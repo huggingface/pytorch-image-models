@@ -441,7 +441,7 @@ def senet154(num_classes=1000, pretrained='imagenet'):
 
 
 def se_resnet18(num_classes=1000, pretrained='imagenet'):
-    model = SENet(SEResNetBottleneck, [2, 2, 2, 2], groups=1, reduction=16,
+    model = SENet(SEResNetBlock, [2, 2, 2, 2], groups=1, reduction=16,
                   dropout_p=None, inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
                   num_classes=num_classes)

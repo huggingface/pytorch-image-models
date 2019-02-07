@@ -9,6 +9,7 @@ import re
 import torch
 from PIL import Image
 
+
 IMG_EXTENSIONS = ['.png', '.jpg', '.jpeg']
 
 
@@ -53,7 +54,7 @@ class Dataset(data.Dataset):
     def __init__(
             self,
             root,
-            transform=None):
+            transform):
 
         imgs, _, _ = find_images_and_targets(root)
         if len(imgs) == 0:
@@ -66,17 +67,13 @@ class Dataset(data.Dataset):
     def __getitem__(self, index):
         path, target = self.imgs[index]
         img = Image.open(path).convert('RGB')
-        if self.transform is not None:
-            img = self.transform(img)
+        img = self.transform(img)
         if target is None:
             target = torch.zeros(1).long()
         return img, target
 
     def __len__(self):
         return len(self.imgs)
-
-    def set_transform(self, transform):
-        self.transform = transform
 
     def filenames(self, indices=[], basename=False):
         if indices:

@@ -6,9 +6,10 @@ from collections import OrderedDict
 from datetime import datetime
 
 from dataset import Dataset
-from models import model_factory, get_transforms_eval, get_transforms_train
+from models import model_factory, transforms_imagenet_eval, transforms_imagenet_train
 from utils import *
 from optim import nadam
+import scheduler
 
 import torch
 import torch.nn
@@ -48,6 +49,8 @@ parser.add_argument('--decay-epochs', type=int, default=30, metavar='N',
                     help='epoch interval to decay LR')
 parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
                     help='LR decay rate (default: 0.1)')
+parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
+                    help='LR scheduler (default: "step"')
 parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.1)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
@@ -93,22 +96,9 @@ def main():
     num_epochs = args.epochs
     torch.manual_seed(args.seed)
 
-    model = model_factory.create_model(
-        args.model,
-        pretrained=args.pretrained,
-        num_classes=1000,
-        drop_rate=args.drop,
-        global_pool=args.gp,
-        checkpoint_path=args.initial_checkpoint)
-
-    if args.initial_batch_size:
-        batch_size = adjust_batch_size(
-            epoch=0, initial_bs=args.initial_batch_size, target_bs=args.batch_size)
-        print('Setting batch-size to %d' % batch_size)
-
     dataset_train = Dataset(
         os.path.join(args.data, 'train'),
-        transform=get_transforms_train(args.model))
+        transform=transforms_imagenet_train(args.model))
 
     loader_train = data.DataLoader(
         dataset_train,
@@ -119,7 +109,7 @@ def main():
 
     dataset_eval = Dataset(
         os.path.join(args.data, 'validation'),
-        transform=get_transforms_eval(args.model))
+        transform=transforms_imagenet_eval(args.model))
 
     loader_eval = data.DataLoader(
         dataset_eval,
@@ -127,6 +117,45 @@ def main():
         shuffle=False,
         num_workers=args.workers
     )
+
+    model = model_factory.create_model(
+        args.model,
+        pretrained=args.pretrained,
+        num_classes=1000,
+        drop_rate=args.drop,
+        global_pool=args.gp,
+        checkpoint_path=args.initial_checkpoint)
+
+    # optionally resume from a checkpoint
+    start_epoch = 0 if args.start_epoch is None else args.start_epoch
+    optimizer_state = None
+    if args.resume:
+        if os.path.isfile(args.resume):
+            print("=> loading checkpoint '{}'".format(args.resume))
+            checkpoint = torch.load(args.resume)
+            if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+                new_state_dict = OrderedDict()
+                for k, v in checkpoint['state_dict'].items():
+                    if k.startswith('module'):
+                        name = k[7:]  # remove `module.`
+                    else:
+                        name = k
+                    new_state_dict[name] = v
+                model.load_state_dict(new_state_dict)
+                if 'optimizer' in checkpoint:
+                    optimizer_state = checkpoint['optimizer']
+                print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
+                start_epoch = checkpoint['epoch'] if args.start_epoch is None else args.start_epoch
+            else:
+                model.load_state_dict(checkpoint)
+        else:
+            print("=> no checkpoint found at '{}'".format(args.resume))
+            return False
+
+    if args.num_gpu > 1:
+        model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
+    else:
+        model.cuda()
 
     train_loss_fn = validate_loss_fn = torch.nn.CrossEntropyLoss()
     train_loss_fn = train_loss_fn.cuda()
@@ -153,85 +182,43 @@ def main():
         assert False and "Invalid optimizer"
         exit(1)
 
-    if not args.decay_epochs:
-        lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=8)
-    else:
-        lr_scheduler = None
+    if optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
 
-    # optionally resume from a checkpoint
-    start_epoch = 0 if args.start_epoch is None else args.start_epoch
-    if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
-            if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-                new_state_dict = OrderedDict()
-                for k, v in checkpoint['state_dict'].items():
-                    if k.startswith('module'):
-                        name = k[7:]  # remove `module.`
-                    else:
-                        name = k
-                    new_state_dict[name] = v
-                model.load_state_dict(new_state_dict)
-                if 'optimizer' in checkpoint:
-                    optimizer.load_state_dict(checkpoint['optimizer'])
-                print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
-                start_epoch = checkpoint['epoch'] if args.start_epoch is None else args.start_epoch
-            else:
-                model.load_state_dict(checkpoint)
-        else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
-            return False
+    if args.sched == 'cosine':
+        lr_scheduler = scheduler.CosineLRScheduler(
+            optimizer,
+            t_initial=13 * len(loader_train),
+            t_mul=2.0,
+            lr_min=0,
+            decay_rate=0.5,
+            warmup_lr_init=1e-4,
+            warmup_updates=len(loader_train)
+        )
+    else:
+        lr_scheduler = scheduler.StepLRScheduler(
+            optimizer,
+            decay_epochs=args.decay_epochs,
+            decay_rate=args.decay_rate,
+        )
 
     saver = CheckpointSaver(checkpoint_dir=output_dir)
-
-    if args.num_gpu > 1:
-        model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
-    else:
-        model.cuda()
-
     best_loss = None
     try:
         for epoch in range(start_epoch, num_epochs):
-            if args.decay_epochs:
-                adjust_learning_rate(
-                    optimizer, epoch, initial_lr=args.lr,
-                    decay_rate=args.decay_rate, decay_epochs=args.decay_epochs)
-
-            if args.initial_batch_size:
-                next_batch_size = adjust_batch_size(
-                    epoch, initial_bs=args.initial_batch_size, target_bs=args.batch_size)
-                if next_batch_size > batch_size:
-                    print("Changing batch size from %d to %d" % (batch_size, next_batch_size))
-                    batch_size = next_batch_size
-                    loader_train = data.DataLoader(
-                        dataset_train,
-                        batch_size=batch_size,
-                        pin_memory=True,
-                        shuffle=True,
-                        # sampler=sampler,
-                        num_workers=args.workers)
 
             train_metrics = train_epoch(
                 epoch, model, loader_train, optimizer, train_loss_fn, args,
-                saver=saver, output_dir=output_dir)
+                lr_scheduler=lr_scheduler, saver=saver, output_dir=output_dir)
 
-            step = epoch * len(loader_train)
             eval_metrics = validate(
-                step, model, loader_eval, validate_loss_fn, args,
-                output_dir=output_dir)
+                model, loader_eval, validate_loss_fn, args)
 
             if lr_scheduler is not None:
-                lr_scheduler.step(eval_metrics['eval_loss'])
+                lr_scheduler.step(epoch, eval_metrics['eval_loss'])
 
-            rowd = OrderedDict(epoch=epoch)
-            rowd.update(train_metrics)
-            rowd.update(eval_metrics)
-            with open(os.path.join(output_dir, 'summary.csv'), mode='a') as cf:
-                dw = csv.DictWriter(cf, fieldnames=rowd.keys())
-                if best_loss is None:  # first iteration (epoch == 1 can't be used)
-                    dw.writeheader()
-                dw.writerow(rowd)
+            update_summary(
+                epoch, train_metrics, eval_metrics, output_dir, write_header=best_loss is None)
 
             # save proper checkpoint with eval metric
             best_loss = saver.save_checkpoint({
@@ -252,9 +239,8 @@ def main():
 
 def train_epoch(
         epoch, model, loader, optimizer, loss_fn, args,
-        saver=None, output_dir=''):
+        lr_scheduler=None, saver=None, output_dir=''):
 
-    epoch_step = (epoch - 1) * len(loader)
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
     losses_m = AverageMeter()
@@ -263,9 +249,9 @@ def train_epoch(
 
     end = time.time()
     last_idx = len(loader) - 1
+    num_updates = epoch * len(loader)
     for batch_idx, (input, target) in enumerate(loader):
         last_batch = batch_idx == last_idx
-        step = epoch_step + batch_idx
         data_time_m.update(time.time() - end)
 
         input = input.cuda()
@@ -283,20 +269,27 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
+        num_updates += 1
+
         batch_time_m.update(time.time() - end)
         if last_batch or batch_idx % args.log_interval == 0:
+            lrl = [param_group['lr'] for param_group in optimizer.param_groups]
+            lr = sum(lrl) / len(lrl)
+
             print('Train: {} [{}/{} ({:.0f}%)]  '
                   'Loss: {loss.val:.6f} ({loss.avg:.4f})  '
                   'Time: {batch_time.val:.3f}s, {rate:.3f}/s  '
                   '({batch_time.avg:.3f}s, {rate_avg:.3f}/s)  '
+                  'LR: {lr:.4f}  '
                   'Data: {data_time.val:.3f} ({data_time.avg:.3f})'.format(
                 epoch,
-                batch_idx * len(input), len(loader.sampler),
+                batch_idx, len(loader),
                 100. * batch_idx / last_idx,
                 loss=losses_m,
                 batch_time=batch_time_m,
                 rate=input.size(0) / batch_time_m.val,
                 rate_avg=input.size(0) / batch_time_m.avg,
+                lr=lr,
                 data_time=data_time_m))
 
             if args.save_images:
@@ -319,12 +312,15 @@ def train_epoch(
                 epoch=save_epoch,
                 batch_idx=batch_idx)
 
+        if lr_scheduler is not None:
+            lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
+
         end = time.time()
 
     return OrderedDict([('train_loss', losses_m.avg)])
 
 
-def validate(step, model, loader, loss_fn, args, output_dir=''):
+def validate(model, loader, loss_fn, args):
     batch_time_m = AverageMeter()
     losses_m = AverageMeter()
     prec1_m = AverageMeter()
@@ -345,7 +341,6 @@ def validate(step, model, loader, loss_fn, args, output_dir=''):
                 target = target.cuda()
 
             output = model(input)
-
             if isinstance(output, (tuple, list)):
                 output = output[0]
 
@@ -381,17 +376,15 @@ def validate(step, model, loader, loss_fn, args, output_dir=''):
     return metrics
 
 
-def adjust_learning_rate(optimizer, epoch, initial_lr, decay_rate=0.1, decay_epochs=30):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = initial_lr * (decay_rate ** (epoch // decay_epochs))
-    print('Setting LR to', lr)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
-def adjust_batch_size(epoch, initial_bs, target_bs, decay_epochs=1):
-    batch_size = min(target_bs, initial_bs * (2 ** (epoch // decay_epochs)))
-    return batch_size
+def update_summary(epoch, train_metrics, eval_metrics, output_dir, write_header=False):
+    rowd = OrderedDict(epoch=epoch)
+    rowd.update(train_metrics)
+    rowd.update(eval_metrics)
+    with open(os.path.join(output_dir, 'summary.csv'), mode='a') as cf:
+        dw = csv.DictWriter(cf, fieldnames=rowd.keys())
+        if write_header:  # first iteration (epoch == 1 can't be used)
+            dw.writeheader()
+        dw.writerow(rowd)
 
 
 if __name__ == '__main__':

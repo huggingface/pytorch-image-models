@@ -1,1 +1,2 @@
-from .model_factory import create_model, get_transforms_eval, get_transforms_train
+from .model_factory import create_model
+from .transforms import transforms_imagenet_eval, transforms_imagenet_train
