@@ -1,6 +1,4 @@
 import argparse
-import csv
-import os
 import time
 from collections import OrderedDict
 from datetime import datetime
@@ -218,7 +216,8 @@ def main():
                 lr_scheduler.step(epoch, eval_metrics['eval_loss'])
 
             update_summary(
-                epoch, train_metrics, eval_metrics, output_dir, write_header=best_loss is None)
+                epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
+                write_header=best_loss is None)
 
             # save proper checkpoint with eval metric
             best_loss = saver.save_checkpoint({

@@ -5,6 +5,8 @@ import numpy as np
 import os
 import shutil
 import glob
+import csv
+from collections import OrderedDict
 
 
 class CheckpointSaver:
@@ -137,3 +139,14 @@ def get_outdir(path, *paths, inc=False):
         outdir = outdir_inc
         os.makedirs(outdir)
     return outdir
+
+
+def update_summary(epoch, train_metrics, eval_metrics, filename, write_header=False):
+    rowd = OrderedDict(epoch=epoch)
+    rowd.update(train_metrics)
+    rowd.update(eval_metrics)
+    with open(filename, mode='a') as cf:
+        dw = csv.DictWriter(cf, fieldnames=rowd.keys())
+        if write_header:  # first iteration (epoch == 1 can't be used)
+            dw.writeheader()
+        dw.writerow(rowd)
