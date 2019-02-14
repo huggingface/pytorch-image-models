@@ -162,7 +162,7 @@ def main():
     if args.opt.lower() == 'sgd':
         optimizer = optim.SGD(
             model.parameters(), lr=args.lr,
-            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=False)
     elif args.opt.lower() == 'adam':
         optimizer = optim.Adam(
             model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
@@ -183,15 +183,27 @@ def main():
     if optimizer_state is not None:
         optimizer.load_state_dict(optimizer_state)
 
+    updates_per_epoch = len(loader_train)
     if args.sched == 'cosine':
         lr_scheduler = scheduler.CosineLRScheduler(
             optimizer,
-            t_initial=13 * len(loader_train),
-            t_mul=2.0,
+            t_initial=100 * updates_per_epoch,
+            t_mul=1.0,
             lr_min=0,
             decay_rate=0.5,
             warmup_lr_init=1e-4,
-            warmup_updates=len(loader_train)
+            warmup_updates=1 * updates_per_epoch
+        )
+    elif args.sched == 'tanh':
+        lr_scheduler = scheduler.TanhLRScheduler(
+            optimizer,
+            t_initial=80 * updates_per_epoch,
+            t_mul=1.0,
+            lr_min=1e-5,
+            decay_rate=0.5,
+            warmup_lr_init=.001,
+            warmup_t=5 * updates_per_epoch,
+            cycle_limit=1
         )
     else:
         lr_scheduler = scheduler.StepLRScheduler(
@@ -354,7 +366,7 @@ def validate(model, loader, loss_fn, args):
             losses_m.update(loss.item(), input.size(0))
 
             # metrics
-            prec1, prec5 = accuracy(output, target, topk=(1, 3))
+            prec1, prec5 = accuracy(output, target, topk=(1, 5))
             prec1_m.update(prec1.item(), output.size(0))
             prec5_m.update(prec5.item(), output.size(0))
 
@@ -373,17 +385,6 @@ def validate(model, loader, loss_fn, args):
     metrics = OrderedDict([('eval_loss', losses_m.avg), ('eval_prec1', prec1_m.avg)])
 
     return metrics
-
-
-def update_summary(epoch, train_metrics, eval_metrics, output_dir, write_header=False):
-    rowd = OrderedDict(epoch=epoch)
-    rowd.update(train_metrics)
-    rowd.update(eval_metrics)
-    with open(os.path.join(output_dir, 'summary.csv'), mode='a') as cf:
-        dw = csv.DictWriter(cf, fieldnames=rowd.keys())
-        if write_header:  # first iteration (epoch == 1 can't be used)
-            dw.writeheader()
-        dw.writerow(rowd)
 
 
 if __name__ == '__main__':

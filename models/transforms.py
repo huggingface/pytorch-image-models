@@ -21,7 +21,7 @@ class LeNormalize(object):
         return tensor
 
 
-def transforms_imagenet_train(model_name, img_size=224, scale=(0.08, 1.0), color_jitter=(0.3, 0.3, 0.3)):
+def transforms_imagenet_train(model_name, img_size=224, scale=(0.1, 1.0), color_jitter=(0.333, 0.333, 0.333)):
     if 'dpn' in model_name:
         normalize = transforms.Normalize(
             mean=IMAGENET_DPN_MEAN,
