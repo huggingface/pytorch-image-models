@@ -21,8 +21,10 @@ class CosineLRScheduler(Scheduler):
                  t_mul: float = 1.,
                  lr_min: float = 0.,
                  decay_rate: float = 1.,
-                 warmup_updates=0,
+                 warmup_t=0,
                  warmup_lr_init=0,
+                 warmup_prefix=False,
+                 t_in_epochs=True,
                  initialize=True) -> None:
         super().__init__(optimizer, param_group_field="lr", initialize=initialize)
 
@@ -35,32 +37,31 @@ class CosineLRScheduler(Scheduler):
         self.t_mul = t_mul
         self.lr_min = lr_min
         self.decay_rate = decay_rate
-        self.warmup_updates = warmup_updates
+        self.warmup_t = warmup_t
         self.warmup_lr_init = warmup_lr_init
-        if self.warmup_updates:
-            self.warmup_steps = [(v - warmup_lr_init) / self.warmup_updates for v in self.base_values]
+        self.warmup_prefix = warmup_prefix
+        self.t_in_epochs = t_in_epochs
+        if self.warmup_t:
+            self.warmup_steps = [(v - warmup_lr_init) / self.warmup_t for v in self.base_values]
+            super().update_groups(self.warmup_lr_init)
         else:
             self.warmup_steps = [1 for _ in self.base_values]
-        if self.warmup_lr_init:
-            super().update_groups(self.warmup_lr_init)
 
-    def get_epoch_values(self, epoch: int):
-        # this scheduler doesn't update on epoch
-        return None
-
-    def get_update_values(self, num_updates: int):
-        if num_updates < self.warmup_updates:
-            lrs = [self.warmup_lr_init + num_updates * s for s in self.warmup_steps]
+    def _get_lr(self, t):
+        if t < self.warmup_t:
+            lrs = [self.warmup_lr_init + t * s for s in self.warmup_steps]
         else:
-            curr_updates = num_updates - self.warmup_updates
+            if self.warmup_prefix:
+                t = t - self.warmup_t
+
             if self.t_mul != 1:
-                i = math.floor(math.log(1 - curr_updates / self.t_initial * (1 - self.t_mul), self.t_mul))
+                i = math.floor(math.log(1 - t / self.t_initial * (1 - self.t_mul), self.t_mul))
                 t_i = self.t_mul ** i * self.t_initial
-                t_curr = curr_updates - (1 - self.t_mul ** i) / (1 - self.t_mul) * self.t_initial
+                t_curr = t - (1 - self.t_mul ** i) / (1 - self.t_mul) * self.t_initial
             else:
-                i = curr_updates // self.t_initial
+                i = t // self.t_initial
                 t_i = self.t_initial
-                t_curr = curr_updates - (self.t_initial * i)
+                t_curr = t - (self.t_initial * i)
 
             gamma = self.decay_rate ** i
             lr_min = self.lr_min * gamma
@@ -70,3 +71,15 @@ class CosineLRScheduler(Scheduler):
                 lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * t_curr / t_i)) for lr_max in lr_max_values
             ]
         return lrs
+
+    def get_epoch_values(self, epoch: int):
+        if self.t_in_epochs:
+            return self._get_lr(epoch)
+        else:
+            return None
+
+    def get_update_values(self, num_updates: int):
+        if not self.t_in_epochs:
+            return self._get_lr(num_updates)
+        else:
+            return None

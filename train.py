@@ -162,7 +162,7 @@ def main():
     if args.opt.lower() == 'sgd':
         optimizer = optim.SGD(
             model.parameters(), lr=args.lr,
-            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=False)
+            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
     elif args.opt.lower() == 'adam':
         optimizer = optim.Adam(
             model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
@@ -183,32 +183,32 @@ def main():
     if optimizer_state is not None:
         optimizer.load_state_dict(optimizer_state)
 
-    updates_per_epoch = len(loader_train)
     if args.sched == 'cosine':
         lr_scheduler = scheduler.CosineLRScheduler(
             optimizer,
-            t_initial=100 * updates_per_epoch,
+            t_initial=130,
             t_mul=1.0,
             lr_min=0,
-            decay_rate=0.5,
+            decay_rate=args.decay_rate,
             warmup_lr_init=1e-4,
-            warmup_updates=1 * updates_per_epoch
+            warmup_t=3,
+            t_in_epochs=True,
         )
     elif args.sched == 'tanh':
         lr_scheduler = scheduler.TanhLRScheduler(
             optimizer,
-            t_initial=80 * updates_per_epoch,
+            t_initial=130,
             t_mul=1.0,
-            lr_min=1e-5,
-            decay_rate=0.5,
+            lr_min=1e-6,
             warmup_lr_init=.001,
-            warmup_t=5 * updates_per_epoch,
-            cycle_limit=1
+            warmup_t=3,
+            cycle_limit=1,
+            t_in_epochs=True,
         )
     else:
         lr_scheduler = scheduler.StepLRScheduler(
             optimizer,
-            decay_epochs=args.decay_epochs,
+            decay_t=args.decay_epochs,
             decay_rate=args.decay_rate,
         )
 

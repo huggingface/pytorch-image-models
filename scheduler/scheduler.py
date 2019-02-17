@@ -56,7 +56,7 @@ class Scheduler:
 
     def step(self, epoch: int, metric: float = None) -> None:
         self.metric = metric
-        values = self.get_epoch_values(epoch)
+        values = self.get_epoch_values(epoch + 1)  # +1 to calculate for next epoch
         if values is not None:
             self.update_groups(values)
 

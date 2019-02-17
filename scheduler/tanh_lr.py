@@ -27,7 +27,7 @@ class TanhLRScheduler(Scheduler):
                  warmup_lr_init=0,
                  warmup_prefix=False,
                  cycle_limit=0,
-                 t_in_epochs=False,
+                 t_in_epochs=True,
                  initialize=True) -> None:
         super().__init__(optimizer, param_group_field="lr", initialize=initialize)
 
