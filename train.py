@@ -180,8 +180,8 @@ def main():
         assert False and "Invalid optimizer"
         exit(1)
 
-    if optimizer_state is not None:
-        optimizer.load_state_dict(optimizer_state)
+    #if optimizer_state is not None:
+    #    optimizer.load_state_dict(optimizer_state)
 
     if args.sched == 'cosine':
         lr_scheduler = scheduler.CosineLRScheduler(
