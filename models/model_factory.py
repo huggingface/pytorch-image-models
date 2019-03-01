@@ -10,8 +10,8 @@ from .densenet import densenet161, densenet121, densenet169, densenet201
 from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152
 from .fbresnet200 import fbresnet200
 from .dpn import dpn68, dpn68b, dpn92, dpn98, dpn131, dpn107
-from .senet import seresnet18, seresnet34, seresnet50, seresnet101, seresnet152,\
-    seresnext50_32x4d, seresnext101_32x4d
+from .senet import seresnet18, seresnet34, seresnet50, seresnet101, seresnet152, \
+    seresnext26_32x4d, seresnext50_32x4d, seresnext101_32x4d
 from .resnext import resnext50, resnext101, resnext152
 
 
@@ -112,6 +112,8 @@ def create_model(
         model = seresnet101(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnet152':
         model = seresnet152(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'seresnext26_32x4d':
+        model = seresnext26_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnext50_32x4d':
         model = seresnext50_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnext101_32x4d':

@@ -91,7 +91,6 @@ def main():
     output_dir = get_outdir(output_base, 'train', exp_name)
 
     batch_size = args.batch_size
-    num_epochs = args.epochs
     torch.manual_seed(args.seed)
 
     dataset_train = Dataset(
@@ -155,9 +154,7 @@ def main():
     else:
         model.cuda()
 
-    train_loss_fn = validate_loss_fn = torch.nn.CrossEntropyLoss()
-    train_loss_fn = train_loss_fn.cuda()
-    validate_loss_fn = validate_loss_fn.cuda()
+    train_loss_fn = validate_loss_fn = torch.nn.CrossEntropyLoss().cuda()
 
     if args.opt.lower() == 'sgd':
         optimizer = optim.SGD(
@@ -183,34 +180,39 @@ def main():
     #if optimizer_state is not None:
     #    optimizer.load_state_dict(optimizer_state)
 
+    num_epochs = args.epochs
     if args.sched == 'cosine':
         lr_scheduler = scheduler.CosineLRScheduler(
             optimizer,
-            t_initial=130,
-            t_mul=1.0,
-            lr_min=0,
+            t_initial=args.epochs,
+            t_mul=1.5,
+            lr_min=1e-5,
             decay_rate=args.decay_rate,
             warmup_lr_init=1e-4,
             warmup_t=3,
+            cycle_limit=3,
             t_in_epochs=True,
         )
+        num_epochs = lr_scheduler.get_cycle_length() + 10
     elif args.sched == 'tanh':
         lr_scheduler = scheduler.TanhLRScheduler(
             optimizer,
-            t_initial=130,
+            t_initial=args.epochs,
             t_mul=1.0,
-            lr_min=1e-6,
+            lr_min=1e-5,
             warmup_lr_init=.001,
             warmup_t=3,
             cycle_limit=1,
             t_in_epochs=True,
         )
+        num_epochs = lr_scheduler.get_cycle_length() + 10
     else:
         lr_scheduler = scheduler.StepLRScheduler(
             optimizer,
             decay_t=args.decay_epochs,
             decay_rate=args.decay_rate,
         )
+    print(num_epochs)
 
     saver = CheckpointSaver(checkpoint_dir=output_dir)
     best_loss = None

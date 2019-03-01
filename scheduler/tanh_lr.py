@@ -97,3 +97,12 @@ class TanhLRScheduler(Scheduler):
             return self._get_lr(num_updates)
         else:
             return None
+
+    def get_cycle_length(self, cycles=0):
+        if not cycles:
+            cycles = self.cycle_limit
+        assert cycles > 0
+        if self.t_mul == 1.0:
+            return self.t_initial * cycles
+        else:
+            return int(math.floor(-self.t_initial * (self.t_mul ** cycles - 1) / (1 - self.t_mul)))

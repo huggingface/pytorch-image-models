@@ -24,6 +24,7 @@ class CosineLRScheduler(Scheduler):
                  warmup_t=0,
                  warmup_lr_init=0,
                  warmup_prefix=False,
+                 cycle_limit=0,
                  t_in_epochs=True,
                  initialize=True) -> None:
         super().__init__(optimizer, param_group_field="lr", initialize=initialize)
@@ -37,6 +38,7 @@ class CosineLRScheduler(Scheduler):
         self.t_mul = t_mul
         self.lr_min = lr_min
         self.decay_rate = decay_rate
+        self.cycle_limit = cycle_limit
         self.warmup_t = warmup_t
         self.warmup_lr_init = warmup_lr_init
         self.warmup_prefix = warmup_prefix
@@ -67,9 +69,13 @@ class CosineLRScheduler(Scheduler):
             lr_min = self.lr_min * gamma
             lr_max_values = [v * gamma for v in self.base_values]
 
-            lrs = [
-                lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * t_curr / t_i)) for lr_max in lr_max_values
-            ]
+            if self.cycle_limit == 0 or (self.cycle_limit > 0 and i < self.cycle_limit):
+                lrs = [
+                    lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * t_curr / t_i)) for lr_max in lr_max_values
+                ]
+            else:
+                lrs = [self.lr_min for _ in self.base_values]
+
         return lrs
 
     def get_epoch_values(self, epoch: int):
@@ -83,3 +89,12 @@ class CosineLRScheduler(Scheduler):
             return self._get_lr(num_updates)
         else:
             return None
+
+    def get_cycle_length(self, cycles=0):
+        if not cycles:
+            cycles = self.cycle_limit
+        assert cycles > 0
+        if self.t_mul == 1.0:
+            return self.t_initial * cycles
+        else:
+            return int(math.floor(-self.t_initial * (self.t_mul ** cycles - 1) / (1 - self.t_mul)))

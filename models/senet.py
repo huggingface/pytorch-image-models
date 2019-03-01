@@ -7,7 +7,9 @@ from collections import OrderedDict
 import math
 
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils import model_zoo
+from models.adaptive_avgmax_pool import AdaptiveAvgMaxPool2d
 
 __all__ = ['SENet', 'senet154', 'seresnet50', 'seresnet101', 'seresnet152',
            'seresnext50_32x4d', 'seresnext101_32x4d']
@@ -193,9 +195,9 @@ class SEResNetBlock(nn.Module):
 
 class SENet(nn.Module):
 
-    def __init__(self, block, layers, groups, reduction, dropout_p=0.2,
+    def __init__(self, block, layers, groups, reduction, drop_rate=0.2,
                  inchans=3, inplanes=128, input_3x3=True, downsample_kernel_size=3,
-                 downsample_padding=1, num_classes=1000):
+                 downsample_padding=1, num_classes=1000, global_pool='avg'):
         """
         Parameters
         ----------
@@ -304,8 +306,8 @@ class SENet(nn.Module):
             downsample_kernel_size=downsample_kernel_size,
             downsample_padding=downsample_padding
         )
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.dropout = nn.Dropout(dropout_p) if dropout_p is not None else None
+        self.avg_pool = AdaptiveAvgMaxPool2d(pool_type=global_pool)
+        self.drop_rate = drop_rate
         self.num_features = 512 * block.expansion
         self.last_linear = nn.Linear(self.num_features, num_classes)
 
@@ -354,8 +356,8 @@ class SENet(nn.Module):
         return x
 
     def logits(self, x):
-        if self.dropout is not None:
-            x = self.dropout(x)
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.last_linear(x)
         return x
 
@@ -375,79 +377,89 @@ def _load_pretrained(model, url, inchans=3):
     model.load_state_dict(state_dict)
     
 
-def senet154(num_classes=1000, inchans=3, pretrained='imagenet'):
+def senet154(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEBottleneck, [3, 8, 36, 3], groups=64, reduction=16,
-                  dropout_p=0.2, num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['senet154'], inchans)
     return model
 
 
-def seresnet18(num_classes=1000, inchans=3, pretrained='imagenet'):
+def seresnet18(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEResNetBlock, [2, 2, 2, 2], groups=1, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnet18'], inchans)
     return model
 
 
-def seresnet34(num_classes=1000, inchans=3, pretrained='imagenet'):
+def seresnet34(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEResNetBlock, [3, 4, 6, 3], groups=1, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnet34'], inchans)
     return model
 
 
-def seresnet50(num_classes=1000, inchans=3, pretrained='imagenet'):
+def seresnet50(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEResNetBottleneck, [3, 4, 6, 3], groups=1, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnet50'], inchans)
     return model
 
 
-def seresnet101(num_classes=1000, inchans=3, pretrained='imagenet'):
+def seresnet101(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEResNetBottleneck, [3, 4, 23, 3], groups=1, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnet101'], inchans)
     return model
 
 
-def seresnet152(num_classes=1000, inchans=3, pretrained='imagenet'):
+def seresnet152(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEResNetBottleneck, [3, 8, 36, 3], groups=1, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnet152'], inchans)
     return model
 
 
-def seresnext50_32x4d(num_classes=1000, inchans=3, pretrained='imagenet'):
-    model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+def seresnext26_32x4d(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+    model = SENet(SEResNeXtBottleneck, [2, 2, 2, 2], groups=32, reduction=16,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
+    if pretrained:
+        _load_pretrained(model, model_urls['se_resnext26_32x4d'], inchans)
+    return model
+
+
+def seresnext50_32x4d(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+    model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
+                  inplanes=64, input_3x3=False,
+                  downsample_kernel_size=1, downsample_padding=0,
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnext50_32x4d'], inchans)
     return model
 
 
-def seresnext101_32x4d(num_classes=1000, inchans=3, pretrained='imagenet'):
+def seresnext101_32x4d(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
     model = SENet(SEResNeXtBottleneck, [3, 4, 23, 3], groups=32, reduction=16,
-                  dropout_p=None, inplanes=64, input_3x3=False,
+                  inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes)
+                  num_classes=num_classes, **kwargs)
     if pretrained:
         _load_pretrained(model, model_urls['seresnext101_32x4d'], inchans)
     return model
