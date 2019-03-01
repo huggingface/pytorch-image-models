@@ -6,13 +6,13 @@ import os
 
 from .inception_v4 import inception_v4
 from .inception_resnet_v2 import inception_resnet_v2
-from .wrn50_2 import wrn50_2
-from .my_densenet import densenet161, densenet121, densenet169, densenet201
-from .my_resnet import resnet18, resnet34, resnet50, resnet101, resnet152
+from .densenet import densenet161, densenet121, densenet169, densenet201
+from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152
 from .fbresnet200 import fbresnet200
 from .dpn import dpn68, dpn68b, dpn92, dpn98, dpn131, dpn107
-from .senet import se_resnet18, se_resnet34, se_resnet50, se_resnet101, se_resnet152,\
-    se_resnext50_32x4d, se_resnext101_32x4d
+from .senet import seresnet18, seresnet34, seresnet50, seresnet101, seresnet152,\
+    seresnext50_32x4d, seresnext101_32x4d
+from .resnext import resnext50, resnext101, resnext152
 
 
 model_config_dict = {
@@ -99,15 +99,29 @@ def create_model(
     elif model_name == 'inception_resnet_v2':
         model = inception_resnet_v2(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'inception_v4':
-        model = inception_v4(num_classes=num_classes, pretrained=pretrained,  **kwargs)
-    elif model_name == 'wrn50':
-        model = wrn50_2(num_classes=num_classes, pretrained=pretrained,  **kwargs)
+        model = inception_v4(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'fbresnet200':
-        model = fbresnet200(num_classes=num_classes, pretrained=pretrained,  **kwargs)
+        model = fbresnet200(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnet18':
-        model = se_resnet18(num_classes=num_classes, pretrained=pretrained)
+        model = seresnet18(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnet34':
-        model = se_resnet34(num_classes=num_classes, pretrained=pretrained)
+        model = seresnet34(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'seresnet50':
+        model = seresnet50(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'seresnet101':
+        model = seresnet101(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'seresnet152':
+        model = seresnet152(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'seresnext50_32x4d':
+        model = seresnext50_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'seresnext101_32x4d':
+        model = seresnext101_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext50':
+        model = resnext50(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext101':
+        model = resnext101(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext152':
+        model = resnext152(num_classes=num_classes, pretrained=pretrained, **kwargs)
     else:
         assert False and "Invalid model"
 

@@ -14,21 +14,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def adaptive_avgmax_pool2d(x, pool_type='avg', padding=0, count_include_pad=False):
+def adaptive_avgmax_pool2d(x, pool_type='avg', output_size=1):
     """Selectable global pooling function with dynamic input kernel size
     """
     if pool_type == 'avgmax':
-        x_avg = F.avg_pool2d(
-                x, kernel_size=(x.size(2), x.size(3)), padding=padding, count_include_pad=count_include_pad)
-        x_max = F.max_pool2d(x, kernel_size=(x.size(2), x.size(3)), padding=padding)
+        x_avg = F.adaptive_avg_pool2d(x, output_size)
+        x_max = F.adaptive_max_pool2d(x, output_size)
         x = 0.5 * (x_avg + x_max)
     elif pool_type == 'max':
-        x = F.max_pool2d(x, kernel_size=(x.size(2), x.size(3)), padding=padding)
+        x = F.adaptive_max_pool2d(x, output_size)
     else:
-        if pool_type != 'avg':
-            print('Invalid pool type %s specified. Defaulting to average pooling.' % pool_type)
-        x = F.avg_pool2d(
-            x, kernel_size=(x.size(2), x.size(3)), padding=padding, count_include_pad=count_include_pad)
+        x = F.adaptive_avg_pool2d(x, output_size)
     return x
 
 

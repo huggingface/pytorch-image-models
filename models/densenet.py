@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 from collections import OrderedDict
 from .adaptive_avgmax_pool import *
+import re
 
 __all__ = ['DenseNet', 'densenet121', 'densenet169', 'densenet201', 'densenet161']
 
@@ -20,6 +21,19 @@ model_urls = {
 }
 
 
+def _filter_pretrained(state_dict):
+    pattern = re.compile(
+        r'^(.*denselayer\d+\.(?:norm|relu|conv))\.((?:[12])\.(?:weight|bias|running_mean|running_var))$')
+
+    for key in list(state_dict.keys()):
+        res = pattern.match(key)
+        if res:
+            new_key = res.group(1) + res.group(2)
+            state_dict[new_key] = state_dict[key]
+            del state_dict[key]
+    return state_dict
+
+
 def densenet121(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
@@ -29,7 +43,8 @@ def densenet121(pretrained=False, **kwargs):
     """
     model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 24, 16), **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['densenet121']))
+        state_dict = model_zoo.load_url(model_urls['densenet121'])
+        model.load_state_dict(_filter_pretrained(state_dict))
     return model
 
 
@@ -42,7 +57,8 @@ def densenet169(pretrained=False, **kwargs):
     """
     model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 32, 32), **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['densenet169']))
+        state_dict = model_zoo.load_url(model_urls['densenet169'])
+        model.load_state_dict(_filter_pretrained(state_dict))
     return model
 
 
@@ -55,7 +71,8 @@ def densenet201(pretrained=False, **kwargs):
     """
     model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 48, 32), **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['densenet201']))
+        state_dict = model_zoo.load_url(model_urls['densenet201'])
+        model.load_state_dict(_filter_pretrained(state_dict))
     return model
 
 
@@ -69,20 +86,21 @@ def densenet161(pretrained=False, **kwargs):
     print(kwargs)
     model = DenseNet(num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24), **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['densenet161']))
+        state_dict = model_zoo.load_url(model_urls['densenet161'])
+        model.load_state_dict(_filter_pretrained(state_dict))
     return model
 
 
 class _DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
         super(_DenseLayer, self).__init__()
-        self.add_module('norm.1', nn.BatchNorm2d(num_input_features)),
-        self.add_module('relu.1', nn.ReLU(inplace=True)),
-        self.add_module('conv.1', nn.Conv2d(num_input_features, bn_size *
+        self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
+        self.add_module('relu1', nn.ReLU(inplace=True)),
+        self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
                         growth_rate, kernel_size=1, stride=1, bias=False)),
-        self.add_module('norm.2', nn.BatchNorm2d(bn_size * growth_rate)),
-        self.add_module('relu.2', nn.ReLU(inplace=True)),
-        self.add_module('conv.2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+        self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
+        self.add_module('relu2', nn.ReLU(inplace=True)),
+        self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                         kernel_size=3, stride=1, padding=1, bias=False)),
         self.drop_rate = drop_rate
 
@@ -172,12 +190,12 @@ class DenseNet(nn.Module):
             self.classifier = None
 
     def forward_features(self, x, pool=True):
-        features = self.features(x)
-        out = F.relu(features, inplace=True)
+        x = self.features(x)
+        x = F.relu(x, inplace=True)
         if pool:
-            out = adaptive_avgmax_pool2d(out, self.global_pool)
-            out = x.view(out.size(0), -1)
-        return out
+            x = adaptive_avgmax_pool2d(x, self.global_pool)
+            x = x.view(x.size(0), -1)
+        return x
 
     def forward(self, x):
         return self.classifier(self.forward_features(x, pool=True))
