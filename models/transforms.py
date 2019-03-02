@@ -2,7 +2,7 @@ import torch
 from torchvision import transforms
 from PIL import Image
 import math
-
+from models.random_erasing import RandomErasing
 
 DEFAULT_CROP_PCT = 0.875
 
@@ -21,7 +21,12 @@ class LeNormalize(object):
         return tensor
 
 
-def transforms_imagenet_train(model_name, img_size=224, scale=(0.1, 1.0), color_jitter=(0.4, 0.4, 0.4)):
+def transforms_imagenet_train(
+        model_name,
+        img_size=224,
+        scale=(0.1, 1.0),
+        color_jitter=(0.4, 0.4, 0.4),
+        random_erasing=0.4):
     if 'dpn' in model_name:
         normalize = transforms.Normalize(
             mean=IMAGENET_DPN_MEAN,
@@ -33,12 +38,14 @@ def transforms_imagenet_train(model_name, img_size=224, scale=(0.1, 1.0), color_
             mean=IMAGENET_DEFAULT_MEAN,
             std=IMAGENET_DEFAULT_STD)
 
-    return transforms.Compose([
+    tfl = [
         transforms.RandomResizedCrop(img_size, scale=scale),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(*color_jitter),
-        transforms.ToTensor(),
-        normalize])
+        transforms.ToTensor()]
+    if random_erasing > 0.:
+        tfl.append(RandomErasing(random_erasing, per_pixel=True))
+    return transforms.Compose(tfl + [normalize])
 
 
 def transforms_imagenet_eval(model_name, img_size=224, crop_pct=None):

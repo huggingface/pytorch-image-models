@@ -6,7 +6,7 @@ from datetime import datetime
 from dataset import Dataset
 from models import model_factory, transforms_imagenet_eval, transforms_imagenet_train
 from utils import *
-from optim import nadam
+from optim import nadam, adabound
 import scheduler
 
 import torch
@@ -166,6 +166,10 @@ def main():
     elif args.opt.lower() == 'nadam':
         optimizer = nadam.Nadam(
             model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
+    elif args.opt.lower() == 'adabound':
+        optimizer = adabound.AdaBound(
+            model.parameters(), lr=args.lr / 1000, weight_decay=args.weight_decay, eps=args.opt_eps,
+            final_lr=args.lr)
     elif args.opt.lower() == 'adadelta':
         optimizer = optim.Adadelta(
             model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
@@ -185,12 +189,12 @@ def main():
         lr_scheduler = scheduler.CosineLRScheduler(
             optimizer,
             t_initial=args.epochs,
-            t_mul=1.5,
+            t_mul=1.0,
             lr_min=1e-5,
             decay_rate=args.decay_rate,
             warmup_lr_init=1e-4,
             warmup_t=3,
-            cycle_limit=3,
+            cycle_limit=1,
             t_in_epochs=True,
         )
         num_epochs = lr_scheduler.get_cycle_length() + 10
