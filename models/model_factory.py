@@ -1,7 +1,4 @@
 import torch
-from torchvision import transforms
-from PIL import Image
-import math
 import os
 
 from .inception_v4 import inception_v4

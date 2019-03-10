@@ -3,10 +3,10 @@ import time
 from collections import OrderedDict
 from datetime import datetime
 
-from dataset import Dataset
-from models import model_factory, transforms_imagenet_eval, transforms_imagenet_train
+from data import *
+from models import model_factory
 from utils import *
-from optim import nadam, adabound
+from optim import Nadam, AdaBound
 import scheduler
 
 import torch
@@ -95,24 +95,32 @@ def main():
 
     dataset_train = Dataset(
         os.path.join(args.data, 'train'),
-        transform=transforms_imagenet_train(args.model))
+        transform=transforms_imagenet_train())
 
     loader_train = data.DataLoader(
         dataset_train,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=args.workers
+        num_workers=args.workers,
+        collate_fn=fast_collate
     )
+    loader_train = PrefetchLoader(
+        loader_train, random_erasing=True,
+        )
 
     dataset_eval = Dataset(
         os.path.join(args.data, 'validation'),
-        transform=transforms_imagenet_eval(args.model))
+        transform=transforms_imagenet_eval())
 
     loader_eval = data.DataLoader(
         dataset_eval,
         batch_size=4 * args.batch_size,
         shuffle=False,
-        num_workers=args.workers
+        num_workers=args.workers,
+        collate_fn=fast_collate,
+    )
+    loader_eval = PrefetchLoader(
+        loader_eval, random_erasing=False,
     )
 
     model = model_factory.create_model(
@@ -156,66 +164,11 @@ def main():
 
     train_loss_fn = validate_loss_fn = torch.nn.CrossEntropyLoss().cuda()
 
-    if args.opt.lower() == 'sgd':
-        optimizer = optim.SGD(
-            model.parameters(), lr=args.lr,
-            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
-    elif args.opt.lower() == 'adam':
-        optimizer = optim.Adam(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'nadam':
-        optimizer = nadam.Nadam(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'adabound':
-        optimizer = adabound.AdaBound(
-            model.parameters(), lr=args.lr / 1000, weight_decay=args.weight_decay, eps=args.opt_eps,
-            final_lr=args.lr)
-    elif args.opt.lower() == 'adadelta':
-        optimizer = optim.Adadelta(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'rmsprop':
-        optimizer = optim.RMSprop(
-            model.parameters(), lr=args.lr, alpha=0.9, eps=args.opt_eps,
-            momentum=args.momentum, weight_decay=args.weight_decay)
-    else:
-        assert False and "Invalid optimizer"
-        exit(1)
+    optimizer = create_optimizer(args, model.parameters())
+    if optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
 
-    #if optimizer_state is not None:
-    #    optimizer.load_state_dict(optimizer_state)
-
-    num_epochs = args.epochs
-    if args.sched == 'cosine':
-        lr_scheduler = scheduler.CosineLRScheduler(
-            optimizer,
-            t_initial=args.epochs,
-            t_mul=1.0,
-            lr_min=1e-5,
-            decay_rate=args.decay_rate,
-            warmup_lr_init=1e-4,
-            warmup_t=3,
-            cycle_limit=1,
-            t_in_epochs=True,
-        )
-        num_epochs = lr_scheduler.get_cycle_length() + 10
-    elif args.sched == 'tanh':
-        lr_scheduler = scheduler.TanhLRScheduler(
-            optimizer,
-            t_initial=args.epochs,
-            t_mul=1.0,
-            lr_min=1e-5,
-            warmup_lr_init=.001,
-            warmup_t=3,
-            cycle_limit=1,
-            t_in_epochs=True,
-        )
-        num_epochs = lr_scheduler.get_cycle_length() + 10
-    else:
-        lr_scheduler = scheduler.StepLRScheduler(
-            optimizer,
-            decay_t=args.decay_epochs,
-            decay_rate=args.decay_rate,
-        )
+    lr_scheduler, num_epochs = create_scheduler(args, optimizer)
     print(num_epochs)
 
     saver = CheckpointSaver(checkpoint_dir=output_dir)
@@ -244,7 +197,6 @@ def main():
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'args': args,
-                'gp': args.gp,
                 },
                 epoch=epoch + 1,
                 metric=eval_metrics['eval_loss'])
@@ -271,12 +223,6 @@ def train_epoch(
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
 
-        input = input.cuda()
-        if isinstance(target, (tuple, list)):
-            target = [t.cuda() for t in target]
-        else:
-            target = target.cuda()
-
         output = model(input)
 
         loss = loss_fn(output, target)
@@ -286,6 +232,7 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
+        torch.cuda.synchronize()
         num_updates += 1
 
         batch_time_m.update(time.time() - end)
@@ -316,7 +263,7 @@ def train_epoch(
                     padding=0,
                     normalize=True)
 
-        if saver is not None and last_batch or batch_idx % args.recovery_interval == 0:
+        if saver is not None and last_batch or (batch_idx + 1) % args.recovery_interval == 0:
             save_epoch = epoch + 1 if last_batch else epoch
             saver.save_recovery({
                 'epoch': save_epoch,
@@ -324,7 +271,6 @@ def train_epoch(
                 'state_dict':  model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'args': args,
-                'gp': args.gp,
                 },
                 epoch=save_epoch,
                 batch_idx=batch_idx)
@@ -351,12 +297,6 @@ def validate(model, loader, loss_fn, args):
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
 
-            input = input.cuda()
-            if isinstance(target, list):
-                target = target[0].cuda()
-            else:
-                target = target.cuda()
-
             output = model(input)
             if isinstance(output, (tuple, list)):
                 output = output[0]
@@ -367,12 +307,12 @@ def validate(model, loader, loss_fn, args):
                 output = output.unfold(0, reduce_factor, reduce_factor).mean(dim=2)
                 target = target[0:target.size(0):reduce_factor]
 
-            # calc loss
             loss = loss_fn(output, target)
-            losses_m.update(loss.item(), input.size(0))
-
-            # metrics
             prec1, prec5 = accuracy(output, target, topk=(1, 5))
+
+            torch.cuda.synchronize()
+
+            losses_m.update(loss.item(), input.size(0))
             prec1_m.update(prec1.item(), output.size(0))
             prec5_m.update(prec5.item(), output.size(0))
 
@@ -391,6 +331,70 @@ def validate(model, loader, loss_fn, args):
     metrics = OrderedDict([('eval_loss', losses_m.avg), ('eval_prec1', prec1_m.avg)])
 
     return metrics
+
+
+def create_optimizer(args, parameters):
+    if args.opt.lower() == 'sgd':
+        optimizer = optim.SGD(
+            parameters, lr=args.lr,
+            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
+    elif args.opt.lower() == 'adam':
+        optimizer = optim.Adam(
+            parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
+    elif args.opt.lower() == 'nadam':
+        optimizer = Nadam(
+            parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
+    elif args.opt.lower() == 'adabound':
+        optimizer = AdaBound(
+            parameters, lr=args.lr / 100, weight_decay=args.weight_decay, eps=args.opt_eps,
+            final_lr=args.lr)
+    elif args.opt.lower() == 'adadelta':
+        optimizer = optim.Adadelta(
+            parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
+    elif args.opt.lower() == 'rmsprop':
+        optimizer = optim.RMSprop(
+            parameters, lr=args.lr, alpha=0.9, eps=args.opt_eps,
+            momentum=args.momentum, weight_decay=args.weight_decay)
+    else:
+        assert False and "Invalid optimizer"
+        raise ValueError
+    return optimizer
+
+
+def create_scheduler(args, optimizer):
+    num_epochs = args.epochs
+    if args.sched == 'cosine':
+        lr_scheduler = scheduler.CosineLRScheduler(
+            optimizer,
+            t_initial=num_epochs,
+            t_mul=1.0,
+            lr_min=1e-5,
+            decay_rate=args.decay_rate,
+            warmup_lr_init=1e-4,
+            warmup_t=0,
+            cycle_limit=1,
+            t_in_epochs=True,
+        )
+        num_epochs = lr_scheduler.get_cycle_length() + 10
+    elif args.sched == 'tanh':
+        lr_scheduler = scheduler.TanhLRScheduler(
+            optimizer,
+            t_initial=num_epochs,
+            t_mul=1.0,
+            lr_min=1e-5,
+            warmup_lr_init=.001,
+            warmup_t=3,
+            cycle_limit=1,
+            t_in_epochs=True,
+        )
+        num_epochs = lr_scheduler.get_cycle_length() + 10
+    else:
+        lr_scheduler = scheduler.StepLRScheduler(
+            optimizer,
+            decay_t=args.decay_epochs,
+            decay_rate=args.decay_rate,
+        )
+    return lr_scheduler, num_epochs
 
 
 if __name__ == '__main__':
