@@ -93,34 +93,33 @@ def main():
     batch_size = args.batch_size
     torch.manual_seed(args.seed)
 
-    dataset_train = Dataset(
-        os.path.join(args.data, 'train'),
-        transform=transforms_imagenet_train())
+    data_mean, data_std = get_model_meanstd(args.model)
 
-    loader_train = data.DataLoader(
+    dataset_train = Dataset(os.path.join(args.data, 'train'))
+
+    loader_train = create_loader(
         dataset_train,
+        img_size=args.img_size,
         batch_size=batch_size,
-        shuffle=True,
+        is_training=True,
+        use_prefetcher=True,
+        random_erasing=0.5,
+        mean=data_mean,
+        std=data_std,
         num_workers=args.workers,
-        collate_fn=fast_collate
     )
-    loader_train = PrefetchLoader(
-        loader_train, random_erasing=True,
-        )
 
-    dataset_eval = Dataset(
-        os.path.join(args.data, 'validation'),
-        transform=transforms_imagenet_eval())
+    dataset_eval = Dataset(os.path.join(args.data, 'validation'))
 
-    loader_eval = data.DataLoader(
+    loader_eval = create_loader(
         dataset_eval,
+        img_size=args.img_size,
         batch_size=4 * args.batch_size,
-        shuffle=False,
+        is_training=False,
+        use_prefetcher=True,
+        mean=data_mean,
+        std=data_std,
         num_workers=args.workers,
-        collate_fn=fast_collate,
-    )
-    loader_eval = PrefetchLoader(
-        loader_eval, random_erasing=False,
     )
 
     model = model_factory.create_model(

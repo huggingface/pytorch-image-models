@@ -21,15 +21,23 @@ from .adaptive_avgmax_pool import adaptive_avgmax_pool2d
 __all__ = ['DPN', 'dpn68', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
 
 
-# If anyone able to provide direct link hosting, more than happy to fill these out.. -rwightman
 model_urls = {
-    'dpn68': '',
-    'dpn68b_extra': 'dpn68_extra-87733ef7.pth',
+    'dpn68':
+        'http://data.lip6.fr/cadene/pretrainedmodels/dpn68-66bebafa7.pth',
+    'dpn68b_extra':
+        'http://data.lip6.fr/cadene/pretrainedmodels/'
+        'dpn68b_extra-84854c156.pth',
     'dpn92': '',
-    'dpn92_extra': '',
-    'dpn98': '',
-    'dpn131': 'dpn131-89380fa2.pth',
-    'dpn107_extra': 'dpn107_extra-fc014e8ec.pth'
+    'dpn92_extra':
+        'http://data.lip6.fr/cadene/pretrainedmodels/'
+        'dpn92_extra-b040e4a9b.pth',
+    'dpn98':
+        'http://data.lip6.fr/cadene/pretrainedmodels/dpn98-5b90dec4d.pth',
+    'dpn131':
+        'http://data.lip6.fr/cadene/pretrainedmodels/dpn131-71dfe43e0.pth',
+    'dpn107_extra':
+        'http://data.lip6.fr/cadene/pretrainedmodels/'
+        'dpn107_extra-1ac7121e2.pth'
 }
 
 

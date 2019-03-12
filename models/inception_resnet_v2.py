@@ -10,7 +10,7 @@ import numpy as np
 from .adaptive_avgmax_pool import *
 
 model_urls = {
-    'imagenet': 'http://webia.lip6.fr/~cadene/Downloads/inceptionresnetv2-d579a627.pth'
+    'imagenet': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionresnetv2-520b38e4.pth'
 }
 
 
@@ -267,7 +267,7 @@ class InceptionResnetV2(nn.Module):
         self.block8 = Block8(noReLU=True)
         self.conv2d_7b = BasicConv2d(2080, 1536, kernel_size=1, stride=1)
         self.num_features = 1536
-        self.classif = nn.Linear(1536, num_classes)
+        self.last_linear = nn.Linear(1536, num_classes)
 
     def get_classifier(self):
         return self.classif
@@ -277,9 +277,16 @@ class InceptionResnetV2(nn.Module):
         self.num_classes = num_classes
         del self.classif
         if num_classes:
-            self.classif = torch.nn.Linear(1536, num_classes)
+            self.last_linear = torch.nn.Linear(1536, num_classes)
         else:
-            self.classif = None
+            self.last_linear = None
+
+    def trim_classifier(self, trim=1):
+        self.num_classes -= trim
+        new_last_linear = nn.Linear(1536, self.num_classes)
+        new_last_linear.weight.data = self.last_linear.weight.data[trim:]
+        new_last_linear.bias.data = self.last_linear.bias.data[trim:]
+        self.last_linear = new_last_linear
 
     def forward_features(self, x, pool=True):
         x = self.conv2d_1a(x)
@@ -298,7 +305,8 @@ class InceptionResnetV2(nn.Module):
         x = self.block8(x)
         x = self.conv2d_7b(x)
         if pool:
-            x = adaptive_avgmax_pool2d(x, self.global_pool, count_include_pad=False)
+            x = adaptive_avgmax_pool2d(x, self.global_pool)
+            #x = F.avg_pool2d(x, 8, count_include_pad=False)
             x = x.view(x.size(0), -1)
         return x
 
@@ -306,20 +314,23 @@ class InceptionResnetV2(nn.Module):
         x = self.forward_features(x, pool=True)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.classif(x)
+        x = self.last_linear(x)
         return x
 
 
-def inception_resnet_v2(pretrained=False, num_classes=1001, **kwargs):
+def inception_resnet_v2(pretrained=False, num_classes=1000, **kwargs):
     r"""InceptionResnetV2 model architecture from the
     `"InceptionV4, Inception-ResNet..." <https://arxiv.org/abs/1602.07261>`_ paper.
 
     Args:
         pretrained ('string'): If True, returns a model pre-trained on ImageNet
     """
-    model = InceptionResnetV2(num_classes=num_classes, **kwargs)
+    extra_class = 1 if pretrained else 0
+    model = InceptionResnetV2(num_classes=num_classes + extra_class, **kwargs)
     if pretrained:
         print('Loading pretrained from %s' % model_urls['imagenet'])
         model.load_state_dict(model_zoo.load_url(model_urls['imagenet']))
+        model.trim_classifier()
+
     return model
 
