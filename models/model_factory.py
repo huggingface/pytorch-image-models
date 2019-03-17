@@ -44,7 +44,7 @@ model_config_dict = {
     'dpn68b_extra': {
         'model_name': 'dpn68b', 'num_classes': 1000, 'input_size': 299, 'normalizer': 'dpn'},
     'inception_resnet_v2': {
-        'model_name': 'inception_resnet_v2', 'num_classes': 1001, 'input_size': 299, 'normalizer': 'le'},
+        'model_name': 'inception_resnet_v2', 'num_classes': 1000, 'input_size': 299, 'normalizer': 'le'},
 }
 
 

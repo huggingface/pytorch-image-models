@@ -9,11 +9,9 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-import torch.utils.data as data
 
-
-from models import create_model, transforms_imagenet_eval
-from dataset import Dataset
+from models import create_model
+from data import Dataset, create_loader, get_model_meanstd
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
@@ -80,14 +78,15 @@ def main():
 
     cudnn.benchmark = True
 
-    dataset = Dataset(
-        args.data,
-        transforms_imagenet_eval(args.model, args.img_size))
-
-    loader = data.DataLoader(
-        dataset,
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+    data_mean, data_std = get_model_meanstd(args.model)
+    loader = create_loader(
+        Dataset(args.data),
+        img_size=args.img_size,
+        batch_size=args.batch_size,
+        use_prefetcher=True,
+        mean=data_mean,
+        std=data_std,
+        num_workers=args.workers)
 
     batch_time = AverageMeter()
     losses = AverageMeter()

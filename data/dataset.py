@@ -54,7 +54,7 @@ class Dataset(data.Dataset):
     def __init__(
             self,
             root,
-            transform):
+            transform=None):
 
         imgs, _, _ = find_images_and_targets(root)
         if len(imgs) == 0:
@@ -67,7 +67,8 @@ class Dataset(data.Dataset):
     def __getitem__(self, index):
         path, target = self.imgs[index]
         img = Image.open(path).convert('RGB')
-        img = self.transform(img)
+        if self.transform is not None:
+            img = self.transform(img)
         if target is None:
             target = torch.zeros(1).long()
         return img, target
