@@ -19,7 +19,7 @@ class ResNeXtBottleneckC(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=32, base_width=4):
         super(ResNeXtBottleneckC, self).__init__()
 
-        width = math.floor(planes / 64 * cardinality * base_width)
+        width = math.floor(planes * (base_width / 64)) * cardinality
 
         self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(width)
@@ -57,13 +57,12 @@ class ResNeXtBottleneckC(nn.Module):
 
 class ResNeXt(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000, cardinality=32, base_width=4, shortcut='C',
+    def __init__(self, block, layers, num_classes=1000, cardinality=32, base_width=4,
                  drop_rate=0., global_pool='avg'):
         self.num_classes = num_classes
         self.inplanes = 64
         self.cardinality = cardinality
         self.base_width = base_width
-        self.shortcut = shortcut
         self.drop_rate = drop_rate
         super(ResNeXt, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -87,31 +86,17 @@ class ResNeXt(nn.Module):
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
-        reshape = stride != 1 or self.inplanes != planes * block.expansion
-        use_conv = (self.shortcut == 'C') or (self.shortcut == 'B' and reshape)
-
-        if use_conv:
+        if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(
                     self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
-        elif reshape:
-            downsample = nn.AvgPool2d(3, stride=stride)
 
         layers = [block(self.inplanes, planes, stride, downsample, self.cardinality, self.base_width)]
         self.inplanes = planes * block.expansion
-
-        if self.shortcut == 'C':
-            shortcut = nn.Sequential(
-                nn.Conv2d(
-                    self.inplanes, planes * block.expansion, kernel_size=1, stride=1, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
-            )
-        else:
-            shortcut = None
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, 1, shortcut, self.cardinality, self.base_width))
+            layers.append(block(self.inplanes, planes, 1, None, self.cardinality, self.base_width))
 
         return nn.Sequential(*layers)
 
@@ -151,7 +136,7 @@ class ResNeXt(nn.Module):
         return x
 
 
-def resnext50(cardinality=32, base_width=4, shortcut='C', pretrained=False, **kwargs):
+def resnext50(cardinality=32, base_width=4, pretrained=False, **kwargs):
     """Constructs a ResNeXt-50 model.
 
     Args:
@@ -160,12 +145,11 @@ def resnext50(cardinality=32, base_width=4, shortcut='C', pretrained=False, **kw
         shortcut ('A'|'B'|'C'): 'B' use 1x1 conv to downsample, 'C' use 1x1 conv on every residual connection
     """
     model = ResNeXt(
-        ResNeXtBottleneckC, [3, 4, 6, 3], cardinality=cardinality,
-        base_width=base_width, shortcut=shortcut, **kwargs)
+        ResNeXtBottleneckC, [3, 4, 6, 3], cardinality=cardinality, base_width=base_width, **kwargs)
     return model
 
 
-def resnext101(cardinality=32, base_width=4, shortcut='C', pretrained=False, **kwargs):
+def resnext101(cardinality=32, base_width=4, pretrained=False, **kwargs):
     """Constructs a ResNeXt-101 model.
 
     Args:
@@ -174,12 +158,11 @@ def resnext101(cardinality=32, base_width=4, shortcut='C', pretrained=False, **k
         shortcut ('A'|'B'|'C'): 'B' use 1x1 conv to downsample, 'C' use 1x1 conv on every residual connection
     """
     model = ResNeXt(
-        ResNeXtBottleneckC, [3, 4, 23, 3], cardinality=cardinality,
-        base_width=base_width, shortcut=shortcut, **kwargs)
+        ResNeXtBottleneckC, [3, 4, 23, 3], cardinality=cardinality, base_width=base_width, **kwargs)
     return model
 
 
-def resnext152(cardinality=32, base_width=4, shortcut='C', pretrained=False, **kwargs):
+def resnext152(cardinality=32, base_width=4, pretrained=False, **kwargs):
     """Constructs a ResNeXt-152 model.
 
     Args:
@@ -188,6 +171,5 @@ def resnext152(cardinality=32, base_width=4, shortcut='C', pretrained=False, **k
         shortcut ('A'|'B'|'C'): 'B' use 1x1 conv to downsample, 'C' use 1x1 conv on every residual connection
     """
     model = ResNeXt(
-        ResNeXtBottleneckC, [3, 8, 36, 3], cardinality=cardinality,
-        base_width=base_width, shortcut=shortcut, **kwargs)
+        ResNeXtBottleneckC, [3, 8, 36, 3], cardinality=cardinality, base_width=base_width, **kwargs)
     return model
