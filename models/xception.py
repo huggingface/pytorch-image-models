@@ -162,14 +162,12 @@ class Xception(nn.Module):
         self.fc = nn.Linear(2048, num_classes)
 
         # #------- init weights --------
-        # for m in self.modules():
-        #     if isinstance(m, nn.Conv2d):
-        #         n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-        #         m.weight.data.normal_(0, math.sqrt(2. / n))
-        #     elif isinstance(m, nn.BatchNorm2d):
-        #         m.weight.data.fill_(1)
-        #         m.bias.data.zero_()
-        # #-----------------------------
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
     def forward_features(self, input):
         x = self.conv1(input)
@@ -215,10 +213,10 @@ class Xception(nn.Module):
         return x
 
 
-def xception(num_classes=1000, pretrained='imagenet'):
+def xception(num_classes=1000, pretrained=False):
     model = Xception(num_classes=num_classes)
     if pretrained:
-        config = pretrained_config['xception'][pretrained]
+        config = pretrained_config['xception']['imagenet']
         assert num_classes == config['num_classes'], \
             "num_classes should be {}, but is {}".format(config['num_classes'], num_classes)
 
