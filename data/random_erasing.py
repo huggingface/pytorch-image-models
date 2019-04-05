@@ -91,15 +91,13 @@ class RandomErasingTorch:
     def __init__(
             self,
             probability=0.5, sl=0.02, sh=1/3, min_aspect=0.3,
-            per_pixel=False, rand_color=False,
-            device='cuda'):
+            per_pixel=False, rand_color=False):
         self.probability = probability
         self.sl = sl
         self.sh = sh
         self.min_aspect = min_aspect
         self.per_pixel = per_pixel  # per pixel random, bounded by [pl, ph]
         self.rand_color = rand_color  # per block random, bounded by [pl, ph]
-        self.device = device
 
     def __call__(self, batch):
         batch_size, chan, img_h, img_w = batch.size()
@@ -115,15 +113,15 @@ class RandomErasingTorch:
                 h = int(round(math.sqrt(target_area * aspect_ratio)))
                 w = int(round(math.sqrt(target_area / aspect_ratio)))
                 if self.rand_color:
-                    c = torch.empty((chan, 1, 1), dtype=batch.dtype, device=self.device).normal_()
+                    c = torch.empty((chan, 1, 1), dtype=batch.dtype).cuda().normal_()
                 elif not self.per_pixel:
-                    c = torch.zeros((chan, 1, 1), dtype=batch.dtype, device=self.device)
+                    c = torch.zeros((chan, 1, 1), dtype=batch.dtype).cuda()
                 if w < img_w and h < img_h:
                     top = random.randint(0, img_h - h)
                     left = random.randint(0, img_w - w)
                     if self.per_pixel:
                         img[:, top:top + h, left:left + w] = torch.empty(
-                            (chan, h, w), dtype=batch.dtype, device=self.device).normal_()
+                            (chan, h, w), dtype=batch.dtype).cuda().normal_()
                     else:
                         img[:, top:top + h, left:left + w] = c
                     break

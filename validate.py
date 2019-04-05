@@ -9,6 +9,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
+from collections import OrderedDict
 
 from models import create_model
 from data import Dataset, create_loader, get_model_meanstd
@@ -60,7 +61,14 @@ def main():
         print("=> loading checkpoint '{}'".format(args.checkpoint))
         checkpoint = torch.load(args.checkpoint)
         if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
+            new_state_dict = OrderedDict()
+            for k, v in checkpoint['state_dict'].items():
+                if k.startswith('module'):
+                    name = k[7:]  # remove `module.`
+                else:
+                    name = k
+                new_state_dict[name] = v
+            model.load_state_dict(new_state_dict)
         else:
             model.load_state_dict(checkpoint)
         print("=> loaded checkpoint '{}'".format(args.checkpoint))

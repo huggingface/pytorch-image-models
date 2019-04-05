@@ -18,24 +18,18 @@ class PrefetchLoader:
 
     def __init__(self,
             loader,
-            fp16=False,
             random_erasing=0.,
             mean=IMAGENET_DEFAULT_MEAN,
             std=IMAGENET_DEFAULT_STD):
         self.loader = loader
-        self.fp16 = fp16
         self.random_erasing = random_erasing
         self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
         self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
         if random_erasing:
             self.random_erasing = RandomErasingTorch(
-                probability=random_erasing, per_pixel=True)
+                probability=random_erasing, per_pixel=False)
         else:
             self.random_erasing = None
-
-        if self.fp16:
-            self.mean = self.mean.half()
-            self.std = self.std.half()
 
     def __iter__(self):
         stream = torch.cuda.Stream()
@@ -45,10 +39,7 @@ class PrefetchLoader:
             with torch.cuda.stream(stream):
                 next_input = next_input.cuda(non_blocking=True)
                 next_target = next_target.cuda(non_blocking=True)
-                if self.fp16:
-                    next_input = next_input.half()
-                else:
-                    next_input = next_input.float()
+                next_input = next_input.float()
                 next_input = next_input.sub_(self.mean).div_(self.std)
                 if self.random_erasing is not None:
                     next_input = self.random_erasing(next_input)
@@ -67,6 +58,10 @@ class PrefetchLoader:
     def __len__(self):
         return len(self.loader)
 
+    @property
+    def sampler(self):
+        return self.loader.sampler
+
 
 def create_loader(
         dataset,
@@ -78,6 +73,7 @@ def create_loader(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         num_workers=1,
+        distributed=False,
 ):
 
     if is_training:
@@ -95,11 +91,16 @@ def create_loader(
 
     dataset.transform = transform
 
+    sampler = None
+    if distributed:
+        sampler = tdata.distributed.DistributedSampler(dataset)
+
     loader = tdata.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=is_training,
+        shuffle=sampler is None and is_training,
         num_workers=num_workers,
+        sampler=sampler,
         collate_fn=fast_collate if use_prefetcher else tdata.dataloader.default_collate,
     )
     if use_prefetcher:
