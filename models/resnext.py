@@ -142,7 +142,6 @@ def resnext50(cardinality=32, base_width=4, pretrained=False, **kwargs):
     Args:
         cardinality (int): Cardinality of the aggregated transform
         base_width (int): Base width of the grouped convolution
-        shortcut ('A'|'B'|'C'): 'B' use 1x1 conv to downsample, 'C' use 1x1 conv on every residual connection
     """
     model = ResNeXt(
         ResNeXtBottleneckC, [3, 4, 6, 3], cardinality=cardinality, base_width=base_width, **kwargs)
@@ -155,7 +154,6 @@ def resnext101(cardinality=32, base_width=4, pretrained=False, **kwargs):
     Args:
         cardinality (int): Cardinality of the aggregated transform
         base_width (int): Base width of the grouped convolution
-        shortcut ('A'|'B'|'C'): 'B' use 1x1 conv to downsample, 'C' use 1x1 conv on every residual connection
     """
     model = ResNeXt(
         ResNeXtBottleneckC, [3, 4, 23, 3], cardinality=cardinality, base_width=base_width, **kwargs)
@@ -168,7 +166,6 @@ def resnext152(cardinality=32, base_width=4, pretrained=False, **kwargs):
     Args:
         cardinality (int): Cardinality of the aggregated transform
         base_width (int): Base width of the grouped convolution
-        shortcut ('A'|'B'|'C'): 'B' use 1x1 conv to downsample, 'C' use 1x1 conv on every residual connection
     """
     model = ResNeXt(
         ResNeXtBottleneckC, [3, 8, 36, 3], cardinality=cardinality, base_width=base_width, **kwargs)

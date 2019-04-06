@@ -127,6 +127,7 @@ class Xception(nn.Module):
         """
         super(Xception, self).__init__()
         self.num_classes = num_classes
+        self.num_features = 2048
 
         self.conv1 = nn.Conv2d(3, 32, 3, 2, 0, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
@@ -156,10 +157,10 @@ class Xception(nn.Module):
         self.bn3 = nn.BatchNorm2d(1536)
 
         # do relu here
-        self.conv4 = SeparableConv2d(1536, 2048, 3, 1, 1)
-        self.bn4 = nn.BatchNorm2d(2048)
+        self.conv4 = SeparableConv2d(1536, self.num_features, 3, 1, 1)
+        self.bn4 = nn.BatchNorm2d(self.num_features)
 
-        self.fc = nn.Linear(2048, num_classes)
+        self.fc = nn.Linear(self.num_features, num_classes)
 
         # #------- init weights --------
         for m in self.modules():
@@ -169,7 +170,18 @@ class Xception(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def forward_features(self, input):
+    def get_classifier(self):
+        return self.fc
+
+    def reset_classifier(self, num_classes):
+        self.num_classes = num_classes
+        del self.fc
+        if num_classes:
+            self.fc = nn.Linear(self.num_features, num_classes)
+        else:
+            self.fc = None
+
+    def forward_features(self, input, pool=True):
         x = self.conv1(input)
         x = self.bn1(x)
         x = self.relu(x)
@@ -197,19 +209,16 @@ class Xception(nn.Module):
 
         x = self.conv4(x)
         x = self.bn4(x)
-        return x
+        x = self.relu(x)
 
-    def logits(self, features):
-        x = self.relu(features)
-
-        x = F.adaptive_avg_pool2d(x, (1, 1))
-        x = x.view(x.size(0), -1)
-        x = self.last_linear(x)
+        if pool:
+            x = F.adaptive_avg_pool2d(x, (1, 1))
+            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, input):
         x = self.forward_features(input)
-        x = self.logits(x)
+        x = self.fc(x)
         return x
 
 
@@ -223,13 +232,4 @@ def xception(num_classes=1000, pretrained=False):
         model = Xception(num_classes=num_classes)
         model.load_state_dict(model_zoo.load_url(config['url']))
 
-        model.input_space = config['input_space']
-        model.input_size = config['input_size']
-        model.input_range = config['input_range']
-        model.mean = config['mean']
-        model.std = config['std']
-
-    # TODO: ugly
-    model.last_linear = model.fc
-    del model.fc
     return model
