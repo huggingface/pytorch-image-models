@@ -6,6 +6,7 @@ import os
 import shutil
 import glob
 import csv
+import operator
 from collections import OrderedDict
 
 
@@ -16,24 +17,32 @@ class CheckpointSaver:
             recovery_prefix='recovery',
             checkpoint_dir='',
             recovery_dir='',
+            decreasing=False,
+            verbose=True,
             max_history=10):
 
-        self.checkpoint_files = []
+        # state
+        self.checkpoint_files = []  # (filename, metric) tuples in order of decreasing betterness
+        self.best_epoch = None
         self.best_metric = None
-        self.worst_metric = None
-        self.max_history = max_history
-        assert self.max_history >= 1
         self.curr_recovery_file = ''
         self.last_recovery_file = ''
+
+        # config
         self.checkpoint_dir = checkpoint_dir
         self.recovery_dir = recovery_dir
         self.save_prefix = checkpoint_prefix
         self.recovery_prefix = recovery_prefix
         self.extension = '.pth.tar'
+        self.decreasing = decreasing  # a lower metric is better if True
+        self.cmp = operator.lt if decreasing else operator.gt  # True if lhs better than rhs
+        self.verbose = verbose
+        self.max_history = max_history
+        assert self.max_history >= 1
 
     def save_checkpoint(self, state, epoch, metric=None):
-        worst_metric = self.checkpoint_files[-1] if self.checkpoint_files else None
-        if len(self.checkpoint_files) < self.max_history or metric < worst_metric[1]:
+        worst_file = self.checkpoint_files[-1] if self.checkpoint_files else None
+        if len(self.checkpoint_files) < self.max_history or self.cmp(metric, worst_file[1]):
             if len(self.checkpoint_files) >= self.max_history:
                 self._cleanup_checkpoints(1)
 
@@ -43,16 +52,21 @@ class CheckpointSaver:
                 state['metric'] = metric
             torch.save(state, save_path)
             self.checkpoint_files.append((save_path, metric))
-            self.checkpoint_files = sorted(self.checkpoint_files, key=lambda x: x[1])
+            self.checkpoint_files = sorted(
+                self.checkpoint_files, key=lambda x: x[1],
+                reverse=not self.decreasing)  # sort in descending order if a lower metric is not better
 
-            print("Current checkpoints:")
-            for c in self.checkpoint_files:
-                print(c)
+            if self.verbose:
+                print("Current checkpoints:")
+                for c in self.checkpoint_files:
+                    print(c)
 
-            if metric is not None and (self.best_metric is None or metric < self.best_metric[1]):
-                self.best_metric = (epoch, metric)
+            if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
+                self.best_epoch = epoch
+                self.best_metric = metric
                 shutil.copyfile(save_path, os.path.join(self.checkpoint_dir, 'model_best' + self.extension))
-        return None, None if self.best_metric is None else self.best_metric
+
+        return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
     def _cleanup_checkpoints(self, trim=0):
         trim = min(len(self.checkpoint_files), trim)
@@ -62,7 +76,8 @@ class CheckpointSaver:
         to_delete = self.checkpoint_files[delete_index:]
         for d in to_delete:
             try:
-                print('Cleaning checkpoint: ', d)
+                if self.verbose:
+                    print('Cleaning checkpoint: ', d)
                 os.remove(d[0])
             except Exception as e:
                 print('Exception (%s) while deleting checkpoint' % str(e))
@@ -74,7 +89,8 @@ class CheckpointSaver:
         torch.save(state, save_path)
         if os.path.exists(self.last_recovery_file):
             try:
-                print('Cleaning recovery', self.last_recovery_file)
+                if self.verbose:
+                    print('Cleaning recovery', self.last_recovery_file)
                 os.remove(self.last_recovery_file)
             except Exception as e:
                 print("Exception (%s) while removing %s" % (str(e), self.last_recovery_file))
@@ -143,8 +159,8 @@ def get_outdir(path, *paths, inc=False):
 
 def update_summary(epoch, train_metrics, eval_metrics, filename, write_header=False):
     rowd = OrderedDict(epoch=epoch)
-    rowd.update(train_metrics)
-    rowd.update(eval_metrics)
+    rowd.update([('train_' + k, v) for k, v in train_metrics.items()])
+    rowd.update([('eval_' + k, v) for k, v in eval_metrics.items()])
     with open(filename, mode='a') as cf:
         dw = csv.DictWriter(cf, fieldnames=rowd.keys())
         if write_header:  # first iteration (epoch == 1 can't be used)
