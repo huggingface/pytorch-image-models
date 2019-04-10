@@ -272,7 +272,7 @@ class InceptionV4(nn.Module):
     def forward_features(self, x, pool=True):
         x = self.features(x)
         if pool:
-            x = adaptive_avgmax_pool2d(x, self.global_pool, count_include_pad=False)
+            x = select_adaptive_pool2d(x, self.global_pool, count_include_pad=False)
             x = x.view(x.size(0), -1)
         return x
 

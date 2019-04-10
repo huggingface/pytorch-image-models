@@ -39,8 +39,7 @@ class PrefetchLoader:
             with torch.cuda.stream(stream):
                 next_input = next_input.cuda(non_blocking=True)
                 next_target = next_target.cuda(non_blocking=True)
-                next_input = next_input.float()
-                next_input = next_input.sub_(self.mean).div_(self.std)
+                next_input = next_input.float().sub_(self.mean).div_(self.std)
                 if self.random_erasing is not None:
                     next_input = self.random_erasing(next_input)
 
@@ -74,6 +73,7 @@ def create_loader(
         std=IMAGENET_DEFAULT_STD,
         num_workers=1,
         distributed=False,
+        crop_pct=None,
 ):
 
     if is_training:
@@ -87,7 +87,8 @@ def create_loader(
             img_size,
             use_prefetcher=use_prefetcher,
             mean=mean,
-            std=std)
+            std=std,
+            crop_pct=crop_pct)
 
     dataset.transform = transform
 

@@ -83,7 +83,6 @@ def densenet161(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    print(kwargs)
     model = DenseNet(num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24), **kwargs)
     if pretrained:
         state_dict = model_zoo.load_url(model_urls['densenet161'])
@@ -193,7 +192,7 @@ class DenseNet(nn.Module):
         x = self.features(x)
         x = F.relu(x, inplace=True)
         if pool:
-            x = adaptive_avgmax_pool2d(x, self.global_pool)
+            x = select_adaptive_pool2d(x, self.global_pool)
             x = x.view(x.size(0), -1)
         return x
 

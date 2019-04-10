@@ -305,7 +305,7 @@ class InceptionResnetV2(nn.Module):
         x = self.block8(x)
         x = self.conv2d_7b(x)
         if pool:
-            x = adaptive_avgmax_pool2d(x, self.global_pool)
+            x = select_adaptive_pool2d(x, self.global_pool)
             #x = F.avg_pool2d(x, 8, count_include_pad=False)
             x = x.view(x.size(0), -1)
         return x

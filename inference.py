@@ -11,7 +11,7 @@ import argparse
 import numpy as np
 import torch
 
-from models import create_model
+from models import create_model, load_checkpoint, TestTimePoolHead
 from data import Dataset, create_loader, get_model_meanstd
 from utils import AverageMeter
 
@@ -49,21 +49,15 @@ def main():
     model = create_model(
         args.model,
         num_classes=num_classes,
-        pretrained=args.pretrained,
-        test_time_pool=args.test_time_pool)
+        pretrained=args.pretrained)
 
-    # resume from a checkpoint
-    if args.checkpoint and os.path.isfile(args.checkpoint):
-        print("=> loading checkpoint '{}'".format(args.checkpoint))
-        checkpoint = torch.load(args.checkpoint)
-        if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
-        else:
-            model.load_state_dict(checkpoint)
-        print("=> loaded checkpoint '{}'".format(args.checkpoint))
-    elif not args.pretrained:
-        print("=> no checkpoint found at '{}'".format(args.checkpoint))
-        exit(1)
+    print('Model %s created, param count: %d' %
+          (args.model, sum([m.numel() for m in model.parameters()])))
+
+    # load a checkpoint
+    if not args.pretrained:
+        if not load_checkpoint(model, args.checkpoint):
+            exit(1)
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()

@@ -9,7 +9,7 @@ import math
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils import model_zoo
-from models.adaptive_avgmax_pool import AdaptiveAvgMaxPool2d
+from models.adaptive_avgmax_pool import SelectAdaptivePool2d
 
 __all__ = ['SENet', 'senet154', 'seresnet50', 'seresnet101', 'seresnet152',
            'seresnext50_32x4d', 'seresnext101_32x4d']
@@ -307,7 +307,7 @@ class SENet(nn.Module):
             downsample_kernel_size=downsample_kernel_size,
             downsample_padding=downsample_padding
         )
-        self.avg_pool = AdaptiveAvgMaxPool2d(pool_type=global_pool)
+        self.avg_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.drop_rate = drop_rate
         self.num_features = 512 * block.expansion
         self.last_linear = nn.Linear(self.num_features, num_classes)

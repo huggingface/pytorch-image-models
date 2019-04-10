@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import torch.utils.model_zoo as model_zoo
-from .adaptive_avgmax_pool import AdaptiveAvgMaxPool2d
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
@@ -29,8 +29,13 @@ def conv3x3(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, drop_rate=0.0):
+    def __init__(self, inplanes, planes, stride=1, downsample=None,
+                 cardinality=1, base_width=64, drop_rate=0.0):
         super(BasicBlock, self).__init__()
+
+        assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
+        assert base_width == 64, 'BasicBlock doest not support changing base width'
+
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
@@ -65,14 +70,18 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, drop_rate=0.0):
+    def __init__(self, inplanes, planes, stride=1, downsample=None,
+                 cardinality=1, base_width=64, drop_rate=0.0):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+
+        width = int(math.floor(planes * (base_width / 64)) * cardinality)
+
+        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(width)
+        self.conv2 = nn.Conv2d(width, width, kernel_size=3, stride=stride,
+                               padding=1, groups=cardinality, bias=False)
+        self.bn2 = nn.BatchNorm2d(width)
+        self.conv3 = nn.Conv2d(width, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -108,10 +117,13 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000,
+                 cardinality=1, base_width=64,
                  drop_rate=0.0, block_drop_rate=0.0,
                  global_pool='avg'):
         self.num_classes = num_classes
         self.inplanes = 64
+        self.cardinality = cardinality
+        self.base_width = base_width
         self.drop_rate = drop_rate
         self.expansion = block.expansion
         super(ResNet, self).__init__()
@@ -123,31 +135,29 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, drop_rate=block_drop_rate)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, drop_rate=block_drop_rate)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, drop_rate=block_drop_rate)
-        self.global_pool = AdaptiveAvgMaxPool2d(pool_type=global_pool)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_features = 512 * block.expansion
-        self.fc = nn.Linear(self.num_features, num_classes)
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
+                nn.init.constant_(m.weight, 1.)
+                nn.init.constant_(m.bias, 0.)
 
     def _make_layer(self, block, planes, blocks, stride=1, drop_rate=0.):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion),
             )
 
-        layers = [block(self.inplanes, planes, stride, downsample, drop_rate)]
+        layers = [block(self.inplanes, planes, stride, downsample, self.cardinality, self.base_width, drop_rate)]
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+            layers.append(block(self.inplanes, planes, cardinality=self.cardinality, base_width=self.base_width))
 
         return nn.Sequential(*layers)
 
@@ -155,11 +165,11 @@ class ResNet(nn.Module):
         return self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = AdaptiveAvgMaxPool2d(pool_type=global_pool)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
         del self.fc
         if num_classes:
-            self.fc = nn.Linear(512 * self.expansion, num_classes)
+            self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
         else:
             self.fc = None
 
@@ -244,4 +254,52 @@ def resnet152(pretrained=False, **kwargs):
     model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
+    return model
+
+
+def resnext50_32x4d(cardinality=32, base_width=4, pretrained=False, **kwargs):
+    """Constructs a ResNeXt50-32x4d model.
+
+    Args:
+        cardinality (int): Cardinality of the aggregated transform
+        base_width (int): Base width of the grouped convolution
+    """
+    model = ResNet(
+        Bottleneck, [3, 4, 6, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+    return model
+
+
+def resnext101_32x4d(cardinality=32, base_width=4, pretrained=False, **kwargs):
+    """Constructs a ResNeXt-101 model.
+
+    Args:
+        cardinality (int): Cardinality of the aggregated transform
+        base_width (int): Base width of the grouped convolution
+    """
+    model = ResNet(
+        Bottleneck, [3, 4, 23, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+    return model
+
+
+def resnext101_64x4d(cardinality=64, base_width=4, pretrained=False, **kwargs):
+    """Constructs a ResNeXt101-64x4d model.
+
+    Args:
+        cardinality (int): Cardinality of the aggregated transform
+        base_width (int): Base width of the grouped convolution
+    """
+    model = ResNet(
+        Bottleneck, [3, 4, 23, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+    return model
+
+
+def resnext152_32x4d(cardinality=32, base_width=4, pretrained=False, **kwargs):
+    """Constructs a ResNeXt152-32x4d model.
+
+    Args:
+        cardinality (int): Cardinality of the aggregated transform
+        base_width (int): Base width of the grouped convolution
+    """
+    model = ResNet(
+        Bottleneck, [3, 8, 36, 3], cardinality=cardinality, base_width=base_width, **kwargs)
     return model

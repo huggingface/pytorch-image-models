@@ -1,15 +1,16 @@
 import torch
 import os
+from collections import OrderedDict
 
 from .inception_v4 import inception_v4
 from .inception_resnet_v2 import inception_resnet_v2
 from .densenet import densenet161, densenet121, densenet169, densenet201
-from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152
-from .fbresnet200 import fbresnet200
+from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152, \
+    resnext50_32x4d, resnext101_32x4d, resnext101_64x4d, resnext152_32x4d
 from .dpn import dpn68, dpn68b, dpn92, dpn98, dpn131, dpn107
 from .senet import seresnet18, seresnet34, seresnet50, seresnet101, seresnet152, \
     seresnext26_32x4d, seresnext50_32x4d, seresnext101_32x4d
-from .resnext import resnext50, resnext101, resnext152
+#from .resnext import resnext50, resnext101, resnext152
 from .xception import xception
 
 model_config_dict = {
@@ -57,26 +58,18 @@ def create_model(
         checkpoint_path='',
         **kwargs):
 
-    test_time_pool = kwargs.pop('test_time_pool') if 'test_time_pool' in kwargs else 0
-
     if model_name == 'dpn68':
-        model = dpn68(
-            num_classes=num_classes, pretrained=pretrained, test_time_pool=test_time_pool)
+        model = dpn68(num_classes=num_classes, pretrained=pretrained)
     elif model_name == 'dpn68b':
-        model = dpn68b(
-            num_classes=num_classes, pretrained=pretrained, test_time_pool=test_time_pool)
+        model = dpn68b(num_classes=num_classes, pretrained=pretrained)
     elif model_name == 'dpn92':
-        model = dpn92(
-            num_classes=num_classes, pretrained=pretrained, test_time_pool=test_time_pool)
+        model = dpn92(num_classes=num_classes, pretrained=pretrained)
     elif model_name == 'dpn98':
-        model = dpn98(
-            num_classes=num_classes, pretrained=pretrained, test_time_pool=test_time_pool)
+        model = dpn98(num_classes=num_classes, pretrained=pretrained)
     elif model_name == 'dpn131':
-        model = dpn131(
-            num_classes=num_classes, pretrained=pretrained, test_time_pool=test_time_pool)
+        model = dpn131(num_classes=num_classes, pretrained=pretrained)
     elif model_name == 'dpn107':
-        model = dpn107(
-            num_classes=num_classes, pretrained=pretrained, test_time_pool=test_time_pool)
+        model = dpn107(num_classes=num_classes, pretrained=pretrained)
     elif model_name == 'resnet18':
         model = resnet18(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'resnet34':
@@ -99,8 +92,6 @@ def create_model(
         model = inception_resnet_v2(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'inception_v4':
         model = inception_v4(num_classes=num_classes, pretrained=pretrained, **kwargs)
-    elif model_name == 'fbresnet200':
-        model = fbresnet200(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnet18':
         model = seresnet18(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnet34':
@@ -117,12 +108,14 @@ def create_model(
         model = seresnext50_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'seresnext101_32x4d':
         model = seresnext101_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
-    elif model_name == 'resnext50':
-        model = resnext50(num_classes=num_classes, pretrained=pretrained, **kwargs)
-    elif model_name == 'resnext101':
-        model = resnext101(num_classes=num_classes, pretrained=pretrained, **kwargs)
-    elif model_name == 'resnext152':
-        model = resnext152(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext50_32x4d':
+        model = resnext50_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext101_32x4d':
+        model = resnext101_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext101_64x4d':
+        model = resnext101_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
+    elif model_name == 'resnext152_32x4d':
+        model = resnext152_32x4d(num_classes=num_classes, pretrained=pretrained, **kwargs)
     elif model_name == 'xception':
         model = xception(num_classes=num_classes, pretrained=pretrained)
     else:
@@ -136,13 +129,22 @@ def create_model(
 
 
 def load_checkpoint(model, checkpoint_path):
-    if checkpoint_path is not None and os.path.isfile(checkpoint_path):
-        print('Loading checkpoint', checkpoint_path)
+    if checkpoint_path and os.path.isfile(checkpoint_path):
+        print("=> Loading checkpoint '{}'".format(checkpoint_path))
         checkpoint = torch.load(checkpoint_path)
         if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-            model.load_state_dict(checkpoint['state_dict'])
+            new_state_dict = OrderedDict()
+            for k, v in checkpoint['state_dict'].items():
+                if k.startswith('module'):
+                    name = k[7:]  # remove `module.`
+                else:
+                    name = k
+                new_state_dict[name] = v
+            model.load_state_dict(new_state_dict)
         else:
             model.load_state_dict(checkpoint)
+        print("=> Loaded checkpoint '{}'".format(checkpoint_path))
+        return True
     else:
-        print("Error: No checkpoint found at %s." % checkpoint_path)
-
+        print("=> Error: No checkpoint found at '{}'".format(checkpoint_path))
+        return False

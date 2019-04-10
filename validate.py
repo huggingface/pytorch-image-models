@@ -9,9 +9,8 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-from collections import OrderedDict
 
-from models import create_model
+from models import create_model, load_checkpoint, TestTimePoolHead
 from data import Dataset, create_loader, get_model_meanstd
 
 
@@ -41,40 +40,26 @@ parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
 def main():
     args = parser.parse_args()
 
-    test_time_pool = False
-    if 'dpn' in args.model and args.img_size > 224 and not args.no_test_pool:
-        test_time_pool = True
-
     # create model
     num_classes = 1000
     model = create_model(
         args.model,
         num_classes=num_classes,
-        pretrained=args.pretrained,
-        test_time_pool=test_time_pool)
+        pretrained=args.pretrained)
 
     print('Model %s created, param count: %d' %
           (args.model, sum([m.numel() for m in model.parameters()])))
 
-    # optionally resume from a checkpoint
-    if args.checkpoint and os.path.isfile(args.checkpoint):
-        print("=> loading checkpoint '{}'".format(args.checkpoint))
-        checkpoint = torch.load(args.checkpoint)
-        if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-            new_state_dict = OrderedDict()
-            for k, v in checkpoint['state_dict'].items():
-                if k.startswith('module'):
-                    name = k[7:]  # remove `module.`
-                else:
-                    name = k
-                new_state_dict[name] = v
-            model.load_state_dict(new_state_dict)
-        else:
-            model.load_state_dict(checkpoint)
-        print("=> loaded checkpoint '{}'".format(args.checkpoint))
-    elif not args.pretrained:
-        print("=> no checkpoint found at '{}'".format(args.checkpoint))
-        exit(1)
+    # load a checkpoint
+    if not args.pretrained:
+        if not load_checkpoint(model, args.checkpoint):
+            exit(1)
+
+    test_time_pool = False
+    # FIXME make this work for networks with default img size != 224 and default pool k != 7
+    if args.img_size > 224 and not args.no_test_pool:
+        model = TestTimePoolHead(model)
+        test_time_pool = True
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
@@ -94,7 +79,8 @@ def main():
         use_prefetcher=True,
         mean=data_mean,
         std=data_std,
-        num_workers=args.workers)
+        num_workers=args.workers,
+        crop_pct=1.0 if test_time_pool else None)
 
     batch_time = AverageMeter()
     losses = AverageMeter()
