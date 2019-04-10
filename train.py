@@ -93,6 +93,8 @@ parser.add_argument('--amp', action='store_true', default=False,
                     help='use NVIDIA amp for mixed precision training')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
                     help='path to output folder (default: none, current dir)')
+parser.add_argument('--eval-metric', default='prec1', type=str, metavar='EVAL_METRIC',
+                    help='Best metric (default: "prec1"')
 parser.add_argument("--local_rank", default=0, type=int)
 
 
@@ -238,10 +240,13 @@ def main():
     if args.local_rank == 0:
         print('Scheduled epochs: ', num_epochs)
 
+    eval_metric = args.eval_metric
     saver = None
     if output_dir:
-        saver = CheckpointSaver(checkpoint_dir=output_dir)
-    best_loss = None
+        decreasing = True if eval_metric == 'loss' else False
+        saver = CheckpointSaver(checkpoint_dir=output_dir, decreasing=decreasing)
+    best_metric = None
+    best_epoch = None
     try:
         for epoch in range(start_epoch, num_epochs):
             if args.distributed:
@@ -255,15 +260,15 @@ def main():
                 model, loader_eval, validate_loss_fn, args)
 
             if lr_scheduler is not None:
-                lr_scheduler.step(epoch, eval_metrics['eval_loss'])
+                lr_scheduler.step(epoch, eval_metrics[eval_metric])
 
             update_summary(
                 epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
-                write_header=best_loss is None)
+                write_header=best_metric is None)
 
             if saver is not None:
                 # save proper checkpoint with eval metric
-                best_loss = saver.save_checkpoint({
+                best_metric, best_epoch = saver.save_checkpoint({
                     'epoch': epoch + 1,
                     'arch': args.model,
                     'state_dict': model.state_dict(),
@@ -271,11 +276,12 @@ def main():
                     'args': args,
                     },
                     epoch=epoch + 1,
-                    metric=eval_metrics['eval_loss'])
+                    metric=eval_metrics[eval_metric])
 
     except KeyboardInterrupt:
         pass
-    print('*** Best loss: {0} (epoch {1})'.format(best_loss[1], best_loss[0]))
+    if best_metric is not None:
+        print('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
 
 
 def train_epoch(
@@ -363,7 +369,7 @@ def train_epoch(
 
         end = time.time()
 
-    return OrderedDict([('train_loss', losses_m.avg)])
+    return OrderedDict([('loss', losses_m.avg)])
 
 
 def validate(model, loader, loss_fn, args):
@@ -418,7 +424,7 @@ def validate(model, loader, loss_fn, args):
                     batch_time=batch_time_m, loss=losses_m,
                     top1=prec1_m, top5=prec5_m))
 
-    metrics = OrderedDict([('eval_loss', losses_m.avg), ('eval_prec1', prec1_m.avg)])
+    metrics = OrderedDict([('loss', losses_m.avg), ('prec1', prec1_m.avg), ('prec5', prec5_m.avg)])
 
     return metrics
 

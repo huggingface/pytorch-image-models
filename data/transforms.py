@@ -20,7 +20,7 @@ def get_model_meanstd(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
-    elif 'ception' in model_name:
+    elif 'ception' in model_name or 'nasnet' in model_name:
         return IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
     else:
         return IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -30,7 +30,7 @@ def get_model_mean(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DPN_STD
-    elif 'ception' in model_name:
+    elif 'ception' in model_name or 'nasnet' in model_name:
         return IMAGENET_INCEPTION_MEAN
     else:
         return IMAGENET_DEFAULT_MEAN
@@ -40,7 +40,7 @@ def get_model_std(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DEFAULT_STD
-    elif 'ception' in model_name:
+    elif 'ception' in model_name or 'nasnet' in model_name:
         return IMAGENET_INCEPTION_STD
     else:
         return IMAGENET_DEFAULT_STD
