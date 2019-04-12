@@ -8,21 +8,40 @@ import math
 
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils import model_zoo
+
+from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import SelectAdaptivePool2d
+from data.transforms import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = ['SENet', 'senet154', 'seresnet50', 'seresnet101', 'seresnet152',
            'seresnext50_32x4d', 'seresnext101_32x4d']
 
-model_urls = {
-    'senet154': 'http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth',
-    'seresnet18': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet50-ce0d4300.pth',
-    'seresnet34': 'https://www.dropbox.com/s/q31ccy22aq0fju7/seresnet34-a4004e63.pth?dl=1',
-    'seresnet50': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet50-ce0d4300.pth',
-    'seresnet101': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet101-7e38fcc6.pth',
-    'seresnet152': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnet152-d17c99b7.pth',
-    'seresnext50_32x4d': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth',
-    'seresnext101_32x4d': 'http://data.lip6.fr/cadene/pretrainedmodels/se_resnext101_32x4d-3b2fe3d8.pth',
+
+def _cfg(url=''):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 244), 'pool_size': (7, 7),
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'crop_pct': 0.875,
+        'first_conv': 'layer0.conv1', 'classifier': 'last_linear',
+    }
+
+
+default_cfgs = {
+    'senet154':
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth'),
+    'seresnet18':
+        _cfg(url=''),
+    'seresnet34':
+        _cfg(url='https://www.dropbox.com/s/q31ccy22aq0fju7/seresnet34-a4004e63.pth?dl=1'),
+    'seresnet50':
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnet50-ce0d4300.pth'),
+    'seresnet101':
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnet101-7e38fcc6.pth'),
+    'seresnet152':
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnet152-d17c99b7.pth'),
+    'seresnext50_32x4d':
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth'),
+    'seresnext101_32x4d':
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext101_32x4d-3b2fe3d8.pth'),
 }
 
 
@@ -197,7 +216,7 @@ class SEResNetBlock(nn.Module):
 class SENet(nn.Module):
 
     def __init__(self, block, layers, groups, reduction, drop_rate=0.2,
-                 inchans=3, inplanes=128, input_3x3=True, downsample_kernel_size=3,
+                 in_chans=3, inplanes=128, input_3x3=True, downsample_kernel_size=3,
                  downsample_padding=1, num_classes=1000, global_pool='avg'):
         """
         Parameters
@@ -247,7 +266,7 @@ class SENet(nn.Module):
         self.num_classes = num_classes
         if input_3x3:
             layer0_modules = [
-                ('conv1', nn.Conv2d(inchans, 64, 3, stride=2, padding=1, bias=False)),
+                ('conv1', nn.Conv2d(in_chans, 64, 3, stride=2, padding=1, bias=False)),
                 ('bn1', nn.BatchNorm2d(64)),
                 ('relu1', nn.ReLU(inplace=True)),
                 ('conv2', nn.Conv2d(64, 64, 3, stride=1, padding=1, bias=False)),
@@ -260,7 +279,7 @@ class SENet(nn.Module):
         else:
             layer0_modules = [
                 ('conv1', nn.Conv2d(
-                    inchans, inplanes, kernel_size=7, stride=2, padding=3, bias=False)),
+                    in_chans, inplanes, kernel_size=7, stride=2, padding=3, bias=False)),
                 ('bn1', nn.BatchNorm2d(inplanes)),
                 ('relu1', nn.ReLU(inplace=True)),
             ]
@@ -368,99 +387,107 @@ class SENet(nn.Module):
         return x
 
 
-def _load_pretrained(model, url, inchans=3):
-    state_dict = model_zoo.load_url(url)
-    if inchans == 1:
-        conv1_weight = state_dict['conv1.weight']
-        state_dict['conv1.weight'] = conv1_weight.sum(dim=1, keepdim=True)
-    elif inchans != 3:
-        assert False, "Invalid inchans for pretrained weights"
-    model.load_state_dict(state_dict)
-    
-
-def senet154(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
-    model = SENet(SEBottleneck, [3, 8, 36, 3], groups=64, reduction=16,
-                  num_classes=num_classes, **kwargs)
-    if pretrained:
-        _load_pretrained(model, model_urls['senet154'], inchans)
-    return model
-
-
-def seresnet18(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnet18(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnet18']
     model = SENet(SEResNetBlock, [2, 2, 2, 2], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnet18'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnet34(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnet34(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnet34']
     model = SENet(SEResNetBlock, [3, 4, 6, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnet34'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnet50(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnet50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnet50']
     model = SENet(SEResNetBottleneck, [3, 4, 6, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnet50'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnet101(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnet101(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnet101']
     model = SENet(SEResNetBottleneck, [3, 4, 23, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnet101'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnet152(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnet152']
     model = SENet(SEResNetBottleneck, [3, 8, 36, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnet152'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnext26_32x4d(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def senet154(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['senet154']
+    model = SENet(SEBottleneck, [3, 8, 36, 3], groups=64, reduction=16,
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+def seresnext26_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnext26_32x4d']
     model = SENet(SEResNeXtBottleneck, [2, 2, 2, 2], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['se_resnext26_32x4d'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnext50_32x4d(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnext50_32x4d']
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnext50_32x4d'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def seresnext101_32x4d(num_classes=1000, inchans=3, pretrained='imagenet', **kwargs):
+def seresnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['seresnext101_32x4d']
     model = SENet(SEResNeXtBottleneck, [3, 4, 23, 3], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
                   downsample_kernel_size=1, downsample_padding=0,
-                  num_classes=num_classes, **kwargs)
+                  num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        _load_pretrained(model, model_urls['seresnext101_32x4d'], inchans)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model

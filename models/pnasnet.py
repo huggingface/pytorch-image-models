@@ -3,29 +3,23 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
-import torch.utils.model_zoo as model_zoo
+import torch.nn.functional as F
 
-pretrained_settings = {
+from models.helpers import load_pretrained
+from models.adaptive_avgmax_pool import SelectAdaptivePool2d
+
+default_cfgs = {
     'pnasnet5large': {
-        'imagenet': {
-            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/pnasnet5large-bf079911.pth',
-            'input_space': 'RGB',
-            'input_size': [3, 331, 331],
-            'input_range': [0, 1],
-            'mean': [0.5, 0.5, 0.5],
-            'std': [0.5, 0.5, 0.5],
-            'num_classes': 1000
-        },
-        'imagenet+background': {
-            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/pnasnet5large-bf079911.pth',
-            'input_space': 'RGB',
-            'input_size': [3, 331, 331],
-            'input_range': [0, 1],
-            'mean': [0.5, 0.5, 0.5],
-            'std': [0.5, 0.5, 0.5],
-            'num_classes': 1001
-        }
-    }
+        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/pnasnet5large-bf079911.pth',
+        'input_size': (3, 331, 331),
+        'pool_size': (11, 11),
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'crop_pct': 0.8975,
+        'num_classes': 1001,
+        'first_conv': 'conv_0.conv',
+        'classifier': 'last_linear',
+    },
 }
 
 
@@ -288,13 +282,14 @@ class Cell(CellBase):
 
 
 class PNASNet5Large(nn.Module):
-    def __init__(self, num_classes=1001):
+    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0.5, global_pool='avg'):
         super(PNASNet5Large, self).__init__()
         self.num_classes = num_classes
         self.num_features = 4320
+        self.drop_rate = drop_rate
 
         self.conv_0 = nn.Sequential(OrderedDict([
-            ('conv', nn.Conv2d(3, 96, kernel_size=3, stride=2, bias=False)),
+            ('conv', nn.Conv2d(in_chans, 96, kernel_size=3, stride=2, bias=False)),
             ('bn', nn.BatchNorm2d(96, eps=0.001))
         ]))
         self.cell_stem_0 = CellStem0(in_channels_left=96, out_channels_left=54,
@@ -334,18 +329,18 @@ class PNASNet5Large(nn.Module):
         self.cell_11 = Cell(in_channels_left=4320, out_channels_left=864,
                             in_channels_right=4320, out_channels_right=864)
         self.relu = nn.ReLU()
-        self.avg_pool = nn.AvgPool2d(11, stride=1, padding=0)
-        self.dropout = nn.Dropout(0.5)
-        self.last_linear = nn.Linear(self.num_features, num_classes)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
     def get_classifier(self):
         return self.last_linear
 
-    def reset_classifier(self, num_classes):
+    def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         del self.last_linear
         if num_classes:
-            self.last_linear = nn.Linear(self.num_features, num_classes)
+            self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
         else:
             self.last_linear = None
 
@@ -367,38 +362,27 @@ class PNASNet5Large(nn.Module):
         x_cell_11 = self.cell_11(x_cell_9, x_cell_10)
         x = self.relu(x_cell_11)
         if pool:
-            x = self.avg_pool(x)
+            x = self.global_pool(x)
             x = x.view(x.size(0), -1)
         return x
 
     def forward(self, input):
         x = self.forward_features(input)
-        x = self.dropout(x)
+        if self.drop_rate > 0:
+            x = F.dropout(x, self.drop_rate, training=self.training)
         x = self.last_linear(x)
         return x
 
 
-def pnasnet5large(num_classes=1001, pretrained='imagenet'):
+def pnasnet5large(num_classes=1000, in_chans=3, pretrained='imagenet'):
     r"""PNASNet-5 model architecture from the
     `"Progressive Neural Architecture Search"
     <https://arxiv.org/abs/1712.00559>`_ paper.
     """
+    default_cfg = default_cfgs['pnasnet5large']
+    model = PNASNet5Large(num_classes=1000, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        settings = pretrained_settings['pnasnet5large']['imagenet']
-        assert num_classes == settings[
-            'num_classes'], 'num_classes should be {}, but is {}'.format(
-            settings['num_classes'], num_classes)
+        load_pretrained(model, default_cfg, num_classes, in_chans)
 
-        # both 'imagenet'&'imagenet+background' are loaded from same parameters
-        model = PNASNet5Large(num_classes=1001)
-        model.load_state_dict(model_zoo.load_url(settings['url']))
-
-        #if pretrained == 'imagenet':
-        new_last_linear = nn.Linear(model.last_linear.in_features, 1000)
-        new_last_linear.weight.data = model.last_linear.weight.data[1:]
-        new_last_linear.bias.data = model.last_linear.bias.data[1:]
-        model.last_linear = new_last_linear
-
-    else:
-        model = PNASNet5Large(num_classes=num_classes)
     return model

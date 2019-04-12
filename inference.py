@@ -11,10 +11,11 @@ import argparse
 import numpy as np
 import torch
 
-from models import create_model, load_checkpoint, TestTimePoolHead
-from data import Dataset, create_loader, get_model_meanstd
+from models import create_model, apply_test_time_pool
+from data import Dataset, create_loader, get_mean_and_std
 from utils import AverageMeter
 
+torch.backends.cudnn.benchmark = True
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Inference')
 parser.add_argument('data', metavar='DIR',
@@ -29,6 +30,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--img-size', default=224, type=int,
                     metavar='N', help='Input image dimension')
+parser.add_argument('--num-classes', type=int, default=1000,
+                    help='Number classes in dataset')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
@@ -45,26 +48,24 @@ def main():
     args = parser.parse_args()
 
     # create model
-    num_classes = 1000
     model = create_model(
         args.model,
-        num_classes=num_classes,
-        pretrained=args.pretrained)
+        num_classes=args.num_classes,
+        in_chans=3,
+        pretrained=args.pretrained,
+        checkpoint_path=args.checkpoint)
 
     print('Model %s created, param count: %d' %
           (args.model, sum([m.numel() for m in model.parameters()])))
 
-    # load a checkpoint
-    if not args.pretrained:
-        if not load_checkpoint(model, args.checkpoint):
-            exit(1)
+    data_mean, data_std = get_mean_and_std(model, args)
+    model, test_time_pool = apply_test_time_pool(model, args)
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
     else:
         model = model.cuda()
 
-    data_mean, data_std = get_model_meanstd(args.model)
     loader = create_loader(
         Dataset(args.data),
         img_size=args.img_size,

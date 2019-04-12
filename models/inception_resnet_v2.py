@@ -5,12 +5,18 @@ based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
-import numpy as np
-from .adaptive_avgmax_pool import *
+from models.helpers import load_pretrained
+from models.adaptive_avgmax_pool import *
+from data.transforms import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
-model_urls = {
-    'imagenet': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionresnetv2-520b38e4.pth'
+
+default_cfgs = {
+    'inception_resnet_v2': {
+        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionresnetv2-520b38e4.pth',
+        'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
+        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
+        'first_conv': 'conv2d_1a.conv', 'classifier': 'last_linear',
+    }
 }
 
 
@@ -204,12 +210,14 @@ class Block8(nn.Module):
 
 
 class InceptionResnetV2(nn.Module):
-    def __init__(self, num_classes=1001, drop_rate=0., global_pool='avg'):
+    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
         super(InceptionResnetV2, self).__init__()
         self.drop_rate = drop_rate
         self.global_pool = global_pool
         self.num_classes = num_classes
-        self.conv2d_1a = BasicConv2d(3, 32, kernel_size=3, stride=2)
+        self.num_features = 1536
+
+        self.conv2d_1a = BasicConv2d(in_chans, 32, kernel_size=3, stride=2)
         self.conv2d_2a = BasicConv2d(32, 32, kernel_size=3, stride=1)
         self.conv2d_2b = BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.maxpool_3a = nn.MaxPool2d(3, stride=2)
@@ -265,28 +273,20 @@ class InceptionResnetV2(nn.Module):
             Block8(scale=0.20)
         )
         self.block8 = Block8(noReLU=True)
-        self.conv2d_7b = BasicConv2d(2080, 1536, kernel_size=1, stride=1)
-        self.num_features = 1536
-        self.last_linear = nn.Linear(1536, num_classes)
+        self.conv2d_7b = BasicConv2d(2080, self.num_features, kernel_size=1, stride=1)
+        self.last_linear = nn.Linear(self.num_features, num_classes)
 
     def get_classifier(self):
-        return self.classif
+        return self.last_linear
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = global_pool
         self.num_classes = num_classes
-        del self.classif
+        del self.last_linear
         if num_classes:
-            self.last_linear = torch.nn.Linear(1536, num_classes)
+            self.last_linear = torch.nn.Linear(self.num_features, num_classes)
         else:
             self.last_linear = None
-
-    def trim_classifier(self, trim=1):
-        self.num_classes -= trim
-        new_last_linear = nn.Linear(1536, self.num_classes)
-        new_last_linear.weight.data = self.last_linear.weight.data[trim:]
-        new_last_linear.bias.data = self.last_linear.bias.data[trim:]
-        self.last_linear = new_last_linear
 
     def forward_features(self, x, pool=True):
         x = self.conv2d_1a(x)
@@ -318,19 +318,15 @@ class InceptionResnetV2(nn.Module):
         return x
 
 
-def inception_resnet_v2(pretrained=False, num_classes=1000, **kwargs):
+def inception_resnet_v2(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     r"""InceptionResnetV2 model architecture from the
     `"InceptionV4, Inception-ResNet..." <https://arxiv.org/abs/1602.07261>`_ paper.
-
-    Args:
-        pretrained ('string'): If True, returns a model pre-trained on ImageNet
     """
-    extra_class = 1 if pretrained else 0
-    model = InceptionResnetV2(num_classes=num_classes + extra_class, **kwargs)
+    default_cfg = default_cfgs['inception_resnet_v2']
+    model = InceptionResnetV2(num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        print('Loading pretrained from %s' % model_urls['imagenet'])
-        model.load_state_dict(model_zoo.load_url(model_urls['imagenet']))
-        model.trim_classifier()
+        load_pretrained(model, default_cfg, num_classes, in_chans)
 
     return model
 

@@ -5,11 +5,18 @@ based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
-from .adaptive_avgmax_pool import *
+from models.helpers import load_pretrained
+from models.adaptive_avgmax_pool import *
+from data.transforms import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
-model_urls = {
-    'imagenet': 'http://webia.lip6.fr/~cadene/Downloads/inceptionv4-97ef9c30.pth'
+
+default_cfgs = {
+    'inception_v4': {
+        'url': 'http://webia.lip6.fr/~cadene/Downloads/inceptionv4-97ef9c30.pth',
+        'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
+        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
+        'first_conv': 'features.0.conv', 'classifier': 'classif',
+    }
 }
 
 
@@ -230,13 +237,15 @@ class Inception_C(nn.Module):
 
 
 class InceptionV4(nn.Module):
-    def __init__(self, num_classes=1001, drop_rate=0., global_pool='avg'):
+    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
         super(InceptionV4, self).__init__()
         self.drop_rate = drop_rate
         self.global_pool = global_pool
         self.num_classes = num_classes
+        self.num_features = 1536
+
         self.features = nn.Sequential(
-            BasicConv2d(3, 32, kernel_size=3, stride=2),
+            BasicConv2d(in_chans, 32, kernel_size=3, stride=2),
             BasicConv2d(32, 32, kernel_size=3, stride=1),
             BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1),
             Mixed_3a(),
@@ -259,7 +268,7 @@ class InceptionV4(nn.Module):
             Inception_C(),
             Inception_C(),
         )
-        self.classif = nn.Linear(1536, num_classes)
+        self.classif = nn.Linear(self.num_features, num_classes)
 
     def get_classifier(self):
         return self.classif
@@ -267,12 +276,12 @@ class InceptionV4(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = global_pool
         self.num_classes = num_classes
-        self.classif = nn.Linear(1536, num_classes)
+        self.classif = nn.Linear(self.num_features, num_classes)
 
     def forward_features(self, x, pool=True):
         x = self.features(x)
         if pool:
-            x = select_adaptive_pool2d(x, self.global_pool, count_include_pad=False)
+            x = select_adaptive_pool2d(x, self.global_pool)
             x = x.view(x.size(0), -1)
         return x
 
@@ -284,10 +293,12 @@ class InceptionV4(nn.Module):
         return x
 
 
-def inception_v4(pretrained=False, num_classes=1001, **kwargs):
-    model = InceptionV4(num_classes=num_classes, **kwargs)
+def inception_v4(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['inception_v4']
+    model = InceptionV4(num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['imagenet']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 

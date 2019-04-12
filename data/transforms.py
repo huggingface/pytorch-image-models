@@ -7,26 +7,57 @@ from data.random_erasing import RandomErasingNumpy
 
 DEFAULT_CROP_PCT = 0.875
 
-IMAGENET_DPN_MEAN = [124 / 255, 117 / 255, 104 / 255]
-IMAGENET_DPN_STD = [1 / (.0167 * 255)] * 3
-IMAGENET_INCEPTION_MEAN = [0.5, 0.5, 0.5]
-IMAGENET_INCEPTION_STD = [0.5, 0.5, 0.5]
-IMAGENET_DEFAULT_MEAN = [0.485, 0.456, 0.406]
-IMAGENET_DEFAULT_STD = [0.229, 0.224, 0.225]
+IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
+IMAGENET_INCEPTION_MEAN = (0.5, 0.5, 0.5)
+IMAGENET_INCEPTION_STD = (0.5, 0.5, 0.5)
+IMAGENET_DPN_MEAN = (124 / 255, 117 / 255, 104 / 255)
+IMAGENET_DPN_STD = tuple([1 / (.0167 * 255)] * 3)
 
 
-# FIXME replace these mean/std fn with model factory based values from config dict
-def get_model_meanstd(model_name):
-    model_name = model_name.lower()
-    if 'dpn' in model_name:
-        return IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
-    elif 'ception' in model_name or 'nasnet' in model_name:
-        return IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+def get_mean_and_std(model, args, num_chan=3):
+    if hasattr(model, 'default_cfg'):
+        mean = model.default_cfg['mean']
+        std = model.default_cfg['std']
     else:
-        return IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+        if args.mean is not None:
+            mean = tuple(args.mean)
+            if len(mean) == 1:
+                mean = tuple(list(mean) * num_chan)
+            else:
+                assert len(mean) == num_chan
+        else:
+            mean = get_mean_by_model(args.model)
+        if args.std is not None:
+            std = tuple(args.std)
+            if len(std) == 1:
+                std = tuple(list(std) * num_chan)
+            else:
+                assert len(std) == num_chan
+        else:
+            std = get_std_by_model(args.model)
+    return mean, std
 
 
-def get_model_mean(model_name):
+def get_mean_by_name(name):
+    if name == 'dpn':
+        return IMAGENET_DPN_MEAN
+    elif name == 'inception' or name == 'le':
+        return IMAGENET_INCEPTION_MEAN
+    else:
+        return IMAGENET_DEFAULT_MEAN
+
+
+def get_std_by_name(name):
+    if name == 'dpn':
+        return IMAGENET_DPN_STD
+    elif name == 'inception' or name == 'le':
+        return IMAGENET_INCEPTION_STD
+    else:
+        return IMAGENET_DEFAULT_STD
+
+
+def get_mean_by_model(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DPN_STD
@@ -36,7 +67,7 @@ def get_model_mean(model_name):
         return IMAGENET_DEFAULT_MEAN
 
 
-def get_model_std(model_name):
+def get_std_by_model(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DEFAULT_STD
@@ -93,8 +124,8 @@ def transforms_imagenet_train(
         tfl += [
             ToTensor(),
             transforms.Normalize(
-                mean=torch.tensor(mean) * 255,
-                std=torch.tensor(std) * 255)
+                mean=torch.tensor(mean),
+                std=torch.tensor(std))
         ]
         if random_erasing > 0.:
             tfl.append(RandomErasingNumpy(random_erasing, per_pixel=True))
@@ -124,11 +155,5 @@ def transforms_imagenet_eval(
                      mean=torch.tensor(mean),
                      std=torch.tensor(std))
         ]
-        # tfl += [
-        #     ToTensor(),
-        #     transforms.Normalize(
-        #         mean=torch.tensor(mean) * 255,
-        #         std=torch.tensor(std) * 255)
-        # ]
 
     return transforms.Compose(tfl)

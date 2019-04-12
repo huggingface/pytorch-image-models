@@ -13,94 +13,108 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
 from collections import OrderedDict
 
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from models.helpers import load_pretrained
+from models.adaptive_avgmax_pool import select_adaptive_pool2d
+from data.transforms import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 
 __all__ = ['DPN', 'dpn68', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
 
 
-model_urls = {
+def _cfg(url=''):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'mean': IMAGENET_DPN_MEAN, 'std': IMAGENET_DPN_STD,
+        'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier',
+    }
+
+
+default_cfgs = {
     'dpn68':
-        'http://data.lip6.fr/cadene/pretrainedmodels/dpn68-66bebafa7.pth',
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68-66bebafa7.pth'),
     'dpn68b_extra':
-        'http://data.lip6.fr/cadene/pretrainedmodels/'
-        'dpn68b_extra-84854c156.pth',
-    'dpn92': '',
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68b_extra-84854c156.pth'),
     'dpn92_extra':
-        'http://data.lip6.fr/cadene/pretrainedmodels/'
-        'dpn92_extra-b040e4a9b.pth',
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn92_extra-b040e4a9b.pth'),
     'dpn98':
-        'http://data.lip6.fr/cadene/pretrainedmodels/dpn98-5b90dec4d.pth',
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn98-5b90dec4d.pth'),
     'dpn131':
-        'http://data.lip6.fr/cadene/pretrainedmodels/dpn131-71dfe43e0.pth',
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn131-71dfe43e0.pth'),
     'dpn107_extra':
-        'http://data.lip6.fr/cadene/pretrainedmodels/'
-        'dpn107_extra-1ac7121e2.pth'
+        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn107_extra-1ac7121e2.pth')
 }
 
 
-def dpn68(num_classes=1000, pretrained=False):
+def dpn68(num_classes=1000, in_chans=3, pretrained=False):
+    default_cfg = default_cfgs['dpn68']
     model = DPN(
         small=True, num_init_features=10, k_r=128, groups=32,
         k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
-        num_classes=num_classes)
+        num_classes=num_classes, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['dpn68']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn68b(num_classes=1000, pretrained=False):
+def dpn68b(num_classes=1000, in_chans=3, pretrained=False):
+    default_cfg = default_cfgs['dpn68b_extra']
     model = DPN(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
-        num_classes=num_classes)
+        num_classes=num_classes, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['dpn68b_extra']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn92(num_classes=1000, pretrained=False, extra=True):
+def dpn92(num_classes=1000, in_chans=3, pretrained=False):
+    default_cfg = default_cfgs['dpn92_extra']
     model = DPN(
         num_init_features=64, k_r=96, groups=32,
         k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
-        num_classes=num_classes)
+        num_classes=num_classes, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        if extra:
-            model.load_state_dict(model_zoo.load_url(model_urls['dpn92_extra']))
-        else:
-            model.load_state_dict(model_zoo.load_url(model_urls['dpn92']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn98(num_classes=1000, pretrained=False):
+def dpn98(num_classes=1000, in_chans=3, pretrained=False):
+    default_cfg = default_cfgs['dpn98']
     model = DPN(
         num_init_features=96, k_r=160, groups=40,
         k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128),
-        num_classes=num_classes)
+        num_classes=num_classes, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['dpn98']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn131(num_classes=1000, pretrained=False):
+def dpn131(num_classes=1000, in_chans=3, pretrained=False):
+    default_cfg = default_cfgs['dpn131']
     model = DPN(
         num_init_features=128, k_r=160, groups=40,
         k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128),
-        num_classes=num_classes)
+        num_classes=num_classes, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['dpn131']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn107(num_classes=1000, pretrained=False):
+def dpn107(num_classes=1000, in_chans=3, pretrained=False):
+    default_cfg = default_cfgs['dpn107_extra']
     model = DPN(
         num_init_features=128, k_r=200, groups=50,
         k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128),
-        num_classes=num_classes)
+        num_classes=num_classes, in_chans=in_chans)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['dpn107_extra']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
@@ -128,11 +142,11 @@ class BnActConv2d(nn.Module):
 
 
 class InputBlock(nn.Module):
-    def __init__(self, num_init_features, kernel_size=7,
+    def __init__(self, num_init_features, kernel_size=7, in_chans=3,
                  padding=3, activation_fn=nn.ReLU(inplace=True)):
         super(InputBlock, self).__init__()
         self.conv = nn.Conv2d(
-            3, num_init_features, kernel_size=kernel_size, stride=2, padding=padding, bias=False)
+            in_chans, num_init_features, kernel_size=kernel_size, stride=2, padding=padding, bias=False)
         self.bn = nn.BatchNorm2d(num_init_features, eps=0.001)
         self.act = activation_fn
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -212,7 +226,7 @@ class DualPathBlock(nn.Module):
 class DPN(nn.Module):
     def __init__(self, small=False, num_init_features=64, k_r=96, groups=32,
                  b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
-                 num_classes=1000, fc_act=nn.ELU(inplace=True)):
+                 num_classes=1000, in_chans=3, fc_act=nn.ELU(inplace=True)):
         super(DPN, self).__init__()
         self.num_classes = num_classes
         self.b = b
@@ -222,9 +236,11 @@ class DPN(nn.Module):
 
         # conv1
         if small:
-            blocks['conv1_1'] = InputBlock(num_init_features, kernel_size=3, padding=1)
+            blocks['conv1_1'] = InputBlock(
+                num_init_features, in_chans=in_chans, kernel_size=3, padding=1)
         else:
-            blocks['conv1_1'] = InputBlock(num_init_features, kernel_size=7, padding=3)
+            blocks['conv1_1'] = InputBlock(
+                num_init_features, in_chans=in_chans, kernel_size=7, padding=3)
 
         # conv2
         bw = 64 * bw_factor

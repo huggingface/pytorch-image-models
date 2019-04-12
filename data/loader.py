@@ -94,6 +94,9 @@ def create_loader(
 
     sampler = None
     if distributed:
+        # FIXME note, doing this for validation isn't technically correct
+        # There currently is no fixed order distributed sampler that corrects
+        # for padded entries
         sampler = tdata.distributed.DistributedSampler(dataset)
 
     loader = tdata.DataLoader(

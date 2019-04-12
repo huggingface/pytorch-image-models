@@ -6,17 +6,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-import torch.utils.model_zoo as model_zoo
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from models.helpers import load_pretrained
+from models.adaptive_avgmax_pool import SelectAdaptivePool2d
+from data.transforms import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
+           'resnext50_32x4d', 'resnext101_32x4d', 'resnext101_64x4d', 'resnext152_32x4d']
 
-model_urls = {
-    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
-    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
-    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
-    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+
+def _cfg(url=''):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'crop_pct': 0.875,
+        'first_conv': 'conv1', 'classifier': 'fc',
+    }
+
+
+default_cfgs = {
+    'resnet18': _cfg(url='https://download.pytorch.org/models/resnet18-5c106cde.pth'),
+    'resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
+    'resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
+    'resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
+    'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
+    'resnext50_32x4d': _cfg(url=''),
+    'resnext101_32x4d': _cfg(url=''),
+    'resnext101_64x4d': _cfg(url=''),
+    'resnext152_32x4d': _cfg(url=''),
 }
 
 
@@ -116,7 +132,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000,
+    def __init__(self, block, layers, num_classes=1000, in_chans=3,
                  cardinality=1, base_width=64,
                  drop_rate=0.0, block_drop_rate=0.0,
                  global_pool='avg'):
@@ -127,7 +143,7 @@ class ResNet(nn.Module):
         self.drop_rate = drop_rate
         self.expansion = block.expansion
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(in_chans, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -197,109 +213,108 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet18(pretrained=False, **kwargs):
+def resnet18(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    default_cfg = default_cfgs['resnet18']
+    model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnet34(pretrained=False, **kwargs):
+def resnet34(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNet-34 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    default_cfg = default_cfgs['resnet34']
+    model = ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet34']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnet50(pretrained=False, **kwargs):
+def resnet50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNet-50 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    default_cfg = default_cfgs['resnet50']
+    model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnet101(pretrained=False, **kwargs):
+def resnet101(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNet-101 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
+    default_cfg = default_cfgs['resnet101']
+    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnet152(pretrained=False, **kwargs):
+def resnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNet-152 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
+    default_cfg = default_cfgs['resnet152']
+    model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnext50_32x4d(cardinality=32, base_width=4, pretrained=False, **kwargs):
+def resnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
-
-    Args:
-        cardinality (int): Cardinality of the aggregated transform
-        base_width (int): Base width of the grouped convolution
     """
+    default_cfg = default_cfgs['resnext50_32x4d2']
     model = ResNet(
-        Bottleneck, [3, 4, 6, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+        Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnext101_32x4d(cardinality=32, base_width=4, pretrained=False, **kwargs):
+def resnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNeXt-101 model.
-
-    Args:
-        cardinality (int): Cardinality of the aggregated transform
-        base_width (int): Base width of the grouped convolution
     """
+    default_cfg = default_cfgs['resnext101_32x4d']
     model = ResNet(
-        Bottleneck, [3, 4, 23, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+        Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnext101_64x4d(cardinality=64, base_width=4, pretrained=False, **kwargs):
+def resnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNeXt101-64x4d model.
-
-    Args:
-        cardinality (int): Cardinality of the aggregated transform
-        base_width (int): Base width of the grouped convolution
     """
+    default_cfg = default_cfgs['resnext101_32x4d']
     model = ResNet(
-        Bottleneck, [3, 4, 23, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+        Bottleneck, [3, 4, 23, 3], cardinality=64, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def resnext152_32x4d(cardinality=32, base_width=4, pretrained=False, **kwargs):
+def resnext152_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNeXt152-32x4d model.
-
-    Args:
-        cardinality (int): Cardinality of the aggregated transform
-        base_width (int): Base width of the grouped convolution
     """
+    default_cfg = default_cfgs['resnext152_32x4d']
     model = ResNet(
-        Bottleneck, [3, 8, 36, 3], cardinality=cardinality, base_width=base_width, **kwargs)
+        Bottleneck, [3, 8, 36, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model

@@ -1,7 +1,6 @@
 
 import argparse
 import time
-from collections import OrderedDict
 from datetime import datetime
 
 try:
@@ -12,17 +11,14 @@ except ImportError:
     has_apex = False
 
 from data import *
-from models import model_factory
+from models import create_model, resume_checkpoint
 from utils import *
-from optim import Nadam, AdaBound
 from loss import LabelSmoothingCrossEntropy
-import scheduler
+from optim import create_optimizer
+from scheduler import create_scheduler
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torch.utils.data as data
 import torch.distributed as dist
 import torchvision.utils
 
@@ -33,6 +29,8 @@ parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--model', default='resnet101', type=str, metavar='MODEL',
                     help='Name of model to train (default: "countception"')
+parser.add_argument('--num-classes', type=int, default=1000, metavar='N',
+                    help='number of label classes (default: 1000)')
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
 parser.add_argument('--opt-eps', default=1e-8, type=float, metavar='EPSILON',
@@ -120,10 +118,13 @@ def main():
         r = torch.distributed.get_rank()
 
     if args.distributed:
-        print('Training in distributed mode with %d processes, 1 GPU per process. Process %d.'
-              % (args.world_size, r))
+        print('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'
+              % (r, args.world_size))
     else:
-        print('Training with a single process with %d GPUs.' % args.num_gpu)
+        print('Training with a single process on %d GPUs.' % args.num_gpu)
+
+    # FIXME seed handling for multi-process distributed?
+    torch.manual_seed(args.seed)
 
     output_dir = ''
     if args.local_rank == 0:
@@ -137,80 +138,21 @@ def main():
             str(args.img_size)])
         output_dir = get_outdir(output_base, 'train', exp_name)
 
-    batch_size = args.batch_size
-    torch.manual_seed(args.seed)
-
-    data_mean, data_std = get_model_meanstd(args.model)
-
-    dataset_train = Dataset(os.path.join(args.data, 'train'))
-
-    loader_train = create_loader(
-        dataset_train,
-        img_size=args.img_size,
-        batch_size=batch_size,
-        is_training=True,
-        use_prefetcher=True,
-        random_erasing=0.3,
-        mean=data_mean,
-        std=data_std,
-        num_workers=args.workers,
-        distributed=args.distributed,
-    )
-
-    dataset_eval = Dataset(os.path.join(args.data, 'validation'))
-
-    loader_eval = create_loader(
-        dataset_eval,
-        img_size=args.img_size,
-        batch_size=4 * args.batch_size,
-        is_training=False,
-        use_prefetcher=True,
-        mean=data_mean,
-        std=data_std,
-        num_workers=args.workers,
-        distributed=args.distributed,
-    )
-
-    model = model_factory.create_model(
+    model = create_model(
         args.model,
         pretrained=args.pretrained,
-        num_classes=1000,
+        num_classes=args.num_classes,
         drop_rate=args.drop,
         global_pool=args.gp,
         checkpoint_path=args.initial_checkpoint)
 
+    data_mean, data_std = get_mean_and_std(model, args)
+
     # optionally resume from a checkpoint
-    start_epoch = 0 if args.start_epoch is None else args.start_epoch
+    start_epoch = 0
     optimizer_state = None
     if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
-            if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-                new_state_dict = OrderedDict()
-                for k, v in checkpoint['state_dict'].items():
-                    if k.startswith('module'):
-                        name = k[7:]  # remove `module.`
-                    else:
-                        name = k
-                    new_state_dict[name] = v
-                model.load_state_dict(new_state_dict)
-                if 'optimizer' in checkpoint:
-                    optimizer_state = checkpoint['optimizer']
-                print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
-                start_epoch = checkpoint['epoch'] if args.start_epoch is None else args.start_epoch
-            else:
-                model.load_state_dict(checkpoint)
-        else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
-            return False
-
-    if args.smoothing:
-        train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing).cuda()
-        validate_loss_fn = nn.CrossEntropyLoss().cuda()
-    else:
-        train_loss_fn = nn.CrossEntropyLoss().cuda()
-        validate_loss_fn = train_loss_fn
+        start_epoch, optimizer_state = resume_checkpoint(model, args.resume, args.start_epoch)
 
     if args.num_gpu > 1:
         if args.amp:
@@ -237,8 +179,54 @@ def main():
         model = DDP(model, delay_allreduce=True)
 
     lr_scheduler, num_epochs = create_scheduler(args, optimizer)
+    if start_epoch > 0:
+        lr_scheduler.step(start_epoch)
     if args.local_rank == 0:
         print('Scheduled epochs: ', num_epochs)
+
+    train_dir = os.path.join(args.data, 'train')
+    if not os.path.exists(train_dir):
+        print('Error: training folder does not exist at: %s' % train_dir)
+        exit(1)
+    dataset_train = Dataset(train_dir)
+
+    loader_train = create_loader(
+        dataset_train,
+        img_size=args.img_size,
+        batch_size=args.batch_size,
+        is_training=True,
+        use_prefetcher=True,
+        random_erasing=0.3,
+        mean=data_mean,
+        std=data_std,
+        num_workers=args.workers,
+        distributed=args.distributed,
+    )
+
+    eval_dir = os.path.join(args.data, 'validation')
+    if not os.path.isdir(eval_dir):
+        print('Error: validation folder does not exist at: %s' % eval_dir)
+        exit(1)
+    dataset_eval = Dataset(eval_dir)
+
+    loader_eval = create_loader(
+        dataset_eval,
+        img_size=args.img_size,
+        batch_size=4 * args.batch_size,
+        is_training=False,
+        use_prefetcher=True,
+        mean=data_mean,
+        std=data_std,
+        num_workers=args.workers,
+        distributed=args.distributed,
+    )
+
+    if args.smoothing:
+        train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing).cuda()
+        validate_loss_fn = nn.CrossEntropyLoss().cuda()
+    else:
+        train_loss_fn = nn.CrossEntropyLoss().cuda()
+        validate_loss_fn = train_loss_fn
 
     eval_metric = args.eval_metric
     saver = None
@@ -429,76 +417,9 @@ def validate(model, loader, loss_fn, args):
     return metrics
 
 
-def create_optimizer(args, parameters):
-    if args.opt.lower() == 'sgd':
-        optimizer = optim.SGD(
-            parameters, lr=args.lr,
-            momentum=args.momentum, weight_decay=args.weight_decay, nesterov=True)
-    elif args.opt.lower() == 'adam':
-        optimizer = optim.Adam(
-            parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'nadam':
-        optimizer = Nadam(
-            parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'adabound':
-        optimizer = AdaBound(
-            parameters, lr=args.lr / 100, weight_decay=args.weight_decay, eps=args.opt_eps,
-            final_lr=args.lr)
-    elif args.opt.lower() == 'adadelta':
-        optimizer = optim.Adadelta(
-            parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'rmsprop':
-        optimizer = optim.RMSprop(
-            parameters, lr=args.lr, alpha=0.9, eps=args.opt_eps,
-            momentum=args.momentum, weight_decay=args.weight_decay)
-    else:
-        assert False and "Invalid optimizer"
-        raise ValueError
-    return optimizer
-
-
-def create_scheduler(args, optimizer):
-    num_epochs = args.epochs
-    #FIXME expose cycle parms of the scheduler config to arguments
-    if args.sched == 'cosine':
-        lr_scheduler = scheduler.CosineLRScheduler(
-            optimizer,
-            t_initial=num_epochs,
-            t_mul=1.0,
-            lr_min=1e-5,
-            decay_rate=args.decay_rate,
-            warmup_lr_init=args.warmup_lr,
-            warmup_t=args.warmup_epochs,
-            cycle_limit=1,
-            t_in_epochs=True,
-        )
-        num_epochs = lr_scheduler.get_cycle_length() + 10
-    elif args.sched == 'tanh':
-        lr_scheduler = scheduler.TanhLRScheduler(
-            optimizer,
-            t_initial=num_epochs,
-            t_mul=1.0,
-            lr_min=1e-5,
-            warmup_lr_init=args.warmup_lr,
-            warmup_t=args.warmup_epochs,
-            cycle_limit=1,
-            t_in_epochs=True,
-        )
-        num_epochs = lr_scheduler.get_cycle_length() + 10
-    else:
-        lr_scheduler = scheduler.StepLRScheduler(
-            optimizer,
-            decay_t=args.decay_epochs,
-            decay_rate=args.decay_rate,
-            warmup_lr_init=args.warmup_lr,
-            warmup_t=args.warmup_epochs,
-        )
-    return lr_scheduler, num_epochs
-
-
 def reduce_tensor(tensor, n):
     rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     rt /= n
     return rt
 

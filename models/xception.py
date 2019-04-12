@@ -26,24 +26,24 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
-from torch.nn import init
+
+from models.helpers import load_pretrained
+from models.adaptive_avgmax_pool import select_adaptive_pool2d
+
 
 __all__ = ['xception']
 
-pretrained_config = {
+default_cfgs = {
     'xception': {
-        'imagenet': {
-            'url': 'http://data.lip6.fr/cadene/pretrainedmodels/xception-43020ad28.pth',
-            'input_space': 'RGB',
-            'input_size': [3, 299, 299],
-            'input_range': [0, 1],
-            'mean': [0.5, 0.5, 0.5],
-            'std': [0.5, 0.5, 0.5],
-            'num_classes': 1000,
-            'scale': 0.8975
+        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/xception-43020ad28.pth',
+        'input_size': (3, 299, 299),
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'num_classes': 1000,
+        'crop_pct': 0.8975,
+        'first_conv': 'conv1',
+        'classifier': 'fc'
         # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
-        }
     }
 }
 
@@ -120,16 +120,18 @@ class Xception(nn.Module):
     https://arxiv.org/pdf/1610.02357.pdf
     """
 
-    def __init__(self, num_classes=1000):
+    def __init__(self, num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg'):
         """ Constructor
         Args:
             num_classes: number of classes
         """
         super(Xception, self).__init__()
+        self.drop_rate = drop_rate
+        self.global_pool = global_pool
         self.num_classes = num_classes
         self.num_features = 2048
 
-        self.conv1 = nn.Conv2d(3, 32, 3, 2, 0, bias=False)
+        self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.relu = nn.ReLU(inplace=True)
 
@@ -173,8 +175,9 @@ class Xception(nn.Module):
     def get_classifier(self):
         return self.fc
 
-    def reset_classifier(self, num_classes):
+    def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
+        self.global_pool = global_pool
         del self.fc
         if num_classes:
             self.fc = nn.Linear(self.num_features, num_classes)
@@ -212,24 +215,23 @@ class Xception(nn.Module):
         x = self.relu(x)
 
         if pool:
-            x = F.adaptive_avg_pool2d(x, (1, 1))
+            x = select_adaptive_pool2d(x, pool_type=self.global_pool)
             x = x.view(x.size(0), -1)
         return x
 
     def forward(self, input):
         x = self.forward_features(input)
+        if self.drop_rate:
+            F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)
         return x
 
 
-def xception(num_classes=1000, pretrained=False):
-    model = Xception(num_classes=num_classes)
+def xception(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+    default_cfg = default_cfgs['xception']
+    model = Xception(num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
     if pretrained:
-        config = pretrained_config['xception']['imagenet']
-        assert num_classes == config['num_classes'], \
-            "num_classes should be {}, but is {}".format(config['num_classes'], num_classes)
-
-        model = Xception(num_classes=num_classes)
-        model.load_state_dict(model_zoo.load_url(config['url']))
+        load_pretrained(model, default_cfg, num_classes, in_chans)
 
     return model
