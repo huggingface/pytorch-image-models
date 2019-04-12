@@ -110,7 +110,7 @@ class RandomErasingTorch:
                 h = int(round(math.sqrt(target_area * aspect_ratio)))
                 w = int(round(math.sqrt(target_area / aspect_ratio)))
                 if self.rand_color:
-                    c = torch.empty((chan, 1, 1), dtype=batch.dtype).cuda().normal_()
+                    c = torch.empty((chan, 1, 1), dtype=batch.dtype).normal_().cuda()
                 elif not self.per_pixel:
                     c = torch.zeros((chan, 1, 1), dtype=batch.dtype).cuda()
                 if w < img_w and h < img_h:
@@ -118,7 +118,7 @@ class RandomErasingTorch:
                     left = random.randint(0, img_w - w)
                     if self.per_pixel:
                         img[:, top:top + h, left:left + w] = torch.empty(
-                            (chan, h, w), dtype=batch.dtype).cuda().normal_()
+                            (chan, h, w), dtype=batch.dtype).normal_().cuda()
                     else:
                         img[:, top:top + h, left:left + w] = c
                     break

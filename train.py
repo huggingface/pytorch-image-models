@@ -61,6 +61,10 @@ parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
                     help='LR scheduler (default: "step"')
 parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.1)')
+parser.add_argument('--reprob', type=float, default=0.4, metavar='PCT',
+                    help='Random erase prob (default: 0.4)')
+parser.add_argument('--repp', action='store_true', default=False,
+                    help='Random erase per-pixel (default: False)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
@@ -196,7 +200,8 @@ def main():
         batch_size=args.batch_size,
         is_training=True,
         use_prefetcher=True,
-        random_erasing=0.3,
+        rand_erase_prob=args.reprob,
+        rand_erase_pp=args.repp,
         mean=data_mean,
         std=data_std,
         num_workers=args.workers,

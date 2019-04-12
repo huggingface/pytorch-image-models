@@ -18,25 +18,25 @@ class PrefetchLoader:
 
     def __init__(self,
             loader,
-            random_erasing=0.,
+            rand_erase_prob=0.,
+            rand_erase_pp=False,
             mean=IMAGENET_DEFAULT_MEAN,
             std=IMAGENET_DEFAULT_STD):
         self.loader = loader
-        self.random_erasing = random_erasing
+        self.stream = torch.cuda.Stream()
         self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
         self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
-        if random_erasing:
+        if rand_erase_prob:
             self.random_erasing = RandomErasingTorch(
-                probability=random_erasing, per_pixel=False)
+                probability=rand_erase_prob, per_pixel=rand_erase_pp)
         else:
             self.random_erasing = None
 
     def __iter__(self):
-        stream = torch.cuda.Stream()
         first = True
 
         for next_input, next_target in self.loader:
-            with torch.cuda.stream(stream):
+            with torch.cuda.stream(self.stream):
                 next_input = next_input.cuda(non_blocking=True)
                 next_target = next_target.cuda(non_blocking=True)
                 next_input = next_input.float().sub_(self.mean).div_(self.std)
@@ -48,7 +48,7 @@ class PrefetchLoader:
             else:
                 first = False
 
-            torch.cuda.current_stream().wait_stream(stream)
+            torch.cuda.current_stream().wait_stream(self.stream)
             input = next_input
             target = next_target
 
@@ -68,7 +68,8 @@ def create_loader(
         batch_size,
         is_training=False,
         use_prefetcher=True,
-        random_erasing=0.,
+        rand_erase_prob=0.,
+        rand_erase_pp=False,
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         num_workers=1,
@@ -110,7 +111,8 @@ def create_loader(
     if use_prefetcher:
         loader = PrefetchLoader(
             loader,
-            random_erasing=random_erasing if is_training else 0.,
+            rand_erase_prob=rand_erase_prob if is_training else 0.,
+            rand_erase_pp=rand_erase_pp,
             mean=mean,
             std=std)
 
