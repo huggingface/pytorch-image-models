@@ -183,11 +183,11 @@ def transforms_imagenet_eval(
 
     if isinstance(img_size, tuple):
         assert len(img_size) == 2
-        if img_size[0] == img_size[1]:
+        if img_size[-1] == img_size[-2]:
             # fall-back to older behaviour so Resize scales to shortest edge if target is square
             scale_size = int(math.floor(img_size[0] / crop_pct))
         else:
-            scale_size = tuple([int(x[0] / crop_pct) for x in img_size])
+            scale_size = tuple([int(x / crop_pct) for x in img_size])
     else:
         scale_size = int(math.floor(img_size / crop_pct))
 
