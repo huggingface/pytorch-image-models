@@ -14,6 +14,7 @@ default_cfgs = {
     'inception_v4': {
         'url': 'http://webia.lip6.fr/~cadene/Downloads/inceptionv4-97ef9c30.pth',
         'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'features.0.conv', 'classifier': 'classif',
     }

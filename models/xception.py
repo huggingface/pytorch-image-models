@@ -37,10 +37,11 @@ default_cfgs = {
     'xception': {
         'url': 'http://data.lip6.fr/cadene/pretrainedmodels/xception-43020ad28.pth',
         'input_size': (3, 299, 299),
+        'crop_pct': 0.8975,
+        'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
         'num_classes': 1000,
-        'crop_pct': 0.8975,
         'first_conv': 'conv1',
         'classifier': 'fc'
         # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299

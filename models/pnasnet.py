@@ -1,3 +1,10 @@
+"""
+ pnasnet5large implementation grabbed from Cadene's pretrained models
+ Additional credit to https://github.com/creafz
+
+ https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/pnasnet.py
+
+"""
 from __future__ import print_function, division, absolute_import
 from collections import OrderedDict
 
@@ -13,9 +20,10 @@ default_cfgs = {
         'url': 'http://data.lip6.fr/cadene/pretrainedmodels/pnasnet5large-bf079911.pth',
         'input_size': (3, 331, 331),
         'pool_size': (11, 11),
+        'crop_pct': 0.875,
+        'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
-        'crop_pct': 0.8975,
         'num_classes': 1001,
         'first_conv': 'conv_0.conv',
         'classifier': 'last_linear',

@@ -1,6 +1,8 @@
-"""Pytorch ResNet implementation tweaks
+"""Pytorch ResNet implementation w/ tweaks
 This file is a copy of https://github.com/pytorch/vision 'resnet.py' (BSD-3-Clause) with
 additional dropout and dynamic global avg/max pool.
+
+ResNext additions added by Ross Wightman
 """
 import torch
 import torch.nn as nn
@@ -18,7 +20,8 @@ def _cfg(url=''):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'crop_pct': 0.875,
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv1', 'classifier': 'fc',
     }
 
@@ -271,7 +274,7 @@ def resnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
 def resnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
     """
-    default_cfg = default_cfgs['resnext50_32x4d2']
+    default_cfg = default_cfgs['resnext50_32x4d']
     model = ResNet(
         Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
         num_classes=num_classes, in_chans=in_chans, **kwargs)

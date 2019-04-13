@@ -1,4 +1,4 @@
-"""Pytorch Densenet implementation tweaks
+"""Pytorch Densenet implementation w/ tweaks
 This file is a copy of https://github.com/pytorch/vision 'densenet.py' (BSD-3-Clause) with
 fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
@@ -18,6 +18,7 @@ __all__ = ['DenseNet', 'densenet121', 'densenet169', 'densenet201', 'densenet161
 def _cfg(url=''):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 244), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'features.conv0', 'classifier': 'classifier',
     }

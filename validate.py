@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.parallel
 
 from models import create_model, apply_test_time_pool
-from data import Dataset, create_loader, get_mean_and_std
+from data import Dataset, create_loader, resolve_data_config
 from utils import accuracy, AverageMeter
 
 torch.backends.cudnn.benchmark = True
@@ -24,8 +24,14 @@ parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--img-size', default=224, type=int,
-                    metavar='N', help='Input image dimension')
+parser.add_argument('--img-size', default=None, type=int,
+                    metavar='N', help='Input image dimension, uses model default if empty')
+parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
+                    help='Override mean pixel value of dataset')
+parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
+                    help='Override std deviation of of dataset')
+parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
+                    help='Image resize interpolation type (overrides model)')
 parser.add_argument('--num-classes', type=int, default=1000,
                     help='Number classes in dataset')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
@@ -37,7 +43,7 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
 parser.add_argument('--num-gpu', type=int, default=1,
                     help='Number of GPUS to use')
 parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
-                    help='disable test time pool for DPN models')
+                    help='disable test time pool')
 
 
 def main():
@@ -54,9 +60,8 @@ def main():
     print('Model %s created, param count: %d' %
           (args.model, sum([m.numel() for m in model.parameters()])))
 
-    data_mean, data_std = get_mean_and_std(model, args)
-
-    model, test_time_pool = apply_test_time_pool(model, args)
+    data_config = resolve_data_config(model, args)
+    model, test_time_pool = apply_test_time_pool(model, data_config, args)
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
@@ -68,13 +73,14 @@ def main():
 
     loader = create_loader(
         Dataset(args.data),
-        img_size=args.img_size,
+        input_size=data_config['input_size'],
         batch_size=args.batch_size,
-        use_prefetcher=False,
-        mean=data_mean,
-        std=data_std,
+        use_prefetcher=True,
+        interpolation=data_config['interpolation'],
+        mean=data_config['mean'],
+        std=data_config['std'],
         num_workers=args.workers,
-        crop_pct=1.0 if test_time_pool else None)
+        crop_pct=1.0 if test_time_pool else data_config['crop_pct'])
 
     batch_time = AverageMeter()
     losses = AverageMeter()

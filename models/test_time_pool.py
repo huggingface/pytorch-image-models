@@ -26,11 +26,13 @@ class TestTimePoolHead(nn.Module):
         return x.view(x.size(0), -1)
 
 
-def apply_test_time_pool(model, args):
+def apply_test_time_pool(model, config, args):
     test_time_pool = False
-    if args.img_size > model.default_cfg['input_size'][-1] and not args.no_test_pool:
-        print('Target input size (%d) > pretrained default (%d), using test time pooling' %
-              (args.img_size, model.default_cfg['input_size'][-1]))
+    if not args.no_test_pool and \
+            config['input_size'][-1] > model.default_cfg['input_size'][-1] and \
+            config['input_size'][-2] > model.default_cfg['input_size'][-2]:
+        print('Target input size (%s) > pretrained default (%s), using test time pooling' %
+              (str(config['input_size'][-2:]), str(model.default_cfg['input_size'][-2:])))
         model = TestTimePoolHead(model, original_pool=model.default_cfg['pool_size'])
         test_time_pool = True
     return model, test_time_pool

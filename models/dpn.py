@@ -25,6 +25,7 @@ __all__ = ['DPN', 'dpn68', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
 def _cfg(url=''):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DPN_MEAN, 'std': IMAGENET_DPN_STD,
         'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier',
     }

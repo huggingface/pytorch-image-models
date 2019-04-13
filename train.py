@@ -43,6 +43,12 @@ parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
 parser.add_argument('--img-size', type=int, default=224, metavar='N',
                     help='Image patch size (default: 224)')
+parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
+                    help='Override mean pixel value of dataset')
+parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
+                    help='Override std deviation of of dataset')
+parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
+                    help='Image resize interpolation type (overrides model)')
 parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-s', '--initial-batch-size', type=int, default=0, metavar='N',
@@ -150,13 +156,13 @@ def main():
         global_pool=args.gp,
         checkpoint_path=args.initial_checkpoint)
 
-    data_mean, data_std = get_mean_and_std(model, args)
+    data_config = resolve_data_config(model, args, verbose=args.local_rank == 0)
 
     # optionally resume from a checkpoint
     start_epoch = 0
     optimizer_state = None
     if args.resume:
-        start_epoch, optimizer_state = resume_checkpoint(model, args.resume, args.start_epoch)
+        optimizer_state, start_epoch = resume_checkpoint(model, args.resume, args.start_epoch)
 
     if args.num_gpu > 1:
         if args.amp:
@@ -196,14 +202,15 @@ def main():
 
     loader_train = create_loader(
         dataset_train,
-        img_size=args.img_size,
+        input_size=data_config['input_size'],
         batch_size=args.batch_size,
         is_training=True,
         use_prefetcher=True,
         rand_erase_prob=args.reprob,
         rand_erase_pp=args.repp,
-        mean=data_mean,
-        std=data_std,
+        interpolation=data_config['interpolation'],
+        mean=data_config['mean'],
+        std=data_config['std'],
         num_workers=args.workers,
         distributed=args.distributed,
     )
@@ -216,12 +223,13 @@ def main():
 
     loader_eval = create_loader(
         dataset_eval,
-        img_size=args.img_size,
+        input_size=data_config['input_size'],
         batch_size=4 * args.batch_size,
         is_training=False,
         use_prefetcher=True,
-        mean=data_mean,
-        std=data_std,
+        interpolation=data_config['interpolation'],
+        mean=data_config['mean'],
+        std=data_config['std'],
         num_workers=args.workers,
         distributed=args.distributed,
     )

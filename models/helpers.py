@@ -26,7 +26,6 @@ def load_checkpoint(model, checkpoint_path):
 
 
 def resume_checkpoint(model, checkpoint_path, start_epoch=None):
-    start_epoch = 0 if start_epoch is None else start_epoch
     optimizer_state = None
     if os.path.isfile(checkpoint_path):
         print("=> loading checkpoint '{}'".format(checkpoint_path))
@@ -46,6 +45,7 @@ def resume_checkpoint(model, checkpoint_path, start_epoch=None):
             start_epoch = checkpoint['epoch'] if start_epoch is None else start_epoch
         else:
             model.load_state_dict(checkpoint)
+            start_epoch = 0 if start_epoch is None else start_epoch
         return optimizer_state, start_epoch
     else:
         print("=> No checkpoint found at '{}'".format(checkpoint_path))
