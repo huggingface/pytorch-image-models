@@ -11,8 +11,11 @@ logger = logging.getLogger(__name__)
 
 class CosineLRScheduler(Scheduler):
     """
-    Cosine annealing with restarts.
+    Cosine decay with restarts.
     This is described in the paper https://arxiv.org/abs/1608.03983.
+
+    Inspiration from
+    https://github.com/allenai/allennlp/blob/master/allennlp/training/learning_rate_schedulers/cosine.py
     """
 
     def __init__(self,

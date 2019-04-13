@@ -68,7 +68,6 @@ def main():
     else:
         model = model.cuda()
 
-    # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
 
     loader = create_loader(
@@ -87,7 +86,6 @@ def main():
     top1 = AverageMeter()
     top5 = AverageMeter()
 
-    # switch to evaluate mode
     model.eval()
     end = time.time()
     with torch.no_grad():

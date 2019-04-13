@@ -20,6 +20,9 @@ class AdaBound(Optimizer):
         amsbound (boolean, optional): whether to use the AMSBound variant of this algorithm
     .. Adaptive Gradient Methods with Dynamic Bound of Learning Rate:
         https://openreview.net/forum?id=Bkg3g2R9FX
+
+    Originally taken from https://github.com/Luolc/AdaBound
+    NOTE: Has not provided good (or even decent) results on large datasets like ImageNet
     """
 
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), final_lr=0.1, gamma=1e-3,

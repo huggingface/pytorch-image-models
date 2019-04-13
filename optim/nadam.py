@@ -20,6 +20,9 @@ class Nadam(Optimizer):
 
     __ http://cs229.stanford.edu/proj2015/054_report.pdf
     __ http://www.cs.toronto.edu/~fritz/absps/momentum.pdf
+
+        Originally taken from: https://github.com/pytorch/pytorch/pull/1408
+        NOTE: Has potential issues but does work well on some problems.
     """
 
     def __init__(self, params, lr=2e-3, betas=(0.9, 0.999), eps=1e-8,
