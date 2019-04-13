@@ -23,7 +23,7 @@ __all__ = ['SENet', 'senet154', 'seresnet50', 'seresnet101', 'seresnet152',
            'seresnext50_32x4d', 'seresnext101_32x4d']
 
 
-def _cfg(url=''):
+def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',

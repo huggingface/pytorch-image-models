@@ -16,13 +16,14 @@ __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152
            'resnext50_32x4d', 'resnext101_32x4d', 'resnext101_64x4d', 'resnext152_32x4d']
 
 
-def _cfg(url=''):
+def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv1', 'classifier': 'fc',
+        **kwargs
     }
 
 
@@ -32,7 +33,8 @@ default_cfgs = {
     'resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
     'resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
     'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
-    'resnext50_32x4d': _cfg(url=''),
+    'resnext50_32x4d': _cfg(url='https://www.dropbox.com/s/yxci33lfew51p6a/resnext50_32x4d-068914d1.pth?dl=1',
+                            interpolation='bicubic'),
     'resnext101_32x4d': _cfg(url=''),
     'resnext101_64x4d': _cfg(url=''),
     'resnext152_32x4d': _cfg(url=''),
