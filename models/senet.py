@@ -29,6 +29,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'layer0.conv1', 'classifier': 'last_linear',
+        **kwargs
     }
 
 
@@ -36,7 +37,8 @@ default_cfgs = {
     'senet154':
         _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth'),
     'seresnet18':
-        _cfg(url=''),
+        _cfg(url='https://www.dropbox.com/s/3o3nd8mfhxod7rq/seresnet18-4bb0ce65.pth?dl=1',
+             interpolation='bicubic'),
     'seresnet34':
         _cfg(url='https://www.dropbox.com/s/q31ccy22aq0fju7/seresnet34-a4004e63.pth?dl=1'),
     'seresnet50':
