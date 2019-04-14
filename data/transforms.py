@@ -138,6 +138,18 @@ class ToTensor:
         return torch.from_numpy(np_img).to(dtype=self.dtype)
 
 
+def _pil_interp(method):
+    if method == 'bicubic':
+        return Image.BICUBIC
+    elif method == 'lanczos':
+        return Image.LANCZOS
+    elif method == 'hamming':
+        return Image.HAMMING
+    else:
+        # default bilinear, do we want to allow nearest?
+        return Image.BILINEAR
+
+
 def transforms_imagenet_train(
         img_size=224,
         scale=(0.1, 1.0),
@@ -152,7 +164,7 @@ def transforms_imagenet_train(
     tfl = [
         transforms.RandomResizedCrop(
             img_size, scale=scale,
-            interpolation=Image.BILINEAR if interpolation == 'bilinear' else Image.BICUBIC),
+            interpolation=_pil_interp(interpolation)),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(*color_jitter),
     ]
@@ -192,7 +204,7 @@ def transforms_imagenet_eval(
         scale_size = int(math.floor(img_size / crop_pct))
 
     tfl = [
-        transforms.Resize(scale_size, Image.BILINEAR if interpolation == 'bilinear' else Image.BICUBIC),
+        transforms.Resize(scale_size, _pil_interp(interpolation)),
         transforms.CenterCrop(img_size),
     ]
     if use_prefetcher:

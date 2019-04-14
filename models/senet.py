@@ -47,6 +47,9 @@ default_cfgs = {
         _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnet101-7e38fcc6.pth'),
     'seresnet152':
         _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnet152-d17c99b7.pth'),
+    'seresnext26_32x4d':
+        _cfg(url='https://www.dropbox.com/s/zaeruz2bejcdhh3/seresnext26_32x4d-65ebdb501.pth?dl=1',
+             interpolation='bicubic'),
     'seresnext50_32x4d':
         _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth'),
     'seresnext101_32x4d':
