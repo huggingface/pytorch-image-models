@@ -42,12 +42,12 @@ Several (less common) features that I often utilize in my projects are included.
     * PyTorch DistributedDataParallel w/ multi-gpu, single process (AMP disabled as it crashes when enabled)
     * PyTorch w/ single GPU single process (AMP optional)
 * A dynamic global pool implementation that allows selecting from average pooling, max pooling, average + max, or concat([average, max]) at model creation. All global pooling is adaptive average by default and compatible with pretrained weights.
-* A 'Test Time Pool' wrapper that can wrap any of the included models and usually provide improved performance doing inference with input images larger than the training size. Idea adapted from original DPN implementation when I ported.
+* A 'Test Time Pool' wrapper that can wrap any of the included models and usually provide improved performance doing inference with input images larger than the training size. Idea adapted from original DPN implementation when I ported (https://github.com/cypw/DPNs)
 * Training schedules and techniques that provide competitive results (Cosine LR, Random Erasing, Smoothed Softmax, etc)
 * An inference script that dumps output to CSV is provided as an example
 
 ### Custom Weights
-I've leveraged the training scripts in this repository to train a few of the models with missing weights to good levels of performance. These numbers are all for 224x224 traing and validation image sizing with the usual 87.5% validation crop.
+I've leveraged the training scripts in this repository to train a few of the models with missing weights to good levels of performance. These numbers are all for 224x224 training and validation image sizing with the usual 87.5% validation crop.
 
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
 |---|---|---|---|---|
@@ -59,7 +59,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 ## TODO
 A number of additions planned in the future for various projects, incl
 * Select some parameter efficient models for mobile/embedded applications
-* Do a model performance (speed + accurracy) assesment across all models (make runable as script)
+* Do a model performance (speed + accuracy) benchmarking across all models (make runable as script)
 * More training experiments
 * Make folder/file layout compat with usage as a module
 * Add usage examples to comments, good hyper params for training
