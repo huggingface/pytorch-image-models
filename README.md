@@ -59,6 +59,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 ## TODO
 A number of additions planned in the future for various projects, incl
 * Select some parameter efficient models for mobile/embedded applications
+* Do a model performance (speed + accurracy) assesment across all models (make runable as script)
 * More training experiments
 * Make folder/file layout compat with usage as a module
 * Add usage examples to comments, good hyper params for training
