@@ -29,7 +29,7 @@ def _cfg(url='', **kwargs):
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'layer0.conv1', 'classifier': 'last_linear',
+        'first_conv': 'conv_stem', 'classifier': 'classifier',
         **kwargs
     }
 
@@ -207,12 +207,11 @@ class MnasNet(nn.Module):
                  global_pool='avg', act_fn=F.relu):
         super(MnasNet, self).__init__()
         self.num_classes = num_classes
-        self.drop_rate = drop_rate
-        self.global_pool = global_pool
-        self.act_fn = act_fn
         self.depth_multiplier = depth_multiplier
         self.bn_momentum = bn_momentum
         self.bn_eps = bn_eps
+        self.drop_rate = drop_rate
+        self.act_fn = act_fn
         self.num_features = 1280
 
         self.conv_stem = nn.Conv2d(in_chans, stem_size, 3, padding=1, stride=2, bias=False)
@@ -230,7 +229,7 @@ class MnasNet(nn.Module):
         self.conv_head = nn.Conv2d(out_chs, self.num_features, 1, padding=0, stride=1, bias=False)
         self.bn1 = nn.BatchNorm2d(self.num_features, momentum=self.bn_momentum, eps=self.bn_eps)
 
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.classifier = nn.Linear(self.num_features, self.num_classes)
 
         for m in self.modules():
@@ -251,11 +250,12 @@ class MnasNet(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        #self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
         del self.classifier
         if num_classes:
-            self.classifier = nn.Linear(self.num_features, num_classes)
+            self.classifier = nn.Linear(
+                self.num_features * self.global_pool.feat_mult(), num_classes)
         else:
             self.classifier = None
 
@@ -282,7 +282,7 @@ class MnasNet(nn.Module):
 def mnasnet_a1(depth_multiplier, num_classes=1000, **kwargs):
     """Creates a mnasnet-a1 model.
     Args:
-      depth_multiplier: multiplier to number of filters per layer.
+      depth_multiplier: multiplier to number of channels per layer.
     """
 
     # defs from https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mnasnet_models.py
@@ -314,7 +314,7 @@ def mnasnet_a1(depth_multiplier, num_classes=1000, **kwargs):
 def mnasnet_b1(depth_multiplier, num_classes=1000, **kwargs):
     """Creates a mnasnet-b1 model.
     Args:
-      depth_multiplier: multiplier to number of filters per layer.
+      depth_multiplier: multiplier to number of channels per layer.
     """
     # from https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mnasnet_models.py
     blocks_defs = [
@@ -345,7 +345,7 @@ def mnasnet_b1(depth_multiplier, num_classes=1000, **kwargs):
 def mnasnet_small(depth_multiplier, num_classes=1000, **kwargs):
     """Creates a mnasnet-b1 model.
     Args:
-      depth_multiplier: multiplier to number of filters per layer.
+      depth_multiplier: multiplier to number of channels per layer.
     """
     # from https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mnasnet_models.py
     blocks_defs = [
@@ -378,6 +378,8 @@ def mnasnet0_50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_b1(0.5, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
@@ -386,6 +388,8 @@ def mnasnet0_75(num_classes, in_chans=3, pretrained=False, **kwargs):
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_b1(0.75, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
@@ -394,6 +398,8 @@ def mnasnet1_00(num_classes, in_chans=3, pretrained=False, **kwargs):
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_b1(1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
@@ -402,6 +408,8 @@ def mnasnet1_40(num_classes, in_chans=3, pretrained=False, **kwargs):
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_b1(1.4, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
@@ -410,6 +418,8 @@ def semnasnet0_50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_a1(0.5, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
@@ -418,27 +428,36 @@ def semnasnet0_75(num_classes, in_chans=3, pretrained=False, **kwargs):
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_a1(0.75, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
 def semnasnet1_00(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ MNASNet Small,  depth multiplier of 1.0. """
+    """ MNASNet A1 (w/ SE), depth multiplier of 1.0. """
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_a1(1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
 def semnasnet1_40(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ MNASNet with depth multiplier of 1.3. """
+    """ MNASNet A1 (w/ SE), depth multiplier of 1.4. """
     default_cfg = default_cfgs['mnasnet0_50']
     model = mnasnet_a1(1.4, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
 def mnasnet_small(num_classes, in_chans=3, pretrained=False, **kwargs):
+    """ MNASNet Small,  depth multiplier of 1.0. """
     default_cfg = default_cfgs['mnasnet_small']
     model = mnasnet_small(1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
