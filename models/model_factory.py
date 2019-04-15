@@ -8,6 +8,8 @@ from models.senet import seresnet18, seresnet34, seresnet50, seresnet101, seresn
     seresnext26_32x4d, seresnext50_32x4d, seresnext101_32x4d
 from models.xception import xception
 from models.pnasnet import pnasnet5large
+from models.mnasnet import mnasnet0_50, mnasnet0_75, mnasnet1_00, mnasnet1_40,\
+    semnasnet0_50, semnasnet0_75, semnasnet1_00, semnasnet1_40, mnasnet_small
 
 from models.helpers import load_checkpoint
 
