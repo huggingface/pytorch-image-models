@@ -61,7 +61,7 @@ def resolve_data_config(model, args, default_cfg={}, verbose=True):
         else:
             assert len(std) == in_chans
         new_config['std'] = std
-    else:
+    elif 'std' in default_cfg:
         new_config['std'] = default_cfg['std']
 
     # resolve default crop percentage
