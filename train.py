@@ -156,6 +156,9 @@ def main():
         global_pool=args.gp,
         checkpoint_path=args.initial_checkpoint)
 
+    print('Model %s created, param count: %d' %
+          (args.model, sum([m.numel() for m in model.parameters()])))
+
     data_config = resolve_data_config(model, args, verbose=args.local_rank == 0)
 
     # optionally resume from a checkpoint
@@ -178,7 +181,7 @@ def main():
         optimizer.load_state_dict(optimizer_state)
 
     if has_apex and args.amp:
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O3')
+        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
         use_amp = True
         print('AMP enabled')
     else:

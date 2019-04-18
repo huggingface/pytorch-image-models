@@ -185,7 +185,6 @@ class MnasBlock(nn.Module):
         # Pointwise projection
         x = self.conv_project(x)
         x = self.bn2(x)
-        # Residual
         if self.has_residual:
             return x + residual
         else:
@@ -268,7 +267,7 @@ class MnasNet(nn.Module):
         x = self.bn1(x)
         x = self.act_fn(x)
         if pool:
-            x = self.avg_pool(x)
+            x = self.global_pool(x)
             x = x.view(x.size(0), -1)
         return x
 

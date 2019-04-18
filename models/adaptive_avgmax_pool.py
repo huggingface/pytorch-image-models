@@ -49,7 +49,7 @@ def select_adaptive_pool2d(x, pool_type='avg', output_size=1):
     return x
 
 
-class AdaptiveAvgMaxPool2d(torch.nn.Module):
+class AdaptiveAvgMaxPool2d(nn.Module):
     def __init__(self, output_size=1):
         super(AdaptiveAvgMaxPool2d, self).__init__()
         self.output_size = output_size
@@ -58,7 +58,7 @@ class AdaptiveAvgMaxPool2d(torch.nn.Module):
         return adaptive_avgmax_pool2d(x, self.output_size)
 
 
-class AdaptiveCatAvgMaxPool2d(torch.nn.Module):
+class AdaptiveCatAvgMaxPool2d(nn.Module):
     def __init__(self, output_size=1):
         super(AdaptiveCatAvgMaxPool2d, self).__init__()
         self.output_size = output_size
@@ -67,7 +67,7 @@ class AdaptiveCatAvgMaxPool2d(torch.nn.Module):
         return adaptive_catavgmax_pool2d(x, self.output_size)
 
 
-class SelectAdaptivePool2d(torch.nn.Module):
+class SelectAdaptivePool2d(nn.Module):
     """Selectable global pooling layer with dynamic input kernel size
     """
     def __init__(self, output_size=1, pool_type='avg'):
