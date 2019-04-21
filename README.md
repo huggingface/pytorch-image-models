@@ -29,7 +29,12 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * PNasNet (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
-
+* My generic MobileNet (GenMobileNet) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable, InvertedResidual, etc blocks
+    * MNASNet B1, A1 (Squeeze-Excite), and Small
+    * MobileNet-V1
+    * MobileNet-V2
+    * ChamNet (details hard to find, currently an educated guess)
+    * FBNet-C (TODO A/B variants)
 ## Features
 Several (less common) features that I often utilize in my projects are included. Many of their additions are the reason why I maintain my own set of models, instead of using others' via PIP:
 * All models have a common default configuration interface and API for
@@ -58,7 +63,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 
 ## TODO
 A number of additions planned in the future for various projects, incl
-* Select some parameter efficient models for mobile/embedded applications
+* Find optimal training hyperparams and create/port pretraiend weights for the generic MobileNet variants
 * Do a model performance (speed + accuracy) benchmarking across all models (make runable as script)
 * More training experiments
 * Make folder/file layout compat with usage as a module
