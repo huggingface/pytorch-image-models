@@ -58,13 +58,16 @@ default_cfgs = {
 
 _DEBUG = True
 
-# default args for PyTorch BN impl
+# Default args for PyTorch BN impl
 _BN_MOMENTUM_PT_DEFAULT = 0.1
 _BN_EPS_PT_DEFAULT = 1e-5
 
-# defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
+# Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
-_BN_MOMENTUM_TF_DEFAULT = 1 - 0.99  # NOTE this varies, .99 or .9997 depending on ref
+# NOTE: momentum varies btw .99 and .9997 depending on source
+# .99 in official TF TPU impl
+# .9997 (/w .999 in search space) for paper
+_BN_MOMENTUM_TF_DEFAULT = 1 - 0.99
 _BN_EPS_TF_DEFAULT = 1e-3
 
 
@@ -468,8 +471,8 @@ class GenMobileNet(nn.Module):
     """ Generic Mobile Net
 
     An implementation of mobile optimized networks that covers:
-      * MobileNetV1
-      * MobileNetV2
+      * MobileNet-V1
+      * MobileNet-V2
       * MNASNet A1, B1, and small
       * FBNet A, B, and C
       * ChamNet (arch details are murky)
@@ -658,7 +661,7 @@ def _gen_mnasnet_small(depth_multiplier, num_classes=1000, **kwargs):
 
 
 def _gen_mobilenet_v1(depth_multiplier, num_classes=1000, **kwargs):
-    """
+    """ Generate MobileNet-V1 network
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
     """
