@@ -1,5 +1,5 @@
 from torch import optim as optim
-from optim import Nadam, AdaBound
+from optim import Nadam, AdaBound, RMSpropTF
 
 
 def create_optimizer(args, parameters):
@@ -22,6 +22,10 @@ def create_optimizer(args, parameters):
             parameters, lr=args.lr, weight_decay=args.weight_decay, eps=args.opt_eps)
     elif args.opt.lower() == 'rmsprop':
         optimizer = optim.RMSprop(
+            parameters, lr=args.lr, alpha=0.9, eps=args.opt_eps,
+            momentum=args.momentum, weight_decay=args.weight_decay)
+    elif args.opt.lower() == 'rmsproptf':
+        optimizer = RMSpropTF(
             parameters, lr=args.lr, alpha=0.9, eps=args.opt_eps,
             momentum=args.momentum, weight_decay=args.weight_decay)
     else:

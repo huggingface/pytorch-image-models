@@ -77,10 +77,16 @@ parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
                     help='warmup learning rate (default: 0.0001)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
-parser.add_argument('--weight-decay', type=float, default=0.0001, metavar='M',
+parser.add_argument('--weight-decay', type=float, default=0.0001,
                     help='weight decay (default: 0.0001)')
-parser.add_argument('--smoothing', type=float, default=0.1, metavar='M',
+parser.add_argument('--smoothing', type=float, default=0.1,
                     help='label smoothing (default: 0.1)')
+parser.add_argument('--bn-tf', action='store_true', default=False,
+                    help='Use Tensorflow BatchNorm defaults for models that support it (default: False)')
+parser.add_argument('--bn-momentum', type=float, default=None,
+                    help='BatchNorm momentum override (if not None)')
+parser.add_argument('--bn-eps', type=float, default=None,
+                    help='BatchNorm epsilon override (if not None)')
 parser.add_argument('--seed', type=int, default=42, metavar='S',
                     help='random seed (default: 42)')
 parser.add_argument('--log-interval', type=int, default=50, metavar='N',
@@ -154,6 +160,9 @@ def main():
         num_classes=args.num_classes,
         drop_rate=args.drop,
         global_pool=args.gp,
+        bn_tf=args.bn_tf,
+        bn_momentum=args.bn_momentum,
+        bn_eps=args.bn_eps,
         checkpoint_path=args.initial_checkpoint)
 
     print('Model %s created, param count: %d' %
