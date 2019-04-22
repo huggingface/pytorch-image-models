@@ -11,7 +11,8 @@ from models.pnasnet import pnasnet5large
 from models.genmobilenet import \
     mnasnet0_50, mnasnet0_75, mnasnet1_00, mnasnet1_40,\
     semnasnet0_50, semnasnet0_75, semnasnet1_00, semnasnet1_40, mnasnet_small,\
-    mobilenetv1_1_00, mobilenetv2_1_00, fbnetc_1_00, chamnetv1_1_00, chamnetv2_1_00
+    mobilenetv1_1_00, mobilenetv2_1_00, fbnetc_1_00, chamnetv1_1_00, chamnetv2_1_00,\
+    spnasnet1_00
 
 from models.helpers import load_checkpoint
 
