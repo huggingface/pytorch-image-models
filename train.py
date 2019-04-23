@@ -185,7 +185,7 @@ def main():
     else:
         model.cuda()
 
-    optimizer = create_optimizer(args, model.parameters())
+    optimizer = create_optimizer(args, model)
     if optimizer_state is not None:
         optimizer.load_state_dict(optimizer_state)
 
