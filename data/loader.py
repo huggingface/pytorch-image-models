@@ -2,6 +2,7 @@ import torch
 import torch.utils.data
 from data.random_erasing import RandomErasingTorch
 from data.transforms import *
+from data.distributed_sampler import OrderedDistributedSampler
 
 
 def fast_collate(batch):
@@ -102,10 +103,12 @@ def create_loader(
 
     sampler = None
     if distributed:
-        # FIXME note, doing this for validation isn't technically correct
-        # There currently is no fixed order distributed sampler that corrects
-        # for padded entries
-        sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        if is_training:
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        else:
+            # This will add extra duplicate entries to result in equal num
+            # of samples per-process, will slightly alter validation results
+            sampler = OrderedDistributedSampler(dataset)
 
     loader = torch.utils.data.DataLoader(
         dataset,
