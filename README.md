@@ -60,6 +60,15 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | SE-ResNeXt-26 (32x4d) | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
 | SE-ResNet-34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear |
 | SE-ResNet-18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic |
+| Single-Path NASNet 1.00 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear |
+
+### Ported Weights
+|Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  | Source |
+|---|---|---|---|---|---|
+| MNASNet 1.00 (B1) | 72.398 (27.602) | 90.930 (9.070) |  4.36M | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
+| SE-MNASNet 1.00 (A1) | 73.086 (26.914) | 91.336 (8.664) | 3.87M  | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
+
+NOTE: For some reason I can't hit the stated accuracy with my impl of MNASNet and Google's tflite weights. Using a TF equivalent to 'SAME' padding was important to get > 70%, but something small is still missing. Trying to train my own weights from scratch with these models has so far to leveled off in the same 72-73% range.
 
 ## TODO
 A number of additions planned in the future for various projects, incl
