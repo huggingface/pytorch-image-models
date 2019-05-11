@@ -33,6 +33,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
     * MNASNet B1, A1 (Squeeze-Excite), and Small
     * MobileNet-V1
     * MobileNet-V2
+    * MobileNet-V3 (work in progress, validating config)
     * ChamNet (details hard to find, currently an educated guess)
     * FBNet-C (TODO A/B variants)
 ## Features

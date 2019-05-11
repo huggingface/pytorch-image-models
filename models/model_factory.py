@@ -9,10 +9,10 @@ from models.senet import seresnet18, seresnet34, seresnet50, seresnet101, seresn
 from models.xception import xception
 from models.pnasnet import pnasnet5large
 from models.genmobilenet import \
-    mnasnet0_50, mnasnet0_75, mnasnet1_00, mnasnet1_40, tflite_mnasnet1_00,\
-    semnasnet0_50, semnasnet0_75, semnasnet1_00, semnasnet1_40, tflite_semnasnet1_00, mnasnet_small,\
-    mobilenetv1_1_00, mobilenetv2_1_00, fbnetc_1_00, chamnetv1_1_00, chamnetv2_1_00,\
-    spnasnet1_00
+    mnasnet_050, mnasnet_075, mnasnet_100, mnasnet_140, tflite_mnasnet_100,\
+    semnasnet_050, semnasnet_075, semnasnet_100, semnasnet_140, tflite_semnasnet_100, mnasnet_small,\
+    mobilenetv1_100, mobilenetv2_100, mobilenetv3_050, mobilenetv3_075, mobilenetv3_100,\
+    fbnetc_100, chamnetv1_100, chamnetv2_100, spnasnet_100
 
 from models.helpers import load_checkpoint
 
