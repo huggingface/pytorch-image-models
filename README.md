@@ -29,7 +29,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * PNasNet (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
-* My generic MobileNet (GenMobileNet) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable, InvertedResidual, etc blocks
+* Generic MobileNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable and InvertedResidual blocks
     * MNASNet B1, A1 (Squeeze-Excite), and Small
     * MobileNet-V1
     * MobileNet-V2
@@ -49,7 +49,8 @@ Several (less common) features that I often utilize in my projects are included.
     * PyTorch w/ single GPU single process (AMP optional)
 * A dynamic global pool implementation that allows selecting from average pooling, max pooling, average + max, or concat([average, max]) at model creation. All global pooling is adaptive average by default and compatible with pretrained weights.
 * A 'Test Time Pool' wrapper that can wrap any of the included models and usually provide improved performance doing inference with input images larger than the training size. Idea adapted from original DPN implementation when I ported (https://github.com/cypw/DPNs)
-* Training schedules and techniques that provide competitive results (Cosine LR, Random Erasing, Smoothed Softmax, etc)
+* Training schedules and techniques that provide competitive results (Cosine LR, Random Erasing, Label Smoothing, etc)
+* Mixup (as in https://arxiv.org/abs/1710.09412) - currently implementing/testing
 * An inference script that dumps output to CSV is provided as an example
 
 ### Custom Weights

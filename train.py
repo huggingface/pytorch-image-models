@@ -13,7 +13,7 @@ except ImportError:
 from data import *
 from models import create_model, resume_checkpoint
 from utils import *
-from loss import LabelSmoothingCrossEntropy
+from loss import LabelSmoothingCrossEntropy, SparseLabelCrossEntropy
 from optim import create_optimizer
 from scheduler import create_scheduler
 
@@ -79,6 +79,10 @@ parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
 parser.add_argument('--weight-decay', type=float, default=0.0001,
                     help='weight decay (default: 0.0001)')
+parser.add_argument('--mixup', type=float, default=0.0,
+                    help='mixup alpha, mixup enabled if > 0. (default: 0.)')
+parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
+                    help='turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
                     help='label smoothing (default: 0.1)')
 parser.add_argument('--bn-tf', action='store_true', default=False,
@@ -246,7 +250,11 @@ def main():
         distributed=args.distributed,
     )
 
-    if args.smoothing:
+    if args.mixup > 0.:
+        # smoothing is handled with mixup label transform
+        train_loss_fn = SparseLabelCrossEntropy().cuda()
+        validate_loss_fn = nn.CrossEntropyLoss().cuda()
+    elif args.smoothing:
         train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing).cuda()
         validate_loss_fn = nn.CrossEntropyLoss().cuda()
     else:
@@ -313,6 +321,13 @@ def train_epoch(
     for batch_idx, (input, target) in enumerate(loader):
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
+
+        if args.mixup > 0.:
+            lam = 1.
+            if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
+                lam = np.random.beta(args.mixup, args.mixup)
+            input.mul_(lam).add_(1 - lam, input.flip(0))
+            target = mixup_target(target, args.num_classes, lam, args.smoothing)
 
         output = model(input)
 

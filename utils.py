@@ -5,6 +5,7 @@ import shutil
 import glob
 import csv
 import operator
+import numpy as np
 from collections import OrderedDict
 
 
@@ -137,6 +138,19 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+
+def one_hot(x, num_classes, on_value=1., off_value=0., device='cuda'):
+    x = x.long().view(-1, 1)
+    return torch.full((x.size()[0], num_classes), off_value, device=device).scatter_(1, x, on_value)
+
+
+def mixup_target(target, num_classes, lam=1., smoothing=0.0):
+    off_value = smoothing / num_classes
+    on_value = 1. - smoothing + off_value
+    y1 = one_hot(target, num_classes, on_value=on_value, off_value=off_value)
+    y2 = one_hot(target.flip(0), num_classes, on_value=on_value, off_value=off_value)
+    return lam*y1 + (1. - lam)*y2
 
 
 def get_outdir(path, *paths, inc=False):
