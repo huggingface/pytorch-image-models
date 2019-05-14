@@ -167,14 +167,14 @@ class DualPathBlock(nn.Module):
         self.num_1x1_c = num_1x1_c
         self.inc = inc
         self.b = b
-        if block_type is 'proj':
+        if block_type == 'proj':
             self.key_stride = 1
             self.has_proj = True
-        elif block_type is 'down':
+        elif block_type == 'down':
             self.key_stride = 2
             self.has_proj = True
         else:
-            assert block_type is 'normal'
+            assert block_type == 'normal'
             self.key_stride = 1
             self.has_proj = False
 
