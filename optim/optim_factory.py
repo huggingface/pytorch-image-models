@@ -1,5 +1,5 @@
 from torch import optim as optim
-from optim import Nadam, AdaBound, RMSpropTF
+from optim import Nadam, RMSpropTF
 
 
 def add_weight_decay(model, weight_decay=1e-5, skip_list=()):
@@ -35,10 +35,6 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
     elif args.opt.lower() == 'nadam':
         optimizer = Nadam(
             parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
-    elif args.opt.lower() == 'adabound':
-        optimizer = AdaBound(
-            parameters, lr=args.lr / 100, weight_decay=weight_decay, eps=args.opt_eps,
-            final_lr=args.lr)
     elif args.opt.lower() == 'adadelta':
         optimizer = optim.Adadelta(
             parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
