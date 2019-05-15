@@ -892,15 +892,11 @@ def _gen_mobilenet_v3(depth_multiplier, num_classes=1000, **kwargs):
         # stage 2, 56x56 in
         ['ir_r3_k5_s2_e3_c40_se0.25_are'],  # relu
         # stage 3, 28x28 in
-        # FIXME are expansions here correct?
         ['ir_r1_k3_s2_e6_c80', 'ir_r1_k3_s1_e2.5_c80', 'ir_r2_k3_s1_e2.3_c80'],  # hard-swish
         # stage 4, 14x14in
         ['ir_r2_k3_s1_e6_c112_se0.25'],  # hard-swish
         # stage 5, 14x14in
-        # FIXME paper has a mistaken block-stride pattern 1-2-1 that doesn't fit the usual 2-1-..., ignoring
-        # The paper numbers result in an exp factor of 4.2 in the middle of this block, but keeping at 6
-        # results in a param count closer to 5.4m
-        ['ir_r1_k5_s2_e6_c160_se0.25', 'ir_r1_k5_s1_e6_c160_se0.25', 'ir_r1_k5_s1_e6_c160_se0.25'],  # hard-swish
+        ['ir_r3_k5_s2_e6_c160_se0.25'],  # hard-swish
         # stage 6, 7x7 in
         ['cn_r1_k1_s1_c960'],  # hard-swish
     ]
