@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import SelectAdaptivePool2d
-from data.transforms import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = ['SENet', 'senet154', 'seresnet50', 'seresnet101', 'seresnet152',
            'seresnext50_32x4d', 'seresnext101_32x4d']

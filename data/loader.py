@@ -1,6 +1,4 @@
-import torch
 import torch.utils.data
-from data.random_erasing import RandomErasingTorch
 from data.transforms import *
 from data.distributed_sampler import OrderedDistributedSampler
 
@@ -27,7 +25,7 @@ class PrefetchLoader:
         self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
         self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
         if rand_erase_prob > 0.:
-            self.random_erasing = RandomErasingTorch(
+            self.random_erasing = RandomErasing(
                 probability=rand_erase_prob, per_pixel=rand_erase_pp)
         else:
             self.random_erasing = None

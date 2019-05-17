@@ -9,7 +9,7 @@ from collections import OrderedDict
 
 from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import *
-from data.transforms import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import re
 
 __all__ = ['DenseNet', 'densenet121', 'densenet169', 'densenet201', 'densenet161']

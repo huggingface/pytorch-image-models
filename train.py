@@ -10,7 +10,7 @@ try:
 except ImportError:
     has_apex = False
 
-from data import *
+from data import Dataset, create_loader, resolve_data_config
 from models import create_model, resume_checkpoint
 from utils import *
 from loss import LabelSmoothingCrossEntropy, SparseLabelCrossEntropy
@@ -224,7 +224,7 @@ def main():
         use_prefetcher=True,
         rand_erase_prob=args.reprob,
         rand_erase_pp=args.repp,
-        interpolation=data_config['interpolation'],
+        interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,

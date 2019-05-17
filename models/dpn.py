@@ -17,7 +17,7 @@ from collections import OrderedDict
 
 from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import select_adaptive_pool2d
-from data.transforms import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
+from data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 
 __all__ = ['DPN', 'dpn68', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
 

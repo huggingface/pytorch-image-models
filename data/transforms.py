@@ -1,118 +1,14 @@
 import torch
 from torchvision import transforms
+import torchvision.transforms.functional as F
 from PIL import Image
+import warnings
 import math
+import random
 import numpy as np
-from data.random_erasing import RandomErasingNumpy
 
-DEFAULT_CROP_PCT = 0.875
-
-IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
-IMAGENET_INCEPTION_MEAN = (0.5, 0.5, 0.5)
-IMAGENET_INCEPTION_STD = (0.5, 0.5, 0.5)
-IMAGENET_DPN_MEAN = (124 / 255, 117 / 255, 104 / 255)
-IMAGENET_DPN_STD = tuple([1 / (.0167 * 255)] * 3)
-
-
-def resolve_data_config(model, args, default_cfg={}, verbose=True):
-    new_config = {}
-    default_cfg = default_cfg
-    if not default_cfg and hasattr(model, 'default_cfg'):
-        default_cfg = model.default_cfg
-
-    # Resolve input/image size
-    # FIXME grayscale/chans arg to use different # channels?
-    in_chans = 3
-    input_size = (in_chans, 224, 224)
-    if args.img_size is not None:
-        # FIXME support passing img_size as tuple, non-square
-        assert isinstance(args.img_size, int)
-        input_size = (in_chans, args.img_size, args.img_size)
-    elif 'input_size' in default_cfg:
-        input_size = default_cfg['input_size']
-    new_config['input_size'] = input_size
-
-    # resolve interpolation method
-    new_config['interpolation'] = 'bilinear'
-    if args.interpolation:
-        new_config['interpolation'] = args.interpolation
-    elif 'interpolation' in default_cfg:
-        new_config['interpolation'] = default_cfg['interpolation']
-
-    # resolve dataset + model mean for normalization
-    new_config['mean'] = get_mean_by_model(args.model)
-    if args.mean is not None:
-        mean = tuple(args.mean)
-        if len(mean) == 1:
-            mean = tuple(list(mean) * in_chans)
-        else:
-            assert len(mean) == in_chans
-        new_config['mean'] = mean
-    elif 'mean' in default_cfg:
-        new_config['mean'] = default_cfg['mean']
-
-    # resolve dataset + model std deviation for normalization
-    new_config['std'] = get_std_by_model(args.model)
-    if args.std is not None:
-        std = tuple(args.std)
-        if len(std) == 1:
-            std = tuple(list(std) * in_chans)
-        else:
-            assert len(std) == in_chans
-        new_config['std'] = std
-    elif 'std' in default_cfg:
-        new_config['std'] = default_cfg['std']
-
-    # resolve default crop percentage
-    new_config['crop_pct'] = DEFAULT_CROP_PCT
-    if 'crop_pct' in default_cfg:
-        new_config['crop_pct'] = default_cfg['crop_pct']
-
-    if verbose:
-        print('Data processing configuration for current model + dataset:')
-        for n, v in new_config.items():
-            print('\t%s: %s' % (n, str(v)))
-
-    return new_config
-
-
-def get_mean_by_name(name):
-    if name == 'dpn':
-        return IMAGENET_DPN_MEAN
-    elif name == 'inception' or name == 'le':
-        return IMAGENET_INCEPTION_MEAN
-    else:
-        return IMAGENET_DEFAULT_MEAN
-
-
-def get_std_by_name(name):
-    if name == 'dpn':
-        return IMAGENET_DPN_STD
-    elif name == 'inception' or name == 'le':
-        return IMAGENET_INCEPTION_STD
-    else:
-        return IMAGENET_DEFAULT_STD
-
-
-def get_mean_by_model(model_name):
-    model_name = model_name.lower()
-    if 'dpn' in model_name:
-        return IMAGENET_DPN_STD
-    elif 'ception' in model_name or 'nasnet' in model_name:
-        return IMAGENET_INCEPTION_MEAN
-    else:
-        return IMAGENET_DEFAULT_MEAN
-
-
-def get_std_by_model(model_name):
-    model_name = model_name.lower()
-    if 'dpn' in model_name:
-        return IMAGENET_DEFAULT_STD
-    elif 'ception' in model_name or 'nasnet' in model_name:
-        return IMAGENET_INCEPTION_STD
-    else:
-        return IMAGENET_DEFAULT_STD
+from data import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from data.random_erasing import RandomErasing
 
 
 class ToNumpy:
@@ -138,6 +34,16 @@ class ToTensor:
         return torch.from_numpy(np_img).to(dtype=self.dtype)
 
 
+_pil_interpolation_to_str = {
+    Image.NEAREST: 'PIL.Image.NEAREST',
+    Image.BILINEAR: 'PIL.Image.BILINEAR',
+    Image.BICUBIC: 'PIL.Image.BICUBIC',
+    Image.LANCZOS: 'PIL.Image.LANCZOS',
+    Image.HAMMING: 'PIL.Image.HAMMING',
+    Image.BOX: 'PIL.Image.BOX',
+}
+
+
 def _pil_interp(method):
     if method == 'bicubic':
         return Image.BICUBIC
@@ -150,21 +56,118 @@ def _pil_interp(method):
         return Image.BILINEAR
 
 
+RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+
+
+class RandomResizedCropAndInterpolation(object):
+    """Crop the given PIL Image to random size and aspect ratio with random interpolation.
+
+    A crop of random size (default: of 0.08 to 1.0) of the original size and a random
+    aspect ratio (default: of 3/4 to 4/3) of the original aspect ratio is made. This crop
+    is finally resized to given size.
+    This is popularly used to train the Inception networks.
+
+    Args:
+        size: expected output size of each edge
+        scale: range of size of the origin size cropped
+        ratio: range of aspect ratio of the origin aspect ratio cropped
+        interpolation: Default: PIL.Image.BILINEAR
+    """
+
+    def __init__(self, size, scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.),
+                 interpolation='bilinear'):
+        if isinstance(size, tuple):
+            self.size = size
+        else:
+            self.size = (size, size)
+        if (scale[0] > scale[1]) or (ratio[0] > ratio[1]):
+            warnings.warn("range should be of kind (min, max)")
+
+        if interpolation == 'random':
+            self.interpolation = RANDOM_INTERPOLATION
+        else:
+            self.interpolation = _pil_interp(interpolation)
+        self.scale = scale
+        self.ratio = ratio
+
+    @staticmethod
+    def get_params(img, scale, ratio):
+        """Get parameters for ``crop`` for a random sized crop.
+
+        Args:
+            img (PIL Image): Image to be cropped.
+            scale (tuple): range of size of the origin size cropped
+            ratio (tuple): range of aspect ratio of the origin aspect ratio cropped
+
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for a random
+                sized crop.
+        """
+        area = img.size[0] * img.size[1]
+
+        for attempt in range(10):
+            target_area = random.uniform(*scale) * area
+            aspect_ratio = random.uniform(*ratio)
+
+            w = int(round(math.sqrt(target_area * aspect_ratio)))
+            h = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if random.random() < 0.5 and min(ratio) <= (h / w) <= max(ratio):
+                w, h = h, w
+
+            if w <= img.size[0] and h <= img.size[1]:
+                i = random.randint(0, img.size[1] - h)
+                j = random.randint(0, img.size[0] - w)
+                return i, j, h, w
+
+        # Fallback
+        w = min(img.size[0], img.size[1])
+        i = (img.size[1] - w) // 2
+        j = (img.size[0] - w) // 2
+        return i, j, w, w
+
+    def __call__(self, img):
+        """
+        Args:
+            img (PIL Image): Image to be cropped and resized.
+
+        Returns:
+            PIL Image: Randomly cropped and resized image.
+        """
+        i, j, h, w = self.get_params(img, self.scale, self.ratio)
+        if isinstance(self.interpolation, (tuple, list)):
+            interpolation = random.choice(self.interpolation)
+        else:
+            interpolation = self.interpolation
+        return F.resized_crop(img, i, j, h, w, self.size, interpolation)
+
+    def __repr__(self):
+        if isinstance(self.interpolation, (tuple, list)):
+            interpolate_str = ' '.join([_pil_interpolation_to_str[x] for x in self.interpolation])
+        else:
+            interpolate_str = _pil_interpolation_to_str[self.interpolation]
+        format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
+        format_string += ', scale={0}'.format(tuple(round(s, 4) for s in self.scale))
+        format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
+        format_string += ', interpolation={0})'.format(interpolate_str)
+        return format_string
+
+
 def transforms_imagenet_train(
         img_size=224,
-        scale=(0.1, 1.0),
+        scale=(0.08, 1.0),
         color_jitter=(0.4, 0.4, 0.4),
-        interpolation='bilinear',
+        interpolation='random',
         random_erasing=0.4,
+        random_erasing_pp=True,
         use_prefetcher=False,
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD
 ):
 
     tfl = [
-        transforms.RandomResizedCrop(
-            img_size, scale=scale,
-            interpolation=_pil_interp(interpolation)),
+        RandomResizedCropAndInterpolation(
+            img_size, scale=scale, interpolation=interpolation),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(*color_jitter),
     ]
@@ -174,13 +177,13 @@ def transforms_imagenet_train(
         tfl += [ToNumpy()]
     else:
         tfl += [
-            ToTensor(),
+            transforms.ToTensor(),
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std))
         ]
         if random_erasing > 0.:
-            tfl.append(RandomErasingNumpy(random_erasing, per_pixel=True))
+            tfl.append(RandomErasing(random_erasing, per_pixel=random_erasing_pp, device='cpu'))
     return transforms.Compose(tfl)
 
 

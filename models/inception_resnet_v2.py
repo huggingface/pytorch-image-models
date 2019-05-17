@@ -7,8 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import *
-from data.transforms import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-
+from data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 default_cfgs = {
     'inception_resnet_v2': {
