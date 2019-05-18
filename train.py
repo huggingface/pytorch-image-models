@@ -69,8 +69,8 @@ parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.1)')
 parser.add_argument('--reprob', type=float, default=0.4, metavar='PCT',
                     help='Random erase prob (default: 0.4)')
-parser.add_argument('--repp', action='store_true', default=False,
-                    help='Random erase per-pixel (default: False)')
+parser.add_argument('--remode', type=str, default='const',
+                    help='Random erase mode (default: "const")')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
@@ -223,7 +223,7 @@ def main():
         is_training=True,
         use_prefetcher=True,
         rand_erase_prob=args.reprob,
-        rand_erase_pp=args.repp,
+        rand_erase_mode=args.remode,
         interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
         mean=data_config['mean'],
         std=data_config['std'],

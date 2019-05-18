@@ -5,7 +5,10 @@ import math
 import torch
 
 
-def _get_patch(per_pixel, rand_color, patch_size, dtype=torch.float32, device='cuda'):
+def _get_pixels(per_pixel, rand_color, patch_size, dtype=torch.float32, device='cuda'):
+    # NOTE I've seen CUDA illegal memory access errors being caused by the normal_()
+    # paths, flip the order so normal is run on CPU if this becomes a problem
+    # ie torch.empty(patch_size, dtype=dtype).normal_().to(device=device)
     if per_pixel:
         return torch.empty(
             patch_size, dtype=dtype, device=device).normal_()
@@ -27,20 +30,29 @@ class RandomErasing:
          sl: Minimum proportion of erased area against input image.
          sh: Maximum proportion of erased area against input image.
          min_aspect: Minimum aspect ratio of erased area.
-         per_pixel: random value for each pixel in the erase region, precedence over rand_color
-         rand_color: random color for whole erase region, 0 if neither this or per_pixel set
+         mode: pixel color mode, one of 'const', 'rand', or 'pixel'
+            'const' - erase block is constant color of 0 for all channels
+            'rand'  - erase block is same per-cannel random (normal) color
+            'pixel' - erase block is per-pixel random (normal) color
     """
 
     def __init__(
             self,
             probability=0.5, sl=0.02, sh=1/3, min_aspect=0.3,
-            per_pixel=False, rand_color=False, device='cuda'):
+            mode='const', device='cuda'):
         self.probability = probability
         self.sl = sl
         self.sh = sh
         self.min_aspect = min_aspect
-        self.per_pixel = per_pixel  # per pixel random, bounded by [pl, ph]
-        self.rand_color = rand_color  # per block random, bounded by [pl, ph]
+        mode = mode.lower()
+        self.rand_color = False
+        self.per_pixel = False
+        if mode == 'rand':
+            self.rand_color = True  # per block random normal
+        elif mode == 'pixel':
+            self.per_pixel = True  # per pixel random normal
+        else:
+            assert not mode or mode == 'const'
         self.device = device
 
     def _erase(self, img, chan, img_h, img_w, dtype):
@@ -55,8 +67,9 @@ class RandomErasing:
             if w < img_w and h < img_h:
                 top = random.randint(0, img_h - h)
                 left = random.randint(0, img_w - w)
-                img[:, top:top + h, left:left + w] = _get_patch(
-                    self.per_pixel, self.rand_color, (chan, h, w), dtype=dtype, device=self.device)
+                img[:, top:top + h, left:left + w] = _get_pixels(
+                    self.per_pixel, self.rand_color, (chan, h, w),
+                    dtype=dtype, device=self.device)
                 break
 
     def __call__(self, input):
