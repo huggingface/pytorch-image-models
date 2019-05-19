@@ -1,6 +1,7 @@
 import torch.utils.data
 from data.transforms import *
 from data.distributed_sampler import OrderedDistributedSampler
+from data.mixup import FastCollateMixup
 
 
 def fast_collate(batch):
@@ -60,6 +61,18 @@ class PrefetchLoader:
     def sampler(self):
         return self.loader.sampler
 
+    @property
+    def mixup_enabled(self):
+        if isinstance(self.loader.collate_fn, FastCollateMixup):
+            return self.loader.collate_fn.mixup_enabled
+        else:
+            return False
+
+    @mixup_enabled.setter
+    def mixup_enabled(self, x):
+        if isinstance(self.loader.collate_fn, FastCollateMixup):
+            self.loader.collate_fn.mixup_enabled = x
+
 
 def create_loader(
         dataset,
@@ -75,6 +88,7 @@ def create_loader(
         num_workers=1,
         distributed=False,
         crop_pct=None,
+        collate_fn=None,
 ):
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
@@ -108,13 +122,16 @@ def create_loader(
             # of samples per-process, will slightly alter validation results
             sampler = OrderedDistributedSampler(dataset)
 
+    if collate_fn is None:
+        collate_fn = fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate
+
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=sampler is None and is_training,
         num_workers=num_workers,
         sampler=sampler,
-        collate_fn=fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate,
+        collate_fn=collate_fn,
         drop_last=is_training,
     )
     if use_prefetcher:

@@ -159,7 +159,7 @@ def transforms_imagenet_train(
         color_jitter=(0.4, 0.4, 0.4),
         interpolation='random',
         random_erasing=0.4,
-        random_erasing_pp=True,
+        random_erasing_mode='const',
         use_prefetcher=False,
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD
@@ -183,7 +183,7 @@ def transforms_imagenet_train(
                 std=torch.tensor(std))
         ]
         if random_erasing > 0.:
-            tfl.append(RandomErasing(random_erasing, per_pixel=random_erasing_pp, device='cpu'))
+            tfl.append(RandomErasing(random_erasing, mode=random_erasing_mode, device='cpu'))
     return transforms.Compose(tfl)
 
 
