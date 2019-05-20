@@ -63,7 +63,7 @@ default_cfgs = {
     'mobilenetv3_100': _cfg(url=''),
     'chamnetv1_100': _cfg(url=''),
     'chamnetv2_100': _cfg(url=''),
-    'fbnetc_100': _cfg(url=''),
+    'fbnetc_100': _cfg(url='https://www.dropbox.com/s/0ku2tztuibrynld/fbnetc_100-f49a0c5f.pth?dl=1'),
     'spnasnet_100': _cfg(url='https://www.dropbox.com/s/iieopt18rytkgaa/spnasnet_100-048bc3f4.pth?dl=1'),
 }
 
@@ -1227,6 +1227,9 @@ def mobilenetv3_100(num_classes, in_chans=3, pretrained=False, **kwargs):
 def fbnetc_100(num_classes, in_chans=3, pretrained=False, **kwargs):
     """ FBNet-C """
     default_cfg = default_cfgs['fbnetc_100']
+    if pretrained:
+        # pretrained model trained with non-default BN epsilon
+        kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
     model = _gen_fbnetc(1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:

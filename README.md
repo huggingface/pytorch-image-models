@@ -118,6 +118,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | SE-ResNeXt-26 (32x4d) | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
 | SE-ResNet-34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear |
 | SE-ResNet-18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic |
+| FBNet-C | 74.830 (25.170 | 92.124 (7.876) | 5.6M | bilinear |
 | Single-Path NASNet 1.00 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear |
 
 ### Ported Weights
