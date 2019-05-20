@@ -11,8 +11,8 @@ The work of many others is present here. I've tried to make sure all source mate
     * [Torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models)
     * [Cadene's Pretrained Models](https://github.com/Cadene/pretrained-models.pytorch)
     * [Myself](https://github.com/rwightman/pytorch-dpn-pretrained)
-* LR scheduler ideas from [AllenNLP](https://github.com/allenai/allennlp/tree/master/allennlp/training/learning_rate_schedulers) and [FAIRseq](https://github.com/pytorch/fairseq/tree/master/fairseq/optim/lr_scheduler)
-* Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py)
+* LR scheduler ideas from [AllenNLP](https://github.com/allenai/allennlp/tree/master/allennlp/training/learning_rate_schedulers), [FAIRseq](https://github.com/pytorch/fairseq/tree/master/fairseq/optim/lr_scheduler), and SGDR: Stochastic Gradient Descent with Warm Restarts (https://arxiv.org/abs/1608.03983)
+* Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py)  (https://arxiv.org/abs/1708.04896)
 
 ## Models
 
@@ -30,12 +30,13 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
 * Generic MobileNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable and InvertedResidual blocks
-    * MNASNet B1, A1 (Squeeze-Excite), and Small
-    * MobileNet-V1
-    * MobileNet-V2
-    * MobileNet-V3 (work in progress, validating config)
-    * ChamNet (details hard to find, currently an educated guess)
-    * FBNet-C (TODO A/B variants)
+    * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
+    * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
+    * MobileNet-V2 (https://arxiv.org/abs/1801.04381)
+    * MobileNet-V3 (https://arxiv.org/abs/1905.02244) -- work in progress, validating config
+    * ChamNet (https://arxiv.org/abs/1812.08934) -- specific arch details hard to find, currently an educated guess
+    * FBNet-C (https://arxiv.org/abs/1812.03443) -- TODO A/B variants
+    * Single-Path NAS (https://arxiv.org/abs/1904.02877) -- pixel1 variant
     
 The full list of model strings that can be passed to model factory via `--model` arg for train, validation, inference scripts:
 ```
