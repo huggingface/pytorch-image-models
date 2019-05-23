@@ -110,7 +110,7 @@ Several (less common) features that I often utilize in my projects are included.
 * Mixup (as in https://arxiv.org/abs/1710.09412) - currently implementing/testing
 * An inference script that dumps output to CSV is provided as an example
 
-### Custom Weights
+### Self-trained Weights
 I've leveraged the training scripts in this repository to train a few of the models with missing weights to good levels of performance. These numbers are all for 224x224 training and validation image sizing with the usual 87.5% validation crop.
 
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
@@ -125,8 +125,12 @@ I've leveraged the training scripts in this repository to train a few of the mod
 ### Ported Weights
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  | Source |
 |---|---|---|---|---|---|
-| MNASNet 1.00 (B1) | 72.398 (27.602) | 90.930 (9.070) |  4.36M | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
+| Gluon Inception-V3 | 78.804 (21.196) | 94.380 (5.620) | 27.16M | bicubic | [MxNet Gluon](https://gluon-cv.mxnet.io/model_zoo/classification.html) |
+| Tensorflow Inception-V3 | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
+| Adversarially trained Inception-V3 | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
 | SE-MNASNet 1.00 (A1) | 73.086 (26.914) | 91.336 (8.664) | 3.87M  | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
+| MNASNet 1.00 (B1) | 72.398 (27.602) | 90.930 (9.070) |  4.36M | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
+
 
 NOTE: For some reason I can't hit the stated accuracy with my impl of MNASNet and Google's tflite weights. Using a TF equivalent to 'SAME' padding was important to get > 70%, but something small is still missing. Trying to train my own weights from scratch with these models has so far to leveled off in the same 72-73% range.
 
