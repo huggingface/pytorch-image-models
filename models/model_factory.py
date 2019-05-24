@@ -14,6 +14,14 @@ from models.genmobilenet import \
     mobilenetv1_100, mobilenetv2_100, mobilenetv3_050, mobilenetv3_075, mobilenetv3_100,\
     fbnetc_100, chamnetv1_100, chamnetv2_100, spnasnet_100
 from models.inception_v3 import inception_v3, gluon_inception_v3, tf_inception_v3, adv_inception_v3
+from models.gluon_resnet import gluon_resnet18_v1b, gluon_resnet34_v1b, gluon_resnet50_v1b, gluon_resnet101_v1b, \
+    gluon_resnet152_v1b, gluon_resnet50_v1c, gluon_resnet101_v1c, gluon_resnet152_v1c, \
+    gluon_resnet50_v1d, gluon_resnet101_v1d, gluon_resnet152_v1d, \
+    gluon_resnet50_v1e, gluon_resnet101_v1e, gluon_resnet152_v1e, \
+    gluon_resnet50_v1s, gluon_resnet101_v1s, gluon_resnet152_v1s, \
+    gluon_resnext50_32x4d, gluon_resnext101_32x4d , gluon_resnext101_64x4d, gluon_resnext152_32x4d, \
+    gluon_seresnext50_32x4d, gluon_seresnext101_32x4d, gluon_seresnext101_64x4d, gluon_seresnext152_32x4d, \
+    gluon_senet154
 
 from models.helpers import load_checkpoint
 
