@@ -1,8 +1,7 @@
-"""Pytorch ResNet implementation w/ tweaks
-This file is a copy of https://github.com/pytorch/vision 'resnet.py' (BSD-3-Clause) with
-additional dropout and dynamic global avg/max pool.
-
-ResNext additions added by Ross Wightman
+"""Pytorch impl of MxNet Gluon ResNet/(SE)ResNeXt variants
+This file evolved from https://github.com/pytorch/vision 'resnet.py' with (SE)-ResNeXt additions
+and ports of Gluon variations (https://github.com/dmlc/gluon-cv/blob/master/gluoncv/model_zoo/resnet.py) 
+by Ross Wightman
 """
 import torch
 import torch.nn as nn
