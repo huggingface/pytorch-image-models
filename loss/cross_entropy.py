@@ -26,10 +26,10 @@ class LabelSmoothingCrossEntropy(nn.Module):
         return loss.mean()
 
 
-class SparseLabelCrossEntropy(nn.Module):
+class SoftTargetCrossEntropy(nn.Module):
 
     def __init__(self):
-        super(SparseLabelCrossEntropy, self).__init__()
+        super(SoftTargetCrossEntropy, self).__init__()
 
     def forward(self, x, target):
         loss = torch.sum(-target * F.log_softmax(x, dim=-1), dim=-1)
