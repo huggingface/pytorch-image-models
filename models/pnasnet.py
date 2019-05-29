@@ -15,6 +15,9 @@ import torch.nn.functional as F
 from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import SelectAdaptivePool2d
 
+_models = ['pnasnet5large']
+__all__ = ['PNASNet5Large'] + _models
+
 default_cfgs = {
     'pnasnet5large': {
         'url': 'http://data.lip6.fr/cadene/pretrainedmodels/pnasnet5large-bf079911.pth',

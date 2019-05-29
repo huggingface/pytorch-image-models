@@ -19,7 +19,8 @@ from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import select_adaptive_pool2d
 from data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 
-__all__ = ['DPN', 'dpn68', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
+_models = ['dpn68', 'dpn68b', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
+__all__ = ['DPN'] + _models
 
 
 def _cfg(url=''):
@@ -32,18 +33,12 @@ def _cfg(url=''):
 
 
 default_cfgs = {
-    'dpn68':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68-66bebafa7.pth'),
-    'dpn68b_extra':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68b_extra-84854c156.pth'),
-    'dpn92_extra':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn92_extra-b040e4a9b.pth'),
-    'dpn98':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn98-5b90dec4d.pth'),
-    'dpn131':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn131-71dfe43e0.pth'),
-    'dpn107_extra':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn107_extra-1ac7121e2.pth')
+    'dpn68': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68-66bebafa7.pth'),
+    'dpn68b_extra': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68b_extra-84854c156.pth'),
+    'dpn92_extra': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn92_extra-b040e4a9b.pth'),
+    'dpn98': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn98-5b90dec4d.pth'),
+    'dpn131': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn131-71dfe43e0.pth'),
+    'dpn107_extra': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn107_extra-1ac7121e2.pth')
 }
 
 

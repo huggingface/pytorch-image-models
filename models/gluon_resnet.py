@@ -11,13 +11,14 @@ from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import SelectAdaptivePool2d
 from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-__all__ = ['GluonResNet', 'gluon_resnet18_v1b', 'gluon_resnet34_v1b', 'gluon_resnet50_v1b', 'gluon_resnet101_v1b',
-    'gluon_resnet152_v1b', 'gluon_resnet50_v1c', 'gluon_resnet101_v1c', 'gluon_resnet152_v1c', 'gluon_resnet50_v1d',
-    'gluon_resnet101_v1d', 'gluon_resnet152_v1d', 'gluon_resnet50_v1e', 'gluon_resnet101_v1e', 'gluon_resnet152_v1e',
-    'gluon_resnet50_v1s', 'gluon_resnet101_v1s', 'gluon_resnet152_v1s', 'gluon_resnext50_32x4d',
-    'gluon_resnext101_32x4d', 'gluon_resnext101_64x4d', 'gluon_resnext152_32x4d', 'gluon_seresnext50_32x4d',
-    'gluon_seresnext101_32x4d', 'gluon_seresnext101_64x4d', 'gluon_seresnext152_32x4d', 'gluon_senet154'
-]
+_models = [
+    'gluon_resnet18_v1b', 'gluon_resnet34_v1b', 'gluon_resnet50_v1b', 'gluon_resnet101_v1b', 'gluon_resnet152_v1b',
+    'gluon_resnet50_v1c', 'gluon_resnet101_v1c', 'gluon_resnet152_v1c', 'gluon_resnet50_v1d', 'gluon_resnet101_v1d',
+    'gluon_resnet152_v1d', 'gluon_resnet50_v1e', 'gluon_resnet101_v1e', 'gluon_resnet152_v1e', 'gluon_resnet50_v1s',
+    'gluon_resnet101_v1s', 'gluon_resnet152_v1s', 'gluon_resnext50_32x4d', 'gluon_resnext101_32x4d',
+    'gluon_resnext101_64x4d', 'gluon_resnext152_32x4d', 'gluon_seresnext50_32x4d', 'gluon_seresnext101_32x4d',
+    'gluon_seresnext101_64x4d', 'gluon_seresnext152_32x4d', 'gluon_senet154']
+__all__ = ['GluonResNet'] + _models
 
 
 def _cfg(url='', **kwargs):

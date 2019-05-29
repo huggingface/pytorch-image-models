@@ -9,13 +9,16 @@ from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import *
 from data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
+_models = ['inception_v4']
+__all__ = ['InceptionV4'] + _models
+
 default_cfgs = {
     'inception_v4': {
-        'url': 'http://webia.lip6.fr/~cadene/Downloads/inceptionv4-97ef9c30.pth',
+        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionv4-8e4777a0.pth',
         'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'features.0.conv', 'classifier': 'classif',
+        'first_conv': 'features.0.conv', 'classifier': 'last_linear',
     }
 }
 
@@ -268,7 +271,7 @@ class InceptionV4(nn.Module):
             Inception_C(),
             Inception_C(),
         )
-        self.classif = nn.Linear(self.num_features, num_classes)
+        self.last_linear = nn.Linear(self.num_features, num_classes)
 
     def get_classifier(self):
         return self.classif
@@ -289,7 +292,7 @@ class InceptionV4(nn.Module):
         x = self.forward_features(x)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.classif(x)
+        x = self.last_linear(x)
         return x
 
 

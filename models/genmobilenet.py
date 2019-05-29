@@ -26,10 +26,12 @@ from models.adaptive_avgmax_pool import SelectAdaptivePool2d
 from models.conv2d_same import sconv2d
 from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-__all__ = ['GenMobileNet', 'mnasnet_050', 'mnasnet_075', 'mnasnet_100', 'mnasnet_140',
-           'semnasnet_050', 'semnasnet_075', 'semnasnet_100', 'semnasnet_140', 'mnasnet_small',
-           'mobilenetv1_100', 'mobilenetv2_100', 'mobilenetv3_050', 'mobilenetv3_075', 'mobilenetv3_100',
-           'chamnetv1_100', 'chamnetv2_100', 'fbnetc_100', 'spnasnet_100']
+_models = [
+    'mnasnet_050', 'mnasnet_075', 'mnasnet_100', 'mnasnet_140', 'semnasnet_050', 'semnasnet_075',
+    'semnasnet_100', 'semnasnet_140', 'mnasnet_small', 'mobilenetv1_100', 'mobilenetv2_100',
+    'mobilenetv3_050', 'mobilenetv3_075', 'mobilenetv3_100', 'chamnetv1_100', 'chamnetv2_100',
+    'fbnetc_100', 'spnasnet_100', 'tflite_mnasnet_100', 'tflite_semnasnet_100']
+__all__ = ['GenMobileNet', 'genmobilenet_model_names'] + _models
 
 
 def _cfg(url='', **kwargs):
@@ -67,7 +69,7 @@ default_cfgs = {
     'spnasnet_100': _cfg(url='https://www.dropbox.com/s/iieopt18rytkgaa/spnasnet_100-048bc3f4.pth?dl=1'),
 }
 
-_DEBUG = True
+_DEBUG = False
 
 # Default args for PyTorch BN impl
 _BN_MOMENTUM_PT_DEFAULT = 0.1
@@ -266,7 +268,7 @@ class _BlockBuilder:
     def __init__(self, depth_multiplier=1.0, depth_divisor=8, min_depth=None,
                  act_fn=None, se_gate_fn=torch.sigmoid, se_reduce_mid=False,
                  bn_momentum=_BN_MOMENTUM_PT_DEFAULT, bn_eps=_BN_EPS_PT_DEFAULT,
-                 folded_bn=False, padding_same=False):
+                 folded_bn=False, padding_same=False, verbose=False):
         self.depth_multiplier = depth_multiplier
         self.depth_divisor = depth_divisor
         self.min_depth = min_depth
@@ -277,6 +279,7 @@ class _BlockBuilder:
         self.bn_eps = bn_eps
         self.folded_bn = folded_bn
         self.padding_same = padding_same
+        self.verbose = verbose
         self.in_chs = None
 
     def _round_channels(self, chs):
@@ -293,7 +296,7 @@ class _BlockBuilder:
         # block act fn overrides the model default
         ba['act_fn'] = ba['act_fn'] if ba['act_fn'] is not None else self.act_fn
         assert ba['act_fn'] is not None
-        if _DEBUG:
+        if self.verbose:
             print('args:', ba)
         #  could replace this if with lambdas or functools binding if variety increases
         if bt == 'ir':
@@ -315,7 +318,7 @@ class _BlockBuilder:
         blocks = []
         # each stack (stage) contains a list of block arguments
         for block_idx, ba in enumerate(stack_args):
-            if _DEBUG:
+            if self.verbose:
                 print('block', block_idx, end=', ')
             if block_idx >= 1:
                 # only the first block in any stack/stage can have a stride > 1
@@ -334,18 +337,18 @@ class _BlockBuilder:
              List of block stacks (each stack wrapped in nn.Sequential)
         """
         arch_args = _decode_arch_def(arch_def)  # convert and expand string defs to arg dicts
-        if _DEBUG:
+        if self.verbose:
             print('Building model trunk with %d stacks (stages)...' % len(arch_args))
         self.in_chs = in_chs
         blocks = []
         # outer list of arch_args defines the stacks ('stages' by some conventions)
         for stack_idx, stack in enumerate(arch_args):
-            if _DEBUG:
+            if self.verbose:
                 print('stack', stack_idx)
             assert isinstance(stack, list)
             stack = self._make_stack(stack)
             blocks.append(stack)
-            if _DEBUG:
+            if self.verbose:
                 print()
         return blocks
 
@@ -631,7 +634,7 @@ class GenMobileNet(nn.Module):
         builder = _BlockBuilder(
             depth_multiplier, depth_divisor, min_depth,
             act_fn, se_gate_fn, se_reduce_mid,
-            bn_momentum, bn_eps, folded_bn, padding_same)
+            bn_momentum, bn_eps, folded_bn, padding_same, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(in_chs, block_args))
         in_chs = builder.in_chs
 
@@ -1265,3 +1268,7 @@ def spnasnet_100(num_classes, in_chans=3, pretrained=False, **kwargs):
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
+
+
+def genmobilenet_model_names():
+    return set(_models)

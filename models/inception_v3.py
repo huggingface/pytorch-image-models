@@ -2,6 +2,9 @@ from torchvision.models import Inception3
 from models.helpers import load_pretrained
 from data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
+_models = ['inception_v3', 'tf_inception_v3', 'adv_inception_v3', 'gluon_inception_v3']
+__all__ = _models
+
 default_cfgs = {
     # original PyTorch weights, ported from Tensorflow but modified
     'inception_v3': {

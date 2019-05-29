@@ -19,8 +19,9 @@ from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import SelectAdaptivePool2d
 from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-__all__ = ['SENet', 'senet154', 'seresnet50', 'seresnet101', 'seresnet152',
+_models = ['senet154', 'seresnet50', 'seresnet101', 'seresnet152',
            'seresnext50_32x4d', 'seresnext101_32x4d']
+__all__ = ['SENet'] + _models
 
 
 def _cfg(url='', **kwargs):

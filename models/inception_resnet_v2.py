@@ -9,6 +9,9 @@ from models.helpers import load_pretrained
 from models.adaptive_avgmax_pool import *
 from data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
+_models = ['inception_resnet_v2']
+__all__ = ['InceptionResnetV2'] + _models
+
 default_cfgs = {
     'inception_resnet_v2': {
         'url': 'http://data.lip6.fr/cadene/pretrainedmodels/inceptionresnetv2-520b38e4.pth',
