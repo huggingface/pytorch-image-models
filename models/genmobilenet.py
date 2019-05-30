@@ -648,7 +648,6 @@ class GenMobileNet(nn.Module):
                  folded_bn=False, padding_same=False):
         super(GenMobileNet, self).__init__()
         self.num_classes = num_classes
-        self.depth_multiplier = channel_multiplier
         self.drop_rate = drop_rate
         self.act_fn = act_fn
         self.num_features = num_features
