@@ -89,27 +89,32 @@ def create_loader(
         distributed=False,
         crop_pct=None,
         collate_fn=None,
+        tf_preprocessing=False,
 ):
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
     else:
         img_size = input_size
 
-    if is_training:
-        transform = transforms_imagenet_train(
-            img_size,
-            interpolation=interpolation,
-            use_prefetcher=use_prefetcher,
-            mean=mean,
-            std=std)
+    if tf_preprocessing and use_prefetcher:
+        from data.tf_preprocessing import TfPreprocessTransform
+        transform = TfPreprocessTransform(is_training=is_training, size=img_size)
     else:
-        transform = transforms_imagenet_eval(
-            img_size,
-            interpolation=interpolation,
-            use_prefetcher=use_prefetcher,
-            mean=mean,
-            std=std,
-            crop_pct=crop_pct)
+        if is_training:
+            transform = transforms_imagenet_train(
+                img_size,
+                interpolation=interpolation,
+                use_prefetcher=use_prefetcher,
+                mean=mean,
+                std=std)
+        else:
+            transform = transforms_imagenet_eval(
+                img_size,
+                interpolation=interpolation,
+                use_prefetcher=use_prefetcher,
+                mean=mean,
+                std=std,
+                crop_pct=crop_pct)
 
     dataset.transform = transform
 

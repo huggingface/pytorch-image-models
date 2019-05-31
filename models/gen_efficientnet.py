@@ -1,6 +1,6 @@
-""" Generic MobileNet
+""" Generic EfficientNets
 
-A generic MobileNet class with building blocks to support a variety of models:
+A generic class with building blocks to support a variety of models with efficient architectures:
 * EfficientNet (B0-B4 in code right now, work in progress, still verifying)
 * MNasNet B1, A1 (SE), Small
 * MobileNet V1, V2, and V3 (work in progress)
@@ -32,8 +32,9 @@ _models = [
     'semnasnet_100', 'semnasnet_140', 'mnasnet_small', 'mobilenetv1_100', 'mobilenetv2_100',
     'mobilenetv3_050', 'mobilenetv3_075', 'mobilenetv3_100', 'chamnetv1_100', 'chamnetv2_100',
     'fbnetc_100', 'spnasnet_100', 'tflite_mnasnet_100', 'tflite_semnasnet_100', 'efficientnet_b0',
-    'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 'efficientnet_b4']
-__all__ = ['GenMobileNet', 'genmobilenet_model_names'] + _models
+    'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 'efficientnet_b4', 'tf_efficientnet_b0',
+    'tf_efficientnet_b1', 'tf_efficientnet_b2', 'tf_efficientnet_b3']
+__all__ = ['GenEfficientNet', 'gen_efficientnet_model_names'] + _models
 
 
 def _cfg(url='', **kwargs):
@@ -74,6 +75,18 @@ default_cfgs = {
     'efficientnet_b2': _cfg(url='', input_size=(3, 260, 260)),
     'efficientnet_b3': _cfg(url='', input_size=(3, 300, 300)),
     'efficientnet_b4': _cfg(url='', input_size=(3, 380, 380)),
+    'tf_efficientnet_b0': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0-0af12548.pth',
+        input_size=(3, 224, 224), interpolation='bicubic'),
+    'tf_efficientnet_b1': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b1-5c1377c4.pth',
+        input_size=(3, 240, 240), interpolation='bicubic', crop_pct=0.882),
+    'tf_efficientnet_b2': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b2-e393ef04.pth',
+        input_size=(3, 260, 260), interpolation='bicubic', crop_pct=0.890),
+    'tf_efficientnet_b3': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b3-e3bd6955.pth',
+        input_size=(3, 300, 300), interpolation='bicubic', crop_pct=0.904),
 }
 
 _DEBUG = False
@@ -648,10 +661,10 @@ class InvertedResidual(nn.Module):
         return x
 
 
-class GenMobileNet(nn.Module):
-    """ Generic Mobile Net
+class GenEfficientNet(nn.Module):
+    """ Generic EfficientNet
 
-    An implementation of mobile optimized networks that covers:
+    An implementation of efficient network architectures, in many cases mobile optimized networks:
       * MobileNet-V1
       * MobileNet-V2
       * MobileNet-V3
@@ -659,7 +672,7 @@ class GenMobileNet(nn.Module):
       * FBNet A, B, and C
       * ChamNet (arch details are murky)
       * Single-Path NAS Pixel1
-      * EfficientNet
+      * EfficientNetB0-B4 (rest easy to add)
     """
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=32, num_features=1280,
@@ -669,7 +682,7 @@ class GenMobileNet(nn.Module):
                  se_gate_fn=torch.sigmoid, se_reduce_mid=False,
                  global_pool='avg', head_conv='default', weight_init='goog',
                  folded_bn=False, padding_same=False,):
-        super(GenMobileNet, self).__init__()
+        super(GenEfficientNet, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.drop_connect_rate = drop_connect_rate
@@ -783,7 +796,7 @@ def _gen_mnasnet_a1(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c320'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -823,7 +836,7 @@ def _gen_mnasnet_b1(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c320_noskip']
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -856,7 +869,7 @@ def _gen_mnasnet_small(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c144']
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=8,
@@ -883,7 +896,7 @@ def _gen_mobilenet_v1(channel_multiplier, num_classes=1000, **kwargs):
         ['dsa_r2_k3_s2_c1024'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -915,7 +928,7 @@ def _gen_mobilenet_v2(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c320'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -956,7 +969,7 @@ def _gen_mobilenet_v3(channel_multiplier, num_classes=1000, **kwargs):
         ['cn_r1_k1_s1_c960'],  # hard-swish
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=16,
@@ -992,7 +1005,7 @@ def _gen_chamnet_v1(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e10_c104'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -1025,7 +1038,7 @@ def _gen_chamnet_v2(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c112'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -1059,7 +1072,7 @@ def _gen_fbnetc(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c352'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=16,
@@ -1099,7 +1112,7 @@ def _gen_spnasnet(channel_multiplier, num_classes=1000, **kwargs):
         ['ir_r1_k3_s1_e6_c320_noskip']
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    model = GenEfficientNet(
         _decode_arch_def(arch_def),
         num_classes=num_classes,
         stem_size=32,
@@ -1119,9 +1132,21 @@ def _gen_efficientnet(channel_multiplier=1.0, depth_multiplier=1.0, num_classes=
     Ref impl: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
     Paper: https://arxiv.org/abs/1905.11946
 
+    EfficientNet params
+    name: (channel_multiplier, depth_multiplier, resolution, dropout_rate)
+    'efficientnet-b0': (1.0, 1.0, 224, 0.2),
+    'efficientnet-b1': (1.0, 1.1, 240, 0.2),
+    'efficientnet-b2': (1.1, 1.2, 260, 0.3),
+    'efficientnet-b3': (1.2, 1.4, 300, 0.3),
+    'efficientnet-b4': (1.4, 1.8, 380, 0.4),
+    'efficientnet-b5': (1.6, 2.2, 456, 0.4),
+    'efficientnet-b6': (1.8, 2.6, 528, 0.5),
+    'efficientnet-b7': (2.0, 3.1, 600, 0.5),
+
     Args:
       channel_multiplier: multiplier to number of channels per layer
       depth_multiplier: multiplier to number of repeats per stage
+
     """
     arch_def = [
         ['ds_r1_k3_s1_e1_c16_se0.25'],
@@ -1133,13 +1158,16 @@ def _gen_efficientnet(channel_multiplier=1.0, depth_multiplier=1.0, num_classes=
         ['ir_r1_k3_s1_e6_c320_se0.25'],
     ]
     bn_momentum, bn_eps = _resolve_bn_params(kwargs)
-    model = GenMobileNet(
+    # NOTE: other models in the family didn't scale the feature count
+    num_features = _round_channels(1280, channel_multiplier, 8, None)
+    model = GenEfficientNet(
         _decode_arch_def(arch_def, depth_multiplier),
         num_classes=num_classes,
         stem_size=32,
         channel_multiplier=channel_multiplier,
         channel_divisor=8,
         channel_min=None,
+        num_features=num_features,
         bn_momentum=bn_momentum,
         bn_eps=bn_eps,
         act_fn=swish,
@@ -1357,19 +1385,8 @@ def spnasnet_100(num_classes, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-# EfficientNet params
-# (width_coefficient, depth_coefficient, resolution, dropout_rate)
-# 'efficientnet-b0': (1.0, 1.0, 224, 0.2),
-# 'efficientnet-b1': (1.0, 1.1, 240, 0.2),
-# 'efficientnet-b2': (1.1, 1.2, 260, 0.3),
-# 'efficientnet-b3': (1.2, 1.4, 300, 0.3),
-# 'efficientnet-b4': (1.4, 1.8, 380, 0.4),
-# 'efficientnet-b5': (1.6, 2.2, 456, 0.4),
-# 'efficientnet-b6': (1.8, 2.6, 528, 0.5),
-# 'efficientnet-b7': (2.0, 3.1, 600, 0.5),
-
 def efficientnet_b0(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ EfficientNet """
+    """ EfficientNet-B0 """
     default_cfg = default_cfgs['efficientnet_b0']
     # NOTE for train, drop_rate should be 0.2
     model = _gen_efficientnet(
@@ -1382,7 +1399,7 @@ def efficientnet_b0(num_classes, in_chans=3, pretrained=False, **kwargs):
 
 
 def efficientnet_b1(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ EfficientNet """
+    """ EfficientNet-B1 """
     default_cfg = default_cfgs['efficientnet_b1']
     # NOTE for train, drop_rate should be 0.2
     model = _gen_efficientnet(
@@ -1395,7 +1412,7 @@ def efficientnet_b1(num_classes, in_chans=3, pretrained=False, **kwargs):
 
 
 def efficientnet_b2(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ EfficientNet """
+    """ EfficientNet-B2 """
     default_cfg = default_cfgs['efficientnet_b2']
     # NOTE for train, drop_rate should be 0.3
     model = _gen_efficientnet(
@@ -1408,7 +1425,7 @@ def efficientnet_b2(num_classes, in_chans=3, pretrained=False, **kwargs):
 
 
 def efficientnet_b3(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ EfficientNet """
+    """ EfficientNet-B3 """
     default_cfg = default_cfgs['efficientnet_b3']
     # NOTE for train, drop_rate should be 0.3
     model = _gen_efficientnet(
@@ -1421,7 +1438,7 @@ def efficientnet_b3(num_classes, in_chans=3, pretrained=False, **kwargs):
 
 
 def efficientnet_b4(num_classes, in_chans=3, pretrained=False, **kwargs):
-    """ EfficientNet """
+    """ EfficientNet-B4 """
     default_cfg = default_cfgs['efficientnet_b4']
     # NOTE for train, drop_rate should be 0.4
     model = _gen_efficientnet(
@@ -1433,5 +1450,61 @@ def efficientnet_b4(num_classes, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def genmobilenet_model_names():
+def tf_efficientnet_b0(num_classes, in_chans=3, pretrained=False, **kwargs):
+    """ EfficientNet-B0. Tensorflow compatible variant  """
+    default_cfg = default_cfgs['tf_efficientnet_b0']
+    kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
+    kwargs['padding_same'] = True
+    model = _gen_efficientnet(
+        channel_multiplier=1.0, depth_multiplier=1.0,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+def tf_efficientnet_b1(num_classes, in_chans=3, pretrained=False, **kwargs):
+    """ EfficientNet-B1. Tensorflow compatible variant  """
+    default_cfg = default_cfgs['tf_efficientnet_b1']
+    kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
+    kwargs['padding_same'] = True
+    model = _gen_efficientnet(
+        channel_multiplier=1.0, depth_multiplier=1.1,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+def tf_efficientnet_b2(num_classes, in_chans=3, pretrained=False, **kwargs):
+    """ EfficientNet-B2. Tensorflow compatible variant  """
+    default_cfg = default_cfgs['tf_efficientnet_b2']
+    kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
+    kwargs['padding_same'] = True
+    model = _gen_efficientnet(
+        channel_multiplier=1.1, depth_multiplier=1.2,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+def tf_efficientnet_b3(num_classes, in_chans=3, pretrained=False, **kwargs):
+    """ EfficientNet-B3. Tensorflow compatible variant """
+    default_cfg = default_cfgs['tf_efficientnet_b3']
+    kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
+    kwargs['padding_same'] = True
+    model = _gen_efficientnet(
+        channel_multiplier=1.2, depth_multiplier=1.4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+def gen_efficientnet_model_names():
     return set(_models)

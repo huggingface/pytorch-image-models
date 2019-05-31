@@ -29,8 +29,8 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * PNasNet (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
-* Generic MobileNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable and InvertedResidual blocks
-    * EfficientNet (B0-B4) (https://arxiv.org/abs/1905.11946) -- work in progress, validating
+* Generic EfficientNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable and InvertedResidual blocks
+    * EfficientNet (B0-B4) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
     * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
     * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
     * MobileNet-V2 (https://arxiv.org/abs/1801.04381)
@@ -39,60 +39,8 @@ I've included a few of my favourite models, but this is not an exhaustive collec
     * FBNet-C (https://arxiv.org/abs/1812.03443) -- TODO A/B variants
     * Single-Path NAS (https://arxiv.org/abs/1904.02877) -- pixel1 variant
     
-The full list of model strings that can be passed to model factory via `--model` arg for train, validation, inference scripts:
-```
-chamnetv1_100
-chamnetv2_100
-densenet121
-densenet161
-densenet169
-densenet201
-dpn107
-dpn131
-dpn68
-dpn68b
-dpn92
-dpn98
-fbnetc_100
-inception_resnet_v2
-inception_v4
-mnasnet_050
-mnasnet_075
-mnasnet_100
-mnasnet_140
-mnasnet_small
-mobilenetv1_100
-mobilenetv2_100
-mobilenetv3_050
-mobilenetv3_075
-mobilenetv3_100
-pnasnet5large
-resnet101
-resnet152
-resnet18
-resnet34
-resnet50
-resnext101_32x4d
-resnext101_64x4d
-resnext152_32x4d
-resnext50_32x4d
-semnasnet_050
-semnasnet_075
-semnasnet_100
-semnasnet_140
-seresnet101
-seresnet152
-seresnet18
-seresnet34
-seresnet50
-seresnext101_32x4d
-seresnext26_32x4d
-seresnext50_32x4d
-spnasnet_100
-tflite_mnasnet_100
-tflite_semnasnet_100
-xception
-```
+Use the  `--model` arg to specify model for train, validation, inference scripts. Match the all lowercase
+creation fn for the model you'd like.
 
 ## Features
 Several (less common) features that I often utilize in my projects are included. Many of their additions are the reason why I maintain my own set of models, instead of using others' via PIP:
@@ -126,40 +74,60 @@ I've leveraged the training scripts in this repository to train a few of the mod
 ### Ported Weights
 
 #### @ 224x224
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  | Source |
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
 |---|---|---|---|---|---|
-| gluon_senet154           | 81.224 (18.776) | 95.356 (4.644)  | 115.09 | bicubic | |
-| gluon_resnet152_v1s      | 81.012 (18.988) | 95.416 (4.584)  | 60.32  | bicubic | |
-| gluon_seresnext101_32x4d | 80.902 (19.098) | 95.294 (4.706)  | 48.96  | bicubic | |
-| gluon_seresnext101_64x4d | 80.890 (19.110) | 95.304 (4.696)  | 88.23  | bicubic | |
-| gluon_resnext101_64x4d   | 80.602 (19.398) | 94.994 (5.006)  | 83.46  | bicubic | |
-| gluon_resnet152_v1d      | 80.470 (19.530) | 95.206 (4.794)  | 60.21  | bicubic | |
-| gluon_resnet101_v1d      | 80.424 (19.576) | 95.020 (4.980)  | 44.57  | bicubic | |
-| gluon_resnext101_32x4d   | 80.334 (19.666) | 94.926 (5.074)  | 44.18  | bicubic | |
-| gluon_resnet101_v1s      | 80.300 (19.700) | 95.150 (4.850)  | 44.67  | bicubic | |
-| gluon_resnet152_v1c      | 79.916 (20.084) | 94.842 (5.158)  | 60.21  | bicubic | |
-| gluon_seresnext50_32x4d  | 79.912 (20.088) | 94.818 (5.182)  | 27.56  | bicubic | |
-| gluon_resnet152_v1b      | 79.692 (20.308) | 94.738 (5.262)  | 60.19  | bicubic | |
-| gluon_resnet101_v1c      | 79.544 (20.456) | 94.586 (5.414)  | 44.57  | bicubic | |
-| gluon_resnext50_32x4d    | 79.356 (20.644) | 94.424 (5.576)  | 25.03  | bicubic | |
-| gluon_resnet101_v1b      | 79.304 (20.696) | 94.524 (5.476)  | 44.55  | bicubic | |
-| gluon_resnet50_v1d       | 79.074 (20.926) | 94.476 (5.524)  | 25.58  | bicubic | |
-| gluon_resnet50_v1s       | 78.712 (21.288) | 94.242 (5.758)  | 25.68  | bicubic | |
-| gluon_resnet50_v1c       | 78.010 (21.990) | 93.988 (6.012)  | 25.58  | bicubic | |
-| gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282)  | 25.56  | bicubic | |
-| gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012)  | 21.80   | bicubic | |
-| SE-MNASNet 1.00 (A1) | 73.086 (26.914) | 91.336 (8.664) | 3.87  | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
-| MNASNet 1.00 (B1) | 72.398 (27.602) | 90.930 (9.070) |  4.36 | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) 
+| gluon_senet154           | 81.224 (18.776) | 95.356 (4.644) | 115.09 | bicubic | |
+| gluon_resnet152_v1s      | 81.012 (18.988) | 95.416 (4.584) | 60.32  | bicubic | |
+| gluon_seresnext101_32x4d | 80.902 (19.098) | 95.294 (4.706) | 48.96  | bicubic | |
+| gluon_seresnext101_64x4d | 80.890 (19.110) | 95.304 (4.696) | 88.23  | bicubic | |
+| gluon_resnext101_64x4d   | 80.602 (19.398) | 94.994 (5.006) | 83.46  | bicubic | |
+| gluon_resnet152_v1d      | 80.470 (19.530) | 95.206 (4.794) | 60.21  | bicubic | |
+| gluon_resnet101_v1d      | 80.424 (19.576) | 95.020 (4.980) | 44.57  | bicubic | |
+| gluon_resnext101_32x4d   | 80.334 (19.666) | 94.926 (5.074) | 44.18  | bicubic | |
+| gluon_resnet101_v1s      | 80.300 (19.700) | 95.150 (4.850) | 44.67  | bicubic | |
+| gluon_resnet152_v1c      | 79.916 (20.084) | 94.842 (5.158) | 60.21  | bicubic | |
+| gluon_seresnext50_32x4d  | 79.912 (20.088) | 94.818 (5.182) | 27.56  | bicubic | |
+| gluon_resnet152_v1b      | 79.692 (20.308) | 94.738 (5.262) | 60.19  | bicubic | |
+| gluon_resnet101_v1c      | 79.544 (20.456) | 94.586 (5.414) | 44.57  | bicubic | |
+| gluon_resnext50_32x4d    | 79.356 (20.644) | 94.424 (5.576) | 25.03  | bicubic | |
+| gluon_resnet101_v1b      | 79.304 (20.696) | 94.524 (5.476) | 44.55  | bicubic | |
+| gluon_resnet50_v1d       | 79.074 (20.926) | 94.476 (5.524) | 25.58  | bicubic | |
+| gluon_resnet50_v1s       | 78.712 (21.288) | 94.242 (5.758) | 25.68  | bicubic | |
+| gluon_resnet50_v1c       | 78.010 (21.990) | 93.988 (6.012) | 25.58  | bicubic | |
+| gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282) | 25.56  | bicubic | |
+| tf_efficientnet_b0 *tfp  | 76.828 (23.172) | 93.226 (6.774) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b0       | 76.528 (23.472) | 93.010 (6.990) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012) | 21.80 | bicubic | |
+| tflite_semnasnet_100     | 73.086 (26.914) | 91.336 (8.664) | 3.87  | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
+| tflite_mnasnet_100       | 72.398 (27.602) | 90.930 (9.070) |  4.36 | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) 
 | gluon_resnet18_v1b       | 70.830 (29.170) | 89.756 (10.244) | 11.69 | bicubic | |
 
-#### @ 299x299
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  | Source |
+#### @ 240x240
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
 |---|---|---|---|---|---|
-| Gluon Inception-V3 | 78.804 (21.196) | 94.380 (5.620) | 27.16M | bicubic | [MxNet Gluon](https://gluon-cv.mxnet.io/model_zoo/classification.html) |
-| Tensorflow Inception-V3 | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
-| Adversarially trained Inception-V3 | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
+| tf_efficientnet_b1 *tfp  | 78.796 (21.204) | 94.232 (5.768)  | 7.79  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b1       | 78.554 (21.446) | 94.098 (5.902)  | 7.79  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+
+#### @ 260x260
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
+|---|---|---|---|---|---|
+| tf_efficientnet_b2 *tfp  | 79.782 (20.218) | 94.800 (5.200)  | 9.11  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b2       | 79.606 (20.394) | 94.712 (5.288)  | 9.11  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+
+#### @ 299x299 and 300x300
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
+|---|---|---|---|---|---|
+| tf_efficientnet_b3 *tfp  | 80.982 (19.018) | 95.332 (4.668)  | 12.23  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b3       | 80.874 (19.126) | 95.302 (4.698)  | 12.23  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| gluon_inception_v3 | 78.804 (21.196) | 94.380 (5.620) | 27.16M | bicubic | [MxNet Gluon](https://gluon-cv.mxnet.io/model_zoo/classification.html) |
+| tf_inception_v3 | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
+| adv_inception_v3 | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
 
 NOTE: For some reason I can't hit the stated accuracy with my impl of MNASNet and Google's tflite weights. Using a TF equivalent to 'SAME' padding was important to get > 70%, but something small is still missing. Trying to train my own weights from scratch with these models has so far to leveled off in the same 72-73% range.
+
+Models with `*tfp` next to them were scored with `--tf-preprocessing` flag. 
+
+The `tf_efficientnet` and `tflite_(se)mnasnet` models require an equivalent for 'SAME' padding as their arch results in asymmetric padding. I've added this in the model creation wrapper, but it does come with a performance penalty. 
 
 ## Script Usage
 

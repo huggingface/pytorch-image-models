@@ -44,6 +44,8 @@ parser.add_argument('--num-gpu', type=int, default=1,
                     help='Number of GPUS to use')
 parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
                     help='disable test time pool')
+parser.add_argument('--tf-preprocessing', dest='tf_preprocessing', action='store_true',
+                    help='Use Tensorflow preprocessing pipeline (require CPU TF installed')
 
 
 def main():
@@ -71,7 +73,7 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
 
     loader = create_loader(
-        Dataset(args.data),
+        Dataset(args.data, load_bytes=args.tf_preprocessing),
         input_size=data_config['input_size'],
         batch_size=args.batch_size,
         use_prefetcher=True,
@@ -79,7 +81,8 @@ def main():
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
-        crop_pct=1.0 if test_time_pool else data_config['crop_pct'])
+        crop_pct=1.0 if test_time_pool else data_config['crop_pct'],
+        tf_preprocessing=args.tf_preprocessing)
 
     batch_time = AverageMeter()
     losses = AverageMeter()

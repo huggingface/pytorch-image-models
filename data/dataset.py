@@ -54,6 +54,7 @@ class Dataset(data.Dataset):
     def __init__(
             self,
             root,
+            load_bytes=False,
             transform=None):
 
         imgs, _, _ = find_images_and_targets(root)
@@ -62,11 +63,12 @@ class Dataset(data.Dataset):
                                "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
         self.root = root
         self.imgs = imgs
+        self.load_bytes = load_bytes
         self.transform = transform
 
     def __getitem__(self, index):
         path, target = self.imgs[index]
-        img = Image.open(path).convert('RGB')
+        img = open(path, 'rb').read() if self.load_bytes else Image.open(path).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
         if target is None:
