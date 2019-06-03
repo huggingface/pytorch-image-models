@@ -23,7 +23,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * DenseNet (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models))
     * DenseNet-121, DenseNet-169, DenseNet-201, DenseNet-161
 * Squeeze-and-Excitation ResNet/ResNeXt (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) with some pretrained weight additions by myself)
-    * SENet-154, SE-ResNet-18, SE-ResNet-34, SE-ResNet-50, SE-ResNet-101, SE-ResNet-152, SE-ResNeXt-26 (32x4d), SE-ResNeXt50 (32x4d), ResNeXt101 (32x4d)
+    * SENet-154, SE-ResNet-18, SE-ResNet-34, SE-ResNet-50, SE-ResNet-101, SE-ResNet-152, SE-ResNeXt-26 (32x4d), SE-ResNeXt50 (32x4d), SE-ResNeXt101 (32x4d)
 * Inception-ResNet-V2 and Inception-V4 (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) )
 * Xception (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
 * PNasNet (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
