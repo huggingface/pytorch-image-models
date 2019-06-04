@@ -34,7 +34,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
     * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
     * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
     * MobileNet-V2 (https://arxiv.org/abs/1801.04381)
-    * MobileNet-V3 (https://arxiv.org/abs/1905.02244) -- work in progress, validating config
+    * MobileNet-V3 (https://arxiv.org/abs/1905.02244) -- pretrained model good, still no official impl to verify against
     * ChamNet (https://arxiv.org/abs/1812.08934) -- specific arch details hard to find, currently an educated guess
     * FBNet-C (https://arxiv.org/abs/1812.03443) -- TODO A/B variants
     * Single-Path NAS (https://arxiv.org/abs/1904.02877) -- pixel1 variant
