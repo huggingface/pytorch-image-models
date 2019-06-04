@@ -65,11 +65,15 @@ default_cfgs = {
     'mobilenetv2_100': _cfg(url=''),
     'mobilenetv3_050': _cfg(url=''),
     'mobilenetv3_075': _cfg(url=''),
-    'mobilenetv3_100': _cfg(url=''),
+    'mobilenetv3_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
+        interpolation='bicubic'),
     'chamnetv1_100': _cfg(url=''),
     'chamnetv2_100': _cfg(url=''),
-    'fbnetc_100': _cfg(url='https://www.dropbox.com/s/0ku2tztuibrynld/fbnetc_100-f49a0c5f.pth?dl=1'),
-    'spnasnet_100': _cfg(url='https://www.dropbox.com/s/iieopt18rytkgaa/spnasnet_100-048bc3f4.pth?dl=1'),
+    'fbnetc_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetc_100-c345b898.pth'),
+    'spnasnet_100': _cfg(
+        url='https://www.dropbox.com/s/iieopt18rytkgaa/spnasnet_100-048bc3f4.pth?dl=1'),
     'efficientnet_b0': _cfg(url=''),
     'efficientnet_b1': _cfg(url='', input_size=(3, 240, 240)),
     'efficientnet_b2': _cfg(url='', input_size=(3, 260, 260)),
@@ -1335,6 +1339,9 @@ def mobilenetv3_075(num_classes, in_chans=3, pretrained=False, **kwargs):
 def mobilenetv3_100(num_classes, in_chans=3, pretrained=False, **kwargs):
     """ MobileNet V3 """
     default_cfg = default_cfgs['mobilenetv3_100']
+    if pretrained:
+        # pretrained model trained with non-default BN epsilon
+        kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
     model = _gen_mobilenet_v3(1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:

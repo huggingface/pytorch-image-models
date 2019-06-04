@@ -62,12 +62,14 @@ Several (less common) features that I often utilize in my projects are included.
 ### Self-trained Weights
 I've leveraged the training scripts in this repository to train a few of the models with missing weights to good levels of performance. These numbers are all for 224x224 training and validation image sizing with the usual 87.5% validation crop.
 
+#### @ 224x224
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
 |---|---|---|---|---|
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
+| mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic |
+| fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear |
 | resnet34 | 75.110 (24.890) | 92.284 (7.716) | 22M | bilinear |
-| fbnetc_100 | 74.830 (25.170 | 92.124 (7.876) | 5.6M | bilinear |
 | seresnet34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear |
 | spnasnet_100 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear |
 | seresnet18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic |
