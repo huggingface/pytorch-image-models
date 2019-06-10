@@ -253,9 +253,9 @@ class ModelEma:
                     name = k
                 new_state_dict[name] = v
             self.ema.load_state_dict(new_state_dict)
-            print("=> loaded state_dict_ema")
+            print("=> Loaded state_dict_ema")
         else:
-            print("=> failed to find state_dict_ema, starting from loaded model weights)")
+            print("=> Failed to find state_dict_ema, starting from loaded model weights")
 
     def update(self, model):
         # correct a mismatch in state dict keys
