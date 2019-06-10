@@ -67,6 +67,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 |---|---|---|---|---|
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
+| efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic |
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic |
 | fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear |
 | resnet34 | 75.110 (24.890) | 92.284 (7.716) | 22M | bilinear |

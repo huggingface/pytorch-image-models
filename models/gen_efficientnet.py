@@ -74,23 +74,29 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetc_100-c345b898.pth'),
     'spnasnet_100': _cfg(
         url='https://www.dropbox.com/s/iieopt18rytkgaa/spnasnet_100-048bc3f4.pth?dl=1'),
-    'efficientnet_b0': _cfg(url=''),
-    'efficientnet_b1': _cfg(url='', input_size=(3, 240, 240)),
-    'efficientnet_b2': _cfg(url='', input_size=(3, 260, 260)),
-    'efficientnet_b3': _cfg(url='', input_size=(3, 300, 300)),
-    'efficientnet_b4': _cfg(url='', input_size=(3, 380, 380)),
+    'efficientnet_b0': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0-d6904d92.pth',
+        interpolation='bicubic'),
+    'efficientnet_b1': _cfg(
+        url='', input_size=(3, 240, 240), pool_size=(8, 8)),
+    'efficientnet_b2': _cfg(
+        url='', input_size=(3, 260, 260), pool_size=(9, 9)),
+    'efficientnet_b3': _cfg(
+        url='', input_size=(3, 300, 300), pool_size=(10, 10)),
+    'efficientnet_b4': _cfg(
+        url='', input_size=(3, 380, 380), pool_size=(12, 12)),
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0-0af12548.pth',
         input_size=(3, 224, 224), interpolation='bicubic'),
     'tf_efficientnet_b1': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b1-5c1377c4.pth',
-        input_size=(3, 240, 240), interpolation='bicubic', crop_pct=0.882),
+        input_size=(3, 240, 240), pool_size=(8, 8), interpolation='bicubic', crop_pct=0.882),
     'tf_efficientnet_b2': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b2-e393ef04.pth',
-        input_size=(3, 260, 260), interpolation='bicubic', crop_pct=0.890),
+        input_size=(3, 260, 260), pool_size=(9, 9), interpolation='bicubic', crop_pct=0.890),
     'tf_efficientnet_b3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b3-e3bd6955.pth',
-        input_size=(3, 300, 300), interpolation='bicubic', crop_pct=0.904),
+        input_size=(3, 300, 300), pool_size=(10, 10), interpolation='bicubic', crop_pct=0.904),
 }
 
 _DEBUG = False
