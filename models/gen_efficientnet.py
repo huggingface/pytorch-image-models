@@ -51,14 +51,18 @@ default_cfgs = {
     'mnasnet_050': _cfg(url=''),
     'mnasnet_075': _cfg(url=''),
     'mnasnet_100': _cfg(url=''),
-    'tflite_mnasnet_100': _cfg(url='https://www.dropbox.com/s/q55ir3tx8mpeyol/tflite_mnasnet_100-31639cdc.pth?dl=1',
-                               interpolation='bicubic'),
+    'tflite_mnasnet_100': _cfg(
+        url='https://www.dropbox.com/s/q55ir3tx8mpeyol/tflite_mnasnet_100-31639cdc.pth?dl=1',
+        interpolation='bicubic'),
     'mnasnet_140': _cfg(url=''),
     'semnasnet_050': _cfg(url=''),
     'semnasnet_075': _cfg(url=''),
-    'semnasnet_100': _cfg(url=''),
-    'tflite_semnasnet_100': _cfg(url='https://www.dropbox.com/s/yiori47sr9dydev/tflite_semnasnet_100-7c780429.pth?dl=1',
-                                 interpolation='bicubic'),
+    'semnasnet_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_a1-d9418771.pth',
+        interpolation='bicubic'),
+    'tflite_semnasnet_100': _cfg(
+        url='https://www.dropbox.com/s/yiori47sr9dydev/tflite_semnasnet_100-7c780429.pth?dl=1',
+        interpolation='bicubic'),
     'semnasnet_140': _cfg(url=''),
     'mnasnet_small': _cfg(url=''),
     'mobilenetv1_100': _cfg(url=''),
