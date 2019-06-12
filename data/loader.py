@@ -62,6 +62,10 @@ class PrefetchLoader:
         return self.loader.sampler
 
     @property
+    def dataset(self):
+        return self.loader.dataset
+
+    @property
     def mixup_enabled(self):
         if isinstance(self.loader.collate_fn, FastCollateMixup):
             return self.loader.collate_fn.mixup_enabled
