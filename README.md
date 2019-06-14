@@ -69,10 +69,11 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
 | efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic |
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic |
-| semnasnet_100 | 75.448 (24.552) | 92.604 (7.396) | 3.89M | bicubic |
+| mnasnet_a1 | 75.448 (24.552) | 92.604 (7.396) | 3.89M | bicubic |
 | fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear |
 | resnet34 | 75.110 (24.890) | 92.284 (7.716) | 22M | bilinear |
 | seresnet34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear |
+| mnasnet_b1 | 74.658 (25.342) | 92.114 (7.886) | 4.38M | bicubic |
 | spnasnet_100 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear |
 | seresnet18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic |
 
