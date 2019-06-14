@@ -137,6 +137,19 @@ The `tf_efficientnet` and `tflite_(se)mnasnet` models require an equivalent for 
 
 ## Script Usage
 
+## Environment
+
+All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x and 3.7.x. Little to no care has been taken to be Python 2.x friendly and I don't plan to support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.
+
+PyTorch versions 1.0 and 1.1 have been tested with this code. 
+
+I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
+```
+conda create -n torch-env
+conda activate torch-env
+conda install -c pytorch pytorch torchvision cudatoolkit=10.0
+```
+
 ### Training
 
 The variety of training args is large and not all combinations of options (or even options) have been fully tested. For the training dataset folder, specify the folder to the base that contains a `train` and `validation` folder.
