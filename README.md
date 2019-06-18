@@ -129,6 +129,19 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | tf_inception_v3 | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
 | adv_inception_v3 | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
 
+#### @ 380x380
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
+|---|---|---|---|---|---|
+| tf_efficientnet_b4       | 82.604 (17.396) | 96.128 (3.872)  | 19.34  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b4 *tfp  | 82.604 (17.396) | 96.094 (3.906)  | 19.34  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+
+#### @ 456x456
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
+|---|---|---|---|---|---|
+| tf_efficientnet_b5 *tfp  | 83.200 (16.800) | 96.456 (3.544) | 30.39  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b5       | 83.176 (16.824) | 96.536 (3.464) | 30.39  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+
+
 NOTE: For some reason I can't hit the stated accuracy with my impl of MNASNet and Google's tflite weights. Using a TF equivalent to 'SAME' padding was important to get > 70%, but something small is still missing. Trying to train my own weights from scratch with these models has so far to leveled off in the same 72-73% range.
 
 Models with `*tfp` next to them were scored with `--tf-preprocessing` flag. 

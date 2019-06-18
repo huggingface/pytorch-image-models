@@ -53,6 +53,10 @@ def resume_checkpoint(model, checkpoint_path, start_epoch=None):
 
 
 def load_pretrained(model, default_cfg, num_classes=1000, in_chans=3, filter_fn=None):
+    if 'url' not in default_cfg or not default_cfg['url']:
+        print("Warning: pretrained model URL is invalid, using random initialization.")
+        return
+
     state_dict = model_zoo.load_url(default_cfg['url'])
 
     if in_chans == 1:
