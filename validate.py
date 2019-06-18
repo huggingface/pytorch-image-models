@@ -4,14 +4,17 @@ from __future__ import print_function
 
 import argparse
 import os
+import csv
+import glob
 import time
 import torch
 import torch.nn as nn
 import torch.nn.parallel
+from collections import OrderedDict
 
-from models import create_model, apply_test_time_pool
+from models import create_model, apply_test_time_pool, load_checkpoint
 from data import Dataset, create_loader, resolve_data_config
-from utils import accuracy, AverageMeter
+from utils import accuracy, AverageMeter, natural_key
 
 torch.backends.cudnn.benchmark = True
 
@@ -46,21 +49,26 @@ parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
                     help='disable test time pool')
 parser.add_argument('--tf-preprocessing', dest='tf_preprocessing', action='store_true',
                     help='Use Tensorflow preprocessing pipeline (require CPU TF installed')
+parser.add_argument('--use-ema', dest='use_ema', action='store_true',
+                    help='use ema version of weights if present')
 
 
-def main():
-    args = parser.parse_args()
+def validate(args):
 
     # create model
     model = create_model(
         args.model,
         num_classes=args.num_classes,
         in_chans=3,
-        pretrained=args.pretrained,
-        checkpoint_path=args.checkpoint)
+        pretrained=args.pretrained)
 
-    print('Model %s created, param count: %d' %
-          (args.model, sum([m.numel() for m in model.parameters()])))
+    if args.checkpoint and not args.pretrained:
+        load_checkpoint(model, args.checkpoint, args.use_ema)
+    else:
+        args.pretrained = True  # might as well try to validate something...
+
+    param_count = sum([m.numel() for m in model.parameters()])
+    print('Model %s created, param count: %d' % (args.model, param_count))
 
     data_config = resolve_data_config(model, args)
     model, test_time_pool = apply_test_time_pool(model, data_config, args)
@@ -120,8 +128,52 @@ def main():
                     rate_avg=input.size(0) / batch_time.avg,
                     loss=losses, top1=top1, top5=top5))
 
-    print(' * Prec@1 {top1.avg:.3f} ({top1a:.3f}) Prec@5 {top5.avg:.3f} ({top5a:.3f})'.format(
-        top1=top1, top1a=100-top1.avg, top5=top5, top5a=100.-top5.avg))
+    results = OrderedDict(
+        top1=round(top1.avg, 3), top1_err=round(100 - top1.avg, 3),
+        top5=round(top5.avg, 3), top5_err=round(100 - top5.avg, 3),
+        param_count=round(param_count / 1e6, 2))
+
+    print(' * Prec@1 {:.3f} ({:.3f}) Prec@5 {:.3f} ({:.3f})'.format(
+       results['top1'], results['top1_err'], results['top5'], results['top5_err']))
+
+    return results
+
+
+def main():
+    args = parser.parse_args()
+    if args.model == 'all':
+        # validate all models in a list of names with pretrained checkpoints
+        args.pretrained = True
+        # FIXME just an example list, need to add model name collections for
+        # batch testing of various pretrained combinations by arg string
+        models = ['tf_efficientnet_b0', 'tf_efficientnet_b1', 'tf_efficientnet_b2', 'tf_efficientnet_b3']
+        model_cfgs = [(n, '') for n in models]
+    elif os.path.isdir(args.checkpoint):
+        # validate all checkpoints in a path with same model
+        checkpoints = glob.glob(args.checkpoint + '/*.pth.tar')
+        checkpoints += glob.glob(args.checkpoint + '/*.pth')
+        model_cfgs = [(args.model, c) for c in sorted(checkpoints, key=natural_key)]
+    else:
+        model_cfgs = []
+
+    if len(model_cfgs):
+        header_written = False
+        with open('./results-all.csv', mode='w') as cf:
+            for m, c in model_cfgs:
+                args.model = m
+                args.checkpoint = c
+                result = OrderedDict(model=args.model)
+                result.update(validate(args))
+                if args.checkpoint:
+                    result['checkpoint'] = args.checkpoint
+                dw = csv.DictWriter(cf, fieldnames=result.keys())
+                if not header_written:
+                    dw.writeheader()
+                    header_written = True
+                dw.writerow(result)
+                cf.flush()
+    else:
+        validate(args)
 
 
 if __name__ == '__main__':

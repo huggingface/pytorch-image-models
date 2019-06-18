@@ -9,6 +9,8 @@ parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--output', default='./cleaned.pth', type=str, metavar='PATH',
                     help='output path')
+parser.add_argument('--use-ema', dest='use_ema', action='store_true',
+                    help='use ema version of weights if present')
 
 
 def main():
@@ -24,8 +26,13 @@ def main():
         checkpoint = torch.load(args.checkpoint, map_location='cpu')
 
         new_state_dict = OrderedDict()
-        if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-            state_dict = checkpoint['state_dict']
+        if isinstance(checkpoint, dict):
+            state_dict_key = 'state_dict_ema' if args.use_ema else 'state_dict'
+            if state_dict_key in checkpoint:
+                state_dict = checkpoint[state_dict_key]
+            else:
+                print("Error: No state_dict found in checkpoint {}.".format(args.checkpoint))
+                exit(1)
         else:
             state_dict = checkpoint
         for k, v in state_dict.items():

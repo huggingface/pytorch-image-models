@@ -89,7 +89,7 @@ class RMSpropTF(Optimizer):
                 state['step'] += 1
 
                 if group['weight_decay'] != 0:
-                    if group['decoupled_decay']:
+                    if 'decoupled_decay' in group and group['decoupled_decay']:
                         p.data.add_(-group['weight_decay'], p.data)
                     else:
                         grad = grad.add(group['weight_decay'], p.data)
@@ -109,7 +109,7 @@ class RMSpropTF(Optimizer):
                 if group['momentum'] > 0:
                     buf = state['momentum_buffer']
                     # Tensorflow accumulates the LR scaling in the momentum buffer
-                    if group['lr_in_momentum']:
+                    if 'lr_in_momentum' in group and group['lr_in_momentum']:
                         buf.mul_(group['momentum']).addcdiv_(group['lr'], grad, avg)
                         p.data.add_(-buf)
                     else:
