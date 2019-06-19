@@ -36,7 +36,7 @@ def create_model(
     else:
         raise RuntimeError('Unknown model (%s)' % model_name)
 
-    if checkpoint_path and not pretrained:
+    if checkpoint_path:
         load_checkpoint(model, checkpoint_path)
 
     return model

@@ -54,6 +54,8 @@ parser.add_argument('--use-ema', dest='use_ema', action='store_true',
 
 
 def validate(args):
+    # might as well try to validate something
+    args.pretrained = args.pretrained or not args.checkpoint
 
     # create model
     model = create_model(
@@ -62,10 +64,8 @@ def validate(args):
         in_chans=3,
         pretrained=args.pretrained)
 
-    if args.checkpoint and not args.pretrained:
+    if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)
-    else:
-        args.pretrained = True  # might as well try to validate something...
 
     param_count = sum([m.numel() for m in model.parameters()])
     print('Model %s created, param count: %d' % (args.model, param_count))
