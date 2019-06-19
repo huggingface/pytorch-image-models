@@ -1,6 +1,6 @@
-from data.constants import *
-from data.config import resolve_data_config
-from data.dataset import Dataset
-from data.transforms import *
-from data.loader import create_loader
-from data.mixup import mixup_target, FastCollateMixup
+from .constants import *
+from .config import resolve_data_config
+from .dataset import Dataset
+from .transforms import *
+from .loader import create_loader
+from .mixup import mixup_target, FastCollateMixup
