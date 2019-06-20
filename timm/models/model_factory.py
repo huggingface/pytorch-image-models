@@ -1,21 +1,21 @@
-from models.inception_v4 import *
-from models.inception_resnet_v2 import *
-from models.densenet import *
-from models.resnet import *
-from models.dpn import *
-from models.senet import *
-from models.xception import *
-from models.pnasnet import *
-from models.gen_efficientnet import *
-from models.inception_v3 import *
-from models.gluon_resnet import *
+from .inception_v4 import *
+from .inception_resnet_v2 import *
+from .densenet import *
+from .resnet import *
+from .dpn import *
+from .senet import *
+from .xception import *
+from .pnasnet import *
+from .gen_efficientnet import *
+from .inception_v3 import *
+from .gluon_resnet import *
 
-from models.helpers import load_checkpoint
+from .helpers import load_checkpoint
 
 
 def create_model(
-        model_name='resnet50',
-        pretrained=None,
+        model_name,
+        pretrained=False,
         num_classes=1000,
         in_chans=3,
         checkpoint_path='',

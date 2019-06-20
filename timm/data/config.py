@@ -1,4 +1,4 @@
-from data.constants import *
+from .constants import *
 
 
 def resolve_data_config(model, args, default_cfg={}, verbose=True):

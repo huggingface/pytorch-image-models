@@ -15,9 +15,9 @@ import math
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import SelectAdaptivePool2d
-from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 _models = ['seresnet18', 'seresnet34', 'seresnet50', 'seresnet101', 'seresnet152', 'senet154',
            'seresnext26_32x4d', 'seresnext50_32x4d', 'seresnext101_32x4d']

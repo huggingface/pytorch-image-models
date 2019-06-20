@@ -12,9 +12,9 @@ import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 
-from models import create_model, apply_test_time_pool, load_checkpoint
-from data import Dataset, create_loader, resolve_data_config
-from utils import accuracy, AverageMeter, natural_key
+from timm.models import create_model, apply_test_time_pool, load_checkpoint
+from timm.data import Dataset, create_loader, resolve_data_config
+from timm.utils import accuracy, AverageMeter, natural_key
 
 torch.backends.cudnn.benchmark = True
 

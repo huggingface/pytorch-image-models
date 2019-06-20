@@ -1,5 +1,5 @@
 from torch import optim as optim
-from optim import Nadam, RMSpropTF
+from timm.optim import Nadam, RMSpropTF
 
 
 def add_weight_decay(model, weight_decay=1e-5, skip_list=()):

@@ -2,14 +2,11 @@
 This file is a copy of https://github.com/pytorch/vision 'densenet.py' (BSD-3-Clause) with
 fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from collections import OrderedDict
 
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import *
-from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import *
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import re
 
 _models = ['densenet121', 'densenet169', 'densenet201', 'densenet161']

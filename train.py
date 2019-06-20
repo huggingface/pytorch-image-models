@@ -11,16 +11,15 @@ try:
 except ImportError:
     has_apex = False
 
-from data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_target
-from models import create_model, resume_checkpoint, load_checkpoint
-from utils import *
-from loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from optim import create_optimizer
-from scheduler import create_scheduler
+from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_target
+from timm.models import create_model, resume_checkpoint
+from timm.utils import *
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.optim import create_optimizer
+from timm.scheduler import create_scheduler
 
 import torch
 import torch.nn as nn
-import torch.distributed as dist
 import torchvision.utils
 
 torch.backends.cudnn.benchmark = True

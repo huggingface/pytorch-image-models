@@ -2,12 +2,9 @@
 Sourced from https://github.com/Cadene/tensorflow-model-zoo.torch (MIT License) which is
 based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0 License)
 """
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import *
-from data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import *
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 _models = ['inception_v4']
 __all__ = ['InceptionV4'] + _models

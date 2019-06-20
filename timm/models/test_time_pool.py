@@ -1,6 +1,6 @@
 from torch import nn
 import torch.nn.functional as F
-from models.adaptive_avgmax_pool import adaptive_avgmax_pool2d
+from .adaptive_avgmax_pool import adaptive_avgmax_pool2d
 
 
 class TestTimePoolHead(nn.Module):

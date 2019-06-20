@@ -1,7 +1,7 @@
 import torch.utils.data
-from data.transforms import *
-from data.distributed_sampler import OrderedDistributedSampler
-from data.mixup import FastCollateMixup
+from .transforms import *
+from .distributed_sampler import OrderedDistributedSampler
+from .mixup import FastCollateMixup
 
 
 def fast_collate(batch):
@@ -101,7 +101,7 @@ def create_loader(
         img_size = input_size
 
     if tf_preprocessing and use_prefetcher:
-        from data.tf_preprocessing import TfPreprocessTransform
+        from timm.data.tf_preprocessing import TfPreprocessTransform
         transform = TfPreprocessTransform(is_training=is_training, size=img_size)
     else:
         if is_training:

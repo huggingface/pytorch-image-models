@@ -11,9 +11,9 @@ import argparse
 import numpy as np
 import torch
 
-from models import create_model, apply_test_time_pool
-from data import Dataset, create_loader, resolve_data_config
-from utils import AverageMeter
+from timm.models import create_model, apply_test_time_pool
+from timm.data import Dataset, create_loader, resolve_data_config
+from timm.utils import AverageMeter
 
 torch.backends.cudnn.benchmark = True
 
@@ -54,6 +54,9 @@ parser.add_argument('--topk', default=5, type=int,
 
 def main():
     args = parser.parse_args()
+
+    # might as well try to do something useful...
+    args.pretrained = args.pretrained or not args.checkpoint
 
     # create model
     model = create_model(

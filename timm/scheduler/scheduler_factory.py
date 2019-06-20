@@ -1,7 +1,6 @@
-from scheduler.cosine_lr import CosineLRScheduler
-from scheduler.plateau_lr import PlateauLRScheduler
-from scheduler.tanh_lr import TanhLRScheduler
-from scheduler.step_lr import StepLRScheduler
+from .cosine_lr import CosineLRScheduler
+from .tanh_lr import TanhLRScheduler
+from .step_lr import StepLRScheduler
 
 
 def create_scheduler(args, optimizer):

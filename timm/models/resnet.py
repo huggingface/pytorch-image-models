@@ -4,13 +4,12 @@ additional dropout and dynamic global avg/max pool.
 
 ResNext additions added by Ross Wightman
 """
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import SelectAdaptivePool2d
-from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 _models = ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
            'resnext50_32x4d', 'resnext101_32x4d', 'resnext101_64x4d', 'resnext152_32x4d']

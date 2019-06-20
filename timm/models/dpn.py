@@ -9,15 +9,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from collections import OrderedDict
 
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import select_adaptive_pool2d
-from data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import select_adaptive_pool2d
+from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 
 _models = ['dpn68', 'dpn68b', 'dpn92', 'dpn98', 'dpn131', 'dpn107']
 __all__ = ['DPN'] + _models

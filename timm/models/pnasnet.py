@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import SelectAdaptivePool2d
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
 
 _models = ['pnasnet5large']
 __all__ = ['PNASNet5Large'] + _models

@@ -22,10 +22,10 @@ from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import SelectAdaptivePool2d
-from models.conv2d_same import sconv2d
-from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .conv2d_same import sconv2d
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 _models = [
     'mnasnet_050', 'mnasnet_075', 'mnasnet_100', 'mnasnet_b1', 'mnasnet_140', 'semnasnet_050', 'semnasnet_075',

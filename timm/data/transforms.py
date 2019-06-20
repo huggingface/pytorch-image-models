@@ -7,8 +7,8 @@ import math
 import random
 import numpy as np
 
-from data import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from data.random_erasing import RandomErasing
+from .constants import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .random_erasing import RandomErasing
 
 
 class ToNumpy:

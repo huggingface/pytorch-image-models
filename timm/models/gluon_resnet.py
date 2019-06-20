@@ -3,13 +3,12 @@ This file evolved from https://github.com/pytorch/vision 'resnet.py' with (SE)-R
 and ports of Gluon variations (https://github.com/dmlc/gluon-cv/blob/master/gluoncv/model_zoo/resnet.py) 
 by Ross Wightman
 """
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from models.helpers import load_pretrained
-from models.adaptive_avgmax_pool import SelectAdaptivePool2d
-from data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 _models = [
     'gluon_resnet18_v1b', 'gluon_resnet34_v1b', 'gluon_resnet50_v1b', 'gluon_resnet101_v1b', 'gluon_resnet152_v1b',
