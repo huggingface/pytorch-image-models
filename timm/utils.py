@@ -18,7 +18,7 @@ def get_state_dict(model):
     if isinstance(model, ModelEma):
         return get_state_dict(model.ema)
     else:
-        return model.module.state_dict() if getattr(model, 'module') else model.state_dict()
+        return model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
 
 
 class CheckpointSaver:
