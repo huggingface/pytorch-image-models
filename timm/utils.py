@@ -65,6 +65,11 @@ class CheckpointSaver:
                 self.checkpoint_files, key=lambda x: x[1],
                 reverse=not self.decreasing)  # sort in descending order if a lower metric is not better
 
+            checkpoints_str = "Current checkpoints:\n"
+            for c in self.checkpoint_files:
+                checkpoints_str += ' {}\n'.format(c)
+            logging.info(checkpoints_str)
+
             if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
                 self.best_epoch = epoch
                 self.best_metric = metric
