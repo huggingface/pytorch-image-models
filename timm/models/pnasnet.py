@@ -20,7 +20,7 @@ __all__ = ['PNASNet5Large'] + _models
 
 default_cfgs = {
     'pnasnet5large': {
-        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/pnasnet5large-bf079911.pth',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/pnasnet5large-bf079911.pth',
         'input_size': (3, 331, 331),
         'pool_size': (11, 11),
         'crop_pct': 0.875,

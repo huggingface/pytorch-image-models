@@ -35,7 +35,7 @@ __all__ = ['Xception'] + _models
 
 default_cfgs = {
     'xception': {
-        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/xception-43020ad28.pth',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/xception-43020ad28.pth',
         'input_size': (3, 299, 299),
         'crop_pct': 0.8975,
         'interpolation': 'bicubic',
