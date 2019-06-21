@@ -19,21 +19,27 @@ setup(
     url='https://github.com/rwightman/pytorch-image-models',
     author='Ross Wightman',
     author_email='hello@rwightman.com',
-    classifiers=[  # Optional
+    classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
         'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
-        'Topic :: Software Development :: Build Tools',
-        'License :: OSI Approved :: Apache License',
+        'Intended Audience :: Education',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Topic :: Scientific/Engineering',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
+        'Topic :: Software Development',
+        'Topic :: Software Development :: Libraries',
+        'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 
     # Note that this is a string of words separated by whitespace, not a list.
     keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet',
     packages=find_packages(exclude=['convert']),
-    install_requires=['torch', 'torchvision'],
+    install_requires=['torch >= 1.0', 'torchvision'],
     python_requires='>=3.6',
 )

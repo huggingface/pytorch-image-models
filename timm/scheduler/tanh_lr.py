@@ -50,7 +50,6 @@ class TanhLRScheduler(Scheduler):
         self.t_in_epochs = t_in_epochs
         if self.warmup_t:
             t_v = self.base_values if self.warmup_prefix else self._get_lr(self.warmup_t)
-            print(t_v)
             self.warmup_steps = [(v - warmup_lr_init) / self.warmup_t for v in t_v]
             super().update_groups(self.warmup_lr_init)
         else:

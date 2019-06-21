@@ -1,3 +1,4 @@
+import logging
 from .constants import *
 
 
@@ -56,9 +57,9 @@ def resolve_data_config(model, args, default_cfg={}, verbose=True):
         new_config['crop_pct'] = default_cfg['crop_pct']
 
     if verbose:
-        print('Data processing configuration for current model + dataset:')
+        logging.info('Data processing configuration for current model + dataset:')
         for n, v in new_config.items():
-            print('\t%s: %s' % (n, str(v)))
+            logging.info('\t%s: %s' % (n, str(v)))
 
     return new_config
 

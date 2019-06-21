@@ -82,7 +82,7 @@ class SelectAdaptivePool2d(nn.Module):
             self.pool = nn.AdaptiveMaxPool2d(output_size)
         else:
             if pool_type != 'avg':
-                print('Invalid pool type %s specified. Defaulting to average pooling.' % pool_type)
+                assert False, 'Invalid pool type: %s' % pool_type
             self.pool = nn.AdaptiveAvgPool2d(output_size)
 
     def forward(self, x):

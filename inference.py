@@ -8,12 +8,13 @@ from __future__ import print_function
 import os
 import time
 import argparse
+import logging
 import numpy as np
 import torch
 
 from timm.models import create_model, apply_test_time_pool
 from timm.data import Dataset, create_loader, resolve_data_config
-from timm.utils import AverageMeter
+from timm.utils import AverageMeter, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
 
@@ -38,8 +39,8 @@ parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('--num-classes', type=int, default=1000,
                     help='Number classes in dataset')
-parser.add_argument('--print-freq', '-p', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
+parser.add_argument('--log-freq', default=10, type=int,
+                    metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
@@ -53,8 +54,8 @@ parser.add_argument('--topk', default=5, type=int,
 
 
 def main():
+    setup_default_logging()
     args = parser.parse_args()
-
     # might as well try to do something useful...
     args.pretrained = args.pretrained or not args.checkpoint
 
@@ -66,8 +67,8 @@ def main():
         pretrained=args.pretrained,
         checkpoint_path=args.checkpoint)
 
-    print('Model %s created, param count: %d' %
-          (args.model, sum([m.numel() for m in model.parameters()])))
+    logging.info('Model %s created, param count: %d' %
+                 (args.model, sum([m.numel() for m in model.parameters()])))
 
     config = resolve_data_config(model, args)
     model, test_time_pool = apply_test_time_pool(model, config, args)
@@ -105,9 +106,8 @@ def main():
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if batch_idx % args.print_freq == 0:
-                print('Predict: [{0}/{1}]\t'
-                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
+            if batch_idx % args.log_freq == 0:
+                logging.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
                     batch_idx, len(loader), batch_time=batch_time))
 
     topk_ids = np.concatenate(topk_ids, axis=0).squeeze()

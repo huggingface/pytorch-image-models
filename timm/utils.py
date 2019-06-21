@@ -8,6 +8,7 @@ import shutil
 import glob
 import csv
 import operator
+import logging
 import numpy as np
 from collections import OrderedDict
 
@@ -18,7 +19,7 @@ def get_state_dict(model):
     if isinstance(model, ModelEma):
         return get_state_dict(model.ema)
     else:
-        return model.module.state_dict() if getattr(model, 'module') else model.state_dict()
+        return model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
 
 
 class CheckpointSaver:
@@ -29,7 +30,6 @@ class CheckpointSaver:
             checkpoint_dir='',
             recovery_dir='',
             decreasing=False,
-            verbose=True,
             max_history=10):
 
         # state
@@ -47,7 +47,6 @@ class CheckpointSaver:
         self.extension = '.pth.tar'
         self.decreasing = decreasing  # a lower metric is better if True
         self.cmp = operator.lt if decreasing else operator.gt  # True if lhs better than rhs
-        self.verbose = verbose
         self.max_history = max_history
         assert self.max_history >= 1
 
@@ -65,11 +64,6 @@ class CheckpointSaver:
             self.checkpoint_files = sorted(
                 self.checkpoint_files, key=lambda x: x[1],
                 reverse=not self.decreasing)  # sort in descending order if a lower metric is not better
-
-            if self.verbose:
-                print("Current checkpoints:")
-                for c in self.checkpoint_files:
-                    print(c)
 
             if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
                 self.best_epoch = epoch
@@ -100,11 +94,10 @@ class CheckpointSaver:
         to_delete = self.checkpoint_files[delete_index:]
         for d in to_delete:
             try:
-                if self.verbose:
-                    print('Cleaning checkpoint: ', d)
+                logging.debug("Cleaning checkpoint: {}".format(d))
                 os.remove(d[0])
             except Exception as e:
-                print('Exception (%s) while deleting checkpoint' % str(e))
+                logging.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
     def save_recovery(self, model, optimizer, args, epoch, model_ema=None, batch_idx=0):
@@ -114,11 +107,10 @@ class CheckpointSaver:
         self._save(save_path, model, optimizer, args, epoch, model_ema)
         if os.path.exists(self.last_recovery_file):
             try:
-                if self.verbose:
-                    print('Cleaning recovery', self.last_recovery_file)
+                logging.debug("Cleaning recovery: {}".format(self.last_recovery_file))
                 os.remove(self.last_recovery_file)
             except Exception as e:
-                print("Exception (%s) while removing %s" % (str(e), self.last_recovery_file))
+                logging.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
         self.last_recovery_file = self.curr_recovery_file
         self.curr_recovery_file = save_path
 
@@ -253,9 +245,9 @@ class ModelEma:
                     name = k
                 new_state_dict[name] = v
             self.ema.load_state_dict(new_state_dict)
-            print("=> Loaded state_dict_ema")
+            logging.info("Loaded state_dict_ema")
         else:
-            print("=> Failed to find state_dict_ema, starting from loaded model weights")
+            logging.warning("Failed to find state_dict_ema, starting from loaded model weights")
 
     def update(self, model):
         # correct a mismatch in state dict keys
@@ -269,3 +261,20 @@ class ModelEma:
                 if self.device:
                     model_v = model_v.to(device=self.device)
                 ema_v.copy_(ema_v * self.decay + (1. - self.decay) * model_v)
+
+
+class FormatterNoInfo(logging.Formatter):
+    def __init__(self, fmt='%(levelname)s: %(message)s'):
+        logging.Formatter.__init__(self, fmt)
+
+    def format(self, record):
+        if record.levelno == logging.INFO:
+            return str(record.getMessage())
+        return logging.Formatter.format(self, record)
+
+
+def setup_default_logging(default_level=logging.INFO):
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(FormatterNoInfo())
+    logging.root.addHandler(console_handler)
+    logging.root.setLevel(default_level)

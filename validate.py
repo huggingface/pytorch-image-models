@@ -7,6 +7,7 @@ import os
 import csv
 import glob
 import time
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -14,7 +15,7 @@ from collections import OrderedDict
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint
 from timm.data import Dataset, create_loader, resolve_data_config
-from timm.utils import accuracy, AverageMeter, natural_key
+from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
 
@@ -37,8 +38,8 @@ parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('--num-classes', type=int, default=1000,
                     help='Number classes in dataset')
-parser.add_argument('--print-freq', '-p', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
+parser.add_argument('--log-freq', default=10, type=int,
+                    metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
@@ -68,7 +69,7 @@ def validate(args):
         load_checkpoint(model, args.checkpoint, args.use_ema)
 
     param_count = sum([m.numel() for m in model.parameters()])
-    print('Model %s created, param count: %d' % (args.model, param_count))
+    logging.info('Model %s created, param count: %d' % (args.model, param_count))
 
     data_config = resolve_data_config(model, args)
     model, test_time_pool = apply_test_time_pool(model, data_config, args)
@@ -118,28 +119,30 @@ def validate(args):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % args.print_freq == 0:
-                print('Test: [{0}/{1}]\t'
-                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f}, {rate_avg:.3f}/s) \t'
-                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                      'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                      'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                    i, len(loader), batch_time=batch_time,
-                    rate_avg=input.size(0) / batch_time.avg,
-                    loss=losses, top1=top1, top5=top5))
+            if i % args.log_freq == 0:
+                logging.info(
+                    'Test: [{0:>4d}/{1}]  '
+                    'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})  '
+                    'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
+                    'Prec@1: {top1.val:>7.4f} ({top1.avg:>7.4f})  '
+                    'Prec@5: {top5.val:>7.4f} ({top5.avg:>7.4f})'.format(
+                        i, len(loader), batch_time=batch_time,
+                        rate_avg=input.size(0) / batch_time.avg,
+                        loss=losses, top1=top1, top5=top5))
 
     results = OrderedDict(
         top1=round(top1.avg, 3), top1_err=round(100 - top1.avg, 3),
         top5=round(top5.avg, 3), top5_err=round(100 - top5.avg, 3),
         param_count=round(param_count / 1e6, 2))
 
-    print(' * Prec@1 {:.3f} ({:.3f}) Prec@5 {:.3f} ({:.3f})'.format(
+    logging.info(' * Prec@1 {:.3f} ({:.3f}) Prec@5 {:.3f} ({:.3f})'.format(
        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
 
     return results
 
 
 def main():
+    setup_default_logging()
     args = parser.parse_args()
     if args.model == 'all':
         # validate all models in a list of names with pretrained checkpoints

@@ -30,7 +30,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
 * Generic EfficientNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable and InvertedResidual blocks
-    * EfficientNet (B0-B4) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
+    * EfficientNet (B0-B5) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
     * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
     * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
     * MobileNet-V2 (https://arxiv.org/abs/1801.04381)
@@ -187,9 +187,6 @@ To run inference from a checkpoint:
 
 ## TODO
 A number of additions planned in the future for various projects, incl
-* Find optimal training hyperparams and create/port pretraiend weights for the generic MobileNet variants
 * Do a model performance (speed + accuracy) benchmarking across all models (make runable as script)
-* More training experiments
-* Make folder/file layout compat with usage as a module
 * Add usage examples to comments, good hyper params for training
 * Comments, cleanup and the usual things that get pushed back

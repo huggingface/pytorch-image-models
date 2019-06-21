@@ -17,6 +17,7 @@ Hacked together by Ross Wightman
 
 import math
 import re
+import logging
 from copy import deepcopy
 
 import torch
@@ -336,7 +337,7 @@ class _BlockBuilder:
         ba['act_fn'] = ba['act_fn'] if ba['act_fn'] is not None else self.act_fn
         assert ba['act_fn'] is not None
         if self.verbose:
-            print('args:', ba)
+            logging.info('  Args: {}'.format(str(ba)))
         #  could replace this if with lambdas or functools binding if variety increases
         if bt == 'ir':
             ba['drop_connect_rate'] = self.drop_connect_rate
@@ -358,7 +359,7 @@ class _BlockBuilder:
         # each stack (stage) contains a list of block arguments
         for block_idx, ba in enumerate(stack_args):
             if self.verbose:
-                print('block', block_idx, end=', ')
+                logging.info(' Block: {}'.format(block_idx))
             if block_idx >= 1:
                 # only the first block in any stack/stage can have a stride > 1
                 ba['stride'] = 1
@@ -370,24 +371,22 @@ class _BlockBuilder:
         """ Build the blocks
         Args:
             in_chs: Number of input-channels passed to first block
-            arch_def: A list of lists, outer list defines stacks (or stages), inner
+            block_args: A list of lists, outer list defines stages, inner
                 list contains strings defining block configuration(s)
         Return:
              List of block stacks (each stack wrapped in nn.Sequential)
         """
         if self.verbose:
-            print('Building model trunk with %d stacks (stages)...' % len(block_args))
+            logging.info('Building model trunk with %d stages...' % len(block_args))
         self.in_chs = in_chs
         blocks = []
         # outer list of block_args defines the stacks ('stages' by some conventions)
         for stack_idx, stack in enumerate(block_args):
             if self.verbose:
-                print('stack', stack_idx)
+                logging.info('Stack: {}'.format(stack_idx))
             assert isinstance(stack, list)
             stack = self._make_stack(stack)
             blocks.append(stack)
-            if self.verbose:
-                print()
         return blocks
 
 
