@@ -11,6 +11,7 @@ from __future__ import print_function
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from collections import OrderedDict
 
 from .helpers import load_pretrained
@@ -31,81 +32,87 @@ def _cfg(url=''):
 
 
 default_cfgs = {
-    'dpn68': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68-66bebafa7.pth'),
-    'dpn68b_extra': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn68b_extra-84854c156.pth'),
-    'dpn92_extra': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn92_extra-b040e4a9b.pth'),
-    'dpn98': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn98-5b90dec4d.pth'),
-    'dpn131': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn131-71dfe43e0.pth'),
-    'dpn107_extra': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/dpn107_extra-1ac7121e2.pth')
+    'dpn68': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
+    'dpn68b_extra': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68b_extra-84854c156.pth'),
+    'dpn92_extra': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
+    'dpn98': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),
+    'dpn131': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn131-71dfe43e0.pth'),
+    'dpn107_extra': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn107_extra-1ac7121e2.pth')
 }
 
 
-def dpn68(num_classes=1000, in_chans=3, pretrained=False):
+def dpn68(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn68']
     model = DPN(
         small=True, num_init_features=10, k_r=128, groups=32,
         k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
-        num_classes=num_classes, in_chans=in_chans)
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn68b(num_classes=1000, in_chans=3, pretrained=False):
+def dpn68b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn68b_extra']
     model = DPN(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
-        num_classes=num_classes, in_chans=in_chans)
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn92(num_classes=1000, in_chans=3, pretrained=False):
+def dpn92(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn92_extra']
     model = DPN(
         num_init_features=64, k_r=96, groups=32,
         k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
-        num_classes=num_classes, in_chans=in_chans)
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn98(num_classes=1000, in_chans=3, pretrained=False):
+def dpn98(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn98']
     model = DPN(
         num_init_features=96, k_r=160, groups=40,
         k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128),
-        num_classes=num_classes, in_chans=in_chans)
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn131(num_classes=1000, in_chans=3, pretrained=False):
+def dpn131(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn131']
     model = DPN(
         num_init_features=128, k_r=160, groups=40,
         k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128),
-        num_classes=num_classes, in_chans=in_chans)
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
-def dpn107(num_classes=1000, in_chans=3, pretrained=False):
+def dpn107(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn107_extra']
     model = DPN(
         num_init_features=128, k_r=200, groups=50,
         k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128),
-        num_classes=num_classes, in_chans=in_chans)
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -220,9 +227,11 @@ class DualPathBlock(nn.Module):
 class DPN(nn.Module):
     def __init__(self, small=False, num_init_features=64, k_r=96, groups=32,
                  b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
-                 num_classes=1000, in_chans=3, fc_act=nn.ELU(inplace=True)):
+                 num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg', fc_act=nn.ELU()):
         super(DPN, self).__init__()
         self.num_classes = num_classes
+        self.drop_rate = drop_rate
+        self.global_pool = global_pool
         self.b = b
         bw_factor = 1 if small else 4
 
@@ -285,8 +294,9 @@ class DPN(nn.Module):
     def get_classifier(self):
         return self.classifier
 
-    def reset_classifier(self, num_classes):
+    def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
+        self.global_pool = global_pool
         del self.classifier
         if num_classes:
             self.classifier = nn.Conv2d(self.num_features, num_classes, kernel_size=1, bias=True)
@@ -296,11 +306,13 @@ class DPN(nn.Module):
     def forward_features(self, x, pool=True):
         x = self.features(x)
         if pool:
-            x = select_adaptive_pool2d(x, pool_type='avg')
+            x = select_adaptive_pool2d(x, pool_type=self.global_pool)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
         out = self.classifier(x)
         return out.view(out.size(0), -1)
 

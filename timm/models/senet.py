@@ -400,7 +400,7 @@ class SENet(nn.Module):
         return x
 
 
-def seresnet18(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet18']
     model = SENet(SEResNetBlock, [2, 2, 2, 2], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -412,7 +412,7 @@ def seresnet18(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnet34(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet34']
     model = SENet(SEResNetBlock, [3, 4, 6, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -424,7 +424,7 @@ def seresnet34(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnet50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet50']
     model = SENet(SEResNetBottleneck, [3, 4, 6, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -436,7 +436,7 @@ def seresnet50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnet101(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet101']
     model = SENet(SEResNetBottleneck, [3, 4, 23, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -448,7 +448,7 @@ def seresnet101(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet152']
     model = SENet(SEResNetBottleneck, [3, 8, 36, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -460,7 +460,7 @@ def seresnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def senet154(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['senet154']
     model = SENet(SEBottleneck, [3, 8, 36, 3], groups=64, reduction=16,
                   num_classes=num_classes, in_chans=in_chans, **kwargs)
@@ -470,7 +470,7 @@ def senet154(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnext26_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnext26_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnext26_32x4d']
     model = SENet(SEResNeXtBottleneck, [2, 2, 2, 2], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -482,7 +482,7 @@ def seresnext26_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnext50_32x4d']
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -494,7 +494,7 @@ def seresnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def seresnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnext101_32x4d']
     model = SENet(SEResNeXtBottleneck, [3, 4, 23, 3], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,

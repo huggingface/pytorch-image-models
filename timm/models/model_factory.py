@@ -21,7 +21,7 @@ def create_model(
         checkpoint_path='',
         **kwargs):
 
-    margs = dict(num_classes=num_classes, in_chans=in_chans, pretrained=pretrained)
+    margs = dict(pretrained=pretrained, num_classes=num_classes, in_chans=in_chans)
 
     # Not all models have support for batchnorm params passed as args, only gen_efficientnet variants
     supports_bn_params = model_name in gen_efficientnet_model_names()

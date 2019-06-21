@@ -228,7 +228,7 @@ class Xception(nn.Module):
         return x
 
 
-def xception(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def xception(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['xception']
     model = Xception(num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg

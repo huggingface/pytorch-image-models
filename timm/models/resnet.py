@@ -219,7 +219,7 @@ class ResNet(nn.Module):
         return x
 
 
-def resnet18(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-18 model.
     """
     default_cfg = default_cfgs['resnet18']
@@ -230,7 +230,7 @@ def resnet18(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnet34(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-34 model.
     """
     default_cfg = default_cfgs['resnet34']
@@ -241,7 +241,7 @@ def resnet34(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnet50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
     default_cfg = default_cfgs['resnet50']
@@ -252,7 +252,7 @@ def resnet50(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnet101(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
     default_cfg = default_cfgs['resnet101']
@@ -263,7 +263,7 @@ def resnet101(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
     default_cfg = default_cfgs['resnet152']
@@ -274,7 +274,7 @@ def resnet152(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
     """
     default_cfg = default_cfgs['resnext50_32x4d']
@@ -287,7 +287,7 @@ def resnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 model.
     """
     default_cfg = default_cfgs['resnext101_32x4d']
@@ -300,7 +300,7 @@ def resnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt101-64x4d model.
     """
     default_cfg = default_cfgs['resnext101_32x4d']
@@ -313,7 +313,7 @@ def resnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def resnext152_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt152-32x4d model.
     """
     default_cfg = default_cfgs['resnext152_32x4d']

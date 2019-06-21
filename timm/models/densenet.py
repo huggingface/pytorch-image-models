@@ -43,7 +43,7 @@ def _filter_pretrained(state_dict):
     return state_dict
 
 
-def densenet121(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def densenet121(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -56,7 +56,7 @@ def densenet121(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def densenet169(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def densenet169(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""Densenet-169 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -69,7 +69,7 @@ def densenet169(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def densenet201(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def densenet201(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""Densenet-201 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -82,7 +82,7 @@ def densenet201(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
     return model
 
 
-def densenet161(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def densenet161(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""Densenet-201 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """

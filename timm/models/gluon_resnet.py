@@ -361,7 +361,7 @@ class GluonResNet(nn.Module):
         return x
 
 
-def gluon_resnet18_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet18_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-18 model.
     """
     default_cfg = default_cfgs['gluon_resnet18_v1b']
@@ -372,7 +372,7 @@ def gluon_resnet18_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet34_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet34_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-34 model.
     """
     default_cfg = default_cfgs['gluon_resnet34_v1b']
@@ -383,7 +383,7 @@ def gluon_resnet34_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet50_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet50_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
     default_cfg = default_cfgs['gluon_resnet50_v1b']
@@ -394,7 +394,7 @@ def gluon_resnet50_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet101_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet101_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
     default_cfg = default_cfgs['gluon_resnet101_v1b']
@@ -405,7 +405,7 @@ def gluon_resnet101_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet152_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet152_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
     default_cfg = default_cfgs['gluon_resnet152_v1b']
@@ -416,7 +416,7 @@ def gluon_resnet152_v1b(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet50_v1c(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet50_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
     default_cfg = default_cfgs['gluon_resnet50_v1c']
@@ -428,7 +428,7 @@ def gluon_resnet50_v1c(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet101_v1c(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet101_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
     default_cfg = default_cfgs['gluon_resnet101_v1c']
@@ -440,7 +440,7 @@ def gluon_resnet101_v1c(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet152_v1c(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet152_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
     default_cfg = default_cfgs['gluon_resnet152_v1c']
@@ -452,7 +452,7 @@ def gluon_resnet152_v1c(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet50_v1d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet50_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
     default_cfg = default_cfgs['gluon_resnet50_v1d']
@@ -464,7 +464,7 @@ def gluon_resnet50_v1d(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet101_v1d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet101_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
     default_cfg = default_cfgs['gluon_resnet101_v1d']
@@ -476,7 +476,7 @@ def gluon_resnet101_v1d(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet152_v1d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet152_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
     default_cfg = default_cfgs['gluon_resnet152_v1d']
@@ -488,7 +488,7 @@ def gluon_resnet152_v1d(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet50_v1e(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet50_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50-V1e model. No pretrained weights for any 'e' variants
     """
     default_cfg = default_cfgs['gluon_resnet50_v1e']
@@ -500,7 +500,7 @@ def gluon_resnet50_v1e(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet101_v1e(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet101_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
     default_cfg = default_cfgs['gluon_resnet101_v1e']
@@ -512,7 +512,7 @@ def gluon_resnet101_v1e(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet152_v1e(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet152_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
     default_cfg = default_cfgs['gluon_resnet152_v1e']
@@ -524,7 +524,7 @@ def gluon_resnet152_v1e(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet50_v1s(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet50_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
     default_cfg = default_cfgs['gluon_resnet50_v1s']
@@ -536,7 +536,7 @@ def gluon_resnet50_v1s(num_classes=1000, in_chans=3, pretrained=False, **kwargs)
     return model
 
 
-def gluon_resnet101_v1s(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet101_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
     default_cfg = default_cfgs['gluon_resnet101_v1s']
@@ -548,7 +548,7 @@ def gluon_resnet101_v1s(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnet152_v1s(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnet152_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
     default_cfg = default_cfgs['gluon_resnet152_v1s']
@@ -560,7 +560,7 @@ def gluon_resnet152_v1s(num_classes=1000, in_chans=3, pretrained=False, **kwargs
     return model
 
 
-def gluon_resnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
     """
     default_cfg = default_cfgs['gluon_resnext50_32x4d']
@@ -573,7 +573,7 @@ def gluon_resnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwar
     return model
 
 
-def gluon_resnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 model.
     """
     default_cfg = default_cfgs['gluon_resnext101_32x4d']
@@ -586,7 +586,7 @@ def gluon_resnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwa
     return model
 
 
-def gluon_resnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 model.
     """
     default_cfg = default_cfgs['gluon_resnext101_64x4d']
@@ -599,7 +599,7 @@ def gluon_resnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **kwa
     return model
 
 
-def gluon_resnext152_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt152-32x4d model.
     """
     default_cfg = default_cfgs['gluon_resnext152_32x4d']
@@ -612,7 +612,7 @@ def gluon_resnext152_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwa
     return model
 
 
-def gluon_seresnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt50-32x4d model.
     """
     default_cfg = default_cfgs['gluon_seresnext50_32x4d']
@@ -625,7 +625,7 @@ def gluon_seresnext50_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kw
     return model
 
 
-def gluon_seresnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt-101-32x4d model.
     """
     default_cfg = default_cfgs['gluon_seresnext101_32x4d']
@@ -638,7 +638,7 @@ def gluon_seresnext101_32x4d(num_classes=1000, in_chans=3, pretrained=False, **k
     return model
 
 
-def gluon_seresnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_seresnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt-101-64x4d model.
     """
     default_cfg = default_cfgs['gluon_seresnext101_64x4d']
@@ -651,7 +651,7 @@ def gluon_seresnext101_64x4d(num_classes=1000, in_chans=3, pretrained=False, **k
     return model
 
 
-def gluon_seresnext152_32x4d(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_seresnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt152-32x4d model.
     """
     default_cfg = default_cfgs['gluon_seresnext152_32x4d']
@@ -664,7 +664,7 @@ def gluon_seresnext152_32x4d(num_classes=1000, in_chans=3, pretrained=False, **k
     return model
 
 
-def gluon_senet154(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def gluon_senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs an SENet-154 model.
     """
     default_cfg = default_cfgs['gluon_senet154']

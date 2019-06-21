@@ -293,7 +293,7 @@ class InceptionV4(nn.Module):
         return x
 
 
-def inception_v4(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def inception_v4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['inception_v4']
     model = InceptionV4(num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg

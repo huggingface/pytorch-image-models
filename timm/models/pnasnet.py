@@ -385,13 +385,13 @@ class PNASNet5Large(nn.Module):
         return x
 
 
-def pnasnet5large(num_classes=1000, in_chans=3, pretrained='imagenet'):
+def pnasnet5large(pretrained='imagenet', num_classes=1000, in_chans=3, **kwargs):
     r"""PNASNet-5 model architecture from the
     `"Progressive Neural Architecture Search"
     <https://arxiv.org/abs/1712.00559>`_ paper.
     """
     default_cfg = default_cfgs['pnasnet5large']
-    model = PNASNet5Large(num_classes=1000, in_chans=in_chans)
+    model = PNASNet5Large(num_classes=1000, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

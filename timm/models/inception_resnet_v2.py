@@ -318,7 +318,7 @@ class InceptionResnetV2(nn.Module):
         return x
 
 
-def inception_resnet_v2(num_classes=1000, in_chans=3, pretrained=False, **kwargs):
+def inception_resnet_v2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""InceptionResnetV2 model architecture from the
     `"InceptionV4, Inception-ResNet..." <https://arxiv.org/abs/1602.07261>`_ paper.
     """
