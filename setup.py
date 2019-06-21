@@ -16,6 +16,7 @@ setup(
     version=__version__,
     description='(Unofficial) PyTorch Image Models',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     url='https://github.com/rwightman/pytorch-image-models',
     author='Ross Wightman',
     author_email='hello@rwightman.com',
