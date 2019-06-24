@@ -81,15 +81,17 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0-d6904d92.pth',
         interpolation='bicubic'),
     'efficientnet_b1': _cfg(
-        url='', input_size=(3, 240, 240), pool_size=(8, 8)),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth',
+        input_size=(3, 240, 240), pool_size=(8, 8), interpolation='bicubic', crop_pct=0.882),
     'efficientnet_b2': _cfg(
-        url='', input_size=(3, 260, 260), pool_size=(9, 9)),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2-d4105846.pth',
+        input_size=(3, 260, 260), pool_size=(9, 9), interpolation='bicubic', crop_pct=0.890),
     'efficientnet_b3': _cfg(
-        url='', input_size=(3, 300, 300), pool_size=(10, 10)),
+        url='', input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
     'efficientnet_b4': _cfg(
-        url='', input_size=(3, 380, 380), pool_size=(12, 12)),
+        url='', input_size=(3, 380, 380), pool_size=(12, 12), crop_pct=0.922),
     'efficientnet_b5': _cfg(
-        url='', input_size=(3, 456, 456), pool_size=(15, 15)),
+        url='', input_size=(3, 456, 456), pool_size=(15, 15), crop_pct=0.934),
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0-0af12548.pth',
         input_size=(3, 224, 224), interpolation='bicubic'),

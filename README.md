@@ -78,6 +78,16 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | spnasnet_100 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear |
 | seresnet18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic |
 
+#### @ 240x240
+|Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
+|---|---|---|---|---|
+| efficientnet_b1 | 78.692 (21.308) | 94.086 (5.914) | 7.79M | bicubic |
+
+#### @ 260x260
+|Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
+|---|---|---|---|---|
+| efficientnet_b2 | 79.668 (20.332) | 94.634 (5.366) | 9.11M | bicubic |
+
 ### Ported Weights
 
 #### @ 224x224
