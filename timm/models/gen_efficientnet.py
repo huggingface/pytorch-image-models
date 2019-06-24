@@ -1189,7 +1189,7 @@ def mnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 @register_model
 def mnasnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1, depth multiplier of 1.0. """
-    return mnasnet_100(num_classes, in_chans, pretrained, **kwargs)
+    return mnasnet_100(pretrained, num_classes, in_chans, **kwargs)
 
 
 @register_model
@@ -1253,7 +1253,7 @@ def semnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 @register_model
 def mnasnet_a1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1 (w/ SE), depth multiplier of 1.0. """
-    return semnasnet_100(num_classes, in_chans, pretrained, **kwargs)
+    return semnasnet_100(pretrained, num_classes, in_chans, **kwargs)
 
 
 @register_model
