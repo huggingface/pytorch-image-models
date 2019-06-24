@@ -2,12 +2,16 @@
 Sourced from https://github.com/Cadene/tensorflow-model-zoo.torch (MIT License) which is
 based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0 License)
 """
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import *
+from .adaptive_avgmax_pool import select_adaptive_pool2d
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
-_models = ['inception_resnet_v2', 'ens_adv_inception_resnet_v2']
-__all__ = ['InceptionResnetV2'] + _models
+__all__ = ['InceptionResnetV2']
 
 default_cfgs = {
     # ported from http://download.tensorflow.org/models/inception_resnet_v2_2016_08_30.tar.gz
@@ -328,6 +332,7 @@ class InceptionResnetV2(nn.Module):
         return x
 
 
+@register_model
 def inception_resnet_v2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""InceptionResnetV2 model architecture from the
     `"InceptionV4, Inception-ResNet..." <https://arxiv.org/abs/1602.07261>` paper.
@@ -341,6 +346,7 @@ def inception_resnet_v2(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def ens_adv_inception_resnet_v2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r""" Ensemble Adversarially trained InceptionResnetV2 model architecture
     As per https://arxiv.org/abs/1705.07204 and

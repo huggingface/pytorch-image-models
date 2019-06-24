@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 
-from timm.models import create_model, apply_test_time_pool, load_checkpoint
+from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import Dataset, create_loader, resolve_data_config
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
@@ -144,22 +144,26 @@ def validate(args):
 def main():
     setup_default_logging()
     args = parser.parse_args()
-    if args.model == 'all':
-        # validate all models in a list of names with pretrained checkpoints
-        args.pretrained = True
-        # FIXME just an example list, need to add model name collections for
-        # batch testing of various pretrained combinations by arg string
-        models = ['tf_efficientnet_b0', 'tf_efficientnet_b1', 'tf_efficientnet_b2', 'tf_efficientnet_b3']
-        model_cfgs = [(n, '') for n in models]
-    elif os.path.isdir(args.checkpoint):
+    model_cfgs = []
+    model_names = []
+    if os.path.isdir(args.checkpoint):
         # validate all checkpoints in a path with same model
         checkpoints = glob.glob(args.checkpoint + '/*.pth.tar')
         checkpoints += glob.glob(args.checkpoint + '/*.pth')
         model_cfgs = [(args.model, c) for c in sorted(checkpoints, key=natural_key)]
     else:
-        model_cfgs = []
+        if args.model == 'all':
+            # validate all models in a list of names with pretrained checkpoints
+            args.pretrained = True
+            model_names = list_models()
+            model_cfgs = [(n, '') for n in model_names]
+        elif not is_model(args.model):
+            # model name doesn't exist, try as wildcard filter
+            model_names = list_models(args.model)
+            model_cfgs = [(n, '') for n in model_names]
 
     if len(model_cfgs):
+        print('Running bulk validation on these pretrained models:', ', '.join(model_names))
         header_written = False
         with open('./results-all.csv', mode='w') as cf:
             for m, c in model_cfgs:

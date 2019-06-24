@@ -4,13 +4,17 @@ fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
 from collections import OrderedDict
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import *
+from .adaptive_avgmax_pool import select_adaptive_pool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import re
 
-_models = ['densenet121', 'densenet169', 'densenet201', 'densenet161']
-__all__ = ['DenseNet'] + _models
+__all__ = ['DenseNet']
 
 
 def _cfg(url=''):
@@ -28,71 +32,6 @@ default_cfgs = {
     'densenet201': _cfg(url='https://download.pytorch.org/models/densenet201-c1103571.pth'),
     'densenet161': _cfg(url='https://download.pytorch.org/models/densenet161-8d451a50.pth'),
 }
-
-
-def _filter_pretrained(state_dict):
-    pattern = re.compile(
-        r'^(.*denselayer\d+\.(?:norm|relu|conv))\.((?:[12])\.(?:weight|bias|running_mean|running_var))$')
-
-    for key in list(state_dict.keys()):
-        res = pattern.match(key)
-        if res:
-            new_key = res.group(1) + res.group(2)
-            state_dict[new_key] = state_dict[key]
-            del state_dict[key]
-    return state_dict
-
-
-def densenet121(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    r"""Densenet-121 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    default_cfg = default_cfgs['densenet121']
-    model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 24, 16),
-                     num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
-    return model
-
-
-def densenet169(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    r"""Densenet-169 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    default_cfg = default_cfgs['densenet169']
-    model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 32, 32),
-                     num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
-    return model
-
-
-def densenet201(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    r"""Densenet-201 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    default_cfg = default_cfgs['densenet201']
-    model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 48, 32),
-                     num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
-    return model
-
-
-def densenet161(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    r"""Densenet-201 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    default_cfg = default_cfgs['densenet161']
-    model = DenseNet(num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24),
-                     num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
-    return model
 
 
 class _DenseLayer(nn.Sequential):
@@ -205,3 +144,72 @@ class DenseNet(nn.Module):
     def forward(self, x):
         return self.classifier(self.forward_features(x, pool=True))
 
+
+def _filter_pretrained(state_dict):
+    pattern = re.compile(
+        r'^(.*denselayer\d+\.(?:norm|relu|conv))\.((?:[12])\.(?:weight|bias|running_mean|running_var))$')
+
+    for key in list(state_dict.keys()):
+        res = pattern.match(key)
+        if res:
+            new_key = res.group(1) + res.group(2)
+            state_dict[new_key] = state_dict[key]
+            del state_dict[key]
+    return state_dict
+
+
+
+@register_model
+def densenet121(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    r"""Densenet-121 model from
+    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    """
+    default_cfg = default_cfgs['densenet121']
+    model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 24, 16),
+                     num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
+    return model
+
+
+@register_model
+def densenet169(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    r"""Densenet-169 model from
+    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    """
+    default_cfg = default_cfgs['densenet169']
+    model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 32, 32),
+                     num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
+    return model
+
+
+@register_model
+def densenet201(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    r"""Densenet-201 model from
+    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    """
+    default_cfg = default_cfgs['densenet201']
+    model = DenseNet(num_init_features=64, growth_rate=32, block_config=(6, 12, 48, 32),
+                     num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
+    return model
+
+
+@register_model
+def densenet161(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    r"""Densenet-201 model from
+    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    """
+    default_cfg = default_cfgs['densenet161']
+    model = DenseNet(num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24),
+                     num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans, filter_fn=_filter_pretrained)
+    return model

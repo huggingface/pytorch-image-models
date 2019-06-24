@@ -3,21 +3,19 @@ This file evolved from https://github.com/pytorch/vision 'resnet.py' with (SE)-R
 and ports of Gluon variations (https://github.com/dmlc/gluon-cv/blob/master/gluoncv/model_zoo/resnet.py) 
 by Ross Wightman
 """
+import math
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+
+from .registry import register_model
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-_models = [
-    'gluon_resnet18_v1b', 'gluon_resnet34_v1b', 'gluon_resnet50_v1b', 'gluon_resnet101_v1b', 'gluon_resnet152_v1b',
-    'gluon_resnet50_v1c', 'gluon_resnet101_v1c', 'gluon_resnet152_v1c', 'gluon_resnet50_v1d', 'gluon_resnet101_v1d',
-    'gluon_resnet152_v1d', 'gluon_resnet50_v1e', 'gluon_resnet101_v1e', 'gluon_resnet152_v1e', 'gluon_resnet50_v1s',
-    'gluon_resnet101_v1s', 'gluon_resnet152_v1s', 'gluon_resnext50_32x4d', 'gluon_resnext101_32x4d',
-    'gluon_resnext101_64x4d', 'gluon_resnext152_32x4d', 'gluon_seresnext50_32x4d', 'gluon_seresnext101_32x4d',
-    'gluon_seresnext101_64x4d', 'gluon_seresnext152_32x4d', 'gluon_senet154']
-__all__ = ['GluonResNet'] + _models
+
+__all__ = ['GluonResNet']
 
 
 def _cfg(url='', **kwargs):
@@ -361,6 +359,7 @@ class GluonResNet(nn.Module):
         return x
 
 
+@register_model
 def gluon_resnet18_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-18 model.
     """
@@ -372,6 +371,7 @@ def gluon_resnet18_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet34_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-34 model.
     """
@@ -383,6 +383,7 @@ def gluon_resnet34_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet50_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
@@ -394,6 +395,7 @@ def gluon_resnet50_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet101_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -405,6 +407,7 @@ def gluon_resnet101_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet152_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -416,6 +419,7 @@ def gluon_resnet152_v1b(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet50_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
@@ -428,6 +432,7 @@ def gluon_resnet50_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet101_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -440,6 +445,7 @@ def gluon_resnet101_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet152_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -452,6 +458,7 @@ def gluon_resnet152_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet50_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
@@ -464,6 +471,7 @@ def gluon_resnet50_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet101_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -476,6 +484,7 @@ def gluon_resnet101_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet152_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -488,6 +497,7 @@ def gluon_resnet152_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet50_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50-V1e model. No pretrained weights for any 'e' variants
     """
@@ -500,6 +510,7 @@ def gluon_resnet50_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet101_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -512,6 +523,7 @@ def gluon_resnet101_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet152_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -524,6 +536,7 @@ def gluon_resnet152_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet50_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
@@ -536,6 +549,7 @@ def gluon_resnet50_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def gluon_resnet101_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -548,6 +562,7 @@ def gluon_resnet101_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnet152_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -560,6 +575,7 @@ def gluon_resnet152_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def gluon_resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
     """
@@ -573,6 +589,7 @@ def gluon_resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwar
     return model
 
 
+@register_model
 def gluon_resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 model.
     """
@@ -586,6 +603,7 @@ def gluon_resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwa
     return model
 
 
+@register_model
 def gluon_resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 model.
     """
@@ -599,6 +617,7 @@ def gluon_resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwa
     return model
 
 
+@register_model
 def gluon_resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt152-32x4d model.
     """
@@ -612,6 +631,7 @@ def gluon_resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwa
     return model
 
 
+@register_model
 def gluon_seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt50-32x4d model.
     """
@@ -625,6 +645,7 @@ def gluon_seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kw
     return model
 
 
+@register_model
 def gluon_seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt-101-32x4d model.
     """
@@ -638,6 +659,7 @@ def gluon_seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **k
     return model
 
 
+@register_model
 def gluon_seresnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt-101-64x4d model.
     """
@@ -651,6 +673,7 @@ def gluon_seresnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **k
     return model
 
 
+@register_model
 def gluon_seresnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt152-32x4d model.
     """
@@ -664,6 +687,7 @@ def gluon_seresnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **k
     return model
 
 
+@register_model
 def gluon_senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs an SENet-154 model.
     """

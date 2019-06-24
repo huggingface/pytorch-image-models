@@ -12,11 +12,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .registry import register_model
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 
-_models = ['pnasnet5large']
-__all__ = ['PNASNet5Large'] + _models
+__all__ = ['PNASNet5Large']
 
 default_cfgs = {
     'pnasnet5large': {
@@ -385,6 +385,7 @@ class PNASNet5Large(nn.Module):
         return x
 
 
+@register_model
 def pnasnet5large(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     r"""PNASNet-5 model architecture from the
     `"Progressive Neural Architecture Search"

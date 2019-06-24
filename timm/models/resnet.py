@@ -4,17 +4,18 @@ additional dropout and dynamic global avg/max pool.
 
 ResNext additions added by Ross Wightman
 """
+import math
+
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+
+from .registry import register_model
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-_models = ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
-           'resnext50_32x4d', 'resnext101_32x4d', 'resnext101_64x4d', 'resnext152_32x4d',
-           'ig_resnext101_32x8d', 'ig_resnext101_32x16d', 'ig_resnext101_32x32d', 'ig_resnext101_32x48d']
-__all__ = ['ResNet'] + _models
+
+__all__ = ['ResNet']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):
@@ -224,6 +225,7 @@ class ResNet(nn.Module):
         return x
 
 
+@register_model
 def resnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-18 model.
     """
@@ -235,6 +237,7 @@ def resnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-34 model.
     """
@@ -246,6 +249,7 @@ def resnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-50 model.
     """
@@ -257,6 +261,7 @@ def resnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -268,6 +273,7 @@ def resnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -279,6 +285,7 @@ def resnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
     """
@@ -292,6 +299,7 @@ def resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 model.
     """
@@ -305,6 +313,7 @@ def resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt101-64x4d model.
     """
@@ -318,6 +327,7 @@ def resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt152-32x4d model.
     """
@@ -331,6 +341,7 @@ def resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def ig_resnext101_32x8d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 32x8 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
@@ -349,6 +360,7 @@ def ig_resnext101_32x8d(pretrained=True, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def ig_resnext101_32x16d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 32x16 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
@@ -367,6 +379,7 @@ def ig_resnext101_32x16d(pretrained=True, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def ig_resnext101_32x32d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 32x32 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
@@ -385,6 +398,7 @@ def ig_resnext101_32x32d(pretrained=True, num_classes=1000, in_chans=3, **kwargs
     return model
 
 
+@register_model
 def ig_resnext101_32x48d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt-101 32x48 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in

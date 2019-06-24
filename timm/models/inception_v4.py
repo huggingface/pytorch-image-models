@@ -2,12 +2,16 @@
 Sourced from https://github.com/Cadene/tensorflow-model-zoo.torch (MIT License) which is
 based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0 License)
 """
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import *
+from .adaptive_avgmax_pool import select_adaptive_pool2d
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
-_models = ['inception_v4']
-__all__ = ['InceptionV4'] + _models
+__all__ = ['InceptionV4']
 
 default_cfgs = {
     'inception_v4': {
@@ -293,6 +297,7 @@ class InceptionV4(nn.Module):
         return x
 
 
+@register_model
 def inception_v4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['inception_v4']
     model = InceptionV4(num_classes=num_classes, in_chans=in_chans, **kwargs)

@@ -23,19 +23,15 @@ from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from .registry import register_model
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from .conv2d_same import sconv2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-_models = [
-    'mnasnet_050', 'mnasnet_075', 'mnasnet_100', 'mnasnet_b1', 'mnasnet_140', 'semnasnet_050', 'semnasnet_075',
-    'semnasnet_100', 'mnasnet_a1', 'semnasnet_140', 'mnasnet_small', 'mobilenetv1_100', 'mobilenetv2_100',
-    'mobilenetv3_050', 'mobilenetv3_075', 'mobilenetv3_100', 'chamnetv1_100', 'chamnetv2_100',
-    'fbnetc_100', 'spnasnet_100', 'tflite_mnasnet_100', 'tflite_semnasnet_100', 'efficientnet_b0', 'efficientnet_b1',
-    'efficientnet_b2', 'efficientnet_b3', 'efficientnet_b4', 'efficientnet_b5', 'tf_efficientnet_b0',
-    'tf_efficientnet_b1', 'tf_efficientnet_b2', 'tf_efficientnet_b3', 'tf_efficientnet_b4', 'tf_efficientnet_b5']
-__all__ = ['GenEfficientNet', 'gen_efficientnet_model_names'] + _models
+
+__all__ = ['GenEfficientNet']
 
 
 def _cfg(url='', **kwargs):
@@ -1157,6 +1153,7 @@ def _gen_efficientnet(channel_multiplier=1.0, depth_multiplier=1.0, num_classes=
     return model
 
 
+@register_model
 def mnasnet_050(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1, depth multiplier of 0.5. """
     default_cfg = default_cfgs['mnasnet_050']
@@ -1167,6 +1164,7 @@ def mnasnet_050(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mnasnet_075(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1, depth multiplier of 0.75. """
     default_cfg = default_cfgs['mnasnet_075']
@@ -1177,6 +1175,7 @@ def mnasnet_075(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1, depth multiplier of 1.0. """
     default_cfg = default_cfgs['mnasnet_100']
@@ -1187,11 +1186,13 @@ def mnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mnasnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1, depth multiplier of 1.0. """
     return mnasnet_100(num_classes, in_chans, pretrained, **kwargs)
 
 
+@register_model
 def tflite_mnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1, depth multiplier of 1.0. """
     default_cfg = default_cfgs['tflite_mnasnet_100']
@@ -1205,6 +1206,7 @@ def tflite_mnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def mnasnet_140(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet B1,  depth multiplier of 1.4 """
     default_cfg = default_cfgs['mnasnet_140']
@@ -1215,6 +1217,7 @@ def mnasnet_140(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def semnasnet_050(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1 (w/ SE), depth multiplier of 0.5 """
     default_cfg = default_cfgs['semnasnet_050']
@@ -1225,6 +1228,7 @@ def semnasnet_050(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def semnasnet_075(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1 (w/ SE),  depth multiplier of 0.75. """
     default_cfg = default_cfgs['semnasnet_075']
@@ -1235,6 +1239,7 @@ def semnasnet_075(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def semnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1 (w/ SE), depth multiplier of 1.0. """
     default_cfg = default_cfgs['semnasnet_100']
@@ -1245,11 +1250,13 @@ def semnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mnasnet_a1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1 (w/ SE), depth multiplier of 1.0. """
     return semnasnet_100(num_classes, in_chans, pretrained, **kwargs)
 
 
+@register_model
 def tflite_semnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1, depth multiplier of 1.0. """
     default_cfg = default_cfgs['tflite_semnasnet_100']
@@ -1263,6 +1270,7 @@ def tflite_semnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwarg
     return model
 
 
+@register_model
 def semnasnet_140(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet A1 (w/ SE), depth multiplier of 1.4. """
     default_cfg = default_cfgs['semnasnet_140']
@@ -1273,6 +1281,7 @@ def semnasnet_140(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mnasnet_small(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MNASNet Small,  depth multiplier of 1.0. """
     default_cfg = default_cfgs['mnasnet_small']
@@ -1283,6 +1292,7 @@ def mnasnet_small(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mobilenetv1_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MobileNet V1 """
     default_cfg = default_cfgs['mobilenetv1_100']
@@ -1293,6 +1303,7 @@ def mobilenetv1_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mobilenetv2_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MobileNet V2 """
     default_cfg = default_cfgs['mobilenetv2_100']
@@ -1303,6 +1314,7 @@ def mobilenetv2_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mobilenetv3_050(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MobileNet V3 """
     default_cfg = default_cfgs['mobilenetv3_050']
@@ -1313,6 +1325,7 @@ def mobilenetv3_050(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mobilenetv3_075(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MobileNet V3 """
     default_cfg = default_cfgs['mobilenetv3_075']
@@ -1323,6 +1336,7 @@ def mobilenetv3_075(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def mobilenetv3_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ MobileNet V3 """
     default_cfg = default_cfgs['mobilenetv3_100']
@@ -1336,6 +1350,7 @@ def mobilenetv3_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def fbnetc_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ FBNet-C """
     default_cfg = default_cfgs['fbnetc_100']
@@ -1349,6 +1364,7 @@ def fbnetc_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def chamnetv1_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ ChamNet """
     default_cfg = default_cfgs['chamnetv1_100']
@@ -1359,6 +1375,7 @@ def chamnetv1_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def chamnetv2_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ ChamNet """
     default_cfg = default_cfgs['chamnetv2_100']
@@ -1369,6 +1386,7 @@ def chamnetv2_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def spnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ Single-Path NAS Pixel1"""
     default_cfg = default_cfgs['spnasnet_100']
@@ -1379,6 +1397,7 @@ def spnasnet_100(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def efficientnet_b0(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B0 """
     default_cfg = default_cfgs['efficientnet_b0']
@@ -1392,6 +1411,7 @@ def efficientnet_b0(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def efficientnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B1 """
     default_cfg = default_cfgs['efficientnet_b1']
@@ -1405,6 +1425,7 @@ def efficientnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def efficientnet_b2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B2 """
     default_cfg = default_cfgs['efficientnet_b2']
@@ -1418,6 +1439,7 @@ def efficientnet_b2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def efficientnet_b3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B3 """
     default_cfg = default_cfgs['efficientnet_b3']
@@ -1431,6 +1453,7 @@ def efficientnet_b3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def efficientnet_b4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B4 """
     default_cfg = default_cfgs['efficientnet_b4']
@@ -1444,6 +1467,7 @@ def efficientnet_b4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def efficientnet_b5(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B5 """
     # NOTE for train, drop_rate should be 0.4
@@ -1457,6 +1481,7 @@ def efficientnet_b5(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def tf_efficientnet_b0(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B0. Tensorflow compatible variant  """
     default_cfg = default_cfgs['tf_efficientnet_b0']
@@ -1471,6 +1496,7 @@ def tf_efficientnet_b0(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def tf_efficientnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B1. Tensorflow compatible variant  """
     default_cfg = default_cfgs['tf_efficientnet_b1']
@@ -1485,6 +1511,7 @@ def tf_efficientnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def tf_efficientnet_b2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B2. Tensorflow compatible variant  """
     default_cfg = default_cfgs['tf_efficientnet_b2']
@@ -1499,6 +1526,7 @@ def tf_efficientnet_b2(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def tf_efficientnet_b3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B3. Tensorflow compatible variant """
     default_cfg = default_cfgs['tf_efficientnet_b3']
@@ -1513,6 +1541,7 @@ def tf_efficientnet_b3(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def tf_efficientnet_b4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B4. Tensorflow compatible variant """
     default_cfg = default_cfgs['tf_efficientnet_b4']
@@ -1527,6 +1556,7 @@ def tf_efficientnet_b4(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     return model
 
 
+@register_model
 def tf_efficientnet_b5(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B5. Tensorflow compatible variant """
     default_cfg = default_cfgs['tf_efficientnet_b5']

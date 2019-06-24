@@ -1,9 +1,9 @@
 from torchvision.models import Inception3
+from .registry import register_model
 from .helpers import load_pretrained
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
-_models = ['inception_v3', 'tf_inception_v3', 'adv_inception_v3', 'gluon_inception_v3']
-__all__ = _models
+__all__ = []
 
 default_cfgs = {
     # original PyTorch weights, ported from Tensorflow but modified
@@ -66,6 +66,7 @@ def _assert_default_kwargs(kwargs):
     assert kwargs.pop('drop_rate', 0.) == 0.
 
 
+@register_model
 def inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     # original PyTorch weights, ported from Tensorflow but modified
     default_cfg = default_cfgs['inception_v3']
@@ -78,6 +79,7 @@ def inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def tf_inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
     default_cfg = default_cfgs['tf_inception_v3']
@@ -90,6 +92,7 @@ def tf_inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def adv_inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     # my port of Tensorflow adversarially trained Inception V3 from
     # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
@@ -103,6 +106,7 @@ def adv_inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def gluon_inception_v3(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     # from gluon pretrained models, best performing in terms of accuracy/loss metrics
     # https://gluon-cv.mxnet.io/model_zoo/classification.html
