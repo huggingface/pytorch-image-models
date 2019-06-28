@@ -86,6 +86,7 @@ def create_loader(
         use_prefetcher=True,
         rand_erase_prob=0.,
         rand_erase_mode='const',
+        color_jitter=0.4,
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
@@ -107,6 +108,7 @@ def create_loader(
         if is_training:
             transform = transforms_imagenet_train(
                 img_size,
+                color_jitter=color_jitter,
                 interpolation=interpolation,
                 use_prefetcher=use_prefetcher,
                 mean=mean,

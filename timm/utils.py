@@ -83,7 +83,8 @@ class CheckpointSaver:
             'arch': args.model,
             'state_dict': get_state_dict(model),
             'optimizer': optimizer.state_dict(),
-            'args': args
+            'args': args,
+            'version': 2,  # version < 2 increments epoch before save
         }
         if model_ema is not None:
             save_state['state_dict_ema'] = get_state_dict(model_ema)

@@ -2,35 +2,43 @@ import logging
 from .constants import *
 
 
-def resolve_data_config(model, args, default_cfg={}, verbose=True):
+def resolve_data_config(args, default_cfg={}, model=None, verbose=True):
     new_config = {}
     default_cfg = default_cfg
-    if not default_cfg and hasattr(model, 'default_cfg'):
+    if not default_cfg and model is not None and hasattr(model, 'default_cfg'):
         default_cfg = model.default_cfg
 
     # Resolve input/image size
-    # FIXME grayscale/chans arg to use different # channels?
     in_chans = 3
+    if 'chans' in args and args['chans'] is not None:
+        in_chans = args['chans']
+
     input_size = (in_chans, 224, 224)
-    if args.img_size is not None:
-        # FIXME support passing img_size as tuple, non-square
-        assert isinstance(args.img_size, int)
-        input_size = (in_chans, args.img_size, args.img_size)
+    if 'input_size' in args and args['input_size'] is not None:
+        assert isinstance(args['input_size'], (tuple, list))
+        assert len(args['input_size']) == 3
+        input_size = tuple(args['input_size'])
+        in_chans = input_size[0]  # input_size overrides in_chans
+    elif 'img_size' in args and args['img_size'] is not None:
+        assert isinstance(args['img_size'], int)
+        input_size = (in_chans, args['img_size'], args['img_size'])
     elif 'input_size' in default_cfg:
         input_size = default_cfg['input_size']
     new_config['input_size'] = input_size
 
     # resolve interpolation method
-    new_config['interpolation'] = 'bilinear'
-    if args.interpolation:
-        new_config['interpolation'] = args.interpolation
+    new_config['interpolation'] = 'bicubic'
+    if 'interpolation' in args and args['interpolation']:
+        new_config['interpolation'] = args['interpolation']
     elif 'interpolation' in default_cfg:
         new_config['interpolation'] = default_cfg['interpolation']
 
     # resolve dataset + model mean for normalization
-    new_config['mean'] = get_mean_by_model(args.model)
-    if args.mean is not None:
-        mean = tuple(args.mean)
+    new_config['mean'] = IMAGENET_DEFAULT_MEAN
+    if 'model' in args:
+        new_config['mean'] = get_mean_by_model(args['model'])
+    if 'mean' in args and args['mean'] is not None:
+        mean = tuple(args['mean'])
         if len(mean) == 1:
             mean = tuple(list(mean) * in_chans)
         else:
@@ -40,9 +48,11 @@ def resolve_data_config(model, args, default_cfg={}, verbose=True):
         new_config['mean'] = default_cfg['mean']
 
     # resolve dataset + model std deviation for normalization
-    new_config['std'] = get_std_by_model(args.model)
-    if args.std is not None:
-        std = tuple(args.std)
+    new_config['std'] = IMAGENET_DEFAULT_STD
+    if 'model' in args:
+        new_config['std'] = get_std_by_model(args['model'])
+    if 'std' in args and args['std'] is not None:
+        std = tuple(args['std'])
         if len(std) == 1:
             std = tuple(list(std) * in_chans)
         else:
@@ -53,7 +63,9 @@ def resolve_data_config(model, args, default_cfg={}, verbose=True):
 
     # resolve default crop percentage
     new_config['crop_pct'] = DEFAULT_CROP_PCT
-    if 'crop_pct' in default_cfg:
+    if 'crop_pct' in args and args['crop_pct'] is not None:
+        new_config['crop_pct'] = args['crop_pct']
+    elif 'crop_pct' in default_cfg:
         new_config['crop_pct'] = default_cfg['crop_pct']
 
     if verbose:
@@ -64,29 +76,11 @@ def resolve_data_config(model, args, default_cfg={}, verbose=True):
     return new_config
 
 
-def get_mean_by_name(name):
-    if name == 'dpn':
-        return IMAGENET_DPN_MEAN
-    elif name == 'inception' or name == 'le':
-        return IMAGENET_INCEPTION_MEAN
-    else:
-        return IMAGENET_DEFAULT_MEAN
-
-
-def get_std_by_name(name):
-    if name == 'dpn':
-        return IMAGENET_DPN_STD
-    elif name == 'inception' or name == 'le':
-        return IMAGENET_INCEPTION_STD
-    else:
-        return IMAGENET_DEFAULT_STD
-
-
 def get_mean_by_model(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DPN_STD
-    elif 'ception' in model_name or 'nasnet' in model_name:
+    elif 'ception' in model_name or ('nasnet' in model_name and 'mnasnet' not in model_name):
         return IMAGENET_INCEPTION_MEAN
     else:
         return IMAGENET_DEFAULT_MEAN
@@ -96,7 +90,7 @@ def get_std_by_model(model_name):
     model_name = model_name.lower()
     if 'dpn' in model_name:
         return IMAGENET_DEFAULT_STD
-    elif 'ception' in model_name or 'nasnet' in model_name:
+    elif 'ception' in model_name or ('nasnet' in model_name and 'mnasnet' not in model_name):
         return IMAGENET_INCEPTION_STD
     else:
         return IMAGENET_DEFAULT_STD

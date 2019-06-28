@@ -156,7 +156,7 @@ class RandomResizedCropAndInterpolation(object):
 def transforms_imagenet_train(
         img_size=224,
         scale=(0.08, 1.0),
-        color_jitter=(0.4, 0.4, 0.4),
+        color_jitter=0.4,
         interpolation='random',
         random_erasing=0.4,
         random_erasing_mode='const',
@@ -164,6 +164,14 @@ def transforms_imagenet_train(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD
 ):
+    if isinstance(color_jitter, (list, tuple)):
+        # color jitter should be a 3-tuple/list if spec brightness/contrast/saturation
+        # or 4 if also augmenting hue
+        assert len(color_jitter) in (3, 4)
+    else:
+        # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
+        color_jitter = (float(color_jitter),) * 3
+    print(*color_jitter)
 
     tfl = [
         RandomResizedCropAndInterpolation(
