@@ -67,6 +67,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
 |---|---|---|---|---|
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic |
+| resnet50 | 78.470 (21.530) | 94.266 (5.734) | 25.6M | bicubic |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
 | efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic |
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic |
@@ -86,7 +87,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 #### @ 260x260
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
 |---|---|---|---|---|
-| efficientnet_b2 | 79.668 (20.332) | 94.634 (5.366) | 9.11M | bicubic |
+| efficientnet_b2 | 79.760 (20.240) | 94.714 (5.286) | 9.11M | bicubic |
 
 ### Ported Weights
 

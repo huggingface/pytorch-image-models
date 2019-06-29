@@ -70,7 +70,7 @@ def main():
     logging.info('Model %s created, param count: %d' %
                  (args.model, sum([m.numel() for m in model.parameters()])))
 
-    config = resolve_data_config(model, args)
+    config = resolve_data_config(vars(args), model=model)
     model, test_time_pool = apply_test_time_pool(model, config, args)
 
     if args.num_gpu > 1:
