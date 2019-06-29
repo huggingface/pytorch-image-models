@@ -87,7 +87,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 #### @ 260x260
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
 |---|---|---|---|---|
-| efficientnet_b2 | 79.668 (20.332) | 94.634 (5.366) | 9.11M | bicubic |
+| efficientnet_b2 | 79.760 (20.240) | 94.714 (5.286) | 9.11M | bicubic |
 
 ### Ported Weights
 
