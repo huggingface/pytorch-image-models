@@ -35,9 +35,9 @@ def _cfg(url=''):
 default_cfgs = {
     'dpn68': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
-    'dpn68b_extra': _cfg(
+    'dpn68b': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68b_extra-84854c156.pth'),
-    'dpn92_extra': _cfg(
+    'dpn92': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
     'dpn98': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),

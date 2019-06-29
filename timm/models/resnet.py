@@ -33,14 +33,22 @@ default_cfgs = {
     'resnet18': _cfg(url='https://download.pytorch.org/models/resnet18-5c106cde.pth'),
     'resnet34': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34-43635321.pth'),
-    'resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
+    'resnet50': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/rw_resnet50-86acaeed.pth',
+        interpolation='bicubic'),
     'resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
     'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
-    'resnext50_32x4d': _cfg(url='https://www.dropbox.com/s/yxci33lfew51p6a/resnext50_32x4d-068914d1.pth?dl=1',
-                            interpolation='bicubic'),
+    'tv_resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
+    'tv_resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
+    'wide_resnet50_2': _cfg(url='https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth'),
+    'wide_resnet101_2': _cfg(url='https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth'),
+    'resnext50_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50_32x4d-068914d1.pth',
+        interpolation='bicubic'),
     'resnext101_32x4d': _cfg(url=''),
+    'resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth'),
     'resnext101_64x4d': _cfg(url=''),
-    'resnext152_32x4d': _cfg(url=''),
+    'tv_resnext50_32x4d': _cfg(url='https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth'),
     'ig_resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x8-c38310e5.pth'),
     'ig_resnext101_32x16d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x16-c6f796b0.pth'),
     'ig_resnext101_32x32d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x32-e4b90b00.pth'),
@@ -286,6 +294,61 @@ def resnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
+def tv_resnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-34 model with original Torchvision weights.
+    """
+    model = ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfgs['tv_resnet34']
+    if pretrained:
+        load_pretrained(model, model.default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def tv_resnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-50 model with original Torchvision weights.
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfgs['tv_resnet50']
+    if pretrained:
+        load_pretrained(model, model.default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def wide_resnet50_2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a Wide ResNet-50-2 model.
+    The model is the same as ResNet except for the bottleneck number of channels
+    which is twice larger in every block. The number of channels in outer 1x1
+    convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
+    channels, and in Wide ResNet-50-2 has 2048-1024-2048.
+    """
+    model = ResNet(
+        Bottleneck, [3, 4, 6, 3], base_width=128,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfgs['wide_resnet50_2']
+    if pretrained:
+        load_pretrained(model, model.default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def wide_resnet101_2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a Wide ResNet-100-2 model.
+    The model is the same as ResNet except for the bottleneck number of channels
+    which is twice larger in every block. The number of channels in outer 1x1
+    convolutions is the same.
+    """
+    model = ResNet(
+        Bottleneck, [3, 4, 23, 3], base_width=128,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfgs['wide_resnet101_2']
+    if pretrained:
+        load_pretrained(model, model.default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
 def resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNeXt50-32x4d model.
     """
@@ -301,11 +364,25 @@ def resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 @register_model
 def resnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNeXt-101 model.
+    """Constructs a ResNeXt-101 32x4d model.
     """
     default_cfg = default_cfgs['resnext101_32x4d']
     model = ResNet(
         Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def resnext101_32x8d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNeXt-101 32x8d model.
+    """
+    default_cfg = default_cfgs['resnext101_32x8d']
+    model = ResNet(
+        Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
@@ -328,12 +405,12 @@ def resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNeXt152-32x4d model.
+def tv_resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNeXt50-32x4d model with original Torchvision weights.
     """
-    default_cfg = default_cfgs['resnext152_32x4d']
+    default_cfg = default_cfgs['tv_resnext50_32x4d']
     model = ResNet(
-        Bottleneck, [3, 8, 36, 3], cardinality=32, base_width=4,
+        Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:

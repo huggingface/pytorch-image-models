@@ -50,11 +50,9 @@ default_cfgs = {
     'gluon_resnext50_32x4d': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnext50_32x4d-e6a097c1.pth'),
     'gluon_resnext101_32x4d': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnext101_32x4d-b253c8c4.pth'),
     'gluon_resnext101_64x4d': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnext101_64x4d-f9a8e184.pth'),
-    'gluon_resnext152_32x4d': _cfg(url=''),
     'gluon_seresnext50_32x4d': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_seresnext50_32x4d-90cf2d6e.pth'),
     'gluon_seresnext101_32x4d': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_seresnext101_32x4d-cf52900d.pth'),
     'gluon_seresnext101_64x4d': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_seresnext101_64x4d-f9926f93.pth'),
-    'gluon_seresnext152_32x4d': _cfg(url=''),
     'gluon_senet154': _cfg(url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_senet154-70a1a3c0.pth'),
 }
 
@@ -618,20 +616,6 @@ def gluon_resnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **kwa
 
 
 @register_model
-def gluon_resnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNeXt152-32x4d model.
-    """
-    default_cfg = default_cfgs['gluon_resnext152_32x4d']
-    model = GluonResNet(
-        BottleneckGl, [3, 8, 36, 3], cardinality=32, base_width=4,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
-
-
-@register_model
 def gluon_seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SEResNeXt50-32x4d model.
     """
@@ -670,20 +654,6 @@ def gluon_seresnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **k
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
-
-
-@register_model
-def gluon_seresnext152_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a SEResNeXt152-32x4d model.
-    """
-    default_cfg = default_cfgs['gluon_seresnext152_32x4d']
-    model = GluonResNet(
-        BottleneckGl, [3, 8, 36, 3], cardinality=32, base_width=4, use_se=True,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    #if pretrained:
-    #    load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
