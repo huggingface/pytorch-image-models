@@ -171,7 +171,6 @@ def transforms_imagenet_train(
     else:
         # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
         color_jitter = (float(color_jitter),) * 3
-    print(*color_jitter)
 
     tfl = [
         RandomResizedCropAndInterpolation(
