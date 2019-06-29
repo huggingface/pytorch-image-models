@@ -1430,7 +1430,7 @@ def efficientnet_b1(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B1 """
     default_cfg = default_cfgs['efficientnet_b1']
     # NOTE for train, drop_rate should be 0.2
-    kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
+    #kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
     model = _gen_efficientnet(
         channel_multiplier=1.0, depth_multiplier=1.1,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
@@ -1445,7 +1445,7 @@ def efficientnet_b2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """ EfficientNet-B2 """
     default_cfg = default_cfgs['efficientnet_b2']
     # NOTE for train, drop_rate should be 0.3
-    kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
+    #kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
     model = _gen_efficientnet(
         channel_multiplier=1.1, depth_multiplier=1.2,
         num_classes=num_classes, in_chans=in_chans, **kwargs)

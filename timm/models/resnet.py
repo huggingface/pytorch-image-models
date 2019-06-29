@@ -334,7 +334,7 @@ def wide_resnet50_2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 @register_model
 def wide_resnet101_2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a Wide ResNet-100-2 model.
+    """Constructs a Wide ResNet-101-2 model.
     The model is the same as ResNet except for the bottleneck number of channels
     which is twice larger in every block. The number of channels in outer 1x1
     convolutions is the same.
