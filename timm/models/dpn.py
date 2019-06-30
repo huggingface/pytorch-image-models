@@ -43,7 +43,7 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),
     'dpn131': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn131-71dfe43e0.pth'),
-    'dpn107_extra': _cfg(
+    'dpn107': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn107_extra-1ac7121e2.pth')
 }
 
@@ -261,7 +261,7 @@ def dpn68(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 @register_model
 def dpn68b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn68b_extra']
+    default_cfg = default_cfgs['dpn68b']
     model = DPN(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
@@ -274,7 +274,7 @@ def dpn68b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 @register_model
 def dpn92(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn92_extra']
+    default_cfg = default_cfgs['dpn92']
     model = DPN(
         num_init_features=64, k_r=96, groups=32,
         k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
@@ -312,7 +312,7 @@ def dpn131(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 def dpn107(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn107_extra']
+    default_cfg = default_cfgs['dpn107']
     model = DPN(
         num_init_features=128, k_r=200, groups=50,
         k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128),
