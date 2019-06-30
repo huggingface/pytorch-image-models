@@ -311,6 +311,7 @@ def dpn131(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 
+@register_model
 def dpn107(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['dpn107']
     model = DPN(
