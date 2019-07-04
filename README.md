@@ -60,6 +60,10 @@ Several (less common) features that I often utilize in my projects are included.
 * Mixup (as in https://arxiv.org/abs/1710.09412) - currently implementing/testing
 * An inference script that dumps output to CSV is provided as an example
 
+## Results
+
+A CSV file containing an ImageNet-1K validation results summary for all included models with pretrained weights and default configurations is located [here](results/results-all.csv)
+
 ### Self-trained Weights
 I've leveraged the training scripts in this repository to train a few of the models with missing weights to good levels of performance. These numbers are all for 224x224 training and validation image sizing with the usual 87.5% validation crop.
 
