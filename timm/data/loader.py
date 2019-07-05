@@ -21,10 +21,15 @@ class PrefetchLoader:
             rand_erase_prob=0.,
             rand_erase_mode='const',
             mean=IMAGENET_DEFAULT_MEAN,
-            std=IMAGENET_DEFAULT_STD):
+            std=IMAGENET_DEFAULT_STD,
+            fp16=False):
         self.loader = loader
         self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
         self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
+        self.fp16 = fp16
+        if fp16:
+            self.mean = self.mean.half()
+            self.std = self.std.half()
         if rand_erase_prob > 0.:
             self.random_erasing = RandomErasing(
                 probability=rand_erase_prob, mode=rand_erase_mode)
@@ -39,7 +44,10 @@ class PrefetchLoader:
             with torch.cuda.stream(stream):
                 next_input = next_input.cuda(non_blocking=True)
                 next_target = next_target.cuda(non_blocking=True)
-                next_input = next_input.float().sub_(self.mean).div_(self.std)
+                if self.fp16:
+                    next_input = next_input.half().sub_(self.mean).div_(self.std)
+                else:
+                    next_input = next_input.float().sub_(self.mean).div_(self.std)
                 if self.random_erasing is not None:
                     next_input = self.random_erasing(next_input)
 
@@ -94,6 +102,7 @@ def create_loader(
         distributed=False,
         crop_pct=None,
         collate_fn=None,
+        fp16=False,
         tf_preprocessing=False,
 ):
     if isinstance(input_size, tuple):
@@ -151,6 +160,7 @@ def create_loader(
             rand_erase_prob=rand_erase_prob if is_training else 0.,
             rand_erase_mode=rand_erase_mode,
             mean=mean,
-            std=std)
+            std=std,
+            fp16=fp16)
 
     return loader
