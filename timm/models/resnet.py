@@ -53,7 +53,9 @@ default_cfgs = {
     'resnext50_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50_32x4d-068914d1.pth',
         interpolation='bicubic'),
-    'resnext50d_32x4d': _cfg(url=''),
+    'resnext50d_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50d_32x4d-103e99f8.pth',
+        interpolation='bicubic'),
     'resnext101_32x4d': _cfg(url=''),
     'resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth'),
     'resnext101_64x4d': _cfg(url=''),
@@ -534,7 +536,7 @@ def resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 @register_model
 def resnext50d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNeXt50-32x4d model.
+    """Constructs a ResNeXt50d-32x4d model. ResNext50 w/ deep stem & avg pool downsample
     """
     default_cfg = default_cfgs['resnext50d_32x4d']
     model = ResNet(
