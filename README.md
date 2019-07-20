@@ -18,8 +18,9 @@ The work of many others is present here. I've tried to make sure all source mate
 
 I've included a few of my favourite models, but this is not an exhaustive collection. You can't do better than Cadene's collection in that regard. Most models do have pretrained weights from their respective sources or original authors. 
 
-* ResNet/ResNeXt (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models) with ResNeXt mods by myself)
+* ResNet/ResNeXt (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models) with mods by myself)
     * ResNet-18, ResNet-34, ResNet-50, ResNet-101, ResNet-152, ResNeXt50 (32x4d), ResNeXt101 (32x4d and 64x4d)
+    * 'Bag of Tricks' / Gluon C, D, E, S variations (https://arxiv.org/abs/1812.01187)
     * Instagram trained / ImageNet tuned ResNeXt101-32x8d to 32x48d from from [facebookresearch](https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/)
 * DenseNet (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models))
     * DenseNet-121, DenseNet-169, DenseNet-201, DenseNet-161
@@ -70,12 +71,15 @@ I've leveraged the training scripts in this repository to train a few of the mod
 #### @ 224x224
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  |
 |---|---|---|---|---|
+| resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic |
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic |
 | resnet50 | 78.470 (21.530) | 94.266 (5.734) | 25.6M | bicubic |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
 | efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic |
+| resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic |
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic |
 | mnasnet_a1 | 75.448 (24.552) | 92.604 (7.396) | 3.89M | bicubic |
+| resnet26 | 75.292 (24.708) | 92.57 (7.43) | 16M | bicubic |
 | fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear |
 | resnet34 | 75.110 (24.890) | 92.284 (7.716) | 22M | bilinear |
 | seresnet34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear |
@@ -120,8 +124,6 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | tf_efficientnet_b0 *tfp  | 76.828 (23.172) | 93.226 (6.774) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b0       | 76.528 (23.472) | 93.010 (6.990) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012) | 21.80 | bicubic | |
-| tflite_semnasnet_100     | 73.086 (26.914) | 91.336 (8.664) | 3.87  | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) |
-| tflite_mnasnet_100       | 72.398 (27.602) | 90.930 (9.070) |  4.36 | bicubic | [Google TFLite](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet) 
 | gluon_resnet18_v1b       | 70.830 (29.170) | 89.756 (10.244) | 11.69 | bicubic | |
 
 #### @ 240x240
