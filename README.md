@@ -31,8 +31,9 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * PNasNet & NASNet-A (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
-* Generic EfficientNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the mobile optimized architecture search derived models that utilize similar DepthwiseSeparable and InvertedResidual blocks
+* Generic EfficientNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the efficient models that utilize similar DepthwiseSeparable and InvertedResidual blocks
     * EfficientNet (B0-B5) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
+    * MixNet (https://arxiv.org/abs/1907.09595) -- validated, compat with TF weights
     * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
     * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
     * MobileNet-V2 (https://arxiv.org/abs/1801.04381)
@@ -40,7 +41,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
     * ChamNet (https://arxiv.org/abs/1812.08934) -- specific arch details hard to find, currently an educated guess
     * FBNet-C (https://arxiv.org/abs/1812.03443) -- TODO A/B variants
     * Single-Path NAS (https://arxiv.org/abs/1904.02877) -- pixel1 variant
-    
+
 Use the  `--model` arg to specify model for train, validation, inference scripts. Match the all lowercase
 creation fn for the model you'd like.
 
@@ -118,11 +119,17 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | gluon_resnext50_32x4d    | 79.356 (20.644) | 94.424 (5.576) | 25.03  | bicubic | |
 | gluon_resnet101_v1b      | 79.304 (20.696) | 94.524 (5.476) | 44.55  | bicubic | |
 | gluon_resnet50_v1d       | 79.074 (20.926) | 94.476 (5.524) | 25.58  | bicubic | |
+| tf_mixnet_l *tfp         | 78.846 (21.154) | 94.212 (5.788) | 7.33  | bilinear | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_mixnet_l              | 78.770 (21.230) | 94.004 (5.996) | 7.33  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
 | gluon_resnet50_v1s       | 78.712 (21.288) | 94.242 (5.758) | 25.68  | bicubic | |
 | gluon_resnet50_v1c       | 78.010 (21.990) | 93.988 (6.012) | 25.58  | bicubic | |
 | gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282) | 25.56  | bicubic | |
+| tf_mixnet_m *tfp         | 77.072 (22.928) | 93.368 (6.632) | 5.01  | bilinear | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_mixnet_m              | 76.950 (23.050) | 93.156 (6.844) | 5.01  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
 | tf_efficientnet_b0 *tfp  | 76.828 (23.172) | 93.226 (6.774) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b0       | 76.528 (23.472) | 93.010 (6.990) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_mixnet_s *tfp         | 75.800 (24.200) | 92.788 (7.212) | 4.13  | bilinear | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_mixnet_s              | 75.648 (24.352) | 92.636 (7.364) | 4.13  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
 | gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012) | 21.80 | bicubic | |
 | gluon_resnet18_v1b       | 70.830 (29.170) | 89.756 (10.244) | 11.69 | bicubic | |
 

@@ -112,7 +112,8 @@ def create_loader(
 
     if tf_preprocessing and use_prefetcher:
         from timm.data.tf_preprocessing import TfPreprocessTransform
-        transform = TfPreprocessTransform(is_training=is_training, size=img_size)
+        transform = TfPreprocessTransform(
+            is_training=is_training, size=img_size, interpolation=interpolation)
     else:
         if is_training:
             transform = transforms_imagenet_train(
