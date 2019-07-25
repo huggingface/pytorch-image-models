@@ -20,7 +20,7 @@ default_cfgs = {
     },
     # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
     'tf_inception_v3': {
-        'url': 'https://www.dropbox.com/s/xdh32bpdgqzpx8t/tf_inception_v3-e0069de4.pth?dl=1',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_inception_v3-e0069de4.pth',
         'input_size': (3, 299, 299),
         'crop_pct': 0.875,
         'interpolation': 'bicubic',
@@ -33,7 +33,7 @@ default_cfgs = {
     # my port of Tensorflow adversarially trained Inception V3 from
     # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
     'adv_inception_v3': {
-        'url': 'https://www.dropbox.com/s/b5pudqh84gtl7i8/adv_inception_v3-9e27bd63.pth?dl=1',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/adv_inception_v3-9e27bd63.pth',
         'input_size': (3, 299, 299),
         'crop_pct': 0.875,
         'interpolation': 'bicubic',
@@ -46,7 +46,7 @@ default_cfgs = {
     # from gluon pretrained models, best performing in terms of accuracy/loss metrics
     # https://gluon-cv.mxnet.io/model_zoo/classification.html
     'gluon_inception_v3': {
-        'url': 'https://www.dropbox.com/s/8uv6wrl6it6394u/gluon_inception_v3-9f746940.pth?dl=1',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_inception_v3-9f746940.pth',
         'input_size': (3, 299, 299),
         'crop_pct': 0.875,
         'interpolation': 'bicubic',
