@@ -11,26 +11,26 @@ def create_scheduler(args, optimizer):
             optimizer,
             t_initial=num_epochs,
             t_mul=1.0,
-            lr_min=1e-5,
+            lr_min=args.min_lr,
             decay_rate=args.decay_rate,
             warmup_lr_init=args.warmup_lr,
             warmup_t=args.warmup_epochs,
             cycle_limit=1,
             t_in_epochs=True,
         )
-        num_epochs = lr_scheduler.get_cycle_length() + 10
+        num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
     elif args.sched == 'tanh':
         lr_scheduler = TanhLRScheduler(
             optimizer,
             t_initial=num_epochs,
             t_mul=1.0,
-            lr_min=1e-5,
+            lr_min=args.min_lr,
             warmup_lr_init=args.warmup_lr,
             warmup_t=args.warmup_epochs,
             cycle_limit=1,
             t_in_epochs=True,
         )
-        num_epochs = lr_scheduler.get_cycle_length() + 10
+        num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
     else:
         lr_scheduler = StepLRScheduler(
             optimizer,
