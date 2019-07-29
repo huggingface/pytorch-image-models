@@ -103,7 +103,8 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b5-c6949ce9.pth',
         input_size=(3, 456, 456), pool_size=(15, 15), crop_pct=0.934),
     'mixnet_s': _cfg(url=''),
-    'mixnet_m': _cfg(url=''),
+    'mixnet_m': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_m-4647fc68.pth'),
     'mixnet_l': _cfg(url=''),
     'tf_mixnet_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_s-89d3354b.pth'),
@@ -269,13 +270,6 @@ def _decode_block_str(block_str, depth_multiplier=1.0):
     # scaled by depth_multiplier
     num_repeat = int(math.ceil(num_repeat * depth_multiplier))
     return [deepcopy(block_args) for _ in range(num_repeat)]
-
-
-def _decode_arch_args(string_list):
-    block_args = []
-    for block_str in string_list:
-        block_args.append(_decode_block_str(block_str))
-    return block_args
 
 
 def _decode_arch_def(arch_def, depth_multiplier=1.0):
@@ -1612,8 +1606,8 @@ def mixnet_m(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     model = _gen_mixnet_m(
         channel_multiplier=1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
-    #if pretrained:
-    #    load_pretrained(model, default_cfg, num_classes, in_chans)
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 

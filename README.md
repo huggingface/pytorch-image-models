@@ -75,6 +75,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic |
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic |
 | resnet50 | 78.470 (21.530) | 94.266 (5.734) | 25.6M | bicubic |
+| mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic |
 | efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic |
