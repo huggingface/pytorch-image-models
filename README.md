@@ -32,7 +32,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * DPN (from [me](https://github.com/rwightman/pytorch-dpn-pretrained), weights hosted by Cadene)
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
 * Generic EfficientNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the efficient models that utilize similar DepthwiseSeparable and InvertedResidual blocks
-    * EfficientNet (B0-B5) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
+    * EfficientNet (B0-B7) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
     * MixNet (https://arxiv.org/abs/1907.09595) -- validated, compat with TF weights
     * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
     * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
