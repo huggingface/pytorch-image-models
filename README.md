@@ -101,75 +101,58 @@ I've leveraged the training scripts in this repository to train a few of the mod
 
 ### Ported Weights
 
-#### @ 224x224
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
-|---|---|---|---|---|---|
-| gluon_senet154           | 81.224 (18.776) | 95.356 (4.644) | 115.09 | bicubic | |
-| gluon_resnet152_v1s      | 81.012 (18.988) | 95.416 (4.584) | 60.32  | bicubic | |
-| gluon_seresnext101_32x4d | 80.902 (19.098) | 95.294 (4.706) | 48.96  | bicubic | |
-| gluon_seresnext101_64x4d | 80.890 (19.110) | 95.304 (4.696) | 88.23  | bicubic | |
-| gluon_resnext101_64x4d   | 80.602 (19.398) | 94.994 (5.006) | 83.46  | bicubic | |
-| gluon_resnet152_v1d      | 80.470 (19.530) | 95.206 (4.794) | 60.21  | bicubic | |
-| gluon_resnet101_v1d      | 80.424 (19.576) | 95.020 (4.980) | 44.57  | bicubic | |
-| gluon_resnext101_32x4d   | 80.334 (19.666) | 94.926 (5.074) | 44.18  | bicubic | |
-| gluon_resnet101_v1s      | 80.300 (19.700) | 95.150 (4.850) | 44.67  | bicubic | |
-| gluon_resnet152_v1c      | 79.916 (20.084) | 94.842 (5.158) | 60.21  | bicubic | |
-| gluon_seresnext50_32x4d  | 79.912 (20.088) | 94.818 (5.182) | 27.56  | bicubic | |
-| gluon_resnet152_v1b      | 79.692 (20.308) | 94.738 (5.262) | 60.19  | bicubic | |
-| gluon_resnet101_v1c      | 79.544 (20.456) | 94.586 (5.414) | 44.57  | bicubic | |
-| gluon_resnext50_32x4d    | 79.356 (20.644) | 94.424 (5.576) | 25.03  | bicubic | |
-| gluon_resnet101_v1b      | 79.304 (20.696) | 94.524 (5.476) | 44.55  | bicubic | |
-| gluon_resnet50_v1d       | 79.074 (20.926) | 94.476 (5.524) | 25.58  | bicubic | |
-| tf_mixnet_l *tfp         | 78.846 (21.154) | 94.212 (5.788) | 7.33  | bilinear | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
-| tf_mixnet_l              | 78.770 (21.230) | 94.004 (5.996) | 7.33  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
-| gluon_resnet50_v1s       | 78.712 (21.288) | 94.242 (5.758) | 25.68  | bicubic | |
-| gluon_resnet50_v1c       | 78.010 (21.990) | 93.988 (6.012) | 25.58  | bicubic | |
-| gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282) | 25.56  | bicubic | |
-| tf_mixnet_m *tfp         | 77.072 (22.928) | 93.368 (6.632) | 5.01  | bilinear | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
-| tf_mixnet_m              | 76.950 (23.050) | 93.156 (6.844) | 5.01  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
-| tf_efficientnet_b0 *tfp  | 76.828 (23.172) | 93.226 (6.774) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b0       | 76.528 (23.472) | 93.010 (6.990) | 5.29  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_mixnet_s *tfp         | 75.800 (24.200) | 92.788 (7.212) | 4.13  | bilinear | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
-| tf_mixnet_s              | 75.648 (24.352) | 92.636 (7.364) | 4.13  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
-| gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012) | 21.80 | bicubic | |
-| gluon_resnet18_v1b       | 70.830 (29.170) | 89.756 (10.244) | 11.69 | bicubic | |
-
-#### @ 240x240
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
-|---|---|---|---|---|---|
-| tf_efficientnet_b1 *tfp  | 78.796 (21.204) | 94.232 (5.768)  | 7.79  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b1       | 78.554 (21.446) | 94.098 (5.902)  | 7.79  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-
-#### @ 260x260
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
-|---|---|---|---|---|---|
-| tf_efficientnet_b2 *tfp  | 79.782 (20.218) | 94.800 (5.200)  | 9.11  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b2       | 79.606 (20.394) | 94.712 (5.288)  | 9.11  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-
-#### @ 299x299 and 300x300
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
-|---|---|---|---|---|---|
-| tf_efficientnet_b3 *tfp  | 80.982 (19.018) | 95.332 (4.668)  | 12.23  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b3       | 80.874 (19.126) | 95.302 (4.698)  | 12.23  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| gluon_inception_v3 | 78.804 (21.196) | 94.380 (5.620) | 27.16M | bicubic | [MxNet Gluon](https://gluon-cv.mxnet.io/model_zoo/classification.html) |
-| tf_inception_v3 | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
-| adv_inception_v3 | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
-
-#### @ 380x380
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
-|---|---|---|---|---|---|
-| tf_efficientnet_b4       | 82.604 (17.396) | 96.128 (3.872)  | 19.34  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b4 *tfp  | 82.604 (17.396) | 96.094 (3.906)  | 19.34  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-
-#### @ 456x456
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Source |
-|---|---|---|---|---|---|
-| tf_efficientnet_b5 *tfp  | 83.200 (16.800) | 96.456 (3.544) | 30.39  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b5       | 83.176 (16.824) | 96.536 (3.464) | 30.39  | bicubic | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Resolution | Source |
+|---|---|---|---|---|---|---|
+| tf_efficientnet_b7 *tfp  | 84.480 (15.520) | 96.870 (3.130) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b7       | 84.420 (15.580) | 96.906 (3.094) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b6 *tfp  | 84.140 (15.860) | 96.852 (3.148) | 43.04  | bicubic | 528 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b6       | 84.110 (15.890) | 96.886 (3.114) | 43.04  | bicubic | 528 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b5 *tfp  | 83.694 (16.306) | 96.696 (3.304) | 30.39  | bicubic | 456 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b5       | 83.688 (16.312) | 96.714 (3.286) | 30.39  | bicubic | 456 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b4       | 83.022 (16.978) | 96.300 (3.700) | 19.34  | bicubic | 380 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b4 *tfp  | 82.948 (17.052) | 96.308 (3.692) | 19.34  | bicubic | 380 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b3 *tfp  | 81.576 (18.424) | 95.662 (4.338) | 12.23  | bicubic | 300 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b3       | 81.636 (18.364) | 95.718 (4.282) | 12.23  | bicubic | 300 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| gluon_senet154           | 81.224 (18.776) | 95.356 (4.644) | 115.09 | bicubic | 224 | |
+| gluon_resnet152_v1s      | 81.012 (18.988) | 95.416 (4.584) | 60.32  | bicubic | 224 | |
+| gluon_seresnext101_32x4d | 80.902 (19.098) | 95.294 (4.706) | 48.96  | bicubic | 224 | |
+| gluon_seresnext101_64x4d | 80.890 (19.110) | 95.304 (4.696) | 88.23  | bicubic | 224 | |
+| gluon_resnext101_64x4d   | 80.602 (19.398) | 94.994 (5.006) | 83.46  | bicubic | 224 | |
+| gluon_resnet152_v1d      | 80.470 (19.530) | 95.206 (4.794) | 60.21  | bicubic | 224 | |
+| gluon_resnet101_v1d      | 80.424 (19.576) | 95.020 (4.980) | 44.57  | bicubic | 224 | |
+| gluon_resnext101_32x4d   | 80.334 (19.666) | 94.926 (5.074) | 44.18  | bicubic | 224 | |
+| gluon_resnet101_v1s      | 80.300 (19.700) | 95.150 (4.850) | 44.67  | bicubic | 224 | |
+| tf_efficientnet_b2 *tfp  | 80.188 (19.812) | 94.974 (5.026) | 9.11  | bicubic | 260 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b2       | 80.086 (19.914) | 94.908 (5.092) | 9.11  | bicubic | 260 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| gluon_resnet152_v1c      | 79.916 (20.084) | 94.842 (5.158) | 60.21  | bicubic | 224 | |
+| gluon_seresnext50_32x4d  | 79.912 (20.088) | 94.818 (5.182) | 27.56  | bicubic | 224 | |
+| gluon_resnet152_v1b      | 79.692 (20.308) | 94.738 (5.262) | 60.19  | bicubic | 224 | |
+| gluon_resnet101_v1c      | 79.544 (20.456) | 94.586 (5.414) | 44.57  | bicubic | 224 | |
+| gluon_resnext50_32x4d    | 79.356 (20.644) | 94.424 (5.576) | 25.03  | bicubic | 224 | |
+| gluon_resnet101_v1b      | 79.304 (20.696) | 94.524 (5.476) | 44.55  | bicubic | 224 | |
+| tf_efficientnet_b1 *tfp  | 79.172 (20.828) | 94.450 (5.550) | 7.79  | bicubic | 240 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| gluon_resnet50_v1d       | 79.074 (20.926) | 94.476 (5.524) | 25.58  | bicubic | 224 | |
+| tf_mixnet_l *tfp         | 78.846 (21.154) | 94.212 (5.788) | 7.33  | bilinear | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_efficientnet_b1       | 78.826 (21.174) | 94.198 (5.802) | 7.79  | bicubic | 240 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| gluon_inception_v3       | 78.804 (21.196) | 94.380 (5.620) | 27.16M | bicubic | 299 | [MxNet Gluon](https://gluon-cv.mxnet.io/model_zoo/classification.html) |
+| tf_mixnet_l              | 78.770 (21.230) | 94.004 (5.996) | 7.33  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| gluon_resnet50_v1s       | 78.712 (21.288) | 94.242 (5.758) | 25.68  | bicubic | 224 | |
+| gluon_resnet50_v1c       | 78.010 (21.990) | 93.988 (6.012) | 25.58  | bicubic | 224 | |
+| tf_inception_v3          | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | 299 | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
+| gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282) | 25.56  | bicubic | 224 | |
+| adv_inception_v3         | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | 299 | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
+| tf_efficientnet_b0 *tfp  | 77.258 (22.742) | 93.478 (6.522) | 5.29  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_mixnet_m *tfp         | 77.072 (22.928) | 93.368 (6.632) | 5.01  | bilinear | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_mixnet_m              | 76.950 (23.050) | 93.156 (6.844) | 5.01  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_efficientnet_b0       | 76.848 (23.152) | 93.228 (6.772) | 5.29  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_mixnet_s *tfp         | 75.800 (24.200) | 92.788 (7.212) | 4.13  | bilinear | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_mixnet_s              | 75.648 (24.352) | 92.636 (7.364) | 4.13  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012) | 21.80 | bicubic | 224 | |
+| gluon_resnet18_v1b       | 70.830 (29.170) | 89.756 (10.244) | 11.69 | bicubic | 224 | |
 
 Models with `*tfp` next to them were scored with `--tf-preprocessing` flag. 
 
-The `tf_efficientnet` and `tflite_(se)mnasnet` models require an equivalent for 'SAME' padding as their arch results in asymmetric padding. I've added this in the model creation wrapper, but it does come with a performance penalty. 
+The `tf_efficientnet`, `tf_mixnet` models require an equivalent for 'SAME' padding as their arch results in asymmetric padding. I've added this in the model creation wrapper, but it does come with a performance penalty. 
 
 ## Usage
 

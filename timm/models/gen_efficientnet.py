@@ -1,7 +1,7 @@
 """ Generic EfficientNets
 
 A generic class with building blocks to support a variety of models with efficient architectures:
-* EfficientNet (B0-B5)
+* EfficientNet (B0-B7)
 * MixNet (Small, Medium, and Large)
 * MnasNet B1, A1 (SE), Small
 * MobileNet V1, V2, and V3
@@ -654,7 +654,7 @@ class GenEfficientNet(nn.Module):
       * FBNet A, B, and C
       * ChamNet (arch details are murky)
       * Single-Path NAS Pixel1
-      * EfficientNet B0-B5
+      * EfficientNet B0-B7
       * MixNet S, M, L
     """
 
