@@ -101,7 +101,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 
 ### Ported Weights
 
-| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Resolution | Source |
+| Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Image Size | Source |
 |---|---|---|---|---|---|---|
 | tf_efficientnet_b7 *tfp  | 84.480 (15.520) | 96.870 (3.130) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b7       | 84.420 (15.580) | 96.906 (3.094) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
