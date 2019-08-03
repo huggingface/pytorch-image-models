@@ -85,7 +85,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic | 224 |
 | mnasnet_a1 | 75.448 (24.552) | 92.604 (7.396) | 3.89M | bicubic | 224 |
 | resnet26 | 75.292 (24.708) | 92.57 (7.43) | 16M | bicubic | 224 |
-| fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear  224 |
+| fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear | 224 |
 | resnet34 | 75.110 (24.890) | 92.284 (7.716) | 22M | bilinear | 224 |
 | seresnet34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear | 224 |
 | mnasnet_b1 | 74.658 (25.342) | 92.114 (7.886) | 4.38M | bicubic | 224 |
