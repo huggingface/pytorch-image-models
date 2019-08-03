@@ -112,10 +112,12 @@ default_cfgs = {
     'tf_efficientnet_b7': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b7_aa-076e3472.pth',
         input_size=(3, 600, 600), pool_size=(19, 19), crop_pct=0.949),
-    'mixnet_s': _cfg(url=''),
+    'mixnet_s': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_s-a907afbc.pth'),
     'mixnet_m': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_m-4647fc68.pth'),
-    'mixnet_l': _cfg(url=''),
+    'mixnet_l': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_l-5a9a2ed8.pth'),
     'tf_mixnet_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_s-89d3354b.pth'),
     'tf_mixnet_m': _cfg(
@@ -1636,12 +1638,12 @@ def tf_efficientnet_b7(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
 def mixnet_s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Creates a MixNet Small model.
     """
-    default_cfg = default_cfgs['mixnet_m']
+    default_cfg = default_cfgs['mixnet_s']
     model = _gen_mixnet_s(
         channel_multiplier=1.0, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
-    #if pretrained:
-    #    load_pretrained(model, default_cfg, num_classes, in_chans)
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 
