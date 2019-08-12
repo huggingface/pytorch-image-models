@@ -5,7 +5,7 @@ import os
 import mxnet as mx
 import gluoncv
 import torch
-from models.model_factory import create_model
+from timm import create_model
 
 parser = argparse.ArgumentParser(description='Convert from MXNet')
 parser.add_argument('--model', default='all', type=str, metavar='MODEL',

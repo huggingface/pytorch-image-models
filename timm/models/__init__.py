@@ -10,6 +10,7 @@ from .pnasnet import *
 from .gen_efficientnet import *
 from .inception_v3 import *
 from .gluon_resnet import *
+from .gluon_xception import *
 
 from .registry import *
 from .factory import create_model
