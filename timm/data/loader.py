@@ -20,6 +20,7 @@ class PrefetchLoader:
             loader,
             rand_erase_prob=0.,
             rand_erase_mode='const',
+            rand_erase_count=1,
             mean=IMAGENET_DEFAULT_MEAN,
             std=IMAGENET_DEFAULT_STD,
             fp16=False):
@@ -32,7 +33,7 @@ class PrefetchLoader:
             self.std = self.std.half()
         if rand_erase_prob > 0.:
             self.random_erasing = RandomErasing(
-                probability=rand_erase_prob, mode=rand_erase_mode)
+                probability=rand_erase_prob, mode=rand_erase_mode, max_count=rand_erase_count)
         else:
             self.random_erasing = None
 
@@ -94,6 +95,7 @@ def create_loader(
         use_prefetcher=True,
         rand_erase_prob=0.,
         rand_erase_mode='const',
+        rand_erase_count=1,
         color_jitter=0.4,
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
@@ -160,6 +162,7 @@ def create_loader(
             loader,
             rand_erase_prob=rand_erase_prob if is_training else 0.,
             rand_erase_mode=rand_erase_mode,
+            rand_erase_count=rand_erase_count,
             mean=mean,
             std=std,
             fp16=fp16)
