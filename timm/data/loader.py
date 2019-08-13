@@ -86,25 +86,17 @@ class PrefetchLoader:
             self.loader.collate_fn.mixup_enabled = x
 
 
-def create_loader(
-        dataset,
+def create_transform(
         input_size,
-        batch_size,
         is_training=False,
-        use_prefetcher=True,
-        rand_erase_prob=0.,
-        rand_erase_mode='const',
+        use_prefetcher=False,
         color_jitter=0.4,
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
-        num_workers=1,
-        distributed=False,
         crop_pct=None,
-        collate_fn=None,
-        fp16=False,
-        tf_preprocessing=False,
-):
+        tf_preprocessing=False):
+
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
     else:
@@ -132,7 +124,39 @@ def create_loader(
                 std=std,
                 crop_pct=crop_pct)
 
-    dataset.transform = transform
+    return transform
+
+
+def create_loader(
+        dataset,
+        input_size,
+        batch_size,
+        is_training=False,
+        use_prefetcher=True,
+        rand_erase_prob=0.,
+        rand_erase_mode='const',
+        color_jitter=0.4,
+        interpolation='bilinear',
+        mean=IMAGENET_DEFAULT_MEAN,
+        std=IMAGENET_DEFAULT_STD,
+        num_workers=1,
+        distributed=False,
+        crop_pct=None,
+        collate_fn=None,
+        fp16=False,
+        tf_preprocessing=False,
+):
+    dataset.transform = create_transform(
+        input_size,
+        is_training=is_training,
+        use_prefetcher=use_prefetcher,
+        color_jitter=color_jitter,
+        interpolation=interpolation,
+        mean=mean,
+        std=std,
+        crop_pct=crop_pct,
+        tf_preprocessing=tf_preprocessing,
+    )
 
     sampler = None
     if distributed:
