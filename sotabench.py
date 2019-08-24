@@ -1,6 +1,7 @@
 from torchbench.image_classification import ImageNet
 from timm import create_model, list_models
 from timm.data import resolve_data_config, create_transform
+import os
 
 NUM_GPU = 1
 BATCH_SIZE = 256 * NUM_GPU
@@ -86,13 +87,13 @@ model_map = dict(
     gluon_xception65=_attrib(
         paper_model_name='Modified Aligned Xception', paper_arxiv_id='1802.02611', batch_size=BATCH_SIZE//2),
     ig_resnext101_32x8d=_attrib(
-        paper_model_name='ResNeXt-101 32×8d', paper_arxiv_id='1805.00932'),
+        paper_model_name='ResNeXt-101 32x8d', paper_arxiv_id='1805.00932'),
     ig_resnext101_32x16d=_attrib(
-        paper_model_name='ResNeXt-101 32×16d', paper_arxiv_id='1805.00932'),
+        paper_model_name='ResNeXt-101 32x16d', paper_arxiv_id='1805.00932'),
     ig_resnext101_32x32d=_attrib(
-        paper_model_name='ResNeXt-101 32×32d', paper_arxiv_id='1805.00932', batch_size=BATCH_SIZE//2),
+        paper_model_name='ResNeXt-101 32x32d', paper_arxiv_id='1805.00932', batch_size=BATCH_SIZE//2),
     ig_resnext101_32x48d=_attrib(
-        paper_model_name='ResNeXt-101 32×48d', paper_arxiv_id='1805.00932', batch_size=BATCH_SIZE//4),
+        paper_model_name='ResNeXt-101 32x48d', paper_arxiv_id='1805.00932', batch_size=BATCH_SIZE//4),
     inception_resnet_v2=_attrib(
         paper_model_name='Inception ResNet V2', paper_arxiv_id='1602.07261'),
     #inception_v3=dict(paper_model_name='Inception V3', paper_arxiv_id=),  # same weights as torchvision
@@ -167,6 +168,12 @@ model_map = dict(
         paper_model_name='EfficientNet-B6', paper_arxiv_id='1905.11946', batch_size=BATCH_SIZE//8),
     tf_efficientnet_b7=_attrib(
         paper_model_name='EfficientNet-B7', paper_arxiv_id='1905.11946', batch_size=BATCH_SIZE//8),
+    tf_efficientnet_es=_attrib(
+        paper_model_name='EfficientNet-EdgeTPU-S', paper_arxiv_id='1905.11946'),
+    tf_efficientnet_em=_attrib(
+        paper_model_name='EfficientNet-EdgeTPU-M', paper_arxiv_id='1905.11946'),
+    tf_efficientnet_el=_attrib(
+        paper_model_name='EfficientNet-EdgeTPU-L', paper_arxiv_id='1905.11946', batch_size=BATCH_SIZE//2),
     tf_inception_v3=_attrib(
         paper_model_name='Inception V3', paper_arxiv_id='1512.00567'),
     tf_mixnet_l=_attrib(
@@ -208,7 +215,7 @@ for model_name in model_names:
         input_transform=input_transform,
         batch_size=model_map[model_name]['batch_size'],
         num_gpu=NUM_GPU,
-        #data_root=DATA_ROOT
+        data_root=os.environ.get('IMAGENET_DIR', './imagenet')
     )
 
 
