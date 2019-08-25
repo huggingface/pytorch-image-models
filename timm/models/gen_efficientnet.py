@@ -138,7 +138,8 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_m-4647fc68.pth'),
     'mixnet_l': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_l-5a9a2ed8.pth'),
-    'mixnet_xl': _cfg(),
+    'mixnet_xl': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_xl-ac5fbe8d.pth'),
     'mixnet_xxl': _cfg(),
     'tf_mixnet_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_s-89d3354b.pth'),
@@ -1919,6 +1920,7 @@ def mixnet_l(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 @register_model
 def mixnet_xl(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Creates a MixNet Extra-Large model.
+    Not a paper spec, experimental def by RW w/ depth scaling.
     """
     default_cfg = default_cfgs['mixnet_xl']
     #kwargs['drop_connect_rate'] = 0.2
@@ -1933,8 +1935,10 @@ def mixnet_xl(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 @register_model
 def mixnet_xxl(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Creates a MixNet Double Extra Large model.
+    Not a paper spec, experimental def by RW w/ depth scaling.
     """
     default_cfg = default_cfgs['mixnet_xxl']
+    # kwargs['drop_connect_rate'] = 0.2
     model = _gen_mixnet_m(
         channel_multiplier=2.4, depth_multiplier=1.3, num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg

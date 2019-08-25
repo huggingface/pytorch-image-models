@@ -33,6 +33,7 @@ I've included a few of my favourite models, but this is not an exhaustive collec
     * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
 * Generic EfficientNet (from my standalone [GenMobileNet](https://github.com/rwightman/genmobilenet-pytorch)) - A generic model that implements many of the efficient models that utilize similar DepthwiseSeparable and InvertedResidual blocks
     * EfficientNet (B0-B7) (https://arxiv.org/abs/1905.11946) -- validated, compat with TF weights
+    * EfficientNet-EdgeTPU (S, M, L) (https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html) --validated w/ TF weights
     * MixNet (https://arxiv.org/abs/1907.09595) -- validated, compat with TF weights
     * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
     * MobileNet-V1 (https://arxiv.org/abs/1704.04861)
@@ -71,6 +72,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  | Image Size |
 |---|---|---|---|---|---|
+| mixnet_xl | 80.120 (19.880) | 95.022 (4.978) | 11.90M | bicubic | 224 |
 | efficientnet_b2 | 79.760 (20.240) | 94.714 (5.286) | 9.11M | bicubic | 260 |
 | resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic | 224 |
 | mixnet_l | 78.976 (21.024 | 94.184 (5.816) | 7.33M | bicubic | 224 |
@@ -111,6 +113,8 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | gluon_seresnext101_32x4d | 80.902 (19.098) | 95.294 (4.706) | 48.96  | bicubic | 224 | |
 | gluon_seresnext101_64x4d | 80.890 (19.110) | 95.304 (4.696) | 88.23  | bicubic | 224 | |
 | gluon_resnext101_64x4d   | 80.602 (19.398) | 94.994 (5.006) | 83.46  | bicubic | 224 | |
+| tf_efficientnet_el       | 80.534 (19.466) | 95.190 (4.810) | 10.59 | bicubic | 300 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu) |
+| tf_efficientnet_el *tfp  | 80.476 (19.524) | 95.200 (4.800) | 10.59 | bicubic | 300 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu) |
 | gluon_resnet152_v1d      | 80.470 (19.530) | 95.206 (4.794) | 60.21  | bicubic | 224 | |
 | gluon_resnet101_v1d      | 80.424 (19.576) | 95.020 (4.980) | 44.57  | bicubic | 224 | |
 | gluon_resnext101_32x4d   | 80.334 (19.666) | 94.926 (5.074) | 44.18  | bicubic | 224 | |
@@ -126,15 +130,19 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | gluon_resnet101_v1b      | 79.304 (20.696) | 94.524 (5.476) | 44.55  | bicubic | 224 | |
 | tf_efficientnet_b1 *tfp  | 79.172 (20.828) | 94.450 (5.550) | 7.79  | bicubic | 240 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | gluon_resnet50_v1d       | 79.074 (20.926) | 94.476 (5.524) | 25.58  | bicubic | 224 | |
+| tf_efficientnet_em *tfp  | 78.958 (21.042) | 94.458 (5.542) | 6.90 | bicubic | 240 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu) |
 | tf_mixnet_l *tfp         | 78.846 (21.154) | 94.212 (5.788) | 7.33  | bilinear | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
 | tf_efficientnet_b1       | 78.826 (21.174) | 94.198 (5.802) | 7.79  | bicubic | 240 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | gluon_inception_v3       | 78.804 (21.196) | 94.380 (5.620) | 27.16M | bicubic | 299 | [MxNet Gluon](https://gluon-cv.mxnet.io/model_zoo/classification.html) |
 | tf_mixnet_l              | 78.770 (21.230) | 94.004 (5.996) | 7.33  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
+| tf_efficientnet_em       | 78.742 (21.258) | 94.332 (5.668) | 6.90 | bicubic | 240 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu) |
 | gluon_resnet50_v1s       | 78.712 (21.288) | 94.242 (5.758) | 25.68  | bicubic | 224 | |
 | gluon_resnet50_v1c       | 78.010 (21.990) | 93.988 (6.012) | 25.58  | bicubic | 224 | |
 | tf_inception_v3          | 77.856 (22.144) | 93.644 (6.356) | 27.16M | bicubic | 299 | [Tensorflow Slim](https://github.com/tensorflow/models/tree/master/research/slim) |
+| tf_efficientnet_es *tfp  | 77.616 (22.384) | 93.750 (6.250) | 5.44 | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu) |
 | gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282) | 25.56  | bicubic | 224 | |
 | adv_inception_v3         | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | 299 | [Tensorflow Adv models](https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models) |
+| tf_efficientnet_es       | 77.264 (22.736) | 93.600 (6.400) | 5.44 | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu) |
 | tf_efficientnet_b0 *tfp  | 77.258 (22.742) | 93.478 (6.522) | 5.29  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_mixnet_m *tfp         | 77.072 (22.928) | 93.368 (6.632) | 5.01  | bilinear | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
 | tf_mixnet_m              | 76.950 (23.050) | 93.156 (6.844) | 5.01  | bicubic | 224 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet) |
