@@ -91,6 +91,8 @@ parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
 parser.add_argument('--remode', type=str, default='const',
                     help='Random erase mode (default: "const")')
+parser.add_argument('--recount', type=int, default=1,
+                    help='Random erase count (default: 1)')
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
@@ -273,6 +275,7 @@ def main():
         use_prefetcher=args.prefetcher,
         rand_erase_prob=args.reprob,
         rand_erase_mode=args.remode,
+        rand_erase_count=args.recount,
         color_jitter=args.color_jitter,
         interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
         mean=data_config['mean'],

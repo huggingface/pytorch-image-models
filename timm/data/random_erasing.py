@@ -33,16 +33,20 @@ class RandomErasing:
             'const' - erase block is constant color of 0 for all channels
             'rand'  - erase block is same per-cannel random (normal) color
             'pixel' - erase block is per-pixel random (normal) color
+        max_count: maximum number of erasing blocks per image, area per box is scaled by count.
+            per-image count is randomly chosen between 1 and this value.
     """
 
     def __init__(
             self,
             probability=0.5, sl=0.02, sh=1/3, min_aspect=0.3,
-            mode='const', device='cuda'):
+            mode='const', max_count=1, device='cuda'):
         self.probability = probability
         self.sl = sl
         self.sh = sh
         self.min_aspect = min_aspect
+        self.min_count = 1
+        self.max_count = max_count
         mode = mode.lower()
         self.rand_color = False
         self.per_pixel = False
@@ -58,18 +62,22 @@ class RandomErasing:
         if random.random() > self.probability:
             return
         area = img_h * img_w
-        for attempt in range(100):
-            target_area = random.uniform(self.sl, self.sh) * area
-            aspect_ratio = random.uniform(self.min_aspect, 1 / self.min_aspect)
-            h = int(round(math.sqrt(target_area * aspect_ratio)))
-            w = int(round(math.sqrt(target_area / aspect_ratio)))
-            if w < img_w and h < img_h:
-                top = random.randint(0, img_h - h)
-                left = random.randint(0, img_w - w)
-                img[:, top:top + h, left:left + w] = _get_pixels(
-                    self.per_pixel, self.rand_color, (chan, h, w),
-                    dtype=dtype, device=self.device)
-                break
+        count = self.min_count if self.min_count == self.max_count else \
+            random.randint(self.min_count, self.max_count)
+        for _ in range(count):
+            for attempt in range(10):
+                target_area = random.uniform(self.sl, self.sh) * area / count
+                log_ratio = (math.log(self.min_aspect), math.log(1 / self.min_aspect))
+                aspect_ratio = math.exp(random.uniform(*log_ratio))
+                h = int(round(math.sqrt(target_area * aspect_ratio)))
+                w = int(round(math.sqrt(target_area / aspect_ratio)))
+                if w < img_w and h < img_h:
+                    top = random.randint(0, img_h - h)
+                    left = random.randint(0, img_w - w)
+                    img[:, top:top + h, left:left + w] = _get_pixels(
+                        self.per_pixel, self.rand_color, (chan, h, w),
+                        dtype=dtype, device=self.device)
+                    break
 
     def __call__(self, input):
         if len(input.size()) == 3:
