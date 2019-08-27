@@ -60,7 +60,7 @@ def load_pretrained(model, default_cfg, num_classes=1000, in_chans=3, filter_fn=
         logging.warning("Pretrained model URL is invalid, using random initialization.")
         return
 
-    state_dict = model_zoo.load_url(default_cfg['url'])
+    state_dict = model_zoo.load_url(default_cfg['url'], progress=False)
 
     if in_chans == 1:
         conv1_name = default_cfg['first_conv']
