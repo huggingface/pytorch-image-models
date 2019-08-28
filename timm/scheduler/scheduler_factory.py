@@ -5,6 +5,7 @@ from .step_lr import StepLRScheduler
 
 def create_scheduler(args, optimizer):
     num_epochs = args.epochs
+    lr_scheduler = None
     #FIXME expose cycle parms of the scheduler config to arguments
     if args.sched == 'cosine':
         lr_scheduler = CosineLRScheduler(
@@ -31,7 +32,7 @@ def create_scheduler(args, optimizer):
             t_in_epochs=True,
         )
         num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
-    else:
+    elif args.sched == 'step':
         lr_scheduler = StepLRScheduler(
             optimizer,
             decay_t=args.decay_epochs,

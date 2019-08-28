@@ -91,6 +91,8 @@ parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
 parser.add_argument('--remode', type=str, default='const',
                     help='Random erase mode (default: "const")')
+parser.add_argument('--recount', type=int, default=1,
+                    help='Random erase count (default: 1)')
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
@@ -249,7 +251,7 @@ def main():
         start_epoch = args.start_epoch
     elif resume_epoch is not None:
         start_epoch = resume_epoch
-    if start_epoch > 0:
+    if lr_scheduler is not None and start_epoch > 0:
         lr_scheduler.step(start_epoch)
 
     if args.local_rank == 0:
@@ -273,6 +275,7 @@ def main():
         use_prefetcher=args.prefetcher,
         rand_erase_prob=args.reprob,
         rand_erase_mode=args.remode,
+        rand_erase_count=args.recount,
         color_jitter=args.color_jitter,
         interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
         mean=data_config['mean'],
@@ -282,10 +285,12 @@ def main():
         collate_fn=collate_fn,
     )
 
-    eval_dir = os.path.join(args.data, 'validation')
+    eval_dir = os.path.join(args.data, 'val')
     if not os.path.isdir(eval_dir):
-        logging.error('Validation folder does not exist at: {}'.format(eval_dir))
-        exit(1)
+        eval_dir = os.path.join(args.data, 'validation')
+        if not os.path.isdir(eval_dir):
+            logging.error('Validation folder does not exist at: {}'.format(eval_dir))
+            exit(1)
     dataset_eval = Dataset(eval_dir)
 
     loader_eval = create_loader(
@@ -387,8 +392,7 @@ def train_epoch(
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
         if not args.prefetcher:
-            input = input.cuda()
-            target = target.cuda()
+            input, target = input.cuda(), target.cuda()
             if args.mixup > 0.:
                 lam = 1.
                 if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
@@ -458,6 +462,10 @@ def train_epoch(
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
 
         end = time.time()
+        # end for
+
+    if hasattr(optimizer, 'sync_lookahead'):
+        optimizer.sync_lookahead()
 
     return OrderedDict([('loss', losses_m.avg)])
 

@@ -107,24 +107,31 @@ class RandomResizedCropAndInterpolation(object):
 
         for attempt in range(10):
             target_area = random.uniform(*scale) * area
-            aspect_ratio = random.uniform(*ratio)
+            log_ratio = (math.log(ratio[0]), math.log(ratio[1]))
+            aspect_ratio = math.exp(random.uniform(*log_ratio))
 
             w = int(round(math.sqrt(target_area * aspect_ratio)))
             h = int(round(math.sqrt(target_area / aspect_ratio)))
-
-            if random.random() < 0.5 and min(ratio) <= (h / w) <= max(ratio):
-                w, h = h, w
 
             if w <= img.size[0] and h <= img.size[1]:
                 i = random.randint(0, img.size[1] - h)
                 j = random.randint(0, img.size[0] - w)
                 return i, j, h, w
 
-        # Fallback
-        w = min(img.size[0], img.size[1])
-        i = (img.size[1] - w) // 2
+        # Fallback to central crop
+        in_ratio = img.size[0] / img.size[1]
+        if in_ratio < min(ratio):
+            w = img.size[0]
+            h = int(round(w / min(ratio)))
+        elif in_ratio > max(ratio):
+            h = img.size[1]
+            w = int(round(h * max(ratio)))
+        else:  # whole image
+            w = img.size[0]
+            h = img.size[1]
+        i = (img.size[1] - h) // 2
         j = (img.size[0] - w) // 2
-        return i, j, w, w
+        return i, j, h, w
 
     def __call__(self, img):
         """
