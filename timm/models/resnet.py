@@ -44,6 +44,9 @@ default_cfgs = {
     'resnet50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/rw_resnet50-86acaeed.pth',
         interpolation='bicubic'),
+    'resnet50d': _cfg(
+        url='',
+        interpolation='bicubic'),
     'resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
     'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
     'tv_resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
@@ -259,7 +262,7 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, in_chans=3, use_se=False,
                  cardinality=1, base_width=64, stem_width=64, deep_stem=False,
                  block_reduce_first=1, down_kernel_size=1, avg_down=False, dilated=False,
-                 norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg'):
+                 norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg', zero_init_last_bn=True):
         self.num_classes = num_classes
         self.inplanes = stem_width * 2 if deep_stem else 64
         self.cardinality = cardinality
@@ -296,11 +299,16 @@ class ResNet(nn.Module):
         self.num_features = 512 * block.expansion
         self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
-        for m in self.modules():
+        last_bn_name = 'bn3' if 'Bottleneck' in block.__name__ else 'bn2'
+        for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1.)
+                if zero_init_last_bn and 'layer' in n and last_bn_name in n:
+                    # Initialize weight/gamma of last BN in each residual block to zero
+                    nn.init.constant_(m.weight, 0.)
+                else:
+                    nn.init.constant_(m.weight, 1.)
                 nn.init.constant_(m.bias, 0.)
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1, reduce_first=1,
@@ -428,6 +436,20 @@ def resnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """
     default_cfg = default_cfgs['resnet50']
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def resnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-50-D model.
+    """
+    default_cfg = default_cfgs['resnet50d']
+    model = ResNet(
+        Bottleneck, [3, 4, 6, 3], stem_width=32, deep_stem=True, avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

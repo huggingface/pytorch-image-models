@@ -251,7 +251,7 @@ def main():
         start_epoch = args.start_epoch
     elif resume_epoch is not None:
         start_epoch = resume_epoch
-    if start_epoch > 0:
+    if lr_scheduler is not None and start_epoch > 0:
         lr_scheduler.step(start_epoch)
 
     if args.local_rank == 0:
@@ -285,10 +285,12 @@ def main():
         collate_fn=collate_fn,
     )
 
-    eval_dir = os.path.join(args.data, 'validation')
+    eval_dir = os.path.join(args.data, 'val')
     if not os.path.isdir(eval_dir):
-        logging.error('Validation folder does not exist at: {}'.format(eval_dir))
-        exit(1)
+        eval_dir = os.path.join(args.data, 'validation')
+        if not os.path.isdir(eval_dir):
+            logging.error('Validation folder does not exist at: {}'.format(eval_dir))
+            exit(1)
     dataset_eval = Dataset(eval_dir)
 
     loader_eval = create_loader(
@@ -390,8 +392,7 @@ def train_epoch(
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
         if not args.prefetcher:
-            input = input.cuda()
-            target = target.cuda()
+            input, target = input.cuda(), target.cuda()
             if args.mixup > 0.:
                 lam = 1.
                 if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
@@ -461,6 +462,10 @@ def train_epoch(
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
 
         end = time.time()
+        # end for
+
+    if hasattr(optimizer, 'sync_lookahead'):
+        optimizer.sync_lookahead()
 
     return OrderedDict([('loss', losses_m.avg)])
 
