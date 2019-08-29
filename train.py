@@ -38,6 +38,8 @@ parser.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH'
                     help='Initialize model from this checkpoint (default: none)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='Resume full model and optimizer state from checkpoint (default: none)')
+parser.add_argument('--no-resume-opt', action='store_true', default=False,
+                    help='prevent resume of optimizer state when resuming model')
 parser.add_argument('--num-classes', type=int, default=1000, metavar='N',
                     help='number of label classes (default: 1000)')
 parser.add_argument('--gp', default='avg', type=str, metavar='POOL',
@@ -189,12 +191,6 @@ def main():
 
     data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
 
-    # optionally resume from a checkpoint
-    optimizer_state = None
-    resume_epoch = None
-    if args.resume:
-        optimizer_state, resume_epoch = resume_checkpoint(model, args.resume)
-
     if args.num_gpu > 1:
         if args.amp:
             logging.warning(
@@ -205,8 +201,6 @@ def main():
         model.cuda()
 
     optimizer = create_optimizer(args, model)
-    if optimizer_state is not None:
-        optimizer.load_state_dict(optimizer_state)
 
     use_amp = False
     if has_apex and args.amp:
@@ -215,6 +209,22 @@ def main():
     if args.local_rank == 0:
         logging.info('NVIDIA APEX {}. AMP {}.'.format(
             'installed' if has_apex else 'not installed', 'on' if use_amp else 'off'))
+
+    # optionally resume from a checkpoint
+    resume_state = {}
+    resume_epoch = None
+    if args.resume:
+        resume_state, resume_epoch = resume_checkpoint(model, args.resume)
+    if resume_state and not args.no_resume_opt:
+        if 'optimizer' in resume_state:
+            if args.local_rank == 0:
+                logging.info('Restoring Optimizer state from checkpoint')
+            optimizer.load_state_dict(resume_state['optimizer'])
+        if use_amp and 'amp' in resume_state and 'load_state_dict' in amp.__dict__:
+            if args.local_rank == 0:
+                logging.info('Restoring NVIDIA AMP state from checkpoint')
+            amp.load_state_dict(resume_state['amp'])
+    resume_state = None
 
     model_ema = None
     if args.model_ema:
@@ -363,7 +373,7 @@ def main():
                 save_metric = eval_metrics[eval_metric]
                 best_metric, best_epoch = saver.save_checkpoint(
                     model, optimizer, args,
-                    epoch=epoch, model_ema=model_ema, metric=save_metric)
+                    epoch=epoch, model_ema=model_ema, metric=save_metric, use_amp=use_amp)
 
     except KeyboardInterrupt:
         pass
@@ -456,7 +466,7 @@ def train_epoch(
         if saver is not None and args.recovery_interval and (
                 last_batch or (batch_idx + 1) % args.recovery_interval == 0):
             saver.save_recovery(
-                model, optimizer, args, epoch, model_ema=model_ema, batch_idx=batch_idx)
+                model, optimizer, args, epoch, model_ema=model_ema, use_amp=use_amp, batch_idx=batch_idx)
 
         if lr_scheduler is not None:
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
