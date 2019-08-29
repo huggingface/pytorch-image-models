@@ -8,9 +8,11 @@ NUM_GPU = 1
 BATCH_SIZE = 256 * NUM_GPU
 
 
-def _entry(model_name, paper_model_name, paper_arxiv_id, batch_size=BATCH_SIZE, ttp=False, args=dict()):
+def _entry(model_name, paper_model_name, paper_arxiv_id, batch_size=BATCH_SIZE,
+           ttp=False, args=dict(), model_desc=None):
     return dict(
         model=model_name,
+        model_description=model_desc,
         paper_model_name=paper_model_name,
         paper_arxiv_id=paper_arxiv_id,
         batch_size=batch_size,
@@ -46,7 +48,7 @@ model_list = [
     #_entry('ens_adv_inception_resnet_v2', 'Ensemble Adversarial Inception V3'),
     _entry('fbnetc_100', 'FBNet-C', '1812.03443'),
     _entry('gluon_inception_v3', 'Inception V3', '1512.00567'),
-    _entry('gluon_resnet18_v1b', 'ResNet-18', '1812.01187'),
+    _entry('gluon_resnet18_v1b', 'ResNet-18', '1812.01187', model_desc='Ported from GluonCV Model Zoo'),
     _entry('gluon_resnet34_v1b', 'ResNet-34', '1812.01187'),
     _entry('gluon_resnet50_v1b', 'ResNet-50', '1812.01187'),
     _entry('gluon_resnet50_v1c', 'ResNet-50-C', '1812.01187'),
@@ -79,7 +81,9 @@ model_list = [
     _entry('mixnet_m', 'MixNet-M', '1907.09595'),
     _entry('mixnet_s', 'MixNet-S', '1907.09595'),
     _entry('mnasnet_100', 'MnasNet-B1', '1807.11626'),
-    _entry('mobilenetv3_100', 'MobileNet V3(1.0)', '1905.02244'),
+    _entry('mobilenetv3_100', 'MobileNet V3(1.0)', '1905.02244',
+           model_desc='Trained from scratch in PyTorch with RMSProp, exponential LR decay, and hyper-params matching'
+                      ' paper as closely as possible.'),
     _entry('nasnetalarge', 'NASNet-A Large', '1707.07012', batch_size=BATCH_SIZE//4),
     _entry('pnasnet5large', 'PNASNet-5', '1712.00559', batch_size=BATCH_SIZE//4),
     _entry('resnet18', 'ResNet-18', '1812.01187'),
@@ -90,7 +94,13 @@ model_list = [
     #_entry('resnet101', , ),  # same weights as torchvision
     #_entry('resnet152', , ),  # same weights as torchvision
     _entry('resnext50_32x4d', 'ResNeXt-50 32x4d', '1812.01187'),
-    _entry('resnext50d_32x4d', 'ResNeXt-50-D 32x4d', '1812.01187'),
+    _entry('resnext50d_32x4d', 'ResNeXt-50-D 32x4d', '1812.01187',
+           model_desc="""'D' variant (3x3 deep stem w/ avg-pool downscale) 
+             Trained with:
+               * SGD w/ cosine LR decay
+               * Random-erasing (gaussian per-pixel noise)
+               * Label-smoothing
+           """),
     #_entry('resnext101_32x8d', ),  # same weights as torchvision
     _entry('semnasnet_100', 'MnasNet-A1', '1807.11626'),
     _entry('senet154', 'SENet-154', '1709.01507'),
@@ -103,17 +113,28 @@ model_list = [
     _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
     _entry('seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
     _entry('spnasnet_100', 'Single-Path NAS', '1904.02877'),
-    _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946'),
-    _entry('tf_efficientnet_b1', 'EfficientNet-B1 (AutoAugment)', '1905.11946'),
-    _entry('tf_efficientnet_b2', 'EfficientNet-B2 (AutoAugment)', '1905.11946'),
-    _entry('tf_efficientnet_b3', 'EfficientNet-B3 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//2),
-    _entry('tf_efficientnet_b4', 'EfficientNet-B4 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//2),
-    _entry('tf_efficientnet_b5', 'EfficientNet-B5 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//4),
-    _entry('tf_efficientnet_b6', 'EfficientNet-B6 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//8),
-    _entry('tf_efficientnet_b7', 'EfficientNet-B7 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//8),
-    _entry('tf_efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946'),
-    _entry('tf_efficientnet_em', 'EfficientNet-EdgeTPU-M', '1905.11946'),
-    _entry('tf_efficientnet_el', 'EfficientNet-EdgeTPU-L', '1905.11946', batch_size=BATCH_SIZE//2),
+    _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b1', 'EfficientNet-B1 (AutoAugment)', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b2', 'EfficientNet-B2 (AutoAugment)', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b3', 'EfficientNet-B3 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//2,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b4', 'EfficientNet-B4 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//2,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b5', 'EfficientNet-B5 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//4,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b6', 'EfficientNet-B6 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//8,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b7', 'EfficientNet-B7 (AutoAugment)', '1905.11946', batch_size=BATCH_SIZE//8,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_em', 'EfficientNet-EdgeTPU-M', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_el', 'EfficientNet-EdgeTPU-L', '1905.11946', batch_size=BATCH_SIZE//2,
+           model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_inception_v3', 'Inception V3', '1512.00567'),
     _entry('tf_mixnet_l', 'MixNet-L', '1907.09595'),
     _entry('tf_mixnet_m', 'MixNet-M', '1907.09595'),
@@ -144,6 +165,7 @@ for m in model_list:
     # Run the benchmark
     ImageNet.benchmark(
         model=model,
+        model_description=m.get('model_description', None),
         paper_model_name=m['paper_model_name'],
         paper_arxiv_id=m['paper_arxiv_id'],
         input_transform=input_transform,
