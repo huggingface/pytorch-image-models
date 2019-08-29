@@ -29,7 +29,7 @@ def load_checkpoint(model, checkpoint_path, use_ema=False):
 
 
 def resume_checkpoint(model, checkpoint_path):
-    optimizer_state = None
+    other_state = {}
     resume_epoch = None
     if os.path.isfile(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
@@ -40,7 +40,9 @@ def resume_checkpoint(model, checkpoint_path):
                 new_state_dict[name] = v
             model.load_state_dict(new_state_dict)
             if 'optimizer' in checkpoint:
-                optimizer_state = checkpoint['optimizer']
+                other_state['optimizer'] = checkpoint['optimizer']
+            if 'amp' in checkpoint:
+                other_state['amp'] = checkpoint['amp']
             if 'epoch' in checkpoint:
                 resume_epoch = checkpoint['epoch']
                 if 'version' in checkpoint and checkpoint['version'] > 1:
@@ -49,7 +51,7 @@ def resume_checkpoint(model, checkpoint_path):
         else:
             model.load_state_dict(checkpoint)
             logging.info("Loaded checkpoint '{}'".format(checkpoint_path))
-        return optimizer_state, resume_epoch
+        return other_state, resume_epoch
     else:
         logging.error("No checkpoint found at '{}'".format(checkpoint_path))
         raise FileNotFoundError()

@@ -11,6 +11,12 @@ import operator
 import logging
 import numpy as np
 from collections import OrderedDict
+try:
+    from apex import amp
+    has_apex = True
+except ImportError:
+    amp = None
+    has_apex = False
 
 from torch import distributed as dist
 
@@ -50,7 +56,7 @@ class CheckpointSaver:
         self.max_history = max_history
         assert self.max_history >= 1
 
-    def save_checkpoint(self, model, optimizer, args, epoch, model_ema=None, metric=None):
+    def save_checkpoint(self, model, optimizer, args, epoch, model_ema=None, metric=None, use_amp=False):
         assert epoch >= 0
         worst_file = self.checkpoint_files[-1] if self.checkpoint_files else None
         if (len(self.checkpoint_files) < self.max_history
@@ -59,7 +65,7 @@ class CheckpointSaver:
                 self._cleanup_checkpoints(1)
             filename = '-'.join([self.save_prefix, str(epoch)]) + self.extension
             save_path = os.path.join(self.checkpoint_dir, filename)
-            self._save(save_path, model, optimizer, args, epoch, model_ema, metric)
+            self._save(save_path, model, optimizer, args, epoch, model_ema, metric, use_amp)
             self.checkpoint_files.append((save_path, metric))
             self.checkpoint_files = sorted(
                 self.checkpoint_files, key=lambda x: x[1],
@@ -77,7 +83,7 @@ class CheckpointSaver:
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
-    def _save(self, save_path, model, optimizer, args, epoch, model_ema=None, metric=None):
+    def _save(self, save_path, model, optimizer, args, epoch, model_ema=None, metric=None, use_amp=False):
         save_state = {
             'epoch': epoch,
             'arch': args.model,
@@ -86,6 +92,8 @@ class CheckpointSaver:
             'args': args,
             'version': 2,  # version < 2 increments epoch before save
         }
+        if use_amp and 'state_dict' in amp.__dict__:
+            save_state['amp'] = amp.state_dict()
         if model_ema is not None:
             save_state['state_dict_ema'] = get_state_dict(model_ema)
         if metric is not None:
@@ -106,11 +114,11 @@ class CheckpointSaver:
                 logging.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
-    def save_recovery(self, model, optimizer, args, epoch, model_ema=None, batch_idx=0):
+    def save_recovery(self, model, optimizer, args, epoch, model_ema=None, use_amp=False, batch_idx=0):
         assert epoch >= 0
         filename = '-'.join([self.recovery_prefix, str(epoch), str(batch_idx)]) + self.extension
         save_path = os.path.join(self.recovery_dir, filename)
-        self._save(save_path, model, optimizer, args, epoch, model_ema)
+        self._save(save_path, model, optimizer, args, epoch, model_ema, use_amp=use_amp)
         if os.path.exists(self.last_recovery_file):
             try:
                 logging.debug("Cleaning recovery: {}".format(self.last_recovery_file))
