@@ -9,6 +9,7 @@ import numpy as np
 
 from .constants import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .random_erasing import RandomErasing
+from .auto_augment import AutoAugment, auto_augment_policy_v0
 
 
 class ToNumpy:
@@ -158,6 +159,48 @@ class RandomResizedCropAndInterpolation(object):
         format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
         format_string += ', interpolation={0})'.format(interpolate_str)
         return format_string
+
+
+def transforms_imagenet_aa(
+        img_size=224,
+        scale=(0.08, 1.0),
+        interpolation='random',
+        random_erasing=0.4,
+        random_erasing_mode='const',
+        use_prefetcher=False,
+        mean=IMAGENET_DEFAULT_MEAN,
+        std=IMAGENET_DEFAULT_STD
+):
+    aa_params = dict(
+        cutout_max_pad_fraction=0.75,
+        cutout_const=100,
+        translate_const=img_size[-1] // 2 - 1,
+        img_mean=tuple([min(255, round(255*x)) for x in mean]),
+    )
+    if interpolation and interpolation != 'random':
+        aa_params['interpolation'] = _pil_interp(interpolation)
+    aa_policy = auto_augment_policy_v0(aa_params)
+
+    tfl = [
+        RandomResizedCropAndInterpolation(
+            img_size, scale=scale, interpolation=interpolation),
+        transforms.RandomHorizontalFlip(),
+        AutoAugment(aa_policy)
+    ]
+
+    if use_prefetcher:
+        # prefetcher and collate will handle tensor conversion and norm
+        tfl += [ToNumpy()]
+    else:
+        tfl += [
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=torch.tensor(mean),
+                std=torch.tensor(std))
+        ]
+        if random_erasing > 0.:
+            tfl.append(RandomErasing(random_erasing, mode=random_erasing_mode, device='cpu'))
+    return transforms.Compose(tfl)
 
 
 def transforms_imagenet_train(

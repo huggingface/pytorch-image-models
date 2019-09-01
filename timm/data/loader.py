@@ -109,13 +109,21 @@ def create_transform(
             is_training=is_training, size=img_size, interpolation=interpolation)
     else:
         if is_training:
-            transform = transforms_imagenet_train(
-                img_size,
-                color_jitter=color_jitter,
-                interpolation=interpolation,
-                use_prefetcher=use_prefetcher,
-                mean=mean,
-                std=std)
+            if True:
+                transform = transforms_imagenet_aa(
+                    img_size,
+                    interpolation=interpolation,
+                    use_prefetcher=use_prefetcher,
+                    mean=mean,
+                    std=std)
+            else:
+                transform = transforms_imagenet_train(
+                    img_size,
+                    color_jitter=color_jitter,
+                    interpolation=interpolation,
+                    use_prefetcher=use_prefetcher,
+                    mean=mean,
+                    std=std)
         else:
             transform = transforms_imagenet_eval(
                 img_size,
