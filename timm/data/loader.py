@@ -92,6 +92,7 @@ def create_transform(
         is_training=False,
         use_prefetcher=False,
         color_jitter=0.4,
+        auto_augment=None,
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
@@ -109,21 +110,14 @@ def create_transform(
             is_training=is_training, size=img_size, interpolation=interpolation)
     else:
         if is_training:
-            if True:
-                transform = transforms_imagenet_aa(
-                    img_size,
-                    interpolation=interpolation,
-                    use_prefetcher=use_prefetcher,
-                    mean=mean,
-                    std=std)
-            else:
-                transform = transforms_imagenet_train(
-                    img_size,
-                    color_jitter=color_jitter,
-                    interpolation=interpolation,
-                    use_prefetcher=use_prefetcher,
-                    mean=mean,
-                    std=std)
+            transform = transforms_imagenet_train(
+                img_size,
+                color_jitter=color_jitter,
+                auto_augment=auto_augment,
+                interpolation=interpolation,
+                use_prefetcher=use_prefetcher,
+                mean=mean,
+                std=std)
         else:
             transform = transforms_imagenet_eval(
                 img_size,
@@ -146,6 +140,7 @@ def create_loader(
         rand_erase_mode='const',
         rand_erase_count=1,
         color_jitter=0.4,
+        auto_augment=None,
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
@@ -161,6 +156,7 @@ def create_loader(
         is_training=is_training,
         use_prefetcher=use_prefetcher,
         color_jitter=color_jitter,
+        auto_augment=auto_augment,
         interpolation=interpolation,
         mean=mean,
         std=std,
