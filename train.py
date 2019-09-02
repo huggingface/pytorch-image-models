@@ -89,6 +89,8 @@ parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RA
 # Augmentation parameters
 parser.add_argument('--color-jitter', type=float, default=0.4, metavar='PCT',
                     help='Color jitter factor (default: 0.4)')
+parser.add_argument('--aa', type=str, default=None, metavar='NAME',
+                    help='Use AutoAugment policy. "v0" or "original". (default: None)'),
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
 parser.add_argument('--remode', type=str, default='const',
@@ -287,6 +289,7 @@ def main():
         rand_erase_mode=args.remode,
         rand_erase_count=args.recount,
         color_jitter=args.color_jitter,
+        auto_augment=args.aa,
         interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
         mean=data_config['mean'],
         std=data_config['std'],

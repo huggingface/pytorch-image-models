@@ -9,6 +9,7 @@ import numpy as np
 
 from .constants import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .random_erasing import RandomErasing
+from .auto_augment import AutoAugment, auto_augment_policy
 
 
 class ToNumpy:
@@ -56,10 +57,10 @@ def _pil_interp(method):
         return Image.BILINEAR
 
 
-RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+_RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
 
 
-class RandomResizedCropAndInterpolation(object):
+class RandomResizedCropAndInterpolation:
     """Crop the given PIL Image to random size and aspect ratio with random interpolation.
 
     A crop of random size (default: of 0.08 to 1.0) of the original size and a random
@@ -84,7 +85,7 @@ class RandomResizedCropAndInterpolation(object):
             warnings.warn("range should be of kind (min, max)")
 
         if interpolation == 'random':
-            self.interpolation = RANDOM_INTERPOLATION
+            self.interpolation = _RANDOM_INTERPOLATION
         else:
             self.interpolation = _pil_interp(interpolation)
         self.scale = scale
@@ -164,6 +165,7 @@ def transforms_imagenet_train(
         img_size=224,
         scale=(0.08, 1.0),
         color_jitter=0.4,
+        auto_augment=None,
         interpolation='random',
         random_erasing=0.4,
         random_erasing_mode='const',
@@ -171,20 +173,34 @@ def transforms_imagenet_train(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD
 ):
-    if isinstance(color_jitter, (list, tuple)):
-        # color jitter should be a 3-tuple/list if spec brightness/contrast/saturation
-        # or 4 if also augmenting hue
-        assert len(color_jitter) in (3, 4)
-    else:
-        # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
-        color_jitter = (float(color_jitter),) * 3
-
     tfl = [
         RandomResizedCropAndInterpolation(
             img_size, scale=scale, interpolation=interpolation),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(*color_jitter),
+        transforms.RandomHorizontalFlip()
     ]
+    if auto_augment:
+        if isinstance(img_size, tuple):
+            img_size_min = min(img_size)
+        else:
+            img_size_min = img_size
+        aa_params = dict(
+            translate_const=int(img_size_min * 0.45),
+            img_mean=tuple([min(255, round(255 * x)) for x in mean]),
+        )
+        if interpolation and interpolation != 'random':
+            aa_params['interpolation'] = _pil_interp(interpolation)
+        aa_policy = auto_augment_policy(auto_augment, aa_params)
+        tfl += [AutoAugment(aa_policy)]
+    else:
+        # color jitter is enabled when not using AA
+        if isinstance(color_jitter, (list, tuple)):
+            # color jitter should be a 3-tuple/list if spec brightness/contrast/saturation
+            # or 4 if also augmenting hue
+            assert len(color_jitter) in (3, 4)
+        else:
+            # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
+            color_jitter = (float(color_jitter),) * 3
+        tfl += [transforms.ColorJitter(*color_jitter)]
 
     if use_prefetcher:
         # prefetcher and collate will handle tensor conversion and norm
