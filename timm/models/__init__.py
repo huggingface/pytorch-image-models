@@ -11,6 +11,8 @@ from .gen_efficientnet import *
 from .inception_v3 import *
 from .gluon_resnet import *
 from .gluon_xception import *
+from .res2net import *
+from .dla import *
 
 from .registry import *
 from .factory import create_model

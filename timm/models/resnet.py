@@ -262,7 +262,8 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, in_chans=3, use_se=False,
                  cardinality=1, base_width=64, stem_width=64, deep_stem=False,
                  block_reduce_first=1, down_kernel_size=1, avg_down=False, dilated=False,
-                 norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg', zero_init_last_bn=True):
+                 norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg',
+                 zero_init_last_bn=True, block_args=dict()):
         self.num_classes = num_classes
         self.inplanes = stem_width * 2 if deep_stem else 64
         self.cardinality = cardinality
@@ -290,7 +291,7 @@ class ResNet(nn.Module):
         dilation_3 = 2 if self.dilated else 1
         dilation_4 = 4 if self.dilated else 1
         largs = dict(use_se=use_se, reduce_first=block_reduce_first, norm_layer=norm_layer,
-                     avg_down=avg_down, down_kernel_size=down_kernel_size)
+                     avg_down=avg_down, down_kernel_size=down_kernel_size, **block_args)
         self.layer1 = self._make_layer(block, 64, layers[0], stride=1, **largs)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, **largs)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=stride_3_4, dilation=dilation_3, **largs)
@@ -312,7 +313,7 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.bias, 0.)
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1, reduce_first=1,
-                    use_se=False, avg_down=False, down_kernel_size=1, norm_layer=nn.BatchNorm2d):
+                    use_se=False, avg_down=False, down_kernel_size=1, norm_layer=nn.BatchNorm2d, **kwargs):
         downsample = None
         down_kernel_size = 1 if stride == 1 and dilation == 1 else down_kernel_size
         if stride != 1 or self.inplanes != planes * block.expansion:
@@ -330,16 +331,15 @@ class ResNet(nn.Module):
             downsample = nn.Sequential(*downsample_layers)
 
         first_dilation = 1 if dilation in (1, 2) else 2
-        layers = [block(
-            self.inplanes, planes, stride, downsample,
+        bargs = dict(
             cardinality=self.cardinality, base_width=self.base_width, reduce_first=reduce_first,
-            use_se=use_se, dilation=first_dilation, previous_dilation=dilation, norm_layer=norm_layer)]
+            use_se=use_se, norm_layer=norm_layer, **kwargs)
+        layers = [block(
+            self.inplanes, planes, stride, downsample, dilation=first_dilation, previous_dilation=dilation, **bargs)]
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(
-                self.inplanes, planes,
-                cardinality=self.cardinality, base_width=self.base_width, reduce_first=reduce_first,
-                use_se=use_se, dilation=dilation, previous_dilation=dilation, norm_layer=norm_layer))
+                self.inplanes, planes, dilation=dilation, previous_dilation=dilation, **bargs))
 
         return nn.Sequential(*layers)
 
@@ -632,7 +632,8 @@ def ig_resnext101_32x8d(pretrained=True, num_classes=1000, in_chans=3, **kwargs)
         in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
     default_cfg = default_cfgs['ig_resnext101_32x8d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8,
+                   num_classes=1000, in_chans=3, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -651,7 +652,8 @@ def ig_resnext101_32x16d(pretrained=True, num_classes=1000, in_chans=3, **kwargs
         in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
     default_cfg = default_cfgs['ig_resnext101_32x16d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=16, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=16,
+                   num_classes=1000, in_chans=3, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -670,7 +672,8 @@ def ig_resnext101_32x32d(pretrained=True, num_classes=1000, in_chans=3, **kwargs
         in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
     default_cfg = default_cfgs['ig_resnext101_32x32d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=32, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=32,
+                   num_classes=1000, in_chans=3, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -689,7 +692,8 @@ def ig_resnext101_32x48d(pretrained=True, num_classes=1000, in_chans=3, **kwargs
         in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
     default_cfg = default_cfgs['ig_resnext101_32x48d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=48, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=48,
+                   num_classes=1000, in_chans=3, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

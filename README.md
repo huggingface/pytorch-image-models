@@ -25,6 +25,10 @@ I've included a few of my favourite models, but this is not an exhaustive collec
     * ResNet-18, ResNet-34, ResNet-50, ResNet-101, ResNet-152, ResNeXt50 (32x4d), ResNeXt101 (32x4d and 64x4d)
     * 'Bag of Tricks' / Gluon C, D, E, S variations (https://arxiv.org/abs/1812.01187)
     * Instagram trained / ImageNet tuned ResNeXt101-32x8d to 32x48d from from [facebookresearch](https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/)
+    * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
+* DLA
+    * Original (https://github.com/ucbdrive/dla, https://arxiv.org/abs/1707.06484)
+    * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
 * DenseNet (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models))
     * DenseNet-121, DenseNet-169, DenseNet-201, DenseNet-161
 * Squeeze-and-Excitation ResNet/ResNeXt (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) with some pretrained weight additions by myself)
