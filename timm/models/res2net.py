@@ -58,7 +58,7 @@ class Bottle2neck(nn.Module):
         super(Bottle2neck, self).__init__()
         assert dilation == 1 and previous_dilation == 1  # FIXME support dilation
         self.scale = scale
-        self.is_first = True if stride > 1 or downsample is not None else False
+        self.is_first = stride > 1 or downsample is not None
         self.num_scales = max(1, scale - 1)
         width = int(math.floor(planes * (base_width / 64.0))) * cardinality
         outplanes = planes * self.expansion
