@@ -119,17 +119,6 @@ class Bottle2neck(nn.Module):
         return out
 
 
-
-@register_model
-def res2net50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a Res2Net-50 model.
-    Res2Net-50 refers to the Res2Net-50_26w_4s.
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
-    return res2net50_26w_4s(pretrained, num_classes, in_chans, **kwargs)
-
-
 @register_model
 def res2net50_26w_4s(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a Res2Net-50_26w_4s model.
