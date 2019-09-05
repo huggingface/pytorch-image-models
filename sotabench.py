@@ -135,7 +135,7 @@ model_list = [
     _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
     _entry('seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
     _entry('senet154', 'SENet-154', '1709.01507'),
-    _entry('xception', 'Xception', '1610.02357'),
+    _entry('xception', 'Xception', '1610.02357',  batch_size=BATCH_SIZE//2),
 
     ## Torchvision weights
     # _entry('densenet121'),
