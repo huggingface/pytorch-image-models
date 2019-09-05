@@ -157,13 +157,13 @@ model_list = [
     _entry('ig_resnext101_32x16d', 'ResNeXt-101 32x16d', '1805.00932'),
     _entry('ig_resnext101_32x32d', 'ResNeXt-101 32x32d', '1805.00932', batch_size=BATCH_SIZE // 2),
     _entry('ig_resnext101_32x48d', 'ResNeXt-101 32x48d', '1805.00932', batch_size=BATCH_SIZE // 4),
-    _entry('ig_resnext101_32x8d (288x288 Mean-Max Pooling)', 'ResNeXt-101 32x8d', '1805.00932',
+    _entry('ig_resnext101_32x8d', 'ResNeXt-101 32x8d (288x288 Mean-Max Pooling)', '1805.00932',
            ttp=True, args=dict(img_size=288)),
-    _entry('ig_resnext101_32x16d (288x288 Mean-Max Pooling)', 'ResNeXt-101 32x16d', '1805.00932',
+    _entry('ig_resnext101_32x16d', 'ResNeXt-101 32x16d (288x288 Mean-Max Pooling)', '1805.00932',
            ttp=True, args=dict(img_size=288), batch_size=BATCH_SIZE // 2),
-    _entry('ig_resnext101_32x32d (288x288 Mean-Max Pooling)', 'ResNeXt-101 32x32d', '1805.00932',
+    _entry('ig_resnext101_32x32d', 'ResNeXt-101 32x32d (288x288 Mean-Max Pooling)', '1805.00932',
            ttp=True, args=dict(img_size=288), batch_size=BATCH_SIZE // 4),
-    _entry('ig_resnext101_32x48d (288x288 Mean-Max Pooling)', 'ResNeXt-101 32x48d', '1805.00932',
+    _entry('ig_resnext101_32x48d', 'ResNeXt-101 32x48d (288x288 Mean-Max Pooling)', '1805.00932',
            ttp=True, args=dict(img_size=288), batch_size=BATCH_SIZE // 8),
 
     ## DLA official impl weights (to remove if sotabench added to source)
