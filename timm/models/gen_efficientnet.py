@@ -2,6 +2,8 @@
 
 A generic class with building blocks to support a variety of models with efficient architectures:
 * EfficientNet (B0-B7)
+* EfficientNet-EdgeTPU
+* EfficientNet-CondConv
 * MixNet (Small, Medium, and Large)
 * MnasNet B1, A1 (SE), Small
 * MobileNet V1, V2, and V3
@@ -31,6 +33,7 @@ from .registry import register_model, model_entrypoint
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from .conv2d_layers import select_conv2d
+from .layers import Flatten
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 
@@ -1050,15 +1053,13 @@ class GenEfficientNet(_GenEfficientNet):
         layers = [self.conv_stem, self.bn1, self.act1]
         layers.extend(self.blocks)
         if self.head_conv == 'efficient':
-            layers.extend([self.global_pool, self.bn2, self.act2])
+            layers.extend([self.global_pool, self.conv_head, self.act2])
         else:
             layers.extend([self.conv_head, self.bn2, self.act2])
             if self.global_pool is not None:
                 layers.append(self.global_pool)
-        #append flatten layer
-        layers.append(self.classifier)
+        layers.extend([Flatten(), nn.Dropout(self.drop_rate), self.classifier])
         return nn.Sequential(*layers)
-
 
     def get_classifier(self):
         return self.classifier
@@ -1106,7 +1107,8 @@ class GenEfficientNetFeatures(_GenEfficientNet):
         #assert len(block_args) >= num_stages - 1
         #block_args = block_args[:num_stages - 1]
 
-        super(GenEfficientNetFeatures, self).__init__(  # FIXME it would be nice if Python made this nicer
+        # FIXME it would be nice if Python made this nicer without using kwargs and erasing IDE hints, etc
+        super(GenEfficientNetFeatures, self).__init__(
             block_args, in_chans=in_chans, stem_size=stem_size,
             output_stride=output_stride, pad_type=pad_type, act_layer=act_layer,
             drop_rate=drop_rate, drop_connect_rate=drop_connect_rate, feature_location=feature_location,
@@ -1548,6 +1550,11 @@ def _gen_efficientnet(variant, channel_multiplier=1.0, depth_multiplier=1.0, pre
 
 
 def _gen_efficientnet_edge(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Creates an EfficientNet-EdgeTPU model
+
+    Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu
+    """
+
     arch_def = [
         # NOTE `fc` is present to override a mismatch between stem channels and in chs not
         # present in other models
@@ -1573,8 +1580,10 @@ def _gen_efficientnet_edge(variant, channel_multiplier=1.0, depth_multiplier=1.0
 
 def _gen_efficientnet_condconv(
         variant, channel_multiplier=1.0, depth_multiplier=1.0, experts_multiplier=1, pretrained=False, **kwargs):
+    """Creates an EfficientNet-CondConv model.
 
-    """Creates an efficientnet-condconv model."""
+    Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/condconv
+    """
     arch_def = [
       ['ds_r1_k3_s1_e1_c16_se0.25'],
       ['ir_r2_k3_s2_e6_c24_se0.25'],
@@ -1584,6 +1593,8 @@ def _gen_efficientnet_condconv(
       ['ir_r4_k5_s2_e6_c192_se0.25_cc4'],
       ['ir_r1_k3_s1_e6_c320_se0.25_cc4'],
     ]
+    # NOTE unlike official impl, this one uses `cc<x>` option where x is the base number of experts for each stage and
+    # the expert_multiplier increases that on a per-model basis as with depth/channel multipliers
     model_kwargs = dict(
         block_args=_decode_arch_def(arch_def, depth_multiplier, experts_multiplier=experts_multiplier),
         num_features=_round_channels(1280, channel_multiplier, 8, None),
@@ -2056,7 +2067,7 @@ def tf_efficientnet_el(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_cc_b0_4e(pretrained=False, **kwargs):
-    """ EfficientNet-B0 """
+    """ EfficientNet-CondConv-B0 w/ 4 Experts. Tensorflow compatible variant """
     # NOTE for train, drop_rate should be 0.2
     #kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
     kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
@@ -2068,7 +2079,7 @@ def tf_efficientnet_cc_b0_4e(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_cc_b0_8e(pretrained=False, **kwargs):
-    """ EfficientNet-B0 """
+    """ EfficientNet-CondConv-B0 w/ 8 Experts. Tensorflow compatible variant """
     # NOTE for train, drop_rate should be 0.2
     #kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
     kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT
@@ -2080,7 +2091,7 @@ def tf_efficientnet_cc_b0_8e(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_cc_b1_8e(pretrained=False, **kwargs):
-    """ EfficientNet-B0 """
+    """ EfficientNet-CondConv-B1 w/ 8 Experts. Tensorflow compatible variant """
     # NOTE for train, drop_rate should be 0.2
     #kwargs['drop_connect_rate'] = 0.2  # set when training, TODO add as cmd arg
     kwargs['bn_eps'] = _BN_EPS_TF_DEFAULT

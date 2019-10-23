@@ -8,6 +8,7 @@ import numpy as np
 import math
 
 
+# Tuple helpers ripped from PyTorch
 def _ntuple(n):
     def parse(x):
         if isinstance(x, container_abcs.Iterable):
@@ -77,7 +78,7 @@ def get_padding_value(padding, kernel_size, **kwargs):
                 # static case, no extra overhead
                 padding = _get_padding(kernel_size, **kwargs)
             else:
-                # dynamic padding
+                # dynamic 'SAME' padding, has runtime/GPU memory overhead
                 padding = 0
                 dynamic = True
         elif padding == 'valid':
@@ -101,6 +102,7 @@ def create_conv2d_pad(in_chs, out_chs, kernel_size, **kwargs):
 
 class MixedConv2d(nn.Module):
     """ Mixed Grouped Convolution
+
     Based on MDConv and GroupedConv in MixNet impl:
       https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mixnet/custom_layers.py
     """
@@ -152,7 +154,11 @@ def get_condconv_initializer(initializer, num_experts, expert_shape):
 
 class CondConv2d(nn.Module):
     """ Conditional Convolution
+
     Inspired by: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/condconv/condconv_layers.py
+
+    Grouped convolution hackery for parallel execution of the per-sample kernel filters inspired by this discussion:
+    https://github.com/pytorch/pytorch/issues/17983
     """
 
     def __init__(self, in_channels, out_channels, kernel_size=3,
@@ -211,6 +217,7 @@ class CondConv2d(nn.Module):
         if self._use_groups:
             new_weight_shape = (B * self.out_channels, self.in_channels // self.groups) + self.kernel_size
             weight = weight.view(new_weight_shape)
+            # move batch elements with channels so each batch element can be efficiently convolved with separate kernel
             x = x.view(1, B * C, H, W)
             out = self.conv_fn(
                 x, weight, bias, stride=self.stride, padding=self.padding,
