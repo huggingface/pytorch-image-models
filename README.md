@@ -105,12 +105,12 @@ I've leveraged the training scripts in this repository to train a few of the mod
 
 | Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling | Image Size | Source |
 |---|---|---|---|---|---|---|
-| tf_efficientnet_b7 *tfp  | 84.480 (15.520) | 96.870 (3.130) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b7       | 84.420 (15.580) | 96.906 (3.094) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b7 *tfp  | 84.940 (15.060) | 97.214 (2.786) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b7       | 84.932 (15.068) | 97.208 (2.792) | 66.35  | bicubic | 600 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b6 *tfp  | 84.140 (15.860) | 96.852 (3.148) | 43.04  | bicubic | 528 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b6       | 84.110 (15.890) | 96.886 (3.114) | 43.04  | bicubic | 528 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b5 *tfp  | 83.694 (16.306) | 96.696 (3.304) | 30.39  | bicubic | 456 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
-| tf_efficientnet_b5       | 83.688 (16.312) | 96.714 (3.286) | 30.39  | bicubic | 456 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b5 *tfp  | 83.822 (16.178) | 96.756 (3.244) | 30.39  | bicubic | 456 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
+| tf_efficientnet_b5       | 83.812 (16.188) | 96.748 (3.252) | 30.39  | bicubic | 456 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b4       | 83.022 (16.978) | 96.300 (3.700) | 19.34  | bicubic | 380 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b4 *tfp  | 82.948 (17.052) | 96.308 (3.692) | 19.34  | bicubic | 380 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |
 | tf_efficientnet_b3 *tfp  | 81.576 (18.424) | 95.662 (4.338) | 12.23  | bicubic | 300 | [Google](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet) |

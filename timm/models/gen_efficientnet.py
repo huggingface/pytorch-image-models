@@ -112,13 +112,13 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b4_aa-818f208c.pth',
         input_size=(3, 380, 380), pool_size=(12, 12), crop_pct=0.922),
     'tf_efficientnet_b5': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b5_aa-99018a74.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b5_ra-9a3e5369.pth',
         input_size=(3, 456, 456), pool_size=(15, 15), crop_pct=0.934),
     'tf_efficientnet_b6': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b6_aa-80ba17e4.pth',
         input_size=(3, 528, 528), pool_size=(17, 17), crop_pct=0.942),
     'tf_efficientnet_b7': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b7_aa-076e3472.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b7_ra-6c08e654.pth',
         input_size=(3, 600, 600), pool_size=(19, 19), crop_pct=0.949),
     'tf_efficientnet_es': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_es-ca1afbfe.pth',
