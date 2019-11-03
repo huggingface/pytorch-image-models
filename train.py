@@ -439,7 +439,7 @@ def train_epoch(
                 lam = 1.
                 if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
                     lam = np.random.beta(args.mixup, args.mixup)
-                input.mul_(lam).add_(1 - lam, input.flip(0))
+                input = input.mul(lam).add_(1 - lam, input.flip(0))
                 target = mixup_target(target, args.num_classes, lam, args.smoothing)
 
         output = model(input)
