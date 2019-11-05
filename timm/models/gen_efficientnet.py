@@ -1106,6 +1106,7 @@ class GenEfficientNetFeatures(_GenEfficientNet):
         num_stages = max(out_indices) + 1  # FIXME reduce num stages created if not needed
         #assert len(block_args) >= num_stages - 1
         #block_args = block_args[:num_stages - 1]
+        self.out_indices = out_indices
 
         # FIXME it would be nice if Python made this nicer without using kwargs and erasing IDE hints, etc
         super(GenEfficientNetFeatures, self).__init__(
