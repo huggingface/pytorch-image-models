@@ -69,6 +69,7 @@ Several (less common) features that I often utilize in my projects are included.
 * Training schedules and techniques that provide competitive results (Cosine LR, Random Erasing, Label Smoothing, etc)
 * Mixup (as in https://arxiv.org/abs/1710.09412) - currently implementing/testing
 * An inference script that dumps output to CSV is provided as an example
+* AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
 
 ## Results
 

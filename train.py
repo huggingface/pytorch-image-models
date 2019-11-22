@@ -65,6 +65,8 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.)')
+parser.add_argument('--drop-connect', type=float, default=0.0, metavar='DROP',
+                    help='Drop connect rate (default: 0.)')
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
@@ -87,7 +89,7 @@ parser.add_argument('--epochs', type=int, default=200, metavar='N',
                     help='number of epochs to train (default: 2)')
 parser.add_argument('--start-epoch', default=None, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--decay-epochs', type=int, default=30, metavar='N',
+parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                     help='epoch interval to decay LR')
 parser.add_argument('--warmup-epochs', type=int, default=3, metavar='N',
                     help='epochs to warmup LR, if scheduler supports')
@@ -208,6 +210,7 @@ def main():
         pretrained=args.pretrained,
         num_classes=args.num_classes,
         drop_rate=args.drop,
+        drop_connect_rate=args.drop_connect,
         global_pool=args.gp,
         bn_tf=args.bn_tf,
         bn_momentum=args.bn_momentum,
@@ -253,7 +256,7 @@ def main():
             if args.local_rank == 0:
                 logging.info('Restoring NVIDIA AMP state from checkpoint')
             amp.load_state_dict(resume_state['amp'])
-    resume_state = None
+    resume_state = None  # clear it
 
     model_ema = None
     if args.model_ema:
