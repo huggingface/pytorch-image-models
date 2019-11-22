@@ -9,7 +9,7 @@ import numpy as np
 
 from .constants import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .random_erasing import RandomErasing
-from .auto_augment import AutoAugment, auto_augment_policy
+from .auto_augment import auto_augment_transform, rand_augment_transform
 
 
 class ToNumpy:
@@ -179,6 +179,7 @@ def transforms_imagenet_train(
         transforms.RandomHorizontalFlip()
     ]
     if auto_augment:
+        assert isinstance(auto_augment, str)
         if isinstance(img_size, tuple):
             img_size_min = min(img_size)
         else:
@@ -189,8 +190,10 @@ def transforms_imagenet_train(
         )
         if interpolation and interpolation != 'random':
             aa_params['interpolation'] = _pil_interp(interpolation)
-        aa_policy = auto_augment_policy(auto_augment, aa_params)
-        tfl += [AutoAugment(aa_policy)]
+        if 'rand' in auto_augment:
+            tfl += [rand_augment_transform(auto_augment, aa_params)]
+        else:
+            tfl += [auto_augment_transform(auto_augment, aa_params)]
     else:
         # color jitter is enabled when not using AA
         if isinstance(color_jitter, (list, tuple)):
