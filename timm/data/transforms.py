@@ -190,7 +190,7 @@ def transforms_imagenet_train(
         )
         if interpolation and interpolation != 'random':
             aa_params['interpolation'] = _pil_interp(interpolation)
-        if 'rand' in auto_augment:
+        if auto_augment.startswith('rand'):
             tfl += [rand_augment_transform(auto_augment, aa_params)]
         else:
             tfl += [auto_augment_transform(auto_augment, aa_params)]
