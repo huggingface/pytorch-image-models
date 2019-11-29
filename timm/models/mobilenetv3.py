@@ -35,6 +35,8 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     'mobilenetv3_large_075': _cfg(url=''),
     'mobilenetv3_large_100': _cfg(url=''),
+    'mobilenetv3_small_075': _cfg(url=''),
+    'mobilenetv3_small_100': _cfg(url=''),
     'mobilenetv3_rw': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
         interpolation='bicubic'),
@@ -375,6 +377,35 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
 
 
 @register_model
+def mobilenetv3_large_075(pretrained=False, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_large_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_large_100(pretrained=False, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_large_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_small_075(pretrained=False, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_small_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_small_100(pretrained=False, **kwargs):
+    print(kwargs)
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_small_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def mobilenetv3_rw(pretrained=False, **kwargs):
     """ MobileNet V3 """
     if pretrained:
@@ -382,7 +413,6 @@ def mobilenetv3_rw(pretrained=False, **kwargs):
         kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     model = _gen_mobilenet_v3_rw('mobilenetv3_rw', 1.0, pretrained=pretrained, **kwargs)
     return model
-
 
 
 @register_model
