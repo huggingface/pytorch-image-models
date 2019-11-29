@@ -103,7 +103,7 @@ class SEModule(nn.Module):
 
     def __init__(self, channels, reduction_channels):
         super(SEModule, self).__init__()
-        #self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Conv2d(
             channels, reduction_channels, kernel_size=1, padding=0, bias=True)
         self.relu = nn.ReLU(inplace=True)
@@ -111,8 +111,7 @@ class SEModule(nn.Module):
             reduction_channels, channels, kernel_size=1, padding=0, bias=True)
 
     def forward(self, x):
-        #x_se = self.avg_pool(x)
-        x_se = x.view(x.size(0), x.size(1), -1).mean(-1).view(x.size(0), x.size(1), 1, 1)
+        x_se = self.avg_pool(x)
         x_se = self.fc1(x_se)
         x_se = self.relu(x_se)
         x_se = self.fc2(x_se)
@@ -287,7 +286,8 @@ class ResNet(nn.Module):
                  cardinality=1, base_width=64, stem_width=64, deep_stem=False,
                  block_reduce_first=1, down_kernel_size=1, avg_down=False, dilated=False,
                  norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg',
-                 zero_init_last_bn=True, block_args=dict()):
+                 zero_init_last_bn=True, block_args=None):
+        block_args = block_args or dict()
         self.num_classes = num_classes
         self.inplanes = stem_width * 2 if deep_stem else 64
         self.cardinality = cardinality
