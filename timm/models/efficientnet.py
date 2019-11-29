@@ -1,17 +1,25 @@
-""" Generic EfficientNets
+""" PyTorch EfficientNet Family
 
-A generic class with building blocks to support a variety of models with efficient architectures:
-* EfficientNet (B0-B7)
-* EfficientNet-EdgeTPU
-* EfficientNet-CondConv
+An implementation of EfficienNet that covers variety of related models with efficient architectures:
+
+* EfficientNet (B0-B8 + Tensorflow pretrained AutoAug/RandAug/AdvProp weight ports)
+  - EfficientNet: Rethinking Model Scaling for CNNs - https://arxiv.org/abs/1905.11946
+  - CondConv: Conditionally Parameterized Convolutions for Efficient Inference - https://arxiv.org/abs/1904.04971
+  - Adversarial Examples Improve Image Recognition - https://arxiv.org/abs/1911.09665
+
 * MixNet (Small, Medium, and Large)
-* MnasNet B1, A1 (SE), Small
-* MobileNet V1, V2, and V3
-* FBNet-C
-* Single-Path NAS Pixel1
-* And likely more...
+  - MixConv: Mixed Depthwise Convolutional Kernels - https://arxiv.org/abs/1907.09595
 
-TODO not all combinations and variations have been tested. Currently working on training hyper-params...
+* MNasNet B1, A1 (SE), Small
+  - MnasNet: Platform-Aware Neural Architecture Search for Mobile - https://arxiv.org/abs/1807.11626
+
+* FBNet-C
+  - FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable NAS - https://arxiv.org/abs/1812.03443
+
+* Single-Path NAS Pixel1
+  - Single-Path NAS: Designing Hardware-Efficient ConvNets - https://arxiv.org/abs/1904.02877
+
+* And likely more...
 
 Hacked together by Ross Wightman
 """
@@ -182,8 +190,6 @@ default_cfgs = {
     'tf_mixnet_l': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_l-6c92e0c8.pth'),
 }
-
-
 
 _DEBUG = False
 
