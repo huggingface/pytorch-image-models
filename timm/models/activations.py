@@ -7,72 +7,64 @@ _USE_MEM_EFFICIENT_ISH = True
 if _USE_MEM_EFFICIENT_ISH:
     # This version reduces memory overhead of Swish during training by
     # recomputing torch.sigmoid(x) in backward instead of saving it.
-    class SwishAutoFn(torch.autograd.Function):
-        """Swish - Described in: https://arxiv.org/abs/1710.05941
-        Memory efficient variant from:
-         https://medium.com/the-artificial-impostor/more-memory-efficient-swish-activation-function-e07c22c12a76
-        """
-        @staticmethod
-        def forward(ctx, x):
-            result = x.mul(torch.sigmoid(x))
-            ctx.save_for_backward(x)
-            return result
-
-        @staticmethod
-        def backward(ctx, grad_output):
-            x = ctx.saved_variables[0]
-            sigmoid_x = torch.sigmoid(x)
-            return grad_output.mul(sigmoid_x * (1 + x * (1 - sigmoid_x)))
-
-    def swish(x, inplace=False):
-        # inplace ignored
-        return SwishAutoFn.apply(x)
+    @torch.jit.script
+    def swish_jit_fwd(x):
+        return x.mul(torch.sigmoid(x))
 
 
-    class MishAutoFn(torch.autograd.Function):
-        """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://arxiv.org/abs/1908.08681
-        Experimental memory-efficient variant
+    @torch.jit.script
+    def swish_jit_bwd(x, grad_output):
+        x_sigmoid = torch.sigmoid(x)
+        return grad_output * (x_sigmoid * (1 + x * (1 - x_sigmoid)))
+
+
+    class SwishJitAutoFn(torch.autograd.Function):
+        """ torch.jit.script optimised Swish
+        Inspired by conversation btw Jeremy Howard & Adam Pazske
+        https://twitter.com/jeremyphoward/status/1188251041835315200
         """
 
         @staticmethod
         def forward(ctx, x):
             ctx.save_for_backward(x)
-            y = x.mul(torch.tanh(F.softplus(x)))  # x * tanh(ln(1 + exp(x)))
-            return y
+            return swish_jit_fwd(x)
 
         @staticmethod
         def backward(ctx, grad_output):
-            x = ctx.saved_variables[0]
-            x_sigmoid = torch.sigmoid(x)
-            x_tanh_sp = F.softplus(x).tanh()
-            return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
-
-    def mish(x, inplace=False):
-        # inplace ignored
-        return MishAutoFn.apply(x)
+            x = ctx.saved_tensors[0]
+            return swish_jit_bwd(x, grad_output)
 
 
-    class WishAutoFn(torch.autograd.Function):
-        """Wish: My own mistaken creation while fiddling with Mish. Did well in some experiments.
-        Experimental memory-efficient variant
-        """
+    def swish(x, _inplace=False):
+        return SwishJitAutoFn.apply(x)
 
+
+    @torch.jit.script
+    def mish_jit_fwd(x):
+        return x.mul(torch.tanh(F.softplus(x)))
+
+
+    @torch.jit.script
+    def mish_jit_bwd(x, grad_output):
+        x_sigmoid = torch.sigmoid(x)
+        x_tanh_sp = F.softplus(x).tanh()
+        return grad_output.mul(x_tanh_sp + x * x_sigmoid * (1 - x_tanh_sp * x_tanh_sp))
+
+
+    class MishJitAutoFn(torch.autograd.Function):
         @staticmethod
         def forward(ctx, x):
             ctx.save_for_backward(x)
-            y = x.mul(torch.tanh(torch.exp(x)))
-            return y
+            return mish_jit_fwd(x)
 
         @staticmethod
         def backward(ctx, grad_output):
-            x = ctx.saved_variables[0]
-            x_exp = x.exp()
-            x_tanh_exp = x_exp.tanh()
-            return grad_output.mul(x_tanh_exp + x * x_exp * (1 - x_tanh_exp * x_tanh_exp))
+            x = ctx.saved_tensors[0]
+            return mish_jit_bwd(x, grad_output)
 
-    def wish(x, inplace=False):
-        # inplace ignored
-        return WishAutoFn.apply(x)
+    def mish(x, _inplace=False):
+        return MishJitAutoFn.apply(x)
+
 else:
     def swish(x, inplace=False):
         """Swish - Described in: https://arxiv.org/abs/1710.05941
@@ -80,18 +72,10 @@ else:
         return x.mul_(x.sigmoid()) if inplace else x.mul(x.sigmoid())
 
 
-    def mish(x, inplace=False):
+    def mish(x, _inplace=False):
         """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://arxiv.org/abs/1908.08681
         """
-        inner = F.softplus(x).tanh()
-        return x.mul_(inner) if inplace else x.mul(inner)
-
-
-    def wish(x, inplace=False):
-        """Wish: My own mistaken creation while fiddling with Mish. Did well in some experiments.
-        """
-        inner = x.exp().tanh()
-        return x.mul_(inner) if inplace else x.mul(inner)
+        return x.mul(F.softplus(x).tanh())
 
 
 class Swish(nn.Module):
@@ -110,15 +94,6 @@ class Mish(nn.Module):
 
     def forward(self, x):
         return mish(x, self.inplace)
-
-
-class Wish(nn.Module):
-    def __init__(self, inplace=False):
-        super(Wish, self).__init__()
-        self.inplace = inplace
-
-    def forward(self, x):
-        return wish(x, self.inplace)
 
 
 def sigmoid(x, inplace=False):
