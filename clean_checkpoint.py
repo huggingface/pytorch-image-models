@@ -2,6 +2,7 @@ import torch
 import argparse
 import os
 import hashlib
+import shutil
 from collections import OrderedDict
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
@@ -31,10 +32,9 @@ def main():
             if state_dict_key in checkpoint:
                 state_dict = checkpoint[state_dict_key]
             else:
-                print("Error: No state_dict found in checkpoint {}.".format(args.checkpoint))
-                exit(1)
+                state_dict = checkpoint
         else:
-            state_dict = checkpoint
+            assert False
         for k, v in state_dict.items():
             name = k[7:] if k.startswith('module') else k
             new_state_dict[name] = v
@@ -43,7 +43,11 @@ def main():
         torch.save(new_state_dict, args.output)
         with open(args.output, 'rb') as f:
             sha_hash = hashlib.sha256(f.read()).hexdigest()
-        print("=> Saved state_dict to '{}, SHA256: {}'".format(args.output, sha_hash))
+
+        checkpoint_base = os.path.splitext(args.checkpoint)[0]
+        final_filename = '-'.join([checkpoint_base, sha_hash[:8]]) + '.pth'
+        shutil.move(args.output, final_filename)
+        print("=> Saved state_dict to '{}, SHA256: {}'".format(final_filename, sha_hash))
     else:
         print("Error: Checkpoint ({}) doesn't exist".format(args.checkpoint))
 
