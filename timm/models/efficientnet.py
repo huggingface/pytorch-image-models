@@ -1294,6 +1294,3 @@ def tf_mixnet_l(pretrained=False, **kwargs):
         'tf_mixnet_l', channel_multiplier=1.3, pretrained=pretrained, **kwargs)
     return model
 
-
-def gen_efficientnet_model_names():
-    return set(_models)

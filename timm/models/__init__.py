@@ -7,7 +7,7 @@ from .senet import *
 from .xception import *
 from .nasnet import *
 from .pnasnet import *
-from .gen_efficientnet import *
+from .efficientnet import *
 from .mobilenetv3 import *
 from .inception_v3 import *
 from .gluon_resnet import *
