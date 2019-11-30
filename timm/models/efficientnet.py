@@ -211,8 +211,7 @@ class EfficientNet(nn.Module):
     def __init__(self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32,
                  channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0.,
-                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 global_pool='avg', weight_init='goog'):
+                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
         super(EfficientNet, self).__init__()
         norm_kwargs = norm_kwargs or {}
 
@@ -245,11 +244,7 @@ class EfficientNet(nn.Module):
         # Classifier
         self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), self.num_classes)
 
-        for m in self.modules():
-            if weight_init == 'goog':
-                efficientnet_init_goog(m)
-            else:
-                efficientnet_init_default(m)
+        efficientnet_init_weights(self)
 
     def as_sequential(self):
         layers = [self.conv_stem, self.bn1, self.act1]
@@ -262,14 +257,10 @@ class EfficientNet(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        del self.classifier
-        if num_classes:
-            self.classifier = nn.Linear(
-                self.num_features * self.global_pool.feat_mult(), num_classes)
-        else:
-            self.classifier = None
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.classifier = nn.Linear(
+            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -300,7 +291,7 @@ class EfficientNetFeatures(nn.Module):
     def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='pre_pwl',
                  in_chans=3, stem_size=32, channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  output_stride=32, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0.,
-                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, weight_init='goog'):
+                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(EfficientNetFeatures, self).__init__()
         norm_kwargs = norm_kwargs or {}
 
@@ -326,12 +317,7 @@ class EfficientNetFeatures(nn.Module):
         self.feature_info = builder.features  # builder provides info about feature channels for each block
         self._in_chs = builder.in_chs
 
-        for m in self.modules():
-            if weight_init == 'goog':
-                efficientnet_init_goog(m)
-            else:
-                efficientnet_init_default(m)
-
+        efficientnet_init_weights(self)
         if _DEBUG:
             for k, v in self.feature_info.items():
                 print('Feature idx: {}: Name: {}, Channels: {}'.format(k, v['name'], v['num_chs']))

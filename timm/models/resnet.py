@@ -17,7 +17,7 @@ from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
-__all__ = ['ResNet']  # model_registry will add each entrypoint fn to this
+__all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):
@@ -374,12 +374,9 @@ class ResNet(nn.Module):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
         del self.fc
-        if num_classes:
-            self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
-        else:
-            self.fc = None
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -389,14 +386,11 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-
-        if pool:
-            x = self.global_pool(x)
-            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.fc(x)

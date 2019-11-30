@@ -294,6 +294,17 @@ model_list = [
     _entry('res2next50', 'Res2NeXt-50', '1904.01169'),
     _entry('dla60_res2net', 'Res2Net-DLA-60', '1904.01169'),
     _entry('dla60_res2next', 'Res2NeXt-DLA-60', '1904.01169'),
+
+    ## HRNet official impl weights
+    _entry('hrnet_w18_small', 'HRNet-W18-C-Small-V1', '1908.07919'),
+    _entry('hrnet_w18_small_v2', 'HRNet-W18-C-Small-V2', '1908.07919'),
+    _entry('hrnet_w18', 'HRNet-W18-C', '1908.07919'),
+    _entry('hrnet_w30', 'HRNet-W30-C', '1908.07919'),
+    _entry('hrnet_w32', 'HRNet-W32-C', '1908.07919'),
+    _entry('hrnet_w40', 'HRNet-W40-C', '1908.07919'),
+    _entry('hrnet_w44', 'HRNet-W44-C', '1908.07919'),
+    _entry('hrnet_w48', 'HRNet-W48-C', '1908.07919'),
+    _entry('hrnet_w64', 'HRNet-W64-C', '1908.07919'),
 ]
 
 for m in model_list:

@@ -16,7 +16,7 @@ from collections import OrderedDict
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 
 
@@ -160,7 +160,6 @@ class DPN(nn.Module):
         super(DPN, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        self.global_pool = global_pool
         self.b = b
         bw_factor = 1 if small else 4
 
@@ -218,32 +217,32 @@ class DPN(nn.Module):
         self.features = nn.Sequential(blocks)
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
-        self.classifier = nn.Conv2d(in_chs, num_classes, kernel_size=1, bias=True)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.classifier = nn.Conv2d(
+            self.num_features * self.global_pool.feat_mult(), num_classes, kernel_size=1, bias=True)
 
     def get_classifier(self):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = global_pool
-        del self.classifier
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         if num_classes:
-            self.classifier = nn.Conv2d(self.num_features, num_classes, kernel_size=1, bias=True)
+            self.classifier = nn.Conv2d(
+                self.num_features * self.global_pool.feat_mult(), num_classes, kernel_size=1, bias=True)
         else:
             self.classifier = None
 
-    def forward_features(self, x, pool=True):
-        x = self.features(x)
-        if pool:
-            x = select_adaptive_pool2d(x, pool_type=self.global_pool)
-        return x
+    def forward_features(self, x):
+        return self.features(x)
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         out = self.classifier(x)
-        return out.view(out.size(0), -1)
+        return out.flatten(1)
 
 
 @register_model

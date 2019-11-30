@@ -17,20 +17,18 @@ import os
 import logging
 import functools
 
-import numpy as np
-
 import torch
 import torch.nn as nn
 import torch._utils
 import torch.nn.functional as F
 
+from .resnet import BasicBlock, Bottleneck  # leveraging ResNet blocks w/ additional features like SE
 from .registry import register_model
-from .helpers import load_pretrained
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-BN_MOMENTUM = 0.1
+_BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
 
 
@@ -46,378 +44,351 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    'hrnet_w18_small': _cfg(url=''),
-    'hrnet_w18_small_v2': _cfg(url=''),
-    'hrnet_w18': _cfg(url=''),
-    'hrnet_w30': _cfg(url=''),
-    'hrnet_w32': _cfg(url=''),
-    'hrnet_w40': _cfg(url=''),
-    'hrnet_w44': _cfg(url=''),
-    'hrnet_w48': _cfg(url=''),
+    'hrnet_w18_small': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnet_w18_small_v1-f460c6bc.pth'),
+    'hrnet_w18_small_v2': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnet_w18_small_v2-4c50a8cb.pth'),
+    'hrnet_w18': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w18-8cb57bb9.pth'),
+    'hrnet_w30': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w30-8d7f8dab.pth'),
+    'hrnet_w32': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w32-90d8c5fb.pth'),
+    'hrnet_w40': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w40-7cd397a4.pth'),
+    'hrnet_w44': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w44-c9ac8c18.pth'),
+    'hrnet_w48': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w48-abd2e6ab.pth'),
+    'hrnet_w64': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-hrnet/hrnetv2_w64-b47cc881.pth'),
 }
 
-cfg_cls_hrnet_w18_small = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(1,),
-        NUM_CHANNELS=(32,),
-        FUSE_METHOD='SUM',
+cfg_cls = dict(
+    hrnet_w18_small=dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(1,),
+            NUM_CHANNELS=(32,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(2, 2),
+            NUM_CHANNELS=(16, 32),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(2, 2, 2),
+            NUM_CHANNELS=(16, 32, 64),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(2, 2, 2, 2),
+            NUM_CHANNELS=(16, 32, 64, 128),
+            FUSE_METHOD='SUM',
+        ),
     ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(2, 2),
-        NUM_CHANNELS=(16, 32),
-        FUSE_METHOD='SUM'
+
+    hrnet_w18_small_v2 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(2,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(2, 2),
+            NUM_CHANNELS=(18, 36),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(2, 2, 2),
+            NUM_CHANNELS=(18, 36, 72),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=2,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(2, 2, 2, 2),
+            NUM_CHANNELS=(18, 36, 72, 144),
+            FUSE_METHOD='SUM',
+        ),
     ),
-    STAGE3=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(2, 2, 2),
-        NUM_CHANNELS=(16, 32, 64),
-        FUSE_METHOD='SUM'
+
+    hrnet_w18 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(18, 36),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(18, 36, 72),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(18, 36, 72, 144),
+            FUSE_METHOD='SUM',
+        ),
     ),
-    STAGE4=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(2, 2, 2, 2),
-        NUM_CHANNELS=(16, 32, 64, 128),
-        FUSE_METHOD='SUM',
+
+    hrnet_w30 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(30, 60),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(30, 60, 120),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(30, 60, 120, 240),
+            FUSE_METHOD='SUM',
+        ),
     ),
+
+    hrnet_w32 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(32, 64),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(32, 64, 128),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(32, 64, 128, 256),
+            FUSE_METHOD='SUM',
+        ),
+    ),
+
+    hrnet_w40 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(40, 80),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(40, 80, 160),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(40, 80, 160, 320),
+            FUSE_METHOD='SUM',
+        ),
+    ),
+
+    hrnet_w44 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(44, 88),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(44, 88, 176),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(44, 88, 176, 352),
+            FUSE_METHOD='SUM',
+        ),
+    ),
+
+    hrnet_w48 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(48, 96),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(48, 96, 192),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(48, 96, 192, 384),
+            FUSE_METHOD='SUM',
+        ),
+    ),
+
+    hrnet_w64 = dict(
+        STEM_WIDTH=64,
+        STAGE1=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=1,
+            BLOCK='BOTTLENECK',
+            NUM_BLOCKS=(4,),
+            NUM_CHANNELS=(64,),
+            FUSE_METHOD='SUM',
+        ),
+        STAGE2=dict(
+            NUM_MODULES=1,
+            NUM_BRANCHES=2,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4),
+            NUM_CHANNELS=(64, 128),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE3=dict(
+            NUM_MODULES=4,
+            NUM_BRANCHES=3,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4),
+            NUM_CHANNELS=(64, 128, 256),
+            FUSE_METHOD='SUM'
+        ),
+        STAGE4=dict(
+            NUM_MODULES=3,
+            NUM_BRANCHES=4,
+            BLOCK='BASIC',
+            NUM_BLOCKS=(4, 4, 4, 4),
+            NUM_CHANNELS=(64, 128, 256, 512),
+            FUSE_METHOD='SUM',
+        ),
+    )
 )
-
-
-cfg_cls_hrnet_w18_small_v2 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(2,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(2, 2),
-        NUM_CHANNELS=(18, 36),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(2, 2, 2),
-        NUM_CHANNELS=(18, 36, 72),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=2,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(2, 2, 2, 2),
-        NUM_CHANNELS=(18, 36, 72, 144),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-cfg_cls_hrnet_w18 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(4,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4),
-        NUM_CHANNELS=(18, 36),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=4,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4),
-        NUM_CHANNELS=(18, 36, 72),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4, 4),
-        NUM_CHANNELS=(18, 36, 72, 144),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-
-cfg_cls_hrnet_w30 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(4,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4),
-        NUM_CHANNELS=(30, 60),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=4,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4),
-        NUM_CHANNELS=(30, 60, 120),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4, 4),
-        NUM_CHANNELS=(30, 60, 120, 240),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-
-cfg_cls_hrnet_w32 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(4,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4),
-        NUM_CHANNELS=(32, 64),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=4,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4),
-        NUM_CHANNELS=(32, 64, 128),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4, 4),
-        NUM_CHANNELS=(32, 64, 128, 256),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-cfg_cls_hrnet_w40 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(4,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4),
-        NUM_CHANNELS=(40, 80),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=4,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4),
-        NUM_CHANNELS=(40, 80, 160),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4, 4),
-        NUM_CHANNELS=(40, 80, 160, 320),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-
-cfg_cls_hrnet_w44 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(4,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4),
-        NUM_CHANNELS=(44, 88),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=4,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4),
-        NUM_CHANNELS=(44, 88, 176),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4, 4),
-        NUM_CHANNELS=(44, 88, 176, 352),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-
-cfg_cls_hrnet_w48 = dict(
-    STAGE1=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=1,
-        BLOCK='BOTTLENECK',
-        NUM_BLOCKS=(4,),
-        NUM_CHANNELS=(64,),
-        FUSE_METHOD='SUM',
-    ),
-    STAGE2=dict(
-        NUM_MODULES=1,
-        NUM_BRANCHES=2,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4),
-        NUM_CHANNELS=(48, 96),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE3=dict(
-        NUM_MODULES=4,
-        NUM_BRANCHES=3,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4),
-        NUM_CHANNELS=(48, 96, 192),
-        FUSE_METHOD='SUM'
-    ),
-    STAGE4=dict(
-        NUM_MODULES=3,
-        NUM_BRANCHES=4,
-        BLOCK='BASIC',
-        NUM_BLOCKS=(4, 4, 4, 4),
-        NUM_CHANNELS=(48, 96, 192, 384),
-        FUSE_METHOD='SUM',
-    ),
-)
-
-
-def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
-
-
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
-
-class Bottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.conv2 = nn.Conv2d(
-            planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
-        self.conv3 = nn.Conv2d(
-            planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(
-            planes * self.expansion, momentum=BN_MOMENTUM)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
 
 
 class HighResolutionModule(nn.Module):
@@ -466,11 +437,10 @@ class HighResolutionModule(nn.Module):
                 nn.Conv2d(
                     self.num_inchannels[branch_index], num_channels[branch_index] * block.expansion,
                     kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(num_channels[branch_index] * block.expansion, momentum=BN_MOMENTUM),
+                nn.BatchNorm2d(num_channels[branch_index] * block.expansion, momentum=_BN_MOMENTUM),
             )
 
-        layers = []
-        layers.append(block(self.num_inchannels[branch_index], num_channels[branch_index], stride, downsample))
+        layers = [block(self.num_inchannels[branch_index], num_channels[branch_index], stride, downsample)]
         self.num_inchannels[branch_index] = num_channels[branch_index] * block.expansion
         for i in range(1, num_blocks[branch_index]):
             layers.append(block(self.num_inchannels[branch_index], num_channels[branch_index]))
@@ -479,7 +449,6 @@ class HighResolutionModule(nn.Module):
 
     def _make_branches(self, num_branches, block, num_blocks, num_channels):
         branches = []
-
         for i in range(num_branches):
             branches.append(self._make_one_branch(i, block, num_blocks, num_channels))
 
@@ -498,7 +467,7 @@ class HighResolutionModule(nn.Module):
                 if j > i:
                     fuse_layer.append(nn.Sequential(
                         nn.Conv2d(num_inchannels[j], num_inchannels[i], 1, 1, 0, bias=False),
-                        nn.BatchNorm2d(num_inchannels[i], momentum=BN_MOMENTUM),
+                        nn.BatchNorm2d(num_inchannels[i], momentum=_BN_MOMENTUM),
                         nn.Upsample(scale_factor=2 ** (j - i), mode='nearest')))
                 elif j == i:
                     fuse_layer.append(None)
@@ -509,12 +478,12 @@ class HighResolutionModule(nn.Module):
                             num_outchannels_conv3x3 = num_inchannels[i]
                             conv3x3s.append(nn.Sequential(
                                 nn.Conv2d(num_inchannels[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
-                                nn.BatchNorm2d(num_outchannels_conv3x3, momentum=BN_MOMENTUM)))
+                                nn.BatchNorm2d(num_outchannels_conv3x3, momentum=_BN_MOMENTUM)))
                         else:
                             num_outchannels_conv3x3 = num_inchannels[j]
                             conv3x3s.append(nn.Sequential(
                                 nn.Conv2d(num_inchannels[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
-                                nn.BatchNorm2d(num_outchannels_conv3x3, momentum=BN_MOMENTUM),
+                                nn.BatchNorm2d(num_outchannels_conv3x3, momentum=_BN_MOMENTUM),
                                 nn.ReLU(False)))
                     fuse_layer.append(nn.Sequential(*conv3x3s))
             fuse_layers.append(nn.ModuleList(fuse_layer))
@@ -552,13 +521,16 @@ blocks_dict = {
 
 class HighResolutionNet(nn.Module):
 
-    def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg'):
+    def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0.0):
         super(HighResolutionNet, self).__init__()
+        self.num_classes = num_classes
+        self.drop_rate = drop_rate
 
-        self.conv1 = nn.Conv2d(in_chans, 64, kernel_size=3, stride=2, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
-        self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
+        stem_width = cfg['STEM_WIDTH']
+        self.conv1 = nn.Conv2d(in_chans, stem_width, kernel_size=3, stride=2, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(stem_width, momentum=_BN_MOMENTUM)
+        self.conv2 = nn.Conv2d(stem_width, 64, kernel_size=3, stride=2, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(64, momentum=_BN_MOMENTUM)
         self.relu = nn.ReLU(inplace=True)
 
         self.stage1_cfg = cfg['STAGE1']
@@ -590,9 +562,10 @@ class HighResolutionNet(nn.Module):
         self.stage4, pre_stage_channels = self._make_stage(self.stage4_cfg, num_channels, multi_scale_output=True)
 
         # Classification Head
+        self.num_features = 2048
         self.incre_modules, self.downsamp_modules, self.final_layer = self._make_head(pre_stage_channels)
-
-        self.classifier = nn.Linear(2048, num_classes)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
         self.init_weights()
 
@@ -616,7 +589,7 @@ class HighResolutionNet(nn.Module):
             downsamp_module = nn.Sequential(
                 nn.Conv2d(
                     in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=2, padding=1),
-                nn.BatchNorm2d(out_channels, momentum=BN_MOMENTUM),
+                nn.BatchNorm2d(out_channels, momentum=_BN_MOMENTUM),
                 nn.ReLU(inplace=True)
             )
             downsamp_modules.append(downsamp_module)
@@ -625,9 +598,9 @@ class HighResolutionNet(nn.Module):
         final_layer = nn.Sequential(
             nn.Conv2d(
                 in_channels=head_channels[3] * head_block.expansion,
-                out_channels=2048, kernel_size=1, stride=1, padding=0
+                out_channels=self.num_features, kernel_size=1, stride=1, padding=0
             ),
-            nn.BatchNorm2d(2048, momentum=BN_MOMENTUM),
+            nn.BatchNorm2d(self.num_features, momentum=_BN_MOMENTUM),
             nn.ReLU(inplace=True)
         )
 
@@ -643,7 +616,7 @@ class HighResolutionNet(nn.Module):
                 if num_channels_cur_layer[i] != num_channels_pre_layer[i]:
                     transition_layers.append(nn.Sequential(
                         nn.Conv2d(num_channels_pre_layer[i], num_channels_cur_layer[i], 3, 1, 1, bias=False),
-                        nn.BatchNorm2d(num_channels_cur_layer[i], momentum=BN_MOMENTUM),
+                        nn.BatchNorm2d(num_channels_cur_layer[i], momentum=_BN_MOMENTUM),
                         nn.ReLU(inplace=True)))
                 else:
                     transition_layers.append(None)
@@ -654,7 +627,7 @@ class HighResolutionNet(nn.Module):
                     outchannels = num_channels_cur_layer[i] if j == i - num_branches_pre else inchannels
                     conv3x3s.append(nn.Sequential(
                         nn.Conv2d(inchannels, outchannels, 3, 2, 1, bias=False),
-                        nn.BatchNorm2d(outchannels, momentum=BN_MOMENTUM),
+                        nn.BatchNorm2d(outchannels, momentum=_BN_MOMENTUM),
                         nn.ReLU(inplace=True)))
                 transition_layers.append(nn.Sequential(*conv3x3s))
 
@@ -665,11 +638,10 @@ class HighResolutionNet(nn.Module):
         if stride != 1 or inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion, momentum=BN_MOMENTUM),
+                nn.BatchNorm2d(planes * block.expansion, momentum=_BN_MOMENTUM),
             )
 
-        layers = []
-        layers.append(block(inplanes, planes, stride, downsample))
+        layers = [block(inplanes, planes, stride, downsample)]
         inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(inplanes, planes))
@@ -699,8 +671,7 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
-    def init_weights(self, pretrained='', ):
-        logger.info('=> init weights from normal distribution')
+    def init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(
@@ -709,7 +680,16 @@ class HighResolutionNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def get_classifier(self):
+        return self.classifier
+
+    def reset_classifier(self, num_classes, global_pool='avg'):
+        self.num_classes = num_classes
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.classifier = nn.Linear(
+            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+
+    def forward_features(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -746,124 +726,79 @@ class HighResolutionNet(nn.Module):
         y = self.incre_modules[0](y_list[0])
         for i in range(len(self.downsamp_modules)):
             y = self.incre_modules[i + 1](y_list[i + 1]) + self.downsamp_modules[i](y)
-
         y = self.final_layer(y)
-
-        if torch._C._get_tracing_state():
-            y = y.flatten(start_dim=2).mean(dim=2)
-        else:
-            y = F.avg_pool2d(y, kernel_size=y.size()[2:]).view(y.size(0), -1)
-
-        y = self.classifier(y)
-
         return y
 
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.classifier(x)
+        return x
+
+
+def _create_model(variant, pretrained, model_kwargs):
+    if model_kwargs.pop('features_only', False):
+        assert False, 'Not Implemented'  # TODO
+        load_strict = False
+        model_kwargs.pop('num_classes', 0)
+        model_class = HighResolutionNet
+    else:
+        load_strict = True
+        model_class = HighResolutionNet
+
+    model = model_class(cfg_cls[variant], **model_kwargs)
+    model.default_cfg = default_cfgs[variant]
+    if pretrained:
+        load_pretrained(
+            model,
+            num_classes=model_kwargs.get('num_classes', 0),
+            in_chans=model_kwargs.get('in_chans', 3),
+            strict=load_strict)
+    return model
 
 
 @register_model
 def hrnet_w18_small(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w18_small']
-    model = HighResolutionNet(cfg_cls_hrnet_w18_small, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w18_small', pretrained, kwargs)
 
 
 @register_model
 def hrnet_w18_small_v2(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w18_small_v2']
-    model = HighResolutionNet(cfg_cls_hrnet_w18_small_v2, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w18_small_v2', pretrained, kwargs)
+
 
 @register_model
 def hrnet_w18(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w18']
-    model = HighResolutionNet(cfg_cls_hrnet_w18, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w18', pretrained, kwargs)
 
 
 @register_model
 def hrnet_w30(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w30']
-    model = HighResolutionNet(cfg_cls_hrnet_w30, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w30', pretrained, kwargs)
+
 
 @register_model
 def hrnet_w32(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w32']
-    model = HighResolutionNet(cfg_cls_hrnet_w32, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w32', pretrained, kwargs)
+
 
 @register_model
 def hrnet_w40(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w40']
-    model = HighResolutionNet(cfg_cls_hrnet_w40, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w40', pretrained, kwargs)
 
 
 @register_model
 def hrnet_w44(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w44']
-    model = HighResolutionNet(cfg_cls_hrnet_w44, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w44', pretrained, kwargs)
 
 
 @register_model
 def hrnet_w48(pretrained=True, **kwargs):
-    default_cfg = default_cfgs['hrnet_w48']
-    model = HighResolutionNet(cfg_cls_hrnet_w48, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3))
-    return model
+    return _create_model('hrnet_w48', pretrained, kwargs)
+
+
+@register_model
+def hrnet_w64(pretrained=True, **kwargs):
+    return _create_model('hrnet_w64', pretrained, kwargs)

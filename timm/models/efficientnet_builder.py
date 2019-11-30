@@ -358,9 +358,13 @@ class EfficientNetBuilder:
         return stages
 
 
-def efficientnet_init_goog(m, n=''):
-    # weight init as per Tensorflow Official impl
-    # https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mnasnet_model.py
+def _init_weight_goog(m, n=''):
+    """ Weight initialization as per Tensorflow official implementations.
+
+    Handles layers in EfficientNet, EfficientNet-CondConv, MixNet, MnasNet, MobileNetV3, etc:
+    * https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mnasnet_model.py
+    * https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
+    """
     if isinstance(m, CondConv2d):
         fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
         init_weight_fn = get_condconv_initializer(
@@ -386,7 +390,8 @@ def efficientnet_init_goog(m, n=''):
         m.bias.data.zero_()
 
 
-def efficientnet_init_default(m, n=''):
+def _init_weight_default(m, n=''):
+    """ Basic ResNet (Kaiming) style weight init"""
     if isinstance(m, CondConv2d):
         init_fn = get_condconv_initializer(partial(
             nn.init.kaiming_normal_, mode='fan_out', nonlinearity='relu'), m.num_experts, m.weight_shape)
@@ -399,4 +404,9 @@ def efficientnet_init_default(m, n=''):
     elif isinstance(m, nn.Linear):
         nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='linear')
 
+
+def efficientnet_init_weights(model: nn.Module, init_fn=None):
+    init_fn = init_fn or _init_weight_goog
+    for n, m in model.named_modules():
+        init_fn(m, n)
 
