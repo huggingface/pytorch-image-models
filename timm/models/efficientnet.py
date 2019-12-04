@@ -68,10 +68,10 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0-d6904d92.pth'),
     'efficientnet_b1': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth',
-        input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
+        input_size=(3, 240, 240), pool_size=(8, 8)),
     'efficientnet_b2': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2-cf78dc4d.pth',
-        input_size=(3, 260, 260), pool_size=(9, 9), crop_pct=0.890),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth',
+        input_size=(3, 260, 260), pool_size=(9, 9)),
     'efficientnet_b3': _cfg(
         url='', input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
     'efficientnet_b4': _cfg(
