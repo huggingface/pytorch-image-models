@@ -21,11 +21,15 @@ except ImportError:
 from torch import distributed as dist
 
 
-def get_state_dict(model):
+def unwrap_model(model):
     if isinstance(model, ModelEma):
-        return get_state_dict(model.ema)
+        return unwrap_model(model.ema)
     else:
-        return model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
+        return model.module if hasattr(model, 'module') else model
+
+
+def get_state_dict(model):
+    return unwrap_model(model).state_dict()
 
 
 class CheckpointSaver:
@@ -204,6 +208,14 @@ def reduce_tensor(tensor, n):
     dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     rt /= n
     return rt
+
+
+def reduce_bn(model, world_size):
+    # ensure every node has the same running bn stats
+    for bn_name, bn_buf in unwrap_model(model).named_buffers(recurse=True):
+        if ('running_mean' in bn_name) or ('running_var' in bn_name):
+            torch.distributed.all_reduce(bn_buf, op=dist.ReduceOp.SUM)
+            bn_buf /= float(world_size)
 
 
 class ModelEma:
