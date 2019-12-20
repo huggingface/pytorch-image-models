@@ -210,12 +210,17 @@ def reduce_tensor(tensor, n):
     return rt
 
 
-def reduce_bn(model, world_size):
+def distribute_bn(model, world_size, reduce=False):
     # ensure every node has the same running bn stats
     for bn_name, bn_buf in unwrap_model(model).named_buffers(recurse=True):
         if ('running_mean' in bn_name) or ('running_var' in bn_name):
-            torch.distributed.all_reduce(bn_buf, op=dist.ReduceOp.SUM)
-            bn_buf /= float(world_size)
+            if reduce:
+                # average bn stats across whole group
+                torch.distributed.all_reduce(bn_buf, op=dist.ReduceOp.SUM)
+                bn_buf /= float(world_size)
+            else:
+                # broadcast bn stats from rank 0 to whole group
+                torch.distributed.broadcast(bn_buf, 0)
 
 
 class ModelEma:
