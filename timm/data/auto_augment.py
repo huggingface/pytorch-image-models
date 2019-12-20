@@ -8,10 +8,9 @@ Hacked together by Ross Wightman
 import random
 import math
 import re
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageOps, ImageEnhance, ImageChops
 import PIL
 import numpy as np
-
 
 
 _PIL_VER = tuple([int(x) for x in PIL.__version__.split('.')[:2]])
@@ -192,34 +191,45 @@ def _translate_abs_level_to_arg(level, hparams):
     return level,
 
 
-def _translate_rel_level_to_arg(level, _hparams):
-    # range [-0.45, 0.45]
-    level = (level / _MAX_LEVEL) * 0.45
+def _translate_rel_level_to_arg(level, hparams):
+    # default range [-0.45, 0.45]
+    translate_pct = hparams.get('translate_pct', 0.45)
+    level = (level / _MAX_LEVEL) * translate_pct
     level = _randomly_negate(level)
     return level,
+
+
+def _posterize_level_to_arg(level, _hparams):
+    # As per Tensorflow TPU EfficientNet impl
+    # range [0, 4], 'keep 0 up to 4 MSB of original image'
+    # intensity/severity of augmentation decreases with level
+    return int((level / _MAX_LEVEL) * 4),
+
+
+def _posterize_increasing_level_to_arg(level, hparams):
+    # As per Tensorflow models research and UDA impl
+    # range [4, 0], 'keep 4 down to 0 MSB of original image',
+    # intensity/severity of augmentation increases with level
+    return 4 - _posterize_level_to_arg(level, hparams)[0],
 
 
 def _posterize_original_level_to_arg(level, _hparams):
     # As per original AutoAugment paper description
     # range [4, 8], 'keep 4 up to 8 MSB of image'
+    # intensity/severity of augmentation decreases with level
     return int((level / _MAX_LEVEL) * 4) + 4,
-
-
-def _posterize_research_level_to_arg(level, _hparams):
-    # As per Tensorflow models research and UDA impl
-    # range [4, 0], 'keep 4 down to 0 MSB of original image'
-    return 4 - int((level / _MAX_LEVEL) * 4),
-
-
-def _posterize_tpu_level_to_arg(level, _hparams):
-    # As per Tensorflow TPU EfficientNet impl
-    # range [0, 4], 'keep 0 up to 4 MSB of original image'
-    return int((level / _MAX_LEVEL) * 4),
 
 
 def _solarize_level_to_arg(level, _hparams):
     # range [0, 256]
+    # intensity/severity of augmentation decreases with level
     return int((level / _MAX_LEVEL) * 256),
+
+
+def _solarize_increasing_level_to_arg(level, _hparams):
+    # range [0, 256]
+    # intensity/severity of augmentation increases with level
+    return 256 - _solarize_level_to_arg(level, _hparams)[0],
 
 
 def _solarize_add_level_to_arg(level, _hparams):
@@ -233,10 +243,11 @@ LEVEL_TO_ARG = {
     'Invert': None,
     'Rotate': _rotate_level_to_arg,
     # There are several variations of the posterize level scaling in various Tensorflow/Google repositories/papers
+    'Posterize': _posterize_level_to_arg,
+    'PosterizeIncreasing': _posterize_increasing_level_to_arg,
     'PosterizeOriginal': _posterize_original_level_to_arg,
-    'PosterizeResearch': _posterize_research_level_to_arg,
-    'PosterizeTpu': _posterize_tpu_level_to_arg,
     'Solarize': _solarize_level_to_arg,
+    'SolarizeIncreasing': _solarize_level_to_arg,
     'SolarizeAdd': _solarize_add_level_to_arg,
     'Color': _enhance_level_to_arg,
     'Contrast': _enhance_level_to_arg,
@@ -256,10 +267,11 @@ NAME_TO_OP = {
     'Equalize': equalize,
     'Invert': invert,
     'Rotate': rotate,
+    'Posterize': posterize,
+    'PosterizeIncreasing': posterize,
     'PosterizeOriginal': posterize,
-    'PosterizeResearch': posterize,
-    'PosterizeTpu': posterize,
     'Solarize': solarize,
+    'SolarizeIncreasing': solarize,
     'SolarizeAdd': solarize_add,
     'Color': color,
     'Contrast': contrast,
@@ -274,7 +286,7 @@ NAME_TO_OP = {
 }
 
 
-class AutoAugmentOp:
+class AugmentOp:
 
     def __init__(self, name, prob=0.5, magnitude=10, hparams=None):
         hparams = hparams or _HPARAMS_DEFAULT
@@ -295,12 +307,12 @@ class AutoAugmentOp:
         self.magnitude_std = self.hparams.get('magnitude_std', 0)
 
     def __call__(self, img):
-        if random.random() > self.prob:
+        if not self.prob >= 1.0 or random.random() > self.prob:
             return img
         magnitude = self.magnitude
         if self.magnitude_std and self.magnitude_std > 0:
             magnitude = random.gauss(magnitude, self.magnitude_std)
-        magnitude = min(_MAX_LEVEL, max(0, magnitude)) # clip to valid range
+        magnitude = min(_MAX_LEVEL, max(0, magnitude))  # clip to valid range
         level_args = self.level_fn(magnitude, self.hparams) if self.level_fn is not None else tuple()
         return self.aug_fn(img, *level_args, **self.kwargs)
 
@@ -320,7 +332,7 @@ def auto_augment_policy_v0(hparams):
         [('Invert', 0.4, 9), ('Rotate', 0.6, 0)],
         [('Equalize', 1.0, 9), ('ShearY', 0.6, 3)],
         [('Color', 0.4, 7), ('Equalize', 0.6, 0)],
-        [('PosterizeTpu', 0.4, 6), ('AutoContrast', 0.4, 7)],
+        [('Posterize', 0.4, 6), ('AutoContrast', 0.4, 7)],
         [('Solarize', 0.6, 8), ('Color', 0.6, 9)],
         [('Solarize', 0.2, 4), ('Rotate', 0.8, 9)],
         [('Rotate', 1.0, 7), ('TranslateYRel', 0.8, 9)],
@@ -330,16 +342,17 @@ def auto_augment_policy_v0(hparams):
         [('Equalize', 0.8, 4), ('Equalize', 0.0, 8)],
         [('Equalize', 1.0, 4), ('AutoContrast', 0.6, 2)],
         [('ShearY', 0.4, 7), ('SolarizeAdd', 0.6, 7)],
-        [('PosterizeTpu', 0.8, 2), ('Solarize', 0.6, 10)],  # This results in black image with Tpu posterize
+        [('Posterize', 0.8, 2), ('Solarize', 0.6, 10)],  # This results in black image with Tpu posterize
         [('Solarize', 0.6, 8), ('Equalize', 0.6, 1)],
         [('Color', 0.8, 6), ('Rotate', 0.4, 5)],
     ]
-    pc = [[AutoAugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
+    pc = [[AugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
     return pc
 
 
 def auto_augment_policy_v0r(hparams):
-    # ImageNet v0 policy from TPU EfficientNet impl, with research variation of Posterize
+    # ImageNet v0 policy from TPU EfficientNet impl, with variation of Posterize used
+    # in Google research implementation (number of bits discarded increases with magnitude)
     policy = [
         [('Equalize', 0.8, 1), ('ShearY', 0.8, 4)],
         [('Color', 0.4, 9), ('Equalize', 0.6, 3)],
@@ -353,7 +366,7 @@ def auto_augment_policy_v0r(hparams):
         [('Invert', 0.4, 9), ('Rotate', 0.6, 0)],
         [('Equalize', 1.0, 9), ('ShearY', 0.6, 3)],
         [('Color', 0.4, 7), ('Equalize', 0.6, 0)],
-        [('PosterizeResearch', 0.4, 6), ('AutoContrast', 0.4, 7)],
+        [('PosterizeIncreasing', 0.4, 6), ('AutoContrast', 0.4, 7)],
         [('Solarize', 0.6, 8), ('Color', 0.6, 9)],
         [('Solarize', 0.2, 4), ('Rotate', 0.8, 9)],
         [('Rotate', 1.0, 7), ('TranslateYRel', 0.8, 9)],
@@ -363,11 +376,11 @@ def auto_augment_policy_v0r(hparams):
         [('Equalize', 0.8, 4), ('Equalize', 0.0, 8)],
         [('Equalize', 1.0, 4), ('AutoContrast', 0.6, 2)],
         [('ShearY', 0.4, 7), ('SolarizeAdd', 0.6, 7)],
-        [('PosterizeResearch', 0.8, 2), ('Solarize', 0.6, 10)],
+        [('PosterizeIncreasing', 0.8, 2), ('Solarize', 0.6, 10)],
         [('Solarize', 0.6, 8), ('Equalize', 0.6, 1)],
         [('Color', 0.8, 6), ('Rotate', 0.4, 5)],
     ]
-    pc = [[AutoAugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
+    pc = [[AugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
     return pc
 
 
@@ -400,23 +413,23 @@ def auto_augment_policy_original(hparams):
         [('Color', 0.6, 4), ('Contrast', 1.0, 8)],
         [('Equalize', 0.8, 8), ('Equalize', 0.6, 3)],
     ]
-    pc = [[AutoAugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
+    pc = [[AugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
     return pc
 
 
 def auto_augment_policy_originalr(hparams):
     # ImageNet policy from https://arxiv.org/abs/1805.09501 with research posterize variation
     policy = [
-        [('PosterizeResearch', 0.4, 8), ('Rotate', 0.6, 9)],
+        [('PosterizeIncreasing', 0.4, 8), ('Rotate', 0.6, 9)],
         [('Solarize', 0.6, 5), ('AutoContrast', 0.6, 5)],
         [('Equalize', 0.8, 8), ('Equalize', 0.6, 3)],
-        [('PosterizeResearch', 0.6, 7), ('PosterizeResearch', 0.6, 6)],
+        [('PosterizeIncreasing', 0.6, 7), ('PosterizeIncreasing', 0.6, 6)],
         [('Equalize', 0.4, 7), ('Solarize', 0.2, 4)],
         [('Equalize', 0.4, 4), ('Rotate', 0.8, 8)],
         [('Solarize', 0.6, 3), ('Equalize', 0.6, 7)],
-        [('PosterizeResearch', 0.8, 5), ('Equalize', 1.0, 2)],
+        [('PosterizeIncreasing', 0.8, 5), ('Equalize', 1.0, 2)],
         [('Rotate', 0.2, 3), ('Solarize', 0.6, 8)],
-        [('Equalize', 0.6, 8), ('PosterizeResearch', 0.4, 6)],
+        [('Equalize', 0.6, 8), ('PosterizeIncreasing', 0.4, 6)],
         [('Rotate', 0.8, 8), ('Color', 0.4, 0)],
         [('Rotate', 0.4, 9), ('Equalize', 0.6, 2)],
         [('Equalize', 0.0, 7), ('Equalize', 0.8, 8)],
@@ -433,7 +446,7 @@ def auto_augment_policy_originalr(hparams):
         [('Color', 0.6, 4), ('Contrast', 1.0, 8)],
         [('Equalize', 0.8, 8), ('Equalize', 0.6, 3)],
     ]
-    pc = [[AutoAugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
+    pc = [[AugmentOp(*a, hparams=hparams) for a in sp] for sp in policy]
     return pc
 
 
@@ -499,7 +512,7 @@ _RAND_TRANSFORMS = [
     'Equalize',
     'Invert',
     'Rotate',
-    'PosterizeTpu',
+    'Posterize',
     'Solarize',
     'SolarizeAdd',
     'Color',
@@ -530,7 +543,7 @@ _RAND_CHOICE_WEIGHTS_0 = {
     'Contrast': .005,
     'Brightness': .005,
     'Equalize': .005,
-    'PosterizeTpu': 0,
+    'Posterize': 0,
     'Invert': 0,
 }
 
@@ -547,7 +560,7 @@ def _select_rand_weights(weight_idx=0, transforms=None):
 def rand_augment_ops(magnitude=10, hparams=None, transforms=None):
     hparams = hparams or _HPARAMS_DEFAULT
     transforms = transforms or _RAND_TRANSFORMS
-    return [AutoAugmentOp(
+    return [AugmentOp(
         name, prob=0.5, magnitude=magnitude, hparams=hparams) for name in transforms]
 
 
@@ -609,3 +622,94 @@ def rand_augment_transform(config_str, hparams):
     ra_ops = rand_augment_ops(magnitude=magnitude, hparams=hparams)
     choice_weights = None if weight_idx is None else _select_rand_weights(weight_idx)
     return RandAugment(ra_ops, num_layers, choice_weights=choice_weights)
+
+
+_AUGMIX_TRANSFORMS = [
+    'AutoContrast',
+    'Contrast',  # not in paper
+    'Brightness',  # not in paper
+    'Sharpness',  # not in paper
+    'Equalize',
+    'Rotate',
+    'PosterizeIncreasing',
+    'SolarizeIncreasing',
+    'ShearX',
+    'ShearY',
+    'TranslateXRel',
+    'TranslateYRel',
+]
+
+
+def augmix_ops(magnitude=10, hparams=None, transforms=None):
+    hparams = hparams or _HPARAMS_DEFAULT
+    transforms = transforms or _AUGMIX_TRANSFORMS
+    return [AugmentOp(
+        name, prob=1.0, magnitude=magnitude, hparams=hparams) for name in transforms]
+
+
+class AugMixAugment:
+    def __init__(self, ops, alpha=1., width=3, depth=-1):
+        self.ops = ops
+        self.alpha = alpha
+        self.width = width
+        self.depth = depth
+        self.recursive = True
+
+    def _apply_recursive(self, img, ws, prod=1.):
+        alpha = ws[-1] / prod
+        if len(ws) > 1:
+            img = self._apply_recursive(img, ws[:-1], prod * (1 - alpha))
+
+        depth = self.depth if self.depth > 0 else np.random.randint(1, 4)
+        ops = np.random.choice(self.ops, depth, replace=True)
+        img_aug = img  # no ops are in-place, deep copy not necessary
+        for op in ops:
+            img_aug = op(img_aug)
+        return Image.blend(img, img_aug, alpha)
+
+    def _apply_basic(self, img, ws, m):
+        w, h = img.size
+        c = len(img.getbands())
+        mixed = np.zeros((w, h, c), dtype=np.float32)
+        for w in ws:
+            depth = self.depth if self.depth > 0 else np.random.randint(1, 4)
+            ops = np.random.choice(self.ops, depth, replace=True)
+            img_aug = img  # no ops are in-place, deep copy not necessary
+            for op in ops:
+                img_aug = op(img_aug)
+            img_aug = np.asarray(img_aug, dtype=np.float32)
+            mixed += w * img_aug
+        np.clip(mixed, 0, 255., out=mixed)
+        mixed = Image.fromarray(mixed.astype(np.uint8))
+        return Image.blend(img, mixed, m)
+
+    def __call__(self, img):
+        mixing_weights = np.float32(np.random.dirichlet([self.alpha] * self.width))
+        m = np.float32(np.random.beta(self.alpha, self.alpha))
+        if self.recursive:
+            mixing_weights *= m
+            mixed = self._apply_recursive(img, mixing_weights)
+        else:
+            mixed = self._apply_basic(img, mixing_weights, m)
+        return mixed
+
+
+def augment_and_mix_transform(config_str, hparams):
+    """Perform AugMix augmentations and compute mixture.
+    Args:
+        image: Raw input image as float32 np.ndarray of shape (h, w, c)
+        severity: Severity of underlying augmentation operators (between 1 to 10).
+        width: Width of augmentation chain
+        depth: Depth of augmentation chain. -1 enables stochastic depth uniformly
+            from [1, 3]
+        alpha: Probability coefficient for Beta and Dirichlet distributions.
+    Returns:
+        mixed: Augmented and mixed image.
+    """
+    # FIXME parse args from config str
+    severity = 3
+    width = 3
+    depth = -1
+    alpha = 1.
+    ops = augmix_ops(magnitude=severity, hparams=hparams)
+    return AugMixAugment(ops, alpha, width, depth)

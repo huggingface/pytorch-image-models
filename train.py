@@ -1,7 +1,6 @@
 
 import argparse
 import time
-import logging
 import yaml
 from datetime import datetime
 
@@ -14,12 +13,15 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_target
+from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_batch
 from timm.models import create_model, resume_checkpoint
 from timm.utils import *
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
+
+#FIXME
+from timm.data.dataset import AugMixDataset
 
 import torch
 import torch.nn as nn
@@ -158,6 +160,10 @@ parser.add_argument('--eval-metric', default='prec1', type=str, metavar='EVAL_ME
 parser.add_argument('--tta', type=int, default=0, metavar='N',
                     help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
 parser.add_argument("--local_rank", default=0, type=int)
+
+
+parser.add_argument('--jsd', action='store_true', default=False,
+                    help='')
 
 
 def _parse_args():
@@ -311,7 +317,13 @@ def main():
 
     collate_fn = None
     if args.prefetcher and args.mixup > 0:
+        assert not args.jsd
         collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
+
+    separate_transforms = False
+    if args.jsd:
+        dataset_train = AugMixDataset(dataset_train)
+        separate_transforms = True
 
     loader_train = create_loader(
         dataset_train,
@@ -330,6 +342,7 @@ def main():
         num_workers=args.workers,
         distributed=args.distributed,
         collate_fn=collate_fn,
+        separate_transforms=separate_transforms,
     )
 
     eval_dir = os.path.join(args.data, 'val')
@@ -354,7 +367,10 @@ def main():
         crop_pct=data_config['crop_pct'],
     )
 
-    if args.mixup > 0.:
+    if args.jsd:
+        train_loss_fn = JsdCrossEntropy(smoothing=args.smoothing).cuda()
+        validate_loss_fn = nn.CrossEntropyLoss().cuda()
+    elif args.mixup > 0.:
         # smoothing is handled with mixup label transform
         train_loss_fn = SoftTargetCrossEntropy().cuda()
         validate_loss_fn = nn.CrossEntropyLoss().cuda()
@@ -452,11 +468,10 @@ def train_epoch(
         if not args.prefetcher:
             input, target = input.cuda(), target.cuda()
             if args.mixup > 0.:
-                lam = 1.
-                if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
-                    lam = np.random.beta(args.mixup, args.mixup)
-                input = input.mul(lam).add_(1 - lam, input.flip(0))
-                target = mixup_target(target, args.num_classes, lam, args.smoothing)
+                input, target = mixup_batch(
+                    input, target,
+                    alpha=args.mixup, num_classes=args.num_classes, smoothing=args.smoothing,
+                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch)
 
         output = model(input)
 

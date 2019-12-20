@@ -140,3 +140,41 @@ class DatasetTar(data.Dataset):
     def __len__(self):
         return len(self.imgs)
 
+
+class AugMixDataset(torch.utils.data.Dataset):
+    """Dataset wrapper to perform AugMix or other clean/augmentation mixes"""
+
+    def __init__(self, dataset, num_aug=2):
+        self.augmentation = None
+        self.normalize = None
+        self.dataset = dataset
+        if self.dataset.transform is not None:
+            self._set_transforms(self.dataset.transform)
+        self.num_aug = num_aug
+
+    def _set_transforms(self, x):
+        assert isinstance(x, (list, tuple)) and len(x) == 3, 'Expecting a tuple/list of 3 transforms'
+        self.dataset.transform = x[0]
+        self.augmentation = x[1]
+        self.normalize = x[2]
+
+    @property
+    def transform(self):
+        return self.dataset.transform
+
+    @transform.setter
+    def transform(self, x):
+        self._set_transforms(x)
+
+    def _normalize(self, x):
+        return x if self.normalize is None else self.normalize(x)
+
+    def __getitem__(self, i):
+        x, y = self.dataset[i]
+        x_list = [self._normalize(x)]
+        for n in range(self.num_aug):
+            x_list.append(self._normalize(self.augmentation(x)))
+        return tuple(x_list), y
+
+    def __len__(self):
+        return len(self.dataset)

@@ -1,17 +1,46 @@
 import torch.utils.data
-from .transforms import *
+import numpy as np
+
+from .transforms_factory import create_transform
+from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .distributed_sampler import OrderedDistributedSampler
+from .random_erasing import RandomErasing
 from .mixup import FastCollateMixup
 
 
 def fast_collate(batch):
-    targets = torch.tensor([b[1] for b in batch], dtype=torch.int64)
-    batch_size = len(targets)
-    tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
-    for i in range(batch_size):
-        tensor[i] += torch.from_numpy(batch[i][0])
-
-    return tensor, targets
+    """ A fast collation function optimized for uint8 images (np array or torch) and int64 targets (labels)"""
+    assert isinstance(batch[0], tuple)
+    batch_size = len(batch)
+    if isinstance(batch[0][0], tuple):
+        # This branch 'deinterleaves' and flattens tuples of input tensors into one tensor ordered by position
+        # such that all tuple of position n will end up in a torch.split(tensor, batch_size) in nth position
+        inner_tuple_size = len(batch[0][0][0])
+        flattened_batch_size = batch_size * inner_tuple_size
+        targets = torch.zeros(flattened_batch_size, dtype=torch.int64)
+        tensor = torch.zeros((flattened_batch_size, *batch[0][0][0].shape), dtype=torch.uint8)
+        for i in range(batch_size):
+            assert len(batch[i][0]) == inner_tuple_size  # all input tensor tuples must be same length
+            for j in range(inner_tuple_size):
+                targets[i + j * batch_size] = batch[i][1]
+                tensor[i + j * batch_size] += torch.from_numpy(batch[i][0][j])
+        return tensor, targets
+    elif isinstance(batch[0][0], np.ndarray):
+        targets = torch.tensor([b[1] for b in batch], dtype=torch.int64)
+        assert len(targets) == batch_size
+        tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
+        for i in range(batch_size):
+            tensor[i] += torch.from_numpy(batch[i][0])
+        return tensor, targets
+    elif isinstance(batch[0][0], torch.Tensor):
+        targets = torch.tensor([b[1] for b in batch], dtype=torch.int64)
+        assert len(targets) == batch_size
+        tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
+        for i in range(batch_size):
+            tensor[i].copy_(batch[i][0])
+        return tensor, targets
+    else:
+        assert False
 
 
 class PrefetchLoader:
@@ -87,49 +116,6 @@ class PrefetchLoader:
             self.loader.collate_fn.mixup_enabled = x
 
 
-def create_transform(
-        input_size,
-        is_training=False,
-        use_prefetcher=False,
-        color_jitter=0.4,
-        auto_augment=None,
-        interpolation='bilinear',
-        mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD,
-        crop_pct=None,
-        tf_preprocessing=False):
-
-    if isinstance(input_size, tuple):
-        img_size = input_size[-2:]
-    else:
-        img_size = input_size
-
-    if tf_preprocessing and use_prefetcher:
-        from timm.data.tf_preprocessing import TfPreprocessTransform
-        transform = TfPreprocessTransform(
-            is_training=is_training, size=img_size, interpolation=interpolation)
-    else:
-        if is_training:
-            transform = transforms_imagenet_train(
-                img_size,
-                color_jitter=color_jitter,
-                auto_augment=auto_augment,
-                interpolation=interpolation,
-                use_prefetcher=use_prefetcher,
-                mean=mean,
-                std=std)
-        else:
-            transform = transforms_imagenet_eval(
-                img_size,
-                interpolation=interpolation,
-                use_prefetcher=use_prefetcher,
-                mean=mean,
-                std=std,
-                crop_pct=crop_pct)
-
-    return transform
-
-
 def create_loader(
         dataset,
         input_size,
@@ -150,6 +136,7 @@ def create_loader(
         collate_fn=None,
         fp16=False,
         tf_preprocessing=False,
+        separate_transforms=False,
 ):
     dataset.transform = create_transform(
         input_size,
@@ -162,6 +149,7 @@ def create_loader(
         std=std,
         crop_pct=crop_pct,
         tf_preprocessing=tf_preprocessing,
+        separate=separate_transforms,
     )
 
     sampler = None
