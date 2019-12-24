@@ -181,7 +181,7 @@ default_cfgs = {
     'mixnet_l': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_l-5a9a2ed8.pth'),
     'mixnet_xl': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_xl-ac5fbe8d.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mixnet_xl_ra-aac3c00c.pth'),
     'mixnet_xxl': _cfg(),
     'tf_mixnet_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_s-89d3354b.pth'),
