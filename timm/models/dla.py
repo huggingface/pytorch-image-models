@@ -276,8 +276,7 @@ class DLA(nn.Module):
 
         self.num_features = channels[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.fc = nn.Conv2d(self.num_features * self.global_pool.feat_mult(), num_classes,
-                            kernel_size=1, stride=1, padding=0, bias=True)
+        self.fc = nn.Conv2d(self.num_features * self.global_pool.feat_mult(), num_classes, 1, bias=True)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -302,15 +301,14 @@ class DLA(nn.Module):
         return self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        del self.fc
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         if num_classes:
-            self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+            self.fc = nn.Conv2d(self.num_features * self.global_pool.feat_mult(), num_classes, 1, bias=True)
         else:
             self.fc = None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x = self.base_layer(x)
         x = self.level0(x)
         x = self.level1(x)
@@ -318,17 +316,15 @@ class DLA(nn.Module):
         x = self.level3(x)
         x = self.level4(x)
         x = self.level5(x)
-        if pool:
-            x = self.global_pool(x)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.fc(x)
-        x = x.flatten(1)
-        return x
+        return x.flatten(1)
 
 
 @register_model

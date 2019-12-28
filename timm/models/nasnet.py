@@ -556,8 +556,18 @@ class NASNetALarge(nn.Module):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
-    def forward_features(self, input, pool=True):
-        x_conv0 = self.conv0(input)
+    def get_classifier(self):
+        return self.last_linear
+
+    def reset_classifier(self, num_classes, global_pool='avg'):
+        self.num_classes = num_classes
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        del self.last_linear
+        self.last_linear = nn.Linear(
+            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+
+    def forward_features(self, x):
+        x_conv0 = self.conv0(x)
         x_stem_0 = self.cell_stem_0(x_conv0)
         x_stem_1 = self.cell_stem_1(x_conv0, x_stem_0)
 
@@ -586,13 +596,11 @@ class NASNetALarge(nn.Module):
         x_cell_16 = self.cell_16(x_cell_15, x_cell_14)
         x_cell_17 = self.cell_17(x_cell_16, x_cell_15)
         x = self.relu(x_cell_17)
-        if pool:
-            x = self.global_pool(x)
-            x = x.view(x.size(0), -1)
         return x
 
-    def forward(self, input):
-        x = self.forward_features(input)
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
         x = self.last_linear(x)

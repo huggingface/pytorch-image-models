@@ -57,30 +57,31 @@ def resume_checkpoint(model, checkpoint_path):
         raise FileNotFoundError()
 
 
-def load_pretrained(model, default_cfg, num_classes=1000, in_chans=3, filter_fn=None):
-    if 'url' not in default_cfg or not default_cfg['url']:
+def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=None, strict=True):
+    if cfg is None:
+        cfg = getattr(model, 'default_cfg')
+    if cfg is None or 'url' not in cfg or not cfg['url']:
         logging.warning("Pretrained model URL is invalid, using random initialization.")
         return
 
-    state_dict = model_zoo.load_url(default_cfg['url'], progress=False)
+    state_dict = model_zoo.load_url(cfg['url'], progress=False, map_location='cpu')
 
     if in_chans == 1:
-        conv1_name = default_cfg['first_conv']
+        conv1_name = cfg['first_conv']
         logging.info('Converting first conv (%s) from 3 to 1 channel' % conv1_name)
         conv1_weight = state_dict[conv1_name + '.weight']
         state_dict[conv1_name + '.weight'] = conv1_weight.sum(dim=1, keepdim=True)
     elif in_chans != 3:
         assert False, "Invalid in_chans for pretrained weights"
 
-    strict = True
-    classifier_name = default_cfg['classifier']
-    if num_classes == 1000 and default_cfg['num_classes'] == 1001:
+    classifier_name = cfg['classifier']
+    if num_classes == 1000 and cfg['num_classes'] == 1001:
         # special case for imagenet trained models with extra background class in pretrained weights
         classifier_weight = state_dict[classifier_name + '.weight']
         state_dict[classifier_name + '.weight'] = classifier_weight[1:]
         classifier_bias = state_dict[classifier_name + '.bias']
         state_dict[classifier_name + '.bias'] = classifier_bias[1:]
-    elif num_classes != default_cfg['num_classes']:
+    elif num_classes != cfg['num_classes']:
         # completely discard fully connected for all other differences between pretrained and created model
         del state_dict[classifier_name + '.weight']
         del state_dict[classifier_name + '.bias']

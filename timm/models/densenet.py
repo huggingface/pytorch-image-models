@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import re
 
@@ -88,8 +88,8 @@ class DenseNet(nn.Module):
     def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16),
                  num_init_features=64, bn_size=4, drop_rate=0,
                  num_classes=1000, in_chans=3, global_pool='avg'):
-        self.global_pool = global_pool
         self.num_classes = num_classes
+        self.drop_rate = drop_rate
         super(DenseNet, self).__init__()
 
         # First convolution
@@ -117,32 +117,31 @@ class DenseNet(nn.Module):
         self.features.add_module('norm5', nn.BatchNorm2d(num_features))
 
         # Linear layer
-        self.classifier = nn.Linear(num_features, num_classes)
-
         self.num_features = num_features
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
     def get_classifier(self):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = global_pool
         self.num_classes = num_classes
-        del self.classifier
-        if num_classes:
-            self.classifier = nn.Linear(self.num_features, num_classes)
-        else:
-            self.classifier = None
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.classifier = nn.Linear(
+            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x = self.features(x)
         x = F.relu(x, inplace=True)
-        if pool:
-            x = select_adaptive_pool2d(x, self.global_pool)
-            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
-        return self.classifier(self.forward_features(x, pool=True))
+        x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.classifier(x)
+        return x
 
 
 def _filter_pretrained(state_dict):

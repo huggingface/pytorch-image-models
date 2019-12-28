@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = ['Xception65', 'Xception71']
@@ -185,7 +185,6 @@ class Xception65(nn.Module):
         super(Xception65, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        self.global_pool = global_pool
         norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
         if output_stride == 32:
             entry_block3_stride = 2
@@ -249,21 +248,18 @@ class Xception65(nn.Module):
             1536, self.num_features, 3, stride=1, dilation=exit_block_dilations[1],
             norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.bn5 = norm_layer(num_features=self.num_features, **norm_kwargs)
-        self.fc = nn.Linear(in_features=self.num_features, out_features=num_classes)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
     def get_classifier(self):
         return self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = global_pool
-        del self.fc
-        if num_classes:
-            self.fc = nn.Linear(self.num_features, num_classes)
-        else:
-            self.fc = None
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         # Entry flow
         x = self.conv1(x)
         x = self.bn1(x)
@@ -299,14 +295,11 @@ class Xception65(nn.Module):
         x = self.conv5(x)
         x = self.bn5(x)
         x = self.relu(x)
-
-        if pool:
-            x = select_adaptive_pool2d(x, pool_type=self.global_pool)
-            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)
@@ -322,7 +315,6 @@ class Xception71(nn.Module):
         super(Xception71, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        self.global_pool = global_pool
         norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
         if output_stride == 32:
             entry_block3_stride = 2
@@ -393,21 +385,18 @@ class Xception71(nn.Module):
             1536, self.num_features, 3, stride=1, dilation=exit_block_dilations[1],
             norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.bn5 = norm_layer(num_features=self.num_features, **norm_kwargs)
-        self.fc = nn.Linear(in_features=self.num_features, out_features=num_classes)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
     def get_classifier(self):
         return self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = global_pool
-        del self.fc
-        if num_classes:
-            self.fc = nn.Linear(self.num_features, num_classes)
-        else:
-            self.fc = None
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         # Entry flow
         x = self.conv1(x)
         x = self.bn1(x)
@@ -443,14 +432,11 @@ class Xception71(nn.Module):
         x = self.conv5(x)
         x = self.bn5(x)
         x = self.relu(x)
-
-        if pool:
-            x = select_adaptive_pool2d(x, pool_type=self.global_pool)
-            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)

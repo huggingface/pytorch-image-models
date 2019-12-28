@@ -25,12 +25,13 @@ def create_model(
     """
     margs = dict(pretrained=pretrained, num_classes=num_classes, in_chans=in_chans)
 
-    # Not all models have support for batchnorm params passed as args, only gen_efficientnet variants
-    supports_bn_params = is_model_in_modules(model_name, ['gen_efficientnet'])
-    if not supports_bn_params and any([x in kwargs for x in ['bn_tf', 'bn_momentum', 'bn_eps']]):
+    # Only EfficientNet and MobileNetV3 models have support for batchnorm params or drop_connect_rate passed as args
+    is_efficientnet = is_model_in_modules(model_name, ['efficientnet', 'mobilenetv3'])
+    if not is_efficientnet:
         kwargs.pop('bn_tf', None)
         kwargs.pop('bn_momentum', None)
         kwargs.pop('bn_eps', None)
+        kwargs.pop('drop_connect_rate', None)
 
     if is_model(model_name):
         create_fn = model_entrypoint(model_name)

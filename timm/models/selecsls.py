@@ -1,11 +1,13 @@
-"""PyTorch SelecSLS on ImageNet
+"""PyTorch SelecSLS Net example for ImageNet Classification
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/legalcode)
+Author: Dushyant Mehta (@mehtadushy)
 
-Based on ResNet implementation in this repository
-SelecSLS (core) Network Architecture as proposed in
-XNect: Real-time Multi-person 3D Human Pose Estimation with a Single RGB Camera, Mehta et al.
+SelecSLS (core) Network Architecture as proposed in "XNect: Real-time Multi-person 3D
+Human Pose Estimation with a Single RGB Camera, Mehta et al."
 https://arxiv.org/abs/1907.00837
 
-Implementation by Dushyant Mehta (@mehtadushy)
+Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
+and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """
 import math
 
@@ -37,11 +39,14 @@ default_cfgs = {
     'selecsls42': _cfg(
         url='',
         interpolation='bicubic'),
+    'selecsls42_B': _cfg(
+        url='http://gvv.mpi-inf.mpg.de/projects/XNect/models/SelecSLS42_B.pth',
+        interpolation='bicubic'),
     'selecsls60': _cfg(
         url='',
         interpolation='bicubic'),
-    'selecsls60NH': _cfg(
-        url='',
+    'selecsls60_B': _cfg(
+        url='http://gvv.mpi-inf.mpg.de/projects/XNect/models/SelecSLS60_B.pth',
         interpolation='bicubic'),
     'selecsls84': _cfg(
         url='',
@@ -161,7 +166,7 @@ class SelecSLS(nn.Module):
                     conv_1x1_bn(1024, 1280),
                     )
             self.num_features = 1280
-        elif cfg=='selecsls42NH':
+        elif cfg=='selecsls42_B':
             self.block = SelecSLSBlock
             #Define configuration of the network after the initial neck
             self.selecSLS_config = [
@@ -204,7 +209,7 @@ class SelecSLS(nn.Module):
                     conv_1x1_bn(1024, 1280),
                     )
             self.num_features = 1280
-        elif cfg=='selecsls60NH':
+        elif cfg=='selecsls60_B':
             self.block = SelecSLSBlock
             #Define configuration of the network after the initial neck
             self.selecSLS_config = [
@@ -313,12 +318,12 @@ def selecsls42(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     return model
 
 @register_model
-def selecsls42NH(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a SelecSLS42NH model.
+def selecsls42_B(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a SelecSLS42_B model.
     """
-    default_cfg = default_cfgs['selecsls42NH']
+    default_cfg = default_cfgs['selecsls42_B']
     model = SelecSLS(
-        cfg='selecsls42NH', num_classes=1000, in_chans=3,**kwargs)
+        cfg='selecsls42_B', num_classes=1000, in_chans=3,**kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -338,12 +343,12 @@ def selecsls60(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def selecsls60NH(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a SelecSLS60NH model.
+def selecsls60_B(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a SelecSLS60_B model.
     """
-    default_cfg = default_cfgs['selecsls60NH']
+    default_cfg = default_cfgs['selecsls60_B']
     model = SelecSLS(
-        cfg='selecsls60NH', num_classes=1000, in_chans=3,**kwargs)
+        cfg='selecsls60_B', num_classes=1000, in_chans=3,**kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

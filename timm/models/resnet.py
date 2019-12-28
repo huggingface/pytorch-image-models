@@ -17,7 +17,7 @@ from .adaptive_avgmax_pool import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
-__all__ = ['ResNet']  # model_registry will add each entrypoint fn to this
+__all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):
@@ -67,6 +67,36 @@ default_cfgs = {
     'ig_resnext101_32x16d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x16-c6f796b0.pth'),
     'ig_resnext101_32x32d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x32-e4b90b00.pth'),
     'ig_resnext101_32x48d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x48-3e41cc8a.pth'),
+    'ssl_resnet18':  _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnet18-d92f0530.pth'),
+    'ssl_resnet50':  _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnet50-08389792.pth'),
+    'ssl_resnext50_32x4d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnext50_32x4-ddb3e555.pth'),
+    'ssl_resnext101_32x4d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnext101_32x4-dc43570a.pth'),
+    'ssl_resnext101_32x8d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnext101_32x8-2cfe2f8b.pth'),
+    'ssl_resnext101_32x16d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnext101_32x16-15fffa57.pth'),
+    'swsl_resnet18': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnet18-118f1556.pth'),
+    'swsl_resnet50': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnet50-16a12f1b.pth'),
+    'swsl_resnext50_32x4d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext50_32x4-72679e44.pth'),
+    'swsl_resnext101_32x4d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext101_32x4-3f87e46b.pth'),
+    'swsl_resnext101_32x8d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext101_32x8-b4712904.pth'),
+    'swsl_resnext101_32x16d': _cfg(
+        url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext101_32x16-f3559a9c.pth'),
+    'seresnext26d_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26d_32x4d-80fa48a3.pth',
+        interpolation='bicubic'),
+    'seresnext26t_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26t_32x4d-361bc1c4.pth',
+        interpolation='bicubic'),
 }
 
 
@@ -79,7 +109,7 @@ class SEModule(nn.Module):
 
     def __init__(self, channels, reduction_channels):
         super(SEModule, self).__init__()
-        #self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Conv2d(
             channels, reduction_channels, kernel_size=1, padding=0, bias=True)
         self.relu = nn.ReLU(inplace=True)
@@ -87,8 +117,7 @@ class SEModule(nn.Module):
             reduction_channels, channels, kernel_size=1, padding=0, bias=True)
 
     def forward(self, x):
-        #x_se = self.avg_pool(x)
-        x_se = x.view(x.size(0), x.size(1), -1).mean(-1).view(x.size(0), x.size(1), 1, 1)
+        x_se = self.avg_pool(x)
         x_se = self.fc1(x_se)
         x_se = self.relu(x_se)
         x_se = self.fc2(x_se)
@@ -208,10 +237,11 @@ class ResNet(nn.Module):
 
     ResNet variants:
       * normal, b - 7x7 stem, stem_width = 64, same as torchvision ResNet, NVIDIA ResNet 'v1.5', Gluon v1b
-      * c - 3 layer deep 3x3 stem, stem_width = 32
-      * d - 3 layer deep 3x3 stem, stem_width = 32, average pool in downsample
-      * e - 3 layer deep 3x3 stem, stem_width = 64, average pool in downsample
-      * s - 3 layer deep 3x3 stem, stem_width = 64
+      * c - 3 layer deep 3x3 stem, stem_width = 32 (32, 32, 64)
+      * d - 3 layer deep 3x3 stem, stem_width = 32 (32, 32, 64), average pool in downsample
+      * e - 3 layer deep 3x3 stem, stem_width = 64 (64, 64, 128), average pool in downsample
+      * s - 3 layer deep 3x3 stem, stem_width = 64 (64, 64, 128)
+      * t - 3 layer deep 3x3 stem, stem width = 32 (24, 48, 64), average pool in downsample
 
     ResNeXt
       * normal - 7x7 stem, stem_width = 64, standard cardinality and base widths
@@ -240,10 +270,13 @@ class ResNet(nn.Module):
         Number of convolution groups for 3x3 conv in Bottleneck.
     base_width : int, default 64
         Factor determining bottleneck channels. `planes * base_width / 64 * cardinality`
-    deep_stem : bool, default False
-        Whether to replace the 7x7 conv1 with 3 3x3 convolution layers.
     stem_width : int, default 64
         Number of channels in stem convolutions
+    stem_type : str, default ''
+        The type of stem:
+          * '', default - a single 7x7 conv with a width of stem_width
+          * 'deep' - three 3x3 convolution layers of widths stem_width, stem_width, stem_width * 2
+          * 'deep_tiered' - three 3x3 conv layers of widths stem_width//4 * 3, stem_width//4 * 6, stem_width * 2
     block_reduce_first: int, default 1
         Reduction factor for first convolution output width of residual blocks,
         1 for all archs except senets, where 2
@@ -260,11 +293,13 @@ class ResNet(nn.Module):
         Global pooling type. One of 'avg', 'max', 'avgmax', 'catavgmax'
     """
     def __init__(self, block, layers, num_classes=1000, in_chans=3, use_se=False,
-                 cardinality=1, base_width=64, stem_width=64, deep_stem=False,
+                 cardinality=1, base_width=64, stem_width=64, stem_type='',
                  block_reduce_first=1, down_kernel_size=1, avg_down=False, dilated=False,
                  norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg',
-                 zero_init_last_bn=True, block_args=dict()):
+                 zero_init_last_bn=True, block_args=None):
+        block_args = block_args or dict()
         self.num_classes = num_classes
+        deep_stem = 'deep' in stem_type
         self.inplanes = stem_width * 2 if deep_stem else 64
         self.cardinality = cardinality
         self.base_width = base_width
@@ -274,16 +309,20 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         if deep_stem:
+            stem_chs_1 = stem_chs_2 = stem_width
+            if 'tiered' in stem_type:
+                stem_chs_1 = 3 * (stem_width // 4)
+                stem_chs_2 = 6 * (stem_width // 4)
             self.conv1 = nn.Sequential(*[
-                nn.Conv2d(in_chans, stem_width, 3, stride=2, padding=1, bias=False),
-                norm_layer(stem_width),
+                nn.Conv2d(in_chans, stem_chs_1, 3, stride=2, padding=1, bias=False),
+                norm_layer(stem_chs_1),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(stem_width, stem_width, 3, stride=1, padding=1, bias=False),
-                norm_layer(stem_width),
+                nn.Conv2d(stem_chs_1, stem_chs_2, 3, stride=1, padding=1, bias=False),
+                norm_layer(stem_chs_2),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(stem_width, self.inplanes, 3, stride=1, padding=1, bias=False)])
+                nn.Conv2d(stem_chs_2, self.inplanes, 3, stride=1, padding=1, bias=False)])
         else:
-            self.conv1 = nn.Conv2d(in_chans, stem_width, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(in_chans, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -300,7 +339,7 @@ class ResNet(nn.Module):
         self.num_features = 512 * block.expansion
         self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
-        last_bn_name = 'bn3' if 'Bottleneck' in block.__name__ else 'bn2'
+        last_bn_name = 'bn3' if 'Bottle' in block.__name__ else 'bn2'
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -350,12 +389,9 @@ class ResNet(nn.Module):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
         del self.fc
-        if num_classes:
-            self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
-        else:
-            self.fc = None
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -365,14 +401,11 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-
-        if pool:
-            x = self.global_pool(x)
-            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.fc(x)
@@ -422,7 +455,7 @@ def resnet26d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """
     default_cfg = default_cfgs['resnet26d']
     model = ResNet(
-        Bottleneck, [2, 2, 2, 2], stem_width=32, deep_stem=True, avg_down=True,
+        Bottleneck, [2, 2, 2, 2], stem_width=32, stem_type='deep', avg_down=True,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
@@ -448,7 +481,7 @@ def resnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """
     default_cfg = default_cfgs['resnet50d']
     model = ResNet(
-        Bottleneck, [3, 4, 6, 3], stem_width=32, deep_stem=True, avg_down=True,
+        Bottleneck, [3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
@@ -556,7 +589,7 @@ def resnext50d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['resnext50d_32x4d']
     model = ResNet(
         Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
-        stem_width=32, deep_stem=True, avg_down=True,
+        stem_width=32, stem_type='deep', avg_down=True,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
@@ -621,59 +654,233 @@ def tv_resnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
 
 
 @register_model
-def ig_resnext101_32x8d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
+def ig_resnext101_32x8d(pretrained=True, **kwargs):
     """Constructs a ResNeXt-101 32x8 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
     Weights from https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/
-    Args:
-        pretrained (bool): load pretrained weights
-        num_classes (int): number of classes for classifier (default: 1000 for pretrained)
-        in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
-    default_cfg = default_cfgs['ig_resnext101_32x8d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8,
-                   num_classes=1000, in_chans=3, **kwargs)
-    model.default_cfg = default_cfg
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8, **kwargs)
+    model.default_cfg = default_cfgs['ig_resnext101_32x8d']
     if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
     return model
 
 
 @register_model
-def ig_resnext101_32x16d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
+def ig_resnext101_32x16d(pretrained=True, **kwargs):
     """Constructs a ResNeXt-101 32x16 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
     Weights from https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/
-    Args:
-        pretrained (bool): load pretrained weights
-        num_classes (int): number of classes for classifier (default: 1000 for pretrained)
-        in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
-    default_cfg = default_cfgs['ig_resnext101_32x16d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=16,
-                   num_classes=1000, in_chans=3, **kwargs)
-    model.default_cfg = default_cfg
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=16, **kwargs)
+    model.default_cfg = default_cfgs['ig_resnext101_32x16d']
     if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
     return model
 
 
 @register_model
-def ig_resnext101_32x32d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
+def ig_resnext101_32x32d(pretrained=True, **kwargs):
     """Constructs a ResNeXt-101 32x32 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
     Weights from https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/
-    Args:
-        pretrained (bool): load pretrained weights
-        num_classes (int): number of classes for classifier (default: 1000 for pretrained)
-        in_chans (int): number of input planes (default: 3 for pretrained / color)
     """
-    default_cfg = default_cfgs['ig_resnext101_32x32d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=32,
-                   num_classes=1000, in_chans=3, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=32, **kwargs)
+    model.default_cfg = default_cfgs['ig_resnext101_32x32d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ig_resnext101_32x48d(pretrained=True, **kwargs):
+    """Constructs a ResNeXt-101 32x48 model pre-trained on weakly-supervised data
+    and finetuned on ImageNet from Figure 5 in
+    `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
+    Weights from https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=48, **kwargs)
+    model.default_cfg = default_cfgs['ig_resnext101_32x48d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ssl_resnet18(pretrained=True, **kwargs):
+    """Constructs a semi-supervised ResNet-18 model pre-trained on YFCC100M dataset and finetuned on ImageNet
+    `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+    Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    model.default_cfg = default_cfgs['ssl_resnet18']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ssl_resnet50(pretrained=True, **kwargs):
+    """Constructs a semi-supervised ResNet-50 model pre-trained on YFCC100M dataset and finetuned on ImageNet
+    `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+    Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    model.default_cfg = default_cfgs['ssl_resnet50']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ssl_resnext50_32x4d(pretrained=True, **kwargs):
+    """Constructs a semi-supervised ResNeXt-50 32x4 model pre-trained on YFCC100M dataset and finetuned on ImageNet
+    `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+    Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4, **kwargs)
+    model.default_cfg = default_cfgs['ssl_resnext50_32x4d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ssl_resnext101_32x4d(pretrained=True, **kwargs):
+    """Constructs a semi-supervised ResNeXt-101 32x4 model pre-trained on YFCC100M dataset and finetuned on ImageNet
+    `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+    Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=4, **kwargs)
+    model.default_cfg = default_cfgs['ssl_resnext101_32x4d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ssl_resnext101_32x8d(pretrained=True, **kwargs):
+    """Constructs a semi-supervised ResNeXt-101 32x8 model pre-trained on YFCC100M dataset and finetuned on ImageNet
+    `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+    Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8, **kwargs)
+    model.default_cfg = default_cfgs['ssl_resnext101_32x8d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def ssl_resnext101_32x16d(pretrained=True, **kwargs):
+    """Constructs a semi-supervised ResNeXt-101 32x16 model pre-trained on YFCC100M dataset and finetuned on ImageNet
+    `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+    Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=16, **kwargs)
+    model.default_cfg = default_cfgs['ssl_resnext101_32x16d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def swsl_resnet18(pretrained=True, **kwargs):
+    """Constructs a semi-weakly supervised Resnet-18 model pre-trained on 1B weakly supervised
+       image dataset and finetuned on ImageNet.
+       `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+       Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    model.default_cfg = default_cfgs['swsl_resnet18']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def swsl_resnet50(pretrained=True, **kwargs):
+    """Constructs a semi-weakly supervised ResNet-50 model pre-trained on 1B weakly supervised
+       image dataset and finetuned on ImageNet.
+       `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+       Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    model.default_cfg = default_cfgs['swsl_resnet50']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def swsl_resnext50_32x4d(pretrained=True, **kwargs):
+    """Constructs a semi-weakly supervised ResNeXt-50 32x4 model pre-trained on 1B weakly supervised
+       image dataset and finetuned on ImageNet.
+       `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+       Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4, **kwargs)
+    model.default_cfg = default_cfgs['swsl_resnext50_32x4d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def swsl_resnext101_32x4d(pretrained=True, **kwargs):
+    """Constructs a semi-weakly supervised ResNeXt-101 32x4 model pre-trained on 1B weakly supervised
+       image dataset and finetuned on ImageNet.
+       `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+       Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=4, **kwargs)
+    model.default_cfg = default_cfgs['swsl_resnext101_32x4d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def swsl_resnext101_32x8d(pretrained=True, **kwargs):
+    """Constructs a semi-weakly supervised ResNeXt-101 32x8 model pre-trained on 1B weakly supervised
+       image dataset and finetuned on ImageNet.
+       `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+       Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=8, **kwargs)
+    model.default_cfg = default_cfgs['swsl_resnext101_32x8d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def swsl_resnext101_32x16d(pretrained=True, **kwargs):
+    """Constructs a semi-weakly supervised ResNeXt-101 32x16 model pre-trained on 1B weakly supervised
+       image dataset and finetuned on ImageNet.
+       `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
+       Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=16, **kwargs)
+    model.default_cfg = default_cfgs['swsl_resnext101_32x16d']
+    if pretrained:
+        load_pretrained(model, num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3))
+    return model
+
+
+@register_model
+def seresnext26d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-26 v1d model.
+    This is technically a 28 layer ResNet, sticking with 'd' modifier from Gluon for now.
+    """
+    default_cfg = default_cfgs['seresnext26d_32x4d']
+    model = ResNet(
+        Bottleneck, [2, 2, 2, 2], cardinality=32, base_width=4,
+        stem_width=32, stem_type='deep', avg_down=True, use_se=True,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -681,19 +888,14 @@ def ig_resnext101_32x32d(pretrained=True, num_classes=1000, in_chans=3, **kwargs
 
 
 @register_model
-def ig_resnext101_32x48d(pretrained=True, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNeXt-101 32x48 model pre-trained on weakly-supervised data
-    and finetuned on ImageNet from Figure 5 in
-    `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
-    Weights from https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/
-    Args:
-        pretrained (bool): load pretrained weights
-        num_classes (int): number of classes for classifier (default: 1000 for pretrained)
-        in_chans (int): number of input planes (default: 3 for pretrained / color)
+def seresnext26t_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-26 v1d model.
     """
-    default_cfg = default_cfgs['ig_resnext101_32x48d']
-    model = ResNet(Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=48,
-                   num_classes=1000, in_chans=3, **kwargs)
+    default_cfg = default_cfgs['seresnext26t_32x4d']
+    model = ResNet(
+        Bottleneck, [2, 2, 2, 2], cardinality=32, base_width=4,
+        stem_width=32, stem_type='deep_tiered', avg_down=True, use_se=True,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

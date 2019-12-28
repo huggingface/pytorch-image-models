@@ -20,7 +20,7 @@ class TestTimePoolHead(nn.Module):
         self.base.reset_classifier(0)  # delete original fc layer
 
     def forward(self, x):
-        x = self.base.forward_features(x, pool=False)
+        x = self.base.forward_features(x)
         x = F.avg_pool2d(x, kernel_size=self.original_pool, stride=1)
         x = self.fc(x)
         x = adaptive_avgmax_pool2d(x, 1)

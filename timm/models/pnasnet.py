@@ -355,7 +355,7 @@ class PNASNet5Large(nn.Module):
         else:
             self.last_linear = None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x_conv_0 = self.conv_0(x)
         x_stem_0 = self.cell_stem_0(x_conv_0)
         x_stem_1 = self.cell_stem_1(x_conv_0, x_stem_0)
@@ -372,13 +372,11 @@ class PNASNet5Large(nn.Module):
         x_cell_10 = self.cell_10(x_cell_8, x_cell_9)
         x_cell_11 = self.cell_11(x_cell_9, x_cell_10)
         x = self.relu(x_cell_11)
-        if pool:
-            x = self.global_pool(x)
-            x = x.view(x.size(0), -1)
         return x
 
-    def forward(self, input):
-        x = self.forward_features(input)
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
         x = self.last_linear(x)

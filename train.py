@@ -55,6 +55,8 @@ parser.add_argument('--gp', default='avg', type=str, metavar='POOL',
                     help='Type of global pool, "avg", "max", "avgmax", "avgmaxc" (default: "avg")')
 parser.add_argument('--img-size', type=int, default=None, metavar='N',
                     help='Image patch size (default: None => model default)')
+parser.add_argument('--crop-pct', default=None, type=float,
+                    metavar='N', help='Input image center crop percent (for validation only)')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
@@ -65,6 +67,8 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.)')
+parser.add_argument('--drop-connect', type=float, default=0.0, metavar='DROP',
+                    help='Drop connect rate (default: 0.)')
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
@@ -87,7 +91,7 @@ parser.add_argument('--epochs', type=int, default=200, metavar='N',
                     help='number of epochs to train (default: 2)')
 parser.add_argument('--start-epoch', default=None, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--decay-epochs', type=int, default=30, metavar='N',
+parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                     help='epoch interval to decay LR')
 parser.add_argument('--warmup-epochs', type=int, default=3, metavar='N',
                     help='epochs to warmup LR, if scheduler supports')
@@ -119,6 +123,10 @@ parser.add_argument('--bn-momentum', type=float, default=None,
                     help='BatchNorm momentum override (if not None)')
 parser.add_argument('--bn-eps', type=float, default=None,
                     help='BatchNorm epsilon override (if not None)')
+parser.add_argument('--sync-bn', action='store_true',
+                    help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
+parser.add_argument('--dist-bn', type=str, default='',
+                    help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
                     help='Enable tracking moving average of model weights')
@@ -141,8 +149,6 @@ parser.add_argument('--save-images', action='store_true', default=False,
                     help='save images of input bathes every log interval for debugging')
 parser.add_argument('--amp', action='store_true', default=False,
                     help='use NVIDIA amp for mixed precision training')
-parser.add_argument('--sync-bn', action='store_true',
-                    help='enabling apex sync BN.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
@@ -208,6 +214,7 @@ def main():
         pretrained=args.pretrained,
         num_classes=args.num_classes,
         drop_rate=args.drop,
+        drop_connect_rate=args.drop_connect,
         global_pool=args.gp,
         bn_tf=args.bn_tf,
         bn_momentum=args.bn_momentum,
@@ -253,7 +260,7 @@ def main():
             if args.local_rank == 0:
                 logging.info('Restoring NVIDIA AMP state from checkpoint')
             amp.load_state_dict(resume_state['amp'])
-    resume_state = None
+    del resume_state
 
     model_ema = None
     if args.model_ema:
@@ -344,6 +351,7 @@ def main():
         std=data_config['std'],
         num_workers=args.workers,
         distributed=args.distributed,
+        crop_pct=data_config['crop_pct'],
     )
 
     if args.mixup > 0.:
@@ -385,9 +393,17 @@ def main():
                 lr_scheduler=lr_scheduler, saver=saver, output_dir=output_dir,
                 use_amp=use_amp, model_ema=model_ema)
 
+            if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
+                if args.local_rank == 0:
+                    logging.info("Distributing BatchNorm running means and vars")
+                distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
+
             eval_metrics = validate(model, loader_eval, validate_loss_fn, args)
 
             if model_ema is not None and not args.model_ema_force_cpu:
+                if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
+                    distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
+
                 ema_eval_metrics = validate(
                     model_ema.ema, loader_eval, validate_loss_fn, args, log_suffix=' (EMA)')
                 eval_metrics = ema_eval_metrics
@@ -439,7 +455,7 @@ def train_epoch(
                 lam = 1.
                 if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
                     lam = np.random.beta(args.mixup, args.mixup)
-                input.mul_(lam).add_(1 - lam, input.flip(0))
+                input = input.mul(lam).add_(1 - lam, input.flip(0))
                 target = mixup_target(target, args.num_classes, lam, args.smoothing)
 
         output = model(input)
