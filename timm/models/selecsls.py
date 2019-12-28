@@ -40,13 +40,13 @@ default_cfgs = {
         url='',
         interpolation='bicubic'),
     'selecsls42_B': _cfg(
-        url='http://gvv.mpi-inf.mpg.de/projects/XNect/models/SelecSLS42_B.pth',
+        url='http://gvv.mpi-inf.mpg.de/projects/XNect/assets/models/SelecSLS42_B.pth',
         interpolation='bicubic'),
     'selecsls60': _cfg(
         url='',
         interpolation='bicubic'),
     'selecsls60_B': _cfg(
-        url='http://gvv.mpi-inf.mpg.de/projects/XNect/models/SelecSLS60_B.pth',
+        url='http://gvv.mpi-inf.mpg.de/projects/XNect/assets/models/SelecSLS60_B.pth',
         interpolation='bicubic'),
     'selecsls84': _cfg(
         url='',
