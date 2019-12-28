@@ -121,7 +121,7 @@ def gluon_resnet50_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     """
     default_cfg = default_cfgs['gluon_resnet50_v1c']
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=32, deep_stem=True, **kwargs)
+                   stem_width=32, stem_type='deep', **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -134,7 +134,7 @@ def gluon_resnet101_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet101_v1c']
     model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=32, deep_stem=True, **kwargs)
+                   stem_width=32, stem_type='deep', **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -147,7 +147,7 @@ def gluon_resnet152_v1c(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet152_v1c']
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=32, deep_stem=True, **kwargs)
+                   stem_width=32, stem_type='deep', **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -160,7 +160,7 @@ def gluon_resnet50_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     """
     default_cfg = default_cfgs['gluon_resnet50_v1d']
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=32, deep_stem=True, avg_down=True, **kwargs)
+                   stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -173,7 +173,7 @@ def gluon_resnet101_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet101_v1d']
     model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=32, deep_stem=True, avg_down=True, **kwargs)
+                   stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -186,7 +186,7 @@ def gluon_resnet152_v1d(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet152_v1d']
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=32, deep_stem=True, avg_down=True, **kwargs)
+                   stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -199,7 +199,7 @@ def gluon_resnet50_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     """
     default_cfg = default_cfgs['gluon_resnet50_v1e']
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=64, deep_stem=True, avg_down=True, **kwargs)
+                   stem_width=64, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
     #if pretrained:
     #    load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -212,7 +212,7 @@ def gluon_resnet101_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet101_v1e']
     model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=64, deep_stem=True, avg_down=True, **kwargs)
+                   stem_width=64, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -225,7 +225,7 @@ def gluon_resnet152_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet152_v1e']
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=64, deep_stem=True, avg_down=True, **kwargs)
+                   stem_width=64, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -238,7 +238,7 @@ def gluon_resnet50_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     """
     default_cfg = default_cfgs['gluon_resnet50_v1s']
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=64, deep_stem=True, **kwargs)
+                   stem_width=64, stem_type='deep', **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -251,7 +251,7 @@ def gluon_resnet101_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet101_v1s']
     model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=64, deep_stem=True, **kwargs)
+                   stem_width=64, stem_type='deep', **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -264,7 +264,7 @@ def gluon_resnet152_v1s(pretrained=False, num_classes=1000, in_chans=3, **kwargs
     """
     default_cfg = default_cfgs['gluon_resnet152_v1s']
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, in_chans=in_chans,
-                   stem_width=64, deep_stem=True, **kwargs)
+                   stem_width=64, stem_type='deep', **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -362,7 +362,7 @@ def gluon_senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['gluon_senet154']
     model = ResNet(
         Bottleneck, [3, 8, 36, 3], cardinality=64, base_width=4, use_se=True,
-        deep_stem=True, down_kernel_size=3, block_reduce_first=2,
+        stem_type='deep', down_kernel_size=3, block_reduce_first=2,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:

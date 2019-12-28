@@ -2,6 +2,15 @@
 
 ## What's New
 
+### Dec 28, 2019
+* Add new model weights and training hparams (see Training Hparams section)
+  * `seresnext26d_32x4d`- 77.6 top-1, 93.6 top-5
+     * deep stem (32, 32, 64), avgpool downsample
+     * stem/dowsample from bag-of-tricks paper
+  * `seresnext26t_32x4d`- 78.0 top-1, 93.7 top-5
+     * deep tiered stem (24, 48, 64), avgpool downsample (a modified 'D' variant)
+     * stem sizing mods from Jeremy Howard and fastai devs discussing ResNet architecture experiments
+
 ### Dec 23, 2019
 * Add RandAugment trained MixNet-XL weights with 80.48 top-1.
 * `--dist-bn` argument added to train.py, will distribute BN stats between nodes after each train epoch, before eval
@@ -114,6 +123,8 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | efficientnet_b1 | 78.692 (21.308) | 94.086 (5.914) | 7.79M | bicubic | 240 |
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic | 224 |
 | resnet50 | 78.470 (21.530) | 94.266 (5.734) | 25.6M | bicubic | 224 |
+| seresnext26t_32x4d | 77.998 (22.002) | 93.708 (6.292) | 16.8M | bicubic | 224 |
+| seresnext26d_32x4d | 77.602 (22.398) | 93.608 (6.392) | 16.8M | bicubic | 224 |
 | mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic | 224 |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic | 224 |
 | efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic | 224 |
@@ -237,10 +248,19 @@ Sources for original weights:
 ## Training Hyperparameters
 
 ### EfficientNet-B2 with RandAugment - 80.4 top-1, 95.1 top-5
+These params are for dual Titan RTX cards with NVIDIA Apex installed:
+
 `./distributed_train.sh 2 /imagenet/ --model efficientnet_b2 -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .016`
 
 ### MixNet-XL with RandAugment - 80.5 top-1, 94.9 top-5
+This params are for dual Titan RTX cards with NVIDIA Apex installed:
+
 `./distributed_train.sh 2 /imagenet/ --model mixnet_xl -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .969 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.3 --amp --lr .016 --dist-bn reduce`
+
+### SE-ResNeXt-26-D and SE-ResNeXt-26-T
+These hparams (or similar) work well for a wide range of ResNet architecture, generally a good idea to increase the epoch # as the model size increases... ie approx 180-200 for ResNe(X)t50, and 220+ for larger. Increase batch size and LR proportionally for better GPUs or with AMP enabled. These params were for 2 1080Ti cards:
+
+`./distributed_train.sh 2 /imagenet/ --model seresnext26t_32x4d --lr 0.1 --warmup-epochs 5 --epochs 160 --weight-decay 1e-4 --sched cosine --reprob 0.4 --remode pixel -b 112`
 
 **TODO dig up some more**
 
