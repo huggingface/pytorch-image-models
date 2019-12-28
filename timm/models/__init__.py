@@ -7,6 +7,7 @@ from .senet import *
 from .xception import *
 from .nasnet import *
 from .pnasnet import *
+from .selecsls import *
 from .gen_efficientnet import *
 from .inception_v3 import *
 from .gluon_resnet import *
