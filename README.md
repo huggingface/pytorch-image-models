@@ -264,7 +264,7 @@ This params are for dual Titan RTX cards with NVIDIA Apex installed:
 
 ### SE-ResNeXt-26-D and SE-ResNeXt-26-T
 These hparams (or similar) work well for a wide range of ResNet architecture, generally a good idea to increase the epoch # as the model size increases... ie approx 180-200 for ResNe(X)t50, and 220+ for larger. Increase batch size and LR proportionally for better GPUs or with AMP enabled. These params were for 2 1080Ti cards:
-i
+
 `./distributed_train.sh 2 /imagenet/ --model seresnext26t_32x4d --lr 0.1 --warmup-epochs 5 --epochs 160 --weight-decay 1e-4 --sched cosine --reprob 0.4 --remode pixel -b 112`
 
 ### EfficientNet-B3 with RandAugment - 81.5 top-1, 95.7 top-5
@@ -279,13 +279,14 @@ The training of this model started with the same command line as EfficientNet-B2
 
 All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x and 3.7.x. Little to no care has been taken to be Python 2.x friendly and I don't plan to support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.
 
-PyTorch versions 1.0 and 1.1 have been tested with this code. 
+PyTorch versions 1.2 and 1.3.1 have been tested with this code. 
 
 I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
 ```
 conda create -n torch-env
 conda activate torch-env
-conda install -c pytorch pytorch torchvision cudatoolkit=10.0
+conda install -c pytorch pytorch torchvision cudatoolkit=10
+conda install pyyaml
 ```
 
 ### Pip
@@ -331,5 +332,4 @@ To run inference from a checkpoint:
 ## TODO
 A number of additions planned in the future for various projects, incl
 * Do a model performance (speed + accuracy) benchmarking across all models (make runable as script)
-* Add usage examples to comments, good hyper params for training
-* Comments, cleanup and the usual things that get pushed back
+* Complete feature map extraction across all model types and build obj detection/segmentation models and scripts (or integrate backbones with mmdetection, detectron2)
