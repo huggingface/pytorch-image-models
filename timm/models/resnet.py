@@ -873,8 +873,8 @@ def swsl_resnext101_32x16d(pretrained=True, **kwargs):
 
 @register_model
 def seresnext26d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNet-26 v1d model.
-    This is technically a 28 layer ResNet, sticking with 'd' modifier from Gluon for now.
+    """Constructs a SE-ResNeXt-26-D model.
+    This is technically a 28 layer ResNet, sticking with 'D' modifier from Gluon / bag-of-tricks.
     """
     default_cfg = default_cfgs['seresnext26d_32x4d']
     model = ResNet(
@@ -889,7 +889,9 @@ def seresnext26d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
 
 @register_model
 def seresnext26t_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNet-26 v1d model.
+    """Constructs a SE-ResNet-26-T model.
+    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 48, 64 channels
+    in the deep stem. Stem channel counts suggested by Jeremy Howard.
     """
     default_cfg = default_cfgs['seresnext26t_32x4d']
     model = ResNet(
