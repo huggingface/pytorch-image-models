@@ -4,6 +4,8 @@
 
 ### Dec 28, 2019
 * Add new model weights and training hparams (see Training Hparams section)
+  * `efficientnet_b3` - 81.5 top-1, 95.7 top-5 at default res/crop, 81.9, 95.8 at 320x320 1.0 crop-pct
+     * trained with RandAugment, ended up with an interesting but less than perfect result (see training section)
   * `seresnext26d_32x4d`- 77.6 top-1, 93.6 top-5
      * deep stem (32, 32, 64), avgpool downsample
      * stem/dowsample from bag-of-tricks paper
@@ -262,8 +264,11 @@ This params are for dual Titan RTX cards with NVIDIA Apex installed:
 
 ### SE-ResNeXt-26-D and SE-ResNeXt-26-T
 These hparams (or similar) work well for a wide range of ResNet architecture, generally a good idea to increase the epoch # as the model size increases... ie approx 180-200 for ResNe(X)t50, and 220+ for larger. Increase batch size and LR proportionally for better GPUs or with AMP enabled. These params were for 2 1080Ti cards:
-
+i
 `./distributed_train.sh 2 /imagenet/ --model seresnext26t_32x4d --lr 0.1 --warmup-epochs 5 --epochs 160 --weight-decay 1e-4 --sched cosine --reprob 0.4 --remode pixel -b 112`
+
+### EfficientNet-B3 with RandAugment - 81.5 top-1, 95.7 top-5
+The training of this model started with the same command line as EfficientNet-B2 w/ RA above. After almost three weeks of training the process crashed. The results weren't looking amazing so I resumed the training several times with tweaks to a few params (increase RE prob, decrease rand-aug, increase ema-decay). Nothing looked great. I ended up averaging the best checkpoints from all restarts. The result is mediocre at default res/crop but oddly performs much better with a full image test crop of 1.0. 
 
 **TODO dig up some more**
 
