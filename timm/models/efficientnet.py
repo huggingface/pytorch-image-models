@@ -72,8 +72,15 @@ default_cfgs = {
     'efficientnet_b2': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth',
         input_size=(3, 260, 260), pool_size=(9, 9)),
+    'efficientnet_b2a': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth',
+        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0),
     'efficientnet_b3': _cfg(
-        url='', input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra-a5e2fbc7.pth',
+        input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
+    'efficientnet_b3a': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra-a5e2fbc7.pth',
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0),
     'efficientnet_b4': _cfg(
         url='', input_size=(3, 380, 380), pool_size=(12, 12), crop_pct=0.922),
     'efficientnet_b5': _cfg(
@@ -856,11 +863,29 @@ def efficientnet_b2(pretrained=False, **kwargs):
 
 
 @register_model
+def efficientnet_b2a(pretrained=False, **kwargs):
+    """ EfficientNet-B2 @ 288x288 w/ 1.0 test crop"""
+    # NOTE for train, drop_rate should be 0.3, drop_connect_rate should be 0.2
+    model = _gen_efficientnet(
+        'efficientnet_b2a', channel_multiplier=1.1, depth_multiplier=1.2, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def efficientnet_b3(pretrained=False, **kwargs):
     """ EfficientNet-B3 """
     # NOTE for train, drop_rate should be 0.3, drop_connect_rate should be 0.2
     model = _gen_efficientnet(
         'efficientnet_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_b3a(pretrained=False, **kwargs):
+    """ EfficientNet-B3 @ 320x320 w/ 1.0 test crop-pct """
+    # NOTE for train, drop_rate should be 0.3, drop_connect_rate should be 0.2
+    model = _gen_efficientnet(
+        'efficientnet_b3a', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
     return model
 
 

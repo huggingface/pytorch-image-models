@@ -116,6 +116,9 @@ I've leveraged the training scripts in this repository to train a few of the mod
 
 |Model | Prec@1 (Err) | Prec@5 (Err) | Param # | Image Scaling  | Image Size |
 |---|---|---|---|---|---|
+| efficientnet_b3a | 81.874 (18.126) | 95.840 (4.160) | 9.11M | bicubic | 320 (1.0 crop) |
+| efficientnet_b3 | 81.498 (18.502) | 95.718 (4.282) | 9.11M | bicubic | 300 |
+| efficientnet_b2a | 80.608 (19.392) | 95.310 (4.690) | 9.11M | bicubic | 288 (1.0 crop) |
 | mixnet_xl | 80.478 (19.522) | 94.932 (5.068) | 11.90M | bicubic | 224 |
 | efficientnet_b2 | 80.402 (19.598) | 95.076 (4.924) | 9.11M | bicubic | 260 |
 | resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic | 224 |
