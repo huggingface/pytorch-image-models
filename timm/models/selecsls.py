@@ -39,13 +39,13 @@ default_cfgs = {
         url='',
         interpolation='bicubic'),
     'selecsls42b': _cfg(
-        url='http://gvv.mpi-inf.mpg.de/projects/XNect/assets/models/SelecSLS42_B.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls42b-8af30141.pth',
         interpolation='bicubic'),
     'selecsls60': _cfg(
         url='',
         interpolation='bicubic'),
     'selecsls60b': _cfg(
-        url='http://gvv.mpi-inf.mpg.de/projects/XNect/assets/models/SelecSLS60_B.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls60b-94e619b5.pth',
         interpolation='bicubic'),
     'selecsls84': _cfg(
         url='',
