@@ -316,6 +316,13 @@ model_list = [
     _entry('hrnet_w44', 'HRNet-W44-C', '1908.07919'),
     _entry('hrnet_w48', 'HRNet-W48-C', '1908.07919'),
     _entry('hrnet_w64', 'HRNet-W64-C', '1908.07919'),
+
+
+    ## SelecSLS official impl weights
+    _entry('selecsls42b', 'SelecSLS-42_B', '1907.00837',
+           model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
+    _entry('selecsls60b', 'SelecSLS-60_B', '1907.00837',
+           model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
 ]
 
 for m in model_list:
