@@ -2,6 +2,9 @@
 
 ## What's New
 
+### Dec 30, 2019
+* Merge [Dushyant Mehta's](https://github.com/mehtadushy) PR for SelecSLS (Selective Short and Long Range Skip Connections) networks. Good GPU memory consumption and throughput. Original: https://github.com/mehtadushy/SelecSLS-Pytorch
+
 ### Dec 28, 2019
 * Add new model weights and training hparams (see Training Hparams section)
   * `efficientnet_b3` - 81.5 top-1, 95.7 top-5 at default res/crop, 81.9, 95.8 at 320x320 1.0 crop-pct
@@ -87,6 +90,8 @@ I've included a few of my favourite models, but this is not an exhaustive collec
 * MobileNet-V3 (https://arxiv.org/abs/1905.02244) -- pretrained PyTorch model, official TF weights ported
 * HRNet
     * code from https://github.com/HRNet/HRNet-Image-Classification, paper https://arxiv.org/abs/1908.07919
+* SelecSLS
+    * code from https://github.com/mehtadushy/SelecSLS-Pytorch, paper https://arxiv.org/abs/1907.00837
 
 Use the  `--model` arg to specify model for train, validation, inference scripts. Match the all lowercase
 creation fn for the model you'd like.
