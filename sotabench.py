@@ -321,6 +321,8 @@ model_list = [
     ## SelecSLS official impl weights
     _entry('selecsls42b', 'SelecSLS-42_B', '1907.00837',
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
+    _entry('selecsls60', 'SelecSLS-60', '1907.00837',
+           model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
     _entry('selecsls60b', 'SelecSLS-60_B', '1907.00837',
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
 ]
