@@ -54,9 +54,8 @@ class Bottle2neck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None,
                  cardinality=1, base_width=26, scale=4, use_se=False,
-                 norm_layer=None, dilation=1, previous_dilation=1, **_):
+                 act_layer=nn.ReLU, norm_layer=None, dilation=1, previous_dilation=1, **_):
         super(Bottle2neck, self).__init__()
-        assert dilation == 1 and previous_dilation == 1  # FIXME support dilation
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
         self.num_scales = max(1, scale - 1)
@@ -71,18 +70,20 @@ class Bottle2neck(nn.Module):
         bns = []
         for i in range(self.num_scales):
             convs.append(nn.Conv2d(
-                width, width, kernel_size=3, stride=stride, padding=1, groups=cardinality, bias=False))
+                width, width, kernel_size=3, stride=stride, padding=dilation,
+                dilation=dilation, groups=cardinality, bias=False))
             bns.append(norm_layer(width))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)
         if self.is_first:
+            # FIXME this should probably have count_include_pad=False, but hurts original weights
             self.pool = nn.AvgPool2d(kernel_size=3, stride=stride, padding=1)
 
         self.conv3 = nn.Conv2d(width * scale, outplanes, kernel_size=1, bias=False)
         self.bn3 = norm_layer(outplanes)
         self.se = SEModule(outplanes, planes // 4) if use_se else None
 
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = act_layer(inplace=True)
         self.downsample = downsample
 
     def forward(self, x):
