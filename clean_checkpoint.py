@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+""" Checkpoint Cleaning Script
+
+Takes training checkpoints with GPU tensors, optimizer state, extra dict keys, etc.
+and outputs a CPU  tensor checkpoint with only the `state_dict` along with SHA256
+calculation for model zoo compatibility.
+
+Hacked together by Ross Wightman (https://github.com/rwightman)
+"""
 import torch
 import argparse
 import os
@@ -5,7 +14,7 @@ import hashlib
 import shutil
 from collections import OrderedDict
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
+parser = argparse.ArgumentParser(description='PyTorch Checkpoint Cleaner')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--output', default='', type=str, metavar='PATH',

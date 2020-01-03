@@ -1,10 +1,10 @@
-"""Sample PyTorch Inference script
+#!/usr/bin/env python
+"""PyTorch Inference Script
+
+An example inference script that outputs top-k class ids for images in a folder into a csv.
+
+Hacked together by Ross Wightman (https://github.com/rwightman)
 """
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import os
 import time
 import argparse

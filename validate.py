@@ -1,7 +1,12 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+#!/usr/bin/env python
+""" ImageNet Validation Script
 
+This is intended to be a lean and easily modifiable ImageNet validation script for evaluating pretrained
+models or training checkpoints against ImageNet or similarly organized image datasets. It prioritizes
+canonical PyTorch, standard Python style, and good performance. Repurpose as you see fit.
+
+Hacked together by Ross Wightman (https://github.com/rwightman)
+"""
 import argparse
 import os
 import csv
@@ -182,6 +187,7 @@ def main():
         # validate all checkpoints in a path with same model
         checkpoints = glob.glob(args.checkpoint + '/*.pth.tar')
         checkpoints += glob.glob(args.checkpoint + '/*.pth')
+        model_names = list_models(args.model)
         model_cfgs = [(args.model, c) for c in sorted(checkpoints, key=natural_key)]
     else:
         if args.model == 'all':
@@ -195,7 +201,7 @@ def main():
             model_cfgs = [(n, '') for n in model_names]
 
     if len(model_cfgs):
-        print('Running bulk validation on these pretrained models:', ', '.join(model_names))
+        logging.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         header_written = False
         with open('./results-all.csv', mode='w') as cf:
             for m, c in model_cfgs:

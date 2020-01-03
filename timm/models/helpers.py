@@ -5,12 +5,11 @@ import logging
 from collections import OrderedDict
 
 
-def load_checkpoint(model, checkpoint_path, use_ema=False):
+def load_state_dict(checkpoint_path, use_ema=False):
     if checkpoint_path and os.path.isfile(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        state_dict_key = ''
+        state_dict_key = 'state_dict'
         if isinstance(checkpoint, dict):
-            state_dict_key = 'state_dict'
             if use_ema and 'state_dict_ema' in checkpoint:
                 state_dict_key = 'state_dict_ema'
         if state_dict_key and state_dict_key in checkpoint:
@@ -19,13 +18,19 @@ def load_checkpoint(model, checkpoint_path, use_ema=False):
                 # strip `module.` prefix
                 name = k[7:] if k.startswith('module') else k
                 new_state_dict[name] = v
-            model.load_state_dict(new_state_dict)
+            state_dict = new_state_dict
         else:
-            model.load_state_dict(checkpoint)
-        logging.info("Loaded {} from checkpoint '{}'".format(state_dict_key or 'weights', checkpoint_path))
+            state_dict = checkpoint
+        logging.info("Loaded {} from checkpoint '{}'".format(state_dict_key, checkpoint_path))
+        return state_dict
     else:
         logging.error("No checkpoint found at '{}'".format(checkpoint_path))
         raise FileNotFoundError()
+
+
+def load_checkpoint(model, checkpoint_path, use_ema=False):
+    state_dict = load_state_dict(checkpoint_path, use_ema)
+    model.load_state_dict(state_dict)
 
 
 def resume_checkpoint(model, checkpoint_path):
