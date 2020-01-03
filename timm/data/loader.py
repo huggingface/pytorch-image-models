@@ -148,6 +148,7 @@ def create_loader(
         distributed=False,
         crop_pct=None,
         collate_fn=None,
+        pin_memory=False,
         fp16=False,
         tf_preprocessing=False,
 ):
@@ -183,6 +184,7 @@ def create_loader(
         num_workers=num_workers,
         sampler=sampler,
         collate_fn=collate_fn,
+        pin_memory=pin_memory,
         drop_last=is_training,
     )
     if use_prefetcher:

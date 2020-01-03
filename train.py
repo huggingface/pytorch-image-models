@@ -149,6 +149,8 @@ parser.add_argument('--save-images', action='store_true', default=False,
                     help='save images of input bathes every log interval for debugging')
 parser.add_argument('--amp', action='store_true', default=False,
                     help='use NVIDIA amp for mixed precision training')
+parser.add_argument('--pin-mem', action='store_true', default=False,
+                    help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
@@ -330,6 +332,7 @@ def main():
         num_workers=args.workers,
         distributed=args.distributed,
         collate_fn=collate_fn,
+        pin_memory=args.pin_mem,
     )
 
     eval_dir = os.path.join(args.data, 'val')
@@ -352,6 +355,7 @@ def main():
         num_workers=args.workers,
         distributed=args.distributed,
         crop_pct=data_config['crop_pct'],
+        pin_memory=args.pin_mem,
     )
 
     if args.mixup > 0.:
