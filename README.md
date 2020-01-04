@@ -2,6 +2,10 @@
 
 ## What's New
 
+### Jan 3, 2019
+* Add RandAugment trained EfficientNet-B0 weight with 77.7 top-1. Trained by [Michael Klachko](https://github.com/michaelklachko) with this code and recent hparams (see Training section)
+* Add `avg_checkpoints.py` script for post training weight averaging and update all scripts with header docstrings and shebangs.
+
 ### Dec 30, 2019
 * Merge [Dushyant Mehta's](https://github.com/mehtadushy) PR for SelecSLS (Selective Short and Long Range Skip Connections) networks. Good GPU memory consumption and throughput. Original: https://github.com/mehtadushy/SelecSLS-Pytorch
 
@@ -134,10 +138,10 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic | 224 |
 | resnet50 | 78.470 (21.530) | 94.266 (5.734) | 25.6M | bicubic | 224 |
 | seresnext26t_32x4d | 77.998 (22.002) | 93.708 (6.292) | 16.8M | bicubic | 224 |
+| efficientnet_b0 | 77.698 (22.302) | 93.532 (6.468) | 5.29M | bicubic | 224 |
 | seresnext26d_32x4d | 77.602 (22.398) | 93.608 (6.392) | 16.8M | bicubic | 224 |
 | mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic | 224 |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic | 224 |
-| efficientnet_b0 | 76.912 (23.088) | 93.210 (6.790) | 5.29M | bicubic | 224 |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic | 224 |
 | mixnet_s | 75.988 (24.012) | 92.794 (7.206) | 4.13M | bicubic | 224 |
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic | 224 |
@@ -274,6 +278,12 @@ These hparams (or similar) work well for a wide range of ResNet architecture, ge
 
 ### EfficientNet-B3 with RandAugment - 81.5 top-1, 95.7 top-5
 The training of this model started with the same command line as EfficientNet-B2 w/ RA above. After almost three weeks of training the process crashed. The results weren't looking amazing so I resumed the training several times with tweaks to a few params (increase RE prob, decrease rand-aug, increase ema-decay). Nothing looked great. I ended up averaging the best checkpoints from all restarts. The result is mediocre at default res/crop but oddly performs much better with a full image test crop of 1.0. 
+
+### EfficientNet-B0 with RandAugment - 77.7 top-1, 95.3 top-5
+Michael Klachko achieved these results with the same command line as for B2, with the recommended B0 dropout rate of 0.2.
+
+`./distributed_train.sh 2 /imagenet/ --model efficientnet_b0 -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.2 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .016`
+
 
 **TODO dig up some more**
 
