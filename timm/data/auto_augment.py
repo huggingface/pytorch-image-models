@@ -323,7 +323,7 @@ class AugmentOp:
         self.magnitude_std = self.hparams.get('magnitude_std', 0)
 
     def __call__(self, img):
-        if not self.prob >= 1.0 or random.random() > self.prob:
+        if self.prob < 1.0 and random.random() > self.prob:
             return img
         magnitude = self.magnitude
         if self.magnitude_std and self.magnitude_std > 0:
@@ -539,7 +539,7 @@ _RAND_TRANSFORMS = [
     'ShearY',
     'TranslateXRel',
     'TranslateYRel',
-    #'Cutout'  # FIXME I implement this as random erasing separately
+    #'Cutout'  # NOTE I've implement this as random erasing separately
 ]
 
 
@@ -559,7 +559,7 @@ _RAND_INCREASING_TRANSFORMS = [
     'ShearY',
     'TranslateXRel',
     'TranslateYRel',
-    #'Cutout'  # FIXME I implement this as random erasing separately
+    #'Cutout'  # NOTE I've implement this as random erasing separately
 ]
 
 
@@ -627,6 +627,7 @@ def rand_augment_transform(config_str, hparams):
         'n' - integer num layers (number of transform ops selected per image)
         'w' - integer probabiliy weight index (index of a set of weights to influence choice of op)
         'mstd' -  float std deviation of magnitude noise applied
+        'inc' - integer (bool), use augmentations that increase in severity with magnitude (default: 0)
     Ex 'rand-m9-n3-mstd0.5' results in RandAugment with magnitude 9, num_layers 3, magnitude_std 0.5
     'rand-mstd1-w0' results in magnitude_std 1.0, weights 0, default magnitude of 10 and num_layers 2
 
@@ -637,6 +638,7 @@ def rand_augment_transform(config_str, hparams):
     magnitude = _MAX_LEVEL  # default to _MAX_LEVEL for magnitude (currently 10)
     num_layers = 2  # default to 2 ops per image
     weight_idx = None  # default to no probability weights for op choice
+    transforms = _RAND_TRANSFORMS
     config = config_str.split('-')
     assert config[0] == 'rand'
     config = config[1:]
@@ -648,6 +650,9 @@ def rand_augment_transform(config_str, hparams):
         if key == 'mstd':
             # noise param injected via hparams for now
             hparams.setdefault('magnitude_std', float(val))
+        elif key == 'inc':
+            if bool(val):
+                transforms = _RAND_INCREASING_TRANSFORMS
         elif key == 'm':
             magnitude = int(val)
         elif key == 'n':
@@ -656,7 +661,7 @@ def rand_augment_transform(config_str, hparams):
             weight_idx = int(val)
         else:
             assert False, 'Unknown RandAugment config section'
-    ra_ops = rand_augment_ops(magnitude=magnitude, hparams=hparams)
+    ra_ops = rand_augment_ops(magnitude=magnitude, hparams=hparams, transforms=transforms)
     choice_weights = None if weight_idx is None else _select_rand_weights(weight_idx)
     return RandAugment(ra_ops, num_layers, choice_weights=choice_weights)
 
@@ -686,12 +691,12 @@ def augmix_ops(magnitude=10, hparams=None, transforms=None):
 
 
 class AugMixAugment:
-    def __init__(self, ops, alpha=1., width=3, depth=-1):
+    def __init__(self, ops, alpha=1., width=3, depth=-1, blended=False):
         self.ops = ops
         self.alpha = alpha
         self.width = width
         self.depth = depth
-        self.blended = False
+        self.blended = blended
 
     def _calc_blended_weights(self, ws, m):
         ws = ws * m
@@ -707,7 +712,7 @@ class AugMixAugment:
         # This is my first crack and implementing a slightly faster mixed augmentation. Instead
         # of accumulating the mix for each chain in a Numpy array and then blending with original,
         # it recomputes the blending coefficients and applies one PIL image blend per chain.
-        # TODO I've verified the results are in the right ballpark but they differ by more than rounding.
+        # TODO the results appear in the right ballpark but they differ by more than rounding.
         img_orig = img.copy()
         ws = self._calc_blended_weights(mixing_weights, m)
         for w in ws:
@@ -755,6 +760,7 @@ def augment_and_mix_transform(config_str, hparams):
         'm' - integer magnitude (severity) of augmentation mix (default: 3)
         'w' - integer width of augmentation chain (default: 3)
         'd' - integer depth of augmentation chain (-1 is random [1, 3], default: -1)
+        'b' - integer (bool), blend each branch of chain into end result without a final blend, less CPU (default: 0)
         'mstd' -  float std deviation of magnitude noise applied (default: 0)
     Ex 'augmix-m5-w4-d2' results in AugMix with severity 5, chain width 4, chain depth 2
 
@@ -766,6 +772,7 @@ def augment_and_mix_transform(config_str, hparams):
     width = 3
     depth = -1
     alpha = 1.
+    blended = False
     config = config_str.split('-')
     assert config[0] == 'augmix'
     config = config[1:]
@@ -785,7 +792,9 @@ def augment_and_mix_transform(config_str, hparams):
             depth = int(val)
         elif key == 'a':
             alpha = float(val)
+        elif key == 'b':
+            blended = bool(val)
         else:
             assert False, 'Unknown AugMix config section'
     ops = augmix_ops(magnitude=magnitude, hparams=hparams)
-    return AugMixAugment(ops, alpha=alpha, width=width, depth=depth)
+    return AugMixAugment(ops, alpha=alpha, width=width, depth=depth, blended=blended)

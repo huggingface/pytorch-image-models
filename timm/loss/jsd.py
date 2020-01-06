@@ -6,7 +6,7 @@ from .cross_entropy import LabelSmoothingCrossEntropy
 
 
 class JsdCrossEntropy(nn.Module):
-    """ Jenson-Shannon Divergence + Cross-Entropy Loss
+    """ Jensen-Shannon Divergence + Cross-Entropy Loss
 
     """
     def __init__(self, num_splits=3, alpha=12, smoothing=0.1):

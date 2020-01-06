@@ -15,11 +15,13 @@ def transforms_imagenet_train(
         color_jitter=0.4,
         auto_augment=None,
         interpolation='random',
-        random_erasing=0.4,
-        random_erasing_mode='const',
         use_prefetcher=False,
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        re_prob=0.,
+        re_mode='const',
+        re_count=1,
+        re_num_splits=0,
         separate=False,
 ):
 
@@ -71,8 +73,9 @@ def transforms_imagenet_train(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std))
         ]
-        if random_erasing > 0.:
-            final_tfl.append(RandomErasing(random_erasing, mode=random_erasing_mode, device='cpu'))
+        if re_prob > 0.:
+            final_tfl.append(
+                RandomErasing(re_prob, mode=re_mode, max_count=re_count, num_splits=re_num_splits, device='cpu'))
 
     if separate:
         return transforms.Compose(primary_tfl), transforms.Compose(secondary_tfl), transforms.Compose(final_tfl)
@@ -126,6 +129,10 @@ def create_transform(
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        re_prob=0.,
+        re_mode='const',
+        re_count=1,
+        re_num_splits=0,
         crop_pct=None,
         tf_preprocessing=False,
         separate=False):
@@ -150,6 +157,10 @@ def create_transform(
                 use_prefetcher=use_prefetcher,
                 mean=mean,
                 std=std,
+                re_prob=re_prob,
+                re_mode=re_mode,
+                re_count=re_count,
+                re_num_splits=re_num_splits,
                 separate=separate)
         else:
             assert not separate, "Separate transforms not supported for validation preprocessing"

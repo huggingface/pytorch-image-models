@@ -38,7 +38,7 @@ class RandomErasing:
     def __init__(
             self,
             probability=0.5, min_area=0.02, max_area=1/3, min_aspect=0.3, max_aspect=None,
-            mode='const', min_count=1, max_count=None, device='cuda'):
+            mode='const', min_count=1, max_count=None, num_splits=0, device='cuda'):
         self.probability = probability
         self.min_area = min_area
         self.max_area = max_area
@@ -46,6 +46,7 @@ class RandomErasing:
         self.log_aspect_ratio = (math.log(min_aspect), math.log(max_aspect))
         self.min_count = min_count
         self.max_count = max_count or min_count
+        self.num_splits = num_splits
         mode = mode.lower()
         self.rand_color = False
         self.per_pixel = False
@@ -82,6 +83,8 @@ class RandomErasing:
             self._erase(input, *input.size(), input.dtype)
         else:
             batch_size, chan, img_h, img_w = input.size()
-            for i in range(batch_size):
+            # skip first slice of batch if num_splits is set (for clean portion of samples)
+            batch_start = batch_size // self.num_splits if self.num_splits > 1 else 0
+            for i in range(batch_start, batch_size):
                 self._erase(input[i], chan, img_h, img_w, input.dtype)
         return input
