@@ -2,7 +2,7 @@
 
 ## What's New
 
-### Jan 3, 2019
+### Jan 3, 2020
 * Add RandAugment trained EfficientNet-B0 weight with 77.7 top-1. Trained by [Michael Klachko](https://github.com/michaelklachko) with this code and recent hparams (see Training section)
 * Add `avg_checkpoints.py` script for post training weight averaging and update all scripts with header docstrings and shebangs.
 
