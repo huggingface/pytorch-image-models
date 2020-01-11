@@ -97,6 +97,9 @@ default_cfgs = {
     'seresnext26t_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26t_32x4d-361bc1c4.pth',
         interpolation='bicubic'),
+    'seresnext26tn_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26tn_32x4d-569cb627.pth',
+        interpolation='bicubic'),
 }
 
 
@@ -318,7 +321,7 @@ class ResNet(nn.Module):
             stem_chs_1 = stem_chs_2 = stem_width
             if 'tiered' in stem_type:
                 stem_chs_1 = 3 * (stem_width // 4)
-                stem_chs_2 = 6 * (stem_width // 4)
+                stem_chs_2 = stem_width if 'narrow' in stem_type else 6 * (stem_width // 4)
             self.conv1 = nn.Sequential(*[
                 nn.Conv2d(in_chans, stem_chs_1, 3, stride=2, padding=1, bias=False),
                 norm_layer(stem_chs_1),
@@ -893,7 +896,8 @@ def swsl_resnext101_32x16d(pretrained=True, **kwargs):
 @register_model
 def seresnext26d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SE-ResNeXt-26-D model.
-    This is technically a 28 layer ResNet, sticking with 'D' modifier from Gluon / bag-of-tricks.
+    This is technically a 28 layer ResNet, using the 'D' modifier from Gluon / bag-of-tricks for
+    combination of deep stem and avg_pool in downsample.
     """
     default_cfg = default_cfgs['seresnext26d_32x4d']
     model = ResNet(
@@ -910,12 +914,29 @@ def seresnext26d_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
 def seresnext26t_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a SE-ResNet-26-T model.
     This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 48, 64 channels
-    in the deep stem. Stem channel counts suggested by Jeremy Howard.
+    in the deep stem.
     """
     default_cfg = default_cfgs['seresnext26t_32x4d']
     model = ResNet(
         Bottleneck, [2, 2, 2, 2], cardinality=32, base_width=4,
         stem_width=32, stem_type='deep_tiered', avg_down=True, use_se=True,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def seresnext26tn_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a SE-ResNeXt-26-TN model.
+    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
+    in the deep stem. The channel number of the middle stem conv is narrower than the 'T' variant.
+    """
+    default_cfg = default_cfgs['seresnext26tn_32x4d']
+    model = ResNet(
+        Bottleneck, [2, 2, 2, 2], cardinality=32, base_width=4,
+        stem_width=32, stem_type='deep_tiered_narrow', avg_down=True, use_se=True,
         num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
