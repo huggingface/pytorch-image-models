@@ -2,6 +2,12 @@
 
 ## What's New
 
+### Jan 11, 2020
+* Master may be a bit unstable wrt to training, these changes have been tested but not all combos
+* Implementations of AugMix added to existing RA and AA. Including numerous suporting pieces like JSD loss (Jensen-Shannon Divergence + CE), and AugMixDataset
+* SplitBatchNorm adaptation layer added for implementing Auxiliary BN as per AdvProp paper
+* Training results with AugMix and related command lines coming soon...
+
 ### Jan 3, 2020
 * Add RandAugment trained EfficientNet-B0 weight with 77.7 top-1. Trained by [Michael Klachko](https://github.com/michaelklachko) with this code and recent hparams (see Training section)
 * Add `avg_checkpoints.py` script for post training weight averaging and update all scripts with header docstrings and shebangs.
