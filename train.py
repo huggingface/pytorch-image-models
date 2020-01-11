@@ -16,7 +16,6 @@ Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
 import time
-import logging
 import yaml
 from datetime import datetime
 
@@ -29,10 +28,10 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_target
-from timm.models import create_model, resume_checkpoint
+from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_batch, AugMixDataset
+from timm.models import create_model, resume_checkpoint, convert_splitbn_model
 from timm.utils import *
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
 
@@ -84,6 +83,8 @@ parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.)')
 parser.add_argument('--drop-connect', type=float, default=0.0, metavar='DROP',
                     help='Drop connect rate (default: 0.)')
+parser.add_argument('--jsd', action='store_true', default=False,
+                    help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
@@ -119,18 +120,24 @@ parser.add_argument('--color-jitter', type=float, default=0.4, metavar='PCT',
                     help='Color jitter factor (default: 0.4)')
 parser.add_argument('--aa', type=str, default=None, metavar='NAME',
                     help='Use AutoAugment policy. "v0" or "original". (default: None)'),
+parser.add_argument('--aug-splits', type=int, default=0,
+                    help='Number of augmentation splits (default: 0, valid: 0 or >=2)')
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
 parser.add_argument('--remode', type=str, default='const',
                     help='Random erase mode (default: "const")')
 parser.add_argument('--recount', type=int, default=1,
                     help='Random erase count (default: 1)')
+parser.add_argument('--resplit', action='store_true', default=False,
+                    help='Do not random erase first (clean) augmentation split')
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                     help='turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
                     help='label smoothing (default: 0.1)')
+parser.add_argument('--train-interpolation', type=str, default='random',
+                    help='Training interpolation (random, bilinear, bicubic default: "random")')
 # Batch norm parameters (only works with gen_efficientnet based models currently)
 parser.add_argument('--bn-tf', action='store_true', default=False,
                     help='Use Tensorflow BatchNorm defaults for models that support it (default: False)')
@@ -142,6 +149,8 @@ parser.add_argument('--sync-bn', action='store_true',
                     help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
 parser.add_argument('--dist-bn', type=str, default='',
                     help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
+parser.add_argument('--split-bn', action='store_true',
+                    help='Enable separate BN layers per augmentation split.')
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
                     help='Enable tracking moving average of model weights')
@@ -244,6 +253,15 @@ def main():
 
     data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
 
+    num_aug_splits = 0
+    if args.aug_splits > 0:
+        assert args.aug_splits > 1, 'A split of 1 makes no sense'
+        num_aug_splits = args.aug_splits
+
+    if args.split_bn:
+        assert num_aug_splits > 1 or args.resplit
+        model = convert_splitbn_model(model, max(num_aug_splits, 2))
+
     if args.num_gpu > 1:
         if args.amp:
             logging.warning(
@@ -290,6 +308,7 @@ def main():
 
     if args.distributed:
         if args.sync_bn:
+            assert not args.split_bn
             try:
                 if has_apex:
                     model = convert_syncbn_model(model)
@@ -328,7 +347,11 @@ def main():
 
     collate_fn = None
     if args.prefetcher and args.mixup > 0:
+        assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
         collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
+
+    if num_aug_splits > 1:
+        dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
 
     loader_train = create_loader(
         dataset_train,
@@ -336,12 +359,14 @@ def main():
         batch_size=args.batch_size,
         is_training=True,
         use_prefetcher=args.prefetcher,
-        rand_erase_prob=args.reprob,
-        rand_erase_mode=args.remode,
-        rand_erase_count=args.recount,
+        re_prob=args.reprob,
+        re_mode=args.remode,
+        re_count=args.recount,
+        re_split=args.resplit,
         color_jitter=args.color_jitter,
         auto_augment=args.aa,
-        interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
+        num_aug_splits=num_aug_splits,
+        interpolation=args.train_interpolation,
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
@@ -373,7 +398,11 @@ def main():
         pin_memory=args.pin_mem,
     )
 
-    if args.mixup > 0.:
+    if args.jsd:
+        assert num_aug_splits > 1  # JSD only valid with aug splits set
+        train_loss_fn = JsdCrossEntropy(num_splits=num_aug_splits, smoothing=args.smoothing).cuda()
+        validate_loss_fn = nn.CrossEntropyLoss().cuda()
+    elif args.mixup > 0.:
         # smoothing is handled with mixup label transform
         train_loss_fn = SoftTargetCrossEntropy().cuda()
         validate_loss_fn = nn.CrossEntropyLoss().cuda()
@@ -471,11 +500,10 @@ def train_epoch(
         if not args.prefetcher:
             input, target = input.cuda(), target.cuda()
             if args.mixup > 0.:
-                lam = 1.
-                if not args.mixup_off_epoch or epoch < args.mixup_off_epoch:
-                    lam = np.random.beta(args.mixup, args.mixup)
-                input = input.mul(lam).add_(1 - lam, input.flip(0))
-                target = mixup_target(target, args.num_classes, lam, args.smoothing)
+                input, target = mixup_batch(
+                    input, target,
+                    alpha=args.mixup, num_classes=args.num_classes, smoothing=args.smoothing,
+                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch)
 
         output = model(input)
 
