@@ -1,7 +1,19 @@
-""" AutoAugment and RandAugment
-Implementation adapted from:
+""" AutoAugment, RandAugment, and AugMix for PyTorch
+
+This code implements the searched ImageNet policies with various tweaks and improvements and
+does not include any of the search code.
+
+AA and RA Implementation adapted from:
     https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py
-Papers: https://arxiv.org/abs/1805.09501, https://arxiv.org/abs/1906.11172, and https://arxiv.org/abs/1909.13719
+
+AugMix adapted from:
+    https://github.com/google-research/augmix
+
+Papers:
+    AutoAugment: Learning Augmentation Policies from Data - https://arxiv.org/abs/1805.09501
+    Learning Data Augmentation Strategies for Object Detection - https://arxiv.org/abs/1906.11172
+    RandAugment: Practical automated data augmentation... - https://arxiv.org/abs/1909.13719
+    AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty - https://arxiv.org/abs/1912.02781
 
 Hacked together by Ross Wightman
 """
@@ -691,12 +703,17 @@ def augmix_ops(magnitude=10, hparams=None, transforms=None):
 
 
 class AugMixAugment:
+    """ AugMix Transform
+    Adapted and improved from impl here: https://github.com/google-research/augmix/blob/master/imagenet.py
+    From paper: 'AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty -
+    https://arxiv.org/abs/1912.02781
+    """
     def __init__(self, ops, alpha=1., width=3, depth=-1, blended=False):
         self.ops = ops
         self.alpha = alpha
         self.width = width
         self.depth = depth
-        self.blended = blended
+        self.blended = blended  # blended mode is faster but not well tested
 
     def _calc_blended_weights(self, ws, m):
         ws = ws * m

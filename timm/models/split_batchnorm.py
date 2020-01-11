@@ -1,6 +1,18 @@
+""" Split BatchNorm
+
+A PyTorch BatchNorm layer that splits input batch into N equal parts and passes each through
+a separate BN layer. The first split is passed through the parent BN layers with weight/bias
+keys the same as the original BN. All other splits pass through BN sub-layers under the '.aux_bn'
+namespace.
+
+This allows easily removing the auxiliary BN layers after training to efficiently
+achieve the 'Auxiliary BatchNorm' as described in the AdvProp Paper, section 4.2,
+'Disentangled Learning via An Auxiliary BN'
+
+Hacked together by Ross Wightman
+"""
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class SplitBatchNorm2d(torch.nn.BatchNorm2d):

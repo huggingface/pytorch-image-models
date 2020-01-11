@@ -237,8 +237,9 @@ def main():
     data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
 
     num_aug_splits = 0
-    if args.aug_splits:
-        num_aug_splits = max(args.aug_splits, 2)  # split of 1 makes no sense
+    if args.aug_splits > 0:
+        assert args.aug_splits > 1, 'A split of 1 makes no sense'
+        num_aug_splits = args.aug_splits
 
     if args.split_bn:
         assert num_aug_splits > 1 or args.resplit

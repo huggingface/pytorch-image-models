@@ -1,3 +1,6 @@
+""" Transforms Factory
+Factory methods for building image transforms for use with TIMM (PyTorch Image Models)
+"""
 import math
 
 import torch
@@ -24,7 +27,13 @@ def transforms_imagenet_train(
         re_num_splits=0,
         separate=False,
 ):
-
+    """
+    If separate==True, the transforms are returned as a tuple of 3 separate transforms
+    for use in a mixing dataset that passes
+     * all data through the first (primary) transform, called the 'clean' data
+     * a portion of the data through the secondary transform
+     * normalizes and converts the branches above with the third, final transform
+    """
     primary_tfl = [
         RandomResizedCropAndInterpolation(
             img_size, scale=scale, interpolation=interpolation),
