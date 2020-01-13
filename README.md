@@ -2,11 +2,13 @@
 
 ## What's New
 
-### Jan 11, 2020
+### Jan 11/12, 2020
 * Master may be a bit unstable wrt to training, these changes have been tested but not all combos
 * Implementations of AugMix added to existing RA and AA. Including numerous suporting pieces like JSD loss (Jensen-Shannon Divergence + CE), and AugMixDataset
 * SplitBatchNorm adaptation layer added for implementing Auxiliary BN as per AdvProp paper
-* Training results with AugMix and related command lines coming soon...
+* ResNet-50 AugMix trained model w/ 79% top-1 added
+* `seresnext26tn_32x4d` - 77.99 top-1, 93.75 top-5 added to tiered experiment
+* Command lines/hparams and more AugMix and related model updates for above coming soon...
 
 ### Jan 3, 2020
 * Add RandAugment trained EfficientNet-B0 weight with 77.7 top-1. Trained by [Michael Klachko](https://github.com/michaelklachko) with this code and recent hparams (see Training section)
@@ -54,10 +56,6 @@ For each competition, personal, or freelance project involving images + Convolut
 The work of many others is present here. I've tried to make sure all source material is acknowledged:
 * Training/validation scripts evolved from early versions of the [PyTorch Imagenet Examples](https://github.com/pytorch/examples)
 * CUDA specific performance enhancements have been pulled from [NVIDIA's APEX Examples](https://github.com/NVIDIA/apex/tree/master/examples)
-* Models are from a wide variety of sources
-    * [Torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models)
-    * [Cadene's Pretrained Models](https://github.com/Cadene/pretrained-models.pytorch)
-    * [Myself](https://github.com/rwightman/pytorch-dpn-pretrained)
 * LR scheduler ideas from [AllenNLP](https://github.com/allenai/allennlp/tree/master/allennlp/training/learning_rate_schedulers), [FAIRseq](https://github.com/pytorch/fairseq/tree/master/fairseq/optim/lr_scheduler), and SGDR: Stochastic Gradient Descent with Warm Restarts (https://arxiv.org/abs/1608.03983)
 * Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py)  (https://arxiv.org/abs/1708.04896)
 * Optimizers:
@@ -67,8 +65,9 @@ The work of many others is present here. I've tried to make sure all source mate
 
 ## Models
 
-I've included a few of my favourite models, but this is not an exhaustive collection. You can't do better than Cadene's collection in that regard. Most models do have pretrained weights from their respective sources or original authors. 
+I've included a few of my favourite models, but this is not an exhaustive collection. You can't do better than [Cadene's](https://github.com/Cadene/pretrained-models.pytorch) collection in that regard. Most models do have pretrained weights from their respective sources or original authors.
 
+Included models:
 * ResNet/ResNeXt (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models) with mods by myself)
     * ResNet-18, ResNet-34, ResNet-50, ResNet-101, ResNet-152, ResNeXt50 (32x4d), ResNeXt101 (32x4d and 64x4d)
     * 'Bag of Tricks' / Gluon C, D, E, S variations (https://arxiv.org/abs/1812.01187)
@@ -123,6 +122,8 @@ Several (less common) features that I often utilize in my projects are included.
 * Mixup (as in https://arxiv.org/abs/1710.09412) - currently implementing/testing
 * An inference script that dumps output to CSV is provided as an example
 * AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
+* AugMix w/ JSD loss (https://arxiv.org/abs/1912.02781), JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well
+* SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
 
 ## Results
 
@@ -139,11 +140,12 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | mixnet_xl | 80.478 (19.522) | 94.932 (5.068) | 11.90M | bicubic | 224 |
 | efficientnet_b2 | 80.402 (19.598) | 95.076 (4.924) | 9.11M | bicubic | 260 |
 | resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic | 224 |
+| resnet50 | 78.994 (21.006) | 94.396 (5.604) | 25.6M | bicubic | 224 |
 | mixnet_l | 78.976 (21.024 | 94.184 (5.816) | 7.33M | bicubic | 224 |
 | efficientnet_b1 | 78.692 (21.308) | 94.086 (5.914) | 7.79M | bicubic | 240 |
 | resnext50_32x4d | 78.512 (21.488) | 94.042 (5.958) | 25M | bicubic | 224 |
-| resnet50 | 78.470 (21.530) | 94.266 (5.734) | 25.6M | bicubic | 224 |
 | seresnext26t_32x4d | 77.998 (22.002) | 93.708 (6.292) | 16.8M | bicubic | 224 |
+| seresnext26tn_32x4d | 77.986 (22.014) | 93.746 (6.254) | 16.8M | bicubic | 224 |
 | efficientnet_b0 | 77.698 (22.302) | 93.532 (6.468) | 5.29M | bicubic | 224 |
 | seresnext26d_32x4d | 77.602 (22.398) | 93.608 (6.392) | 16.8M | bicubic | 224 |
 | mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic | 224 |
