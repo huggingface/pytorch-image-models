@@ -4,10 +4,10 @@
 
 ### Jan 11/12, 2020
 * Master may be a bit unstable wrt to training, these changes have been tested but not all combos
-* Implementations of AugMix added to existing RA and AA. Including numerous suporting pieces like JSD loss (Jensen-Shannon Divergence + CE), and AugMixDataset
+* Implementations of AugMix added to existing RA and AA. Including numerous supporting pieces like JSD loss (Jensen-Shannon divergence + CE), and AugMixDataset
 * SplitBatchNorm adaptation layer added for implementing Auxiliary BN as per AdvProp paper
 * ResNet-50 AugMix trained model w/ 79% top-1 added
-* `seresnext26tn_32x4d` - 77.99 top-1, 93.75 top-5 added to tiered experiment
+* `seresnext26tn_32x4d` - 77.99 top-1, 93.75 top-5 added to tiered experiment, higher img/s than 't' and 'd'
 * Command lines/hparams and more AugMix and related model updates for above coming soon...
 
 ### Jan 3, 2020
