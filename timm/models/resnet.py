@@ -243,7 +243,7 @@ class SelectiveKernelAttn(nn.Module):
         self.fc_reduce = nn.Conv2d(channels, num_attn_feat, kernel_size=1, bias=False)
         self.bn = norm_layer(num_attn_feat)
         self.act = act_layer(inplace=True)
-        self.fc_select = nn.Conv2d(num_attn_feat, channels * num_paths, kernel_size=1)
+        self.fc_select = nn.Conv2d(num_attn_feat, channels * num_paths, kernel_size=1, bias=False)
 
     def forward(self, x):
         assert x.shape[1] == self.num_paths
