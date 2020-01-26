@@ -16,6 +16,7 @@ from .gluon_xception import *
 from .res2net import *
 from .dla import *
 from .hrnet import *
+from .sknet import *
 
 from .registry import *
 from .factory import create_model
