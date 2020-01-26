@@ -106,7 +106,7 @@ class SelectiveKernelConv(nn.Module):
 
     def forward(self, x):
         if self.split_input:
-            x_split = torch.split(x, self.out_channels // self.num_paths, 1)
+            x_split = torch.split(x, self.in_channels // self.num_paths, 1)
             x_paths = [op(x_split[i]) for i, op in enumerate(self.paths)]
         else:
             x_paths = [op(x) for op in self.paths]
