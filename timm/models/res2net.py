@@ -54,14 +54,15 @@ class Bottle2neck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None,
                  cardinality=1, base_width=26, scale=4, use_se=False,
-                 act_layer=nn.ReLU, norm_layer=None, dilation=1, previous_dilation=1, **_):
+                 act_layer=nn.ReLU, norm_layer=None, dilation=1, first_dilation=None, **_):
         super(Bottle2neck, self).__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
         self.num_scales = max(1, scale - 1)
         width = int(math.floor(planes * (base_width / 64.0))) * cardinality
-        outplanes = planes * self.expansion
         self.width = width
+        outplanes = planes * self.expansion
+        first_dilation = first_dilation or dilation
 
         self.conv1 = nn.Conv2d(inplanes, width * scale, kernel_size=1, bias=False)
         self.bn1 = norm_layer(width * scale)
@@ -70,8 +71,8 @@ class Bottle2neck(nn.Module):
         bns = []
         for i in range(self.num_scales):
             convs.append(nn.Conv2d(
-                width, width, kernel_size=3, stride=stride, padding=dilation,
-                dilation=dilation, groups=cardinality, bias=False))
+                width, width, kernel_size=3, stride=stride, padding=first_dilation,
+                dilation=first_dilation, groups=cardinality, bias=False))
             bns.append(norm_layer(width))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)

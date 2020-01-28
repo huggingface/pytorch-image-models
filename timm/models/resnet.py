@@ -131,24 +131,23 @@ class BasicBlock(nn.Module):
     __constants__ = ['se', 'downsample']  # for pre 1.4 torchscript compat
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=64, use_se=False,
-                 reduce_first=1, dilation=1, previous_dilation=1, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64, use_se=False,
+                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
         super(BasicBlock, self).__init__()
 
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
         assert base_width == 64, 'BasicBlock doest not support changing base width'
         first_planes = planes // reduce_first
         outplanes = planes * self.expansion
+        first_dilation = first_dilation or dilation
 
         self.conv1 = nn.Conv2d(
-            inplanes, first_planes, kernel_size=3, stride=stride, padding=dilation,
-            dilation=dilation, bias=False)
+            inplanes, first_planes, kernel_size=3, stride=stride, padding=first_dilation,
+            dilation=first_dilation, bias=False)
         self.bn1 = norm_layer(first_planes)
         self.act1 = act_layer(inplace=True)
         self.conv2 = nn.Conv2d(
-            first_planes, outplanes, kernel_size=3, padding=previous_dilation,
-            dilation=previous_dilation, bias=False)
+            first_planes, outplanes, kernel_size=3, padding=dilation, dilation=dilation, bias=False)
         self.bn2 = norm_layer(outplanes)
         self.se = SEModule(outplanes, planes // 4) if use_se else None
         self.act2 = act_layer(inplace=True)
@@ -181,21 +180,21 @@ class Bottleneck(nn.Module):
     __constants__ = ['se', 'downsample']  # for pre 1.4 torchscript compat
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=64, use_se=False,
-                 reduce_first=1, dilation=1, previous_dilation=1, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64, use_se=False,
+                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
         super(Bottleneck, self).__init__()
 
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
         first_planes = width // reduce_first
         outplanes = planes * self.expansion
+        first_dilation = first_dilation or dilation
 
         self.conv1 = nn.Conv2d(inplanes, first_planes, kernel_size=1, bias=False)
         self.bn1 = norm_layer(first_planes)
         self.act1 = act_layer(inplace=True)
         self.conv2 = nn.Conv2d(
             first_planes, width, kernel_size=3, stride=stride,
-            padding=dilation, dilation=dilation, groups=cardinality, bias=False)
+            padding=first_dilation, dilation=first_dilation, groups=cardinality, bias=False)
         self.bn2 = norm_layer(width)
         self.act2 = act_layer(inplace=True)
         self.conv3 = nn.Conv2d(width, outplanes, kernel_size=1, bias=False)
@@ -396,13 +395,11 @@ class ResNet(nn.Module):
         first_dilation = 1 if dilation in (1, 2) else 2
         bkwargs = dict(
             cardinality=self.cardinality, base_width=self.base_width, reduce_first=reduce_first,
-            use_se=use_se, **kwargs)
-        layers = [block(
-            self.inplanes, planes, stride, downsample, dilation=first_dilation, previous_dilation=dilation, **bkwargs)]
+            dilation=dilation, use_se=use_se, **kwargs)
+        layers = [block(self.inplanes, planes, stride, downsample, first_dilation=first_dilation, **bkwargs)]
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(
-                self.inplanes, planes, dilation=dilation, previous_dilation=dilation, **bkwargs))
+            layers.append(block(self.inplanes, planes, **bkwargs))
 
         return nn.Sequential(*layers)
 
@@ -430,8 +427,8 @@ class ResNet(nn.Module):
     def forward(self, x):
         x = self.forward_features(x)
         x = self.global_pool(x).flatten(1)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        if self.drop_rate:
+            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
         x = self.fc(x)
         return x
 
