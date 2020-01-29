@@ -271,11 +271,36 @@ def _kernel_valid(k):
     assert k >= 3 and k % 2
 
 
+class ConvBnAct(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, dilation=1, groups=1,
+                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+        super(ConvBnAct, self).__init__()
+        padding = _get_padding(kernel_size, stride, dilation)  # assuming PyTorch style padding for this block
+        self.conv = nn.Conv2d(
+            in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
+            padding=padding, dilation=dilation, groups=groups, bias=False)
+        self.bn = norm_layer(out_channels)
+        self.drop_block = drop_block
+        if act_layer is not None:
+            self.act = act_layer(inplace=True)
+        else:
+            self.act = None
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        if self.drop_block is not None:
+            x = self.drop_block(x)
+        if self.act is not None:
+            x = self.act(x)
+        return x
+
+
 class SelectiveKernelConv(nn.Module):
 
     def __init__(self, in_channels, out_channels, kernel_size=None, stride=1, dilation=1, groups=1,
                  attn_reduction=16, min_attn_channels=32, keep_3x3=True, split_input=False,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
         super(SelectiveKernelConv, self).__init__()
         kernel_size = kernel_size or [3, 5]
         _kernel_valid(kernel_size)
@@ -297,19 +322,15 @@ class SelectiveKernelConv(nn.Module):
             out_channels = out_channels // num_paths
         groups = min(out_channels, groups)
 
-        self.paths = nn.ModuleList()
-        for k, d in zip(kernel_size, dilation):
-            p = _get_padding(k, stride, d)
-            self.paths.append(nn.Sequential(OrderedDict([
-                ('conv', nn.Conv2d(
-                    in_channels, out_channels, kernel_size=k, stride=stride, padding=p,
-                    dilation=d, groups=groups, bias=False)),
-                ('bn', norm_layer(out_channels)),
-                ('act', act_layer(inplace=True))
-            ])))
+        conv_kwargs = dict(
+            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer)
+        self.paths = nn.ModuleList([
+            ConvBnAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
+            for k, d in zip(kernel_size, dilation)])
 
         attn_channels = max(int(out_channels / attn_reduction), min_attn_channels)
         self.attn = SelectiveKernelAttn(out_channels, num_paths, attn_channels)
+        self.drop_block = drop_block
 
     def forward(self, x):
         if self.split_input:

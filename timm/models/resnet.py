@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from .registry import register_model
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .nn_ops import DropBlock2d, DropPath
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
@@ -132,7 +133,8 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64, use_se=False,
-                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
+                 drop_block=None, drop_path=None):
         super(BasicBlock, self).__init__()
 
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
@@ -181,7 +183,8 @@ class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64, use_se=False,
-                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
+                 drop_block=None, drop_path=None):
         super(Bottleneck, self).__init__()
 
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
@@ -305,8 +308,8 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, in_chans=3, use_se=False,
                  cardinality=1, base_width=64, stem_width=64, stem_type='',
                  block_reduce_first=1, down_kernel_size=1, avg_down=False, output_stride=32,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, drop_rate=0.0, global_pool='avg',
-                 zero_init_last_bn=True, block_args=None):
+                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, drop_rate=0.0, drop_path_rate=0.,
+                 drop_block_rate=0., global_pool='avg', zero_init_last_bn=True, block_args=None):
         block_args = block_args or dict()
         self.num_classes = num_classes
         deep_stem = 'deep' in stem_type
@@ -338,6 +341,9 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
+        dp = DropPath(drop_path_rate) if drop_block_rate else None
+        db_3 = DropBlock2d(drop_block_rate, 7, 0.25) if drop_block_rate else None
+        db_4 = DropBlock2d(drop_block_rate, 7, 1.00) if drop_block_rate else None
         channels, strides, dilations = [64, 128, 256, 512], [1, 2, 2, 2], [1] * 4
         if output_stride == 16:
             strides[3] = 1
@@ -350,11 +356,11 @@ class ResNet(nn.Module):
         llargs = list(zip(channels, layers, strides, dilations))
         lkwargs = dict(
             use_se=use_se, reduce_first=block_reduce_first, act_layer=act_layer, norm_layer=norm_layer,
-            avg_down=avg_down, down_kernel_size=down_kernel_size, **block_args)
+            avg_down=avg_down, down_kernel_size=down_kernel_size, drop_path=dp, **block_args)
         self.layer1 = self._make_layer(block, *llargs[0], **lkwargs)
         self.layer2 = self._make_layer(block, *llargs[1], **lkwargs)
-        self.layer3 = self._make_layer(block, *llargs[2], **lkwargs)
-        self.layer4 = self._make_layer(block, *llargs[3], **lkwargs)
+        self.layer3 = self._make_layer(block, drop_block=db_3, *llargs[2], **lkwargs)
+        self.layer4 = self._make_layer(block, drop_block=db_4, *llargs[3], **lkwargs)
 
         # Head (Pooling and Classifier)
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
