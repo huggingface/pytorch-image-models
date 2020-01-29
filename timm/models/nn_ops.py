@@ -83,14 +83,13 @@ def drop_block_2d(x, drop_prob=0.1, block_size=7, gamma_scale=1.0, drop_with_noi
             (height - block_size + 1))
 
     # Forces the block to be inside the feature map.
-    w_i, h_i = torch.meshgrid(torch.arange(width), torch.arange(height))
+    w_i, h_i = torch.meshgrid(torch.arange(width).to(x.device), torch.arange(height).to(x.device))
     valid_block = ((w_i >= clipped_block_size // 2) & (w_i < width - (clipped_block_size - 1) // 2)) & \
                   ((h_i >= clipped_block_size // 2) & (h_i < height - (clipped_block_size - 1) // 2))
-    valid_block = torch.reshape(valid_block, (1, 1, height, width))
-    valid_block = valid_block.to(x.dtype)
+    valid_block = torch.reshape(valid_block, (1, 1, height, width)).float()
 
-    uniform_noise = torch.rand_like(x)
-    block_mask = ((2 - seed_drop_rate - valid_block + uniform_noise) >= 1).to(x.dtype)
+    uniform_noise = torch.rand_like(x, dtype=torch.float32)
+    block_mask = ((2 - seed_drop_rate - valid_block + uniform_noise) >= 1).to(dtype=x.dtype)
     block_mask = -F.max_pool2d(
         -block_mask,
         kernel_size=clipped_block_size,  # block_size,
