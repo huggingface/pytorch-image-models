@@ -87,6 +87,9 @@ class Bottle2neck(nn.Module):
         self.relu = act_layer(inplace=True)
         self.downsample = downsample
 
+    def zero_init_last_bn(self):
+        nn.init.zeros_(self.bn3.weight)
+
     def forward(self, x):
         residual = x
 

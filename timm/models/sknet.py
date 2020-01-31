@@ -63,6 +63,9 @@ class SelectiveKernelBasic(nn.Module):
         self.drop_block = drop_block
         self.drop_path = drop_path
 
+    def zero_init_last_bn(self):
+        nn.init.zeros_(self.conv2.bn.weight)
+
     def forward(self, x):
         residual = x
         x = self.conv1(x)
@@ -108,6 +111,9 @@ class SelectiveKernelBottleneck(nn.Module):
         self.dilation = dilation
         self.drop_block = drop_block
         self.drop_path = drop_path
+
+    def zero_init_last_bn(self):
+        nn.init.zeros_(self.conv3.bn.weight)
 
     def forward(self, x):
         residual = x
