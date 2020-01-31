@@ -315,7 +315,9 @@ def main():
                 else:
                     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
                 if args.local_rank == 0:
-                    logging.info('Converted model to use Synchronized BatchNorm.')
+                    logging.info(
+                        'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
+                        'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
             except Exception as e:
                 logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
         if has_apex:
