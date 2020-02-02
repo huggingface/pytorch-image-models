@@ -22,7 +22,10 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     'skresnet18': _cfg(url=''),
-    'skresnet26d': _cfg()
+    'skresnet26d': _cfg(),
+    'skresnet50': _cfg(),
+    'skresnet50d': _cfg(),
+    'skresnext50_32x4d': _cfg(),
 }
 
 
@@ -132,24 +135,6 @@ class SelectiveKernelBottleneck(nn.Module):
 
 
 @register_model
-def skresnet26d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """Constructs a ResNet-26 model.
-    """
-    default_cfg = default_cfgs['skresnet26d']
-    sk_kwargs = dict(
-        keep_3x3=False,
-    )
-    model = ResNet(
-        SelectiveKernelBottleneck, [2, 2, 2, 2],  stem_width=32, stem_type='deep', avg_down=True,
-        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs),
-        **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
-
-
-@register_model
 def skresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a ResNet-18 model.
     """
@@ -178,6 +163,77 @@ def sksresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     model = ResNet(
         SelectiveKernelBasic, [2, 2, 2, 2], num_classes=num_classes, in_chans=in_chans,
         block_args=dict(sk_kwargs=sk_kwargs), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def skresnet26d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-26 model.
+    """
+    default_cfg = default_cfgs['skresnet26d']
+    sk_kwargs = dict(
+        keep_3x3=False,
+    )
+    model = ResNet(
+        SelectiveKernelBottleneck, [2, 2, 2, 2],  stem_width=32, stem_type='deep', avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs),
+        **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def skresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a Select Kernel ResNet-50 model.
+    Based on config in "Compounding the Performance Improvements of Assembled Techniques in a
+    Convolutional Neural Network"
+    """
+    sk_kwargs = dict(
+        attn_reduction=2,
+    )
+    default_cfg = default_cfgs['skresnet50']
+    model = ResNet(
+        SelectiveKernelBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
+        block_args=dict(sk_kwargs=sk_kwargs), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def skresnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a Select Kernel ResNet-50-D model.
+    Based on config in "Compounding the Performance Improvements of Assembled Techniques in a
+    Convolutional Neural Network"
+    """
+    sk_kwargs = dict(
+        attn_reduction=2,
+    )
+    default_cfg = default_cfgs['skresnet50d']
+    model = ResNet(
+        SelectiveKernelBottleneck, [3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def skresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a Select Kernel ResNeXt50-32x4d model. This should be equivalent to
+    the SKNet50 model in the Select Kernel Paper
+    """
+    default_cfg = default_cfgs['skresnext50_32x4d']
+    model = ResNet(
+        SelectiveKernelBottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
