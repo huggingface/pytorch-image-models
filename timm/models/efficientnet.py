@@ -124,6 +124,9 @@ default_cfgs = {
     'tf_efficientnet_b7': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b7_ra-6c08e654.pth',
         input_size=(3, 600, 600), pool_size=(19, 19), crop_pct=0.949),
+    'tf_efficientnet_b8': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b8_ra-572d5dd9.pth',
+        input_size=(3, 672, 672), pool_size=(21, 21), crop_pct=0.954),
     'tf_efficientnet_b0_ap': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_ap-f262efe1.pth',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, input_size=(3, 224, 224)),
@@ -1060,8 +1063,19 @@ def tf_efficientnet_b7(pretrained=False, **kwargs):
 
 
 @register_model
+def tf_efficientnet_b8(pretrained=False, **kwargs):
+    """ EfficientNet-B8. Tensorflow compatible variant """
+    # NOTE for train, drop_rate should be 0.5
+    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
+    kwargs['pad_type'] = 'same'
+    model = _gen_efficientnet(
+        'tf_efficientnet_b8', channel_multiplier=2.2, depth_multiplier=3.6, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def tf_efficientnet_b0_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B0. Tensorflow compatible variant  """
+    """ EfficientNet-B0 AdvProp. Tensorflow compatible variant  """
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnet(
@@ -1071,7 +1085,7 @@ def tf_efficientnet_b0_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b1_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B1. Tensorflow compatible variant  """
+    """ EfficientNet-B1 AdvProp. Tensorflow compatible variant  """
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnet(
@@ -1081,7 +1095,7 @@ def tf_efficientnet_b1_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b2_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B2. Tensorflow compatible variant  """
+    """ EfficientNet-B2 AdvProp. Tensorflow compatible variant  """
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnet(
@@ -1091,7 +1105,7 @@ def tf_efficientnet_b2_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b3_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B3. Tensorflow compatible variant """
+    """ EfficientNet-B3 AdvProp. Tensorflow compatible variant """
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnet(
@@ -1101,7 +1115,7 @@ def tf_efficientnet_b3_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b4_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B4. Tensorflow compatible variant """
+    """ EfficientNet-B4 AdvProp. Tensorflow compatible variant """
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnet(
@@ -1111,7 +1125,7 @@ def tf_efficientnet_b4_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b5_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B5. Tensorflow compatible variant """
+    """ EfficientNet-B5 AdvProp. Tensorflow compatible variant """
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnet(
@@ -1121,7 +1135,7 @@ def tf_efficientnet_b5_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b6_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B6. Tensorflow compatible variant """
+    """ EfficientNet-B6 AdvProp. Tensorflow compatible variant """
     # NOTE for train, drop_rate should be 0.5
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
@@ -1132,7 +1146,7 @@ def tf_efficientnet_b6_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b7_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B7. Tensorflow compatible variant """
+    """ EfficientNet-B7 AdvProp. Tensorflow compatible variant """
     # NOTE for train, drop_rate should be 0.5
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
@@ -1143,7 +1157,7 @@ def tf_efficientnet_b7_ap(pretrained=False, **kwargs):
 
 @register_model
 def tf_efficientnet_b8_ap(pretrained=False, **kwargs):
-    """ EfficientNet-B7. Tensorflow compatible variant """
+    """ EfficientNet-B8 AdvProp. Tensorflow compatible variant """
     # NOTE for train, drop_rate should be 0.5
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
