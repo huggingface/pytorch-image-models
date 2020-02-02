@@ -130,6 +130,8 @@ model_list = [
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_b7', 'EfficientNet-B7 (RandAugment)', '1905.11946', batch_size=BATCH_SIZE//8,
            model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_b8', 'EfficientNet-B8 (RandAugment)', '1905.11946', batch_size=BATCH_SIZE // 8,
+           model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_b0_ap', 'EfficientNet-B0 (AdvProp)', '1911.09665',
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_b1_ap', 'EfficientNet-B1 (AdvProp)', '1911.09665',

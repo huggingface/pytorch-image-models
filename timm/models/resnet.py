@@ -42,7 +42,7 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26d-69e92c46.pth',
         interpolation='bicubic'),
     'resnet50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_am-6c502b37.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth',
         interpolation='bicubic'),
     'resnet50d': _cfg(
         url='',

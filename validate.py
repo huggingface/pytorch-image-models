@@ -45,6 +45,8 @@ parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('--num-classes', type=int, default=1000,
                     help='Number classes in dataset')
+parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
+                    help='path to class to idx mapping file (default: "")')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
@@ -67,6 +69,8 @@ parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
+parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
+                    help='Output csv file for validation results (summary)')
 
 
 def validate(args):
@@ -104,10 +108,12 @@ def validate(args):
 
     criterion = nn.CrossEntropyLoss().cuda()
 
+    #from torchvision.datasets import ImageNet
+    #dataset = ImageNet(args.data, split='val')
     if os.path.splitext(args.data)[1] == '.tar' and os.path.isfile(args.data):
-        dataset = DatasetTar(args.data, load_bytes=args.tf_preprocessing)
+        dataset = DatasetTar(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
     else:
-        dataset = Dataset(args.data, load_bytes=args.tf_preprocessing)
+        dataset = Dataset(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
 
     crop_pct = 1.0 if test_time_pool else data_config['crop_pct']
     loader = create_loader(
@@ -201,9 +207,10 @@ def main():
             model_cfgs = [(n, '') for n in model_names]
 
     if len(model_cfgs):
+        results_file = args.results_file or './results-all.csv'
         logging.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
-        header_written = False
-        with open('./results-all.csv', mode='w') as cf:
+        results = []
+        try:
             for m, c in model_cfgs:
                 args.model = m
                 args.checkpoint = c
@@ -212,14 +219,23 @@ def main():
                 result.update(r)
                 if args.checkpoint:
                     result['checkpoint'] = args.checkpoint
-                dw = csv.DictWriter(cf, fieldnames=result.keys())
-                if not header_written:
-                    dw.writeheader()
-                    header_written = True
-                dw.writerow(result)
-                cf.flush()
+                results.append(result)
+        except KeyboardInterrupt as e:
+            pass
+        results = sorted(results, key=lambda x: x['top1'], reverse=True)
+        if len(results):
+            write_results(results_file, results)
     else:
         validate(args)
+
+
+def write_results(results_file, results):
+    with open(results_file, mode='w') as cf:
+        dw = csv.DictWriter(cf, fieldnames=results[0].keys())
+        dw.writeheader()
+        for r in results:
+            dw.writerow(r)
+        cf.flush()
 
 
 if __name__ == '__main__':
