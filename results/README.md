@@ -20,7 +20,7 @@ The standard 50,000 image ImageNet-1k validation set. Model selection during tra
 
 An ImageNet test set of 10,000 images sampled from new images roughly 10 years after the original. Care was taken to replicate the original ImageNet curation/sampling process.
 
-### ImageNet-Sketch - [`results-sketch.csv`](results-imagenet-sketch.csv)
+### ImageNet-Sketch - [`results-sketch.csv`](results-sketch.csv)
 
 * Source: https://github.com/HaohanWang/ImageNet-Sketch
 * Paper: "Learning Robust Global Representations by Penalizing Local Predictive Power" - https://arxiv.org/abs/1905.13549
