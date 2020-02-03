@@ -11,7 +11,7 @@ There are currently results for the ImageNet validation set and 3 additional tes
 * Source: http://image-net.org/challenges/LSVRC/2012/index
 * Paper: "ImageNet Large Scale Visual Recognition Challenge" - https://arxiv.org/abs/1409.0575
 
-The standard 50,000 image ImageNet-1k validation set. Model selection during training utilizes this validation set, so it is not a true test set.
+The standard 50,000 image ImageNet-1k validation set. Model selection during training utilizes this validation set, so it is not a true test set. Question: Does anyone have the official ImageNet-1k test set classification labels now that challenges are done?
 
 ### ImageNetV2 Matched Frequency - [`results-imagenetv2-matched-frequency.csv`](results-imagenetv2-matched-frequency.csv)
 
@@ -32,7 +32,7 @@ An ImageNet test set of 10,000 images sampled from new images roughly 10 years a
 * Source: https://github.com/hendrycks/natural-adv-examples
 * Paper: "Natural Adversarial Examples" - https://arxiv.org/abs/1907.07174
 
-A collection of 7500 images covering 200 of the 1000 ImageNet classes. Images are naturally occuring adversarial examples that confuse typical ImageNet classifiers. This is a challenging dataset, your average ResNet-50 will score 0% top-1.
+A collection of 7500 images covering 200 of the 1000 ImageNet classes. Images are naturally occuring adversarial examples that confuse typical ImageNet classifiers. This is a challenging dataset, your typical ResNet-50 will score 0% top-1.
 
 ## TODO
 * Add rank difference, and top-1/top-5 difference from ImageNet-1k validation for the 3 additional test sets
