@@ -49,7 +49,19 @@ class eca_layer(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
         self.sigmoid = nn.Sigmoid()
+    def forward(self, x):
+        # feature descriptor on the global spatial information
+        y = self.avg_pool(x)
+        # reshape for convolution
+        y = y.view(x.shape[0], 1, -1)
+        # Two different branches of ECA module
+        y = self.conv(y)
+        # Multi-scale information fusion
+        y = self.sigmoid(y.view(x.shape[0], -1, 1, 1))
+        return x * y.expand_as(x)
 
+
+    '''original implementation
     def forward(self, x):
         # x: input features with shape [b, c, h, w]
         b, c, h, w = x.size()
@@ -62,8 +74,10 @@ class eca_layer(nn.Module):
 
         # Multi-scale information fusion
         y = self.sigmoid(y)
-
         return x * y.expand_as(x)
+    '''
+
+
 
 class ceca_layer(nn.Module):
     """Constructs a circular ECA module.
@@ -74,7 +88,6 @@ class ceca_layer(nn.Module):
     This will fundamentally increase connectivity and possibly increase performance metrics
     (accuracy, robustness), without signficantly impacting resource metrics 
     (parameter size, throughput,latency, etc)
-
 
     Args:
         channel: Number of channels of the input feature map
@@ -92,19 +105,16 @@ class ceca_layer(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # x: input features with shape [b, c, h, w]
-        b, c, h, w = x.size()
         # feature descriptor on the global spatial information
         y = self.avg_pool(x)
         
-        #manually implement circular padding
-        y = torch.cat((y[:,:self.padding,:,:], y, y[:,-self.padding:,:,:]),dim=1)
-        
+        #manually implement circular padding, F.pad does not seemed to be bugged
+        y = F.pad(y.view(x.shape[0],1,-1),(self.padding,self.padding),mode='circular')
 
         # Two different branches of ECA module
-        y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+        y = self.conv(y)
 
         # Multi-scale information fusion
-        y = self.sigmoid(y)
+        y = self.sigmoid(y.view(x.shape[0], -1, 1, 1))
 
         return x * y.expand_as(x)
