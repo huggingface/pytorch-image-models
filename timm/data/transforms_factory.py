@@ -69,7 +69,7 @@ def transforms_imagenet_train(
         else:
             # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
             color_jitter = (float(color_jitter),) * 3
-            secondary_tfl += [transforms.ColorJitter(*color_jitter)]
+        secondary_tfl += [transforms.ColorJitter(*color_jitter)]
 
     final_tfl = []
     if use_prefetcher:

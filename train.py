@@ -79,6 +79,8 @@ parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
+parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
+                    help='ratio of validation batch size to training batch size (default: 1)')
 parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.)')
 parser.add_argument('--drop-connect', type=float, default=0.0, metavar='DROP',
@@ -388,7 +390,7 @@ def main():
     loader_eval = create_loader(
         dataset_eval,
         input_size=data_config['input_size'],
-        batch_size=4 * args.batch_size,
+        batch_size=args.validation_batch_size_multiplier * args.batch_size,
         is_training=False,
         use_prefetcher=args.prefetcher,
         interpolation=data_config['interpolation'],
