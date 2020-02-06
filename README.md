@@ -314,7 +314,7 @@ Trained on two older 1080Ti cards, this took a while. Only slightly, non statist
 ### EfficientNet-ES (EdgeTPU-Small) with RandAugment - 78.066 top-1, 93.926 top-5
 Trained by [Andrew Lavin](https://github.com/andravin) with 8 V100 cards. Model EMA was not used, final checkpoint is the average of 8 best checkpoints during training.
 
-`./distributed_train.sh 8 /imagenet --model efficientnet_es --output /data/trained-models -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.2 --drop-connect 0.2  --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .064`
+`./distributed_train.sh 8 /imagenet --model efficientnet_es -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.2 --drop-connect 0.2  --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .064`
 
 **TODO dig up some more**
 
