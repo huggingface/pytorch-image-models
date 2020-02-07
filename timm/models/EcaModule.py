@@ -36,7 +36,7 @@ from torch import nn
 from torch.nn.parameter import Parameter
 
 
-class eca_layer(nn.Module):
+class EcaModule(nn.Module):
     """Constructs a ECA module.
 
     Args:
@@ -44,7 +44,7 @@ class eca_layer(nn.Module):
         k_size: Adaptive selection of kernel size
     """
     def __init__(self, channel, k_size=3):
-        super(eca_layer, self).__init__()
+        super(EcaModule, self).__init__()
         assert k_size % 2 == 1
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
@@ -79,7 +79,7 @@ class eca_layer(nn.Module):
 
 
 
-class ceca_layer(nn.Module):
+class CecaModule(nn.Module):
     """Constructs a circular ECA module.
     the primary difference is that the conv uses a circular padding rather than zero padding.
     This is because unlike images, the channels themselves do not have inherent ordering nor 
@@ -94,7 +94,7 @@ class ceca_layer(nn.Module):
         k_size: Adaptive selection of kernel size
     """
     def __init__(self, channel, k_size=3):
-        super(ceca_layer, self).__init__()
+        super(CecaModule, self).__init__()
         assert k_size % 2 == 1
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         #pytorch circular padding mode is bugged as of pytorch 1.4

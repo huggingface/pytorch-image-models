@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from .registry import register_model
 from .helpers import load_pretrained
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
-from .eca_module import eca_layer
+from .EcaModule import EcaModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
@@ -157,7 +157,7 @@ class BasicBlock(nn.Module):
         self.bn2 = norm_layer(outplanes)
 
         self.se = SEModule(outplanes, planes // 4) if use_se else None
-        self.eca = eca_layer(outplanes) if use_eca else None
+        self.eca = EcaModule(outplanes) if use_eca else None
 
         self.act2 = act_layer(inplace=True)
         self.downsample = downsample
@@ -212,7 +212,7 @@ class Bottleneck(nn.Module):
         self.bn3 = norm_layer(outplanes)
 
         self.se = SEModule(outplanes, planes // 4) if use_se else None
-        self.eca = eca_layer(outplanes) if use_eca else None
+        self.eca = Eca_Module(outplanes) if use_eca else None
     
         self.act3 = act_layer(inplace=True)
         self.downsample = downsample
