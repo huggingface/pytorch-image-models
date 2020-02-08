@@ -311,15 +311,13 @@ class SelectiveKernelConv(nn.Module):
             kernel_size = [3] * len(kernel_size)
         else:
             dilation = [dilation] * len(kernel_size)
-        num_paths = len(kernel_size)
-        self.num_paths = num_paths
-        self.split_input = split_input
+        self.num_paths = len(kernel_size)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        if split_input:
-            assert in_channels % num_paths == 0 and out_channels % num_paths == 0
-            in_channels = in_channels // num_paths
-            out_channels = out_channels // num_paths
+        self.split_input = split_input
+        if self.split_input:
+            assert in_channels % self.num_paths == 0
+            in_channels = in_channels // self.num_paths
         groups = min(out_channels, groups)
 
         conv_kwargs = dict(
@@ -329,7 +327,7 @@ class SelectiveKernelConv(nn.Module):
             for k, d in zip(kernel_size, dilation)])
 
         attn_channels = max(int(out_channels / attn_reduction), min_attn_channels)
-        self.attn = SelectiveKernelAttn(out_channels, num_paths, attn_channels)
+        self.attn = SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
         self.drop_block = drop_block
 
     def forward(self, x):
@@ -338,16 +336,10 @@ class SelectiveKernelConv(nn.Module):
             x_paths = [op(x_split[i]) for i, op in enumerate(self.paths)]
         else:
             x_paths = [op(x) for op in self.paths]
-
         x = torch.stack(x_paths, dim=1)
         x_attn = self.attn(x)
         x = x * x_attn
-
-        if self.split_input:
-            B, N, C, H, W = x.shape
-            x = x.reshape(B, N * C, H, W)
-        else:
-            x = torch.sum(x, dim=1)
+        x = torch.sum(x, dim=1)
         return x
 
 

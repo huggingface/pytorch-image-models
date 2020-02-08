@@ -158,11 +158,12 @@ def sksresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['skresnet18']
     sk_kwargs = dict(
         min_attn_channels=16,
+        attn_reduction=8,
         split_input=True
     )
     model = ResNet(
         SelectiveKernelBasic, [2, 2, 2, 2], num_classes=num_classes, in_chans=in_chans,
-        block_args=dict(sk_kwargs=sk_kwargs), **kwargs)
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -179,7 +180,7 @@ def skresnet26d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     )
     model = ResNet(
         SelectiveKernelBottleneck, [2, 2, 2, 2],  stem_width=32, stem_type='deep', avg_down=True,
-        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs),
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False
         **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
@@ -199,7 +200,7 @@ def skresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['skresnet50']
     model = ResNet(
         SelectiveKernelBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-        block_args=dict(sk_kwargs=sk_kwargs), **kwargs)
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -218,7 +219,8 @@ def skresnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['skresnet50d']
     model = ResNet(
         SelectiveKernelBottleneck, [3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
-        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs), **kwargs)
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs),
+        zero_init_last_bn=False, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -233,7 +235,7 @@ def skresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['skresnext50_32x4d']
     model = ResNet(
         SelectiveKernelBottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
+        num_classes=num_classes, in_chans=in_chans, zero_init_last_bn=False, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
