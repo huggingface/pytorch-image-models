@@ -2,10 +2,10 @@ import math
 
 from torch import nn as nn
 
-from timm.models.registry import register_model
-from timm.models.helpers import load_pretrained
-from timm.models.conv2d_layers import SelectiveKernelConv, ConvBnAct
-from timm.models.resnet import ResNet, SEModule
+from .registry import register_model
+from .helpers import load_pretrained
+from .layers import SelectiveKernelConv, ConvBnAct
+from .resnet import ResNet, SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 

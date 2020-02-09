@@ -4,8 +4,8 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .activations import sigmoid
-from .conv2d_layers import *
+from .layers.activations import sigmoid
+from .layers.conv2d_layers import *
 
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per

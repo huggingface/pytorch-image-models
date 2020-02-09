@@ -5,7 +5,7 @@ from collections.__init__ import OrderedDict
 from copy import deepcopy
 
 import torch.nn as nn
-from .activations import sigmoid, HardSwish, Swish
+from .layers.activations import sigmoid, HardSwish, Swish
 from .efficientnet_blocks import *
 
 

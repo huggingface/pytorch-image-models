@@ -13,9 +13,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
-from .layers import EcaModule
-from .nn_ops import DropBlock2d, DropPath
+from .layers import EcaModule, SelectAdaptivePool2d, DropBlock2d, DropPath
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
