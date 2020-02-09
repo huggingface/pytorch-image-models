@@ -1,11 +1,8 @@
-
-from functools import partial
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.nn import functional as F
 from .layers.activations import sigmoid
-from .layers.conv2d_layers import *
+from .layers import select_conv2d
 
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
@@ -72,7 +69,7 @@ def round_channels(channels, multiplier=1.0, divisor=8, channel_min=None):
     return make_divisible(channels, divisor, channel_min)
 
 
-def drop_connect(inputs, training=False, drop_connect_rate=0.):
+def drop_connect(inputs, training: bool = False, drop_connect_rate: float = 0.):
     """Apply drop connect."""
     if not training:
         return inputs
@@ -160,7 +157,7 @@ class DepthwiseSeparableConv(nn.Module):
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_connect_rate=0.):
         super(DepthwiseSeparableConv, self).__init__()
         norm_kwargs = norm_kwargs or {}
-        self.has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.
         self.has_residual = (stride == 1 and in_chs == out_chs) and not noskip
         self.has_pw_act = pw_act  # activation after point-wise conv
         self.drop_connect_rate = drop_connect_rate
@@ -171,9 +168,11 @@ class DepthwiseSeparableConv(nn.Module):
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if has_se:
             se_kwargs = resolve_se_args(se_kwargs, in_chs, act_layer)
             self.se = SqueezeExcite(in_chs, se_ratio=se_ratio, **se_kwargs)
+        else:
+            self.se = None
 
         self.conv_pw = select_conv2d(in_chs, out_chs, pw_kernel_size, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
@@ -193,7 +192,7 @@ class DepthwiseSeparableConv(nn.Module):
         x = self.bn1(x)
         x = self.act1(x)
 
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         x = self.conv_pw(x)
@@ -219,7 +218,7 @@ class InvertedResidual(nn.Module):
         norm_kwargs = norm_kwargs or {}
         conv_kwargs = conv_kwargs or {}
         mid_chs = make_divisible(in_chs * exp_ratio)
-        self.has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
         self.drop_connect_rate = drop_connect_rate
 
@@ -236,9 +235,11 @@ class InvertedResidual(nn.Module):
         self.act2 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if has_se:
             se_kwargs = resolve_se_args(se_kwargs, in_chs, act_layer)
             self.se = SqueezeExcite(mid_chs, se_ratio=se_ratio, **se_kwargs)
+        else:
+            self.se = None
 
         # Point-wise linear projection
         self.conv_pwl = select_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
@@ -269,7 +270,7 @@ class InvertedResidual(nn.Module):
         x = self.act2(x)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         # Point-wise linear projection
@@ -323,7 +324,7 @@ class CondConvResidual(InvertedResidual):
         x = self.act2(x)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         # Point-wise linear projection
@@ -350,7 +351,7 @@ class EdgeResidual(nn.Module):
             mid_chs = make_divisible(fake_in_chs * exp_ratio)
         else:
             mid_chs = make_divisible(in_chs * exp_ratio)
-        self.has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
         self.drop_connect_rate = drop_connect_rate
 
@@ -360,9 +361,11 @@ class EdgeResidual(nn.Module):
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if has_se:
             se_kwargs = resolve_se_args(se_kwargs, in_chs, act_layer)
             self.se = SqueezeExcite(mid_chs, se_ratio=se_ratio, **se_kwargs)
+        else:
+            self.se = None
 
         # Point-wise linear projection
         self.conv_pwl = select_conv2d(
@@ -389,7 +392,7 @@ class EdgeResidual(nn.Module):
         x = self.act1(x)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         # Point-wise linear projection

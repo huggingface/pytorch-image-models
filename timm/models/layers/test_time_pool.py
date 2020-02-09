@@ -1,3 +1,8 @@
+""" Test Time Pooling (Average-Max Pool)
+
+Hacked together by Ross Wightman
+"""
+
 import logging
 from torch import nn
 import torch.nn.functional as F

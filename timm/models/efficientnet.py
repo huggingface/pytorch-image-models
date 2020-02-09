@@ -27,7 +27,8 @@ from .efficientnet_builder import *
 from .feature_hooks import FeatureHooks
 from .registry import register_model
 from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, select_conv2d
+from .layers import SelectAdaptivePool2d
+from timm.models.layers import select_conv2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 

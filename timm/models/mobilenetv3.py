@@ -7,8 +7,6 @@ Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
 Hacked together by Ross Wightman
 """
-import torch.nn as nn
-import torch.nn.functional as F
 
 from .efficientnet_builder import *
 from .registry import register_model
