@@ -10,8 +10,8 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
+from .helpers import tup_pair
 from .conv2d_same import get_padding_value, conv2d_same
-from .conv_helpers import tup_pair
 
 
 def get_condconv_initializer(initializer, num_experts, expert_shape):

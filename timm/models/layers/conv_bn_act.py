@@ -4,7 +4,7 @@ Hacked together by Ross Wightman
 """
 from torch import nn as nn
 
-from timm.models.layers.conv_helpers import get_padding
+from timm.models.layers import get_padding
 
 
 class ConvBnAct(nn.Module):

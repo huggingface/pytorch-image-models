@@ -28,7 +28,7 @@ from .feature_hooks import FeatureHooks
 from .registry import register_model
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.models.layers import select_conv2d
+from timm.models.layers import create_conv2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 
@@ -220,7 +220,7 @@ class EfficientNet(nn.Module):
 
     def __init__(self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32,
                  channel_multiplier=1.0, channel_divisor=8, channel_min=None,
-                 pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0.,
+                 output_stride=32, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0.,
                  se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
         super(EfficientNet, self).__init__()
         norm_kwargs = norm_kwargs or {}
@@ -232,21 +232,21 @@ class EfficientNet(nn.Module):
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier, channel_divisor, channel_min)
-        self.conv_stem = select_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
         self._in_chs = stem_size
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
-            channel_multiplier, channel_divisor, channel_min, 32, pad_type, act_layer, se_kwargs,
+            channel_multiplier, channel_divisor, channel_min, output_stride, pad_type, act_layer, se_kwargs,
             norm_layer, norm_kwargs, drop_connect_rate, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = builder.features
         self._in_chs = builder.in_chs
 
         # Head + Pooling
-        self.conv_head = select_conv2d(self._in_chs, self.num_features, 1, padding=pad_type)
+        self.conv_head = create_conv2d(self._in_chs, self.num_features, 1, padding=pad_type)
         self.bn2 = norm_layer(self.num_features, **norm_kwargs)
         self.act2 = act_layer(inplace=True)
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
@@ -314,7 +314,7 @@ class EfficientNetFeatures(nn.Module):
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier, channel_divisor, channel_min)
-        self.conv_stem = select_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
         self._in_chs = stem_size

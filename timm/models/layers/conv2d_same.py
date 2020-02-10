@@ -8,26 +8,13 @@ import torch.nn.functional as F
 from typing import Union, List, Tuple, Optional, Callable
 import math
 
-from .conv_helpers import get_padding
-
-
-def _is_static_pad(kernel_size, stride=1, dilation=1, **_):
-    return stride == 1 and (dilation * (kernel_size - 1)) % 2 == 0
-
-
-def _calc_same_pad(i: int, k: int, s: int, d: int):
-    return max((math.ceil(i / s) - 1) * s + (k - 1) * d + 1 - i, 0)
+from .padding import get_padding, pad_same, is_static_pad
 
 
 def conv2d_same(
         x, weight: torch.Tensor, bias: Optional[torch.Tensor] = None, stride: Tuple[int, int] = (1, 1),
         padding: Tuple[int, int] = (0, 0), dilation: Tuple[int, int] = (1, 1), groups: int = 1):
-    ih, iw = x.size()[-2:]
-    kh, kw = weight.size()[-2:]
-    pad_h = _calc_same_pad(ih, kh, stride[0], dilation[0])
-    pad_w = _calc_same_pad(iw, kw, stride[1], dilation[1])
-    if pad_h > 0 or pad_w > 0:
-        x = F.pad(x, [pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2])
+    x = pad_same(x, weight.shape[-2:], stride, dilation)
     return F.conv2d(x, weight, bias, stride, (0, 0), dilation, groups)
 
 
@@ -51,7 +38,7 @@ def get_padding_value(padding, kernel_size, **kwargs) -> Tuple[Tuple, bool]:
         padding = padding.lower()
         if padding == 'same':
             # TF compatible 'SAME' padding, has a performance and GPU memory allocation impact
-            if _is_static_pad(kernel_size, **kwargs):
+            if is_static_pad(kernel_size, **kwargs):
                 # static case, no extra overhead
                 padding = get_padding(kernel_size, **kwargs)
             else:

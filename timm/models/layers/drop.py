@@ -1,3 +1,9 @@
+""" DropBlock, DropPath
+
+PyTorch implementations of DropBlock and DropPath (Stochastic Depth) regularization layers.
+
+Hacked together by Ross Wightman
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,6 +12,8 @@ import math
 
 
 def drop_block_2d(x, drop_prob=0.1, block_size=7, gamma_scale=1.0, drop_with_noise=False):
+    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """
     _, _, height, width = x.shape
     total_size = width * height
     clipped_block_size = min(block_size, min(width, height))
@@ -24,7 +32,7 @@ def drop_block_2d(x, drop_prob=0.1, block_size=7, gamma_scale=1.0, drop_with_noi
     block_mask = ((2 - seed_drop_rate - valid_block + uniform_noise) >= 1).float()
     block_mask = -F.max_pool2d(
         -block_mask,
-        kernel_size=clipped_block_size,  # block_size,
+        kernel_size=clipped_block_size,  # block_size, ???
         stride=1,
         padding=clipped_block_size // 2)
 
@@ -58,7 +66,8 @@ class DropBlock2d(nn.Module):
 
 
 def drop_path(x, drop_prob=0.):
-    """Drop paths (Stochastic Depth) per sample (when applied in residual blocks)."""
+    """Drop paths (Stochastic Depth) per sample (when applied in residual blocks).
+    """
     keep_prob = 1 - drop_prob
     random_tensor = keep_prob + torch.rand((x.size()[0], 1, 1, 1), dtype=x.dtype, device=x.device)
     random_tensor.floor_()  # binarize
@@ -67,6 +76,8 @@ def drop_path(x, drop_prob=0.):
 
 
 class DropPath(nn.ModuleDict):
+    """Drop paths (Stochastic Depth) per sample (when applied in residual blocks).
+    """
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob

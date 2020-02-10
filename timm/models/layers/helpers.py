@@ -1,4 +1,4 @@
-""" Common Helpers
+""" Layer/Module Helpers
 
 Hacked together by Ross Wightman
 """
@@ -21,7 +21,7 @@ tup_triple = _ntuple(3)
 tup_quadruple = _ntuple(4)
 
 
-# Calculate symmetric padding for a convolution
-def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1, **_) -> int:
-    padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
-    return padding
+
+
+
+

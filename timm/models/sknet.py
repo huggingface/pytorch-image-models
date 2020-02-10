@@ -4,8 +4,8 @@ from torch import nn as nn
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .layers import SelectiveKernelConv, ConvBnAct
-from .resnet import ResNet, SEModule
+from .layers import SelectiveKernelConv, ConvBnAct, create_attn
+from .resnet import ResNet
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
@@ -33,8 +33,8 @@ class SelectiveKernelBasic(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
-                 use_se=False, sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None,
-                 drop_block=None, drop_path=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None,
+                 drop_block=None, drop_path=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None):
         super(SelectiveKernelBasic, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
@@ -42,7 +42,7 @@ class SelectiveKernelBasic(nn.Module):
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
         assert base_width == 64, 'BasicBlock doest not support changing base width'
         first_planes = planes // reduce_first
-        out_planes = planes * self.expansion
+        outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
         _selective_first = True  # FIXME temporary, for experiments
@@ -51,14 +51,14 @@ class SelectiveKernelBasic(nn.Module):
                 inplanes, first_planes, stride=stride, dilation=first_dilation, **conv_kwargs, **sk_kwargs)
             conv_kwargs['act_layer'] = None
             self.conv2 = ConvBnAct(
-                first_planes, out_planes, kernel_size=3, dilation=dilation, **conv_kwargs)
+                first_planes, outplanes, kernel_size=3, dilation=dilation, **conv_kwargs)
         else:
             self.conv1 = ConvBnAct(
                 inplanes, first_planes, kernel_size=3, stride=stride, dilation=first_dilation, **conv_kwargs)
             conv_kwargs['act_layer'] = None
             self.conv2 = SelectiveKernelConv(
-                first_planes, out_planes, dilation=dilation, **conv_kwargs, **sk_kwargs)
-        self.se = SEModule(out_planes, planes // 4) if use_se else None
+                first_planes, outplanes, dilation=dilation, **conv_kwargs, **sk_kwargs)
+        self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -88,17 +88,15 @@ class SelectiveKernelBottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=64, use_se=False, sk_kwargs=None,
-                 reduce_first=1, dilation=1, first_dilation=None,
-                 drop_block=None, drop_path=None,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 cardinality=1, base_width=64, sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None,
+                 drop_block=None, drop_path=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None):
         super(SelectiveKernelBottleneck, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
         conv_kwargs = dict(drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer)
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
         first_planes = width // reduce_first
-        out_planes = planes * self.expansion
+        outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
         self.conv1 = ConvBnAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
@@ -106,8 +104,8 @@ class SelectiveKernelBottleneck(nn.Module):
             first_planes, width, stride=stride, dilation=first_dilation, groups=cardinality,
             **conv_kwargs, **sk_kwargs)
         conv_kwargs['act_layer'] = None
-        self.conv3 = ConvBnAct(width, out_planes, kernel_size=1, **conv_kwargs)
-        self.se = SEModule(out_planes, planes // 4) if use_se else None
+        self.conv3 = ConvBnAct(width, outplanes, kernel_size=1, **conv_kwargs)
+        self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
         self.stride = stride

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from .layers.activations import sigmoid
-from .layers import select_conv2d
+from .layers import create_conv2d
 
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
@@ -129,7 +129,7 @@ class ConvBnAct(nn.Module):
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(ConvBnAct, self).__init__()
         norm_kwargs = norm_kwargs or {}
-        self.conv = select_conv2d(in_chs, out_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type)
+        self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type)
         self.bn1 = norm_layer(out_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
@@ -162,7 +162,7 @@ class DepthwiseSeparableConv(nn.Module):
         self.has_pw_act = pw_act  # activation after point-wise conv
         self.drop_connect_rate = drop_connect_rate
 
-        self.conv_dw = select_conv2d(
+        self.conv_dw = create_conv2d(
             in_chs, in_chs, dw_kernel_size, stride=stride, dilation=dilation, padding=pad_type, depthwise=True)
         self.bn1 = norm_layer(in_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
@@ -174,7 +174,7 @@ class DepthwiseSeparableConv(nn.Module):
         else:
             self.se = None
 
-        self.conv_pw = select_conv2d(in_chs, out_chs, pw_kernel_size, padding=pad_type)
+        self.conv_pw = create_conv2d(in_chs, out_chs, pw_kernel_size, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
         self.act2 = act_layer(inplace=True) if self.has_pw_act else nn.Identity()
 
@@ -223,12 +223,12 @@ class InvertedResidual(nn.Module):
         self.drop_connect_rate = drop_connect_rate
 
         # Point-wise expansion
-        self.conv_pw = select_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type, **conv_kwargs)
+        self.conv_pw = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type, **conv_kwargs)
         self.bn1 = norm_layer(mid_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
         # Depth-wise convolution
-        self.conv_dw = select_conv2d(
+        self.conv_dw = create_conv2d(
             mid_chs, mid_chs, dw_kernel_size, stride=stride, dilation=dilation,
             padding=pad_type, depthwise=True, **conv_kwargs)
         self.bn2 = norm_layer(mid_chs, **norm_kwargs)
@@ -242,7 +242,7 @@ class InvertedResidual(nn.Module):
             self.se = None
 
         # Point-wise linear projection
-        self.conv_pwl = select_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
+        self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
         self.bn3 = norm_layer(out_chs, **norm_kwargs)
 
     def feature_module(self, location):
@@ -356,7 +356,7 @@ class EdgeResidual(nn.Module):
         self.drop_connect_rate = drop_connect_rate
 
         # Expansion convolution
-        self.conv_exp = select_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type)
+        self.conv_exp = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type)
         self.bn1 = norm_layer(mid_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
@@ -368,7 +368,7 @@ class EdgeResidual(nn.Module):
             self.se = None
 
         # Point-wise linear projection
-        self.conv_pwl = select_conv2d(
+        self.conv_pwl = create_conv2d(
             mid_chs, out_chs, pw_kernel_size, stride=stride, dilation=dilation, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
 

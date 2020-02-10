@@ -1,4 +1,4 @@
-""" Select Conv2d Factory Method
+""" Create Conv2d Factory Method
 
 Hacked together by Ross Wightman
 """
@@ -8,7 +8,7 @@ from .cond_conv2d import CondConv2d
 from .conv2d_same import create_conv2d_pad
 
 
-def select_conv2d(in_chs, out_chs, kernel_size, **kwargs):
+def create_conv2d(in_chs, out_chs, kernel_size, **kwargs):
     """ Select a 2d convolution implementation based on arguments
     Creates and returns one of torch.nn.Conv2d, Conv2dSame, MixedConv2d, or CondConv2d.
 

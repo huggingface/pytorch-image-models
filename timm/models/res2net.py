@@ -8,10 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .resnet import ResNet, SEModule
+from .resnet import ResNet
 from .registry import register_model
 from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d
+from .layers import SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = []
@@ -53,8 +53,8 @@ class Bottle2neck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=26, scale=4, use_se=False,
-                 act_layer=nn.ReLU, norm_layer=None, dilation=1, first_dilation=None, **_):
+                 cardinality=1, base_width=26, scale=4, dilation=1, first_dilation=None,
+                 act_layer=nn.ReLU, norm_layer=None, attn_layer=None, **_):
         super(Bottle2neck, self).__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
@@ -82,7 +82,7 @@ class Bottle2neck(nn.Module):
 
         self.conv3 = nn.Conv2d(width * scale, outplanes, kernel_size=1, bias=False)
         self.bn3 = norm_layer(outplanes)
-        self.se = SEModule(outplanes, planes // 4) if use_se else None
+        self.se = attn_layer(outplanes) if attn_layer is not None else None
 
         self.relu = act_layer(inplace=True)
         self.downsample = downsample

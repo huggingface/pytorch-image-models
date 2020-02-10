@@ -47,19 +47,20 @@ class EcaModule(nn.Module):
             gamma, beta: when channel is given parameters of mapping function
             refer to original paper https://arxiv.org/pdf/1910.03151.pdf
             (default=None. if channel size not given, use k_size given for kernel size.)
-        k_size: Adaptive selection of kernel size (default=3)
+        kernel_size: Adaptive selection of kernel size (default=3)
     """
-    def __init__(self, channel=None, k_size=3, gamma=2, beta=1):
+    def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1):
         super(EcaModule, self).__init__()
-        assert k_size % 2 == 1
+        assert kernel_size % 2 == 1
 
-        if channel is not None:
-            t = int(abs(math.log(channel, 2)+beta) / gamma)
-            k_size = t if t % 2 else t + 1
+        if channels is not None:
+            t = int(abs(math.log(channels, 2) + beta) / gamma)
+            kernel_size = max(t if t % 2 else t + 1, 3)
+
+        print('florg', kernel_size)
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False)
-        self.sigmoid = nn.Sigmoid()
+        self.conv = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=(kernel_size - 1) // 2, bias=False)
 
     def forward(self, x):
         # Feature descriptor on the global spatial information
@@ -69,7 +70,7 @@ class EcaModule(nn.Module):
         # Two different branches of ECA module
         y = self.conv(y)
         # Multi-scale information fusion
-        y = self.sigmoid(y.view(x.shape[0], -1, 1, 1))
+        y = y.view(x.shape[0], -1, 1, 1).sigmoid()
         return x * y.expand_as(x)
 
 
@@ -93,22 +94,21 @@ class CecaModule(nn.Module):
         k_size: Adaptive selection of kernel size (default=3)
     """
 
-    def __init__(self, channel=None, k_size=3, gamma=2, beta=1):
+    def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1):
         super(CecaModule, self).__init__()
-        assert k_size % 2 == 1
+        assert kernel_size % 2 == 1
 
-        if channel is not None:
-            t = int(abs(math.log(channel, 2)+beta) / gamma)
-            k_size = t if t % 2 else t + 1
+        if channels is not None:
+            t = int(abs(math.log(channels, 2) + beta) / gamma)
+            kernel_size = max(t if t % 2 else t + 1, 3)
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         #pytorch circular padding mode is buggy as of pytorch 1.4
         #see https://github.com/pytorch/pytorch/pull/17240
 
         #implement manual circular padding
-        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=0, bias=False)
-        self.padding = (k_size - 1) // 2
-        self.sigmoid = nn.Sigmoid()
+        self.conv = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=0, bias=False)
+        self.padding = (kernel_size - 1) // 2
 
     def forward(self, x):
         # Feature descriptor on the global spatial information
@@ -121,6 +121,6 @@ class CecaModule(nn.Module):
         y = self.conv(y)
 
         # Multi-scale information fusion
-        y = self.sigmoid(y.view(x.shape[0], -1, 1, 1))
+        y = y.view(x.shape[0], -1, 1, 1).sigmoid()
 
         return x * y.expand_as(x)
