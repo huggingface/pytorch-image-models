@@ -57,8 +57,6 @@ class EcaModule(nn.Module):
             t = int(abs(math.log(channels, 2) + beta) / gamma)
             kernel_size = max(t if t % 2 else t + 1, 3)
 
-        print('florg', kernel_size)
-
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=(kernel_size - 1) // 2, bias=False)
 
@@ -86,12 +84,12 @@ class CecaModule(nn.Module):
     (parameter size, throughput,latency, etc)
 
     Args:
-        channel: Number of channels of the input feature map for use in adaptive kernel sizes
+        channels: Number of channels of the input feature map for use in adaptive kernel sizes
             for actual calculations according to channel.
             gamma, beta: when channel is given parameters of mapping function
             refer to original paper https://arxiv.org/pdf/1910.03151.pdf
             (default=None. if channel size not given, use k_size given for kernel size.)
-        k_size: Adaptive selection of kernel size (default=3)
+        kernel_size: Adaptive selection of kernel size (default=3)
     """
 
     def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1):
