@@ -5,6 +5,7 @@ Hacked together by Ross Wightman
 import torch
 from .se import SEModule
 from .eca import EcaModule, CecaModule
+from .cbam import CbamModule, LightCbamModule
 
 
 def create_attn(attn_type, channels, **kwargs):
@@ -18,6 +19,10 @@ def create_attn(attn_type, channels, **kwargs):
                 module_cls = EcaModule
             elif attn_type == 'eca':
                 module_cls = CecaModule
+            elif attn_type == 'cbam':
+                module_cls = CbamModule
+            elif attn_type == 'lcbam':
+                module_cls = LightCbamModule
             else:
                 assert False, "Invalid attn module (%s)" % attn_type
         elif isinstance(attn_type, bool):
