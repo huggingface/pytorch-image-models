@@ -106,3 +106,4 @@ venv.bak/
 *.gz
 Untitled.ipynb
 Testing notebook.ipynb
+Testing-Cifar-100.ipynb
