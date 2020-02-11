@@ -54,6 +54,8 @@ model_list = [
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
     _entry('efficientnet_b3a', 'EfficientNet-B3 (320x320, 1.0 crop)', '1905.11946',
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
+    _entry('efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946',
+           model_desc='Trained from scratch in PyTorch w/ RandAugment'),
     _entry('fbnetc_100', 'FBNet-C', '1812.03443',
            model_desc='Trained in PyTorch with RMSProp, exponential LR decay'),
     _entry('gluon_inception_v3', 'Inception V3', '1512.00567', model_desc='Ported from GluonCV Model Zoo'),

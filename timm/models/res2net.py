@@ -8,10 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .resnet import ResNet, SEModule
+from .resnet import ResNet
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .layers import SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = []
@@ -53,15 +53,16 @@ class Bottle2neck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=26, scale=4, use_se=False,
-                 act_layer=nn.ReLU, norm_layer=None, dilation=1, previous_dilation=1, **_):
+                 cardinality=1, base_width=26, scale=4, dilation=1, first_dilation=None,
+                 act_layer=nn.ReLU, norm_layer=None, attn_layer=None, **_):
         super(Bottle2neck, self).__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
         self.num_scales = max(1, scale - 1)
         width = int(math.floor(planes * (base_width / 64.0))) * cardinality
-        outplanes = planes * self.expansion
         self.width = width
+        outplanes = planes * self.expansion
+        first_dilation = first_dilation or dilation
 
         self.conv1 = nn.Conv2d(inplanes, width * scale, kernel_size=1, bias=False)
         self.bn1 = norm_layer(width * scale)
@@ -70,8 +71,8 @@ class Bottle2neck(nn.Module):
         bns = []
         for i in range(self.num_scales):
             convs.append(nn.Conv2d(
-                width, width, kernel_size=3, stride=stride, padding=dilation,
-                dilation=dilation, groups=cardinality, bias=False))
+                width, width, kernel_size=3, stride=stride, padding=first_dilation,
+                dilation=first_dilation, groups=cardinality, bias=False))
             bns.append(norm_layer(width))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)
@@ -81,10 +82,13 @@ class Bottle2neck(nn.Module):
 
         self.conv3 = nn.Conv2d(width * scale, outplanes, kernel_size=1, bias=False)
         self.bn3 = norm_layer(outplanes)
-        self.se = SEModule(outplanes, planes // 4) if use_se else None
+        self.se = attn_layer(outplanes) if attn_layer is not None else None
 
         self.relu = act_layer(inplace=True)
         self.downsample = downsample
+
+    def zero_init_last_bn(self):
+        nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
         residual = x
