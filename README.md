@@ -184,8 +184,8 @@ For the models below, the model code and weight porting from Tensorflow or MXNet
 |---|---|---|---|---|---|
 | tf_efficientnet_l2_ns *tfp | 88.352 (11.648) | 98.652 (1.348) | 480 | bicubic | 800 |
 | tf_efficientnet_l2_ns      | TBD | TBD | 480 | bicubic | 800 |
-| tf_efficientnet_l2_ns *tfp | 88.172 (11.828) | 98.566 (1.434) | 480 | bicubic | 475 |
-| tf_efficientnet_l2_ns      | TBD | TBD | 480 | bicubic | 475 |
+| tf_efficientnet_l2_ns_475      | 88.234 (11.766) | 98.546 (1.454)f | 480 | bicubic | 475 |
+| tf_efficientnet_l2_ns_475 *tfp | 88.172 (11.828) | 98.566 (1.434) | 480 | bicubic | 475 |
 | tf_efficientnet_b7_ns *tfp | 86.844 (13.156) | 98.084 (1.916) | 66.35 | bicubic | 600 |
 | tf_efficientnet_b7_ns      | 86.840 (13.160) | 98.094 (1.906) | 66.35 | bicubic | 600 |
 | tf_efficientnet_b6_ns      | 86.452 (13.548) | 97.882 (2.118) | 43.04 | bicubic | 528 |
@@ -194,7 +194,7 @@ For the models below, the model code and weight porting from Tensorflow or MXNet
 | tf_efficientnet_b5_ns      | 86.088 (13.912) | 97.752 (2.248) | 30.39 | bicubic | 456 |
 | tf_efficientnet_b8_ap *tfp | 85.436 (14.564) | 97.272 (2.728) | 87.4 | bicubic | 672 |
 | tf_efficientnet_b8 *tfp    | 85.384 (14.616) | 97.394 (2.606) | 87.4 | bicubic | 672 |
-| tf_efficientnet_b8         | 85.37 (14.63) | 97.39 (2.61) | 87.4 | bicubic | 672 |
+| tf_efficientnet_b8         | 85.370 (14.630) | 97.390 (2.610) | 87.4 | bicubic | 672 |
 | tf_efficientnet_b8_ap      | 85.368 (14.632) | 97.294 (2.706) | 87.4 | bicubic | 672 |
 | tf_efficientnet_b4_ns *tfp | 85.298 (14.702) | 97.504 (2.496) | 19.34 | bicubic | 380 |
 | tf_efficientnet_b4_ns      | 85.162 (14.838) | 97.470 (2.530) | 19.34 | bicubic | 380 |
