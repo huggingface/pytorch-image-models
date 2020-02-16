@@ -1,3 +1,9 @@
+""" Selective Kernel Networks (ResNet base)
+
+Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
+
+Hacked together by Ross Wightman
+"""
 import math
 
 from torch import nn as nn
@@ -47,19 +53,11 @@ class SelectiveKernelBasic(nn.Module):
         outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
-        _selective_first = True  # FIXME temporary, for experiments
-        if _selective_first:
-            self.conv1 = SelectiveKernelConv(
-                inplanes, first_planes, stride=stride, dilation=first_dilation, **conv_kwargs, **sk_kwargs)
-            conv_kwargs['act_layer'] = None
-            self.conv2 = ConvBnAct(
-                first_planes, outplanes, kernel_size=3, dilation=dilation, **conv_kwargs)
-        else:
-            self.conv1 = ConvBnAct(
-                inplanes, first_planes, kernel_size=3, stride=stride, dilation=first_dilation, **conv_kwargs)
-            conv_kwargs['act_layer'] = None
-            self.conv2 = SelectiveKernelConv(
-                first_planes, outplanes, dilation=dilation, **conv_kwargs, **sk_kwargs)
+        self.conv1 = SelectiveKernelConv(
+            inplanes, first_planes, stride=stride, dilation=first_dilation, **conv_kwargs, **sk_kwargs)
+        conv_kwargs['act_layer'] = None
+        self.conv2 = ConvBnAct(
+            first_planes, outplanes, kernel_size=3, dilation=dilation, **conv_kwargs)
         self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
@@ -222,7 +220,7 @@ def skresnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 @register_model
 def skresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs a Select Kernel ResNeXt50-32x4d model. This should be equivalent to
-    the SKNet50 model in the Select Kernel Paper
+    the SKNet-50 model in the Select Kernel Paper
     """
     default_cfg = default_cfgs['skresnext50_32x4d']
     model = ResNet(

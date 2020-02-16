@@ -1,4 +1,6 @@
-""" Conditional Convolution
+""" PyTorch Mixed Convolution
+
+Paper: MixConv: Mixed Depthwise Convolutional Kernels (https://arxiv.org/abs/1907.09595)
 
 Hacked together by Ross Wightman
 """

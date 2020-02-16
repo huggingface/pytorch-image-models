@@ -42,7 +42,7 @@ class EcaModule(nn.Module):
     """Constructs an ECA module.
 
     Args:
-        channel: Number of channels of the input feature map for use in adaptive kernel sizes
+        channels: Number of channels of the input feature map for use in adaptive kernel sizes
             for actual calculations according to channel.
             gamma, beta: when channel is given parameters of mapping function
             refer to original paper https://arxiv.org/pdf/1910.03151.pdf

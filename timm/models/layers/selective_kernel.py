@@ -1,4 +1,6 @@
-""" Selective Kernel Convolution Attention
+""" Selective Kernel Convolution/Attention
+
+Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
 
 Hacked together by Ross Wightman
 """
