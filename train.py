@@ -28,7 +28,8 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_batch, AugMixDataset
+from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mix_batch, AugMixDataset,\
+    FastCollateMixupElementwise, FastCollateMixupBatchwise
 from timm.models import create_model, resume_checkpoint, convert_splitbn_model
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
@@ -134,6 +135,8 @@ parser.add_argument('--resplit', action='store_true', default=False,
                     help='Do not random erase first (clean) augmentation split')
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
+parser.add_argument('--mixup-mode', type=str, default='mixup',
+                    help='Mixup mode ("mixup", "cutmix", "random", default: "mixup")')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                     help='turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
@@ -352,7 +355,7 @@ def main():
     collate_fn = None
     if args.prefetcher and args.mixup > 0:
         assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
-        collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
+        collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes, args.mixup_mode)
 
     if num_aug_splits > 1:
         dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
@@ -504,10 +507,10 @@ def train_epoch(
         if not args.prefetcher:
             input, target = input.cuda(), target.cuda()
             if args.mixup > 0.:
-                input, target = mixup_batch(
+                input, target = mix_batch(
                     input, target,
                     alpha=args.mixup, num_classes=args.num_classes, smoothing=args.smoothing,
-                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch)
+                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch, mode=args.mixup_mode)
 
         output = model(input)
 
