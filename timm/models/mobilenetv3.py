@@ -7,15 +7,12 @@ Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
 Hacked together by Ross Wightman
 """
-import torch.nn as nn
-import torch.nn.functional as F
 
 from .efficientnet_builder import *
-from .activations import HardSwish, hard_sigmoid
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
-from .conv2d_layers import select_conv2d
+from .layers import SelectAdaptivePool2d, create_conv2d
+from .layers.activations import HardSwish, hard_sigmoid
 from .feature_hooks import FeatureHooks
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
@@ -74,7 +71,7 @@ class MobileNetV3(nn.Module):
     """
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
-                 channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0.,
+                 channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0.,
                  se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
         super(MobileNetV3, self).__init__()
         
@@ -85,7 +82,7 @@ class MobileNetV3(nn.Module):
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
-        self.conv_stem = select_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
         self._in_chs = stem_size
@@ -93,14 +90,14 @@ class MobileNetV3(nn.Module):
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, 32, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_connect_rate, verbose=_DEBUG)
+            norm_layer, norm_kwargs, drop_path_rate, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = builder.features
         self._in_chs = builder.in_chs
         
         # Head + Pooling
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.conv_head = select_conv2d(self._in_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
+        self.conv_head = create_conv2d(self._in_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
         self.act2 = act_layer(inplace=True)
 
         # Classifier
@@ -151,7 +148,7 @@ class MobileNetV3Features(nn.Module):
 
     def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='pre_pwl',
                  in_chans=3, stem_size=16, channel_multiplier=1.0, output_stride=32, pad_type='',
-                 act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0., se_kwargs=None,
+                 act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0., se_kwargs=None,
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(MobileNetV3Features, self).__init__()
         norm_kwargs = norm_kwargs or {}
@@ -165,7 +162,7 @@ class MobileNetV3Features(nn.Module):
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
-        self.conv_stem = select_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
         self._in_chs = stem_size
@@ -173,7 +170,7 @@ class MobileNetV3Features(nn.Module):
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, output_stride, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_connect_rate, feature_location=feature_location, verbose=_DEBUG)
+            norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = builder.features  # builder provides info about feature channels for each block
         self._in_chs = builder.in_chs

@@ -211,11 +211,24 @@ def main():
         logging.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         results = []
         try:
+            start_batch_size = args.batch_size
             for m, c in model_cfgs:
+                batch_size = start_batch_size
                 args.model = m
                 args.checkpoint = c
                 result = OrderedDict(model=args.model)
-                r = validate(args)
+                r = {}
+                while not r and batch_size >= args.num_gpu:
+                    try:
+                        args.batch_size = batch_size
+                        print('Validating with batch size: %d' % args.batch_size)
+                        r = validate(args)
+                    except RuntimeError as e:
+                        if batch_size <= args.num_gpu:
+                            print("Validation failed with no ability to reduce batch size. Exiting.")
+                            raise e
+                        batch_size = max(batch_size // 2, args.num_gpu)
+                        print("Validation failed, reducing batch size by 50%")
                 result.update(r)
                 if args.checkpoint:
                     result['checkpoint'] = args.checkpoint
