@@ -2,6 +2,16 @@
 
 PyTorch implementations of DropBlock and DropPath (Stochastic Depth) regularization layers.
 
+Papers:
+DropBlock: A regularization method for convolutional networks (https://arxiv.org/abs/1810.12890)
+
+Deep Networks with Stochastic Depth (https://arxiv.org/abs/1603.09382)
+
+Code:
+DropBlock impl inspired by two Tensorflow impl that I liked:
+ - https://github.com/tensorflow/tpu/blob/master/models/official/resnet/resnet_model.py#L74
+ - https://github.com/clovaai/assembled-cnn/blob/master/nets/blocks.py
+
 Hacked together by Ross Wightman
 """
 import torch
@@ -11,9 +21,15 @@ import numpy as np
 import math
 
 
-def drop_block_2d(x, drop_prob=0.1, block_size=7, gamma_scale=1.0, drop_with_noise=False):
+def drop_block_2d(x, drop_prob=0.1, training=False, block_size=7, gamma_scale=1.0, drop_with_noise=False):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+
+    DropBlock with an experimental gaussian noise option. This layer has been tested on a few training
+    runs with success, but needs further validation and possibly optimization for lower runtime impact.
+
     """
+    if drop_prob == 0. or not training:
+        return x
     _, _, height, width = x.shape
     total_size = width * height
     clipped_block_size = min(block_size, min(width, height))
@@ -60,14 +76,21 @@ class DropBlock2d(nn.Module):
         self.with_noise = with_noise
 
     def forward(self, x):
-        if not self.training or not self.drop_prob:
-            return x
-        return drop_block_2d(x, self.drop_prob, self.block_size, self.gamma_scale, self.with_noise)
+        return drop_block_2d(x, self.drop_prob, self.training, self.block_size, self.gamma_scale, self.with_noise)
 
 
-def drop_path(x, drop_prob=0.):
-    """Drop paths (Stochastic Depth) per sample (when applied in residual blocks).
+def drop_path(x, drop_prob=0., training=False):
+    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
+
+    This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
+    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
+    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
+    changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
+    'survival rate' as the argument.
+
     """
+    if drop_prob == 0. or not training:
+        return x
     keep_prob = 1 - drop_prob
     random_tensor = keep_prob + torch.rand((x.size()[0], 1, 1, 1), dtype=x.dtype, device=x.device)
     random_tensor.floor_()  # binarize
@@ -76,13 +99,11 @@ def drop_path(x, drop_prob=0.):
 
 
 class DropPath(nn.ModuleDict):
-    """Drop paths (Stochastic Depth) per sample (when applied in residual blocks).
+    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
     """
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
 
     def forward(self, x):
-        if not self.training or not self.drop_prob:
-            return x
-        return drop_path(x, self.drop_prob)
+        return drop_path(x, self.drop_prob, self.training)

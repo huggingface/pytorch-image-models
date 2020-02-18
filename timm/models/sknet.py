@@ -2,6 +2,10 @@
 
 Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
 
+This was inspired by reading 'Compounding the Performance Improvements...' (https://arxiv.org/abs/2001.06268)
+and a streamlined impl at https://github.com/clovaai/assembled-cnn but I ended up building something closer
+to the original paper with some modifications of my own to better balance param count vs accuracy.
+
 Hacked together by Ross Wightman
 """
 import math
@@ -29,7 +33,8 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     'skresnet18': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet18_ra-4eec2804.pth'),
-    'skresnet34': _cfg(url=''),
+    'skresnet34': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet34_ra-bdc0ccde.pth'),
     'skresnet50': _cfg(),
     'skresnet50d': _cfg(),
     'skresnext50_32x4d': _cfg(

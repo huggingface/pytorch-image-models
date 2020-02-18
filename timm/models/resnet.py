@@ -382,7 +382,7 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
-        dp = DropPath(drop_path_rate) if drop_block_rate else None
+        dp = DropPath(drop_path_rate) if drop_path_rate else None
         db_3 = DropBlock2d(drop_block_rate, 7, 0.25) if drop_block_rate else None
         db_4 = DropBlock2d(drop_block_rate, 7, 1.00) if drop_block_rate else None
         channels, strides, dilations = [64, 128, 256, 512], [1, 2, 2, 2], [1] * 4
