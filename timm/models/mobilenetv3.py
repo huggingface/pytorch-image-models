@@ -71,7 +71,7 @@ class MobileNetV3(nn.Module):
     """
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
-                 channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0.,
+                 channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0.,
                  se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
         super(MobileNetV3, self).__init__()
         
@@ -90,7 +90,7 @@ class MobileNetV3(nn.Module):
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, 32, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_connect_rate, verbose=_DEBUG)
+            norm_layer, norm_kwargs, drop_path_rate, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = builder.features
         self._in_chs = builder.in_chs
@@ -148,7 +148,7 @@ class MobileNetV3Features(nn.Module):
 
     def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='pre_pwl',
                  in_chans=3, stem_size=16, channel_multiplier=1.0, output_stride=32, pad_type='',
-                 act_layer=nn.ReLU, drop_rate=0., drop_connect_rate=0., se_kwargs=None,
+                 act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0., se_kwargs=None,
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(MobileNetV3Features, self).__init__()
         norm_kwargs = norm_kwargs or {}
@@ -170,7 +170,7 @@ class MobileNetV3Features(nn.Module):
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, output_stride, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_connect_rate, feature_location=feature_location, verbose=_DEBUG)
+            norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = builder.features  # builder provides info about feature channels for each block
         self._in_chs = builder.in_chs
