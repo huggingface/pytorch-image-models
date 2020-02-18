@@ -123,6 +123,7 @@ model_list = [
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
 
     _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
+    _entry('skresnet34', 'SK-ResNet-34', '1903.06586'),
     _entry('skresnext50_32x4d', 'SKNet-50', '1903.06586'),
 
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
