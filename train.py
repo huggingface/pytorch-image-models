@@ -105,6 +105,10 @@ parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
                     help='LR scheduler (default: "step"')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
+parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
+                    help='learning rate noise on/off epoch percentages')
+parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
+                    help='learning rate nose std-dev (default: 1.0)')
 parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
                     help='warmup learning rate (default: 0.0001)')
 parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
