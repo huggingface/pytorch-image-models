@@ -16,7 +16,7 @@ from collections import OrderedDict
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 
 

@@ -1,11 +1,8 @@
-
-from functools import partial
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .activations import sigmoid
-from .conv2d_layers import *
+from torch.nn import functional as F
+from .layers.activations import sigmoid
+from .layers import create_conv2d, drop_path
 
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
@@ -72,19 +69,6 @@ def round_channels(channels, multiplier=1.0, divisor=8, channel_min=None):
     return make_divisible(channels, divisor, channel_min)
 
 
-def drop_connect(inputs, training=False, drop_connect_rate=0.):
-    """Apply drop connect."""
-    if not training:
-        return inputs
-
-    keep_prob = 1 - drop_connect_rate
-    random_tensor = keep_prob + torch.rand(
-        (inputs.size()[0], 1, 1, 1), dtype=inputs.dtype, device=inputs.device)
-    random_tensor.floor_()  # binarize
-    output = inputs.div(keep_prob) * random_tensor
-    return output
-
-
 class ChannelShuffle(nn.Module):
     # FIXME haven't used yet
     def __init__(self, groups):
@@ -132,7 +116,7 @@ class ConvBnAct(nn.Module):
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(ConvBnAct, self).__init__()
         norm_kwargs = norm_kwargs or {}
-        self.conv = select_conv2d(in_chs, out_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type)
+        self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type)
         self.bn1 = norm_layer(out_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
@@ -157,25 +141,27 @@ class DepthwiseSeparableConv(nn.Module):
     def __init__(self, in_chs, out_chs, dw_kernel_size=3,
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False,
                  pw_kernel_size=1, pw_act=False, se_ratio=0., se_kwargs=None,
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_connect_rate=0.):
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0.):
         super(DepthwiseSeparableConv, self).__init__()
         norm_kwargs = norm_kwargs or {}
-        self.has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.
         self.has_residual = (stride == 1 and in_chs == out_chs) and not noskip
         self.has_pw_act = pw_act  # activation after point-wise conv
-        self.drop_connect_rate = drop_connect_rate
+        self.drop_path_rate = drop_path_rate
 
-        self.conv_dw = select_conv2d(
+        self.conv_dw = create_conv2d(
             in_chs, in_chs, dw_kernel_size, stride=stride, dilation=dilation, padding=pad_type, depthwise=True)
         self.bn1 = norm_layer(in_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if has_se:
             se_kwargs = resolve_se_args(se_kwargs, in_chs, act_layer)
             self.se = SqueezeExcite(in_chs, se_ratio=se_ratio, **se_kwargs)
+        else:
+            self.se = None
 
-        self.conv_pw = select_conv2d(in_chs, out_chs, pw_kernel_size, padding=pad_type)
+        self.conv_pw = create_conv2d(in_chs, out_chs, pw_kernel_size, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
         self.act2 = act_layer(inplace=True) if self.has_pw_act else nn.Identity()
 
@@ -193,7 +179,7 @@ class DepthwiseSeparableConv(nn.Module):
         x = self.bn1(x)
         x = self.act1(x)
 
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         x = self.conv_pw(x)
@@ -201,8 +187,8 @@ class DepthwiseSeparableConv(nn.Module):
         x = self.act2(x)
 
         if self.has_residual:
-            if self.drop_connect_rate > 0.:
-                x = drop_connect(x, self.training, self.drop_connect_rate)
+            if self.drop_path_rate > 0.:
+                x = drop_path(x, self.drop_path_rate, self.training)
             x += residual
         return x
 
@@ -214,34 +200,36 @@ class InvertedResidual(nn.Module):
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False,
                  exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1,
                  se_ratio=0., se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 conv_kwargs=None, drop_connect_rate=0.):
+                 conv_kwargs=None, drop_path_rate=0.):
         super(InvertedResidual, self).__init__()
         norm_kwargs = norm_kwargs or {}
         conv_kwargs = conv_kwargs or {}
         mid_chs = make_divisible(in_chs * exp_ratio)
-        self.has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
-        self.drop_connect_rate = drop_connect_rate
+        self.drop_path_rate = drop_path_rate
 
         # Point-wise expansion
-        self.conv_pw = select_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type, **conv_kwargs)
+        self.conv_pw = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type, **conv_kwargs)
         self.bn1 = norm_layer(mid_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
         # Depth-wise convolution
-        self.conv_dw = select_conv2d(
+        self.conv_dw = create_conv2d(
             mid_chs, mid_chs, dw_kernel_size, stride=stride, dilation=dilation,
             padding=pad_type, depthwise=True, **conv_kwargs)
         self.bn2 = norm_layer(mid_chs, **norm_kwargs)
         self.act2 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if has_se:
             se_kwargs = resolve_se_args(se_kwargs, in_chs, act_layer)
             self.se = SqueezeExcite(mid_chs, se_ratio=se_ratio, **se_kwargs)
+        else:
+            self.se = None
 
         # Point-wise linear projection
-        self.conv_pwl = select_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
+        self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
         self.bn3 = norm_layer(out_chs, **norm_kwargs)
 
     def feature_module(self, location):
@@ -269,7 +257,7 @@ class InvertedResidual(nn.Module):
         x = self.act2(x)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         # Point-wise linear projection
@@ -277,8 +265,8 @@ class InvertedResidual(nn.Module):
         x = self.bn3(x)
 
         if self.has_residual:
-            if self.drop_connect_rate > 0.:
-                x = drop_connect(x, self.training, self.drop_connect_rate)
+            if self.drop_path_rate > 0.:
+                x = drop_path(x, self.drop_path_rate, self.training)
             x += residual
 
         return x
@@ -291,7 +279,7 @@ class CondConvResidual(InvertedResidual):
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False,
                  exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1,
                  se_ratio=0., se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 num_experts=0, drop_connect_rate=0.):
+                 num_experts=0, drop_path_rate=0.):
 
         self.num_experts = num_experts
         conv_kwargs = dict(num_experts=self.num_experts)
@@ -301,7 +289,7 @@ class CondConvResidual(InvertedResidual):
             act_layer=act_layer, noskip=noskip, exp_ratio=exp_ratio, exp_kernel_size=exp_kernel_size,
             pw_kernel_size=pw_kernel_size, se_ratio=se_ratio, se_kwargs=se_kwargs,
             norm_layer=norm_layer, norm_kwargs=norm_kwargs, conv_kwargs=conv_kwargs,
-            drop_connect_rate=drop_connect_rate)
+            drop_path_rate=drop_path_rate)
 
         self.routing_fn = nn.Linear(in_chs, self.num_experts)
 
@@ -323,7 +311,7 @@ class CondConvResidual(InvertedResidual):
         x = self.act2(x)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         # Point-wise linear projection
@@ -331,8 +319,8 @@ class CondConvResidual(InvertedResidual):
         x = self.bn3(x)
 
         if self.has_residual:
-            if self.drop_connect_rate > 0.:
-                x = drop_connect(x, self.training, self.drop_connect_rate)
+            if self.drop_path_rate > 0.:
+                x = drop_path(x, self.drop_path_rate, self.training)
             x += residual
         return x
 
@@ -343,29 +331,31 @@ class EdgeResidual(nn.Module):
     def __init__(self, in_chs, out_chs, exp_kernel_size=3, exp_ratio=1.0, fake_in_chs=0,
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False, pw_kernel_size=1,
                  se_ratio=0., se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 drop_connect_rate=0.):
+                 drop_path_rate=0.):
         super(EdgeResidual, self).__init__()
         norm_kwargs = norm_kwargs or {}
         if fake_in_chs > 0:
             mid_chs = make_divisible(fake_in_chs * exp_ratio)
         else:
             mid_chs = make_divisible(in_chs * exp_ratio)
-        self.has_se = se_ratio is not None and se_ratio > 0.
+        has_se = se_ratio is not None and se_ratio > 0.
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
-        self.drop_connect_rate = drop_connect_rate
+        self.drop_path_rate = drop_path_rate
 
         # Expansion convolution
-        self.conv_exp = select_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type)
+        self.conv_exp = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type)
         self.bn1 = norm_layer(mid_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if has_se:
             se_kwargs = resolve_se_args(se_kwargs, in_chs, act_layer)
             self.se = SqueezeExcite(mid_chs, se_ratio=se_ratio, **se_kwargs)
+        else:
+            self.se = None
 
         # Point-wise linear projection
-        self.conv_pwl = select_conv2d(
+        self.conv_pwl = create_conv2d(
             mid_chs, out_chs, pw_kernel_size, stride=stride, dilation=dilation, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
 
@@ -389,7 +379,7 @@ class EdgeResidual(nn.Module):
         x = self.act1(x)
 
         # Squeeze-and-excitation
-        if self.has_se:
+        if self.se is not None:
             x = self.se(x)
 
         # Point-wise linear projection
@@ -397,8 +387,8 @@ class EdgeResidual(nn.Module):
         x = self.bn2(x)
 
         if self.has_residual:
-            if self.drop_connect_rate > 0.:
-                x = drop_connect(x, self.training, self.drop_connect_rate)
+            if self.drop_path_rate > 0.:
+                x = drop_path(x, self.drop_path_rate, self.training)
             x += residual
 
         return x

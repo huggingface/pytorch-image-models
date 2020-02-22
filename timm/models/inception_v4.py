@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 __all__ = ['InceptionV4']

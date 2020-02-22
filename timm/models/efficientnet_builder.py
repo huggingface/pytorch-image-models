@@ -5,7 +5,8 @@ from collections.__init__ import OrderedDict
 from copy import deepcopy
 
 import torch.nn as nn
-from .activations import sigmoid, HardSwish, Swish
+from .layers import CondConv2d, get_condconv_initializer
+from .layers.activations import HardSwish, Swish
 from .efficientnet_blocks import *
 
 
@@ -201,7 +202,7 @@ class EfficientNetBuilder:
     """
     def __init__(self, channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  output_stride=32, pad_type='', act_layer=None, se_kwargs=None,
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_connect_rate=0., feature_location='',
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0., feature_location='',
                  verbose=False):
         self.channel_multiplier = channel_multiplier
         self.channel_divisor = channel_divisor
@@ -212,7 +213,7 @@ class EfficientNetBuilder:
         self.se_kwargs = se_kwargs
         self.norm_layer = norm_layer
         self.norm_kwargs = norm_kwargs
-        self.drop_connect_rate = drop_connect_rate
+        self.drop_path_rate = drop_path_rate
         self.feature_location = feature_location
         assert feature_location in ('pre_pwl', 'post_exp', '')
         self.verbose = verbose
@@ -225,7 +226,7 @@ class EfficientNetBuilder:
         return round_channels(chs, self.channel_multiplier, self.channel_divisor, self.channel_min)
 
     def _make_block(self, ba, block_idx, block_count):
-        drop_connect_rate = self.drop_connect_rate * block_idx / block_count
+        drop_path_rate = self.drop_path_rate * block_idx / block_count
         bt = ba.pop('block_type')
         ba['in_chs'] = self.in_chs
         ba['out_chs'] = self._round_channels(ba['out_chs'])
@@ -239,7 +240,7 @@ class EfficientNetBuilder:
         ba['act_layer'] = ba['act_layer'] if ba['act_layer'] is not None else self.act_layer
         assert ba['act_layer'] is not None
         if bt == 'ir':
-            ba['drop_connect_rate'] = drop_connect_rate
+            ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
                 logging.info('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)))
@@ -248,13 +249,13 @@ class EfficientNetBuilder:
             else:
                 block = InvertedResidual(**ba)
         elif bt == 'ds' or bt == 'dsa':
-            ba['drop_connect_rate'] = drop_connect_rate
+            ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
                 logging.info('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)))
             block = DepthwiseSeparableConv(**ba)
         elif bt == 'er':
-            ba['drop_connect_rate'] = drop_connect_rate
+            ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
                 logging.info('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)))

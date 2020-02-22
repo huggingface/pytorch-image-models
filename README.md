@@ -2,6 +2,20 @@
 
 ## What's New
 
+### Feb 18, 2020
+* Big refactor of model layers and addition of several attention mechanisms. Several additions motivated by 'Compounding the Performance Improvements...' (https://arxiv.org/abs/2001.06268):
+  * Move layer/module impl into `layers` subfolder/module of `models` and organize in a more granular fashion
+  * ResNet downsample paths now properly support dilation (output stride != 32) for avg_pool ('D' variant) and 3x3 (SENets) networks
+  * Add Selective Kernel Nets on top of ResNet base, pretrained weights
+    * skresnet18 - 73% top-1
+    * skresnet34 - 76.9% top-1 
+    * skresnext50_32x4d (equiv to SKNet50) - 80.2% top-1
+  * ECA and CECA (circular padding) attention layer contributed by [Chris Ha](https://github.com/VRandme)
+  * CBAM attention experiment (not the best results so far, may remove)
+  * Attention factory to allow dynamically selecting one of SE, ECA, CBAM in the `.se` position for all ResNets
+  * Add DropBlock and DropPath (formerly DropConnect for EfficientNet/MobileNetv3) support to all ResNet variants
+* Full dataset results updated that incl NoisyStudent weights and 2 of the 3 SK weights
+
 ### Feb 12, 2020
 * Add EfficientNet-L2 and B0-B7 NoisyStudent weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet)
 
@@ -86,6 +100,7 @@ Included models:
     * 'Bag of Tricks' / Gluon C, D, E, S variations (https://arxiv.org/abs/1812.01187)
     * Instagram trained / ImageNet tuned ResNeXt101-32x8d to 32x48d from from [facebookresearch](https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/)
     * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
+    * Selective Kernel (SK) Nets (https://arxiv.org/abs/1903.06586)
 * DLA
     * Original (https://github.com/ucbdrive/dla, https://arxiv.org/abs/1707.06484)
     * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
@@ -138,6 +153,8 @@ Several (less common) features that I often utilize in my projects are included.
 * AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
 * AugMix w/ JSD loss (https://arxiv.org/abs/1912.02781), JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
+* DropBlock (https://arxiv.org/abs/1810.12890)
+* Efficient Channel Attention - ECA (https://arxiv.org/abs/1910.03151)
 
 ## Results
 
@@ -150,9 +167,11 @@ I've leveraged the training scripts in this repository to train a few of the mod
 |---|---|---|---|---|---|
 | efficientnet_b3a | 81.874 (18.126) | 95.840 (4.160) | 12.23M | bicubic | 320 (1.0 crop) |
 | efficientnet_b3 | 81.498 (18.502) | 95.718 (4.282) | 12.23M | bicubic | 300 |
+| skresnext50d_32x4d | 81.278 (18.722) | 95.366 (4.634) | 27.5M | bicubic | 288 (1.0 crop) |
 | efficientnet_b2a | 80.608 (19.392) | 95.310 (4.690) | 9.11M | bicubic | 288 (1.0 crop) |
 | mixnet_xl | 80.478 (19.522) | 94.932 (5.068) | 11.90M | bicubic | 224 |
 | efficientnet_b2 | 80.402 (19.598) | 95.076 (4.924) | 9.11M | bicubic | 260 |
+| skresnext50d_32x4d | 80.156 (19.844) | 94.642 (5.358) | 27.5M | bicubic | 224 |
 | resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic | 224 |
 | resnet50 | 79.038 (20.962) | 94.390 (5.610) | 25.6M | bicubic | 224 |
 | mixnet_l | 78.976 (21.024 | 94.184 (5.816) | 7.33M | bicubic | 224 |
@@ -165,6 +184,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | seresnext26d_32x4d | 77.602 (22.398) | 93.608 (6.392) | 16.8M | bicubic | 224 |
 | mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic | 224 |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic | 224 |
+| skresnet34 | 76.912 (23.088) | 93.322 (6.678) | 22.2M | bicubic | 224 |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic | 224 |
 | mixnet_s | 75.988 (24.012) | 92.794 (7.206) | 4.13M | bicubic | 224 |
 | mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic | 224 |
@@ -175,6 +195,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | seresnet34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear | 224 |
 | mnasnet_b1 | 74.658 (25.342) | 92.114 (7.886) | 4.38M | bicubic | 224 |
 | spnasnet_100 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear | 224 |
+| skresnet18 | 73.038 (26.962) | 91.168 (8.832) | 11.9M | bicubic | 224 |
 | seresnet18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic | 224 |
 
 ### Ported Weights

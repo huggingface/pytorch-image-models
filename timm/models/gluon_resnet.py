@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
+from .layers import SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 from .resnet import ResNet, Bottleneck, BasicBlock
@@ -319,8 +320,8 @@ def gluon_seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kw
     """
     default_cfg = default_cfgs['gluon_seresnext50_32x4d']
     model = ResNet(
-        Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4, use_se=True,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
+        Bottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer=SEModule), **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -333,8 +334,8 @@ def gluon_seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **k
     """
     default_cfg = default_cfgs['gluon_seresnext101_32x4d']
     model = ResNet(
-        Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=4, use_se=True,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
+        Bottleneck, [3, 4, 23, 3], cardinality=32, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer=SEModule), **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -346,9 +347,10 @@ def gluon_seresnext101_64x4d(pretrained=False, num_classes=1000, in_chans=3, **k
     """Constructs a SEResNeXt-101-64x4d model.
     """
     default_cfg = default_cfgs['gluon_seresnext101_64x4d']
+    block_args = dict(attn_layer=SEModule)
     model = ResNet(
-        Bottleneck, [3, 4, 23, 3], cardinality=64, base_width=4, use_se=True,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
+        Bottleneck, [3, 4, 23, 3], cardinality=64, base_width=4,
+        num_classes=num_classes, in_chans=in_chans, block_args=block_args, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
@@ -360,10 +362,10 @@ def gluon_senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """Constructs an SENet-154 model.
     """
     default_cfg = default_cfgs['gluon_senet154']
+    block_args = dict(attn_layer=SEModule)
     model = ResNet(
-        Bottleneck, [3, 8, 36, 3], cardinality=64, base_width=4, use_se=True,
-        stem_type='deep', down_kernel_size=3, block_reduce_first=2,
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
+        Bottleneck, [3, 8, 36, 3], cardinality=64, base_width=4, stem_type='deep', down_kernel_size=3,
+        block_reduce_first=2, num_classes=num_classes, in_chans=in_chans, block_args=block_args, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

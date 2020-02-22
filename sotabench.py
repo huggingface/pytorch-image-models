@@ -56,8 +56,7 @@ model_list = [
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
     _entry('efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946',
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
-    _entry('fbnetc_100', 'FBNet-C', '1812.03443',
-           model_desc='Trained in PyTorch with RMSProp, exponential LR decay'),
+
     _entry('gluon_inception_v3', 'Inception V3', '1512.00567', model_desc='Ported from GluonCV Model Zoo'),
     _entry('gluon_resnet18_v1b', 'ResNet-18', '1812.01187', model_desc='Ported from GluonCV Model Zoo'),
     _entry('gluon_resnet34_v1b', 'ResNet-34', '1812.01187', model_desc='Ported from GluonCV Model Zoo'),
@@ -82,14 +81,22 @@ model_list = [
     _entry('gluon_seresnext101_64x4d', 'SE-ResNeXt-101 64x4d', '1812.01187', model_desc='Ported from GluonCV Model Zoo'),
     _entry('gluon_xception65', 'Modified Aligned Xception', '1802.02611', batch_size=BATCH_SIZE//2,
            model_desc='Ported from GluonCV Model Zoo'),
+
     _entry('mixnet_xl', 'MixNet-XL', '1907.09595', model_desc="My own scaling beyond paper's MixNet Large"),
     _entry('mixnet_l', 'MixNet-L', '1907.09595'),
     _entry('mixnet_m', 'MixNet-M', '1907.09595'),
     _entry('mixnet_s', 'MixNet-S', '1907.09595'),
+
+    _entry('fbnetc_100', 'FBNet-C', '1812.03443',
+           model_desc='Trained in PyTorch with RMSProp, exponential LR decay'),
     _entry('mnasnet_100', 'MnasNet-B1', '1807.11626'),
+    _entry('semnasnet_100', 'MnasNet-A1', '1807.11626'),
+    _entry('spnasnet_100', 'Single-Path NAS', '1904.02877',
+           model_desc='Trained in PyTorch with SGD, cosine LR decay'),
     _entry('mobilenetv3_rw', 'MobileNet V3-Large 1.0', '1905.02244',
            model_desc='Trained in PyTorch with RMSProp, exponential LR decay, and hyper-params matching '
                       'paper as closely as possible.'),
+
     _entry('resnet18', 'ResNet-18', '1812.01187'),
     _entry('resnet26', 'ResNet-26', '1812.01187', model_desc='Block cfg of ResNet-34 w/ Bottleneck'),
     _entry('resnet26d', 'ResNet-26-D', '1812.01187',
@@ -103,7 +110,7 @@ model_list = [
     _entry('resnext50d_32x4d', 'ResNeXt-50-D 32x4d', '1812.01187',
            model_desc="'D' variant (3x3 deep stem w/ avg-pool downscale). Trained with "
                       "SGD w/ cosine LR decay, random-erasing (gaussian per-pixel noise) and label-smoothing"),
-    _entry('semnasnet_100', 'MnasNet-A1', '1807.11626'),
+
     _entry('seresnet18', 'SE-ResNet-18', '1709.01507'),
     _entry('seresnet34', 'SE-ResNet-34', '1709.01507'),
     _entry('seresnext26_32x4d', 'SE-ResNeXt-26 32x4d', '1709.01507',
@@ -114,8 +121,10 @@ model_list = [
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered stem, and avg-pool in downsample layers.'),
     _entry('seresnext26tn_32x4d', 'SE-ResNeXt-26-TN 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
-    _entry('spnasnet_100', 'Single-Path NAS', '1904.02877',
-           model_desc='Trained in PyTorch with SGD, cosine LR decay'),
+
+    _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
+    _entry('skresnet34', 'SK-ResNet-34', '1903.06586'),
+    _entry('skresnext50_32x4d', 'SKNet-50', '1903.06586'),
 
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),

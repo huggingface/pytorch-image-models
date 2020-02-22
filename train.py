@@ -81,10 +81,14 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
                     help='ratio of validation batch size to training batch size (default: 1)')
-parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
+parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
                     help='Dropout rate (default: 0.)')
-parser.add_argument('--drop-connect', type=float, default=0.0, metavar='DROP',
-                    help='Drop connect rate (default: 0.)')
+parser.add_argument('--drop-connect', type=float, default=None, metavar='PCT',
+                    help='Drop connect rate, DEPRECATED, use drop-path (default: None)')
+parser.add_argument('--drop-path', type=float, default=None, metavar='PCT',
+                    help='Drop path rate (default: None)')
+parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
+                    help='Drop block rate (default: None)')
 parser.add_argument('--jsd', action='store_true', default=False,
                     help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 # Optimizer parameters
@@ -242,7 +246,9 @@ def main():
         pretrained=args.pretrained,
         num_classes=args.num_classes,
         drop_rate=args.drop,
-        drop_connect_rate=args.drop_connect,
+        drop_connect_rate=args.drop_connect,  # DEPRECATED, use drop_path
+        drop_path_rate=args.drop_path,
+        drop_block_rate=args.drop_block,
         global_pool=args.gp,
         bn_tf=args.bn_tf,
         bn_momentum=args.bn_momentum,
