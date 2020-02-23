@@ -25,6 +25,11 @@ class Scheduler:
     def __init__(self,
                  optimizer: torch.optim.Optimizer,
                  param_group_field: str,
+                 noise_range_t=None,
+                 noise_type='normal',
+                 noise_pct=0.67,
+                 noise_std=1.0,
+                 noise_seed=None,
                  initialize: bool = True) -> None:
         self.optimizer = optimizer
         self.param_group_field = param_group_field
@@ -40,6 +45,11 @@ class Scheduler:
                     raise KeyError(f"{self._initial_param_group_field} missing from param_groups[{i}]")
         self.base_values = [group[self._initial_param_group_field] for group in self.optimizer.param_groups]
         self.metric = None  # any point to having this for all?
+        self.noise_range_t = noise_range_t
+        self.noise_pct = noise_pct
+        self.noise_type = noise_type
+        self.noise_std = noise_std
+        self.noise_seed = noise_seed if noise_seed is not None else 42
         self.update_groups(self.base_values)
 
     def state_dict(self) -> Dict[str, Any]:
@@ -58,12 +68,14 @@ class Scheduler:
         self.metric = metric
         values = self.get_epoch_values(epoch)
         if values is not None:
+            values = self._add_noise(values, epoch)
             self.update_groups(values)
 
     def step_update(self, num_updates: int, metric: float = None):
         self.metric = metric
         values = self.get_update_values(num_updates)
         if values is not None:
+            values = self._add_noise(values, num_updates)
             self.update_groups(values)
 
     def update_groups(self, values):
@@ -71,3 +83,23 @@ class Scheduler:
             values = [values] * len(self.optimizer.param_groups)
         for param_group, value in zip(self.optimizer.param_groups, values):
             param_group[self.param_group_field] = value
+
+    def _add_noise(self, lrs, t):
+        if self.noise_range_t is not None:
+            if isinstance(self.noise_range_t, (list, tuple)):
+                apply_noise = self.noise_range_t[0] <= t < self.noise_range_t[1]
+            else:
+                apply_noise = t >= self.noise_range_t
+            if apply_noise:
+                g = torch.Generator()
+                g.manual_seed(self.noise_seed + t)
+                if self.noise_type == 'normal':
+                    while True:
+                        # resample if noise out of percent limit, brute force but shouldn't spin much
+                        noise = torch.randn(1, generator=g).item()
+                        if abs(noise) < self.noise_pct:
+                            break
+                else:
+                    noise = 2 * (torch.rand(1, generator=g).item() - 0.5) * self.noise_pct
+                lrs = [v + v * noise for v in lrs]
+        return lrs
