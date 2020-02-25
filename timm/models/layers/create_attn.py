@@ -3,9 +3,9 @@
 Hacked together by Ross Wightman
 """
 import torch
-from .se import SEModule
-from .eca import EcaModule, CecaModule
-from .cbam import CbamModule, LightCbamModule
+from .se import SqueezeExcite, SqueezeExciteV2
+from .eca import EfficientChannelAttn, CircularEfficientChannelAttn
+from .cbam import ConvBlockAttn, LightConvBlockAttn
 
 
 def create_attn(attn_type, channels, **kwargs):
@@ -14,20 +14,19 @@ def create_attn(attn_type, channels, **kwargs):
         if isinstance(attn_type, str):
             attn_type = attn_type.lower()
             if attn_type == 'se':
-                module_cls = SEModule
+                module_cls = SqueezeExcite
+            elif attn_type == 'sev2':
+                module_cls = SqueezeExciteV2
             elif attn_type == 'eca':
-                module_cls = EcaModule
-            elif attn_type == 'eca':
-                module_cls = CecaModule
+                module_cls = EfficientChannelAttn
+            elif attn_type == 'ceca':
+                module_cls = CircularEfficientChannelAttn
             elif attn_type == 'cbam':
-                module_cls = CbamModule
+                module_cls = ConvBlockAttn
             elif attn_type == 'lcbam':
-                module_cls = LightCbamModule
+                module_cls = LightConvBlockAttn
             else:
                 assert False, "Invalid attn module (%s)" % attn_type
-        elif isinstance(attn_type, bool):
-            if attn_type:
-                module_cls = SEModule
         else:
             module_cls = attn_type
     if module_cls is not None:

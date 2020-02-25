@@ -38,7 +38,7 @@ from torch import nn
 import torch.nn.functional as F
 
 
-class EcaModule(nn.Module):
+class EfficientChannelAttn(nn.Module):
     """Constructs an ECA module.
 
     Args:
@@ -49,8 +49,8 @@ class EcaModule(nn.Module):
             (default=None. if channel size not given, use k_size given for kernel size.)
         kernel_size: Adaptive selection of kernel size (default=3)
     """
-    def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1):
-        super(EcaModule, self).__init__()
+    def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1, gate_fn=None):
+        super(EfficientChannelAttn, self).__init__()
         assert kernel_size % 2 == 1
 
         if channels is not None:
@@ -59,20 +59,18 @@ class EcaModule(nn.Module):
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=(kernel_size - 1) // 2, bias=False)
+        self.gate_fn = gate_fn
 
     def forward(self, x):
-        # Feature descriptor on the global spatial information
-        y = self.avg_pool(x)
-        # Reshape for convolution
-        y = y.view(x.shape[0], 1, -1)
-        # Two different branches of ECA module
+        y = self.avg_pool(x)  # Feature descriptor on the global spatial information
+        y = y.view(x.shape[0], 1, -1)  # Reshape for convolution
         y = self.conv(y)
-        # Multi-scale information fusion
-        y = y.view(x.shape[0], -1, 1, 1).sigmoid()
+        y = y.view(x.shape[0], -1, 1, 1)
+        y = y.sigmoid() if self.gate_fn is None else self.gate_fn(y)
         return x * y.expand_as(x)
 
 
-class CecaModule(nn.Module):
+class CircularEfficientChannelAttn(nn.Module):
     """Constructs a circular ECA module.
 
     ECA module where the conv uses circular padding rather than zero padding.
@@ -92,13 +90,14 @@ class CecaModule(nn.Module):
         kernel_size: Adaptive selection of kernel size (default=3)
     """
 
-    def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1):
-        super(CecaModule, self).__init__()
+    def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1, gate_fn=None):
+        super(CircularEfficientChannelAttn, self).__init__()
         assert kernel_size % 2 == 1
 
         if channels is not None:
             t = int(abs(math.log(channels, 2) + beta) / gamma)
             kernel_size = max(t if t % 2 else t + 1, 3)
+        self.padding = (kernel_size - 1) // 2
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         #pytorch circular padding mode is buggy as of pytorch 1.4
@@ -106,19 +105,13 @@ class CecaModule(nn.Module):
 
         #implement manual circular padding
         self.conv = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=0, bias=False)
-        self.padding = (kernel_size - 1) // 2
+        self.gate_fn = gate_fn
 
     def forward(self, x):
-        # Feature descriptor on the global spatial information
-        y = self.avg_pool(x)
-
+        y = self.avg_pool(x)  # Feature descriptor on the global spatial information
         # Manually implement circular padding, F.pad does not seemed to be bugged
         y = F.pad(y.view(x.shape[0], 1, -1), (self.padding, self.padding), mode='circular')
-
-        # Two different branches of ECA module
         y = self.conv(y)
-
-        # Multi-scale information fusion
-        y = y.view(x.shape[0], -1, 1, 1).sigmoid()
-
+        y = y.view(x.shape[0], -1, 1, 1)
+        y = y.sigmoid() if self.gate_fn is None else self.gate_fn(y)
         return x * y.expand_as(x)

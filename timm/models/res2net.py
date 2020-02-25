@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from .resnet import ResNet
 from .registry import register_model
 from .helpers import load_pretrained
-from .layers import SEModule
+from .layers import SqueezeExcite
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = []

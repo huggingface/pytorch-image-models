@@ -75,9 +75,9 @@ class LightSpatialAttn(nn.Module):
         return x * x_attn.sigmoid()
 
 
-class CbamModule(nn.Module):
+class ConvBlockAttn(nn.Module):
     def __init__(self, channels, spatial_kernel_size=7):
-        super(CbamModule, self).__init__()
+        super(ConvBlockAttn, self).__init__()
         self.channel = ChannelAttn(channels)
         self.spatial = SpatialAttn(spatial_kernel_size)
 
@@ -87,9 +87,9 @@ class CbamModule(nn.Module):
         return x
 
 
-class LightCbamModule(nn.Module):
+class LightConvBlockAttn(nn.Module):
     def __init__(self, channels, spatial_kernel_size=7):
-        super(LightCbamModule, self).__init__()
+        super(LightConvBlockAttn, self).__init__()
         self.channel = LightChannelAttn(channels)
         self.spatial = LightSpatialAttn(spatial_kernel_size)
 

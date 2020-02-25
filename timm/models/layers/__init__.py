@@ -7,8 +7,8 @@ from .cond_conv2d import CondConv2d, get_condconv_initializer
 from .create_conv2d import create_conv2d
 from .create_attn import create_attn
 from .selective_kernel import SelectiveKernelConv
-from .se import SEModule
-from .eca import EcaModule, CecaModule
+from .se import SqueezeExcite, SqueezeExciteV2
+from .eca import EfficientChannelAttn, CircularEfficientChannelAttn
 from .activations import *
 from .adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d

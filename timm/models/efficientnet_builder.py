@@ -79,6 +79,13 @@ def _decode_block_str(block_str):
     exp_kernel_size = _parse_ksize(options['a']) if 'a' in options else 1
     pw_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
     fake_in_chs = int(options['fc']) if 'fc' in options else 0  # FIXME hack to deal with in_chs issue in TPU def
+    attn_layer = None
+    attn_kwargs = None
+    if 'se' in options:
+        attn_layer = 'sev2'
+        attn_kwargs = dict(se_ratio=float(options['se']))
+    elif 'eca' in options:
+        attn_layer = 'eca'
 
     num_repeat = int(options['r'])
     # each type of block has different valid arguments, fill accordingly
@@ -90,7 +97,8 @@ def _decode_block_str(block_str):
             pw_kernel_size=pw_kernel_size,
             out_chs=int(options['c']),
             exp_ratio=float(options['e']),
-            se_ratio=float(options['se']) if 'se' in options else None,
+            attn_layer=attn_layer,
+            attn_kwargs=attn_kwargs,
             stride=int(options['s']),
             act_layer=act_layer,
             noskip=noskip,
@@ -103,7 +111,8 @@ def _decode_block_str(block_str):
             dw_kernel_size=_parse_ksize(options['k']),
             pw_kernel_size=pw_kernel_size,
             out_chs=int(options['c']),
-            se_ratio=float(options['se']) if 'se' in options else None,
+            attn_layer=attn_layer,
+            attn_kwargs=attn_kwargs,
             stride=int(options['s']),
             act_layer=act_layer,
             pw_act=block_type == 'dsa',
@@ -117,7 +126,8 @@ def _decode_block_str(block_str):
             out_chs=int(options['c']),
             exp_ratio=float(options['e']),
             fake_in_chs=fake_in_chs,
-            se_ratio=float(options['se']) if 'se' in options else None,
+            attn_layer=attn_layer,
+            attn_kwargs=attn_kwargs,
             stride=int(options['s']),
             act_layer=act_layer,
             noskip=noskip,
@@ -201,7 +211,7 @@ class EfficientNetBuilder:
 
     """
     def __init__(self, channel_multiplier=1.0, channel_divisor=8, channel_min=None,
-                 output_stride=32, pad_type='', act_layer=None, se_kwargs=None,
+                 output_stride=32, pad_type='', act_layer=None, attn_layer=None, attn_kwargs=None,
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0., feature_location='',
                  verbose=False):
         self.channel_multiplier = channel_multiplier
@@ -210,7 +220,8 @@ class EfficientNetBuilder:
         self.output_stride = output_stride
         self.pad_type = pad_type
         self.act_layer = act_layer
-        self.se_kwargs = se_kwargs
+        self.attn_layer = attn_layer
+        self.attn_kwargs = attn_kwargs
         self.norm_layer = norm_layer
         self.norm_kwargs = norm_kwargs
         self.drop_path_rate = drop_path_rate
@@ -239,9 +250,19 @@ class EfficientNetBuilder:
         # block act fn overrides the model default
         ba['act_layer'] = ba['act_layer'] if ba['act_layer'] is not None else self.act_layer
         assert ba['act_layer'] is not None
+        if 'attn_layer' in ba:
+            assert'attn_kwargs' in ba  # block args should have both or neither
+            # per-block attn layer overrides model default
+            ba['attn_layer'] = ba['attn_layer'] if ba['attn_layer'] is not None else self.attn_layer
+            if self.attn_kwargs is not None:
+                # merge per-block attn kwargs with model if both exist
+                if ba['attn_kwargs'] is None:
+                    ba['attn_kwargs'] = self.attn_kwargs
+                else:
+                    ba['attn_kwargs'].update(self.attn_kwargs)
+
         if bt == 'ir':
             ba['drop_path_rate'] = drop_path_rate
-            ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
                 logging.info('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)))
             if ba.get('num_experts', 0) > 0:
@@ -250,13 +271,11 @@ class EfficientNetBuilder:
                 block = InvertedResidual(**ba)
         elif bt == 'ds' or bt == 'dsa':
             ba['drop_path_rate'] = drop_path_rate
-            ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
                 logging.info('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)))
             block = DepthwiseSeparableConv(**ba)
         elif bt == 'er':
             ba['drop_path_rate'] = drop_path_rate
-            ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
                 logging.info('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)))
             block = EdgeResidual(**ba)
