@@ -413,7 +413,7 @@ def _gen_mobilenet_v3_eca(variant, channel_multiplier=1.0, pretrained=False, **k
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
         act_layer=act_layer,
-        attn_layer='eca',
+        attn_layer='ceca',
         attn_kwargs=dict(gate_fn=hard_sigmoid),
         **kwargs,
     )
