@@ -21,7 +21,9 @@ import numpy as np
 import math
 
 
-def drop_block_2d(x, drop_prob=0.1, training=False, block_size=7, gamma_scale=1.0, drop_with_noise=False):
+def drop_block_2d(
+        x, drop_prob: float = 0.1, training: bool = False, block_size: int = 7,
+        gamma_scale: float = 1.0, drop_with_noise: bool = False):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
     DropBlock with an experimental gaussian noise option. This layer has been tested on a few training
@@ -79,7 +81,7 @@ class DropBlock2d(nn.Module):
         return drop_block_2d(x, self.drop_prob, self.training, self.block_size, self.gamma_scale, self.with_noise)
 
 
-def drop_path(x, drop_prob=0., training=False):
+def drop_path(x, drop_prob: float = 0., training: bool = False):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
     This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
