@@ -31,7 +31,9 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     'mobilenetv3_large_075': _cfg(url=''),
-    'mobilenetv3_large_100': _cfg(url=''),
+    'mobilenetv3_large_100': _cfg(
+        interpolation='bicubic',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
     'mobilenetv3_small_075': _cfg(url=''),
     'mobilenetv3_small_100': _cfg(url=''),
     'mobilenetv3_rw': _cfg(

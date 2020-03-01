@@ -29,8 +29,15 @@ class CosineLRScheduler(Scheduler):
                  warmup_prefix=False,
                  cycle_limit=0,
                  t_in_epochs=True,
+                 noise_range_t=None,
+                 noise_pct=0.67,
+                 noise_std=1.0,
+                 noise_seed=42,
                  initialize=True) -> None:
-        super().__init__(optimizer, param_group_field="lr", initialize=initialize)
+        super().__init__(
+            optimizer, param_group_field="lr",
+            noise_range_t=noise_range_t, noise_pct=noise_pct, noise_std=noise_std, noise_seed=noise_seed,
+            initialize=initialize)
 
         assert t_initial > 0
         assert lr_min >= 0
