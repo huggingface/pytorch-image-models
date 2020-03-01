@@ -10,9 +10,10 @@ def create_scheduler(args, optimizer):
     if args.lr_noise is not None:
         if isinstance(args.lr_noise, (list, tuple)):
             noise_range = [n * num_epochs for n in args.lr_noise]
+            if len(noise_range) == 1:
+                noise_range = noise_range[0]
         else:
             noise_range = args.lr_noise * num_epochs
-        print('Noise range:', noise_range)
     else:
         noise_range = None
 
