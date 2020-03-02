@@ -2,6 +2,14 @@
 
 ## What's New
 
+### Feb 29, 2020
+* New MobileNet-V3 Large weights trained from stratch with this code to 75.77% top-1
+* IMPORTANT CHANGE - default weight init changed for all MobilenetV3 / EfficientNet / related models
+  * overall results similar to a bit better training from scratch on a few smaller models tried
+  * performance early in training seems consistently improved but less difference by end
+  * set `fix_group_fanout=False` in `_init_weight_goog` fn if you need to reproducte past behaviour
+* Experimental LR noise feature added applies a random perturbation to LR each epoch in specified range of training
+
 ### Feb 18, 2020
 * Big refactor of model layers and addition of several attention mechanisms. Several additions motivated by 'Compounding the Performance Improvements...' (https://arxiv.org/abs/2001.06268):
   * Move layer/module impl into `layers` subfolder/module of `models` and organize in a more granular fashion
@@ -187,7 +195,8 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | skresnet34 | 76.912 (23.088) | 93.322 (6.678) | 22.2M | bicubic | 224 |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic | 224 |
 | mixnet_s | 75.988 (24.012) | 92.794 (7.206) | 4.13M | bicubic | 224 |
-| mobilenetv3_100 | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic | 224 |
+| mobilenetv3_large_100 | 75.766 (24.234) | 92.542 (7.458) | 5.5M | bicubic | 224 |
+| mobilenetv3_rw | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic | 224 |
 | mnasnet_a1 | 75.448 (24.552) | 92.604 (7.396) | 3.89M | bicubic | 224 |
 | resnet26 | 75.292 (24.708) | 92.57 (7.43) | 16M | bicubic | 224 |
 | fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear | 224 |
@@ -360,6 +369,11 @@ Trained on two older 1080Ti cards, this took a while. Only slightly, non statist
 Trained by [Andrew Lavin](https://github.com/andravin) with 8 V100 cards. Model EMA was not used, final checkpoint is the average of 8 best checkpoints during training.
 
 `./distributed_train.sh 8 /imagenet --model efficientnet_es -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.2 --drop-connect 0.2  --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .064`
+
+### MobileNetV3-Large-100 - 75.766 top-1, 92,542 top-5
+
+`./distributed_train.sh 2 /imagenet/ --model mobilenetv3_large_100 -b 512 --sched step --epochs 600 --decay-epochs 2.4 --decay-rate .973 --opt rmsproptf --opt-eps .001 -j 7 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.2 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .064 --lr-noise 0.42 0.9`
+
 
 **TODO dig up some more**
 

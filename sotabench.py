@@ -93,7 +93,7 @@ model_list = [
     _entry('semnasnet_100', 'MnasNet-A1', '1807.11626'),
     _entry('spnasnet_100', 'Single-Path NAS', '1904.02877',
            model_desc='Trained in PyTorch with SGD, cosine LR decay'),
-    _entry('mobilenetv3_rw', 'MobileNet V3-Large 1.0', '1905.02244',
+    _entry('mobilenetv3_large_100', 'MobileNet V3-Large 1.0', '1905.02244',
            model_desc='Trained in PyTorch with RMSProp, exponential LR decay, and hyper-params matching '
                       'paper as closely as possible.'),
 
