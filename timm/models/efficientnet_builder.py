@@ -85,7 +85,8 @@ def _decode_block_str(block_str):
         attn_layer = 'sev2'
         attn_kwargs = dict(se_ratio=float(options['se']))
     elif 'eca' in options:
-        attn_layer = 'eca'
+        attn_layer = 'ceca'
+        attn_kwargs = dict(kernel_size=int(options['eca']))
 
     num_repeat = int(options['r'])
     # each type of block has different valid arguments, fill accordingly
@@ -378,7 +379,7 @@ class EfficientNetBuilder:
         return stages
 
 
-def _init_weight_goog(m, n='', fix_group_fanout=False):
+def _init_weight_goog(m, n='', fix_group_fanout=True):
     """ Weight initialization as per Tensorflow official implementations.
 
     Args:
