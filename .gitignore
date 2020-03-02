@@ -105,8 +105,3 @@ venv.bak/
 *.pth
 *.gz
 Untitled.ipynb
-<<<<<<< Updated upstream
-=======
-Testing notebook.ipynb
-Testing-Cifar-100.ipynb
->>>>>>> Stashed changes
