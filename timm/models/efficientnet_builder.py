@@ -90,7 +90,7 @@ def _decode_block_str(block_str):
 
     num_repeat = int(options['r'])
     # each type of block has different valid arguments, fill accordingly
-    if block_type == 'ir':
+    if block_type == 'ir' or block_type == 'xir':
         block_args = dict(
             block_type=block_type,
             dw_kernel_size=_parse_ksize(options['k']),
@@ -106,7 +106,7 @@ def _decode_block_str(block_str):
         )
         if 'cc' in options:
             block_args['num_experts'] = int(options['cc'])
-    elif block_type == 'ds' or block_type == 'dsa':
+    elif block_type == 'ds' or block_type == 'dsa' or block_type == 'xds':
         block_args = dict(
             block_type=block_type,
             dw_kernel_size=_parse_ksize(options['k']),
@@ -232,6 +232,7 @@ class EfficientNetBuilder:
 
         # state updated during build, consumed by model
         self.in_chs = None
+        self.x_count = 0
         self.features = OrderedDict()
 
     def _round_channels(self, chs):
@@ -261,32 +262,34 @@ class EfficientNetBuilder:
                     ba['attn_kwargs'] = self.attn_kwargs
                 else:
                     ba['attn_kwargs'].update(self.attn_kwargs)
+        ba['drop_path_rate'] = drop_path_rate
 
         if bt == 'ir':
-            ba['drop_path_rate'] = drop_path_rate
-            if self.verbose:
-                logging.info('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)))
             if ba.get('num_experts', 0) > 0:
                 block = CondConvResidual(**ba)
             else:
                 block = InvertedResidual(**ba)
+        elif bt == 'xir':
+            ba['pad_shift'] = self.x_count
+            block = XInvertedResidual(**ba)
+            self.x_count = (self.x_count + 1) % 4
         elif bt == 'ds' or bt == 'dsa':
-            ba['drop_path_rate'] = drop_path_rate
-            if self.verbose:
-                logging.info('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)))
             block = DepthwiseSeparableConv(**ba)
+        elif bt == 'xds':
+            ba['pad_shift'] = self.x_count
+            block = XDepthwiseSeparableConv(**ba)
+            self.x_count = (self.x_count + 1) % 4
         elif bt == 'er':
-            ba['drop_path_rate'] = drop_path_rate
-            if self.verbose:
-                logging.info('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)))
             block = EdgeResidual(**ba)
         elif bt == 'cn':
-            if self.verbose:
-                logging.info('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)))
+            del ba['drop_path_rate']
             block = ConvBnAct(**ba)
         else:
             assert False, 'Uknkown block type (%s) while building model.' % bt
         self.in_chs = ba['out_chs']  # update in_chs for arg of next block
+
+        if self.verbose:
+            logging.info('  {} {}, Args: {}'.format(block.__class__.__name__, block_idx, str(ba)))
 
         return block
 

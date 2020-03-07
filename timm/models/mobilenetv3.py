@@ -35,6 +35,7 @@ default_cfgs = {
     'mobilenetv3_small_075': _cfg(url='', interoplation='bicubic'),
     'mobilenetv3_small_100': _cfg(url='', interoplation='bicubic'),
     'mobilenetv3_eca_large': _cfg(url='', interoplation='bicubic'),
+    'xmobilenetv3_large_100': _cfg(url='', interoplation='bicubic'),
     'mobilenetv3_rw': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
         interpolation='bicubic'),
@@ -58,7 +59,7 @@ default_cfgs = {
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 }
 
-_DEBUG = False
+_DEBUG = True
 
 
 class MobileNetV3(nn.Module):
@@ -360,6 +361,102 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
     return model
 
 
+def _gen_xmobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """Creates a MobileNet-V3 model.
+
+    Ref impl: ?
+    Paper: https://arxiv.org/abs/1905.02244
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer.
+    """
+    if 'small' in variant:
+        num_features = 1024
+        if 'minimal' in variant:
+            act_layer = nn.ReLU
+            arch_def = [
+                # stage 0, 112x112 in
+                ['ds_r1_k3_s2_e1_c16'],
+                # stage 1, 56x56 in
+                ['ir_r1_k3_s2_e4.5_c24', 'ir_r1_k3_s1_e3.67_c24'],
+                # stage 2, 28x28 in
+                ['ir_r1_k3_s2_e4_c40', 'ir_r2_k3_s1_e6_c40'],
+                # stage 3, 14x14 in
+                ['ir_r2_k3_s1_e3_c48'],
+                # stage 4, 14x14in
+                ['ir_r3_k3_s2_e6_c96'],
+                # stage 6, 7x7 in
+                ['cn_r1_k1_s1_c576'],
+            ]
+        else:
+            act_layer = HardSwish
+            arch_def = [
+                # stage 0, 112x112 in
+                ['ds_r1_k3_s2_e1_c16_se0.25_nre'],  # relu
+                # stage 1, 56x56 in
+                ['ir_r1_k3_s2_e4.5_c24_nre', 'ir_r1_k3_s1_e3.67_c24_nre'],  # relu
+                # stage 2, 28x28 in
+                ['ir_r1_k5_s2_e4_c40_se0.25', 'ir_r2_k5_s1_e6_c40_se0.25'],  # hard-swish
+                # stage 3, 14x14 in
+                ['ir_r2_k5_s1_e3_c48_se0.25'],  # hard-swish
+                # stage 4, 14x14in
+                ['ir_r3_k5_s2_e6_c96_se0.25'],  # hard-swish
+                # stage 6, 7x7 in
+                ['cn_r1_k1_s1_c576'],  # hard-swish
+            ]
+    else:
+        num_features = 1280
+        if 'minimal' in variant:
+            act_layer = nn.ReLU
+            arch_def = [
+                # stage 0, 112x112 in
+                ['ds_r1_k3_s1_e1_c16'],
+                # stage 1, 112x112 in
+                ['ir_r1_k3_s2_e4_c24', 'ir_r1_k3_s1_e3_c24'],
+                # stage 2, 56x56 in
+                ['ir_r3_k3_s2_e3_c40'],
+                # stage 3, 28x28 in
+                ['ir_r1_k3_s2_e6_c80', 'ir_r1_k3_s1_e2.5_c80', 'ir_r2_k3_s1_e2.3_c80'],
+                # stage 4, 14x14in
+                ['ir_r2_k3_s1_e6_c112'],
+                # stage 5, 14x14in
+                ['ir_r3_k3_s2_e6_c160'],
+                # stage 6, 7x7 in
+                ['cn_r1_k1_s1_c960'],
+            ]
+        else:
+            act_layer = HardSwish
+            arch_def = [
+                # stage 0, 112x112 in
+                ['ds_r1_k3_s1_e1_c16_nre'],  # relu
+                # stage 1, 112x112 in
+                ['ir_r1_k3_s2_e4_c24_nre', 'ir_r1_k3_s1_e3_c24_nre'],  # relu
+                # stage 2, 56x56 in
+                ['ir_r3_k5_s2_e3_c40_se0.25_nre', 'xir_r2_k5_s2_e3_c40_se0.25_nre'],  # relu
+                # stage 3, 28x28 in
+                ['ir_r1_k3_s2_e6_c80', 'ir_r1_k3_s1_e2.5_c80', 'ir_r2_k3_s1_e2.3_c80'],  # hard-swish
+                # stage 4, 14x14in
+                ['xir_r2_k5_s1_e6_c112_se0.25'],  # hard-swish
+                # stage 5, 14x14in
+                ['ir_r1_k5_s2_e6_c160_se0.25', 'xir_r2_k5_s2_e6_c160_se0.25'],  # hard-swish
+                # stage 6, 7x7 in
+                ['cn_r1_k1_s1_c960'],  # hard-swish
+            ]
+
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        num_features=num_features,
+        stem_size=16,
+        channel_multiplier=channel_multiplier,
+        norm_kwargs=resolve_bn_args(kwargs),
+        act_layer=act_layer,
+        attn_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisible_by=8),
+        **kwargs,
+    )
+    model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
+    return model
+
+
 def _gen_mobilenet_v3_eca(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """Creates a MobileNet-V3 model.
 
@@ -468,6 +565,13 @@ def mobilenetv3_small_100(pretrained=False, **kwargs):
 def mobilenetv3_eca_large(pretrained=False, **kwargs):
     """ MobileNet V3 """
     model = _gen_mobilenet_v3_eca('mobilenetv3_eca_large', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def xmobilenetv3_large_100(pretrained=False, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_xmobilenet_v3('xmobilenetv3_large_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
 

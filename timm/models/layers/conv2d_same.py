@@ -13,8 +13,8 @@ from .padding import get_padding, pad_same, is_static_pad
 
 def conv2d_same(
         x, weight: torch.Tensor, bias: Optional[torch.Tensor] = None, stride: Tuple[int, int] = (1, 1),
-        padding: Tuple[int, int] = (0, 0), dilation: Tuple[int, int] = (1, 1), groups: int = 1):
-    x = pad_same(x, weight.shape[-2:], stride, dilation)
+        padding: Tuple[int, int] = (0, 0), dilation: Tuple[int, int] = (1, 1), groups: int = 1, pad_shift: int = 0):
+    x = pad_same(x, weight.shape[-2:], stride, dilation, pad_shift)
     return F.conv2d(x, weight, bias, stride, (0, 0), dilation, groups)
 
 
@@ -23,12 +23,14 @@ class Conv2dSame(nn.Conv2d):
     """
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, groups=1, bias=True):
+                 padding=0, dilation=1, groups=1, bias=True, pad_shift=0):
         super(Conv2dSame, self).__init__(
             in_channels, out_channels, kernel_size, stride, 0, dilation, groups, bias)
+        self.pad_shift = pad_shift
 
     def forward(self, x):
-        return conv2d_same(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return conv2d_same(
+            x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups, self.pad_shift)
 
 
 def get_padding_value(padding, kernel_size, **kwargs) -> Tuple[Tuple, bool]:
