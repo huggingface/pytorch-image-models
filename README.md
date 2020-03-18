@@ -2,6 +2,9 @@
 
 ## What's New
 
+### March 18, 2020
+* Add EfficientNet-Lite models w/ weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite)
+
 ### Feb 29, 2020
 * New MobileNet-V3 Large weights trained from stratch with this code to 75.77% top-1
 * IMPORTANT CHANGE - default weight init changed for all MobilenetV3 / EfficientNet / related models
@@ -252,7 +255,9 @@ For the models below, the model code and weight porting from Tensorflow or MXNet
 | tf_efficientnet_b3_ap      | 81.828 (18.172) | 95.624 (4.376) | 12.23 | bicubic | 300 |
 | tf_efficientnet_b3         | 81.636 (18.364) | 95.718 (4.282) | 12.23 | bicubic | 300 |
 | tf_efficientnet_b3 *tfp    | 81.576 (18.424) | 95.662 (4.338) | 12.23 | bicubic | 300 |
+| tf_efficientnet_lite4      | 81.528 (18.472) | 95.668 (4.332) | 13.00  | bilinear | 380 |
 | tf_efficientnet_b1_ns *tfp | 81.514 (18.486) | 95.776 (4.224) | 7.79 | bicubic | 240 |
+| tf_efficientnet_lite4 *tfp | 81.502 (18.498) | 95.676 (4.324) | 13.00  | bilinear | 380 |
 | tf_efficientnet_b1_ns      | 81.388 (18.612) | 95.738 (4.262) | 7.79 | bicubic | 240 |
 | gluon_senet154           | 81.224 (18.776) | 95.356 (4.644) | 115.09 | bicubic | 224 |
 | gluon_resnet152_v1s      | 81.012 (18.988) | 95.416 (4.584) | 60.32  | bicubic | 224 |
@@ -271,6 +276,8 @@ For the models below, the model code and weight porting from Tensorflow or MXNet
 | tf_efficientnet_b2       | 80.086 (19.914) | 94.908 (5.092) | 9.11  | bicubic | 260 |
 | gluon_resnet152_v1c      | 79.916 (20.084) | 94.842 (5.158) | 60.21  | bicubic | 224 |
 | gluon_seresnext50_32x4d  | 79.912 (20.088) | 94.818 (5.182) | 27.56  | bicubic | 224 |
+| tf_efficientnet_lite3       | 79.812 (20.188) | 94.914 (5.086) | 8.20  | bilinear | 300 |
+| tf_efficientnet_lite3 *tfp  | 79.734 (20.266) | 94.838 (5.162) | 8.20  | bilinear | 300 |
 | gluon_resnet152_v1b      | 79.692 (20.308) | 94.738 (5.262) | 60.19  | bicubic | 224 |
 | gluon_xception65         | 79.604 (20.396) | 94.748 (5.252) | 39.92  | bicubic | 299 |
 | gluon_resnet101_v1c      | 79.544 (20.456) | 94.586 (5.414) | 44.57  | bicubic | 224 |
@@ -299,6 +306,8 @@ For the models below, the model code and weight porting from Tensorflow or MXNet
 | tf_efficientnet_es *tfp  | 77.616 (22.384) | 93.750 (6.250) | 5.44 | bicubic | 224 |
 | gluon_resnet50_v1b       | 77.578 (22.422) | 93.718 (6.282) | 25.56  | bicubic | 224 |
 | adv_inception_v3         | 77.576 (22.424) | 93.724 (6.276) | 27.16M | bicubic | 299 |
+| tf_efficientnet_lite2 *tfp  | 77.544 (22.456) | 93.800 (6.200) | 6.09  | bilinear | 260 |
+| tf_efficientnet_lite2       | 77.460 (22.540) | 93.746 (6.254) | 6.09  | bicubic | 260 |
 | tf_efficientnet_b0_ap *tfp | 77.514 (22.486) | 93.576 (6.424) | 5.29  | bicubic | 224 |
 | tf_efficientnet_cc_b0_4e | 77.304 (22.696) | 93.332 (6.668) | 13.3 | bicubic | 224 |
 | tf_efficientnet_es       | 77.264 (22.736) | 93.600 (6.400) | 5.44 | bicubic | 224 |
@@ -307,10 +316,14 @@ For the models below, the model code and weight porting from Tensorflow or MXNet
 | tf_mixnet_m *tfp         | 77.072 (22.928) | 93.368 (6.632) | 5.01  | bilinear | 224 |
 | tf_mixnet_m              | 76.950 (23.050) | 93.156 (6.844) | 5.01  | bicubic | 224 |
 | tf_efficientnet_b0       | 76.848 (23.152) | 93.228 (6.772) | 5.29  | bicubic | 224 |
+| tf_efficientnet_lite1 *tfp  | 76.764 (23.236) | 93.326 (6.674) | 5.42  | bilinear | 240 |
+| tf_efficientnet_lite1       | 76.638 (23.362) | 93.232 (6.768) | 5.42  | bicubic | 240 |
 | tf_mixnet_s *tfp         | 75.800 (24.200) | 92.788 (7.212) | 4.13  | bilinear | 224 |
 | tf_mobilenetv3_large_100 *tfp | 75.768 (24.232) | 92.710 (7.290) | 5.48 | bilinear | 224 |
 | tf_mixnet_s              | 75.648 (24.352) | 92.636 (7.364) | 4.13  | bicubic | 224 |
 | tf_mobilenetv3_large_100 | 75.516 (24.484) | 92.600 (7.400) | 5.48 | bilinear | 224 |
+| tf_efficientnet_lite0 *tfp  | 75.074 (24.926) | 92.314 (7.686) | 4.65  | bilinear | 224 |
+| tf_efficientnet_lite0       | 74.842 (25.158) | 92.170 (7.830) | 4.65  | bicubic | 224 |
 | gluon_resnet34_v1b       | 74.580 (25.420) | 91.988 (8.012) | 21.80 | bicubic | 224 |
 | tf_mobilenetv3_large_075 *tfp | 73.730 (26.270) | 91.616 (8.384) | 3.99 | bilinear | 224 |
 | tf_mobilenetv3_large_075 | 73.442 (26.558) | 91.352 (8.648) | 3.99 | bilinear | 224 |

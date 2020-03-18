@@ -174,7 +174,7 @@ def _scale_stage_depth(stack_args, repeats, depth_multiplier=1.0, depth_trunc='c
     return sa_scaled
 
 
-def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_multiplier=1):
+def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_multiplier=1, fix_first_last=False):
     arch_args = []
     for stack_idx, block_strings in enumerate(arch_def):
         assert isinstance(block_strings, list)
@@ -187,7 +187,10 @@ def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_
                 ba['num_experts'] *= experts_multiplier
             stack_args.append(ba)
             repeats.append(rep)
-        arch_args.append(_scale_stage_depth(stack_args, repeats, depth_multiplier, depth_trunc))
+        if fix_first_last and (stack_idx == 0 or stack_idx == len(arch_def) - 1):
+            arch_args.append(_scale_stage_depth(stack_args, repeats, 1.0, depth_trunc))
+        else:
+            arch_args.append(_scale_stage_depth(stack_args, repeats, depth_multiplier, depth_trunc))
     return arch_args
 
 
