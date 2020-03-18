@@ -61,6 +61,10 @@ default_cfgs = {
     'mnasnet_small': _cfg(url=''),
 
     'mobilenetv2_100': _cfg(url=''),
+    'mobilenetv2_100d': _cfg(url=''),
+    'mobilenetv2_110d': _cfg(url=''),
+    'mobilenetv2_140': _cfg(url=''),
+
     'fbnetc_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetc_100-c345b898.pth',
         interpolation='bilinear'),
@@ -565,7 +569,7 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
     return model
 
 
-def _gen_mobilenet_v2(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_mobilenet_v2(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
     """ Generate MobileNet-V2 network
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
@@ -580,7 +584,7 @@ def _gen_mobilenet_v2(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         ['ir_r1_k3_s1_e6_c320'],
     ]
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def),
+        block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier),
         stem_size=32,
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
@@ -947,6 +951,27 @@ def mnasnet_small(pretrained=False, **kwargs):
 def mobilenetv2_100(pretrained=False, **kwargs):
     """ MobileNet V2 """
     model = _gen_mobilenet_v2('mobilenetv2_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_100d(pretrained=False, **kwargs):
+    """ MobileNet V2 """
+    model = _gen_mobilenet_v2('mobilenetv2_100d', 1.0, depth_multiplier=1.1, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_110d(pretrained=False, **kwargs):
+    """ MobileNet V2 """
+    model = _gen_mobilenet_v2('mobilenetv2_110d', 1.1, depth_multiplier=1.2, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_140(pretrained=False, **kwargs):
+    """ MobileNet V2 """
+    model = _gen_mobilenet_v2('mobilenetv2_140', 1.4, pretrained=pretrained, **kwargs)
     return model
 
 
