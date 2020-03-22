@@ -17,7 +17,7 @@ class BlurPool2d(nn.Module):
     Corresponds to the Downsample class, which does blurring and subsampling
     Args:
         channels = Number of input channels
-        blur_filter_size (int): binomial filter size for blurring. currently supports 3(default) and 5.
+        blur_filter_size (int): binomial filter size for blurring. currently supports 3 (default) and 5.
         stride (int): downsampling filter stride
     Shape:
     Returns:
