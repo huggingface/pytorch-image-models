@@ -60,10 +60,14 @@ default_cfgs = {
     'semnasnet_140': _cfg(url=''),
     'mnasnet_small': _cfg(url=''),
 
-    'mobilenetv2_100': _cfg(url=''),
-    'mobilenetv2_100d': _cfg(url=''),
-    'mobilenetv2_110d': _cfg(url=''),
-    'mobilenetv2_140': _cfg(url=''),
+    'mobilenetv2_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_100_ra-b33bc2c4.pth'),
+    'mobilenetv2_110d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_110d_ra-77090ade.pth'),
+    'mobilenetv2_120d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_120d_ra-5987e2ed.pth'),
+    'mobilenetv2_140': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_140_ra-21a4e913.pth'),
 
     'fbnetc_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetc_100-c345b898.pth',
@@ -953,31 +957,31 @@ def mnasnet_small(pretrained=False, **kwargs):
 
 @register_model
 def mobilenetv2_100(pretrained=False, **kwargs):
-    """ MobileNet V2 """
+    """ MobileNet V2 w/ 1.0 channel multiplier """
     model = _gen_mobilenet_v2('mobilenetv2_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def mobilenetv2_140(pretrained=False, **kwargs):
-    """ MobileNet V2 """
+    """ MobileNet V2 w/ 1.4 channel multiplier """
     model = _gen_mobilenet_v2('mobilenetv2_140', 1.4, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def mobilenetv2_110d(pretrained=False, **kwargs):
-    """ MobileNet V2 """
+    """ MobileNet V2 w/ 1.1 channel, 1.2 depth multipliers"""
     model = _gen_mobilenet_v2(
-        'mobilenetv2_100d', 1.1, depth_multiplier=1.2, fix_stem_head=True, pretrained=pretrained, **kwargs)
+        'mobilenetv2_110d', 1.1, depth_multiplier=1.2, fix_stem_head=True, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def mobilenetv2_120d(pretrained=False, **kwargs):
-    """ MobileNet V2 """
+    """ MobileNet V2 w/ 1.2 channel, 1.4 depth multipliers """
     model = _gen_mobilenet_v2(
-        'mobilenetv2_110d', 1.2, depth_multiplier=1.4, fix_stem_head=True, pretrained=pretrained, **kwargs)
+        'mobilenetv2_120d', 1.2, depth_multiplier=1.4, fix_stem_head=True, pretrained=pretrained, **kwargs)
     return model
 
 

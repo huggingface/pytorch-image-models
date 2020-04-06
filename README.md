@@ -2,6 +2,13 @@
 
 ## What's New
 
+### April 5, 2020
+* Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite
+  * 3.5M param MobileNet-V2 100 @ 73%
+  * 4.5M param MobileNet-V2 110d @ 75%
+  * 6.1M param MobileNet-V2 140 @ 76.5%
+  * 5.8M param MobileNet-V2 120d @ 77.3%
+
 ### March 18, 2020
 * Add EfficientNet-Lite models w/ weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite)
 
@@ -193,10 +200,12 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | seresnext26tn_32x4d | 77.986 (22.014) | 93.746 (6.254) | 16.8M | bicubic | 224 |
 | efficientnet_b0 | 77.698 (22.302) | 93.532 (6.468) | 5.29M | bicubic | 224 |
 | seresnext26d_32x4d | 77.602 (22.398) | 93.608 (6.392) | 16.8M | bicubic | 224 |
+| mobilenetv2_120d | 77.294 (22.706 | 93.502 (6.498) | 5.8M | bicubic | 224 |
 | mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic | 224 |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic | 224 |
 | skresnet34 | 76.912 (23.088) | 93.322 (6.678) | 22.2M | bicubic | 224 |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic | 224 |
+| mobilenetv2_140 | 76.524 (23.476) | 92.990 (7.010) | 6.1M | bicubic | 224 |
 | mixnet_s | 75.988 (24.012) | 92.794 (7.206) | 4.13M | bicubic | 224 |
 | mobilenetv3_large_100 | 75.766 (24.234) | 92.542 (7.458) | 5.5M | bicubic | 224 |
 | mobilenetv3_rw | 75.634 (24.366) | 92.708 (7.292) | 5.5M | bicubic | 224 |
@@ -204,10 +213,12 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | resnet26 | 75.292 (24.708) | 92.57 (7.43) | 16M | bicubic | 224 |
 | fbnetc_100 | 75.124 (24.876) | 92.386 (7.614) | 5.6M | bilinear | 224 |
 | resnet34 | 75.110 (24.890) | 92.284 (7.716) | 22M | bilinear | 224 |
+| mobilenetv2_110d | 75.052 (24.948) | 92.180 (7.820) | 4.5M | bicubic | 224 |
 | seresnet34 | 74.808 (25.192) | 92.124 (7.876) | 22M | bilinear | 224 |
 | mnasnet_b1 | 74.658 (25.342) | 92.114 (7.886) | 4.38M | bicubic | 224 |
 | spnasnet_100 | 74.084 (25.916)  | 91.818 (8.182) | 4.42M | bilinear | 224 |
 | skresnet18 | 73.038 (26.962) | 91.168 (8.832) | 11.9M | bicubic | 224 |
+| mobilenetv2_100 | 72.978 (27.022) | 91.016 (8.984) | 3.5M | bicubic | 224 |
 | seresnet18 | 71.742 (28.258) | 90.334 (9.666) | 11.8M | bicubic | 224 |
 
 ### Ported Weights
