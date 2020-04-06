@@ -60,7 +60,15 @@ default_cfgs = {
     'semnasnet_140': _cfg(url=''),
     'mnasnet_small': _cfg(url=''),
 
-    'mobilenetv2_100': _cfg(url=''),
+    'mobilenetv2_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_100_ra-b33bc2c4.pth'),
+    'mobilenetv2_110d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_110d_ra-77090ade.pth'),
+    'mobilenetv2_120d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_120d_ra-5987e2ed.pth'),
+    'mobilenetv2_140': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_140_ra-21a4e913.pth'),
+
     'fbnetc_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetc_100-c345b898.pth',
         interpolation='bilinear'),
@@ -318,6 +326,7 @@ class EfficientNet(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_channels(stem_size, channel_multiplier, channel_divisor, channel_min)
+        print(stem_size)
         self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
@@ -565,7 +574,8 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
     return model
 
 
-def _gen_mobilenet_v2(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_mobilenet_v2(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, fix_stem_head=False, pretrained=False, **kwargs):
     """ Generate MobileNet-V2 network
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
@@ -580,8 +590,10 @@ def _gen_mobilenet_v2(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         ['ir_r1_k3_s1_e6_c320'],
     ]
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def),
+        block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
+        num_features=1280 if fix_stem_head else round_channels(1280, channel_multiplier, 8, None),
         stem_size=32,
+        fix_stem=fix_stem_head,
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
         act_layer=nn.ReLU6,
@@ -945,8 +957,31 @@ def mnasnet_small(pretrained=False, **kwargs):
 
 @register_model
 def mobilenetv2_100(pretrained=False, **kwargs):
-    """ MobileNet V2 """
+    """ MobileNet V2 w/ 1.0 channel multiplier """
     model = _gen_mobilenet_v2('mobilenetv2_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_140(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 1.4 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_140', 1.4, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_110d(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 1.1 channel, 1.2 depth multipliers"""
+    model = _gen_mobilenet_v2(
+        'mobilenetv2_110d', 1.1, depth_multiplier=1.2, fix_stem_head=True, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_120d(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 1.2 channel, 1.4 depth multipliers """
+    model = _gen_mobilenet_v2(
+        'mobilenetv2_120d', 1.2, depth_multiplier=1.4, fix_stem_head=True, pretrained=pretrained, **kwargs)
     return model
 
 
