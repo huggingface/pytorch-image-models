@@ -17,7 +17,7 @@ def create_attn(attn_type, channels, **kwargs):
                 module_cls = SEModule
             elif attn_type == 'eca':
                 module_cls = EcaModule
-            elif attn_type == 'eca':
+            elif attn_type == 'ceca':
                 module_cls = CecaModule
             elif attn_type == 'cbam':
                 module_cls = CbamModule
