@@ -1,9 +1,10 @@
 from .padding import get_padding
-from .avg_pool2d_same import AvgPool2dSame
+from .pool2d_same import AvgPool2dSame
 from .conv2d_same import Conv2dSame
 from .conv_bn_act import ConvBnAct
 from .mixed_conv2d import MixedConv2d
 from .cond_conv2d import CondConv2d, get_condconv_initializer
+from .pool2d_same import create_pool2d
 from .create_conv2d import create_conv2d
 from .create_attn import create_attn
 from .selective_kernel import SelectiveKernelConv

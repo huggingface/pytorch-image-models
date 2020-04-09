@@ -14,7 +14,8 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from .helpers import tup_pair
-from .conv2d_same import get_padding_value, conv2d_same
+from .conv2d_same import conv2d_same
+from timm.models.layers.padding import get_padding_value
 
 
 def get_condconv_initializer(initializer, num_experts, expert_shape):

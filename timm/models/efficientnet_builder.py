@@ -218,7 +218,7 @@ class EfficientNetBuilder:
         self.norm_kwargs = norm_kwargs
         self.drop_path_rate = drop_path_rate
         self.feature_location = feature_location
-        assert feature_location in ('pre_pwl', 'post_exp', '')
+        assert feature_location in ('bottleneck', 'depthwise', 'expansion', '')
         self.verbose = verbose
 
         # state updated during build, consumed by model
@@ -313,20 +313,21 @@ class EfficientNetBuilder:
                     block_args['stride'] = 1
 
                 do_extract = False
-                if self.feature_location == 'pre_pwl':
+                if self.feature_location == 'bottleneck' or self.feature_location == 'depthwise':
                     if last_block:
                         next_stage_idx = stage_idx + 1
                         if next_stage_idx >= len(model_block_args):
                             do_extract = True
                         else:
                             do_extract = model_block_args[next_stage_idx][0]['stride'] > 1
-                elif self.feature_location == 'post_exp':
-                    if block_args['stride'] > 1 or (last_stack and last_block) :
+                elif self.feature_location == 'expansion':
+                    if block_args['stride'] > 1 or (last_stack and last_block):
                         do_extract = True
                 if do_extract:
                     extract_features = self.feature_location
 
                 next_dilation = current_dilation
+                next_output_stride = current_stride
                 if block_args['stride'] > 1:
                     next_output_stride = current_stride * block_args['stride']
                     if next_output_stride > self.output_stride:
@@ -347,14 +348,13 @@ class EfficientNetBuilder:
 
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
-                    feature_module = block.feature_module(extract_features)
-                    if feature_module:
-                        feature_module = 'blocks.{}.{}.'.format(stage_idx, block_idx) + feature_module
-                    feature_channels = block.feature_channels(extract_features)
-                    self.features[feature_idx] = dict(
-                        name=feature_module,
-                        num_chs=feature_channels
-                    )
+                    feature_info = block.feature_info(extract_features)
+                    if feature_info['module']:
+                        feature_info['module'] = 'blocks.{}.{}.'.format(stage_idx, block_idx) + feature_info['module']
+                    feature_info['stage_idx'] = stage_idx
+                    feature_info['block_idx'] = block_idx
+                    feature_info['reduction'] = current_stride
+                    self.features[feature_idx] = feature_info
                     feature_idx += 1
 
                 total_block_idx += 1  # incr global block idx (across all stacks)
