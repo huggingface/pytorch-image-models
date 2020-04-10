@@ -150,10 +150,10 @@ def validate(args):
             loss = criterion(output, target)
 
             # measure accuracy and record loss
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+            acc1, acc5 = accuracy(output.data, target, topk=(1, 5))
             losses.update(loss.item(), input.size(0))
-            top1.update(prec1.item(), input.size(0))
-            top5.update(prec5.item(), input.size(0))
+            top1.update(acc1.item(), input.size(0))
+            top5.update(acc5.item(), input.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -164,8 +164,8 @@ def validate(args):
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
-                    'Prec@1: {top1.val:>7.3f} ({top1.avg:>7.3f})  '
-                    'Prec@5: {top5.val:>7.3f} ({top5.avg:>7.3f})'.format(
+                    'Acc@1: {top1.val:>7.3f} ({top1.avg:>7.3f})  '
+                    'Acc@5: {top5.val:>7.3f} ({top5.avg:>7.3f})'.format(
                         i, len(loader), batch_time=batch_time,
                         rate_avg=input.size(0) / batch_time.avg,
                         loss=losses, top1=top1, top5=top5))
@@ -178,7 +178,7 @@ def validate(args):
         cropt_pct=crop_pct,
         interpolation=data_config['interpolation'])
 
-    logging.info(' * Prec@1 {:.3f} ({:.3f}) Prec@5 {:.3f} ({:.3f})'.format(
+    logging.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
 
     return results
