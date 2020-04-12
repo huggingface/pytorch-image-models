@@ -38,7 +38,7 @@ default_cfgs = {
     'tresnet_l':
         _cfg(url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/tresnet/tresnet_l_81_5.pth'),
     'tresnet_xl':
-        _cfg(url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/tresnet/tresnet_xl_82_1.pth')
+        _cfg(url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/tresnet/tresnet_xl_82_0.pth')
 }
 
 
@@ -284,7 +284,7 @@ def tresnet_l(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 @register_model
 def tresnet_xl(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['tresnet_l']
+    default_cfg = default_cfgs['tresnet_xl']
     model = TResNet(layers=[4, 5, 24, 3], num_classes=num_classes, in_chans=in_chans, width_factor=1.3)
     model.default_cfg = default_cfg
     if pretrained:
