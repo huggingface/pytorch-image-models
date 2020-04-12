@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from .layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 __all__ = ['InceptionResnetV2']
@@ -193,11 +193,12 @@ class Mixed_7a(nn.Module):
 
 
 class Block8(nn.Module):
-    def __init__(self, scale=1.0, noReLU=False):
+    __constants__ = ['relu']  # for pre 1.4 torchscript compat
+
+    def __init__(self, scale=1.0, no_relu=False):
         super(Block8, self).__init__()
 
         self.scale = scale
-        self.noReLU = noReLU
 
         self.branch0 = BasicConv2d(2080, 192, kernel_size=1, stride=1)
 
@@ -208,8 +209,7 @@ class Block8(nn.Module):
         )
 
         self.conv2d = nn.Conv2d(448, 2080, kernel_size=1, stride=1)
-        if not self.noReLU:
-            self.relu = nn.ReLU(inplace=False)
+        self.relu = None if no_relu else nn.ReLU(inplace=False)
 
     def forward(self, x):
         x0 = self.branch0(x)
@@ -217,7 +217,7 @@ class Block8(nn.Module):
         out = torch.cat((x0, x1), 1)
         out = self.conv2d(out)
         out = out * self.scale + x
-        if not self.noReLU:
+        if self.relu is not None:
             out = self.relu(out)
         return out
 
@@ -226,7 +226,6 @@ class InceptionResnetV2(nn.Module):
     def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
         super(InceptionResnetV2, self).__init__()
         self.drop_rate = drop_rate
-        self.global_pool = global_pool
         self.num_classes = num_classes
         self.num_features = 1536
 
@@ -285,24 +284,22 @@ class InceptionResnetV2(nn.Module):
             Block8(scale=0.20),
             Block8(scale=0.20)
         )
-        self.block8 = Block8(noReLU=True)
+        self.block8 = Block8(no_relu=True)
         self.conv2d_7b = BasicConv2d(2080, self.num_features, kernel_size=1, stride=1)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         # NOTE some variants/checkpoints for this model may have 'last_linear' as the name for the FC
-        self.classif = nn.Linear(self.num_features, num_classes)
+        self.classif = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
     def get_classifier(self):
         return self.classif
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = global_pool
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        del self.classif
-        if num_classes:
-            self.classif = torch.nn.Linear(self.num_features, num_classes)
-        else:
-            self.classif = None
+        self.classif = nn.Linear(
+            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x = self.conv2d_1a(x)
         x = self.conv2d_2a(x)
         x = self.conv2d_2b(x)
@@ -318,14 +315,11 @@ class InceptionResnetV2(nn.Module):
         x = self.repeat_2(x)
         x = self.block8(x)
         x = self.conv2d_7b(x)
-        if pool:
-            x = select_adaptive_pool2d(x, self.global_pool)
-            #x = F.avg_pool2d(x, 8, count_include_pad=False)
-            x = x.view(x.size(0), -1)
         return x
 
     def forward(self, x):
-        x = self.forward_features(x, pool=True)
+        x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.classif(x)

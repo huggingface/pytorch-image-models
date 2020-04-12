@@ -16,7 +16,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 __all__ = ['SENet']
@@ -68,7 +68,7 @@ class SEModule(nn.Module):
 
     def __init__(self, channels, reduction):
         super(SEModule, self).__init__()
-        #self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Conv2d(
             channels, channels // reduction, kernel_size=1, padding=0)
         self.relu = nn.ReLU(inplace=True)
@@ -78,8 +78,7 @@ class SEModule(nn.Module):
 
     def forward(self, x):
         module_input = x
-        #x = self.avg_pool(x)
-        x = x.view(x.size(0), x.size(1), -1).mean(-1).view(x.size(0), x.size(1), 1, 1)
+        x = self.avg_pool(x)
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
@@ -275,6 +274,7 @@ class SENet(nn.Module):
         super(SENet, self).__init__()
         self.inplanes = inplanes
         self.num_classes = num_classes
+        self.drop_rate = drop_rate
         if input_3x3:
             layer0_modules = [
                 ('conv1', nn.Conv2d(in_chans, 64, 3, stride=2, padding=1, bias=False)),
@@ -338,7 +338,6 @@ class SENet(nn.Module):
             downsample_padding=downsample_padding
         )
         self.avg_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.drop_rate = drop_rate
         self.num_features = 512 * block.expansion
         self.last_linear = nn.Linear(self.num_features, num_classes)
 
@@ -367,26 +366,25 @@ class SENet(nn.Module):
     def get_classifier(self):
         return self.last_linear
 
-    def reset_classifier(self, num_classes):
+    def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
+        self.avg_pool = SelectAdaptivePool2d(pool_type=global_pool)
         del self.last_linear
         if num_classes:
-            self.last_linear = nn.Linear(self.num_features, num_classes)
+            self.last_linear = nn.Linear(self.num_features * self.avg_pool.feat_mult(), num_classes)
         else:
             self.last_linear = None
 
-    def forward_features(self, x, pool=True):
+    def forward_features(self, x):
         x = self.layer0(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        if pool:
-            x = self.avg_pool(x)
-            x = x.view(x.size(0), -1)
         return x
 
     def logits(self, x):
+        x = self.avg_pool(x).flatten(1)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.last_linear(x)

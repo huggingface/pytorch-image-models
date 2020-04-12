@@ -1,14 +1,10 @@
 import torch
-from torchvision import transforms
 import torchvision.transforms.functional as F
 from PIL import Image
 import warnings
 import math
 import random
 import numpy as np
-
-from .constants import DEFAULT_CROP_PCT, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .random_erasing import RandomErasing
 
 
 class ToNumpy:
@@ -56,10 +52,10 @@ def _pil_interp(method):
         return Image.BILINEAR
 
 
-RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+_RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
 
 
-class RandomResizedCropAndInterpolation(object):
+class RandomResizedCropAndInterpolation:
     """Crop the given PIL Image to random size and aspect ratio with random interpolation.
 
     A crop of random size (default: of 0.08 to 1.0) of the original size and a random
@@ -84,7 +80,7 @@ class RandomResizedCropAndInterpolation(object):
             warnings.warn("range should be of kind (min, max)")
 
         if interpolation == 'random':
-            self.interpolation = RANDOM_INTERPOLATION
+            self.interpolation = _RANDOM_INTERPOLATION
         else:
             self.interpolation = _pil_interp(interpolation)
         self.scale = scale
@@ -107,24 +103,31 @@ class RandomResizedCropAndInterpolation(object):
 
         for attempt in range(10):
             target_area = random.uniform(*scale) * area
-            aspect_ratio = random.uniform(*ratio)
+            log_ratio = (math.log(ratio[0]), math.log(ratio[1]))
+            aspect_ratio = math.exp(random.uniform(*log_ratio))
 
             w = int(round(math.sqrt(target_area * aspect_ratio)))
             h = int(round(math.sqrt(target_area / aspect_ratio)))
-
-            if random.random() < 0.5 and min(ratio) <= (h / w) <= max(ratio):
-                w, h = h, w
 
             if w <= img.size[0] and h <= img.size[1]:
                 i = random.randint(0, img.size[1] - h)
                 j = random.randint(0, img.size[0] - w)
                 return i, j, h, w
 
-        # Fallback
-        w = min(img.size[0], img.size[1])
-        i = (img.size[1] - w) // 2
+        # Fallback to central crop
+        in_ratio = img.size[0] / img.size[1]
+        if in_ratio < min(ratio):
+            w = img.size[0]
+            h = int(round(w / min(ratio)))
+        elif in_ratio > max(ratio):
+            h = img.size[1]
+            w = int(round(h * max(ratio)))
+        else:  # whole image
+            w = img.size[0]
+            h = img.size[1]
+        i = (img.size[1] - h) // 2
         j = (img.size[0] - w) // 2
-        return i, j, w, w
+        return i, j, h, w
 
     def __call__(self, img):
         """
@@ -153,79 +156,3 @@ class RandomResizedCropAndInterpolation(object):
         return format_string
 
 
-def transforms_imagenet_train(
-        img_size=224,
-        scale=(0.08, 1.0),
-        color_jitter=0.4,
-        interpolation='random',
-        random_erasing=0.4,
-        random_erasing_mode='const',
-        use_prefetcher=False,
-        mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD
-):
-    if isinstance(color_jitter, (list, tuple)):
-        # color jitter should be a 3-tuple/list if spec brightness/contrast/saturation
-        # or 4 if also augmenting hue
-        assert len(color_jitter) in (3, 4)
-    else:
-        # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
-        color_jitter = (float(color_jitter),) * 3
-
-    tfl = [
-        RandomResizedCropAndInterpolation(
-            img_size, scale=scale, interpolation=interpolation),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(*color_jitter),
-    ]
-
-    if use_prefetcher:
-        # prefetcher and collate will handle tensor conversion and norm
-        tfl += [ToNumpy()]
-    else:
-        tfl += [
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=torch.tensor(mean),
-                std=torch.tensor(std))
-        ]
-        if random_erasing > 0.:
-            tfl.append(RandomErasing(random_erasing, mode=random_erasing_mode, device='cpu'))
-    return transforms.Compose(tfl)
-
-
-def transforms_imagenet_eval(
-        img_size=224,
-        crop_pct=None,
-        interpolation='bilinear',
-        use_prefetcher=False,
-        mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD):
-    crop_pct = crop_pct or DEFAULT_CROP_PCT
-
-    if isinstance(img_size, tuple):
-        assert len(img_size) == 2
-        if img_size[-1] == img_size[-2]:
-            # fall-back to older behaviour so Resize scales to shortest edge if target is square
-            scale_size = int(math.floor(img_size[0] / crop_pct))
-        else:
-            scale_size = tuple([int(x / crop_pct) for x in img_size])
-    else:
-        scale_size = int(math.floor(img_size / crop_pct))
-
-    tfl = [
-        transforms.Resize(scale_size, _pil_interp(interpolation)),
-        transforms.CenterCrop(img_size),
-    ]
-    if use_prefetcher:
-        # prefetcher and collate will handle tensor conversion and norm
-        tfl += [ToNumpy()]
-    else:
-        tfl += [
-            transforms.ToTensor(),
-            transforms.Normalize(
-                     mean=torch.tensor(mean),
-                     std=torch.tensor(std))
-        ]
-
-    return transforms.Compose(tfl)

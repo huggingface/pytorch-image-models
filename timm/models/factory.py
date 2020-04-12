@@ -25,12 +25,27 @@ def create_model(
     """
     margs = dict(pretrained=pretrained, num_classes=num_classes, in_chans=in_chans)
 
-    # Not all models have support for batchnorm params passed as args, only gen_efficientnet variants
-    supports_bn_params = is_model_in_modules(model_name, ['gen_efficientnet'])
-    if not supports_bn_params and any([x in kwargs for x in ['bn_tf', 'bn_momentum', 'bn_eps']]):
+    # Only EfficientNet and MobileNetV3 models have support for batchnorm params or drop_connect_rate passed as args
+    is_efficientnet = is_model_in_modules(model_name, ['efficientnet', 'mobilenetv3'])
+    if not is_efficientnet:
         kwargs.pop('bn_tf', None)
         kwargs.pop('bn_momentum', None)
         kwargs.pop('bn_eps', None)
+
+    # Parameters that aren't supported by all models should default to None in command line args,
+    # remove them if they are present and not set so that non-supporting models don't break.
+    if kwargs.get('drop_block_rate', None) is None:
+        kwargs.pop('drop_block_rate', None)
+
+    # handle backwards compat with drop_connect -> drop_path change
+    drop_connect_rate = kwargs.pop('drop_connect_rate', None)
+    if drop_connect_rate is not None and kwargs.get('drop_path_rate', None) is None:
+        print("WARNING: 'drop_connect' as an argument is deprecated, please use 'drop_path'."
+              " Setting drop_path to %f." % drop_connect_rate)
+        kwargs['drop_path_rate'] = drop_connect_rate
+
+    if kwargs.get('drop_path_rate', None) is None:
+        kwargs.pop('drop_path_rate', None)
 
     if is_model(model_name):
         create_fn = model_entrypoint(model_name)

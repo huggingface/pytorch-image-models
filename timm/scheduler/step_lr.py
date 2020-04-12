@@ -10,13 +10,21 @@ class StepLRScheduler(Scheduler):
 
     def __init__(self,
                  optimizer: torch.optim.Optimizer,
-                 decay_t: int,
+                 decay_t: float,
                  decay_rate: float = 1.,
                  warmup_t=0,
                  warmup_lr_init=0,
                  t_in_epochs=True,
-                 initialize=True) -> None:
-        super().__init__(optimizer, param_group_field="lr", initialize=initialize)
+                 noise_range_t=None,
+                 noise_pct=0.67,
+                 noise_std=1.0,
+                 noise_seed=42,
+                 initialize=True,
+                 ) -> None:
+        super().__init__(
+            optimizer, param_group_field="lr",
+            noise_range_t=noise_range_t, noise_pct=noise_pct, noise_std=noise_std, noise_seed=noise_seed,
+            initialize=initialize)
 
         self.decay_t = decay_t
         self.decay_rate = decay_rate
@@ -33,8 +41,7 @@ class StepLRScheduler(Scheduler):
         if t < self.warmup_t:
             lrs = [self.warmup_lr_init + t * s for s in self.warmup_steps]
         else:
-            lrs = [v * (self.decay_rate ** (t // self.decay_t))
-                   for v in self.base_values]
+            lrs = [v * (self.decay_rate ** (t // self.decay_t)) for v in self.base_values]
         return lrs
 
     def get_epoch_values(self, epoch: int):

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from .layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 __all__ = ['InceptionV4']
@@ -244,7 +244,6 @@ class InceptionV4(nn.Module):
     def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
         super(InceptionV4, self).__init__()
         self.drop_rate = drop_rate
-        self.global_pool = global_pool
         self.num_classes = num_classes
         self.num_features = 1536
 
@@ -272,25 +271,24 @@ class InceptionV4(nn.Module):
             Inception_C(),
             Inception_C(),
         )
-        self.last_linear = nn.Linear(self.num_features, num_classes)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
     def get_classifier(self):
-        return self.classif
+        return self.last_linear
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = global_pool
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        self.classif = nn.Linear(self.num_features, num_classes)
+        self.last_linear = nn.Linear(
+            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, x, pool=True):
-        x = self.features(x)
-        if pool:
-            x = select_adaptive_pool2d(x, self.global_pool)
-            x = x.view(x.size(0), -1)
-        return x
+    def forward_features(self, x):
+        return self.features(x)
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.last_linear(x)

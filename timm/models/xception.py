@@ -29,7 +29,7 @@ import torch.nn.functional as F
 
 from .registry import register_model
 from .helpers import load_pretrained
-from .adaptive_avgmax_pool import select_adaptive_pool2d
+from .layers import SelectAdaptivePool2d
 
 __all__ = ['Xception']
 
@@ -163,7 +163,8 @@ class Xception(nn.Module):
         self.conv4 = SeparableConv2d(1536, self.num_features, 3, 1, 1)
         self.bn4 = nn.BatchNorm2d(self.num_features)
 
-        self.fc = nn.Linear(self.num_features, num_classes)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
         # #------- init weights --------
         for m in self.modules():
@@ -178,15 +179,12 @@ class Xception(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = global_pool
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         del self.fc
-        if num_classes:
-            self.fc = nn.Linear(self.num_features, num_classes)
-        else:
-            self.fc = None
+        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
 
-    def forward_features(self, input, pool=True):
-        x = self.conv1(input)
+    def forward_features(self, x):
+        x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
 
@@ -214,14 +212,11 @@ class Xception(nn.Module):
         x = self.conv4(x)
         x = self.bn4(x)
         x = self.relu(x)
-
-        if pool:
-            x = select_adaptive_pool2d(x, pool_type=self.global_pool)
-            x = x.view(x.size(0), -1)
         return x
 
-    def forward(self, input):
-        x = self.forward_features(input)
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.global_pool(x).flatten(1)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)
