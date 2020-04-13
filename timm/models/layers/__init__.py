@@ -16,3 +16,5 @@ from .adaptive_avgmax_pool import \
 from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
+from .anti_aliasing import AntiAliasDownsampleLayer
+from .space_to_depth import SpaceToDepthModule
