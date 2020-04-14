@@ -80,7 +80,7 @@ class CecaModule(nn.Module):
     locality. Although this module in essence, applies such an assumption, it is unnecessary
     to limit the channels on either "edge" from being circularly adapted to each other.
     This will fundamentally increase connectivity and possibly increase performance metrics
-    (accuracy, robustness), without signficantly impacting resource metrics
+    (accuracy, robustness), without significantly impacting resource metrics
     (parameter size, throughput,latency, etc)
 
     Args:
