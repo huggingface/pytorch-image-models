@@ -28,9 +28,9 @@ class SpaceToDepthJit(object):
 
 
 class SpaceToDepthModule(nn.Module):
-    def __init__(self, remove_model_jit=False):
+    def __init__(self, no_jit=False):
         super().__init__()
-        if not remove_model_jit:
+        if not no_jit:
             self.op = SpaceToDepthJit()
         else:
             self.op = SpaceToDepth()

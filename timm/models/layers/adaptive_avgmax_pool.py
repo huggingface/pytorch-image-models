@@ -70,10 +70,11 @@ class AdaptiveCatAvgMaxPool2d(nn.Module):
 class SelectAdaptivePool2d(nn.Module):
     """Selectable global pooling layer with dynamic input kernel size
     """
-    def __init__(self, output_size=1, pool_type='avg'):
+    def __init__(self, output_size=1, pool_type='avg', flatten=False):
         super(SelectAdaptivePool2d, self).__init__()
         self.output_size = output_size
         self.pool_type = pool_type
+        self.flatten = flatten
         if pool_type == 'avgmax':
             self.pool = AdaptiveAvgMaxPool2d(output_size)
         elif pool_type == 'catavgmax':
@@ -86,7 +87,10 @@ class SelectAdaptivePool2d(nn.Module):
             self.pool = nn.AdaptiveAvgPool2d(output_size)
 
     def forward(self, x):
-        return self.pool(x)
+        x = self.pool(x)
+        if self.flatten:
+            x = x.flatten(1)
+        return x
 
     def feat_mult(self):
         return adaptive_pool_feat_mult(self.pool_type)
