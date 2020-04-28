@@ -229,9 +229,9 @@ class TResNet(nn.Module):
 
         # head
         self.num_features = (self.planes * 8) * Bottleneck.expansion
-        self.global_pool = None
-        self.head = None
-        self.reset_classifier(num_classes, global_pool)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+        self.head = nn.Sequential(OrderedDict([
+            ('fc', nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes))]))
 
         # model initilization
         for m in self.modules():
@@ -273,11 +273,8 @@ class TResNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.num_classes = num_classes
-        if global_pool == 'avg':
-            self.global_pool = FastGlobalAvgPool2d(flatten=True)
-        else:
-            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head = None
         if num_classes:
             self.head = nn.Sequential(OrderedDict([
