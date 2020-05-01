@@ -11,10 +11,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .registry import register_model
-from .helpers import load_pretrained
+from .helpers import load_pretrained, adapt_model_from_file
 from .layers import SelectAdaptivePool2d, DropBlock2d, DropPath, AvgPool2dSame, create_attn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
 
@@ -104,6 +103,21 @@ default_cfgs = {
         interpolation='bicubic'),
     'ecaresnet18': _cfg(),
     'ecaresnet50': _cfg(),
+    'ecaresnetlight': _cfg(
+        url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45402/outputs/ECAResNetLight_4f34b35b.pth',
+        interpolation='bicubic'),
+    'ecaresnet50d': _cfg(
+        url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45402/outputs/ECAResNet50D_833caf58.pth',
+        interpolation='bicubic'),
+    'ecaresnet50d_pruned': _cfg(
+        url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45899/outputs/ECAResNet50D_P_9c67f710.pth',
+        interpolation='bicubic'),
+    'ecaresnet101d': _cfg(
+        url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45402/outputs/ECAResNet101D_281c5844.pth',
+        interpolation='bicubic'),
+    'ecaresnet101d_pruned': _cfg(
+        url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45610/outputs/ECAResNet101D_P_75a3370e.pth',
+        interpolation='bicubic'),
 }
 
 
@@ -1019,6 +1033,84 @@ def ecaresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     model = ResNet(
         Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans, block_args=block_args, **kwargs)
     model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def ecaresnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-50-D model with eca.
+    """
+    default_cfg = default_cfgs['ecaresnet50d']
+    model = ResNet(
+        Bottleneck, [3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer='eca'), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def ecaresnet50d_pruned(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-50-D model pruned with eca.
+        The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf
+    """
+    variant = 'ecaresnet50d_pruned'
+    default_cfg = default_cfgs[variant]
+    model = ResNet(
+        Bottleneck, [3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer='eca'), **kwargs)
+    model.default_cfg = default_cfg
+    model = adapt_model_from_file(model, variant)
+
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def ecaresnetlight(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-50-D light model with eca.
+    """
+    default_cfg = default_cfgs['ecaresnetlight']
+    model = ResNet(
+        Bottleneck, [1, 1, 11, 3], stem_width=32, avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer='eca'), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def ecaresnet101d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-101-D model with eca.
+    """
+    default_cfg = default_cfgs['ecaresnet101d']
+    model = ResNet(
+        Bottleneck, [3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer='eca'), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def ecaresnet101d_pruned(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """Constructs a ResNet-101-D model pruned with eca.
+       The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf
+    """
+    variant = 'ecaresnet101d_pruned'
+    default_cfg = default_cfgs[variant]
+    model = ResNet(
+        Bottleneck, [3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True,
+        num_classes=num_classes, in_chans=in_chans, block_args=dict(attn_layer='eca'), **kwargs)
+    model.default_cfg = default_cfg
+    model = adapt_model_from_file(model, variant)
+
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
