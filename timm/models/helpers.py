@@ -101,9 +101,6 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
     model.load_state_dict(state_dict, strict=strict)
 
 
-
-
-
 def extract_layer(model, layer):
     layer = layer.split('.')
     module = model
@@ -168,27 +165,32 @@ def adapt_model_from_string(parent_module, model_string):
             s = state_dict[n + '.weight']
             in_channels = s[1]
             out_channels = s[0]
+            g = 1
             if old_module.groups > 1:
                 in_channels = out_channels
                 g = in_channels
-            else:
-                g = 1
-            new_conv = conv(in_channels=in_channels, out_channels=out_channels,
-                            kernel_size=old_module.kernel_size, bias=old_module.bias is not None,
-                            padding=old_module.padding, dilation=old_module.dilation,
-                            groups=g, stride=old_module.stride)
+            new_conv = conv(
+                in_channels=in_channels, out_channels=out_channels, kernel_size=old_module.kernel_size,
+                bias=old_module.bias is not None, padding=old_module.padding, dilation=old_module.dilation,
+                groups=g, stride=old_module.stride)
             set_layer(new_module, n, new_conv)
         if isinstance(old_module, nn.BatchNorm2d):
-            new_bn = nn.BatchNorm2d(num_features=state_dict[n + '.weight'][0], eps=old_module.eps,
-                                    momentum=old_module.momentum,
-                                    affine=old_module.affine,
-                                    track_running_stats=True)
+            new_bn = nn.BatchNorm2d(
+                num_features=state_dict[n + '.weight'][0], eps=old_module.eps, momentum=old_module.momentum,
+                affine=old_module.affine, track_running_stats=True)
             set_layer(new_module, n, new_bn)
         if isinstance(old_module, nn.Linear):
-            new_fc = nn.Linear(in_features=state_dict[n + '.weight'][1], out_features=old_module.out_features,
-                               bias=old_module.bias is not None)
+            new_fc = nn.Linear(
+                in_features=state_dict[n + '.weight'][1], out_features=old_module.out_features,
+                bias=old_module.bias is not None)
             set_layer(new_module, n, new_fc)
     new_module.eval()
     parent_module.eval()
 
     return new_module
+
+
+def adapt_model_from_file(parent_module, model_variant):
+    adapt_file = os.path.join(os.path.dirname(__file__), 'pruned', model_variant + '.txt')
+    with open(adapt_file, 'r') as f:
+        return adapt_model_from_string(parent_module, f.read().strip())
