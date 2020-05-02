@@ -5,12 +5,12 @@ import torch.nn.functional as F
 
 
 class AntiAliasDownsampleLayer(nn.Module):
-    def __init__(self, no_jit: bool = False, filt_size: int = 3, stride: int = 2, channels: int = 0):
+    def __init__(self, channels: int = 0, filt_size: int = 3, stride: int = 2, no_jit: bool = False):
         super(AntiAliasDownsampleLayer, self).__init__()
         if no_jit:
-            self.op = Downsample(filt_size, stride, channels)
+            self.op = Downsample(channels, filt_size, stride)
         else:
-            self.op = DownsampleJIT(filt_size, stride, channels)
+            self.op = DownsampleJIT(channels, filt_size, stride)
 
         # FIXME I should probably override _apply and clear DownsampleJIT filter cache for .cuda(), .half(), etc calls
 
@@ -20,10 +20,10 @@ class AntiAliasDownsampleLayer(nn.Module):
 
 @torch.jit.script
 class DownsampleJIT(object):
-    def __init__(self, filt_size: int = 3, stride: int = 2, channels: int = 0):
+    def __init__(self, channels: int = 0, filt_size: int = 3, stride: int = 2):
+        self.channels = channels
         self.stride = stride
         self.filt_size = filt_size
-        self.channels = channels
         assert self.filt_size == 3
         assert stride == 2
         self.filt = {}  # lazy init by device for DataParallel compat
@@ -32,8 +32,7 @@ class DownsampleJIT(object):
         filt = torch.tensor([1., 2., 1.], dtype=like.dtype, device=like.device)
         filt = filt[:, None] * filt[None, :]
         filt = filt / torch.sum(filt)
-        filt = filt[None, None, :, :].repeat((self.channels, 1, 1, 1))
-        return filt
+        return filt[None, None, :, :].repeat((self.channels, 1, 1, 1))
 
     def __call__(self, input: torch.Tensor):
         input_pad = F.pad(input, (1, 1, 1, 1), 'reflect')
@@ -42,11 +41,11 @@ class DownsampleJIT(object):
 
 
 class Downsample(nn.Module):
-    def __init__(self, filt_size=3, stride=2, channels=None):
+    def __init__(self, channels=None, filt_size=3, stride=2):
         super(Downsample, self).__init__()
+        self.channels = channels
         self.filt_size = filt_size
         self.stride = stride
-        self.channels = channels
 
         assert self.filt_size == 3
         filt = torch.tensor([1., 2., 1.])
