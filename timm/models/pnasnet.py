@@ -390,7 +390,7 @@ def pnasnet5large(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     <https://arxiv.org/abs/1712.00559>`_ paper.
     """
     default_cfg = default_cfgs['pnasnet5large']
-    model = PNASNet5Large(num_classes=1000, in_chans=in_chans, **kwargs)
+    model = PNASNet5Large(num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
