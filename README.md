@@ -2,6 +2,13 @@
 
 ## What's New
 
+### May 1, 2020
+* Merged a number of execellent contributions in the ResNet model family over the past month
+  * BlurPool2D and resnetblur models initiated by [Chris Ha](https://github.com/VRandme), I trained resnetblur50 to 79.3.
+  * TResNet models and SpaceToDepth, AntiAliasDownsampleLayer layers by [mrT23](https://github.com/mrT23)
+  * ecaresnet (50d, 101d, light) models and two pruned variants using pruning as per (https://arxiv.org/abs/2002.08258) by [yoniaflalo](https://github.com/yoniaflalo)
+* 200 pretrained models in total now with updated results csv in results folder
+
 ### April 5, 2020
 * Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite
   * 3.5M param MobileNet-V2 100 @ 73%
@@ -149,6 +156,8 @@ Included models:
     * code from https://github.com/HRNet/HRNet-Image-Classification, paper https://arxiv.org/abs/1908.07919
 * SelecSLS
     * code from https://github.com/mehtadushy/SelecSLS-Pytorch, paper https://arxiv.org/abs/1907.00837
+* TResNet
+    * code from https://github.com/mrT23/TResNet, paper https://arxiv.org/abs/2003.13630
 
 Use the  `--model` arg to specify model for train, validation, inference scripts. Match the all lowercase
 creation fn for the model you'd like.
