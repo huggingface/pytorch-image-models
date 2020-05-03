@@ -6,10 +6,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from .registry import register_model
 
 __all__ = ['InceptionResnetV2']
 
@@ -296,8 +296,11 @@ class InceptionResnetV2(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        self.classif = nn.Linear(
-            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        num_features = self.num_features * self.global_pool.feat_mult()
+        if num_classes:
+            self.classif = nn.Linear(num_features, num_classes)
+        else:
+            self.classif = nn.Identity()
 
     def forward_features(self, x):
         x = self.conv2d_1a(x)

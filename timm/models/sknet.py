@@ -12,11 +12,11 @@ import math
 
 from torch import nn as nn
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectiveKernelConv, ConvBnAct, create_attn
+from .registry import register_model
 from .resnet import ResNet
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
 def _cfg(url='', **kwargs):
@@ -30,15 +30,13 @@ def _cfg(url='', **kwargs):
     }
 
 
+url_weight_dir = 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/'
 default_cfgs = {
-    'skresnet18': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet18_ra-4eec2804.pth'),
-    'skresnet34': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet34_ra-bdc0ccde.pth'),
+    'skresnet18': _cfg(url=url_weight_dir + 'skresnet18_ra-4eec2804.pth'),
+    'skresnet34': _cfg(url=url_weight_dir + 'skresnet34_ra-bdc0ccde.pth'),
     'skresnet50': _cfg(),
     'skresnet50d': _cfg(),
-    'skresnext50_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnext50_ra-f40e40bf.pth'),
+    'skresnext50_32x4d': _cfg(url=url_weight_dir + 'skresnext50_ra-f40e40bf.pth'),
 }
 
 

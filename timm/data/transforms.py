@@ -1,10 +1,11 @@
+import math
+import random
+import warnings
+
+import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from PIL import Image
-import warnings
-import math
-import random
-import numpy as np
 
 
 class ToNumpy:
@@ -154,5 +155,3 @@ class RandomResizedCropAndInterpolation:
         format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
         format_string += ', interpolation={0})'.format(interpolate_str)
         return format_string
-
-

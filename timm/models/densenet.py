@@ -2,17 +2,17 @@
 This file is a copy of https://github.com/pytorch/vision 'densenet.py' (BSD-3-Clause) with
 fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
+import re
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-import re
+from .registry import register_model
 
 __all__ = ['DenseNet']
 
@@ -40,11 +40,11 @@ class _DenseLayer(nn.Sequential):
         self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
         self.add_module('relu1', nn.ReLU(inplace=True)),
         self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
-                        growth_rate, kernel_size=1, stride=1, bias=False)),
+                                           growth_rate, kernel_size=1, stride=1, bias=False)),
         self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
         self.add_module('relu2', nn.ReLU(inplace=True)),
         self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                        kernel_size=3, stride=1, padding=1, bias=False)),
+                                           kernel_size=3, stride=1, padding=1, bias=False)),
         self.drop_rate = drop_rate
 
     def forward(self, x):
@@ -85,6 +85,7 @@ class DenseNet(nn.Module):
         drop_rate (float) - dropout rate after each dense layer
         num_classes (int) - number of classification classes
     """
+
     def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16),
                  num_init_features=64, bn_size=4, drop_rate=0,
                  num_classes=1000, in_chans=3, global_pool='avg'):
@@ -127,8 +128,11 @@ class DenseNet(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Linear(
-            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        num_features = self.num_features * self.global_pool.feat_mult()
+        if num_classes:
+            self.classifier = nn.Linear(num_features, num_classes)
+        else:
+            self.classifier = nn.Identity()
 
     def forward_features(self, x):
         x = self.features(x)
@@ -155,7 +159,6 @@ def _filter_pretrained(state_dict):
             state_dict[new_key] = state_dict[key]
             del state_dict[key]
     return state_dict
-
 
 
 @register_model

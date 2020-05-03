@@ -6,13 +6,11 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from .resnet import ResNet
-from .registry import register_model
-from .helpers import load_pretrained
-from .layers import SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .registry import register_model
+from .resnet import ResNet
 
 __all__ = []
 
@@ -28,21 +26,15 @@ def _cfg(url='', **kwargs):
     }
 
 
+url_weight_dir = 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/'
 default_cfgs = {
-    'res2net50_26w_4s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_26w_4s-06e79181.pth'),
-    'res2net50_48w_2s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_48w_2s-afed724a.pth'),
-    'res2net50_14w_8s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_14w_8s-6527dddc.pth'),
-    'res2net50_26w_6s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_26w_6s-19041792.pth'),
-    'res2net50_26w_8s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_26w_8s-2c7c9f12.pth'),
-    'res2net101_26w_4s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net101_26w_4s-02a759a1.pth'),
-    'res2next50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2next50_4s-6ef7e7bf.pth'),
+    'res2net50_26w_4s': _cfg(url=url_weight_dir + 'res2net50_26w_4s-06e79181.pth'),
+    'res2net50_48w_2s': _cfg(url=url_weight_dir + 'res2net50_48w_2s-afed724a.pth'),
+    'res2net50_14w_8s': _cfg(url=url_weight_dir + 'res2net50_14w_8s-6527dddc.pth'),
+    'res2net50_26w_6s': _cfg(url=url_weight_dir + 'res2net50_26w_6s-19041792.pth'),
+    'res2net50_26w_8s': _cfg(url=url_weight_dir + 'res2net50_26w_8s-2c7c9f12.pth'),
+    'res2net101_26w_4s': _cfg(url=url_weight_dir + 'res2net101_26w_4s-02a759a1.pth'),
+    'res2next50': _cfg(url=url_weight_dir + 'res2next50_4s-6ef7e7bf.pth'),
 }
 
 
@@ -105,7 +97,7 @@ class Bottle2neck(nn.Module):
             sp = bn(sp)
             sp = self.relu(sp)
             spo.append(sp)
-        if self.scale > 1 :
+        if self.scale > 1:
             spo.append(self.pool(spx[-1]) if self.is_first else spx[-1])
         out = torch.cat(spo, 1)
 

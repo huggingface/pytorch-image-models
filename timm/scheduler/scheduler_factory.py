@@ -1,7 +1,7 @@
 from .cosine_lr import CosineLRScheduler
-from .tanh_lr import TanhLRScheduler
-from .step_lr import StepLRScheduler
 from .plateau_lr import PlateauLRScheduler
+from .step_lr import StepLRScheduler
+from .tanh_lr import TanhLRScheduler
 
 
 def create_scheduler(args, optimizer):
@@ -18,7 +18,7 @@ def create_scheduler(args, optimizer):
         noise_range = None
 
     lr_scheduler = None
-    #FIXME expose cycle parms of the scheduler config to arguments
+    # FIXME expose cycle parms of the scheduler config to arguments
     if args.sched == 'cosine':
         lr_scheduler = CosineLRScheduler(
             optimizer,

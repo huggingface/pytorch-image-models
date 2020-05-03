@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from .layers.activations import sigmoid
-from .layers import create_conv2d, drop_path
 
+from .layers import create_conv2d, drop_path
+from .layers.activations import sigmoid
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
@@ -140,6 +140,7 @@ class DepthwiseSeparableConv(nn.Module):
     Used for DS convs in MobileNet-V1 and in the place of IR blocks that have no expansion
     (factor of 1.0). This is an alternative to having a IR with an optional first pw conv.
     """
+
     def __init__(self, in_chs, out_chs, dw_kernel_size=3,
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False,
                  pw_kernel_size=1, pw_act=False, se_ratio=0., se_kwargs=None,

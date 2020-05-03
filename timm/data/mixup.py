@@ -12,7 +12,7 @@ def mixup_target(target, num_classes, lam=1., smoothing=0.0, device='cuda'):
     on_value = 1. - smoothing + off_value
     y1 = one_hot(target, num_classes, on_value=on_value, off_value=off_value, device=device)
     y2 = one_hot(target.flip(0), num_classes, on_value=on_value, off_value=off_value, device=device)
-    return lam*y1 + (1. - lam)*y2
+    return lam * y1 + (1. - lam) * y2
 
 
 def mixup_batch(input, target, alpha=0.2, num_classes=1000, smoothing=0.1, disable=False):

@@ -1,6 +1,6 @@
-import sys
-import re
 import fnmatch
+import re
+import sys
 from collections import defaultdict
 
 __all__ = ['list_models', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules']
@@ -91,4 +91,3 @@ def is_model_in_modules(model_name, module_names):
     """
     assert isinstance(module_names, (tuple, list, set))
     return any(model_name in _module_to_models[n] for n in module_names)
-

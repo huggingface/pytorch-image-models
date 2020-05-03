@@ -6,11 +6,9 @@ easily be swapped. All have an `inplace` arg even if not used.
 Hacked together by Ross Wightman
 """
 
-
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-
 
 _USE_MEM_EFFICIENT_ISH = True
 if _USE_MEM_EFFICIENT_ISH:
@@ -70,6 +68,7 @@ if _USE_MEM_EFFICIENT_ISH:
         def backward(ctx, grad_output):
             x = ctx.saved_tensors[0]
             return mish_jit_bwd(x, grad_output)
+
 
     def mish(x, _inplace=False):
         return MishJitAutoFn.apply(x)
@@ -161,4 +160,3 @@ class HardSigmoid(nn.Module):
 
     def forward(self, x):
         return hard_sigmoid(x, self.inplace)
-

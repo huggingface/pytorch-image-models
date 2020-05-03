@@ -11,11 +11,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-
+from .registry import register_model
 
 __all__ = ['DLA']
 
@@ -51,6 +50,7 @@ default_cfgs = {
 
 class DlaBasic(nn.Module):
     """DLA Basic"""
+
     def __init__(self, inplanes, planes, stride=1, dilation=1, **_):
         super(DlaBasic, self).__init__()
         self.conv1 = nn.Conv2d(
@@ -170,7 +170,7 @@ class DlaBottle2neck(nn.Module):
             sp = bn(sp)
             sp = self.relu(sp)
             spo.append(sp)
-        if self.scale > 1 :
+        if self.scale > 1:
             spo.append(self.pool(spx[-1]) if self.is_first else spx[-1])
         out = torch.cat(spo, 1)
 
@@ -303,10 +303,11 @@ class DLA(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        num_features = self.num_features * self.global_pool.feat_mult()
         if num_classes:
-            self.fc = nn.Conv2d(self.num_features * self.global_pool.feat_mult(), num_classes, 1, bias=True)
+            self.fc = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
         else:
-            self.fc = None
+            self.fc = nn.Identity()
 
     def forward_features(self, x):
         x = self.base_layer(x)

@@ -1,4 +1,3 @@
-
 """ MobileNet V3
 
 A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
@@ -8,13 +7,13 @@ Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 Hacked together by Ross Wightman
 """
 
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_builder import *
-from .registry import register_model
+from .feature_hooks import FeatureHooks
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d, create_conv2d
 from .layers.activations import HardSwish, hard_sigmoid
-from .feature_hooks import FeatureHooks
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from .registry import register_model
 
 __all__ = ['MobileNetV3']
 
@@ -29,34 +28,26 @@ def _cfg(url='', **kwargs):
     }
 
 
+url_weight_dir = 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/'
 default_cfgs = {
-    'mobilenetv3_large_075': _cfg(url=''),
-    'mobilenetv3_large_100': _cfg(
-        interpolation='bicubic',
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
-    'mobilenetv3_small_075': _cfg(url=''),
-    'mobilenetv3_small_100': _cfg(url=''),
-    'mobilenetv3_rw': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
-        interpolation='bicubic'),
-    'tf_mobilenetv3_large_075': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_large_075-150ee8b0.pth',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
-    'tf_mobilenetv3_large_100': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_large_100-427764d5.pth',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
-    'tf_mobilenetv3_large_minimal_100': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_large_minimal_100-8596ae28.pth',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
-    'tf_mobilenetv3_small_075': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_small_075-da427f52.pth',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
-    'tf_mobilenetv3_small_100': _cfg(
-        url= 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_small_100-37f49e2b.pth',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
-    'tf_mobilenetv3_small_minimal_100': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_small_minimal_100-922a7843.pth',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+    'mobilenetv3_large_075': _cfg(),
+    'mobilenetv3_large_100': _cfg(url=url_weight_dir + 'mobilenetv3_large_100_ra-f55367f5.pth',
+                                  interpolation='bicubic'),
+    'mobilenetv3_small_075': _cfg(),
+    'mobilenetv3_small_100': _cfg(),
+    'mobilenetv3_rw': _cfg(url=url_weight_dir + 'mobilenetv3_100-35495452.pth', interpolation='bicubic'),
+    'tf_mobilenetv3_large_075': _cfg(url=url_weight_dir + 'tf_mobilenetv3_large_075-150ee8b0.pth',
+                                     mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+    'tf_mobilenetv3_large_100': _cfg(url=url_weight_dir + 'tf_mobilenetv3_large_100-427764d5.pth',
+                                     mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+    'tf_mobilenetv3_large_minimal_100': _cfg(url=url_weight_dir + 'tf_mobilenetv3_large_minimal_100-8596ae28.pth',
+                                             mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+    'tf_mobilenetv3_small_075': _cfg(url=url_weight_dir + 'tf_mobilenetv3_small_075-da427f52.pth',
+                                     mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+    'tf_mobilenetv3_small_100': _cfg(url=url_weight_dir + 'tf_mobilenetv3_small_100-37f49e2b.pth',
+                                     mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+    'tf_mobilenetv3_small_minimal_100': _cfg(url=url_weight_dir + 'tf_mobilenetv3_small_minimal_100-922a7843.pth',
+                                             mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 }
 
 _DEBUG = False
@@ -76,7 +67,7 @@ class MobileNetV3(nn.Module):
                  channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0.,
                  se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
         super(MobileNetV3, self).__init__()
-        
+
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
@@ -96,7 +87,7 @@ class MobileNetV3(nn.Module):
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = builder.features
         self._in_chs = builder.in_chs
-        
+
         # Head + Pooling
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.conv_head = create_conv2d(self._in_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
@@ -120,8 +111,11 @@ class MobileNetV3(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        self.classifier = nn.Linear(
-            self.num_features * self.global_pool.feat_mult(), num_classes) if self.num_classes else None
+        num_features = self.num_features * self.global_pool.feat_mult()
+        if num_classes:
+            self.classifier = nn.Linear(num_features, num_classes)
+        else:
+            self.classifier = nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -397,7 +391,6 @@ def mobilenetv3_small_075(pretrained=False, **kwargs):
 
 @register_model
 def mobilenetv3_small_100(pretrained=False, **kwargs):
-    print(kwargs)
     """ MobileNet V3 """
     model = _gen_mobilenet_v3('mobilenetv3_small_100', 1.0, pretrained=pretrained, **kwargs)
     return model

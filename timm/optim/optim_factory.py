@@ -1,8 +1,11 @@
 import torch
 from torch import optim as optim
+
 from timm.optim import Nadam, RMSpropTF, AdamW, RAdam, NovoGrad, NvNovoGrad, Lookahead
+
 try:
     from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
+
     has_apex = True
 except ImportError:
     has_apex = False

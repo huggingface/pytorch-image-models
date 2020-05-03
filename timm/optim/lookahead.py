@@ -2,9 +2,10 @@
 Implementation modified from: https://github.com/alphadl/lookahead.pytorch
 Paper: `Lookahead Optimizer: k steps forward, 1 step back` - https://arxiv.org/abs/1907.08610
 """
+from collections import defaultdict
+
 import torch
 from torch.optim.optimizer import Optimizer
-from collections import defaultdict
 
 
 class Lookahead(Optimizer):
@@ -41,7 +42,7 @@ class Lookahead(Optimizer):
             self.update_slow(group)
 
     def step(self, closure=None):
-        #assert id(self.param_groups) == id(self.base_optimizer.param_groups)
+        # assert id(self.param_groups) == id(self.base_optimizer.param_groups)
         loss = self.base_optimizer.step(closure)
         for group in self.param_groups:
             group['lookahead_step'] += 1

@@ -2,10 +2,11 @@
 
 Hacked together by Ross Wightman
 """
+from typing import Tuple, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple, Optional
 
 from timm.models.layers.padding import get_padding_value
 from .padding import pad_same
@@ -39,5 +40,3 @@ def create_conv2d_pad(in_chs, out_chs, kernel_size, **kwargs):
         return Conv2dSame(in_chs, out_chs, kernel_size, **kwargs)
     else:
         return nn.Conv2d(in_chs, out_chs, kernel_size, padding=padding, **kwargs)
-
-

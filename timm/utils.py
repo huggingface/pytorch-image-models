@@ -1,18 +1,17 @@
+import csv
+import glob
+import logging
+import operator
+import os
+import re
+from collections import OrderedDict
 from copy import deepcopy
 
 import torch
-import math
-import os
-import re
-import shutil
-import glob
-import csv
-import operator
-import logging
-import numpy as np
-from collections import OrderedDict
+
 try:
     from apex import amp
+
     has_apex = True
 except ImportError:
     amp = None
@@ -66,7 +65,7 @@ class CheckpointSaver:
         last_save_path = os.path.join(self.checkpoint_dir, 'last' + self.extension)
         self._save(tmp_save_path, model, optimizer, args, epoch, model_ema, metric, use_amp)
         if os.path.exists(last_save_path):
-            os.unlink(last_save_path) # required for Windows support.
+            os.unlink(last_save_path)  # required for Windows support.
         os.rename(tmp_save_path, last_save_path)
         worst_file = self.checkpoint_files[-1] if self.checkpoint_files else None
         if (len(self.checkpoint_files) < self.max_history
@@ -153,6 +152,7 @@ class CheckpointSaver:
 
 class AverageMeter:
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -252,6 +252,7 @@ class ModelEma:
     GPU assignment and distributed training wrappers.
     I've tested with the sequence in my own train.py for torch.DataParallel, apex.DDP, and single-GPU.
     """
+
     def __init__(self, model, decay=0.9999, device='', resume=''):
         # make a copy of the model for accumulating moving average of weights
         self.ema = deepcopy(model)

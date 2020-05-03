@@ -5,9 +5,10 @@ from collections.__init__ import OrderedDict
 from copy import deepcopy
 
 import torch.nn as nn
+
+from .efficientnet_blocks import *
 from .layers import CondConv2d, get_condconv_initializer
 from .layers.activations import HardSwish, Swish
-from .efficientnet_blocks import *
 
 
 def _parse_ksize(ss):
@@ -203,6 +204,7 @@ class EfficientNetBuilder:
     https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/modeling/backbone/fbnet_builder.py
 
     """
+
     def __init__(self, channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  output_stride=32, pad_type='', act_layer=None, se_kwargs=None,
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0., feature_location='',
@@ -407,4 +409,3 @@ def efficientnet_init_weights(model: nn.Module, init_fn=None):
     init_fn = init_fn or _init_weight_goog
     for n, m in model.named_modules():
         init_fn(m, n)
-

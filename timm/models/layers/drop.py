@@ -17,8 +17,6 @@ Hacked together by Ross Wightman
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import math
 
 
 def drop_block_2d(
@@ -66,6 +64,7 @@ def drop_block_2d(
 class DropBlock2d(nn.Module):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
     """
+
     def __init__(self,
                  drop_prob=0.1,
                  block_size=7,
@@ -103,6 +102,7 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
 class DropPath(nn.ModuleDict):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
     """
+
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob

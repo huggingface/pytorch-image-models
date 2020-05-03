@@ -2,14 +2,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import torch.utils.data as data
-
 import os
 import re
-import torch
 import tarfile
-from PIL import Image
 
+import torch
+import torch.utils.data as data
+from PIL import Image
 
 IMG_EXTENSIONS = ['.png', '.jpg', '.jpeg']
 
@@ -70,8 +69,9 @@ class Dataset(data.Dataset):
             class_to_idx = load_class_map(class_map, root)
         images, class_to_idx = find_images_and_targets(root, class_to_idx=class_to_idx)
         if len(images) == 0:
-            raise(RuntimeError("Found 0 images in subfolders of: " + root + "\n"
-                               "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
+            raise (RuntimeError("Found 0 images in subfolders of: " + root + "\n"
+                                                                             "Supported image extensions are: " + ",".join(
+                IMG_EXTENSIONS)))
         self.root = root
         self.samples = images
         self.imgs = self.samples  # torchvision ImageFolder compat

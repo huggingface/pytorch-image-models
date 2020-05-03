@@ -9,16 +9,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import OrderedDict
 
-from .registry import register_model
+from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
-
+from .registry import register_model
 
 __all__ = ['DPN']
 
@@ -32,19 +32,14 @@ def _cfg(url=''):
     }
 
 
+url_weight_dir = 'https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/'
 default_cfgs = {
-    'dpn68': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
-    'dpn68b': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68b_extra-84854c156.pth'),
-    'dpn92': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
-    'dpn98': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),
-    'dpn131': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn131-71dfe43e0.pth'),
-    'dpn107': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn107_extra-1ac7121e2.pth')
+    'dpn68': _cfg(url=url_weight_dir + 'dpn68-66bebafa7.pth'),
+    'dpn68b': _cfg(url=url_weight_dir + 'dpn68b_extra-84854c156.pth'),
+    'dpn92': _cfg(url=url_weight_dir + 'dpn92_extra-b040e4a9b.pth'),
+    'dpn98': _cfg(url=url_weight_dir + 'dpn98-5b90dec4d.pth'),
+    'dpn131': _cfg(url=url_weight_dir + 'dpn131-71dfe43e0.pth'),
+    'dpn107': _cfg(url=url_weight_dir + 'dpn107_extra-1ac7121e2.pth')
 }
 
 
@@ -218,8 +213,8 @@ class DPN(nn.Module):
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Conv2d(
-            self.num_features * self.global_pool.feat_mult(), num_classes, kernel_size=1, bias=True)
+        num_features = self.num_features * self.global_pool.feat_mult()
+        self.classifier = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
 
     def get_classifier(self):
         return self.classifier
@@ -227,11 +222,11 @@ class DPN(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        num_features = self.num_features * self.global_pool.feat_mult()
         if num_classes:
-            self.classifier = nn.Conv2d(
-                self.num_features * self.global_pool.feat_mult(), num_classes, kernel_size=1, bias=True)
+            self.classifier = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
         else:
-            self.classifier = None
+            self.classifier = nn.Identity()
 
     def forward_features(self, x):
         return self.features(x)

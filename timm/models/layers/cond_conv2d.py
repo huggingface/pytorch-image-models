@@ -8,14 +8,15 @@ Hacked together by Ross Wightman
 
 import math
 from functools import partial
+
 import numpy as np
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-from .helpers import tup_pair
-from .conv2d_same import conv2d_same
 from timm.models.layers.padding import get_padding_value
+from .conv2d_same import conv2d_same
+from .helpers import tup_pair
 
 
 def get_condconv_initializer(initializer, num_experts, expert_shape):
@@ -28,6 +29,7 @@ def get_condconv_initializer(initializer, num_experts, expert_shape):
                 'CondConv variables must have shape [num_experts, num_params]'))
         for i in range(num_experts):
             initializer(weight[i].view(expert_shape))
+
     return condconv_initializer
 
 

@@ -7,7 +7,6 @@ Paper: `Stochastic Gradient Methods with Layer-wise Adaptive Moments for Trainin
 
 import torch
 from torch.optim.optimizer import Optimizer
-import math
 
 
 class NvNovoGrad(Optimizer):

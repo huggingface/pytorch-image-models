@@ -6,10 +6,10 @@ import math
 import torch
 from torchvision import transforms
 
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
-from timm.data.transforms import _pil_interp, RandomResizedCropAndInterpolation, ToNumpy, ToTensor
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.data.random_erasing import RandomErasing
+from timm.data.transforms import _pil_interp, RandomResizedCropAndInterpolation, ToNumpy
 
 
 def transforms_imagenet_train(
@@ -122,8 +122,8 @@ def transforms_imagenet_eval(
         tfl += [
             transforms.ToTensor(),
             transforms.Normalize(
-                     mean=torch.tensor(mean),
-                     std=torch.tensor(std))
+                mean=torch.tensor(mean),
+                std=torch.tensor(std))
         ]
 
     return transforms.Compose(tfl)
@@ -145,7 +145,6 @@ def create_transform(
         crop_pct=None,
         tf_preprocessing=False,
         separate=False):
-
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
     else:

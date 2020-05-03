@@ -10,12 +10,14 @@ Hacked together by Ross Wightman
 
 import torch
 from torch import nn as nn
+
 from .conv_bn_act import ConvBnAct
 
 
 class ChannelAttn(nn.Module):
     """ Original CBAM channel attention module, currently avg + max pool variant only.
     """
+
     def __init__(self, channels, reduction=16, act_layer=nn.ReLU):
         super(ChannelAttn, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -36,6 +38,7 @@ class ChannelAttn(nn.Module):
 class LightChannelAttn(ChannelAttn):
     """An experimental 'lightweight' that sums avg + max pool first
     """
+
     def __init__(self, channels, reduction=16):
         super(LightChannelAttn, self).__init__(channels, reduction)
 
@@ -48,6 +51,7 @@ class LightChannelAttn(ChannelAttn):
 class SpatialAttn(nn.Module):
     """ Original CBAM spatial attention module
     """
+
     def __init__(self, kernel_size=7):
         super(SpatialAttn, self).__init__()
         self.conv = ConvBnAct(2, 1, kernel_size, act_layer=None)
@@ -63,6 +67,7 @@ class SpatialAttn(nn.Module):
 class LightSpatialAttn(nn.Module):
     """An experimental 'lightweight' variant that sums avg_pool and max_pool results.
     """
+
     def __init__(self, kernel_size=7):
         super(LightSpatialAttn, self).__init__()
         self.conv = ConvBnAct(1, 1, kernel_size, act_layer=None)
@@ -97,4 +102,3 @@ class LightCbamModule(nn.Module):
         x = self.channel(x)
         x = self.spatial(x)
         return x
-

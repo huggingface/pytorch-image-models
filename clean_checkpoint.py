@@ -7,12 +7,13 @@ calculation for model zoo compatibility.
 
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
-import torch
 import argparse
-import os
 import hashlib
+import os
 import shutil
 from collections import OrderedDict
+
+import torch
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Cleaner')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',

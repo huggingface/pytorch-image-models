@@ -8,11 +8,13 @@ FIXME merge this impl with those in `anti_aliasing.py`
 Hacked together by Chris Ha and Ross Wightman
 """
 
+from typing import Dict
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from typing import Dict
+
 from .padding import get_padding
 
 

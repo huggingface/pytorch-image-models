@@ -23,6 +23,7 @@ class MixedConv2d(nn.ModuleDict):
     Based on MDConv and GroupedConv in MixNet impl:
       https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mixnet/custom_layers.py
     """
+
     def __init__(self, in_channels, out_channels, kernel_size=3,
                  stride=1, padding='', dilation=1, depthwise=False, **kwargs):
         super(MixedConv2d, self).__init__()

@@ -5,17 +5,20 @@ https://arxiv.org/pdf/2003.13630.pdf
 Original model: https://github.com/mrT23/TResNet
 
 """
+from collections import OrderedDict
 from functools import partial
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import OrderedDict
+
+from .helpers import load_pretrained
 from .layers import SpaceToDepthModule, AntiAliasDownsampleLayer, SelectAdaptivePool2d
 from .registry import register_model
-from .helpers import load_pretrained
 
 try:
     from inplace_abn import InPlaceABN
+
     has_iabn = True
 except ImportError:
     has_iabn = False
@@ -33,22 +36,14 @@ def _cfg(url='', **kwargs):
     }
 
 
+url_weight_dir = 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/'
 default_cfgs = {
-    'tresnet_m': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_80_8-dbc13962.pth'),
-    'tresnet_l': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_81_5-235b486c.pth'),
-    'tresnet_xl': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_xl_82_0-a2d51b00.pth'),
-    'tresnet_m_448': _cfg(
-        input_size=(3, 448, 448),
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_448-bc359d10.pth'),
-    'tresnet_l_448': _cfg(
-        input_size=(3, 448, 448),
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_448-940d0cd1.pth'),
-    'tresnet_xl_448': _cfg(
-        input_size=(3, 448, 448),
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_xl_448-8c1815de.pth')
+    'tresnet_m': _cfg(url=url_weight_dir + 'tresnet_m_80_8-dbc13962.pth'),
+    'tresnet_l': _cfg(url=url_weight_dir + 'tresnet_l_81_5-235b486c.pth'),
+    'tresnet_xl': _cfg(url=url_weight_dir + 'tresnet_xl_82_0-a2d51b00.pth'),
+    'tresnet_m_448': _cfg(url=url_weight_dir + 'tresnet_m_448-bc359d10.pth', input_size=(3, 448, 448)),
+    'tresnet_l_448': _cfg(url=url_weight_dir + 'tresnet_l_448-940d0cd1.pth', input_size=(3, 448, 448)),
+    'tresnet_xl_448': _cfg(url=url_weight_dir + 'tresnet_xl_448-8c1815de.pth', input_size=(3, 448, 448))
 }
 
 
@@ -88,7 +83,7 @@ class FastSEModule(nn.Module):
 
 
 def IABN2Float(module: nn.Module) -> nn.Module:
-    "If `module` is IABN don't use half precision."
+    """If `module` is IABN don't use half precision."""
     if isinstance(module, InPlaceABN):
         module.float()
     for child in module.children():
@@ -276,9 +271,11 @@ class TResNet(nn.Module):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.num_classes = num_classes
         self.head = None
+        num_features = self.num_features * self.global_pool.feat_mult()
         if num_classes:
-            self.head = nn.Sequential(OrderedDict([
-                ('fc', nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes))]))
+            self.head = nn.Sequential(OrderedDict([('fc', nn.Linear(num_features, num_classes))]))
+        else:
+            self.head = nn.Sequential(OrderedDict([('fc', nn.Identity())]))
 
     def forward_features(self, x):
         return self.body(x)

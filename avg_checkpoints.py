@@ -11,11 +11,13 @@ weight averaging), but post-training.
 
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
-import torch
 import argparse
-import os
 import glob
 import hashlib
+import os
+
+import torch
+
 from timm.models.helpers import load_state_dict
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Averager')

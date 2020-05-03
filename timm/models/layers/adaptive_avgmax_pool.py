@@ -70,6 +70,7 @@ class AdaptiveCatAvgMaxPool2d(nn.Module):
 class SelectAdaptivePool2d(nn.Module):
     """Selectable global pooling layer with dynamic input kernel size
     """
+
     def __init__(self, output_size=1, pool_type='avg', flatten=False):
         super(SelectAdaptivePool2d, self).__init__()
         self.output_size = output_size

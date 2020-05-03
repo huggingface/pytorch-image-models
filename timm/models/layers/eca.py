@@ -34,8 +34,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import math
-from torch import nn
+
 import torch.nn.functional as F
+from torch import nn
 
 
 class EcaModule(nn.Module):
@@ -49,6 +50,7 @@ class EcaModule(nn.Module):
             (default=None. if channel size not given, use k_size given for kernel size.)
         kernel_size: Adaptive selection of kernel size (default=3)
     """
+
     def __init__(self, channels=None, kernel_size=3, gamma=2, beta=1):
         super(EcaModule, self).__init__()
         assert kernel_size % 2 == 1
@@ -101,10 +103,10 @@ class CecaModule(nn.Module):
             kernel_size = max(t if t % 2 else t + 1, 3)
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        #pytorch circular padding mode is buggy as of pytorch 1.4
-        #see https://github.com/pytorch/pytorch/pull/17240
+        # pytorch circular padding mode is buggy as of pytorch 1.4
+        # see https://github.com/pytorch/pytorch/pull/17240
 
-        #implement manual circular padding
+        # implement manual circular padding
         self.conv = nn.Conv1d(1, 1, kernel_size=kernel_size, padding=0, bias=False)
         self.padding = (kernel_size - 1) // 2
 

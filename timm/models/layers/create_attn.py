@@ -2,10 +2,9 @@
 
 Hacked together by Ross Wightman
 """
-import torch
-from .se import SEModule
-from .eca import EcaModule, CecaModule
 from .cbam import CbamModule, LightCbamModule
+from .eca import EcaModule, CecaModule
+from .se import SEModule
 
 
 def create_attn(attn_type, channels, **kwargs):

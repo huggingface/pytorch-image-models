@@ -1,11 +1,11 @@
-import torch.utils.data
 import numpy as np
+import torch.utils.data
 
-from .transforms_factory import create_transform
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .distributed_sampler import OrderedDistributedSampler
-from .random_erasing import RandomErasing
 from .mixup import FastCollateMixup
+from .random_erasing import RandomErasing
+from .transforms_factory import create_transform
 
 
 def fast_collate(batch):

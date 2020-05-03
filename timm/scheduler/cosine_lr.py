@@ -1,10 +1,9 @@
 import logging
 import math
-import numpy as np
+
 import torch
 
 from .scheduler import Scheduler
-
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +80,8 @@ class CosineLRScheduler(Scheduler):
 
             if self.cycle_limit == 0 or (self.cycle_limit > 0 and i < self.cycle_limit):
                 lrs = [
-                    lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * t_curr / t_i)) for lr_max in lr_max_values
+                    lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * t_curr / t_i)) for lr_max in
+                    lr_max_values
                 ]
             else:
                 lrs = [self.lr_min for _ in self.base_values]

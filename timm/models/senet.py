@@ -8,16 +8,16 @@ Original model: https://github.com/hujie-frank/SENet
 ResNet code gently borrowed from
 https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 """
-from collections import OrderedDict
 import math
+from collections import OrderedDict
 
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .registry import register_model
 
 __all__ = ['SENet']
 
@@ -32,27 +32,19 @@ def _cfg(url='', **kwargs):
     }
 
 
+url_weight_dir = 'https://github.com/rwightman/pytorch-image-models/releases/download/'
 default_cfgs = {
-    'senet154':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth'),
-    'seresnet18': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet18-4bb0ce65.pth',
-        interpolation='bicubic'),
-    'seresnet34': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet34-a4004e63.pth'),
-    'seresnet50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet50-ce0d4300.pth'),
-    'seresnet101': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet101-7e38fcc6.pth'),
-    'seresnet152': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet152-d17c99b7.pth'),
-    'seresnext26_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26_32x4d-65ebdb501.pth',
-        interpolation='bicubic'),
-    'seresnext50_32x4d':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth'),
-    'seresnext101_32x4d':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext101_32x4d-3b2fe3d8.pth'),
+    'senet154': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth'),
+    'seresnet18': _cfg(url=url_weight_dir + 'v0.1-weights/seresnet18-4bb0ce65.pth',
+                       interpolation='bicubic'),
+    'seresnet34': _cfg(url=url_weight_dir + 'v0.1-weights/seresnet34-a4004e63.pth'),
+    'seresnet50': _cfg(url=url_weight_dir + 'v0.1-cadene/se_resnet50-ce0d4300.pth'),
+    'seresnet101': _cfg(url=url_weight_dir + 'v0.1-cadene/se_resnet101-7e38fcc6.pth'),
+    'seresnet152': _cfg(url=url_weight_dir + 'v0.1-cadene/se_resnet152-d17c99b7.pth'),
+    'seresnext26_32x4d': _cfg(url=url_weight_dir + 'v0.1-weights/seresnext26_32x4d-65ebdb501.pth',
+                              interpolation='bicubic'),
+    'seresnext50_32x4d': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth'),
+    'seresnext101_32x4d': _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext101_32x4d-3b2fe3d8.pth'),
 }
 
 

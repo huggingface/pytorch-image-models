@@ -3,8 +3,9 @@ Implementation lifted from: https://github.com/LiyuanLucasLiu/RAdam
 Paper: `On the Variance of the Adaptive Learning Rate and Beyond` - https://arxiv.org/abs/1908.03265
 """
 import math
+
 import torch
-from torch.optim.optimizer import Optimizer, required
+from torch.optim.optimizer import Optimizer
 
 
 class RAdam(Optimizer):
@@ -65,7 +66,7 @@ class RAdam(Optimizer):
                     if N_sma >= 5:
                         step_size = group['lr'] * math.sqrt(
                             (1 - beta2_t) * (N_sma - 4) / (N_sma_max - 4) * (N_sma - 2) / N_sma * N_sma_max / (
-                                        N_sma_max - 2)) / (1 - beta1 ** state['step'])
+                                    N_sma_max - 2)) / (1 - beta1 ** state['step'])
                     else:
                         step_size = group['lr'] / (1 - beta1 ** state['step'])
                     buffered[2] = step_size
@@ -140,7 +141,7 @@ class PlainRAdam(Optimizer):
                 if N_sma >= 5:
                     step_size = group['lr'] * math.sqrt(
                         (1 - beta2_t) * (N_sma - 4) / (N_sma_max - 4) * (N_sma - 2) / N_sma * N_sma_max / (
-                                    N_sma_max - 2)) / (1 - beta1 ** state['step'])
+                                N_sma_max - 2)) / (1 - beta1 ** state['step'])
                     denom = exp_avg_sq.sqrt().add_(group['eps'])
                     p_data_fp32.addcdiv_(-step_size, exp_avg, denom)
                 else:

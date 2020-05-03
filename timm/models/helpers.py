@@ -1,10 +1,12 @@
+import logging
+import os
+from collections import OrderedDict
+from copy import deepcopy
+
 import torch
 import torch.nn as nn
-from copy import deepcopy
 import torch.utils.model_zoo as model_zoo
-import os
-import logging
-from collections import OrderedDict
+
 from timm.models.layers.conv2d_same import Conv2dSame
 
 
