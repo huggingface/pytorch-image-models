@@ -24,14 +24,12 @@ An implementation of EfficienNet that covers variety of related models with effi
 
 Hacked together by Ross Wightman
 """
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_builder import *
 from .feature_hooks import FeatureHooks
-from .registry import register_model
 from .helpers import load_pretrained, adapt_model_from_file
 from .layers import SelectAdaptivePool2d
-from timm.models.layers import create_conv2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-
+from .registry import register_model
 
 __all__ = ['EfficientNet']
 
@@ -1205,8 +1203,6 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
     model = _gen_efficientnet(
         'efficientnet_b3_pruned', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
     return model
-
-
 
 
 @register_model
