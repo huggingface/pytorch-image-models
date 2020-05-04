@@ -2,11 +2,14 @@
 
 ## What's New
 
+### May 3, 2020
+* Pruned EfficientNet B1, B2, and B3 (https://arxiv.org/abs/2002.08258) contributed by [Yonathan Aflalo](https://github.com/yoniaflalo)
+
 ### May 1, 2020
 * Merged a number of execellent contributions in the ResNet model family over the past month
   * BlurPool2D and resnetblur models initiated by [Chris Ha](https://github.com/VRandme), I trained resnetblur50 to 79.3.
   * TResNet models and SpaceToDepth, AntiAliasDownsampleLayer layers by [mrT23](https://github.com/mrT23)
-  * ecaresnet (50d, 101d, light) models and two pruned variants using pruning as per (https://arxiv.org/abs/2002.08258) by [yoniaflalo](https://github.com/yoniaflalo)
+  * ecaresnet (50d, 101d, light) models and two pruned variants using pruning as per (https://arxiv.org/abs/2002.08258) by [Yonathan Aflalo](https://github.com/yoniaflalo)
 * 200 pretrained models in total now with updated results csv in results folder
 
 ### April 5, 2020

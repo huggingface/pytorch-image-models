@@ -55,6 +55,7 @@ ecaresnet50d,69.83,30.17,89.37,10.63,25.58,224,0.875,bicubic
 gluon_resnext101_64x4d,69.69,30.31,88.26,11.74,83.46,224,0.875,bicubic
 ssl_resnext50_32x4d,69.69,30.31,89.42,10.58,25.03,224,0.875,bilinear
 tresnet_m,69.65,30.35,88,12,31.39,224,0.875,bilinear
+efficientnet_b3_pruned,69.58,30.42,88.97,11.03,9.86,300,0.904,bicubic
 ens_adv_inception_resnet_v2,69.52,30.48,88.5,11.5,55.84,299,0.8975,bicubic
 efficientnet_b2a,69.49,30.51,88.68,11.32,9.11,288,1,bicubic
 inception_v4,69.35,30.65,88.78,11.22,42.68,299,0.875,bicubic
@@ -81,6 +82,7 @@ ssl_resnet50,68.42,31.58,88.58,11.42,25.56,224,0.875,bilinear
 ecaresnet50d_pruned,68.39,31.61,88.37,11.63,19.94,224,0.875,bicubic
 skresnext50_32x4d,68.39,31.61,87.59,12.41,27.48,224,0.875,bicubic
 dla102x2,68.34,31.66,87.87,12.13,41.75,224,0.875,bilinear
+efficientnet_b2_pruned,68.3,31.7,88.1,11.9,8.31,260,0.89,bicubic
 gluon_resnext50_32x4d,68.28,31.72,87.32,12.68,25.03,224,0.875,bicubic
 tf_efficientnet_lite3,68.23,31.77,87.72,12.28,8.2,300,0.904,bilinear
 tf_efficientnet_el,68.18,31.82,88.35,11.65,10.59,300,0.904,bicubic
@@ -134,6 +136,7 @@ tf_efficientnet_cc_b0_8e,66.21,33.79,86.22,13.78,24.01,224,0.875,bicubic
 tv_resnext50_32x4d,66.18,33.82,86.04,13.96,25.03,224,0.875,bilinear
 res2net50_26w_4s,66.17,33.83,86.6,13.4,25.7,224,0.875,bilinear
 inception_v3,66.12,33.88,86.34,13.66,27.16,299,0.875,bicubic
+efficientnet_b1_pruned,66.08,33.92,86.58,13.42,6.33,240,0.882,bicubic
 gluon_resnet50_v1b,66.04,33.96,86.27,13.73,25.56,224,0.875,bicubic
 res2net50_14w_8s,66.02,33.98,86.24,13.76,25.06,224,0.875,bilinear
 densenet161,65.85,34.15,86.46,13.54,28.68,224,0.875,bicubic
