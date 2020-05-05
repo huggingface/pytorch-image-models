@@ -52,7 +52,7 @@ class SelectiveKernelConv(nn.Module):
 
     def __init__(self, in_channels, out_channels, kernel_size=None, stride=1, dilation=1, groups=1,
                  attn_reduction=16, min_attn_channels=32, keep_3x3=True, split_input=False,
-                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None):
         """ Selective Kernel Convolution Module
 
         As described in Selective Kernel Networks (https://arxiv.org/abs/1903.06586) with some modifications.
@@ -98,7 +98,8 @@ class SelectiveKernelConv(nn.Module):
         groups = min(out_channels, groups)
 
         conv_kwargs = dict(
-            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer)
+            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer,
+            aa_layer=aa_layer)
         self.paths = nn.ModuleList([
             ConvBnAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
             for k, d in zip(kernel_size, dilation)])
