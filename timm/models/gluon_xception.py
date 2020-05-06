@@ -6,15 +6,15 @@ Original PyTorch DeepLab impl: https://github.com/jfzhang95/pytorch-deeplab-xcep
 
 Hacked together by Ross Wightman
 """
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from collections import OrderedDict
 
-from .registry import register_model
+import torch.nn as nn
+import torch.nn.functional as F
+
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .registry import register_model
 
 __all__ = ['Xception65', 'Xception71']
 
@@ -46,7 +46,6 @@ default_cfgs = {
         # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
     }
 }
-
 
 """ PADDING NOTES
 The original PyTorch and Gluon impl of these models dutifully reproduced the 
@@ -223,7 +222,7 @@ class Xception65(nn.Module):
             norm_layer=norm_layer, norm_kwargs=norm_kwargs, start_with_relu=True, grow_first=True, is_last=True)
 
         # Middle flow
-        self.mid = nn.Sequential(OrderedDict([('block%d' % i,  Block(
+        self.mid = nn.Sequential(OrderedDict([('block%d' % i, Block(
             728, 728, num_reps=3, stride=1, dilation=middle_block_dilation,
             norm_layer=norm_layer, norm_kwargs=norm_kwargs, start_with_relu=True, grow_first=True))
                                               for i in range(4, 20)]))
@@ -333,7 +332,7 @@ class Xception71(nn.Module):
             exit_block_dilations = (2, 4)
         else:
             raise NotImplementedError
-        
+
         # Entry flow
         self.conv1 = nn.Conv2d(in_chans, 32, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn1 = norm_layer(num_features=32, **norm_kwargs)
@@ -394,7 +393,11 @@ class Xception71(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        if num_classes:
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.fc = nn.Linear(num_features, num_classes)
+        else:
+            self.fc = nn.Identity()
 
     def forward_features(self, x):
         # Entry flow
@@ -465,4 +468,3 @@ def gluon_xception71(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
-

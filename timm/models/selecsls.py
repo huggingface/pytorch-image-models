@@ -9,16 +9,15 @@ https://arxiv.org/abs/1907.00837
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """
-import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .registry import register_model
 
 __all__ = ['SelecSLS']  # model_registry will add each entrypoint fn to this
 
@@ -134,11 +133,11 @@ class SelecSLS(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        del self.fc
         if num_classes:
-            self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.fc = nn.Linear(num_features, num_classes)
         else:
-            self.fc = None
+            self.fc = nn.Identity()
 
     def forward_features(self, x):
         x = self.stem(x)

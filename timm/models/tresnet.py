@@ -5,14 +5,16 @@ https://arxiv.org/pdf/2003.13630.pdf
 Original model: https://github.com/mrT23/TResNet
 
 """
+from collections import OrderedDict
 from functools import partial
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import OrderedDict
+
+from .helpers import load_pretrained
 from .layers import SpaceToDepthModule, AntiAliasDownsampleLayer, SelectAdaptivePool2d
 from .registry import register_model
-from .helpers import load_pretrained
 
 try:
     from inplace_abn import InPlaceABN
@@ -88,7 +90,7 @@ class FastSEModule(nn.Module):
 
 
 def IABN2Float(module: nn.Module) -> nn.Module:
-    "If `module` is IABN don't use half precision."
+    """If `module` is IABN don't use half precision."""
     if isinstance(module, InPlaceABN):
         module.float()
     for child in module.children():
@@ -277,8 +279,10 @@ class TResNet(nn.Module):
         self.num_classes = num_classes
         self.head = None
         if num_classes:
-            self.head = nn.Sequential(OrderedDict([
-                ('fc', nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes))]))
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.head = nn.Sequential(OrderedDict([('fc', nn.Linear(num_features, num_classes))]))
+        else:
+            self.head = nn.Sequential(OrderedDict([('fc', nn.Identity())]))
 
     def forward_features(self, x):
         return self.body(x)

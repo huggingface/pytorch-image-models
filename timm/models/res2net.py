@@ -6,13 +6,11 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from .resnet import ResNet
-from .registry import register_model
-from .helpers import load_pretrained
-from .layers import SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .registry import register_model
+from .resnet import ResNet
 
 __all__ = []
 
@@ -105,7 +103,7 @@ class Bottle2neck(nn.Module):
             sp = bn(sp)
             sp = self.relu(sp)
             spo.append(sp)
-        if self.scale > 1 :
+        if self.scale > 1:
             spo.append(self.pool(spx[-1]) if self.is_first else spx[-1])
         out = torch.cat(spo, 1)
 

@@ -6,10 +6,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from .registry import register_model
 
 __all__ = ['InceptionV4']
 
@@ -280,8 +280,11 @@ class InceptionV4(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        self.last_linear = nn.Linear(
-            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        if num_classes:
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.last_linear = nn.Linear(num_features, num_classes)
+        else:
+            self.last_linear = nn.Identity()
 
     def forward_features(self, x):
         return self.features(x)
@@ -303,6 +306,3 @@ def inception_v4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
-
-
-

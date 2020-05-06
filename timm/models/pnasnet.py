@@ -6,15 +6,16 @@
 
 """
 from __future__ import print_function, division, absolute_import
+
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
+from .registry import register_model
 
 __all__ = ['PNASNet5Large']
 
@@ -349,11 +350,11 @@ class PNASNet5Large(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        del self.last_linear
         if num_classes:
-            self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.last_linear = nn.Linear(num_features, num_classes)
         else:
-            self.last_linear = None
+            self.last_linear = nn.Identity()
 
     def forward_features(self, x):
         x_conv_0 = self.conv_0(x)

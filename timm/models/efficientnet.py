@@ -24,14 +24,12 @@ An implementation of EfficienNet that covers variety of related models with effi
 
 Hacked together by Ross Wightman
 """
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_builder import *
 from .feature_hooks import FeatureHooks
-from .registry import register_model
 from .helpers import load_pretrained, adapt_model_from_file
 from .layers import SelectAdaptivePool2d
-from timm.models.layers import create_conv2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-
+from .registry import register_model
 
 __all__ = ['EfficientNet']
 
@@ -373,8 +371,11 @@ class EfficientNet(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Linear(
-            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        if num_classes:
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.classifier = nn.Linear(num_features, num_classes)
+        else:
+            self.classifier = nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -785,13 +786,13 @@ def _gen_efficientnet_condconv(
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/condconv
     """
     arch_def = [
-      ['ds_r1_k3_s1_e1_c16_se0.25'],
-      ['ir_r2_k3_s2_e6_c24_se0.25'],
-      ['ir_r2_k5_s2_e6_c40_se0.25'],
-      ['ir_r3_k3_s2_e6_c80_se0.25'],
-      ['ir_r3_k5_s1_e6_c112_se0.25_cc4'],
-      ['ir_r4_k5_s2_e6_c192_se0.25_cc4'],
-      ['ir_r1_k3_s1_e6_c320_se0.25_cc4'],
+        ['ds_r1_k3_s1_e1_c16_se0.25'],
+        ['ir_r2_k3_s2_e6_c24_se0.25'],
+        ['ir_r2_k5_s2_e6_c40_se0.25'],
+        ['ir_r3_k3_s2_e6_c80_se0.25'],
+        ['ir_r3_k5_s1_e6_c112_se0.25_cc4'],
+        ['ir_r4_k5_s2_e6_c192_se0.25_cc4'],
+        ['ir_r1_k3_s1_e6_c320_se0.25_cc4'],
     ]
     # NOTE unlike official impl, this one uses `cc<x>` option where x is the base number of experts for each stage and
     # the expert_multiplier increases that on a per-model basis as with depth/channel multipliers
@@ -1187,6 +1188,7 @@ def efficientnet_cc_b0_8e(pretrained=False, **kwargs):
         pretrained=pretrained, **kwargs)
     return model
 
+
 @register_model
 def efficientnet_cc_b1_8e(pretrained=False, **kwargs):
     """ EfficientNet-CondConv-B1 w/ 8 Experts """
@@ -1242,8 +1244,6 @@ def efficientnet_lite4(pretrained=False, **kwargs):
     return model
 
 
-
-
 @register_model
 def efficientnet_b1_pruned(pretrained=False, **kwargs):
     """ EfficientNet-B1 Pruned. The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf  """
@@ -1273,8 +1273,6 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
     model = _gen_efficientnet(
         'efficientnet_b3_pruned', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
     return model
-
-
 
 
 @register_model
@@ -1619,6 +1617,7 @@ def tf_efficientnet_cc_b0_8e(pretrained=False, **kwargs):
         pretrained=pretrained, **kwargs)
     return model
 
+
 @register_model
 def tf_efficientnet_cc_b1_8e(pretrained=False, **kwargs):
     """ EfficientNet-CondConv-B1 w/ 8 Experts. Tensorflow compatible variant """
@@ -1764,4 +1763,3 @@ def tf_mixnet_l(pretrained=False, **kwargs):
     model = _gen_mixnet_m(
         'tf_mixnet_l', channel_multiplier=1.3, pretrained=pretrained, **kwargs)
     return model
-
