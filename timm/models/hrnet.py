@@ -675,7 +675,10 @@ class HighResolutionNet(nn.Module):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         num_features = self.num_features * self.global_pool.feat_mult()
-        self.classifier = nn.Linear(num_features, num_classes) if num_classes else nn.Identity()
+        if num_classes:
+            self.classifier = nn.Linear(num_features, num_classes)
+        else:
+            self.classifier = nn.Identity()
 
     def forward_features(self, x):
         x = self.conv1(x)
