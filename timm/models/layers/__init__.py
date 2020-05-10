@@ -19,3 +19,5 @@ from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .anti_aliasing import AntiAliasDownsampleLayer
 from .space_to_depth import SpaceToDepthModule
 from .blur_pool import BlurPool2d
+from .norm_act import BatchNormAct2d
+from .evo_norm import EvoNormBatch2d, EvoNormSample2d
