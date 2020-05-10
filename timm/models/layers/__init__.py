@@ -21,3 +21,4 @@ from .space_to_depth import SpaceToDepthModule
 from .blur_pool import BlurPool2d
 from .norm_act import BatchNormAct2d
 from .evo_norm import EvoNormBatch2d, EvoNormSample2d
+from .create_norm_act import create_norm_act

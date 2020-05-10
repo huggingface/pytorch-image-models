@@ -4,6 +4,7 @@ fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
 import re
 from collections import OrderedDict
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -13,7 +14,7 @@ from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, BatchNormAct2d, EvoNormBatch2d, EvoNormSample2d
+from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act
 from .registry import register_model
 
 __all__ = ['DenseNet']
@@ -327,9 +328,11 @@ def densenet121d_evob(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
+    def norm_act_fn(num_features, **kwargs):
+        return create_norm_act('EvoNormBatch', num_features, jit=True, **kwargs)
     model = _densenet(
         'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_act_layer=EvoNormBatch2d, pretrained=pretrained, **kwargs)
+        norm_act_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -338,9 +341,11 @@ def densenet121d_evos(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
+    def norm_act_fn(num_features, **kwargs):
+        return create_norm_act('EvoNormSample', num_features, jit=True, **kwargs)
     model = _densenet(
         'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_act_layer=EvoNormSample2d, pretrained=pretrained, **kwargs)
+        norm_act_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -349,10 +354,11 @@ def densenet121d_iabn(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    from inplace_abn import InPlaceABN
+    def norm_act_fn(num_features, **kwargs):
+        return create_norm_act('iabn', num_features, **kwargs)
     model = _densenet(
         'densenet121tn', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_act_layer=InPlaceABN, pretrained=pretrained, **kwargs)
+        norm_act_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 
