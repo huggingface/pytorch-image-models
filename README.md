@@ -130,6 +130,7 @@ Included models:
     * Instagram trained / ImageNet tuned ResNeXt101-32x8d to 32x48d from from [facebookresearch](https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/)
     * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
     * Selective Kernel (SK) Nets (https://arxiv.org/abs/1903.06586)
+    * ResNeSt (code adapted from https://github.com/zhanghang1989/ResNeSt, paper https://arxiv.org/abs/2004.08955)
 * DLA
     * Original (https://github.com/ucbdrive/dla, https://arxiv.org/abs/1707.06484)
     * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
