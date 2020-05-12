@@ -5,7 +5,7 @@ from timm import list_models, create_model
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize('model_name', list_models())
+@pytest.mark.parametrize('model_name', list_models(exclude_filters='*efficientnet_l2*'))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
   """Run a single forward pass with each model"""
