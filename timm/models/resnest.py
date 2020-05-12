@@ -238,7 +238,24 @@ def resnest269e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
+def resnest50d_4s2x40d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """ResNeSt-50 4s2x40d from https://github.com/zhanghang1989/ResNeSt/blob/master/ablation.md
+    """
+    default_cfg = default_cfgs['resnest50d_4s2x40d']
+    model = ResNet(
+        ResNestBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
+        stem_type='deep', stem_width=32, avg_down=True, base_width=40, cardinality=2,
+        block_args=dict(radix=4, avd=True, avd_first=True), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
 def resnest50d_1s4x24d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """ResNeSt-50 1s4x24d from https://github.com/zhanghang1989/ResNeSt/blob/master/ablation.md
+    """
     default_cfg = default_cfgs['resnest50d_1s4x24d']
     model = ResNet(
         ResNestBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,

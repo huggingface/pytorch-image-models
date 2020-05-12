@@ -68,14 +68,12 @@ class SplitAttnConv2d(nn.Module):
             x_gap = x
         x_gap = F.adaptive_avg_pool2d(x_gap, 1)
         x_gap = self.fc1(x_gap)
-
         if self.bn1 is not None:
             x_gap = self.bn1(x_gap)
         x_gap = self.act1(x_gap)
-
         x_attn = self.fc2(x_gap)
-        x_attn = self.rsoftmax(x_attn).view(B, -1, 1, 1)
 
+        x_attn = self.rsoftmax(x_attn).view(B, -1, 1, 1)
         if self.radix > 1:
             out = (x * x_attn.reshape((B, self.radix, RC // self.radix, 1, 1))).sum(dim=1)
         else:
