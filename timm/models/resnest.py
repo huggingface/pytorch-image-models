@@ -1,8 +1,8 @@
 """ ResNeSt Models
 
-Paper: `ResNeSt: Split-Attention Networks` - /https://arxiv.org/abs/2004.08955
+Paper: `ResNeSt: Split-Attention Networks` - https://arxiv.org/abs/2004.08955
 
-Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang1989/ResNeSt
+Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang1989/ResNeSt by Hang Zhang
 
 Modified for torchscript compat, and consistency with timm by Ross Wightman
 """
@@ -31,8 +31,10 @@ def _cfg(url='', **kwargs):
     }
 
 default_cfgs = {
+    'resnest14d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_resnest14-9c8fe254.pth'),
     'resnest26d': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_resnest26-50eb607c.pth'),
     'resnest50d': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50-528c19ca.pth'),
     'resnest101e': _cfg(
@@ -41,6 +43,12 @@ default_cfgs = {
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest200-75117900.pth', input_size=(3, 320, 320)),
     'resnest269e': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest269-0cc87c48.pth', input_size=(3, 416, 416)),
+    'resnest50d_4s2x40d': _cfg(
+        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50_fast_4s2x40d-41d14ed0.pth',
+        interpolation='bicubic'),
+    'resnest50d_1s4x24d': _cfg(
+        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50_fast_1s4x24d-d4a4f76f.pth',
+        interpolation='bicubic')
 }
 
 
@@ -78,7 +86,7 @@ class ResNestBottleneck(nn.Module):
         if self.radix >= 1:
             self.conv2 = SplitAttnConv2d(
                 group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
-                dilation=first_dilation, groups=cardinality, norm_layer=norm_layer, drop_block=drop_block)
+                dilation=first_dilation, groups=cardinality, radix=radix, norm_layer=norm_layer, drop_block=drop_block)
             self.bn2 = None  # FIXME revisit, here to satisfy current torchscript fussyness
             self.drop_block2 = None
             self.act2 = None
@@ -136,8 +144,23 @@ class ResNestBottleneck(nn.Module):
 
 
 @register_model
+def resnest14d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    """ ResNeSt-14d model. Weights ported from GluonCV.
+    """
+    default_cfg = default_cfgs['resnest14d']
+    model = ResNet(
+        ResNestBottleneck, [1, 1, 1, 1], num_classes=num_classes, in_chans=in_chans,
+        stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
+        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
 def resnest26d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    """ ResNeSt-26d model.
+    """ ResNeSt-26d model. Weights ported from GluonCV.
     """
     default_cfg = default_cfgs['resnest26d']
     model = ResNet(
@@ -208,6 +231,19 @@ def resnest269e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
         ResNestBottleneck, [3, 30, 48, 8], num_classes=num_classes, in_chans=in_chans,
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
+    model.default_cfg = default_cfg
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
+    return model
+
+
+@register_model
+def resnest50d_1s4x24d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+    default_cfg = default_cfgs['resnest50d_1s4x24d']
+    model = ResNet(
+        ResNestBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
+        stem_type='deep', stem_width=32, avg_down=True, base_width=24, cardinality=4,
+        block_args=dict(radix=1, avd=True, avd_first=True), **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)
