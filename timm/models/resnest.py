@@ -76,10 +76,10 @@ class ResNestBottleneck(nn.Module):
         else:
             avd_stride = 0
         self.radix = radix
+        self.drop_block = drop_block
 
         self.conv1 = nn.Conv2d(inplanes, group_width, kernel_size=1, bias=False)
         self.bn1 = norm_layer(group_width)
-        self.drop_block1 = drop_block if drop_block is not None else None
         self.act1 = act_layer(inplace=True)
         self.avd_first = nn.AvgPool2d(3, avd_stride, padding=1) if avd_stride > 0 and avd_first else None
 
@@ -88,20 +88,17 @@ class ResNestBottleneck(nn.Module):
                 group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
                 dilation=first_dilation, groups=cardinality, radix=radix, norm_layer=norm_layer, drop_block=drop_block)
             self.bn2 = None  # FIXME revisit, here to satisfy current torchscript fussyness
-            self.drop_block2 = None
             self.act2 = None
         else:
             self.conv2 = nn.Conv2d(
                 group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
                 dilation=first_dilation, groups=cardinality, bias=False)
             self.bn2 = norm_layer(group_width)
-            self.drop_block2 = drop_block if drop_block is not None else None
             self.act2 = act_layer(inplace=True)
         self.avd_last = nn.AvgPool2d(3, avd_stride, padding=1) if avd_stride > 0 and not avd_first else None
 
         self.conv3 = nn.Conv2d(group_width, planes * 4, kernel_size=1, bias=False)
         self.bn3 = norm_layer(planes*4)
-        self.drop_block3 = drop_block if drop_block is not None else None
         self.act3 = act_layer(inplace=True)
         self.downsample = downsample
 
@@ -113,8 +110,8 @@ class ResNestBottleneck(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        if self.drop_block1 is not None:
-            out = self.drop_block1(out)
+        if self.drop_block is not None:
+            out = self.drop_block(out)
         out = self.act1(out)
 
         if self.avd_first is not None:
@@ -123,8 +120,8 @@ class ResNestBottleneck(nn.Module):
         out = self.conv2(out)
         if self.bn2 is not None:
             out = self.bn2(out)
-            if self.drop_block2 is not None:
-                out = self.drop_block2(out)
+            if self.drop_block is not None:
+                out = self.drop_block(out)
             out = self.act2(out)
 
         if self.avd_last is not None:
@@ -132,8 +129,8 @@ class ResNestBottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
-        if self.drop_block3 is not None:
-            out = self.drop_block3(out)
+        if self.drop_block is not None:
+            out = self.drop_block(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)

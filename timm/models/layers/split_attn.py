@@ -31,25 +31,24 @@ class RadixSoftmax(nn.Module):
 class SplitAttnConv2d(nn.Module):
     """Split-Attention Conv2d
     """
-    def __init__(self, in_channels, channels, kernel_size, stride=1, padding=0,
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0,
                  dilation=1, groups=1, bias=False, radix=2, reduction_factor=4,
                  act_layer=nn.ReLU, norm_layer=None, drop_block=None, **kwargs):
         super(SplitAttnConv2d, self).__init__()
         self.radix = radix
-        self.cardinality = groups
-        self.channels = channels
-        mid_chs = channels * radix
+        self.drop_block = drop_block
+        mid_chs = out_channels * radix
         attn_chs = max(in_channels * radix // reduction_factor, 32)
+
         self.conv = nn.Conv2d(
             in_channels, mid_chs, kernel_size, stride, padding, dilation,
             groups=groups * radix, bias=bias, **kwargs)
         self.bn0 = norm_layer(mid_chs) if norm_layer is not None else None
         self.act0 = act_layer(inplace=True)
-        self.fc1 = nn.Conv2d(channels, attn_chs, 1, groups=self.cardinality)
+        self.fc1 = nn.Conv2d(out_channels, attn_chs, 1, groups=groups)
         self.bn1 = norm_layer(attn_chs) if norm_layer is not None else None
         self.act1 = act_layer(inplace=True)
-        self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=self.cardinality)
-        self.drop_block = drop_block
+        self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=groups)
         self.rsoftmax = RadixSoftmax(radix, groups)
 
     def forward(self, x):
@@ -63,7 +62,7 @@ class SplitAttnConv2d(nn.Module):
         B, RC, H, W = x.shape
         if self.radix > 1:
             x = x.reshape((B, self.radix, RC // self.radix, H, W))
-            x_gap = torch.sum(x, dim=1)
+            x_gap = x.sum(dim=1)
         else:
             x_gap = x
         x_gap = F.adaptive_avg_pool2d(x_gap, 1)
