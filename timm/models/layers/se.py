@@ -3,10 +3,10 @@ from torch import nn as nn
 
 class SEModule(nn.Module):
 
-    def __init__(self, channels, reduction=16, act_layer=nn.ReLU):
+    def __init__(self, channels, reduction=16, act_layer=nn.ReLU, min_channels=8, reduction_channels=None):
         super(SEModule, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        reduction_channels = max(channels // reduction, 8)
+        reduction_channels = reduction_channels or max(channels // reduction, min_channels)
         self.fc1 = nn.Conv2d(
             channels, reduction_channels, kernel_size=1, padding=0, bias=True)
         self.act = act_layer(inplace=True)
