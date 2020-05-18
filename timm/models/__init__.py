@@ -19,6 +19,7 @@ from .hrnet import *
 from .sknet import *
 from .tresnet import *
 from .resnest import *
+from .regnet import *
 
 from .registry import *
 from .factory import create_model
