@@ -237,8 +237,11 @@ class DlaTree(nn.Module):
 
     def forward(self, x, residual=None, children=None):
         children = [] if children is None else children
-        bottom = self.downsample(x) if self.downsample else x
-        residual = self.project(bottom) if self.project else bottom
+        # FIXME the way downsample / project are used here and residual is passed to next level up
+        # the tree, the residual is overridden and some project weights are thus never used and
+        # have no gradients. This appears to be an issue with the original model / weights.
+        bottom = self.downsample(x) if self.downsample is not None else x
+        residual = self.project(bottom) if self.project is not None else bottom
         if self.level_root:
             children.append(bottom)
         x1 = self.tree1(x, residual)
@@ -354,7 +357,8 @@ def dla60_res2next(pretrained=None, num_classes=1000, in_chans=3, **kwargs):
 @register_model
 def dla34(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-34
     default_cfg = default_cfgs['dla34']
-    model = DLA([1, 1, 1, 2, 2, 1], [16, 32, 64, 128, 256, 512], block=DlaBasic, **kwargs)
+    model = DLA([1, 1, 1, 2, 2, 1], [16, 32, 64, 128, 256, 512], block=DlaBasic,
+                num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

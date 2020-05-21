@@ -38,11 +38,14 @@ default_cfgs = {
     'resnest50d': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50-528c19ca.pth'),
     'resnest101e': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest101-22405ba7.pth', input_size=(3, 256, 256)),
+        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest101-22405ba7.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8)),
     'resnest200e': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest200-75117900.pth', input_size=(3, 320, 320)),
+        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest200-75117900.pth',
+        input_size=(3, 320, 320), pool_size=(10, 10)),
     'resnest269e': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest269-0cc87c48.pth', input_size=(3, 416, 416)),
+        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest269-0cc87c48.pth',
+        input_size=(3, 416, 416), pool_size=(13, 13)),
     'resnest50d_4s2x40d': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50_fast_4s2x40d-41d14ed0.pth',
         interpolation='bicubic'),

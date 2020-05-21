@@ -28,7 +28,7 @@ def _cfg(url='', **kwargs):
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': (0, 0, 0), 'std': (1, 1, 1),
-        'first_conv': 'layer0.conv1', 'classifier': 'head.fc',
+        'first_conv': 'body.conv1', 'classifier': 'head.fc',
         **kwargs
     }
 
@@ -41,13 +41,13 @@ default_cfgs = {
     'tresnet_xl': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_xl_82_0-a2d51b00.pth'),
     'tresnet_m_448': _cfg(
-        input_size=(3, 448, 448),
+        input_size=(3, 448, 448), pool_size=(14, 14),
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_448-bc359d10.pth'),
     'tresnet_l_448': _cfg(
-        input_size=(3, 448, 448),
+        input_size=(3, 448, 448), pool_size=(14, 14),
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_448-940d0cd1.pth'),
     'tresnet_xl_448': _cfg(
-        input_size=(3, 448, 448),
+        input_size=(3, 448, 448), pool_size=(14, 14),
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_xl_448-8c1815de.pth')
 }
 
