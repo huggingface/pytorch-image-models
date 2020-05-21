@@ -3,6 +3,10 @@ import torch
 
 from timm import list_models, create_model
 
+MAX_FWD_SIZE = 320
+MAX_BWD_SIZE = 128
+MAX_FWD_FEAT_SIZE = 448
+
 
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models())
@@ -13,9 +17,9 @@ def test_model_forward(model_name, batch_size):
     model.eval()
 
     input_size = model.default_cfg['input_size']
-    if any([x > 448 for x in input_size]):
+    if any([x > MAX_FWD_SIZE for x in input_size]):
         # cap forward test at max res 448 * 448 to keep resource down
-        input_size = tuple([min(x, 448) for x in input_size])
+        input_size = tuple([min(x, MAX_FWD_SIZE) for x in input_size])
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)
 
@@ -33,9 +37,9 @@ def test_model_backward(model_name, batch_size):
     model.eval()
 
     input_size = model.default_cfg['input_size']
-    if any([x > 128 for x in input_size]):
+    if any([x > MAX_BWD_SIZE for x in input_size]):
         # cap backward test at 128 * 128 to keep resource usage down
-        input_size = tuple([min(x, 128) for x in input_size])
+        input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)
     outputs.mean().backward()
@@ -61,9 +65,9 @@ def test_model_default_cfgs(model_name, batch_size):
     pool_size = cfg['pool_size']
     input_size = model.default_cfg['input_size']
 
-    if all([x <= 448 for x in input_size]):
+    if all([x <= MAX_FWD_FEAT_SIZE for x in input_size]) and 'efficientnet_l2' not in model_name:
         # pool size only checked if default res <= 448 * 448 to keep resource down
-        input_size = tuple([min(x, 448) for x in input_size])
+        input_size = tuple([min(x, MAX_FWD_FEAT_SIZE) for x in input_size])
         outputs = model.forward_features(torch.randn((batch_size, *input_size)))
         assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
     assert any([k.startswith(classifier) for k in state_dict.keys()]), f'{classifier} not in model params'
