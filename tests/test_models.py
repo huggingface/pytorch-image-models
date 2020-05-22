@@ -9,7 +9,7 @@ from timm import list_models, create_model
 
 if 'GITHUB_ACTIONS' in os.environ and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FILTERS = ['*efficientnet_l2*']
+    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d']
 else:
     EXCLUDE_FILTERS = []
 MAX_FWD_SIZE = 384
