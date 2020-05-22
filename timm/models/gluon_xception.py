@@ -36,7 +36,7 @@ default_cfgs = {
         'url': '',
         'input_size': (3, 299, 299),
         'crop_pct': 0.875,
-        'pool_size': (10, 10),
+        'pool_size': (5, 5),
         'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN,
         'std': IMAGENET_DEFAULT_STD,

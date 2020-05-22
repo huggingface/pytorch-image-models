@@ -126,6 +126,15 @@ model_list = [
     _entry('skresnet34', 'SK-ResNet-34', '1903.06586'),
     _entry('skresnext50_32x4d', 'SKNet-50', '1903.06586'),
 
+    _entry('ecaresnetlight', 'ECA-ResNet-Light', '1910.03151',
+           model_desc='A tweaked ResNet50d with ECA attn.'),
+    _entry('ecaresnet50d', 'ECA-ResNet-50d', '1910.03151',
+           model_desc='A ResNet50d with ECA attn'),
+    _entry('ecaresnet101d', 'ECA-ResNet-101d', '1910.03151',
+           model_desc='A ResNet101d with ECA attn'),
+
+    _entry('resnetblur50', 'ResNet-Blur-50', '1904.11486'),
+
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_b1', 'EfficientNet-B1 (AutoAugment)', '1905.11946',

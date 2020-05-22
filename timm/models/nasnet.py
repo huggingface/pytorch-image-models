@@ -18,7 +18,7 @@ default_cfgs = {
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
         'num_classes': 1001,
-        'first_conv': 'conv_0.conv',
+        'first_conv': 'conv0.conv',
         'classifier': 'last_linear',
     },
 }
@@ -613,7 +613,7 @@ def nasnetalarge(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     """NASNet-A large model architecture.
     """
     default_cfg = default_cfgs['nasnetalarge']
-    model = NASNetALarge(num_classes=1000, in_chans=in_chans, **kwargs)
+    model = NASNetALarge(num_classes=num_classes, in_chans=in_chans, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(model, default_cfg, num_classes, in_chans)

@@ -25,7 +25,7 @@ __all__ = ['SelecSLS']  # model_registry will add each entrypoint fn to this
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (3, 3),
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (4, 4),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem', 'classifier': 'fc',
