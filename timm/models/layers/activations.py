@@ -18,7 +18,7 @@ if _USE_MEM_EFFICIENT_ISH:
     # recomputing torch.sigmoid(x) in backward instead of saving it.
     @torch.jit.script
     def swish_jit_fwd(x):
-        return x.mul(torch.sigmoid(x))
+        return x.mul_(torch.sigmoid(x))
 
 
     @torch.jit.script
@@ -50,7 +50,7 @@ if _USE_MEM_EFFICIENT_ISH:
 
     @torch.jit.script
     def mish_jit_fwd(x):
-        return x.mul(torch.tanh(F.softplus(x)))
+        return x.mul_(torch.tanh(F.softplus(x)))
 
 
     @torch.jit.script
