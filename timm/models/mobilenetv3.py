@@ -7,13 +7,15 @@ Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
 Hacked together by Ross Wightman
 """
+import torch.nn as nn
+import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .efficientnet_builder import *
+from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
+from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .feature_hooks import FeatureHooks
 from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, create_conv2d
-from .layers.activations import HardSwish, hard_sigmoid
+from .layers import SelectAdaptivePool2d, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
 __all__ = ['MobileNetV3']
@@ -273,8 +275,8 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         head_bias=False,
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
-        act_layer=HardSwish,
-        se_kwargs=dict(gate_fn=hard_sigmoid, reduce_mid=True, divisor=1),
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
+        se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
         **kwargs,
     )
     model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
@@ -293,7 +295,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
     if 'small' in variant:
         num_features = 1024
         if 'minimal' in variant:
-            act_layer = nn.ReLU
+            act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
                 ['ds_r1_k3_s2_e1_c16'],
@@ -309,7 +311,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
                 ['cn_r1_k1_s1_c576'],
             ]
         else:
-            act_layer = HardSwish
+            act_layer = resolve_act_layer(kwargs, 'hard_swish')
             arch_def = [
                 # stage 0, 112x112 in
                 ['ds_r1_k3_s2_e1_c16_se0.25_nre'],  # relu
@@ -327,7 +329,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
     else:
         num_features = 1280
         if 'minimal' in variant:
-            act_layer = nn.ReLU
+            act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
                 ['ds_r1_k3_s1_e1_c16'],
@@ -345,7 +347,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
                 ['cn_r1_k1_s1_c960'],
             ]
         else:
-            act_layer = HardSwish
+            act_layer = resolve_act_layer(kwargs, 'hard_swish')
             arch_def = [
                 # stage 0, 112x112 in
                 ['ds_r1_k3_s1_e1_c16_nre'],  # relu

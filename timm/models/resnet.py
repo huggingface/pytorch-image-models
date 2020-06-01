@@ -200,7 +200,6 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
-    __constants__ = ['se', 'downsample']  # for pre 1.4 torchscript compat
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,

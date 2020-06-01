@@ -9,6 +9,7 @@ https://arxiv.org/abs/1907.00837
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch
 """
+from typing import List
 
 import torch
 import torch.nn as nn
@@ -52,6 +53,27 @@ default_cfgs = {
 }
 
 
+class SequentialList(nn.Sequential):
+
+    def __init__(self, *args):
+        super(SequentialList, self).__init__(*args)
+
+    @torch.jit._overload_method  # noqa: F811
+    def forward(self, x):
+        # type: (List[torch.Tensor]) -> (List[torch.Tensor])
+        pass
+
+    @torch.jit._overload_method  # noqa: F811
+    def forward(self, x):
+        # type: (torch.Tensor) -> (List[torch.Tensor])
+        pass
+
+    def forward(self, x) -> List[torch.Tensor]:
+        for module in self:
+            x = module(x)
+        return x
+
+
 def conv_bn(in_chs, out_chs, k=3, stride=1, padding=None, dilation=1):
     if padding is None:
         padding = ((stride - 1) + dilation * (k - 1)) // 2
@@ -77,7 +99,7 @@ class SelecSLSBlock(nn.Module):
         self.conv5 = conv_bn(mid_chs, mid_chs // 2, 3)
         self.conv6 = conv_bn(2 * mid_chs + (0 if is_first else skip_chs), out_chs, 1)
 
-    def forward(self, x):
+    def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
         assert isinstance(x, list)
         assert len(x) in [1, 2]
 
@@ -113,7 +135,7 @@ class SelecSLS(nn.Module):
         super(SelecSLS, self).__init__()
 
         self.stem = conv_bn(in_chans, 32, stride=2)
-        self.features = nn.Sequential(*[cfg['block'](*block_args) for block_args in cfg['features']])
+        self.features = SequentialList(*[cfg['block'](*block_args) for block_args in cfg['features']])
         self.head = nn.Sequential(*[conv_bn(*conv_args) for conv_args in cfg['head']])
         self.num_features = cfg['num_features']
 

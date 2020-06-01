@@ -24,11 +24,15 @@ An implementation of EfficienNet that covers variety of related models with effi
 
 Hacked together by Ross Wightman
 """
+import torch.nn as nn
+import torch.nn.functional as F
+
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .efficientnet_builder import *
+from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
+from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .feature_hooks import FeatureHooks
 from .helpers import load_pretrained, adapt_model_from_file
-from .layers import SelectAdaptivePool2d
+from .layers import SelectAdaptivePool2d, create_conv2d
 from .registry import register_model
 
 __all__ = ['EfficientNet']
@@ -631,7 +635,7 @@ def _gen_mobilenet_v2(
         fix_stem=fix_stem_head,
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
-        act_layer=nn.ReLU6,
+        act_layer=resolve_act_layer(kwargs, 'relu6'),
         **kwargs
     )
     model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
@@ -741,7 +745,7 @@ def _gen_efficientnet(variant, channel_multiplier=1.0, depth_multiplier=1.0, pre
         num_features=round_channels(1280, channel_multiplier, 8, None),
         stem_size=32,
         channel_multiplier=channel_multiplier,
-        act_layer=Swish,
+        act_layer=resolve_act_layer(kwargs, 'swish'),
         norm_kwargs=resolve_bn_args(kwargs),
         variant=variant,
         **kwargs,
@@ -772,7 +776,7 @@ def _gen_efficientnet_edge(variant, channel_multiplier=1.0, depth_multiplier=1.0
         stem_size=32,
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
-        act_layer=nn.ReLU,
+        act_layer=resolve_act_layer(kwargs, 'relu'),
         **kwargs,
     )
     model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
@@ -802,7 +806,7 @@ def _gen_efficientnet_condconv(
         stem_size=32,
         channel_multiplier=channel_multiplier,
         norm_kwargs=resolve_bn_args(kwargs),
-        act_layer=Swish,
+        act_layer=resolve_act_layer(kwargs, 'swish'),
         **kwargs,
     )
     model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
@@ -842,7 +846,7 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
         stem_size=32,
         fix_stem=True,
         channel_multiplier=channel_multiplier,
-        act_layer=nn.ReLU6,
+        act_layer=resolve_act_layer(kwargs, 'relu6'),
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs,
     )

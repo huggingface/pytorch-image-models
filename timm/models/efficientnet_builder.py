@@ -1,13 +1,15 @@
 import logging
 import math
 import re
-from collections.__init__ import OrderedDict
+from collections import OrderedDict
 from copy import deepcopy
 
 import torch.nn as nn
-from .layers import CondConv2d, get_condconv_initializer
-from .layers.activations import HardSwish, Swish
+
 from .efficientnet_blocks import *
+from .layers import CondConv2d, get_condconv_initializer
+
+__all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"]
 
 
 def _parse_ksize(ss):
@@ -57,13 +59,13 @@ def _decode_block_str(block_str):
             key = op[0]
             v = op[1:]
             if v == 're':
-                value = nn.ReLU
+                value = get_act_layer('relu')
             elif v == 'r6':
-                value = nn.ReLU6
+                value = get_act_layer('relu6')
             elif v == 'hs':
-                value = HardSwish
+                value = get_act_layer('hard_swish')
             elif v == 'sw':
-                value = Swish
+                value = get_act_layer('swish')
             else:
                 continue
             options[key] = value

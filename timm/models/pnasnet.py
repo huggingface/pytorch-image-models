@@ -43,11 +43,12 @@ class MaxPool(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size, stride=stride, padding=padding)
 
     def forward(self, x):
-        if self.zero_pad:
+        if self.zero_pad is not None:
             x = self.zero_pad(x)
-        x = self.pool(x)
-        if self.zero_pad:
+            x = self.pool(x)
             x = x[:, :, 1:, 1:]
+        else:
+            x = self.pool(x)
         return x
 
 
@@ -90,11 +91,12 @@ class BranchSeparables(nn.Module):
 
     def forward(self, x):
         x = self.relu_1(x)
-        if self.zero_pad:
+        if self.zero_pad is not None:
             x = self.zero_pad(x)
-        x = self.separable_1(x)
-        if self.zero_pad:
+            x = self.separable_1(x)
             x = x[:, :, 1:, 1:].contiguous()
+        else:
+            x = self.separable_1(x)
         x = self.bn_sep_1(x)
         x = self.relu_2(x)
         x = self.separable_2(x)
@@ -171,15 +173,14 @@ class CellBase(nn.Module):
         x_comb_iter_3 = x_comb_iter_3_left + x_comb_iter_3_right
 
         x_comb_iter_4_left = self.comb_iter_4_left(x_left)
-        if self.comb_iter_4_right:
+        if self.comb_iter_4_right is not None:
             x_comb_iter_4_right = self.comb_iter_4_right(x_right)
         else:
             x_comb_iter_4_right = x_right
         x_comb_iter_4 = x_comb_iter_4_left + x_comb_iter_4_right
 
         x_out = torch.cat(
-            [x_comb_iter_0, x_comb_iter_1, x_comb_iter_2, x_comb_iter_3,
-             x_comb_iter_4], 1)
+            [x_comb_iter_0, x_comb_iter_1, x_comb_iter_2, x_comb_iter_3, x_comb_iter_4], 1)
         return x_out
 
 
@@ -280,9 +281,8 @@ class Cell(CellBase):
                                                  kernel_size=3, stride=stride,
                                                  zero_pad=zero_pad)
         if is_reduction:
-            self.comb_iter_4_right = ReluConvBn(out_channels_right,
-                                                out_channels_right,
-                                                kernel_size=1, stride=stride)
+            self.comb_iter_4_right = ReluConvBn(
+                out_channels_right, out_channels_right, kernel_size=1, stride=stride)
         else:
             self.comb_iter_4_right = None
 

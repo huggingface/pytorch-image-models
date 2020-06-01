@@ -41,13 +41,13 @@ default_cfgs = {
 
 
 class DenseLayer(nn.Module):
-    def __init__(self, num_input_features, growth_rate, bn_size, norm_act_layer=BatchNormAct2d,
+    def __init__(self, num_input_features, growth_rate, bn_size, norm_layer=BatchNormAct2d,
                  drop_rate=0., memory_efficient=False):
         super(DenseLayer, self).__init__()
-        self.add_module('norm1', norm_act_layer(num_input_features)),
+        self.add_module('norm1', norm_layer(num_input_features)),
         self.add_module('conv1', nn.Conv2d(
             num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)),
-        self.add_module('norm2', norm_act_layer(bn_size * growth_rate)),
+        self.add_module('norm2', norm_layer(bn_size * growth_rate)),
         self.add_module('conv2', nn.Conv2d(
             bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)),
         self.drop_rate = float(drop_rate)
@@ -109,7 +109,7 @@ class DenseLayer(nn.Module):
 class DenseBlock(nn.ModuleDict):
     _version = 2
 
-    def __init__(self, num_layers, num_input_features, bn_size, growth_rate, norm_act_layer=nn.ReLU,
+    def __init__(self, num_layers, num_input_features, bn_size, growth_rate, norm_layer=nn.ReLU,
                  drop_rate=0., memory_efficient=False):
         super(DenseBlock, self).__init__()
         for i in range(num_layers):
@@ -117,7 +117,7 @@ class DenseBlock(nn.ModuleDict):
                 num_input_features + i * growth_rate,
                 growth_rate=growth_rate,
                 bn_size=bn_size,
-                norm_act_layer=norm_act_layer,
+                norm_layer=norm_layer,
                 drop_rate=drop_rate,
                 memory_efficient=memory_efficient,
             )
@@ -132,9 +132,9 @@ class DenseBlock(nn.ModuleDict):
 
 
 class DenseTransition(nn.Sequential):
-    def __init__(self, num_input_features, num_output_features, norm_act_layer=nn.BatchNorm2d, aa_layer=None):
+    def __init__(self, num_input_features, num_output_features, norm_layer=nn.BatchNorm2d, aa_layer=None):
         super(DenseTransition, self).__init__()
-        self.add_module('norm', norm_act_layer(num_input_features))
+        self.add_module('norm', norm_layer(num_input_features))
         self.add_module('conv', nn.Conv2d(
             num_input_features, num_output_features, kernel_size=1, stride=1, bias=False))
         if aa_layer is not None:
@@ -160,7 +160,7 @@ class DenseNet(nn.Module):
 
     def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16), bn_size=4, stem_type='',
                  num_classes=1000, in_chans=3, global_pool='avg',
-                 norm_act_layer=BatchNormAct2d, aa_layer=None, drop_rate=0, memory_efficient=False):
+                 norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0, memory_efficient=False):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         super(DenseNet, self).__init__()
@@ -181,17 +181,17 @@ class DenseNet(nn.Module):
                 stem_chs_2 = num_init_features if 'narrow' in stem_type else 6 * (growth_rate // 4)
             self.features = nn.Sequential(OrderedDict([
                 ('conv0', nn.Conv2d(in_chans, stem_chs_1, 3, stride=2, padding=1, bias=False)),
-                ('norm0', norm_act_layer(stem_chs_1)),
+                ('norm0', norm_layer(stem_chs_1)),
                 ('conv1', nn.Conv2d(stem_chs_1, stem_chs_2, 3, stride=1, padding=1, bias=False)),
-                ('norm1', norm_act_layer(stem_chs_2)),
+                ('norm1', norm_layer(stem_chs_2)),
                 ('conv2', nn.Conv2d(stem_chs_2, num_init_features, 3, stride=1, padding=1, bias=False)),
-                ('norm2', norm_act_layer(num_init_features)),
+                ('norm2', norm_layer(num_init_features)),
                 ('pool0', stem_pool),
             ]))
         else:
             self.features = nn.Sequential(OrderedDict([
                 ('conv0', nn.Conv2d(in_chans, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)),
-                ('norm0', norm_act_layer(num_init_features)),
+                ('norm0', norm_layer(num_init_features)),
                 ('pool0', stem_pool),
             ]))
 
@@ -203,7 +203,7 @@ class DenseNet(nn.Module):
                 num_input_features=num_features,
                 bn_size=bn_size,
                 growth_rate=growth_rate,
-                norm_act_layer=norm_act_layer,
+                norm_layer=norm_layer,
                 drop_rate=drop_rate,
                 memory_efficient=memory_efficient
             )
@@ -212,12 +212,12 @@ class DenseNet(nn.Module):
             if i != len(block_config) - 1:
                 trans = DenseTransition(
                     num_input_features=num_features, num_output_features=num_features // 2,
-                    norm_act_layer=norm_act_layer)
+                    norm_layer=norm_layer)
                 self.features.add_module('transition%d' % (i + 1), trans)
                 num_features = num_features // 2
 
         # Final batch norm
-        self.features.add_module('norm5', norm_act_layer(num_features))
+        self.features.add_module('norm5', norm_layer(num_features))
 
         # Linear layer
         self.num_features = num_features
@@ -346,7 +346,7 @@ def densenet121d_evob(pretrained=False, **kwargs):
         return create_norm_act('EvoNormBatch', num_features, jit=True, **kwargs)
     model = _densenet(
         'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_act_layer=norm_act_fn, pretrained=pretrained, **kwargs)
+        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -359,7 +359,7 @@ def densenet121d_evos(pretrained=False, **kwargs):
         return create_norm_act('EvoNormSample', num_features, jit=True, **kwargs)
     model = _densenet(
         'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_act_layer=norm_act_fn, pretrained=pretrained, **kwargs)
+        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -372,7 +372,7 @@ def densenet121d_iabn(pretrained=False, **kwargs):
         return create_norm_act('iabn', num_features, **kwargs)
     model = _densenet(
         'densenet121tn', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_act_layer=norm_act_fn, pretrained=pretrained, **kwargs)
+        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 

@@ -24,7 +24,8 @@ try:
 except ImportError:
     has_apex = False
 
-from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
+from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models,\
+    set_scriptable, set_no_jit
 from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
@@ -84,6 +85,9 @@ def validate(args):
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
 
+    if args.torchscript:
+        set_scriptable(True)
+
     # create model
     model = create_model(
         args.model,
@@ -141,8 +145,10 @@ def validate(args):
     top5 = AverageMeter()
 
     model.eval()
-    end = time.time()
     with torch.no_grad():
+        # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
+        model(torch.randn((args.batch_size,) + data_config['input_size']).cuda())
+        end = time.time()
         for i, (input, target) in enumerate(loader):
             if args.no_prefetcher:
                 target = target.cuda()

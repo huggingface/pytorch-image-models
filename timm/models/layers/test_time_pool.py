@@ -6,6 +6,7 @@ Hacked together by Ross Wightman
 import logging
 from torch import nn
 import torch.nn.functional as F
+
 from .adaptive_avgmax_pool import adaptive_avgmax_pool2d
 
 
