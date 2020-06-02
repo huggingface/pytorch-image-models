@@ -60,7 +60,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
         if torch.jit.is_scripting():
             x = self._forward_jit(x)
         else:
-            self._forward_python(x)
+            x = self._forward_python(x)
         if self.act is not None:
             x = self.act(x)
         return x
