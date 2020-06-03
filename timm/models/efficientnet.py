@@ -24,8 +24,11 @@ An implementation of EfficienNet that covers variety of related models with effi
 
 Hacked together by Ross Wightman
 """
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from typing import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
@@ -471,7 +474,7 @@ class EfficientNetFeatures(nn.Module):
             return self._feature_info[idx]
         return [self._feature_info[i] for i in self.out_indices]
 
-    def forward(self, x):
+    def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)

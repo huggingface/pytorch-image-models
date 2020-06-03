@@ -7,8 +7,11 @@ Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
 Hacked together by Ross Wightman
 """
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from typing import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
@@ -206,7 +209,16 @@ class MobileNetV3Features(nn.Module):
             return self._feature_info[idx]['num_chs']
         return [self._feature_info[i]['num_chs'] for i in self.out_indices]
 
-    def forward(self, x):
+    def feature_info(self, idx=None):
+        """ Feature Channel Shortcut
+        Returns feature channel count for each output index if idx == None. If idx is an integer, will
+        return feature channel count for that feature block index (independent of out_indices setting).
+        """
+        if isinstance(idx, int):
+            return self._feature_info[idx]
+        return [self._feature_info[i] for i in self.out_indices]
+
+    def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)
