@@ -85,15 +85,13 @@ def validate(args):
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
 
-    if args.torchscript:
-        set_scriptable(True)
-
     # create model
     model = create_model(
         args.model,
+        pretrained=args.pretrained,
         num_classes=args.num_classes,
         in_chans=3,
-        pretrained=args.pretrained)
+        scriptable=args.torchscript)
 
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)

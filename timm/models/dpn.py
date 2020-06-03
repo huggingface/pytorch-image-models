@@ -10,7 +10,7 @@ from __future__ import division
 from __future__ import print_function
 
 from collections import OrderedDict
-from typing import Union, Optional, List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn

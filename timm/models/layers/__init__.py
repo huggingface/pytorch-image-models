@@ -4,7 +4,8 @@ from .adaptive_avgmax_pool import \
 from .anti_aliasing import AntiAliasDownsampleLayer
 from .blur_pool import BlurPool2d
 from .cond_conv2d import CondConv2d, get_condconv_initializer
-from .config import is_exportable, is_scriptable, set_exportable, set_scriptable, is_no_jit, set_no_jit
+from .config import is_exportable, is_scriptable, is_no_jit, set_exportable, set_scriptable, set_no_jit,\
+    set_layer_config
 from .conv2d_same import Conv2dSame
 from .conv_bn_act import ConvBnAct
 from .create_act import create_act_layer, get_act_layer, get_act_fn

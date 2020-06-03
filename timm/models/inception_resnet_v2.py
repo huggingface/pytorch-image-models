@@ -193,7 +193,6 @@ class Mixed_7a(nn.Module):
 
 
 class Block8(nn.Module):
-    __constants__ = ['relu']  # for pre 1.4 torchscript compat
 
     def __init__(self, scale=1.0, no_relu=False):
         super(Block8, self).__init__()
