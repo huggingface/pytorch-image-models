@@ -39,6 +39,7 @@ default_cfgs = {
     'densenet201': _cfg(url='https://download.pytorch.org/models/densenet201-c1103571.pth'),
     'densenet161': _cfg(url='https://download.pytorch.org/models/densenet161-8d451a50.pth'),
     'densenet264': _cfg(url=''),
+    'densenet264d_iabn': _cfg(url=''),
     'tv_densenet121': _cfg(url='https://download.pytorch.org/models/densenet121-a639ec97.pth'),
 }
 
@@ -332,45 +333,6 @@ def densenet121d(pretrained=False, **kwargs):
 
 
 @register_model
-def densenet121d_evob(pretrained=False, **kwargs):
-    r"""Densenet-121 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    def norm_act_fn(num_features, **kwargs):
-        return create_norm_act('EvoNormBatch', num_features, jit=True, **kwargs)
-    model = _densenet(
-        'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def densenet121d_evos(pretrained=False, **kwargs):
-    r"""Densenet-121 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    def norm_act_fn(num_features, **kwargs):
-        return create_norm_act('EvoNormSample', num_features, jit=True, **kwargs)
-    model = _densenet(
-        'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def densenet121d_iabn(pretrained=False, **kwargs):
-    r"""Densenet-121 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    def norm_act_fn(num_features, **kwargs):
-        return create_norm_act('iabn', num_features, **kwargs)
-    model = _densenet(
-        'densenet121tn', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
-        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
 def densenet169(pretrained=False, **kwargs):
     r"""Densenet-169 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
@@ -407,6 +369,18 @@ def densenet264(pretrained=False, **kwargs):
     """
     model = _densenet(
         'densenet264', growth_rate=48, block_config=(6, 12, 64, 48), pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def densenet264d_iabn(pretrained=False, **kwargs):
+    r"""Densenet-264 model with deep stem and Inplace-ABN
+    """
+    def norm_act_fn(num_features, **kwargs):
+        return create_norm_act('iabn', num_features, **kwargs)
+    model = _densenet(
+        'densenet264d_iabn', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep',
+        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
 
 
