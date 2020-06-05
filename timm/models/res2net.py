@@ -99,9 +99,9 @@ class Bottle2neck(nn.Module):
 
         spx = torch.split(out, self.width, 1)
         spo = []
-        sp = spx[0]
+        sp = spx[0]  # redundant, for torchscript
         for i, (conv, bn) in enumerate(zip(self.convs, self.bns)):
-            if self.is_first:
+            if i == 0 or self.is_first:
                 sp = spx[i]
             else:
                 sp = sp + spx[i]

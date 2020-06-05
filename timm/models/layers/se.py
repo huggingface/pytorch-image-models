@@ -5,7 +5,7 @@ from .create_act import get_act_fn
 class SEModule(nn.Module):
 
     def __init__(self, channels, reduction=16, act_layer=nn.ReLU, min_channels=8, reduction_channels=None,
-                 gate_fn='hard_sigmoid'):
+                 gate_fn='sigmoid'):
         super(SEModule, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         reduction_channels = reduction_channels or max(channels // reduction, min_channels)
