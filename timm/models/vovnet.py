@@ -149,7 +149,8 @@ default_cfgs = dict(
     ese_vovnet19b_slim_dw=_cfg(url=''),
     ese_vovnet19b_dw=_cfg(url=''),
     ese_vovnet19b_slim=_cfg(url=''),
-    ese_vovnet39b=_cfg(url=''),
+    ese_vovnet39b=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth'),
     ese_vovnet57b=_cfg(url=''),
     ese_vovnet99b=_cfg(url=''),
     eca_vovnet39b=_cfg(url=''),
@@ -313,6 +314,8 @@ class VovNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1.)
                 nn.init.constant_(m.bias, 0.)
+            elif isinstance(m, nn.Linear):
+                nn.init.zeros_(m.bias)
 
     def get_classifier(self):
         return self.head.fc
