@@ -29,6 +29,8 @@ from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
+logger = logging.getLogger(__name__)
+
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
 parser.add_argument('data', metavar='DIR',
@@ -95,7 +97,7 @@ def validate(args):
         load_checkpoint(model, args.checkpoint, args.use_ema)
 
     param_count = sum([m.numel() for m in model.parameters()])
-    logging.info('Model %s created, param count: %d' % (args.model, param_count))
+    logger.info('Model %s created, param count: %d' % (args.model, param_count))
 
     data_config = resolve_data_config(vars(args), model=model)
     model, test_time_pool = apply_test_time_pool(model, data_config, args)
@@ -165,7 +167,7 @@ def validate(args):
             end = time.time()
 
             if i % args.log_freq == 0:
-                logging.info(
+                logger.info(
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
@@ -183,7 +185,7 @@ def validate(args):
         cropt_pct=crop_pct,
         interpolation=data_config['interpolation'])
 
-    logging.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
+    logger.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
 
     return results
@@ -213,7 +215,7 @@ def main():
 
     if len(model_cfgs):
         results_file = args.results_file or './results-all.csv'
-        logging.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
+        logger.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         results = []
         try:
             start_batch_size = args.batch_size

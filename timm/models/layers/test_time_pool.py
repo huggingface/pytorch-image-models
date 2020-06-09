@@ -9,6 +9,9 @@ import torch.nn.functional as F
 from .adaptive_avgmax_pool import adaptive_avgmax_pool2d
 
 
+logger = logging.getLogger(__name__)
+
+
 class TestTimePoolHead(nn.Module):
     def __init__(self, base, original_pool=7):
         super(TestTimePoolHead, self).__init__()
@@ -39,7 +42,7 @@ def apply_test_time_pool(model, config, args):
     if not args.no_test_pool and \
             config['input_size'][-1] > model.default_cfg['input_size'][-1] and \
             config['input_size'][-2] > model.default_cfg['input_size'][-2]:
-        logging.info('Target input size %s > pretrained default %s, using test time pooling' %
+        logger.info('Target input size %s > pretrained default %s, using test time pooling' %
                      (str(config['input_size'][-2:]), str(model.default_cfg['input_size'][-2:])))
         model = TestTimePoolHead(model, original_pool=model.default_cfg['pool_size'])
         test_time_pool = True

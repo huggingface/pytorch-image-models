@@ -21,6 +21,9 @@ except ImportError:
 from torch import distributed as dist
 
 
+logger = logging.getLogger(__name__)
+
+
 def unwrap_model(model):
     if isinstance(model, ModelEma):
         return unwrap_model(model.ema)
@@ -84,7 +87,7 @@ class CheckpointSaver:
             checkpoints_str = "Current checkpoints:\n"
             for c in self.checkpoint_files:
                 checkpoints_str += ' {}\n'.format(c)
-            logging.info(checkpoints_str)
+            logger.info(checkpoints_str)
 
             if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
                 self.best_epoch = epoch
@@ -121,10 +124,10 @@ class CheckpointSaver:
         to_delete = self.checkpoint_files[delete_index:]
         for d in to_delete:
             try:
-                logging.debug("Cleaning checkpoint: {}".format(d))
+                logger.debug("Cleaning checkpoint: {}".format(d))
                 os.remove(d[0])
             except Exception as e:
-                logging.error("Exception '{}' while deleting checkpoint".format(e))
+                logger.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
     def save_recovery(self, model, optimizer, args, epoch, model_ema=None, use_amp=False, batch_idx=0):
@@ -134,10 +137,10 @@ class CheckpointSaver:
         self._save(save_path, model, optimizer, args, epoch, model_ema, use_amp=use_amp)
         if os.path.exists(self.last_recovery_file):
             try:
-                logging.debug("Cleaning recovery: {}".format(self.last_recovery_file))
+                logger.debug("Cleaning recovery: {}".format(self.last_recovery_file))
                 os.remove(self.last_recovery_file)
             except Exception as e:
-                logging.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
+                logger.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
         self.last_recovery_file = self.curr_recovery_file
         self.curr_recovery_file = save_path
 
@@ -279,9 +282,9 @@ class ModelEma:
                     name = k
                 new_state_dict[name] = v
             self.ema.load_state_dict(new_state_dict)
-            logging.info("Loaded state_dict_ema")
+            logger.info("Loaded state_dict_ema")
         else:
-            logging.warning("Failed to find state_dict_ema, starting from loaded model weights")
+            logger.warning("Failed to find state_dict_ema, starting from loaded model weights")
 
     def update(self, model):
         # correct a mismatch in state dict keys
