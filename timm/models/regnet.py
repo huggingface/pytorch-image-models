@@ -31,30 +31,30 @@ def _mcfg(**kwargs):
 
 # Model FLOPS = three trailing digits * 10^8
 model_cfgs = dict(
-    x_002=_mcfg(w0=24, wa=36.44, wm=2.49, group_w=8, depth=13),
-    x_004=_mcfg(w0=24, wa=24.48, wm=2.54, group_w=16, depth=22),
-    x_006=_mcfg(w0=48, wa=36.97, wm=2.24, group_w=24, depth=16),
-    x_008=_mcfg(w0=56, wa=35.73, wm=2.28, group_w=16, depth=16),
-    x_016=_mcfg(w0=80, wa=34.01, wm=2.25, group_w=24, depth=18),
-    x_032=_mcfg(w0=88, wa=26.31, wm=2.25, group_w=48, depth=25),
-    x_040=_mcfg(w0=96, wa=38.65, wm=2.43, group_w=40, depth=23),
-    x_064=_mcfg(w0=184, wa=60.83, wm=2.07, group_w=56, depth=17),
-    x_080=_mcfg(w0=80, wa=49.56, wm=2.88, group_w=120, depth=23),
-    x_120=_mcfg(w0=168, wa=73.36, wm=2.37, group_w=112, depth=19),
-    x_160=_mcfg(w0=216, wa=55.59, wm=2.1, group_w=128, depth=22),
-    x_320=_mcfg(w0=320, wa=69.86, wm=2.0, group_w=168, depth=23),
-    y_002=_mcfg(w0=24, wa=36.44, wm=2.49, group_w=8, depth=13, se_ratio=0.25),
-    y_004=_mcfg(w0=48, wa=27.89, wm=2.09, group_w=8, depth=16, se_ratio=0.25),
-    y_006=_mcfg(w0=48, wa=32.54, wm=2.32, group_w=16, depth=15, se_ratio=0.25),
-    y_008=_mcfg(w0=56, wa=38.84, wm=2.4, group_w=16, depth=14, se_ratio=0.25),
-    y_016=_mcfg(w0=48, wa=20.71, wm=2.65, group_w=24, depth=27, se_ratio=0.25),
-    y_032=_mcfg(w0=80, wa=42.63, wm=2.66, group_w=24, depth=21, se_ratio=0.25),
-    y_040=_mcfg(w0=96, wa=31.41, wm=2.24, group_w=64, depth=22, se_ratio=0.25),
-    y_064=_mcfg(w0=112, wa=33.22, wm=2.27, group_w=72, depth=25, se_ratio=0.25),
-    y_080=_mcfg(w0=192, wa=76.82, wm=2.19, group_w=56, depth=17, se_ratio=0.25),
-    y_120=_mcfg(w0=168, wa=73.36, wm=2.37, group_w=112, depth=19, se_ratio=0.25),
-    y_160=_mcfg(w0=200, wa=106.23, wm=2.48, group_w=112, depth=18, se_ratio=0.25),
-    y_320=_mcfg(w0=232, wa=115.89, wm=2.53, group_w=232, depth=20, se_ratio=0.25),
+    regnetx_002=_mcfg(w0=24, wa=36.44, wm=2.49, group_w=8, depth=13),
+    regnetx_004=_mcfg(w0=24, wa=24.48, wm=2.54, group_w=16, depth=22),
+    regnetx_006=_mcfg(w0=48, wa=36.97, wm=2.24, group_w=24, depth=16),
+    regnetx_008=_mcfg(w0=56, wa=35.73, wm=2.28, group_w=16, depth=16),
+    regnetx_016=_mcfg(w0=80, wa=34.01, wm=2.25, group_w=24, depth=18),
+    regnetx_032=_mcfg(w0=88, wa=26.31, wm=2.25, group_w=48, depth=25),
+    regnetx_040=_mcfg(w0=96, wa=38.65, wm=2.43, group_w=40, depth=23),
+    regnetx_064=_mcfg(w0=184, wa=60.83, wm=2.07, group_w=56, depth=17),
+    regnetx_080=_mcfg(w0=80, wa=49.56, wm=2.88, group_w=120, depth=23),
+    regnetx_120=_mcfg(w0=168, wa=73.36, wm=2.37, group_w=112, depth=19),
+    regnetx_160=_mcfg(w0=216, wa=55.59, wm=2.1, group_w=128, depth=22),
+    regnetx_320=_mcfg(w0=320, wa=69.86, wm=2.0, group_w=168, depth=23),
+    regnety_002=_mcfg(w0=24, wa=36.44, wm=2.49, group_w=8, depth=13, se_ratio=0.25),
+    regnety_004=_mcfg(w0=48, wa=27.89, wm=2.09, group_w=8, depth=16, se_ratio=0.25),
+    regnety_006=_mcfg(w0=48, wa=32.54, wm=2.32, group_w=16, depth=15, se_ratio=0.25),
+    regnety_008=_mcfg(w0=56, wa=38.84, wm=2.4, group_w=16, depth=14, se_ratio=0.25),
+    regnety_016=_mcfg(w0=48, wa=20.71, wm=2.65, group_w=24, depth=27, se_ratio=0.25),
+    regnety_032=_mcfg(w0=80, wa=42.63, wm=2.66, group_w=24, depth=21, se_ratio=0.25),
+    regnety_040=_mcfg(w0=96, wa=31.41, wm=2.24, group_w=64, depth=22, se_ratio=0.25),
+    regnety_064=_mcfg(w0=112, wa=33.22, wm=2.27, group_w=72, depth=25, se_ratio=0.25),
+    regnety_080=_mcfg(w0=192, wa=76.82, wm=2.19, group_w=56, depth=17, se_ratio=0.25),
+    regnety_120=_mcfg(w0=168, wa=73.36, wm=2.37, group_w=112, depth=19, se_ratio=0.25),
+    regnety_160=_mcfg(w0=200, wa=106.23, wm=2.48, group_w=112, depth=18, se_ratio=0.25),
+    regnety_320=_mcfg(w0=232, wa=115.89, wm=2.53, group_w=232, depth=20, se_ratio=0.25),
 )
 
 
@@ -68,30 +68,30 @@ def _cfg(url=''):
 
 
 default_cfgs = dict(
-    x_002=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_002-e7e85e5c.pth'),
-    x_004=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_004-7d0e9424.pth'),
-    x_006=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_006-85ec1baa.pth'),
-    x_008=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_008-d8b470eb.pth'),
-    x_016=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_016-65ca972a.pth'),
-    x_032=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_032-ed0c7f7e.pth'),
-    x_040=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_040-73c2a654.pth'),
-    x_064=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_064-29278baa.pth'),
-    x_080=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_080-7c7fcab1.pth'),
-    x_120=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_120-65d5521e.pth'),
-    x_160=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_160-c98c4112.pth'),
-    x_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_320-8ea38b93.pth'),
-    y_002=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_002-e68ca334.pth'),
-    y_004=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_004-0db870e6.pth'),
-    y_006=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_006-c67e57ec.pth'),
-    y_008=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_008-dc900dbe.pth'),
-    y_016=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_016-54367f74.pth'),
-    y_032=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_032-62b47782.pth'),
-    y_040=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_040-f0d569f9.pth'),
-    y_064=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_064-0a48325c.pth'),
-    y_080=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_080-e7f3eb93.pth'),
-    y_120=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_120-721ba79a.pth'),
-    y_160=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_160-d64013cd.pth'),
-    y_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'),
+    regnetx_002=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_002-e7e85e5c.pth'),
+    regnetx_004=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_004-7d0e9424.pth'),
+    regnetx_006=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_006-85ec1baa.pth'),
+    regnetx_008=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_008-d8b470eb.pth'),
+    regnetx_016=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_016-65ca972a.pth'),
+    regnetx_032=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_032-ed0c7f7e.pth'),
+    regnetx_040=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_040-73c2a654.pth'),
+    regnetx_064=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_064-29278baa.pth'),
+    regnetx_080=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_080-7c7fcab1.pth'),
+    regnetx_120=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_120-65d5521e.pth'),
+    regnetx_160=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_160-c98c4112.pth'),
+    regnetx_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnetx_320-8ea38b93.pth'),
+    regnety_002=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_002-e68ca334.pth'),
+    regnety_004=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_004-0db870e6.pth'),
+    regnety_006=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_006-c67e57ec.pth'),
+    regnety_008=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_008-dc900dbe.pth'),
+    regnety_016=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_016-54367f74.pth'),
+    regnety_032=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_032-62b47782.pth'),
+    regnety_040=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_040-f0d569f9.pth'),
+    regnety_064=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_064-0a48325c.pth'),
+    regnety_080=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_080-e7f3eb93.pth'),
+    regnety_120=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_120-721ba79a.pth'),
+    regnety_160=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_160-d64013cd.pth'),
+    regnety_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'),
 )
 
 
@@ -344,142 +344,142 @@ def _regnet(variant, pretrained, **kwargs):
 @register_model
 def regnetx_002(pretrained=False, **kwargs):
     """RegNetX-200MF"""
-    return _regnet('x_002', pretrained, **kwargs)
+    return _regnet('regnetx_002', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_004(pretrained=False, **kwargs):
     """RegNetX-400MF"""
-    return _regnet('x_004', pretrained, **kwargs)
+    return _regnet('regnetx_004', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_006(pretrained=False, **kwargs):
     """RegNetX-600MF"""
-    return _regnet('x_006', pretrained, **kwargs)
+    return _regnet('regnetx_006', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_008(pretrained=False, **kwargs):
     """RegNetX-800MF"""
-    return _regnet('x_008', pretrained, **kwargs)
+    return _regnet('regnetx_008', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_016(pretrained=False, **kwargs):
     """RegNetX-1.6GF"""
-    return _regnet('x_016', pretrained, **kwargs)
+    return _regnet('regnetx_016', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_032(pretrained=False, **kwargs):
     """RegNetX-3.2GF"""
-    return _regnet('x_032', pretrained, **kwargs)
+    return _regnet('regnetx_032', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_040(pretrained=False, **kwargs):
     """RegNetX-4.0GF"""
-    return _regnet('x_040', pretrained, **kwargs)
+    return _regnet('regnetx_040', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_064(pretrained=False, **kwargs):
     """RegNetX-6.4GF"""
-    return _regnet('x_064', pretrained, **kwargs)
+    return _regnet('regnetx_064', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_080(pretrained=False, **kwargs):
     """RegNetX-8.0GF"""
-    return _regnet('x_080', pretrained, **kwargs)
+    return _regnet('regnetx_080', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_120(pretrained=False, **kwargs):
     """RegNetX-12GF"""
-    return _regnet('x_120', pretrained, **kwargs)
+    return _regnet('regnetx_120', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_160(pretrained=False, **kwargs):
     """RegNetX-16GF"""
-    return _regnet('x_160', pretrained, **kwargs)
+    return _regnet('regnetx_160', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_320(pretrained=False, **kwargs):
     """RegNetX-32GF"""
-    return _regnet('x_320', pretrained, **kwargs)
+    return _regnet('regnetx_320', pretrained, **kwargs)
 
 
 @register_model
 def regnety_002(pretrained=False, **kwargs):
     """RegNetY-200MF"""
-    return _regnet('y_002', pretrained, **kwargs)
+    return _regnet('regnety_002', pretrained, **kwargs)
 
 
 @register_model
 def regnety_004(pretrained=False, **kwargs):
     """RegNetY-400MF"""
-    return _regnet('y_004', pretrained, **kwargs)
+    return _regnet('regnety_004', pretrained, **kwargs)
 
 
 @register_model
 def regnety_006(pretrained=False, **kwargs):
     """RegNetY-600MF"""
-    return _regnet('y_006', pretrained, **kwargs)
+    return _regnet('regnety_006', pretrained, **kwargs)
 
 
 @register_model
 def regnety_008(pretrained=False, **kwargs):
     """RegNetY-800MF"""
-    return _regnet('y_008', pretrained, **kwargs)
+    return _regnet('regnety_008', pretrained, **kwargs)
 
 
 @register_model
 def regnety_016(pretrained=False, **kwargs):
     """RegNetY-1.6GF"""
-    return _regnet('y_016', pretrained, **kwargs)
+    return _regnet('regnety_016', pretrained, **kwargs)
 
 
 @register_model
 def regnety_032(pretrained=False, **kwargs):
     """RegNetY-3.2GF"""
-    return _regnet('y_032', pretrained, **kwargs)
+    return _regnet('regnety_032', pretrained, **kwargs)
 
 
 @register_model
 def regnety_040(pretrained=False, **kwargs):
     """RegNetY-4.0GF"""
-    return _regnet('y_040', pretrained, **kwargs)
+    return _regnet('regnety_040', pretrained, **kwargs)
 
 
 @register_model
 def regnety_064(pretrained=False, **kwargs):
     """RegNetY-6.4GF"""
-    return _regnet('y_064', pretrained, **kwargs)
+    return _regnet('regnety_064', pretrained, **kwargs)
 
 
 @register_model
 def regnety_080(pretrained=False, **kwargs):
     """RegNetY-8.0GF"""
-    return _regnet('y_080', pretrained, **kwargs)
+    return _regnet('regnety_080', pretrained, **kwargs)
 
 
 @register_model
 def regnety_120(pretrained=False, **kwargs):
     """RegNetY-12GF"""
-    return _regnet('y_120', pretrained, **kwargs)
+    return _regnet('regnety_120', pretrained, **kwargs)
 
 
 @register_model
 def regnety_160(pretrained=False, **kwargs):
     """RegNetY-16GF"""
-    return _regnet('y_160', pretrained, **kwargs)
+    return _regnet('regnety_160', pretrained, **kwargs)
 
 
 @register_model
 def regnety_320(pretrained=False, **kwargs):
     """RegNetY-32GF"""
-    return _regnet('y_320', pretrained, **kwargs)
+    return _regnet('regnety_320', pretrained, **kwargs)
