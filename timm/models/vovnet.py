@@ -157,7 +157,7 @@ default_cfgs = dict(
     ese_vovnet99b=_cfg(url=''),
     eca_vovnet39b=_cfg(url=''),
     ese_vovnet39b_evos=_cfg(url=''),
-    eee_vovnet99b_iabn=_cfg(url=''),
+    ese_vovnet99b_iabn=_cfg(url=''),
 )
 
 
