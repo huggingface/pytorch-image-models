@@ -135,6 +135,12 @@ model_list = [
 
     _entry('resnetblur50', 'ResNet-Blur-50', '1904.11486'),
 
+    _entry('densenet121', 'DenseNet-121', '1608.06993'),
+    _entry('densenetblur121d', 'DenseNet-Blur-121D', '1904.11486',
+           model_desc='DenseNet with blur pooling and deep stem'),
+
+    _entry('ese_vovnet39b', 'VoVNet-39-V2', '1911.06667'),
+
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_b1', 'EfficientNet-B1 (AutoAugment)', '1905.11946',
@@ -389,6 +395,34 @@ model_list = [
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
     _entry('selecsls60b', 'SelecSLS-60_B', '1907.00837',
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
+
+    ## RegNet official impl weighs
+    _entry('regnetx_002', 'RegNetX-200MF', '2003.13678'),
+    _entry('regnetx_004', 'RegNetX-400MF', '2003.13678'),
+    _entry('regnetx_006', 'RegNetX-600MF', '2003.13678'),
+    _entry('regnetx_008', 'RegNetX-800MF', '2003.13678'),
+    _entry('regnetx_016', 'RegNetX-1.6GF', '2003.13678'),
+    _entry('regnetx_032', 'RegNetX-3.2GF', '2003.13678'),
+    _entry('regnetx_040', 'RegNetX-4.0GF', '2003.13678'),
+    _entry('regnetx_064', 'RegNetX-6.4GF', '2003.13678'),
+    _entry('regnetx_080', 'RegNetX-8.0GF', '2003.13678'),
+    _entry('regnetx_120', 'RegNetX-12GF', '2003.13678'),
+    _entry('regnetx_160', 'RegNetX-16GF', '2003.13678'),
+    _entry('regnetx_320', 'RegNetX-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
+
+    _entry('regnety_002', 'RegNetY-200MF', '2003.13678'),
+    _entry('regnety_004', 'RegNetY-400MF', '2003.13678'),
+    _entry('regnety_006', 'RegNetY-600MF', '2003.13678'),
+    _entry('regnety_008', 'RegNetY-800MF', '2003.13678'),
+    _entry('regnety_016', 'RegNetY-1.6GF', '2003.13678'),
+    _entry('regnety_032', 'RegNetY-3.2GF', '2003.13678'),
+    _entry('regnety_040', 'RegNetY-4.0GF', '2003.13678'),
+    _entry('regnety_064', 'RegNetY-6.4GF', '2003.13678'),
+    _entry('regnety_080', 'RegNetY-8.0GF', '2003.13678'),
+    _entry('regnety_120', 'RegNetY-12GF', '2003.13678'),
+    _entry('regnety_160', 'RegNetY-16GF', '2003.13678'),
+    _entry('regnety_320', 'RegNetY-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
+
 ]
 
 for m in model_list:
