@@ -185,12 +185,12 @@ class HardMishJitAutoFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x):
         ctx.save_for_backward(x)
-        return mish_jit_fwd(x)
+        return hard_mish_jit_fwd(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         x = ctx.saved_tensors[0]
-        return mish_jit_bwd(x, grad_output)
+        return hard_mish_jit_bwd(x, grad_output)
 
 
 def hard_mish_me(x, inplace: bool = False):
