@@ -10,10 +10,10 @@ import math
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained, adapt_model_from_file
 from .layers import SelectAdaptivePool2d, DropBlock2d, DropPath, AvgPool2dSame, create_attn, BlurPool2d
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .registry import register_model
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
 
@@ -200,7 +200,6 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
-    __constants__ = ['se', 'downsample']  # for pre 1.4 torchscript compat
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
@@ -377,6 +376,7 @@ class ResNet(nn.Module):
     global_pool : str, default 'avg'
         Global pooling type. One of 'avg', 'max', 'avgmax', 'catavgmax'
     """
+
     def __init__(self, block, layers, num_classes=1000, in_chans=3,
                  cardinality=1, base_width=64, stem_width=64, stem_type='',
                  block_reduce_first=1, down_kernel_size=1, avg_down=False, output_stride=32,
@@ -482,8 +482,11 @@ class ResNet(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        del self.fc
-        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        if num_classes:
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.fc = nn.Linear(num_features, num_classes)
+        else:
+            self.fc = nn.Identity()
 
     def forward_features(self, x):
         x = self.conv1(x)

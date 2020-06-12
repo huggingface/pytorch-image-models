@@ -4,7 +4,6 @@ Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
 
 Hacked together by Ross Wightman
 """
-
 import torch
 from torch import nn as nn
 

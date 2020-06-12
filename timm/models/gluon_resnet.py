@@ -3,17 +3,11 @@ This file evolved from https://github.com/pytorch/vision 'resnet.py' with (SE)-R
 and ports of Gluon variations (https://github.com/dmlc/gluon-cv/blob/master/gluoncv/model_zoo/resnet.py) 
 by Ross Wightman
 """
-import math
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SEModule
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-
+from .registry import register_model
 from .resnet import ResNet, Bottleneck, BasicBlock
 
 
@@ -202,8 +196,8 @@ def gluon_resnet50_v1e(pretrained=False, num_classes=1000, in_chans=3, **kwargs)
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
                    stem_width=64, stem_type='deep', avg_down=True, **kwargs)
     model.default_cfg = default_cfg
-    #if pretrained:
-    #    load_pretrained(model, default_cfg, num_classes, in_chans)
+    if pretrained:
+        load_pretrained(model, default_cfg, num_classes, in_chans)
     return model
 
 

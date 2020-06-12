@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from .layers.activations import sigmoid
-from .layers import create_conv2d, drop_path
 
+from .layers import create_conv2d, drop_path, get_act_layer
+from .layers.activations import sigmoid
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
@@ -50,6 +50,13 @@ def resolve_se_args(kwargs, in_chs, act_layer=None):
         assert act_layer is not None
         se_kwargs['act_layer'] = act_layer
     return se_kwargs
+
+
+def resolve_act_layer(kwargs, default='relu'):
+    act_layer = kwargs.pop('act_layer', default)
+    if isinstance(act_layer, str):
+        act_layer = get_act_layer(act_layer)
+    return act_layer
 
 
 def make_divisible(v, divisor=8, min_value=None):

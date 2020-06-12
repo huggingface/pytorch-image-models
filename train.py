@@ -111,6 +111,10 @@ parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT
                     help='learning rate noise limit percent (default: 0.67)')
 parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
                     help='learning rate noise std-dev (default: 1.0)')
+parser.add_argument('--lr-cycle-mul', type=float, default=1.0, metavar='MULT',
+                    help='learning rate cycle len multiplier (default: 1.0)')
+parser.add_argument('--lr-cycle-limit', type=int, default=1, metavar='N',
+                    help='learning rate cycle limit')
 parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
                     help='warmup learning rate (default: 0.0001)')
 parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',

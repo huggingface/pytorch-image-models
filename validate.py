@@ -24,7 +24,8 @@ try:
 except ImportError:
     has_apex = False
 
-from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
+from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models,\
+    set_scriptable, set_no_jit
 from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
@@ -87,9 +88,10 @@ def validate(args):
     # create model
     model = create_model(
         args.model,
+        pretrained=args.pretrained,
         num_classes=args.num_classes,
         in_chans=3,
-        pretrained=args.pretrained)
+        scriptable=args.torchscript)
 
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)
@@ -141,8 +143,11 @@ def validate(args):
     top5 = AverageMeter()
 
     model.eval()
-    end = time.time()
     with torch.no_grad():
+        # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
+        input = torch.randn((args.batch_size,) + data_config['input_size']).cuda()
+        model(input)
+        end = time.time()
         for i, (input, target) in enumerate(loader):
             if args.no_prefetcher:
                 target = target.cuda()
@@ -234,6 +239,7 @@ def main():
                             raise e
                         batch_size = max(batch_size // 2, args.num_gpu)
                         print("Validation failed, reducing batch size by 50%")
+                        torch.cuda.empty_cache()
                 result.update(r)
                 if args.checkpoint:
                     result['checkpoint'] = args.checkpoint

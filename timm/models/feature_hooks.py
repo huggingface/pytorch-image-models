@@ -1,5 +1,8 @@
+import torch
+
 from collections import defaultdict, OrderedDict
 from functools import partial
+from typing import List
 
 
 class FeatureHooks:
@@ -25,7 +28,7 @@ class FeatureHooks:
             x = x[0]  # unwrap input tuple
         self._feature_outputs[x.device][name] = x
 
-    def get_output(self, device):
-        output = tuple(self._feature_outputs[device].values())[::-1]
+    def get_output(self, device) -> List[torch.tensor]:
+        output = list(self._feature_outputs[device].values())
         self._feature_outputs[device] = OrderedDict()  # clear after reading
         return output

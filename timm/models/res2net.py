@@ -6,13 +6,11 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from .resnet import ResNet
-from .registry import register_model
-from .helpers import load_pretrained
-from .layers import SEModule
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import load_pretrained
+from .registry import register_model
+from .resnet import ResNet
 
 __all__ = []
 
@@ -79,6 +77,8 @@ class Bottle2neck(nn.Module):
         if self.is_first:
             # FIXME this should probably have count_include_pad=False, but hurts original weights
             self.pool = nn.AvgPool2d(kernel_size=3, stride=stride, padding=1)
+        else:
+            self.pool = None
 
         self.conv3 = nn.Conv2d(width * scale, outplanes, kernel_size=1, bias=False)
         self.bn3 = norm_layer(outplanes)
@@ -99,14 +99,22 @@ class Bottle2neck(nn.Module):
 
         spx = torch.split(out, self.width, 1)
         spo = []
+        sp = spx[0]  # redundant, for torchscript
         for i, (conv, bn) in enumerate(zip(self.convs, self.bns)):
-            sp = spx[i] if i == 0 or self.is_first else sp + spx[i]
+            if i == 0 or self.is_first:
+                sp = spx[i]
+            else:
+                sp = sp + spx[i]
             sp = conv(sp)
             sp = bn(sp)
             sp = self.relu(sp)
             spo.append(sp)
-        if self.scale > 1 :
-            spo.append(self.pool(spx[-1]) if self.is_first else spx[-1])
+        if self.scale > 1:
+            if self.pool is not None:
+                # self.is_first == True, None check for torchscript
+                spo.append(self.pool(spx[-1]))
+            else:
+                spo.append(spx[-1])
         out = torch.cat(spo, 1)
 
         out = self.conv3(out)

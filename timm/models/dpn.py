@@ -9,16 +9,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from collections import OrderedDict
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import OrderedDict
 
-from .registry import register_model
+from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
-from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
-
+from .registry import register_model
 
 __all__ = ['DPN']
 
@@ -54,8 +55,19 @@ class CatBnAct(nn.Module):
         self.bn = nn.BatchNorm2d(in_chs, eps=0.001)
         self.act = activation_fn
 
+    @torch.jit._overload_method  # noqa: F811
     def forward(self, x):
-        x = torch.cat(x, dim=1) if isinstance(x, tuple) else x
+        # type: (Tuple[torch.Tensor, torch.Tensor]) -> (torch.Tensor)
+        pass
+
+    @torch.jit._overload_method  # noqa: F811
+    def forward(self, x):
+        # type: (torch.Tensor) -> (torch.Tensor)
+        pass
+
+    def forward(self, x):
+        if isinstance(x, tuple):
+            x = torch.cat(x, dim=1)
         return self.act(self.bn(x))
 
 
@@ -107,6 +119,8 @@ class DualPathBlock(nn.Module):
             self.key_stride = 1
             self.has_proj = False
 
+        self.c1x1_w_s1 = None
+        self.c1x1_w_s2 = None
         if self.has_proj:
             # Using different member names here to allow easier parameter key matching for conversion
             if self.key_stride == 2:
@@ -115,6 +129,7 @@ class DualPathBlock(nn.Module):
             else:
                 self.c1x1_w_s1 = BnActConv2d(
                     in_chs=in_chs, out_chs=num_1x1_c + 2 * inc, kernel_size=1, stride=1)
+
         self.c1x1_a = BnActConv2d(in_chs=in_chs, out_chs=num_1x1_a, kernel_size=1, stride=1)
         self.c3x3_b = BnActConv2d(
             in_chs=num_1x1_a, out_chs=num_3x3_b, kernel_size=3,
@@ -125,27 +140,46 @@ class DualPathBlock(nn.Module):
             self.c1x1_c2 = nn.Conv2d(num_3x3_b, inc, kernel_size=1, bias=False)
         else:
             self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1)
+            self.c1x1_c1 = None
+            self.c1x1_c2 = None
 
+    @torch.jit._overload_method  # noqa: F811
     def forward(self, x):
-        x_in = torch.cat(x, dim=1) if isinstance(x, tuple) else x
-        if self.has_proj:
-            if self.key_stride == 2:
-                x_s = self.c1x1_w_s2(x_in)
-            else:
-                x_s = self.c1x1_w_s1(x_in)
-            x_s1 = x_s[:, :self.num_1x1_c, :, :]
-            x_s2 = x_s[:, self.num_1x1_c:, :, :]
+        # type: (Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]
+        pass
+
+    @torch.jit._overload_method  # noqa: F811
+    def forward(self, x):
+        # type: (torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]
+        pass
+
+    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
+        if isinstance(x, tuple):
+            x_in = torch.cat(x, dim=1)
         else:
+            x_in = x
+        if self.c1x1_w_s1 is None and self.c1x1_w_s2 is None:
+            # self.has_proj == False, torchscript requires condition on module == None
             x_s1 = x[0]
             x_s2 = x[1]
+        else:
+            # self.has_proj == True
+            if self.c1x1_w_s1 is not None:
+                # self.key_stride = 1
+                x_s = self.c1x1_w_s1(x_in)
+            else:
+                # self.key_stride = 2
+                x_s = self.c1x1_w_s2(x_in)
+            x_s1 = x_s[:, :self.num_1x1_c, :, :]
+            x_s2 = x_s[:, self.num_1x1_c:, :, :]
         x_in = self.c1x1_a(x_in)
         x_in = self.c3x3_b(x_in)
-        if self.b:
-            x_in = self.c1x1_c(x_in)
+        x_in = self.c1x1_c(x_in)
+        if self.c1x1_c1 is not None:
+            # self.b == True, using None check for torchscript compat
             out1 = self.c1x1_c1(x_in)
             out2 = self.c1x1_c2(x_in)
         else:
-            x_in = self.c1x1_c(x_in)
             out1 = x_in[:, :self.num_1x1_c, :, :]
             out2 = x_in[:, self.num_1x1_c:, :, :]
         resid = x_s1 + out1
@@ -167,11 +201,9 @@ class DPN(nn.Module):
 
         # conv1
         if small:
-            blocks['conv1_1'] = InputBlock(
-                num_init_features, in_chans=in_chans, kernel_size=3, padding=1)
+            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=3, padding=1)
         else:
-            blocks['conv1_1'] = InputBlock(
-                num_init_features, in_chans=in_chans, kernel_size=7, padding=3)
+            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=7, padding=3)
 
         # conv2
         bw = 64 * bw_factor
@@ -218,8 +250,8 @@ class DPN(nn.Module):
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Conv2d(
-            self.num_features * self.global_pool.feat_mult(), num_classes, kernel_size=1, bias=True)
+        num_features = self.num_features * self.global_pool.feat_mult()
+        self.classifier = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
 
     def get_classifier(self):
         return self.classifier
@@ -228,10 +260,10 @@ class DPN(nn.Module):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         if num_classes:
-            self.classifier = nn.Conv2d(
-                self.num_features * self.global_pool.feat_mult(), num_classes, kernel_size=1, bias=True)
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.classifier = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
         else:
-            self.classifier = None
+            self.classifier = nn.Identity()
 
     def forward_features(self, x):
         return self.features(x)

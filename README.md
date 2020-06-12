@@ -2,6 +2,19 @@
 
 ## What's New
 
+### June 11, 2020
+Bunch of changes:
+* DenseNet models updated with memory efficient addition from torchvision (fixed a bug), blur pooling and deep stem additions
+* VoVNet V1 and V2 models added, 39 V2 variant (ese_vovnet_39b) trained to 79.3 top-1
+* Activation factory added along with new activations:
+   * select act at model creation time for more flexibility in using activations compatible with scripting or tracing (ONNX export)
+   * hard_mish (experimental) added with memory-efficient grad, along with ME hard_swish
+   * context mgr for setting exportable/scriptable/no_jit states
+* Norm + Activation combo layers added with initial trial support in DenseNet and VoVNet along with impl of EvoNorm and InplaceAbn wrapper that fit the interface
+* Torchscript works for all but two of the model types as long as using Pytorch 1.5+, tests added for this
+* Some import cleanup and classifier reset changes, all models will have classifier reset to nn.Identity on reset_classifer(0) call
+* Prep for 0.1.28 pip release
+
 ### May 12, 2020
 * Add ResNeSt models (code adapted from https://github.com/zhanghang1989/ResNeSt, paper https://arxiv.org/abs/2004.08955))
 

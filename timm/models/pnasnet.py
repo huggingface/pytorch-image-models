@@ -6,15 +6,16 @@
 
 """
 from __future__ import print_function, division, absolute_import
+
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
+from .registry import register_model
 
 __all__ = ['PNASNet5Large']
 
@@ -42,11 +43,12 @@ class MaxPool(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size, stride=stride, padding=padding)
 
     def forward(self, x):
-        if self.zero_pad:
+        if self.zero_pad is not None:
             x = self.zero_pad(x)
-        x = self.pool(x)
-        if self.zero_pad:
+            x = self.pool(x)
             x = x[:, :, 1:, 1:]
+        else:
+            x = self.pool(x)
         return x
 
 
@@ -89,11 +91,12 @@ class BranchSeparables(nn.Module):
 
     def forward(self, x):
         x = self.relu_1(x)
-        if self.zero_pad:
+        if self.zero_pad is not None:
             x = self.zero_pad(x)
-        x = self.separable_1(x)
-        if self.zero_pad:
+            x = self.separable_1(x)
             x = x[:, :, 1:, 1:].contiguous()
+        else:
+            x = self.separable_1(x)
         x = self.bn_sep_1(x)
         x = self.relu_2(x)
         x = self.separable_2(x)
@@ -170,15 +173,14 @@ class CellBase(nn.Module):
         x_comb_iter_3 = x_comb_iter_3_left + x_comb_iter_3_right
 
         x_comb_iter_4_left = self.comb_iter_4_left(x_left)
-        if self.comb_iter_4_right:
+        if self.comb_iter_4_right is not None:
             x_comb_iter_4_right = self.comb_iter_4_right(x_right)
         else:
             x_comb_iter_4_right = x_right
         x_comb_iter_4 = x_comb_iter_4_left + x_comb_iter_4_right
 
         x_out = torch.cat(
-            [x_comb_iter_0, x_comb_iter_1, x_comb_iter_2, x_comb_iter_3,
-             x_comb_iter_4], 1)
+            [x_comb_iter_0, x_comb_iter_1, x_comb_iter_2, x_comb_iter_3, x_comb_iter_4], 1)
         return x_out
 
 
@@ -279,9 +281,8 @@ class Cell(CellBase):
                                                  kernel_size=3, stride=stride,
                                                  zero_pad=zero_pad)
         if is_reduction:
-            self.comb_iter_4_right = ReluConvBn(out_channels_right,
-                                                out_channels_right,
-                                                kernel_size=1, stride=stride)
+            self.comb_iter_4_right = ReluConvBn(
+                out_channels_right, out_channels_right, kernel_size=1, stride=stride)
         else:
             self.comb_iter_4_right = None
 
@@ -349,11 +350,11 @@ class PNASNet5Large(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        del self.last_linear
         if num_classes:
-            self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+            num_features = self.num_features * self.global_pool.feat_mult()
+            self.last_linear = nn.Linear(num_features, num_classes)
         else:
-            self.last_linear = None
+            self.last_linear = nn.Identity()
 
     def forward_features(self, x):
         x_conv_0 = self.conv_0(x)

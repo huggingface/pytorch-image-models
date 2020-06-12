@@ -5,8 +5,7 @@ Hacked together by Ross Wightman
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union, List, Tuple, Optional
-import math
+from typing import List, Tuple, Optional
 
 from .helpers import tup_pair
 from .padding import pad_same, get_padding_value

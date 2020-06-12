@@ -17,8 +17,6 @@ Hacked together by Ross Wightman
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import math
 
 
 def drop_block_2d(
