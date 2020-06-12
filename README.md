@@ -64,28 +64,6 @@ Bunch of changes:
 ### Feb 12, 2020
 * Add EfficientNet-L2 and B0-B7 NoisyStudent weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet)
 
-### Feb 6, 2020
-* Add RandAugment trained EfficientNet-ES (EdgeTPU-Small) weights with 78.1 top-1. Trained by [Andrew Lavin](https://github.com/andravin) (see Training section for hparams)
-
-### Feb 1/2, 2020
-* Port new EfficientNet-B8 (RandAugment) weights, these are different than the B8 AdvProp, different input normalization.
-* Update results csv files on all models for ImageNet validation and three other test sets
-* Push PyPi package update
-
-### Jan 31, 2020
-* Update ResNet50 weights with a new 79.038 result from further JSD / AugMix experiments. Full command line for reproduction in training section below.
-
-### Jan 11/12, 2020
-* Master may be a bit unstable wrt to training, these changes have been tested but not all combos
-* Implementations of AugMix added to existing RA and AA. Including numerous supporting pieces like JSD loss (Jensen-Shannon divergence + CE), and AugMixDataset
-* SplitBatchNorm adaptation layer added for implementing Auxiliary BN as per AdvProp paper
-* ResNet-50 AugMix trained model w/ 79% top-1 added
-* `seresnext26tn_32x4d` - 77.99 top-1, 93.75 top-5 added to tiered experiment, higher img/s than 't' and 'd'
-
-### Jan 3, 2020
-* Add RandAugment trained EfficientNet-B0 weight with 77.7 top-1. Trained by [Michael Klachko](https://github.com/michaelklachko) with this code and recent hparams (see Training section)
-* Add `avg_checkpoints.py` script for post training weight averaging and update all scripts with header docstrings and shebangs.
-
 ## Introduction 
 
 For each competition, personal, or freelance project involving images + Convolution Neural Networks, I build on top of an evolving collection of code and models. This repo contains a (somewhat) cleaned up and paired down iteration of that code. Hopefully it'll be of use to others.
@@ -119,6 +97,7 @@ Included models:
     * DenseNet-121, DenseNet-169, DenseNet-201, DenseNet-161
 * Squeeze-and-Excitation ResNet/ResNeXt (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) with some pretrained weight additions by myself)
     * SENet-154, SE-ResNet-18, SE-ResNet-34, SE-ResNet-50, SE-ResNet-101, SE-ResNet-152, SE-ResNeXt-26 (32x4d), SE-ResNeXt50 (32x4d), SE-ResNeXt101 (32x4d)
+* Inception-V3 (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models))
 * Inception-ResNet-V2 and Inception-V4 (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) )
 * Xception
     * Original variant from [Cadene](https://github.com/Cadene/pretrained-models.pytorch)
@@ -143,6 +122,12 @@ Included models:
     * code from https://github.com/mehtadushy/SelecSLS-Pytorch, paper https://arxiv.org/abs/1907.00837
 * TResNet
     * code from https://github.com/mrT23/TResNet, paper https://arxiv.org/abs/2003.13630
+* RegNet
+    * paper `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
+    * reference code at https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
+* VovNet V2 (with V1 support)
+    * paper `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
+    * reference code at https://github.com/youngwanLEE/vovnet-detectron2
 
 Use the  `--model` arg to specify model for train, validation, inference scripts. Match the all lowercase
 creation fn for the model you'd like.
@@ -187,6 +172,8 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | skresnext50d_32x4d | 80.156 (19.844) | 94.642 (5.358) | 27.5M | bicubic | 224 |
 | resnext50_32x4d | 79.762 (20.238) | 94.600 (5.400) | 25M | bicubic | 224 |
 | resnext50d_32x4d | 79.674 (20.326) | 94.868 (5.132) | 25.1M | bicubic | 224 |
+| ese_vovnet39b | 79.320 (20.680) | 94.710 (5.290) | 24.6M | bicubic | 224 |
+| resnetblur50 | 79.290 (20.710) | 94.632 (5.368) | 25.6M | bicubic | 224 |
 | resnet50 | 79.038 (20.962) | 94.390 (5.610) | 25.6M | bicubic | 224 |
 | mixnet_l | 78.976 (21.024 | 94.184 (5.816) | 7.33M | bicubic | 224 |
 | efficientnet_b1 | 78.692 (21.308) | 94.086 (5.914) | 7.79M | bicubic | 240 |
@@ -200,6 +187,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic | 224 |
 | skresnet34 | 76.912 (23.088) | 93.322 (6.678) | 22.2M | bicubic | 224 |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic | 224 |
+| densenetblur121d | 76.576 (23.424) | 93.190 (6.810) | 8.0M | bicubic | 224 |
 | mobilenetv2_140 | 76.524 (23.476) | 92.990 (7.010) | 6.1M | bicubic | 224 |
 | mixnet_s | 75.988 (24.012) | 92.794 (7.206) | 4.13M | bicubic | 224 |
 | mobilenetv3_large_100 | 75.766 (24.234) | 92.542 (7.458) | 5.5M | bicubic | 224 |

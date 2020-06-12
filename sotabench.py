@@ -396,6 +396,24 @@ model_list = [
     _entry('selecsls60b', 'SelecSLS-60_B', '1907.00837',
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
 
+    ## ResNeSt official impl weights
+    _entry('resnest14d', 'ResNeSt-14', '2004.08955',
+           model_desc='Originally from GluonCV'),
+    _entry('resnest26d', 'ResNeSt-26', '2004.08955',
+           model_desc='Originally from GluonCV'),
+    _entry('resnest50d', 'ResNeSt-50', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest101e', 'ResNeSt-101', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest200e', 'ResNeSt-200', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest269e', 'ResNeSt-269', '2004.08955', batch_size=BATCH_SIZE // 2,
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest50d_4s2x40d', 'ResNeSt-50 4s2x40d', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest50d_1s4x24d', 'ResNeSt-50 1s4x24d', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+
     ## RegNet official impl weighs
     _entry('regnetx_002', 'RegNetX-200MF', '2003.13678'),
     _entry('regnetx_004', 'RegNetX-400MF', '2003.13678'),
