@@ -42,10 +42,10 @@ default_cfgs = {
         input_size=(3, 256, 256), pool_size=(8, 8)),
     'resnest200e': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest200-75117900.pth',
-        input_size=(3, 320, 320), pool_size=(10, 10)),
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=0.909, interpolation='bicubic'),
     'resnest269e': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest269-0cc87c48.pth',
-        input_size=(3, 416, 416), pool_size=(13, 13)),
+        input_size=(3, 416, 416), pool_size=(13, 13), crop_pct=0.928, interpolation='bicubic'),
     'resnest50d_4s2x40d': _cfg(
         url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50_fast_4s2x40d-41d14ed0.pth',
         interpolation='bicubic'),
