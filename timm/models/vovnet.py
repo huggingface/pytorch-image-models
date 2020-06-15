@@ -149,7 +149,8 @@ default_cfgs = dict(
     vovnet39a=_cfg(url=''),
     vovnet57a=_cfg(url=''),
     ese_vovnet19b_slim_dw=_cfg(url=''),
-    ese_vovnet19b_dw=_cfg(url=''),
+    ese_vovnet19b_dw=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet19b_dw-a8741004.pth'),
     ese_vovnet19b_slim=_cfg(url=''),
     ese_vovnet39b=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth'),

@@ -186,6 +186,7 @@ I've leveraged the training scripts in this repository to train a few of the mod
 | mixnet_m | 77.256 (22.744) | 93.418 (6.582) | 5.01M | bicubic | 224 |
 | seresnext26_32x4d | 77.104 (22.896) | 93.316 (6.684) | 16.8M | bicubic | 224 |
 | skresnet34 | 76.912 (23.088) | 93.322 (6.678) | 22.2M | bicubic | 224 |
+| ese_vovnet19b_dw | 76.798 (23.202) | 93.268 (6.732) | 6.5M | bicubic | 224 |
 | resnet26d | 76.68 (23.32) | 93.166 (6.834) | 16M | bicubic | 224 |
 | densenetblur121d | 76.576 (23.424) | 93.190 (6.810) | 8.0M | bicubic | 224 |
 | mobilenetv2_140 | 76.524 (23.476) | 92.990 (7.010) | 6.1M | bicubic | 224 |
