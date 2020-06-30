@@ -36,21 +36,21 @@ default_cfgs = {
     'resnest26d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_resnest26-50eb607c.pth'),
     'resnest50d': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50-528c19ca.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest50-528c19ca.pth'),
     'resnest101e': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest101-22405ba7.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest101-22405ba7.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
     'resnest200e': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest200-75117900.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest200-75117900.pth',
         input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=0.909, interpolation='bicubic'),
     'resnest269e': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest269-0cc87c48.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest269-0cc87c48.pth',
         input_size=(3, 416, 416), pool_size=(13, 13), crop_pct=0.928, interpolation='bicubic'),
     'resnest50d_4s2x40d': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50_fast_4s2x40d-41d14ed0.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest50_fast_4s2x40d-41d14ed0.pth',
         interpolation='bicubic'),
     'resnest50d_1s4x24d': _cfg(
-        url='https://hangzh.s3.amazonaws.com/encoding/models/resnest50_fast_1s4x24d-d4a4f76f.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest50_fast_1s4x24d-d4a4f76f.pth',
         interpolation='bicubic')
 }
 
