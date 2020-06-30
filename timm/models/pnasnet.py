@@ -24,7 +24,7 @@ default_cfgs = {
         'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/pnasnet5large-bf079911.pth',
         'input_size': (3, 331, 331),
         'pool_size': (11, 11),
-        'crop_pct': 0.875,
+        'crop_pct': 0.911,
         'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),

@@ -13,7 +13,7 @@ default_cfgs = {
         'url': 'http://data.lip6.fr/cadene/pretrainedmodels/nasnetalarge-a1897284.pth',
         'input_size': (3, 331, 331),
         'pool_size': (11, 11),
-        'crop_pct': 0.875,
+        'crop_pct': 0.911,
         'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
