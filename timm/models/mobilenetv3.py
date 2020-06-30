@@ -199,15 +199,6 @@ class MobileNetV3Features(nn.Module):
             hooks = self.feature_info.get_by_key(keys=('module', 'hook_type'))
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
 
-    def feature_channels(self, idx=None):
-        """ Feature Channel Shortcut
-        Returns feature channel count for each output index if idx == None. If idx is an integer, will
-        return feature channel count for that feature block index (independent of out_indices setting).
-        """
-        if isinstance(idx, int):
-            return self.feature_info[idx]['num_chs']
-        return [self.feature_info[i]['num_chs'] for i in self.out_indices]
-
     def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)
         x = self.bn1(x)

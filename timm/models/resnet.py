@@ -525,7 +525,6 @@ def _create_resnet_with_cfg(variant, default_cfg, pretrained=False, **kwargs):
     out_indices = None
     if kwargs.pop('features_only', False):
         features = True
-        kwargs.pop('num_classes', 0)
         out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     pruned = kwargs.pop('pruned', False)
 
@@ -910,7 +909,7 @@ def seresnext26tn_32x4d(pretrained=False, **kwargs):
 
 
 @register_model
-def ecaresnext26tn_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def ecaresnext26tn_32x4d(pretrained=False, **kwargs):
     """Constructs an ECA-ResNeXt-26-TN model.
     This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
     in the deep stem. The channel number of the middle stem conv is narrower than the 'T' variant.
