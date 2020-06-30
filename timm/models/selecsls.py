@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .features import FeatureNet
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
@@ -100,7 +101,8 @@ class SelecSLSBlock(nn.Module):
         self.conv6 = conv_bn(2 * mid_chs + (0 if is_first else skip_chs), out_chs, 1)
 
     def forward(self, x: List[torch.Tensor]) -> List[torch.Tensor]:
-        assert isinstance(x, list)
+        if not isinstance(x, list):
+            x = [x]
         assert len(x) in [1, 2]
 
         d1 = self.conv1(x[0])
@@ -163,7 +165,7 @@ class SelecSLS(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.features([x])
+        x = self.features(x)
         x = self.head(x[0])
         return x
 
@@ -178,6 +180,7 @@ class SelecSLS(nn.Module):
 
 def _create_model(variant, pretrained, model_kwargs):
     cfg = {}
+    feature_info = [dict(num_chs=32, reduction=2, module='stem.2')]
     if variant.startswith('selecsls42'):
         cfg['block'] = SelecSLSBlock
         # Define configuration of the network after the initial neck
@@ -190,7 +193,13 @@ def _create_model(variant, pretrained, model_kwargs):
             (288, 0, 304, 304, True, 2),
             (304, 304, 304, 480, False, 1),
         ]
+        feature_info.extend([
+            dict(num_chs=128, reduction=4, module='features.1'),
+            dict(num_chs=288, reduction=8, module='features.3'),
+            dict(num_chs=480, reduction=16, module='features.5'),
+        ])
         # Head can be replaced with alternative configurations depending on the problem
+        feature_info.append(dict(num_chs=1024, reduction=32, module='head.1'))
         if variant == 'selecsls42b':
             cfg['head'] = [
                 (480, 960, 3, 2),
@@ -198,6 +207,7 @@ def _create_model(variant, pretrained, model_kwargs):
                 (1024, 1280, 3, 2),
                 (1280, 1024, 1, 1),
             ]
+            feature_info.append(dict(num_chs=1024, reduction=64, module='head.3'))
             cfg['num_features'] = 1024
         else:
             cfg['head'] = [
@@ -206,7 +216,9 @@ def _create_model(variant, pretrained, model_kwargs):
                 (1024, 1024, 3, 2),
                 (1024, 1280, 1, 1),
             ]
+            feature_info.append(dict(num_chs=1280, reduction=64, module='head.3'))
             cfg['num_features'] = 1280
+
     elif variant.startswith('selecsls60'):
         cfg['block'] = SelecSLSBlock
         # Define configuration of the network after the initial neck
@@ -222,7 +234,13 @@ def _create_model(variant, pretrained, model_kwargs):
             (288, 288, 288, 288, False, 1),
             (288, 288, 288, 416, False, 1),
         ]
+        feature_info.extend([
+            dict(num_chs=128, reduction=4, module='features.1'),
+            dict(num_chs=288, reduction=8, module='features.4'),
+            dict(num_chs=416, reduction=16, module='features.8'),
+        ])
         # Head can be replaced with alternative configurations depending on the problem
+        feature_info.append(dict(num_chs=1024, reduction=32, module='head.1'))
         if variant == 'selecsls60b':
             cfg['head'] = [
                 (416, 756, 3, 2),
@@ -230,6 +248,7 @@ def _create_model(variant, pretrained, model_kwargs):
                 (1024, 1280, 3, 2),
                 (1280, 1024, 1, 1),
             ]
+            feature_info.append(dict(num_chs=1024, reduction=64, module='head.3'))
             cfg['num_features'] = 1024
         else:
             cfg['head'] = [
@@ -238,7 +257,9 @@ def _create_model(variant, pretrained, model_kwargs):
                 (1024, 1024, 3, 2),
                 (1024, 1280, 1, 1),
             ]
+            feature_info.append(dict(num_chs=1280, reduction=64, module='head.3'))
             cfg['num_features'] = 1280
+
     elif variant == 'selecsls84':
         cfg['block'] = SelecSLSBlock
         # Define configuration of the network after the initial neck
@@ -258,6 +279,11 @@ def _create_model(variant, pretrained, model_kwargs):
             (304, 304, 304, 304, False, 1),
             (304, 304, 304, 512, False, 1),
         ]
+        feature_info.extend([
+            dict(num_chs=144, reduction=4, module='features.1'),
+            dict(num_chs=304, reduction=8, module='features.6'),
+            dict(num_chs=512, reduction=16, module='features.12'),
+        ])
         # Head can be replaced with alternative configurations depending on the problem
         cfg['head'] = [
             (512, 960, 3, 2),
@@ -266,17 +292,35 @@ def _create_model(variant, pretrained, model_kwargs):
             (1024, 1280, 3, 1),
         ]
         cfg['num_features'] = 1280
+        feature_info.extend([
+            dict(num_chs=1024, reduction=32, module='head.1'),
+            dict(num_chs=1280, reduction=64, module='head.3')
+        ])
     else:
         raise ValueError('Invalid net configuration ' + variant + ' !!!')
 
+    load_strict = True
+    features = False
+    out_indices = None
+    if model_kwargs.pop('features_only', False):
+        load_strict = False
+        features = True
+        # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
+        out_indices = model_kwargs.pop('out_indices', (0, 1, 2, 3, 4))
+        model_kwargs.pop('num_classes', 0)
+
     model = SelecSLS(cfg, **model_kwargs)
     model.default_cfg = default_cfgs[variant]
+    model.feature_info = feature_info
     if pretrained:
         load_pretrained(
             model,
             num_classes=model_kwargs.get('num_classes', 0),
             in_chans=model_kwargs.get('in_chans', 3),
-            strict=True)
+            strict=load_strict)
+
+    if features:
+        model = FeatureNet(model, out_indices, flatten_sequential=True)
     return model
 
 

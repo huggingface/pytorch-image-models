@@ -24,9 +24,8 @@ try:
 except ImportError:
     has_apex = False
 
-from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models,\
-    set_scriptable, set_no_jit
-from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config
+from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
+from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
@@ -76,8 +75,25 @@ parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
+parser.add_argument('--legacy-jit', dest='legacy_jit', action='store_true',
+                    help='use legacy jit mode for pytorch 1.5/1.5.1/1.6 to get back fusion performance')
 parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
                     help='Output csv file for validation results (summary)')
+parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
+                    help='Real labels JSON file for imagenet evaluation')
+
+
+def set_jit_legacy():
+    """ Set JIT executor to legacy w/ support for op fusion
+    This is hopefully a temporary need in 1.5/1.5.1/1.6 to restore performance due to changes
+    in the JIT exectutor. These API are not supported so could change.
+    """
+    #
+    assert hasattr(torch._C, '_jit_set_profiling_executor'), "Old JIT behavior doesn't exist!"
+    torch._C._jit_set_profiling_executor(False)
+    torch._C._jit_set_profiling_mode(False)
+    torch._C._jit_override_can_fuse_on_gpu(True)
+    #torch._C._jit_set_texpr_fuser_enabled(True)
 
 
 def validate(args):
@@ -103,6 +119,8 @@ def validate(args):
     model, test_time_pool = apply_test_time_pool(model, data_config, args)
 
     if args.torchscript:
+        if args.legacy_jit:
+            set_jit_legacy()
         torch.jit.optimized_execution(True)
         model = torch.jit.script(model)
 
@@ -116,12 +134,15 @@ def validate(args):
 
     criterion = nn.CrossEntropyLoss().cuda()
 
-    #from torchvision.datasets import ImageNet
-    #dataset = ImageNet(args.data, split='val')
     if os.path.splitext(args.data)[1] == '.tar' and os.path.isfile(args.data):
         dataset = DatasetTar(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
     else:
         dataset = Dataset(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
+
+    if args.real_labels:
+        real_labels = RealLabelsImagenet(dataset.filenames(basename=True), real_json=args.real_labels)
+    else:
+        real_labels = None
 
     crop_pct = 1.0 if test_time_pool else data_config['crop_pct']
     loader = create_loader(
@@ -148,7 +169,7 @@ def validate(args):
         input = torch.randn((args.batch_size,) + data_config['input_size']).cuda()
         model(input)
         end = time.time()
-        for i, (input, target) in enumerate(loader):
+        for batch_idx, (input, target) in enumerate(loader):
             if args.no_prefetcher:
                 target = target.cuda()
                 input = input.cuda()
@@ -158,6 +179,9 @@ def validate(args):
             # compute output
             output = model(input)
             loss = criterion(output, target)
+
+            if real_labels is not None:
+                real_labels.add_result(output)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output.data, target, topk=(1, 5))
@@ -169,25 +193,35 @@ def validate(args):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % args.log_freq == 0:
+            if batch_idx % args.log_freq == 0:
                 logging.info(
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
                     'Acc@1: {top1.val:>7.3f} ({top1.avg:>7.3f})  '
                     'Acc@5: {top5.val:>7.3f} ({top5.avg:>7.3f})'.format(
-                        i, len(loader), batch_time=batch_time,
+                        batch_idx, len(loader), batch_time=batch_time,
                         rate_avg=input.size(0) / batch_time.avg,
                         loss=losses, top1=top1, top5=top5))
 
-    results = OrderedDict(
-        top1=round(top1.avg, 4), top1_err=round(100 - top1.avg, 4),
-        top5=round(top5.avg, 4), top5_err=round(100 - top5.avg, 4),
+    if real_labels is not None:
+        real_top1 = real_labels.get_accuracy(k=1)
+        real_top5 = real_labels.get_accuracy(k=5)
+        results = OrderedDict(
+            top1=round(real_top1, 4), top1_err=round(100 - real_top1, 4),
+            top5=round(real_top5, 4), top5_err=round(100 - real_top5, 4),
+            top1_original=round(top1.avg, 4),
+            top5_original=round(top5.avg, 4))
+    else:
+        results = OrderedDict(
+            top1=round(top1.avg, 4), top1_err=round(100 - top1.avg, 4),
+            top5=round(top5.avg, 4), top5_err=round(100 - top5.avg, 4))
+    results.update(OrderedDict(
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
         cropt_pct=crop_pct,
-        interpolation=data_config['interpolation'])
-
+        interpolation=data_config['interpolation']
+    ))
     logging.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
 

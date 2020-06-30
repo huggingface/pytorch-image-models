@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
 from .helpers import load_pretrained
+from .features import FeatureNet
 from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, SelectAdaptivePool2d, \
     create_attn, create_norm_act, get_norm_act_layer
 
@@ -296,6 +297,9 @@ class VovNet(nn.Module):
             conv_type(stem_chs[0], stem_chs[1], 3, stride=1, norm_layer=norm_layer),
             conv_type(stem_chs[1], stem_chs[2], 3, stride=last_stem_stride, norm_layer=norm_layer),
         ])
+        self.feature_info = [dict(
+            num_chs=stem_chs[1], reduction=2, module=f'stem.{1 if stem_stride == 4 else 2}')]
+        current_stride = stem_stride
 
         # OSA stages
         in_ch_list = stem_chs[-1:] + stage_out_chs[:-1]
@@ -309,6 +313,9 @@ class VovNet(nn.Module):
                 downsample=downsample, **stage_args)
             ]
             self.num_features = stage_out_chs[i]
+            current_stride *= 2 if downsample else 1
+            self.feature_info += [dict(num_chs=self.num_features, reduction=current_stride, module=f'stages.{i}')]
+
         self.stages = nn.Sequential(*stages)
 
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
@@ -338,22 +345,22 @@ class VovNet(nn.Module):
 
 
 def _vovnet(variant, pretrained=False, **kwargs):
-    load_strict = True
-    model_class = VovNet
+    features = False
+    out_indices = None
     if kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
+        features = True
         kwargs.pop('num_classes', 0)
+        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     model_cfg = model_cfgs[variant]
-    default_cfg = default_cfgs[variant]
-    model = model_class(model_cfg, **kwargs)
-    model.default_cfg = default_cfg
+    model = VovNet(model_cfg, **kwargs)
+    model.default_cfg = default_cfgs[variant]
     if pretrained:
         load_pretrained(
-            model, default_cfg,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=load_strict)
+            model,
+            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
+    if features:
+        model = FeatureNet(model, out_indices, flatten_sequential=True)
     return model
-
 
 
 @register_model

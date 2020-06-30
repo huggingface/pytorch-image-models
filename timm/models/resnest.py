@@ -6,18 +6,14 @@ Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang198
 
 Modified for torchscript compat, and consistency with timm by Ross Wightman
 """
-import math
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.layers import DropBlock2d
-from .helpers import load_pretrained
-from .layers import SelectiveKernelConv, ConvBnAct, create_attn
 from .layers.split_attn import SplitAttnConv2d
 from .registry import register_model
-from .resnet import ResNet
+from .resnet import _create_resnet_with_cfg
 
 
 def _cfg(url='', **kwargs):
@@ -143,125 +139,98 @@ class ResNestBottleneck(nn.Module):
         return out
 
 
+def _create_resnest(variant, pretrained=False, **kwargs):
+    default_cfg = default_cfgs[variant]
+    return _create_resnet_with_cfg(variant, default_cfg, pretrained=pretrained, **kwargs)
+
+
 @register_model
-def resnest14d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest14d(pretrained=False, **kwargs):
     """ ResNeSt-14d model. Weights ported from GluonCV.
     """
-    default_cfg = default_cfgs['resnest14d']
-    model = ResNet(
-        ResNestBottleneck, [1, 1, 1, 1], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[1, 1, 1, 1],
         stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest14d', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest26d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest26d(pretrained=False, **kwargs):
     """ ResNeSt-26d model. Weights ported from GluonCV.
     """
-    default_cfg = default_cfgs['resnest26d']
-    model = ResNet(
-        ResNestBottleneck, [2, 2, 2, 2], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[2, 2, 2, 2],
         stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest26d', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest50d(pretrained=False, **kwargs):
     """ ResNeSt-50d model. Matches paper ResNeSt-50 model, https://arxiv.org/abs/2004.08955
     Since this codebase supports all possible variations, 'd' for deep stem, stem_width 32, avg in downsample.
     """
-    default_cfg = default_cfgs['resnest50d']
-    model = ResNet(
-        ResNestBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[3, 4, 6, 3],
         stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest50d', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest101e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest101e(pretrained=False, **kwargs):
     """ ResNeSt-101e model. Matches paper ResNeSt-101 model, https://arxiv.org/abs/2004.08955
      Since this codebase supports all possible variations, 'e' for deep stem, stem_width 64, avg in downsample.
     """
-    default_cfg = default_cfgs['resnest101e']
-    model = ResNet(
-        ResNestBottleneck, [3, 4, 23, 3], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[3, 4, 23, 3],
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest101e', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest200e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest200e(pretrained=False, **kwargs):
     """ ResNeSt-200e model. Matches paper ResNeSt-200 model, https://arxiv.org/abs/2004.08955
     Since this codebase supports all possible variations, 'e' for deep stem, stem_width 64, avg in downsample.
     """
-    default_cfg = default_cfgs['resnest200e']
-    model = ResNet(
-        ResNestBottleneck, [3, 24, 36, 3], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[3, 24, 36, 3],
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest200e', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest269e(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest269e(pretrained=False, **kwargs):
     """ ResNeSt-269e model. Matches paper ResNeSt-269 model, https://arxiv.org/abs/2004.08955
     Since this codebase supports all possible variations, 'e' for deep stem, stem_width 64, avg in downsample.
     """
-    default_cfg = default_cfgs['resnest269e']
-    model = ResNet(
-        ResNestBottleneck, [3, 30, 48, 8], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[3, 30, 48, 8],
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
         block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest269e', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest50d_4s2x40d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest50d_4s2x40d(pretrained=False, **kwargs):
     """ResNeSt-50 4s2x40d from https://github.com/zhanghang1989/ResNeSt/blob/master/ablation.md
     """
-    default_cfg = default_cfgs['resnest50d_4s2x40d']
-    model = ResNet(
-        ResNestBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[3, 4, 6, 3],
         stem_type='deep', stem_width=32, avg_down=True, base_width=40, cardinality=2,
         block_args=dict(radix=4, avd=True, avd_first=True), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest50d_4s2x40d', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def resnest50d_1s4x24d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def resnest50d_1s4x24d(pretrained=False, **kwargs):
     """ResNeSt-50 1s4x24d from https://github.com/zhanghang1989/ResNeSt/blob/master/ablation.md
     """
-    default_cfg = default_cfgs['resnest50d_1s4x24d']
-    model = ResNet(
-        ResNestBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
+    model_kwargs = dict(
+        block=ResNestBottleneck, layers=[3, 4, 6, 3],
         stem_type='deep', stem_width=32, avg_down=True, base_width=24, cardinality=4,
         block_args=dict(radix=1, avd=True, avd_first=True), **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_resnest('resnest50d_1s4x24d', pretrained=pretrained, **model_kwargs)

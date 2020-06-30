@@ -34,6 +34,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCE
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .feature_hooks import FeatureHooks
+from .features import FeatureInfo
 from .helpers import load_pretrained, adapt_model_from_file
 from .layers import SelectAdaptivePool2d, create_conv2d
 from .registry import register_model
@@ -438,41 +439,21 @@ class EfficientNetFeatures(nn.Module):
             channel_multiplier, channel_divisor, channel_min, output_stride, pad_type, act_layer, se_kwargs,
             norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
-        self._feature_info = builder.features  # builder provides info about feature channels for each block
+        self.feature_info = FeatureInfo(builder.features, out_indices)
         self._stage_to_feature_idx = {
-            v['stage_idx']: fi for fi, v in self._feature_info.items() if fi in self.out_indices}
+            v['stage_idx']: fi for fi, v in enumerate(self.feature_info) if fi in self.out_indices}
         self._in_chs = builder.in_chs
 
         efficientnet_init_weights(self)
         if _DEBUG:
-            for k, v in self._feature_info.items():
-                print('Feature idx: {}: Name: {}, Channels: {}'.format(k, v['name'], v['num_chs']))
+            for fi, v in enumerate(self.feature_info):
+                print('Feature idx: {}: Name: {}, Channels: {}'.format(fi, v['module'], v['num_chs']))
 
         # Register feature extraction hooks with FeatureHooks helper
         self.feature_hooks = None
         if feature_location != 'bottleneck':
-            hooks = [dict(
-                name=self._feature_info[idx]['module'],
-                type=self._feature_info[idx]['hook_type']) for idx in out_indices]
+            hooks = self.feature_info.get_by_key(keys=('module', 'hook_type'))
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
-
-    def feature_channels(self, idx=None):
-        """ Feature Channel Shortcut
-        Returns feature channel count for each output index if idx == None. If idx is an integer, will
-        return feature channel count for that feature block index (independent of out_indices setting).
-        """
-        if isinstance(idx, int):
-            return self._feature_info[idx]['num_chs']
-        return [self._feature_info[i]['num_chs'] for i in self.out_indices]
-
-    def feature_info(self, idx=None):
-        """ Feature Channel Shortcut
-        Returns feature channel count for each output index if idx == None. If idx is an integer, will
-        return feature channel count for that feature block index (independent of out_indices setting).
-        """
-        if isinstance(idx, int):
-            return self._feature_info[idx]
-        return [self._feature_info[i] for i in self.out_indices]
 
     def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)

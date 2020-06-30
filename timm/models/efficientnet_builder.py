@@ -225,7 +225,7 @@ class EfficientNetBuilder:
 
         # state updated during build, consumed by model
         self.in_chs = None
-        self.features = OrderedDict()
+        self.features = []
 
     def _round_channels(self, chs):
         return round_channels(chs, self.channel_multiplier, self.channel_divisor, self.channel_min)
@@ -291,7 +291,6 @@ class EfficientNetBuilder:
         total_block_idx = 0
         current_stride = 2
         current_dilation = 1
-        feature_idx = 0
         stages = []
         # outer list of block_args defines the stacks ('stages' by some conventions)
         for stage_idx, stage_block_args in enumerate(model_block_args):
@@ -351,13 +350,15 @@ class EfficientNetBuilder:
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
                     feature_info = block.feature_info(extract_features)
-                    if feature_info['module']:
-                        feature_info['module'] = 'blocks.{}.{}.'.format(stage_idx, block_idx) + feature_info['module']
+                    module_name = f'blocks.{stage_idx}.{block_idx}'
+                    if 'module' in feature_info and feature_info['module']:
+                        feature_info['module'] = '.'.join([module_name, feature_info['module']])
+                    else:
+                        feature_info['module'] = module_name
                     feature_info['stage_idx'] = stage_idx
                     feature_info['block_idx'] = block_idx
                     feature_info['reduction'] = current_stride
-                    self.features[feature_idx] = feature_info
-                    feature_idx += 1
+                    self.features.append(feature_info)
 
                 total_block_idx += 1  # incr global block idx (across all stacks)
             stages.append(nn.Sequential(*blocks))

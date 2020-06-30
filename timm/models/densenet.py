@@ -13,6 +13,7 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .features import FeatureNet
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act, BlurPool2d
 from .registry import register_model
@@ -199,6 +200,9 @@ class DenseNet(nn.Module):
                 ('norm0', norm_layer(num_init_features)),
                 ('pool0', stem_pool),
             ]))
+        self.feature_info = [
+            dict(num_chs=num_init_features, reduction=2, module=f'features.norm{2 if deep_stem else 0}')]
+        current_stride = 4
 
         # DenseBlocks
         num_features = num_init_features
@@ -212,21 +216,27 @@ class DenseNet(nn.Module):
                 drop_rate=drop_rate,
                 memory_efficient=memory_efficient
             )
-            self.features.add_module('denseblock%d' % (i + 1), block)
+            module_name = f'denseblock{(i + 1)}'
+            self.features.add_module(module_name, block)
             num_features = num_features + num_layers * growth_rate
             transition_aa_layer = None if aa_stem_only else aa_layer
             if i != len(block_config) - 1:
+                self.feature_info += [
+                    dict(num_chs=num_features, reduction=current_stride, module='features.' + module_name)]
+                current_stride *= 2
                 trans = DenseTransition(
                     num_input_features=num_features, num_output_features=num_features // 2,
                     norm_layer=norm_layer, aa_layer=transition_aa_layer)
-                self.features.add_module('transition%d' % (i + 1), trans)
+                self.features.add_module(f'transition{i + 1}', trans)
                 num_features = num_features // 2
 
         # Final batch norm
         self.features.add_module('norm5', norm_layer(num_features))
 
-        # Linear layer
+        self.feature_info += [dict(num_chs=num_features, reduction=current_stride, module='features.norm5')]
         self.num_features = num_features
+
+        # Linear layer
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
@@ -279,16 +289,14 @@ def _filter_torchvision_pretrained(state_dict):
 
 
 def _densenet(variant, growth_rate, block_config, pretrained, **kwargs):
+    features = False
+    out_indices = None
     if kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
+        features = True
         kwargs.pop('num_classes', 0)
-        model_class = DenseNet
-    else:
-        load_strict = True
-        model_class = DenseNet
+        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     default_cfg = default_cfgs[variant]
-    model = model_class(growth_rate=growth_rate, block_config=block_config, **kwargs)
+    model = DenseNet(growth_rate=growth_rate, block_config=block_config, **kwargs)
     model.default_cfg = default_cfg
     if pretrained:
         load_pretrained(
@@ -296,7 +304,9 @@ def _densenet(variant, growth_rate, block_config, pretrained, **kwargs):
             num_classes=kwargs.get('num_classes', 0),
             in_chans=kwargs.get('in_chans', 3),
             filter_fn=_filter_torchvision_pretrained,
-            strict=load_strict)
+            strict=not features)
+    if features:
+        model = FeatureNet(model, out_indices, flatten_sequential=True)
     return model
 
 

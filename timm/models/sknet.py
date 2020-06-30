@@ -12,11 +12,11 @@ import math
 
 from torch import nn as nn
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
 from .layers import SelectiveKernelConv, ConvBnAct, create_attn
-from .resnet import ResNet
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .registry import register_model
+from .resnet import _create_resnet_with_cfg
 
 
 def _cfg(url='', **kwargs):
@@ -138,101 +138,80 @@ class SelectiveKernelBottleneck(nn.Module):
         return x
 
 
+def _create_skresnet(variant, pretrained=False, **kwargs):
+    default_cfg = default_cfgs[variant]
+    return _create_resnet_with_cfg(variant, default_cfg, pretrained=pretrained, **kwargs)
+
+
 @register_model
-def skresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def skresnet18(pretrained=False, **kwargs):
     """Constructs a Selective Kernel ResNet-18 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    default_cfg = default_cfgs['skresnet18']
     sk_kwargs = dict(
         min_attn_channels=16,
         attn_reduction=8,
-        split_input=True
-    )
-    model = ResNet(
-        SelectiveKernelBasic, [2, 2, 2, 2], num_classes=num_classes, in_chans=in_chans,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        split_input=True)
+    model_args = dict(
+        block=SelectiveKernelBasic, layers=[2, 2, 2, 2], block_args=dict(sk_kwargs=sk_kwargs),
+        zero_init_last_bn=False, **kwargs)
+    return _create_skresnet('skresnet18', pretrained, **model_args)
 
 
 @register_model
-def skresnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def skresnet34(pretrained=False, **kwargs):
     """Constructs a Selective Kernel ResNet-34 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    default_cfg = default_cfgs['skresnet34']
     sk_kwargs = dict(
         min_attn_channels=16,
         attn_reduction=8,
-        split_input=True
-    )
-    model = ResNet(
-        SelectiveKernelBasic, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        split_input=True)
+    model_args = dict(
+        block=SelectiveKernelBasic, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
+        zero_init_last_bn=False, **kwargs)
+    return _create_skresnet('skresnet34', pretrained, **model_args)
 
 
 @register_model
-def skresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def skresnet50(pretrained=False, **kwargs):
     """Constructs a Select Kernel ResNet-50 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    sk_kwargs = dict(
-        split_input=True,
-    )
-    default_cfg = default_cfgs['skresnet50']
-    model = ResNet(
-        SelectiveKernelBottleneck, [3, 4, 6, 3], num_classes=num_classes, in_chans=in_chans,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    sk_kwargs = dict(split_input=True)
+    model_args = dict(
+        block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
+        zero_init_last_bn=False, **kwargs)
+    return _create_skresnet('skresnet50', pretrained, **model_args)
 
 
 @register_model
-def skresnet50d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def skresnet50d(pretrained=False, **kwargs):
     """Constructs a Select Kernel ResNet-50-D model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    sk_kwargs = dict(
-        split_input=True,
-    )
-    default_cfg = default_cfgs['skresnet50d']
-    model = ResNet(
-        SelectiveKernelBottleneck, [3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
-        num_classes=num_classes, in_chans=in_chans, block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last_bn=False, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    sk_kwargs = dict(split_input=True)
+    model_args = dict(
+        block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
+    return _create_skresnet('skresnet50d', pretrained, **model_args)
 
 
 @register_model
-def skresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def skresnext50_32x4d(pretrained=False, **kwargs):
     """Constructs a Select Kernel ResNeXt50-32x4d model. This should be equivalent to
     the SKNet-50 model in the Select Kernel Paper
     """
-    default_cfg = default_cfgs['skresnext50_32x4d']
-    model = ResNet(
-        SelectiveKernelBottleneck, [3, 4, 6, 3], cardinality=32, base_width=4,
-        num_classes=num_classes, in_chans=in_chans, zero_init_last_bn=False, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    model_args = dict(
+        block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], cardinality=32, base_width=4,
+        zero_init_last_bn=False, **kwargs)
+    return _create_skresnet('skresnext50_32x4d', pretrained, **model_args)
+
