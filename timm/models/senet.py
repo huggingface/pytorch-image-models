@@ -7,6 +7,9 @@ Original model: https://github.com/hujie-frank/SENet
 
 ResNet code gently borrowed from
 https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
+
+FIXME I'm deprecating this model and moving them to ResNet as I don't want to maintain duplicate
+support for extras like dilation, switchable BN/activations, feature extraction, etc that don't exist here.
 """
 import math
 from collections import OrderedDict
@@ -397,7 +400,7 @@ class SENet(nn.Module):
 
 
 @register_model
-def seresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet18']
     model = SENet(SEResNetBlock, [2, 2, 2, 2], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -410,7 +413,7 @@ def seresnet18(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet34']
     model = SENet(SEResNetBlock, [3, 4, 6, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -423,7 +426,7 @@ def seresnet34(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet50']
     model = SENet(SEResNetBottleneck, [3, 4, 6, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -436,7 +439,7 @@ def seresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet101']
     model = SENet(SEResNetBottleneck, [3, 4, 23, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -449,7 +452,7 @@ def seresnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnet152']
     model = SENet(SEResNetBottleneck, [3, 8, 36, 3], groups=1, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -462,7 +465,7 @@ def seresnet152(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['senet154']
     model = SENet(SEBottleneck, [3, 8, 36, 3], groups=64, reduction=16,
                   num_classes=num_classes, in_chans=in_chans, **kwargs)
@@ -473,7 +476,7 @@ def senet154(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnext26_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnext26_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnext26_32x4d']
     model = SENet(SEResNeXtBottleneck, [2, 2, 2, 2], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -486,7 +489,7 @@ def seresnext26_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnext50_32x4d']
     model = SENet(SEResNeXtBottleneck, [3, 4, 6, 3], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,
@@ -499,7 +502,7 @@ def seresnext50_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
 
 
 @register_model
-def seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnext101_32x4d(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
     default_cfg = default_cfgs['seresnext101_32x4d']
     model = SENet(SEResNeXtBottleneck, [3, 4, 23, 3], groups=32, reduction=16,
                   inplanes=64, input_3x3=False,

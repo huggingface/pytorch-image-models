@@ -223,11 +223,12 @@ class Block8(nn.Module):
 
 
 class InceptionResnetV2(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
+    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., output_stride=32, global_pool='avg'):
         super(InceptionResnetV2, self).__init__()
         self.drop_rate = drop_rate
         self.num_classes = num_classes
         self.num_features = 1536
+        assert output_stride == 32
 
         self.conv2d_1a = BasicConv2d(in_chans, 32, kernel_size=3, stride=2)
         self.conv2d_2a = BasicConv2d(32, 32, kernel_size=3, stride=1)
@@ -340,16 +341,16 @@ class InceptionResnetV2(nn.Module):
 
 
 def _inception_resnet_v2(variant, pretrained=False, **kwargs):
-    load_strict, features, out_indices = True, False, None
+    features, out_indices = False, None
     if kwargs.pop('features_only', False):
-        load_strict, features, out_indices = False, True, kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-        kwargs.pop('num_classes', 0)
+        features = True
+        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     model = InceptionResnetV2(**kwargs)
     model.default_cfg = default_cfgs[variant]
     if pretrained:
         load_pretrained(
             model,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=load_strict)
+            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
     if features:
         model = FeatureNet(model, out_indices)
     return model

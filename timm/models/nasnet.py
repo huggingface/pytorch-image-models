@@ -400,14 +400,15 @@ class ReductionCell1(nn.Module):
 class NASNetALarge(nn.Module):
     """NASNetALarge (6 @ 4032) """
 
-    def __init__(self, num_classes=1000, in_chans=1, stem_size=96, num_features=4032, channel_multiplier=2,
-                 drop_rate=0., global_pool='avg', pad_type='same'):
+    def __init__(self, num_classes=1000, in_chans=1, stem_size=96, channel_multiplier=2,
+                 num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
         super(NASNetALarge, self).__init__()
         self.num_classes = num_classes
         self.stem_size = stem_size
         self.num_features = num_features
         self.channel_multiplier = channel_multiplier
         self.drop_rate = drop_rate
+        assert output_stride == 32
 
         channels = self.num_features // 24
         # 24 is default value for the architecture

@@ -12,15 +12,15 @@ Weights from original impl have been modified
 * remap names to match the ones here
 
 """
-import torch
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .features import FeatureNet
 from .helpers import load_pretrained
 from .layers import SelectAdaptivePool2d, AvgPool2dSame, ConvBnAct, SEModule
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .registry import register_model
 
 
 def _mcfg(**kwargs):
@@ -128,18 +128,17 @@ class Bottleneck(nn.Module):
     after conv3 to after conv2. Otherwise, it's just redefining the arguments for groups/bottleneck channels.
     """
 
-    def __init__(self, in_chs, out_chs, stride=1, bottleneck_ratio=1, group_width=1, se_ratio=0.25,
-                 dilation=1, first_dilation=None, downsample=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-                 aa_layer=None, drop_block=None, drop_path=None):
+    def __init__(self, in_chs, out_chs, stride=1, dilation=1, bottleneck_ratio=1, group_width=1, se_ratio=0.25,
+                 downsample=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None,
+                 drop_block=None, drop_path=None):
         super(Bottleneck, self).__init__()
         bottleneck_chs = int(round(out_chs * bottleneck_ratio))
         groups = bottleneck_chs // group_width
-        first_dilation = first_dilation or dilation
 
         cargs = dict(act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer, drop_block=drop_block)
         self.conv1 = ConvBnAct(in_chs, bottleneck_chs, kernel_size=1, **cargs)
         self.conv2 = ConvBnAct(
-            bottleneck_chs, bottleneck_chs, kernel_size=3, stride=stride, dilation=first_dilation,
+            bottleneck_chs, bottleneck_chs, kernel_size=3, stride=stride, dilation=dilation,
             groups=groups, **cargs)
         if se_ratio:
             se_channels = int(round(in_chs * se_ratio))
@@ -172,16 +171,16 @@ class Bottleneck(nn.Module):
 
 
 def downsample_conv(
-        in_chs, out_chs, kernel_size, stride=1, dilation=1, first_dilation=None, norm_layer=None):
+        in_chs, out_chs, kernel_size, stride=1, dilation=1, norm_layer=None):
     norm_layer = norm_layer or nn.BatchNorm2d
     kernel_size = 1 if stride == 1 and dilation == 1 else kernel_size
-    first_dilation = (first_dilation or dilation) if kernel_size > 1 else 1
+    dilation = dilation if kernel_size > 1 else 1
     return ConvBnAct(
-        in_chs, out_chs, kernel_size, stride=stride, dilation=first_dilation, norm_layer=norm_layer, act_layer=None)
+        in_chs, out_chs, kernel_size, stride=stride, dilation=dilation, norm_layer=norm_layer, act_layer=None)
 
 
 def downsample_avg(
-        in_chs, out_chs, kernel_size, stride=1, dilation=1, first_dilation=None, norm_layer=None):
+        in_chs, out_chs, kernel_size, stride=1, dilation=1, norm_layer=None):
     """ AvgPool Downsampling as in 'D' ResNet variants. This is not in RegNet space but I might experiment."""
     norm_layer = norm_layer or nn.BatchNorm2d
     avg_stride = stride if dilation == 1 else 1
@@ -196,21 +195,24 @@ def downsample_avg(
 class RegStage(nn.Module):
     """Stage (sequence of blocks w/ the same output shape)."""
 
-    def __init__(self, in_chs, out_chs, stride, depth, block_fn, bottle_ratio, group_width, se_ratio):
+    def __init__(self, in_chs, out_chs, stride, dilation, depth, bottle_ratio, group_width,
+                 block_fn=Bottleneck, se_ratio=0.):
         super(RegStage, self).__init__()
         block_kwargs = {}  # FIXME setup to pass various aa, norm, act layer common args
+        first_dilation = 1 if dilation in (1, 2) else 2
         for i in range(depth):
             block_stride = stride if i == 0 else 1
             block_in_chs = in_chs if i == 0 else out_chs
+            block_dilation = first_dilation if i == 0 else dilation
             if (block_in_chs != out_chs) or (block_stride != 1):
-                proj_block = downsample_conv(block_in_chs, out_chs, 1, stride)
+                proj_block = downsample_conv(block_in_chs, out_chs, 1, block_stride, block_dilation)
             else:
                 proj_block = None
 
             name = "b{}".format(i + 1)
             self.add_module(
                 name, block_fn(
-                    block_in_chs, out_chs, block_stride, bottle_ratio, group_width, se_ratio,
+                    block_in_chs, out_chs, block_stride, block_dilation, bottle_ratio, group_width, se_ratio,
                     downsample=proj_block, **block_kwargs)
             )
 
@@ -247,26 +249,30 @@ class RegNet(nn.Module):
     Original Impl: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
     """
 
-    def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0.,
+    def __init__(self, cfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg', drop_rate=0.,
                  zero_init_last_bn=True):
         super().__init__()
         # TODO add drop block, drop path, anti-aliasing, custom bn/act args
         self.num_classes = num_classes
         self.drop_rate = drop_rate
+        assert output_stride in (8, 16, 32)
 
         # Construct the stem
         stem_width = cfg['stem_width']
         self.stem = ConvBnAct(in_chans, stem_width, 3, stride=2)
-        
+        self.feature_info = [dict(num_chs=stem_width, reduction=2, module='stem')]
+
         # Construct the stages
-        block_fn = Bottleneck
         prev_width = stem_width
-        stage_params = self._get_stage_params(cfg)
+        curr_stride = 2
+        stage_params = self._get_stage_params(cfg, output_stride=output_stride)
         se_ratio = cfg['se_ratio']
-        for i, (d, w, s, br, gw) in enumerate(stage_params):
-            self.add_module(
-                "s{}".format(i + 1), RegStage(prev_width, w, s, d, block_fn, br, gw, se_ratio))
-            prev_width = w
+        for i, stage_args in enumerate(stage_params):
+            stage_name = "s{}".format(i + 1)
+            self.add_module(stage_name, RegStage(prev_width, **stage_args, se_ratio=se_ratio))
+            prev_width = stage_args['out_chs']
+            curr_stride *= stage_args['stride']
+            self.feature_info += [dict(num_chs=prev_width, reduction=curr_stride, module=stage_name)]
 
         # Construct the head
         self.num_features = prev_width
@@ -287,7 +293,7 @@ class RegNet(nn.Module):
                 if hasattr(m, 'zero_init_last_bn'):
                     m.zero_init_last_bn()
 
-    def _get_stage_params(self, cfg, stride=2):
+    def _get_stage_params(self, cfg, default_stride=2, output_stride=32):
         # Generate RegNet ws per block
         w_a, w_0, w_m, d = cfg['wa'], cfg['w0'], cfg['wm'], cfg['depth']
         widths, num_stages, _, _ = generate_regnet(w_a, w_0, w_m, d)
@@ -298,12 +304,26 @@ class RegNet(nn.Module):
         # Use the same group width, bottleneck mult and stride for each stage
         stage_groups = [cfg['group_w'] for _ in range(num_stages)]
         stage_bottle_ratios = [cfg['bottle_ratio'] for _ in range(num_stages)]
-        stage_strides = [stride for _ in range(num_stages)]
-        # FIXME add dilation / output_stride support
+        stage_strides = []
+        stage_dilations = []
+        total_stride = 2
+        dilation = 1
+        for _ in range(num_stages):
+            if total_stride >= output_stride:
+                dilation *= default_stride
+                stride = 1
+            else:
+                stride = default_stride
+                total_stride *= stride
+            stage_strides.append(stride)
+            stage_dilations.append(dilation)
 
         # Adjust the compatibility of ws and gws
         stage_widths, stage_groups = adjust_widths_groups_comp(stage_widths, stage_bottle_ratios, stage_groups)
-        stage_params = list(zip(stage_depths, stage_widths, stage_strides, stage_bottle_ratios, stage_groups))
+        param_names = ['out_chs', 'stride', 'dilation', 'depth', 'bottle_ratio', 'group_width']
+        stage_params = [
+            dict(zip(param_names, params)) for params in
+            zip(stage_widths, stage_strides, stage_dilations, stage_depths, stage_bottle_ratios, stage_groups)]
         return stage_params
 
     def get_classifier(self):
@@ -324,20 +344,20 @@ class RegNet(nn.Module):
 
 
 def _regnet(variant, pretrained, **kwargs):
-    load_strict = True
-    model_class = RegNet
+    features = False
+    out_indices = None
     if kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
-        kwargs.pop('num_classes', 0)
+        features = True
+        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     model_cfg = model_cfgs[variant]
-    default_cfg = default_cfgs[variant]
-    model = model_class(model_cfg, **kwargs)
-    model.default_cfg = default_cfg
+    model = RegNet(model_cfg, **kwargs)
+    model.default_cfg = default_cfgs[variant]
     if pretrained:
         load_pretrained(
-            model, default_cfg,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=load_strict)
+            model,
+            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
+    if features:
+        model = FeatureNet(model, out_indices=out_indices)
     return model
 
 

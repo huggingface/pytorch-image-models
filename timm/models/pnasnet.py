@@ -236,11 +236,12 @@ class Cell(CellBase):
 
 
 class PNASNet5Large(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0.5, global_pool='avg', padding=''):
+    def __init__(self, num_classes=1001, in_chans=3, output_stride=32, drop_rate=0.5, global_pool='avg', padding=''):
         super(PNASNet5Large, self).__init__()
         self.num_classes = num_classes
-        self.num_features = 4320
         self.drop_rate = drop_rate
+        self.num_features = 4320
+        assert output_stride == 32
 
         self.conv_0 = ConvBnAct(
             in_chans, 96, kernel_size=3, stride=2, padding=0,

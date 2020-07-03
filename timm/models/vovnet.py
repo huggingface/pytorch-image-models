@@ -275,13 +275,14 @@ class ClassifierHead(nn.Module):
 class VovNet(nn.Module):
 
     def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
-                 norm_layer=BatchNormAct2d):
+                 output_stride=32, norm_layer=BatchNormAct2d):
         """ VovNet (v2)
         """
         super(VovNet, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert stem_stride in (4, 2)
+        assert output_stride == 32  # FIXME support dilation
 
         stem_chs = cfg["stem_chs"]
         stage_conv_chs = cfg["stage_conv_chs"]
@@ -349,7 +350,6 @@ def _vovnet(variant, pretrained=False, **kwargs):
     out_indices = None
     if kwargs.pop('features_only', False):
         features = True
-        kwargs.pop('num_classes', 0)
         out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
     model_cfg = model_cfgs[variant]
     model = VovNet(model_cfg, **kwargs)
@@ -412,9 +412,10 @@ def eca_vovnet39b(pretrained=False, **kwargs):
 
 @register_model
 def ese_vovnet39b_evos(pretrained=False, **kwargs):
-    def norm_act_fn(num_features, **kwargs):
-        return create_norm_act('EvoNormSample', num_features, jit=False, **kwargs)
+    def norm_act_fn(num_features, **nkwargs):
+        return create_norm_act('EvoNormSample', num_features, jit=False, **nkwargs)
     return _vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
+
 
 @register_model
 def ese_vovnet99b_iabn(pretrained=False, **kwargs):

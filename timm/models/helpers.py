@@ -74,6 +74,9 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
 
     state_dict = model_zoo.load_url(cfg['url'], progress=False, map_location='cpu')
 
+    if filter_fn is not None:
+        state_dict = filter_fn(state_dict)
+
     if in_chans == 1:
         conv1_name = cfg['first_conv']
         logging.info('Converting first conv (%s) from 3 to 1 channel' % conv1_name)
@@ -94,9 +97,6 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
         del state_dict[classifier_name + '.weight']
         del state_dict[classifier_name + '.bias']
         strict = False
-
-    if filter_fn is not None:
-        state_dict = filter_fn(state_dict)
 
     model.load_state_dict(state_dict, strict=strict)
 

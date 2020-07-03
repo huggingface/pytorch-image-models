@@ -33,6 +33,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
+    # ResNet and Wide ResNet
     'resnet18': _cfg(url='https://download.pytorch.org/models/resnet18-5c106cde.pth'),
     'resnet34': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34-43635321.pth'),
@@ -54,6 +55,8 @@ default_cfgs = {
     'tv_resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
     'wide_resnet50_2': _cfg(url='https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth'),
     'wide_resnet101_2': _cfg(url='https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth'),
+
+    # ResNeXt
     'resnext50_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50_32x4d_ra-d733960d.pth',
         interpolation='bicubic'),
@@ -64,10 +67,17 @@ default_cfgs = {
     'resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth'),
     'resnext101_64x4d': _cfg(url=''),
     'tv_resnext50_32x4d': _cfg(url='https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth'),
+
+    #  ResNeXt models - Weakly Supervised Pretraining on Instagram Hashtags
+    #  from https://github.com/facebookresearch/WSL-Images
+    #  Please note the CC-BY-NC 4.0 license on theses weights, non-commercial use only.
     'ig_resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x8-c38310e5.pth'),
     'ig_resnext101_32x16d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x16-c6f796b0.pth'),
     'ig_resnext101_32x32d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x32-e4b90b00.pth'),
     'ig_resnext101_32x48d': _cfg(url='https://download.pytorch.org/models/ig_resnext101_32x48-3e41cc8a.pth'),
+
+    #  Semi-Supervised ResNe*t models from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models
+    #  Please note the CC-BY-NC 4.0 license on theses weights, non-commercial use only.
     'ssl_resnet18':  _cfg(
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnet18-d92f0530.pth'),
     'ssl_resnet50':  _cfg(
@@ -80,6 +90,9 @@ default_cfgs = {
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnext101_32x8-2cfe2f8b.pth'),
     'ssl_resnext101_32x16d': _cfg(
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnext101_32x16-15fffa57.pth'),
+
+    #  Semi-Weakly Supervised ResNe*t models from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models
+    #  Please note the CC-BY-NC 4.0 license on theses weights, non-commercial use only.
     'swsl_resnet18': _cfg(
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnet18-118f1556.pth'),
     'swsl_resnet50': _cfg(
@@ -92,6 +105,31 @@ default_cfgs = {
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext101_32x8-b4712904.pth'),
     'swsl_resnext101_32x16d': _cfg(
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext101_32x16-f3559a9c.pth'),
+
+    #  Squeeze-Excitation ResNets, to eventually replace the models in senet.py
+    'seresnet18': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet34': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet50': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet50tn': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet101': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet152': _cfg(
+        url='',
+        interpolation='bicubic'),
+
+    #  Squeeze-Excitation ResNeXts, to eventually replace the models in senet.py
+    'seresnext26_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
     'seresnext26d_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26d_32x4d-80fa48a3.pth',
         interpolation='bicubic'),
@@ -101,9 +139,19 @@ default_cfgs = {
     'seresnext26tn_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26tn_32x4d-569cb627.pth',
         interpolation='bicubic'),
-    'ecaresnext26tn_32x4d': _cfg(
+    'seresnext50_32x4d': _cfg(
+        interpolation='bicubic'),
+    'seresnext101_32x4d': _cfg(
         url='',
         interpolation='bicubic'),
+    'seresnext101_32x8d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'senet154': _cfg(
+        url='',
+        interpolation='bicubic'),
+
+    # Efficient Channel Attention ResNets
     'ecaresnet18': _cfg(),
     'ecaresnet50': _cfg(),
     'ecaresnetlight': _cfg(
@@ -121,6 +169,16 @@ default_cfgs = {
     'ecaresnet101d_pruned': _cfg(
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45610/outputs/ECAResNet101D_P_75a3370e.pth',
         interpolation='bicubic'),
+
+    # Efficient Channel Attention ResNeXts
+    'ecaresnext26tn_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'ecaresnext50_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
+
+    # ResNets with anti-aliasing blur pool
     'resnetblur18': _cfg(
         interpolation='bicubic'),
     'resnetblur50': _cfg(
@@ -278,6 +336,14 @@ class Bottleneck(nn.Module):
         return x
 
 
+def setup_drop_block(drop_block_rate=0.):
+    return [
+        None,
+        None,
+        DropBlock2d(drop_block_rate, 5, 0.25) if drop_block_rate else None,
+        DropBlock2d(drop_block_rate, 3, 1.00) if drop_block_rate else None]
+
+
 def downsample_conv(
         in_channels, out_channels, kernel_size, stride=1, dilation=1, first_dilation=None, norm_layer=None):
     norm_layer = norm_layer or nn.BatchNorm2d
@@ -386,6 +452,7 @@ class ResNet(nn.Module):
                  act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_rate=0.0, drop_path_rate=0.,
                  drop_block_rate=0., global_pool='avg', zero_init_last_bn=True, block_args=None):
         block_args = block_args or dict()
+        assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
         deep_stem = 'deep' in stem_type
         self.inplanes = stem_width * 2 if deep_stem else 64
@@ -393,7 +460,6 @@ class ResNet(nn.Module):
         self.base_width = base_width
         self.drop_rate = drop_rate
         self.expansion = block.expansion
-        self.feature_info = [dict(num_chs=self.inplanes, reduction=2, module='act1')]
         super(ResNet, self).__init__()
 
         # Stem
@@ -414,6 +480,8 @@ class ResNet(nn.Module):
             self.conv1 = nn.Conv2d(in_chans, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.act1 = act_layer(inplace=True)
+        self.feature_info = [dict(num_chs=self.inplanes, reduction=2, module='act1')]
+
         # Stem Pooling
         if aa_layer is not None:
             self.maxpool = nn.Sequential(*[
@@ -424,32 +492,26 @@ class ResNet(nn.Module):
             self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
-        channels, strides, dilations = [64, 128, 256, 512], [1, 2, 2, 2], [1] * 4
-        if output_stride == 16:
-            strides[3] = 1
-            dilations[3] = 2
-        elif output_stride == 8:
-            strides[2:4] = [1, 1]
-            dilations[2:4] = [2, 4]
-        else:
-            assert output_stride == 32
+        channels = [64, 128, 256, 512]
         dp = DropPath(drop_path_rate) if drop_path_rate else None
-        db = [
-            None, None,
-            DropBlock2d(drop_block_rate, 5, 0.25) if drop_block_rate else None,
-            DropBlock2d(drop_block_rate, 3, 1.00) if drop_block_rate else None]
-        layer_args = list(zip(channels, layers, strides, dilations))
+        db = setup_drop_block(drop_block_rate)
         layer_kwargs = dict(
             reduce_first=block_reduce_first, act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer,
             avg_down=avg_down, down_kernel_size=down_kernel_size, drop_path=dp, **block_args)
-        current_stride = 4
+        total_stride = 4
+        dilation = 1
         for i in range(4):
             layer_name = f'layer{i + 1}'
+            stride = 2 if i > 0 else 1
+            if total_stride >= output_stride:
+                dilation *= stride
+                stride = 1
+            else:
+                total_stride *= stride
             self.add_module(layer_name, self._make_layer(
-                block, *layer_args[i], drop_block=db[i], **layer_kwargs))
-            current_stride *= strides[i]
+                block, channels[i], layers[i], stride, dilation, drop_block=db[i], **layer_kwargs))
             self.feature_info.append(dict(
-                num_chs=self.inplanes, reduction=current_stride, module=layer_name))
+                num_chs=self.inplanes, reduction=total_stride, module=layer_name))
 
         # Head (Pooling and Classifier)
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
@@ -873,55 +935,6 @@ def swsl_resnext101_32x16d(pretrained=True, **kwargs):
 
 
 @register_model
-def seresnext26d_32x4d(pretrained=False, **kwargs):
-    """Constructs a SE-ResNeXt-26-D model.
-    This is technically a 28 layer ResNet, using the 'D' modifier from Gluon / bag-of-tricks for
-    combination of deep stem and avg_pool in downsample.
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
-        stem_type='deep', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
-    return _create_resnet('seresnext26d_32x4d', pretrained, **model_args)
-
-
-@register_model
-def seresnext26t_32x4d(pretrained=False, **kwargs):
-    """Constructs a SE-ResNet-26-T model.
-    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 48, 64 channels
-    in the deep stem.
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
-        stem_type='deep_tiered', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
-    return _create_resnet('seresnext26t_32x4d', pretrained, **model_args)
-
-
-@register_model
-def seresnext26tn_32x4d(pretrained=False, **kwargs):
-    """Constructs a SE-ResNeXt-26-TN model.
-    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
-    in the deep stem. The channel number of the middle stem conv is narrower than the 'T' variant.
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
-        stem_type='deep_tiered_narrow', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
-    return _create_resnet('seresnext26tn_32x4d', pretrained, **model_args)
-
-
-@register_model
-def ecaresnext26tn_32x4d(pretrained=False, **kwargs):
-    """Constructs an ECA-ResNeXt-26-TN model.
-    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
-    in the deep stem. The channel number of the middle stem conv is narrower than the 'T' variant.
-    this model replaces SE module with the ECA module
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
-        stem_type='deep_tiered_narrow', avg_down=True, block_args=dict(attn_layer='eca'), **kwargs)
-    return _create_resnet('ecaresnext26tn_32x4d', pretrained, **model_args)
-
-
-@register_model
 def ecaresnet18(pretrained=False, **kwargs):
     """ Constructs an ECA-ResNet-18 model.
     """
@@ -990,6 +1003,19 @@ def ecaresnet101d_pruned(pretrained=False, **kwargs):
 
 
 @register_model
+def ecaresnext26tn_32x4d(pretrained=False, **kwargs):
+    """Constructs an ECA-ResNeXt-26-TN model.
+    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
+    in the deep stem. The channel number of the middle stem conv is narrower than the 'T' variant.
+    this model replaces SE module with the ECA module
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
+        stem_type='deep_tiered_narrow', avg_down=True, block_args=dict(attn_layer='eca'), **kwargs)
+    return _create_resnet('ecaresnext26tn_32x4d', pretrained, **model_args)
+
+
+@register_model
 def resnetblur18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model with blur anti-aliasing
     """
@@ -1003,3 +1029,123 @@ def resnetblur50(pretrained=False, **kwargs):
     """
     model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=BlurPool2d, **kwargs)
     return _create_resnet('resnetblur50', pretrained, **model_args)
+
+
+@register_model
+def seresnet18(pretrained=False, **kwargs):
+    model_args = dict(block=BasicBlock, layers=[2, 2, 2, 2], block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet18', pretrained, **model_args)
+
+
+@register_model
+def seresnet34(pretrained=False, **kwargs):
+    model_args = dict(block=BasicBlock, layers=[3, 4, 6, 3], block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet34', pretrained, **model_args)
+
+
+@register_model
+def seresnet50(pretrained=False, **kwargs):
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet50', pretrained, **model_args)
+
+
+@register_model
+def seresnet50tn(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3],  stem_width=32, stem_type='deep_tiered_narrow', avg_down=True,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet50tn', pretrained, **model_args)
+
+
+@register_model
+def seresnet101(pretrained=False, **kwargs):
+    model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet101', pretrained, **model_args)
+
+
+@register_model
+def seresnet152(pretrained=False, **kwargs):
+    model_args = dict(block=Bottleneck, layers=[3, 8, 36, 3], block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet152', pretrained, **model_args)
+
+
+@register_model
+def seresnext26_32x4d(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext26_32x4d', pretrained, **model_args)
+
+
+@register_model
+def seresnext26d_32x4d(pretrained=False, **kwargs):
+    """Constructs a SE-ResNeXt-26-D model.`
+    This is technically a 28 layer ResNet, using the 'D' modifier from Gluon / bag-of-tricks for
+    combination of deep stem and avg_pool in downsample.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
+        stem_type='deep', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext26d_32x4d', pretrained, **model_args)
+
+
+@register_model
+def seresnext26t_32x4d(pretrained=False, **kwargs):
+    """Constructs a SE-ResNet-26-T model.
+    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 48, 64 channels
+    in the deep stem.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
+        stem_type='deep_tiered', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext26t_32x4d', pretrained, **model_args)
+
+
+@register_model
+def seresnext26tn_32x4d(pretrained=False, **kwargs):
+    """Constructs a SE-ResNeXt-26-TN model.
+    This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
+    in the deep stem. The channel number of the middle stem conv is narrower than the 'T' variant.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
+        stem_type='deep_tiered_narrow', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext26tn_32x4d', pretrained, **model_args)
+
+
+@register_model
+def seresnext50_32x4d(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3], cardinality=32, base_width=4,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext50_32x4d', pretrained, **model_args)
+
+
+@register_model
+def seresnext101_32x4d(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], cardinality=32, base_width=4,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext101_32x4d', pretrained, **model_args)
+
+
+@register_model
+def seresnext101_32x8d(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], cardinality=32, base_width=8,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext101_32x8d', pretrained, **model_args)
+
+
+@register_model
+def senet154(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 8, 36, 3], cardinality=64, base_width=4, stem_type='deep',
+        down_kernel_size=3, block_reduce_first=2, block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('senet154', pretrained, **model_args)
+
+
+@register_model
+def eseresnet50(pretrained=False, **kwargs):
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], block_args=dict(attn_layer='ese'), **kwargs)
+    return _create_resnet('seresnet50', pretrained, **model_args)
