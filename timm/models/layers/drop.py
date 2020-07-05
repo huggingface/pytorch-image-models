@@ -156,7 +156,7 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
     return output
 
 
-class DropPath(nn.ModuleDict):
+class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
     """
     def __init__(self, drop_prob=None):
