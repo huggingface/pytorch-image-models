@@ -35,5 +35,4 @@ An ImageNet test set of 10,000 images sampled from new images roughly 10 years a
 A collection of 7500 images covering 200 of the 1000 ImageNet classes. Images are naturally occuring adversarial examples that confuse typical ImageNet classifiers. This is a challenging dataset, your typical ResNet-50 will score 0% top-1.
 
 ## TODO
-* Add rank difference, and top-1/top-5 difference from ImageNet-1k validation for the 3 additional test sets
 * Explore adding a reduced version of ImageNet-C (Corruptions) and ImageNet-P (Perturbations) from https://github.com/hendrycks/robustness. The originals are huge and image size specific.
