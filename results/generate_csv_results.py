@@ -44,6 +44,8 @@ def diff(csv_file):
     results[csv_file]['top1_diff'] = top1_diff
     results[csv_file]['top5_diff'] = top5_diff
     
+    results[csv_file]['param_count'] = results[csv_file]['param_count'].map('{:,.2f}'.format)
+
     results[csv_file].to_csv(csv_file, index=False, float_format='%.3f')
 
 for csv_file in results:
