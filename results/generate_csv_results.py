@@ -44,7 +44,7 @@ def diff(csv_file):
     results[csv_file]['top1_diff'] = top1_diff
     results[csv_file]['top5_diff'] = top5_diff
     
-    results[csv_file].to_csv(csv_file, index=False, float_format='%.4f')
+    results[csv_file].to_csv(csv_file, index=False, float_format='%.3f')
 
 for csv_file in results:
     if csv_file != 'results-imagenet.csv': diff(csv_file)
