@@ -1,0 +1,34 @@
+site_name: 'Pytorch Image Models'
+site_description: 'Pretained Image Recognition Models'
+repo_name: 'rwightman/pytorch-image-models'
+repo_url: 'https://github.com/rwightman/pytorch-image-models'
+nav:
+  - index.md
+  - models.md
+  - changes.md
+theme:
+  name: 'material'
+  feature:
+    tabs: false
+extra_javascript:
+  - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML'
+markdown_extensions:
+  - codehilite:
+      linenums: true
+  - admonition
+  - pymdownx.arithmatex
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.critic
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:pymdownx.emoji.to_svg
+  - pymdownx.inlinehilite
+  - pymdownx.magiclink
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
