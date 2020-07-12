@@ -16,20 +16,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD
+from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d
+from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act, create_conv2d
 from .registry import register_model
 
 __all__ = ['DPN']
 
 
-def _cfg(url=''):
+def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DPN_MEAN, 'std': IMAGENET_DPN_STD,
         'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier',
+        **kwargs
     }
 
 
@@ -37,7 +38,8 @@ default_cfgs = {
     'dpn68': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
     'dpn68b': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68b_extra-84854c156.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dpn68b_ra-a31ca160.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     'dpn92': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
     'dpn98': _cfg(
@@ -50,10 +52,9 @@ default_cfgs = {
 
 
 class CatBnAct(nn.Module):
-    def __init__(self, in_chs, activation_fn=nn.ReLU(inplace=True)):
+    def __init__(self, in_chs, norm_layer=BatchNormAct2d):
         super(CatBnAct, self).__init__()
-        self.bn = nn.BatchNorm2d(in_chs, eps=0.001)
-        self.act = activation_fn
+        self.bn = norm_layer(in_chs, eps=0.001)
 
     @torch.jit._overload_method  # noqa: F811
     def forward(self, x):
@@ -68,35 +69,29 @@ class CatBnAct(nn.Module):
     def forward(self, x):
         if isinstance(x, tuple):
             x = torch.cat(x, dim=1)
-        return self.act(self.bn(x))
+        return self.bn(x)
 
 
 class BnActConv2d(nn.Module):
-    def __init__(self, in_chs, out_chs, kernel_size, stride,
-                 padding=0, groups=1, activation_fn=nn.ReLU(inplace=True)):
+    def __init__(self, in_chs, out_chs, kernel_size, stride, groups=1, norm_layer=BatchNormAct2d):
         super(BnActConv2d, self).__init__()
-        self.bn = nn.BatchNorm2d(in_chs, eps=0.001)
-        self.act = activation_fn
-        self.conv = nn.Conv2d(in_chs, out_chs, kernel_size, stride, padding, groups=groups, bias=False)
+        self.bn = norm_layer(in_chs, eps=0.001)
+        self.conv = create_conv2d(in_chs, out_chs, kernel_size, stride=stride, groups=groups)
 
     def forward(self, x):
-        return self.conv(self.act(self.bn(x)))
+        return self.conv(self.bn(x))
 
 
 class InputBlock(nn.Module):
-    def __init__(self, num_init_features, kernel_size=7, in_chans=3,
-                 padding=3, activation_fn=nn.ReLU(inplace=True)):
+    def __init__(self, num_init_features, kernel_size=7, in_chans=3, norm_layer=BatchNormAct2d):
         super(InputBlock, self).__init__()
-        self.conv = nn.Conv2d(
-            in_chans, num_init_features, kernel_size=kernel_size, stride=2, padding=padding, bias=False)
-        self.bn = nn.BatchNorm2d(num_init_features, eps=0.001)
-        self.act = activation_fn
+        self.conv = create_conv2d(in_chans, num_init_features, kernel_size=kernel_size, stride=2)
+        self.bn = norm_layer(num_init_features, eps=0.001)
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
     def forward(self, x):
         x = self.conv(x)
         x = self.bn(x)
-        x = self.act(x)
         x = self.pool(x)
         return x
 
@@ -132,12 +127,11 @@ class DualPathBlock(nn.Module):
 
         self.c1x1_a = BnActConv2d(in_chs=in_chs, out_chs=num_1x1_a, kernel_size=1, stride=1)
         self.c3x3_b = BnActConv2d(
-            in_chs=num_1x1_a, out_chs=num_3x3_b, kernel_size=3,
-            stride=self.key_stride, padding=1, groups=groups)
+            in_chs=num_1x1_a, out_chs=num_3x3_b, kernel_size=3, stride=self.key_stride, groups=groups)
         if b:
             self.c1x1_c = CatBnAct(in_chs=num_3x3_b)
-            self.c1x1_c1 = nn.Conv2d(num_3x3_b, num_1x1_c, kernel_size=1, bias=False)
-            self.c1x1_c2 = nn.Conv2d(num_3x3_b, inc, kernel_size=1, bias=False)
+            self.c1x1_c1 = create_conv2d(num_3x3_b, num_1x1_c, kernel_size=1)
+            self.c1x1_c2 = create_conv2d(num_3x3_b, inc, kernel_size=1)
         else:
             self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1)
             self.c1x1_c1 = None
@@ -190,7 +184,7 @@ class DualPathBlock(nn.Module):
 class DPN(nn.Module):
     def __init__(self, small=False, num_init_features=64, k_r=96, groups=32,
                  b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
-                 num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg', fc_act=nn.ELU()):
+                 num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg', fc_act=nn.ELU):
         super(DPN, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -201,9 +195,9 @@ class DPN(nn.Module):
 
         # conv1
         if small:
-            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=3, padding=1)
+            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=3)
         else:
-            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=7, padding=3)
+            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=7)
 
         # conv2
         bw = 64 * bw_factor
@@ -244,7 +238,10 @@ class DPN(nn.Module):
         for i in range(2, k_sec[3] + 1):
             blocks['conv5_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
             in_chs += inc
-        blocks['conv5_bn_ac'] = CatBnAct(in_chs, activation_fn=fc_act)
+
+        def _fc_norm(f, eps): return BatchNormAct2d(f, eps=eps, act_layer=fc_act, inplace=False)
+        blocks['conv5_bn_ac'] = CatBnAct(in_chs, norm_layer=_fc_norm)
+
         self.num_features = in_chs
         self.features = nn.Sequential(blocks)
 
