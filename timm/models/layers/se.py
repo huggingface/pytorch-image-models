@@ -28,10 +28,10 @@ class EffectiveSEModule(nn.Module):
     """ 'Effective Squeeze-Excitation
     From `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
     """
-    def __init__(self, channel, gate_fn='hard_sigmoid'):
+    def __init__(self, channels, gate_fn='hard_sigmoid'):
         super(EffectiveSEModule, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Conv2d(channel, channel, kernel_size=1, padding=0)
+        self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0)
         self.gate_fn = get_act_fn(gate_fn)
 
     def forward(self, x):

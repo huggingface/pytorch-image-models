@@ -9,7 +9,7 @@ from .norm_act import BatchNormAct2d, GroupNormAct
 from .inplace_abn import InplaceAbn
 
 _NORM_ACT_TYPES = {BatchNormAct2d, GroupNormAct, EvoNormBatch2d, EvoNormSample2d, InplaceAbn}
-
+_NORM_ACT_REQUIRES_ARG = {BatchNormAct2d, GroupNormAct, InplaceAbn}  # requires act_layer arg to define act type
 
 def get_norm_act_layer(layer_class):
     layer_class = layer_class.replace('_', '').lower()
@@ -58,7 +58,9 @@ def convert_norm_act_type(norm_layer, act_layer, norm_kwargs=None):
             norm_act_layer = GroupNormAct
         else:
             assert False, f"No equivalent norm_act layer for {type_name}"
+    if norm_act_layer in _NORM_ACT_REQUIRES_ARG:
         # Must pass `act_layer` through for backwards compat where `act_layer=None` implies no activation.
-        # Newer models will use `apply_act` and likely have `act_layer` arg bound to relevant NormAct types.
+        # In the future, may force use of `apply_act` with `act_layer` arg bound to relevant NormAct types
+        # It is intended that functions/partial does not trigger this, they should define act.
         norm_act_args.update(dict(act_layer=act_layer))
     return norm_act_layer, norm_act_args
