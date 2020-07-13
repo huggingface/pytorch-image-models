@@ -1,5 +1,59 @@
 # PyTorch Image Models, etc
+## Setup 
+Follow the steps in the "Usage" section to set up the environment. Here are the main steps to follow:
 
+All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x and 3.7.x. (It also works with 3.8.x, I had tried it.)
+
+Steps to set up the conda environment (if running on CPU, don't need to install cudatoolkit=10.1):
+```
+conda create -n torch-env
+conda activate torch-env
+conda install -c pytorch pytorch torchvision cudatoolkit=10.1
+conda install pyyaml
+```
+
+After the conda environment is set up, install the 'timm' package:
+```
+pip install timm
+```
+
+To check to make sure the 'timm' package was install, open an Python shell and try to run below:
+```
+>>> import timm
+>>> m = timm.create_model('mobilenetv3_small_100', pretrained=True)
+>>> m.eval()
+```
+
+## Run training with the ResNeXt50 model
+
+There are a few examples on running different models for training in the "Training Hyperparameters" section. To run the one for ResNeXt50 with CUDA/GPU, the example is below.
+
+### ResNeXt-50 32x4d w/ RandAugment - 79.762 top-1, 94.60 top-5
+These params will also work well for SE-ResNeXt-50 and SK-ResNeXt-50 and likely 101. I used them for the SK-ResNeXt-50 32x4d that I trained with 2 GPU using a slightly higher LR per effective batch size (lr=0.18, b=192 per GPU). The cmd line below are tuned for 8 GPU training.
+
+
+`./distributed_train.sh 8 /imagenet --model resnext50_32x4d --lr 0.6 --warmup-epochs 5 --epochs 240 --weight-decay 1e-4 --sched cosine --reprob 0.4 --recount 3 --remode pixel --aa rand-m7-mstd0.5-inc1 -b 192 -j 6 --amp --dist-bn reduce`
+
+Here is the breakdown of the arguments from the above example (detailed explanation for all possible arguments are in the train.py file in the argparser):
+
+`./distributed_train.sh <num of GPUs to use> <path to imagenet directory> --model resnext50_32x4d --lr <learning rate> --warmup-epochs <epochs to warmup LR, if scheduler supports> --epochs <number of epochs to train (default: 2)> --weight-decay <weight decay default: 0.0001> --sched <learning rate scheduler> --reprob <Random erase prob (default: 0.)> --recount <Random erase count (default: 1)> --remode <Random erase mode (default: "const")> --aa <Use AutoAugment policy. "v0" or "original". (default: None)> -b <input batch size for training> -j <how many training processes to use/number of workers (default: 1)> --amp <flag that indicates use NVIDIA amp for mixed precision training> --dist-bn <Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")>`
+
+
+Some other arguments that may be helpful:
+
+`--log-interval <how many batches to wait before logging training status>`
+
+The default log interval is set to 50.
+
+`--drop <dropout rate>`
+
+The default dropout rate is 0.
+
+`--opt <Optimizer>`
+
+The default optimizer is SGD, but some other choices include Adam ("adam"), RMSProp ("rmsprop"), etc. The optimizer choices are in the timm/optim/optim_factory.py file.
+
+----------------------------------------------------------------------------------------
 ## What's New
 
 ### June 11, 2020
