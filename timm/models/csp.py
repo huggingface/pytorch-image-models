@@ -32,7 +32,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'conv1', 'classifier': 'fc',
+        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
         **kwargs
     }
 
@@ -59,6 +59,7 @@ model_cfgs = dict(
             exp_ratio=(2.,) * 4,
             bottle_ratio=(0.5,) * 4,
             block_ratio=(1.,) * 4,
+            cross_linear=True,
         )
     ),
     cspresnet50d=dict(
@@ -70,6 +71,7 @@ model_cfgs = dict(
             exp_ratio=(2.,) * 4,
             bottle_ratio=(0.5,) * 4,
             block_ratio=(1.,) * 4,
+            cross_linear=True,
         )
     ),
     cspresnet50w=dict(
@@ -81,6 +83,7 @@ model_cfgs = dict(
             exp_ratio=(1.,) * 4,
             bottle_ratio=(0.25,) * 4,
             block_ratio=(0.5,) * 4,
+            cross_linear=True,
         )
     ),
     cspresnext50=dict(
@@ -93,6 +96,7 @@ model_cfgs = dict(
             exp_ratio=(1.,) * 4,
             bottle_ratio=(1.,) * 4,
             block_ratio=(0.5,) * 4,
+            cross_linear=True,
         )
     ),
     cspdarknet53=dict(
@@ -217,7 +221,7 @@ class DarkBlock(nn.Module):
 class CrossStage(nn.Module):
     """Cross Stage."""
     def __init__(self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., exp_ratio=1.,
-                 groups=1, first_dilation=None, down_growth=False, block_dpr=None,
+                 groups=1, first_dilation=None, down_growth=False, cross_linear=False, block_dpr=None,
                  block_fn=ResBottleneck, **block_kwargs):
         super(CrossStage, self).__init__()
         first_dilation = first_dilation or dilation
@@ -238,7 +242,7 @@ class CrossStage(nn.Module):
         # FIXME this 1x1 expansion is pushed down into the cross and block paths in the darknet cfgs. Also,
         # there is also special case for the first stage for some of the model that results in uneven split
         # across the two paths. I did it this way for simplicity for now.
-        self.conv_exp = ConvBnAct(prev_chs, exp_chs, kernel_size=1, **conv_kwargs)
+        self.conv_exp = ConvBnAct(prev_chs, exp_chs, kernel_size=1, apply_act=not cross_linear, **conv_kwargs)
         prev_chs = exp_chs // 2  # output of conv_exp is always split in two
 
         self.blocks = nn.Sequential()
@@ -317,6 +321,8 @@ def _cfg_to_stage_args(cfg, curr_stride=2, output_stride=32, drop_path_rate=0.):
         cfg['groups'] = (1,) * num_stages
     if 'down_growth' in cfg and not isinstance(cfg['down_growth'], (list, tuple)):
         cfg['down_growth'] = (cfg['down_growth'],) * num_stages
+    if 'cross_linear' in cfg and not isinstance(cfg['cross_linear'], (list, tuple)):
+        cfg['cross_linear'] = (cfg['cross_linear'],) * num_stages
     cfg['block_dpr'] = [None] * num_stages if not drop_path_rate else \
         [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg['depth'])).split(cfg['depth'])]
     stage_strides = []
