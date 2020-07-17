@@ -38,7 +38,7 @@ default_cfgs = {
     'resnest50d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest50-528c19ca.pth'),
     'resnest101e': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest101-22405ba7.pth',
+        url='https://s3.us-west-1.wasabisys.com/resnest/torch/resnest101-22405ba7.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
     'resnest200e': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-resnest/resnest200-75117900.pth',
