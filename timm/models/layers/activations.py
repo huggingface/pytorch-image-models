@@ -82,7 +82,7 @@ class HardSwish(nn.Module):
         self.inplace = inplace
 
     def forward(self, x):
-        return F.hardswish(x) #hard_swish(x, self.inplace)
+        return hard_swish(x, self.inplace)
 
 
 def hard_sigmoid(x, inplace: bool = False):

@@ -39,7 +39,7 @@ _ACT_FN_ME = dict(
 )
 
 _ACT_LAYER_DEFAULT = dict(
-    swish=Swish, #nn.SiLU, #
+    swish=Swish,
     mish=Mish,
     relu=nn.ReLU,
     relu6=nn.ReLU6,
@@ -56,7 +56,7 @@ _ACT_LAYER_DEFAULT = dict(
 )
 
 _ACT_LAYER_JIT = dict(
-    #swish=SwishJit,
+    swish=SwishJit,
     mish=MishJit,
     hard_sigmoid=HardSigmoidJit,
     hard_swish=HardSwishJit,
