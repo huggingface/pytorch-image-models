@@ -17,9 +17,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .features import FeatureNet
-from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, ConvBnAct, DropPath, create_attn, get_norm_act_layer
+from .helpers import build_model_with_cfg
+from .layers import ClassifierHead, ConvBnAct, DropPath, create_attn, get_norm_act_layer
 from .registry import register_model
 
 
@@ -294,26 +293,6 @@ class DarkStage(nn.Module):
         return x
 
 
-class ClassifierHead(nn.Module):
-    """Head."""
-
-    def __init__(self, in_chs, num_classes, pool_type='avg', drop_rate=0.):
-        super(ClassifierHead, self).__init__()
-        self.drop_rate = drop_rate
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-        if num_classes > 0:
-            self.fc = nn.Linear(in_chs, num_classes, bias=True)
-        else:
-            self.fc = nn.Identity()
-
-    def forward(self, x):
-        x = self.global_pool(x).flatten(1)
-        if self.drop_rate:
-            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
-        x = self.fc(x)
-        return x
-
-
 def _cfg_to_stage_args(cfg, curr_stride=2, output_stride=32, drop_path_rate=0.):
     # get per stage args for stage and containing blocks, calculate strides to meet target output_stride
     num_stages = len(cfg['depth'])
@@ -420,62 +399,50 @@ class CspNet(nn.Module):
         return x
 
 
-def _cspnet(variant, pretrained=False, **kwargs):
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        features = True
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
+def _create_cspnet(variant, pretrained=False, **kwargs):
     cfg_variant = variant.split('_')[0]
-    cfg = model_cfgs[cfg_variant]
-    model = CspNet(cfg, **kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices, flatten_sequential=True)
-    return model
+    return build_model_with_cfg(
+        CspNet, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), model_cfg=model_cfgs[cfg_variant], **kwargs)
 
 
 @register_model
 def cspresnet50(pretrained=False, **kwargs):
-    return _cspnet('cspresnet50', pretrained=pretrained, **kwargs)
+    return _create_cspnet('cspresnet50', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def cspresnet50d(pretrained=False, **kwargs):
-    return _cspnet('cspresnet50d', pretrained=pretrained, **kwargs)
+    return _create_cspnet('cspresnet50d', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def cspresnet50w(pretrained=False, **kwargs):
-    return _cspnet('cspresnet50w', pretrained=pretrained, **kwargs)
+    return _create_cspnet('cspresnet50w', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def cspresnext50(pretrained=False, **kwargs):
-    return _cspnet('cspresnext50', pretrained=pretrained, **kwargs)
+    return _create_cspnet('cspresnext50', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def cspresnext50_iabn(pretrained=False, **kwargs):
     norm_layer = get_norm_act_layer('iabn')
-    return _cspnet('cspresnext50', pretrained=pretrained, norm_layer=norm_layer, **kwargs)
+    return _create_cspnet('cspresnext50', pretrained=pretrained, norm_layer=norm_layer, **kwargs)
 
 
 @register_model
 def cspdarknet53(pretrained=False, **kwargs):
-    return _cspnet('cspdarknet53', pretrained=pretrained, block_fn=DarkBlock, **kwargs)
+    return _create_cspnet('cspdarknet53', pretrained=pretrained, block_fn=DarkBlock, **kwargs)
 
 
 @register_model
 def cspdarknet53_iabn(pretrained=False, **kwargs):
     norm_layer = get_norm_act_layer('iabn')
-    return _cspnet('cspdarknet53', pretrained=pretrained, block_fn=DarkBlock, norm_layer=norm_layer, **kwargs)
+    return _create_cspnet('cspdarknet53', pretrained=pretrained, block_fn=DarkBlock, norm_layer=norm_layer, **kwargs)
 
 
 @register_model
 def darknet53(pretrained=False, **kwargs):
-    return _cspnet('darknet53', pretrained=pretrained, block_fn=DarkBlock, stage_fn=DarkStage, **kwargs)
+    return _create_cspnet('darknet53', pretrained=pretrained, block_fn=DarkBlock, stage_fn=DarkStage, **kwargs)

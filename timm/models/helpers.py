@@ -1,11 +1,15 @@
+import logging
+import os
+from collections import OrderedDict
+from copy import deepcopy
+from typing import Callable
+
 import torch
 import torch.nn as nn
-from copy import deepcopy
 import torch.utils.model_zoo as model_zoo
-import os
-import logging
-from collections import OrderedDict
-from timm.models.layers.conv2d_same import Conv2dSame
+
+from .features import FeatureNet
+from .layers import Conv2dSame
 
 
 def load_state_dict(checkpoint_path, use_ema=False):
@@ -194,3 +198,42 @@ def adapt_model_from_file(parent_module, model_variant):
     adapt_file = os.path.join(os.path.dirname(__file__), 'pruned', model_variant + '.txt')
     with open(adapt_file, 'r') as f:
         return adapt_model_from_string(parent_module, f.read().strip())
+
+
+def build_model_with_cfg(
+        model_cls: Callable,
+        variant: str,
+        pretrained: bool,
+        default_cfg: dict,
+        model_cfg: dict = None,
+        feature_cfg: dict = None,
+        pretrained_filter_fn: Callable = None,
+        **kwargs):
+    pruned = kwargs.pop('pruned', False)
+    features = False
+    feature_cfg = feature_cfg or {}
+
+    if kwargs.pop('features_only', False):
+        features = True
+        feature_cfg.setdefault('out_indices', (0, 1, 2, 3, 4))
+        if 'out_indices' in kwargs:
+            feature_cfg['out_indices'] = kwargs.pop('out_indices')
+
+    model = model_cls(**kwargs) if model_cfg is None else model_cls(cfg=model_cfg, **kwargs)
+    model.default_cfg = deepcopy(default_cfg)
+    
+    if pruned:
+        model = adapt_model_from_file(model, variant)
+
+    if pretrained:
+        load_pretrained(
+            model,
+            num_classes=kwargs.get('num_classes', 0),
+            in_chans=kwargs.get('in_chans', 3),
+            filter_fn=pretrained_filter_fn)
+    
+    if features:
+        feature_cls = feature_cfg.pop('feature_cls', FeatureNet)
+        model = feature_cls(model, **feature_cfg)
+    
+    return model

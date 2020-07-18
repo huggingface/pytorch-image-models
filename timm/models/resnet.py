@@ -13,8 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .features import FeatureNet
-from .helpers import load_pretrained, adapt_model_from_file
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, DropBlock2d, DropPath, AvgPool2dSame, create_attn, BlurPool2d
 from .registry import register_model
 
@@ -590,32 +589,9 @@ class ResNet(nn.Module):
         return x
 
 
-def _create_resnet_with_cfg(variant, default_cfg, pretrained=False, **kwargs):
-    assert isinstance(default_cfg, dict)
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        features = True
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    pruned = kwargs.pop('pruned', False)
-
-    model = ResNet(**kwargs)
-    model.default_cfg = copy.deepcopy(default_cfg)
-
-    if pruned:
-        model = adapt_model_from_file(model, variant)
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices=out_indices)
-    return model
-
-
 def _create_resnet(variant, pretrained=False, **kwargs):
-    default_cfg = default_cfgs[variant]
-    return _create_resnet_with_cfg(variant, default_cfg, pretrained=pretrained, **kwargs)
+    return build_model_with_cfg(
+        ResNet, variant, default_cfg=default_cfgs[variant], pretrained=pretrained, **kwargs)
 
 
 @register_model

@@ -17,8 +17,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act, create_conv2d
+from .helpers import build_model_with_cfg
+from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_conv2d, ConvBnAct
 from .registry import register_model
 
 __all__ = ['DPN']
@@ -80,20 +80,6 @@ class BnActConv2d(nn.Module):
 
     def forward(self, x):
         return self.conv(self.bn(x))
-
-
-class InputBlock(nn.Module):
-    def __init__(self, num_init_features, kernel_size=7, in_chans=3, norm_layer=BatchNormAct2d):
-        super(InputBlock, self).__init__()
-        self.conv = create_conv2d(in_chans, num_init_features, kernel_size=kernel_size, stride=2)
-        self.bn = norm_layer(num_init_features, eps=0.001)
-        self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.bn(x)
-        x = self.pool(x)
-        return x
 
 
 class DualPathBlock(nn.Module):
@@ -183,21 +169,21 @@ class DualPathBlock(nn.Module):
 
 class DPN(nn.Module):
     def __init__(self, small=False, num_init_features=64, k_r=96, groups=32,
-                 b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
+                 b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128), output_stride=32,
                  num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg', fc_act=nn.ELU):
         super(DPN, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.b = b
+        assert output_stride == 32  # FIXME look into dilation support
         bw_factor = 1 if small else 4
-
         blocks = OrderedDict()
 
         # conv1
-        if small:
-            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=3)
-        else:
-            blocks['conv1_1'] = InputBlock(num_init_features, in_chans=in_chans, kernel_size=7)
+        blocks['conv1_1'] = ConvBnAct(
+            in_chans, num_init_features, kernel_size=3 if small else 7, stride=2, norm_kwargs=dict(eps=.001))
+        blocks['conv1_pool'] = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.feature_info = [dict(num_chs=num_init_features, reduction=2, module='features.conv1_1')]
 
         # conv2
         bw = 64 * bw_factor
@@ -208,6 +194,7 @@ class DPN(nn.Module):
         for i in range(2, k_sec[0] + 1):
             blocks['conv2_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
             in_chs += inc
+        self.feature_info += [dict(num_chs=in_chs, reduction=4, module=f'features.conv2_{k_sec[0]}')]
 
         # conv3
         bw = 128 * bw_factor
@@ -218,6 +205,7 @@ class DPN(nn.Module):
         for i in range(2, k_sec[1] + 1):
             blocks['conv3_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
             in_chs += inc
+        self.feature_info += [dict(num_chs=in_chs, reduction=8, module=f'features.conv3_{k_sec[1]}')]
 
         # conv4
         bw = 256 * bw_factor
@@ -228,6 +216,7 @@ class DPN(nn.Module):
         for i in range(2, k_sec[2] + 1):
             blocks['conv4_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
             in_chs += inc
+        self.feature_info += [dict(num_chs=in_chs, reduction=16, module=f'features.conv4_{k_sec[2]}')]
 
         # conv5
         bw = 512 * bw_factor
@@ -238,6 +227,7 @@ class DPN(nn.Module):
         for i in range(2, k_sec[3] + 1):
             blocks['conv5_' + str(i)] = DualPathBlock(in_chs, r, r, bw, inc, groups, 'normal', b)
             in_chs += inc
+        self.feature_info += [dict(num_chs=in_chs, reduction=32, module=f'features.conv5_{k_sec[3]}')]
 
         def _fc_norm(f, eps): return BatchNormAct2d(f, eps=eps, act_layer=fc_act, inplace=False)
         blocks['conv5_bn_ac'] = CatBnAct(in_chs, norm_layer=_fc_norm)
@@ -274,79 +264,55 @@ class DPN(nn.Module):
         return out.flatten(1)
 
 
+def _create_dpn(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        DPN, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(feature_concat=True, flatten_sequential=True), **kwargs)
+
+
 @register_model
-def dpn68(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn68']
-    model = DPN(
+def dpn68(pretrained=False, **kwargs):
+    model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
-        k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64), **kwargs)
+    return _create_dpn('dpn68', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def dpn68b(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn68b']
-    model = DPN(
+def dpn68b(pretrained=False, **kwargs):
+    model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
-        b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64),
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64), **kwargs)
+    return _create_dpn('dpn68b', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def dpn92(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn92']
-    model = DPN(
+def dpn92(pretrained=False, **kwargs):
+    model_kwargs = dict(
         num_init_features=64, k_r=96, groups=32,
-        k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128),
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128), **kwargs)
+    return _create_dpn('dpn92', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def dpn98(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn98']
-    model = DPN(
+def dpn98(pretrained=False, **kwargs):
+    model_kwargs = dict(
         num_init_features=96, k_r=160, groups=40,
-        k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128),
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128), **kwargs)
+    return _create_dpn('dpn98', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def dpn131(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn131']
-    model = DPN(
+def dpn131(pretrained=False, **kwargs):
+    model_kwargs = dict(
         num_init_features=128, k_r=160, groups=40,
-        k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128),
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128), **kwargs)
+    return _create_dpn('dpn131', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def dpn107(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dpn107']
-    model = DPN(
+def dpn107(pretrained=False, **kwargs):
+    model_kwargs = dict(
         num_init_features=128, k_r=200, groups=50,
-        k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128),
-        num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+        k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128), **kwargs)
+    return _create_dpn('dpn107', pretrained=pretrained, **model_kwargs)

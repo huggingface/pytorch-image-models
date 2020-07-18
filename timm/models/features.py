@@ -11,7 +11,8 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+from .feature_hooks import FeatureHooks
 
 
 class FeatureInfo:
@@ -24,11 +25,11 @@ class FeatureInfo:
             assert 'reduction' in fi and fi['reduction'] >= prev_reduction
             prev_reduction = fi['reduction']
             assert 'module' in fi
-        self._out_indices = out_indices
-        self._info = feature_info
+        self.out_indices = out_indices
+        self.info = feature_info
 
     def from_other(self, out_indices: Tuple[int]):
-        return FeatureInfo(deepcopy(self._info), out_indices)
+        return FeatureInfo(deepcopy(self.info), out_indices)
 
     def channels(self, idx=None):
         """ feature channels accessor
@@ -36,8 +37,8 @@ class FeatureInfo:
         if idx is an integer, return feature channel count for that feature module index
         """
         if isinstance(idx, int):
-            return self._info[idx]['num_chs']
-        return [self._info[i]['num_chs'] for i in self._out_indices]
+            return self.info[idx]['num_chs']
+        return [self.info[i]['num_chs'] for i in self.out_indices]
 
     def reduction(self, idx=None):
         """ feature reduction (output stride) accessor
@@ -45,8 +46,8 @@ class FeatureInfo:
         if idx is an integer, return feature channel count at that feature module index
         """
         if isinstance(idx, int):
-            return self._info[idx]['reduction']
-        return [self._info[i]['reduction'] for i in self._out_indices]
+            return self.info[idx]['reduction']
+        return [self.info[i]['reduction'] for i in self.out_indices]
 
     def module_name(self, idx=None):
         """ feature module name accessor
@@ -54,24 +55,24 @@ class FeatureInfo:
         if idx is an integer, return feature module name at that feature module index
         """
         if isinstance(idx, int):
-            return self._info[idx]['module']
-        return [self._info[i]['module'] for i in self._out_indices]
+            return self.info[idx]['module']
+        return [self.info[i]['module'] for i in self.out_indices]
 
     def get_by_key(self, idx=None, keys=None):
         """ return info dicts for specified keys (or all if None) at specified idx (or out_indices if None)
         """
         if isinstance(idx, int):
-            return self._info[idx] if keys is None else {k: self._info[idx][k] for k in keys}
+            return self.info[idx] if keys is None else {k: self.info[idx][k] for k in keys}
         if keys is None:
-            return [self._info[i] for i in self._out_indices]
+            return [self.info[i] for i in self.out_indices]
         else:
-            return [{k: self._info[i][k] for k in keys} for i in self._out_indices]
+            return [{k: self.info[i][k] for k in keys} for i in self.out_indices]
 
     def __getitem__(self, item):
-        return self._info[item]
+        return self.info[item]
 
     def __len__(self):
-        return len(self._info)
+        return len(self.info)
 
 
 def _module_list(module, flatten_sequential=False):
@@ -81,30 +82,47 @@ def _module_list(module, flatten_sequential=False):
         if flatten_sequential and isinstance(module, nn.Sequential):
             # first level of Sequential containers is flattened into containing model
             for child_name, child_module in module.named_children():
-                ml.append(('_'.join([name, child_name]), child_module))
+                combined = [name, child_name]
+                ml.append(('_'.join(combined), '.'.join(combined), child_module))
         else:
-            ml.append((name, module))
+            ml.append((name, name, module))
     return ml
 
 
-def _check_return_layers(input_return_layers, modules):
-    return_layers = {}
-    for k, v in input_return_layers.items():
-        ks = k.split('.')
-        assert 0 < len(ks) <= 2
-        return_layers['_'.join(ks)] = v
-    return_set = set(return_layers.keys())
-    sdiff = return_set - {name for name, _ in modules}
-    if sdiff:
-        raise ValueError(f'return_layers {sdiff} are not present in model')
-    return return_layers, return_set
+class LayerGetterHooks(nn.ModuleDict):
+    """ LayerGetterHooks
+    TODO
+    """
+
+    def __init__(self, model, feature_info, flatten_sequential=False, out_as_dict=False, out_map=None,
+                 default_hook_type='forward'):
+        modules = _module_list(model, flatten_sequential=flatten_sequential)
+        remaining = {f['module']: f['hook_type'] if 'hook_type' in f else default_hook_type for f in feature_info}
+        layers = OrderedDict()
+        hooks = []
+        for new_name, old_name, module in modules:
+            layers[new_name] = module
+            for fn, fm in module.named_modules(prefix=old_name):
+                if fn in remaining:
+                    hooks.append(dict(module=fn, hook_type=remaining[fn]))
+                    del remaining[fn]
+            if not remaining:
+                break
+        assert not remaining, f'Return layers ({remaining}) are not present in model'
+        super(LayerGetterHooks, self).__init__(layers)
+        self.hooks = FeatureHooks(hooks, model.named_modules(), out_as_dict=out_as_dict, out_map=out_map)
+
+    def forward(self, x) -> Dict[Any, torch.Tensor]:
+        for name, module in self.items():
+            x = module(x)
+        return self.hooks.get_output(x.device)
 
 
 class LayerGetterDict(nn.ModuleDict):
     """
     Module wrapper that returns intermediate layers from a model as a dictionary
 
-    Originally based on IntermediateLayerGetter at
+    Originally based on concepts from IntermediateLayerGetter at
     https://github.com/pytorch/vision/blob/d88d8961ae51507d0cb680329d985b1488b1b76b/torchvision/models/_utils.py
 
     It has a strong assumption that the modules have been registered into the model in the same
@@ -131,16 +149,20 @@ class LayerGetterDict(nn.ModuleDict):
     """
 
     def __init__(self, model, return_layers, concat=False, flatten_sequential=False):
-        modules = _module_list(model, flatten_sequential=flatten_sequential)
-        self.return_layers, remaining = _check_return_layers(return_layers, modules)
-        layers = OrderedDict()
+        self.return_layers = {}
         self.concat = concat
-        for name, module in modules:
-            layers[name] = module
-            if name in remaining:
-                remaining.remove(name)
+        modules = _module_list(model, flatten_sequential=flatten_sequential)
+        remaining = set(return_layers.keys())
+        layers = OrderedDict()
+        for new_name, old_name, module in modules:
+            layers[new_name] = module
+            if old_name in remaining:
+                self.return_layers[new_name] = return_layers[old_name]
+                remaining.remove(old_name)
             if not remaining:
                 break
+        assert not remaining and len(self.return_layers) == len(return_layers), \
+            f'Return layers ({remaining}) are not present in model'
         super(LayerGetterDict, self).__init__(layers)
 
     def forward(self, x) -> Dict[Any, torch.Tensor]:
@@ -162,7 +184,7 @@ class LayerGetterList(nn.Sequential):
     """
     Module wrapper that returns intermediate layers from a model as a list
 
-    Originally based on IntermediateLayerGetter at
+    Originally based on concepts from IntermediateLayerGetter at
     https://github.com/pytorch/vision/blob/d88d8961ae51507d0cb680329d985b1488b1b76b/torchvision/models/_utils.py
 
     It has a strong assumption that the modules have been registered into the model in the same
@@ -190,15 +212,19 @@ class LayerGetterList(nn.Sequential):
 
     def __init__(self, model, return_layers, concat=False, flatten_sequential=False):
         super(LayerGetterList, self).__init__()
-        modules = _module_list(model, flatten_sequential=flatten_sequential)
-        self.return_layers, remaining = _check_return_layers(return_layers, modules)
+        self.return_layers = {}
         self.concat = concat
-        for name, module in modules:
-            self.add_module(name, module)
-            if name in remaining:
-                remaining.remove(name)
+        modules = _module_list(model, flatten_sequential=flatten_sequential)
+        remaining = set(return_layers.keys())
+        for new_name, orig_name, module in modules:
+            self.add_module(new_name, module)
+            if orig_name in remaining:
+                self.return_layers[new_name] = return_layers[orig_name]
+                remaining.remove(orig_name)
             if not remaining:
                 break
+        assert not remaining and len(self.return_layers) == len(return_layers), \
+            f'Return layers ({remaining}) are not present in model'
 
     def forward(self, x) -> List[torch.Tensor]:
         out = []
@@ -225,6 +251,14 @@ def _resolve_feature_info(net, out_indices, feature_info=None):
         assert False, "Provided feature_info is not valid"
 
 
+def _get_return_layers(feature_info, out_map):
+    module_names = feature_info.module_name()
+    return_layers = {}
+    for i, name in enumerate(module_names):
+        return_layers[name] = out_map[i] if out_map is not None else feature_info.out_indices[i]
+    return return_layers
+
+
 class FeatureNet(nn.Module):
     """ FeatureNet
 
@@ -235,17 +269,41 @@ class FeatureNet(nn.Module):
     """
     def __init__(
             self, net,
-            out_indices=(0, 1, 2, 3, 4), out_map=None, out_as_dict=False,
+            out_indices=(0, 1, 2, 3, 4), out_map=None, out_as_dict=False, use_hooks=False,
             feature_info=None, feature_concat=False, flatten_sequential=False):
         super(FeatureNet, self).__init__()
         self.feature_info = _resolve_feature_info(net, out_indices, feature_info)
-        module_names = self.feature_info.module_name()
-        return_layers = {}
-        for i in range(len(out_indices)):
-            return_layers[module_names[i]] = out_map[i] if out_map is not None else out_indices[i]
-        lg_args = dict(return_layers=return_layers, concat=feature_concat, flatten_sequential=flatten_sequential)
-        self.body = LayerGetterDict(net, **lg_args) if out_as_dict else LayerGetterList(net, **lg_args)
+        if use_hooks:
+            self.body = LayerGetterHooks(net, self.feature_info, out_as_dict=out_as_dict, out_map=out_map)
+        else:
+            return_layers = _get_return_layers(self.feature_info, out_map)
+            lg_args = dict(return_layers=return_layers, concat=feature_concat, flatten_sequential=flatten_sequential)
+            self.body = LayerGetterDict(net, **lg_args) if out_as_dict else LayerGetterList(net, **lg_args)
 
     def forward(self, x):
         output = self.body(x)
         return output
+
+
+class FeatureHookNet(nn.Module):
+    """ FeatureHookNet
+
+    Wrap a model and extract features specified by the out indices.
+
+    Features are extracted via hooks without modifying the underlying network in any way. If only
+    part of the model is used it is up to the caller to remove unneeded layers as this wrapper
+    does not rewrite and remove unused top-level modules like FeatureNet with LayerGetter.
+    """
+    def __init__(
+            self, net,
+            out_indices=(0, 1, 2, 3, 4), out_as_dict=False, out_map=None,
+            feature_info=None, feature_concat=False):
+        super(FeatureHookNet, self).__init__()
+        self.feature_info = _resolve_feature_info(net, out_indices, feature_info)
+        self.body = net
+        self.hooks = FeatureHooks(
+            self.feature_info, self.body.named_modules(), out_as_dict=out_as_dict, out_map=out_map)
+
+    def forward(self, x):
+        self.body(x)
+        return self.hooks.get_output(x.device)

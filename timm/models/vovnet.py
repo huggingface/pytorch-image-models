@@ -19,9 +19,8 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
-from .helpers import load_pretrained
-from .features import FeatureNet
-from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, SelectAdaptivePool2d, \
+from .helpers import build_model_with_cfg
+from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, ClassifierHead, \
     create_attn, create_norm_act, get_norm_act_layer
 
 
@@ -253,26 +252,6 @@ class OsaStage(nn.Module):
         return x
 
 
-class ClassifierHead(nn.Module):
-    """Head."""
-
-    def __init__(self, in_chs, num_classes, pool_type='avg', drop_rate=0.):
-        super(ClassifierHead, self).__init__()
-        self.drop_rate = drop_rate
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-        if num_classes > 0:
-            self.fc = nn.Linear(in_chs, num_classes, bias=True)
-        else:
-            self.fc = nn.Identity()
-
-    def forward(self, x):
-        x = self.global_pool(x).flatten(1)
-        if self.drop_rate:
-            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
-        x = self.fc(x)
-        return x
-
-
 class VovNet(nn.Module):
 
     def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
@@ -346,67 +325,55 @@ class VovNet(nn.Module):
         return self.head(x)
 
 
-def _vovnet(variant, pretrained=False, **kwargs):
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        features = True
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    model_cfg = model_cfgs[variant]
-    model = VovNet(model_cfg, **kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices, flatten_sequential=True)
-    return model
+def _create_vovnet(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        VovNet, variant, pretrained, default_cfg=default_cfgs[variant], model_cfg=model_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), **kwargs)
 
 
 @register_model
 def vovnet39a(pretrained=False, **kwargs):
-    return _vovnet('vovnet39a', pretrained=pretrained, **kwargs)
+    return _create_vovnet('vovnet39a', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def vovnet57a(pretrained=False, **kwargs):
-    return _vovnet('vovnet57a', pretrained=pretrained, **kwargs)
+    return _create_vovnet('vovnet57a', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet19b_slim_dw(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet19b_slim_dw', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet19b_slim_dw', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet19b_dw(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet19b_dw', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet19b_dw', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet19b_slim(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet19b_slim', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet19b_slim', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet39b(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet39b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet39b', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet57b(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet57b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet57b', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet99b(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet99b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet99b', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def eca_vovnet39b(pretrained=False, **kwargs):
-    return _vovnet('eca_vovnet39b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('eca_vovnet39b', pretrained=pretrained, **kwargs)
 
 
 # Experimental Models
@@ -415,11 +382,11 @@ def eca_vovnet39b(pretrained=False, **kwargs):
 def ese_vovnet39b_evos(pretrained=False, **kwargs):
     def norm_act_fn(num_features, **nkwargs):
         return create_norm_act('EvoNormSample', num_features, jit=False, **nkwargs)
-    return _vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
+    return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
 
 
 @register_model
 def ese_vovnet99b_iabn(pretrained=False, **kwargs):
     norm_layer = get_norm_act_layer('iabn')
-    return _vovnet(
+    return _create_vovnet(
         'ese_vovnet99b_iabn', pretrained=pretrained, norm_layer=norm_layer, act_layer=nn.LeakyReLU, **kwargs)

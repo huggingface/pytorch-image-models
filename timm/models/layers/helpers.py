@@ -19,7 +19,7 @@ tup_single = _ntuple(1)
 tup_pair = _ntuple(2)
 tup_triple = _ntuple(3)
 tup_quadruple = _ntuple(4)
-
+ntup = _ntuple
 
 
 

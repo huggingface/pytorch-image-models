@@ -504,21 +504,16 @@ class BasicConv2d(nn.Module):
         return F.relu(x, inplace=True)
 
 
-def _inception_v3(variant, pretrained=False, **kwargs):
+def _create_inception_v3(variant, pretrained=False, **kwargs):
+    assert not kwargs.pop('features_only', False)
     default_cfg = default_cfgs[variant]
-    if kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
-        model_kwargs.pop('num_classes', 0)
-        model_class = InceptionV3
+    aux_logits = kwargs.pop('aux_logits', False)
+    if aux_logits:
+        model_class = InceptionV3Aux
+        load_strict = default_cfg['has_aux']
     else:
-        aux_logits = kwargs.pop('aux_logits', False)
-        if aux_logits:
-            model_class = InceptionV3Aux
-            load_strict = default_cfg['has_aux']
-        else:
-            model_class = InceptionV3
-            load_strict = not default_cfg['has_aux']
+        model_class = InceptionV3
+        load_strict = not default_cfg['has_aux']
 
     model = model_class(**kwargs)
     model.default_cfg = default_cfg
@@ -534,14 +529,14 @@ def _inception_v3(variant, pretrained=False, **kwargs):
 @register_model
 def inception_v3(pretrained=False, **kwargs):
     # original PyTorch weights, ported from Tensorflow but modified
-    model = _inception_v3('inception_v3', pretrained=pretrained, **kwargs)
+    model = _create_inception_v3('inception_v3', pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def tf_inception_v3(pretrained=False, **kwargs):
     # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
-    model = _inception_v3('tf_inception_v3', pretrained=pretrained, **kwargs)
+    model = _create_inception_v3('tf_inception_v3', pretrained=pretrained, **kwargs)
     return model
 
 
@@ -549,7 +544,7 @@ def tf_inception_v3(pretrained=False, **kwargs):
 def adv_inception_v3(pretrained=False, **kwargs):
     # my port of Tensorflow adversarially trained Inception V3 from
     # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
-    model = _inception_v3('adv_inception_v3', pretrained=pretrained, **kwargs)
+    model = _create_inception_v3('adv_inception_v3', pretrained=pretrained, **kwargs)
     return model
 
 
@@ -557,5 +552,5 @@ def adv_inception_v3(pretrained=False, **kwargs):
 def gluon_inception_v3(pretrained=False, **kwargs):
     # from gluon pretrained models, best performing in terms of accuracy/loss metrics
     # https://gluon-cv.mxnet.io/model_zoo/classification.html
-    model = _inception_v3('gluon_inception_v3', pretrained=pretrained, **kwargs)
+    model = _create_inception_v3('gluon_inception_v3', pretrained=pretrained, **kwargs)
     return model

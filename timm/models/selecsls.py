@@ -16,8 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .features import FeatureNet
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
 
@@ -178,7 +177,7 @@ class SelecSLS(nn.Module):
         return x
 
 
-def _create_model(variant, pretrained, model_kwargs):
+def _create_selecsls(variant, pretrained, model_kwargs):
     cfg = {}
     feature_info = [dict(num_chs=32, reduction=2, module='stem.2')]
     if variant.startswith('selecsls42'):
@@ -299,61 +298,42 @@ def _create_model(variant, pretrained, model_kwargs):
     else:
         raise ValueError('Invalid net configuration ' + variant + ' !!!')
 
-    load_strict = True
-    features = False
-    out_indices = None
-    if model_kwargs.pop('features_only', False):
-        load_strict = False
-        features = True
-        # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
-        out_indices = model_kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-        model_kwargs.pop('num_classes', 0)
-
-    model = SelecSLS(cfg, **model_kwargs)
-    model.default_cfg = default_cfgs[variant]
-    model.feature_info = feature_info
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=model_kwargs.get('num_classes', 0),
-            in_chans=model_kwargs.get('in_chans', 3),
-            strict=load_strict)
-
-    if features:
-        model = FeatureNet(model, out_indices, flatten_sequential=True)
-    return model
+    # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
+    return build_model_with_cfg(
+        SelecSLS, variant, pretrained, default_cfg=default_cfgs[variant], model_cfg=cfg,
+        feature_cfg=dict(out_indices=(0, 1, 2, 3, 4), flatten_sequential=True), **model_kwargs)
 
 
 @register_model
 def selecsls42(pretrained=False, **kwargs):
     """Constructs a SelecSLS42 model.
     """
-    return _create_model('selecsls42', pretrained, kwargs)
+    return _create_selecsls('selecsls42', pretrained, kwargs)
 
 
 @register_model
 def selecsls42b(pretrained=False, **kwargs):
     """Constructs a SelecSLS42_B model.
     """
-    return _create_model('selecsls42b', pretrained, kwargs)
+    return _create_selecsls('selecsls42b', pretrained, kwargs)
 
 
 @register_model
 def selecsls60(pretrained=False, **kwargs):
     """Constructs a SelecSLS60 model.
     """
-    return _create_model('selecsls60', pretrained, kwargs)
+    return _create_selecsls('selecsls60', pretrained, kwargs)
 
 
 @register_model
 def selecsls60b(pretrained=False, **kwargs):
     """Constructs a SelecSLS60_B model.
     """
-    return _create_model('selecsls60b', pretrained, kwargs)
+    return _create_selecsls('selecsls60b', pretrained, kwargs)
 
 
 @register_model
 def selecsls84(pretrained=False, **kwargs):
     """Constructs a SelecSLS84 model.
     """
-    return _create_model('selecsls84', pretrained, kwargs)
+    return _create_selecsls('selecsls84', pretrained, kwargs)

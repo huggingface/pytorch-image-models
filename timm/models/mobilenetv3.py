@@ -215,7 +215,7 @@ class MobileNetV3Features(nn.Module):
             return self.feature_hooks.get_output(x.device)
 
 
-def _create_model(model_kwargs, default_cfg, pretrained=False):
+def _create_mnv3(model_kwargs, default_cfg, pretrained=False):
     if model_kwargs.pop('features_only', False):
         load_strict = False
         model_kwargs.pop('num_classes', 0)
@@ -272,7 +272,7 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
         **kwargs,
     )
-    model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
+    model = _create_mnv3(model_kwargs, default_cfgs[variant], pretrained)
     return model
 
 
@@ -368,7 +368,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
         **kwargs,
     )
-    model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
+    model = _create_mnv3(model_kwargs, default_cfgs[variant], pretrained)
     return model
 
 

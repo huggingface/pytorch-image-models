@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
 from .resnet import BasicBlock, Bottleneck  # leveraging ResNet blocks w/ additional features like SE
@@ -734,67 +734,52 @@ class HighResolutionNet(nn.Module):
         return x
 
 
-def _create_model(variant, pretrained, model_kwargs):
-    if model_kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
-        model_kwargs.pop('num_classes', 0)
-        model_class = HighResolutionNet
-    else:
-        load_strict = True
-        model_class = HighResolutionNet
-
-    model = model_class(cfg_cls[variant], **model_kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=model_kwargs.get('num_classes', 0),
-            in_chans=model_kwargs.get('in_chans', 3),
-            strict=load_strict)
-    return model
+def _create_hrnet(variant, pretrained, **model_kwargs):
+    return build_model_with_cfg(
+        HighResolutionNet, variant, pretrained, default_cfg=default_cfgs[variant],
+        model_cfg=cfg_cls[variant], **model_kwargs)
 
 
 @register_model
 def hrnet_w18_small(pretrained=True, **kwargs):
-    return _create_model('hrnet_w18_small', pretrained, kwargs)
+    return _create_hrnet('hrnet_w18_small', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w18_small_v2(pretrained=True, **kwargs):
-    return _create_model('hrnet_w18_small_v2', pretrained, kwargs)
+    return _create_hrnet('hrnet_w18_small_v2', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w18(pretrained=True, **kwargs):
-    return _create_model('hrnet_w18', pretrained, kwargs)
+    return _create_hrnet('hrnet_w18', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w30(pretrained=True, **kwargs):
-    return _create_model('hrnet_w30', pretrained, kwargs)
+    return _create_hrnet('hrnet_w30', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w32(pretrained=True, **kwargs):
-    return _create_model('hrnet_w32', pretrained, kwargs)
+    return _create_hrnet('hrnet_w32', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w40(pretrained=True, **kwargs):
-    return _create_model('hrnet_w40', pretrained, kwargs)
+    return _create_hrnet('hrnet_w40', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w44(pretrained=True, **kwargs):
-    return _create_model('hrnet_w44', pretrained, kwargs)
+    return _create_hrnet('hrnet_w44', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w48(pretrained=True, **kwargs):
-    return _create_model('hrnet_w48', pretrained, kwargs)
+    return _create_hrnet('hrnet_w48', pretrained, **kwargs)
 
 
 @register_model
 def hrnet_w64(pretrained=True, **kwargs):
-    return _create_model('hrnet_w64', pretrained, kwargs)
+    return _create_hrnet('hrnet_w64', pretrained, **kwargs)

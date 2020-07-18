@@ -14,12 +14,10 @@ Weights from original impl have been modified
 """
 import numpy as np
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .features import FeatureNet
-from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, AvgPool2dSame, ConvBnAct, SEModule
+from .helpers import build_model_with_cfg
+from .layers import ClassifierHead, AvgPool2dSame, ConvBnAct, SEModule
 from .registry import register_model
 
 
@@ -222,26 +220,6 @@ class RegStage(nn.Module):
         return x
 
 
-class ClassifierHead(nn.Module):
-    """Head."""
-
-    def __init__(self, in_chs, num_classes, pool_type='avg', drop_rate=0.):
-        super(ClassifierHead, self).__init__()
-        self.drop_rate = drop_rate
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-        if num_classes > 0:
-            self.fc = nn.Linear(in_chs, num_classes, bias=True)
-        else:
-            self.fc = nn.Identity()
-
-    def forward(self, x):
-        x = self.global_pool(x).flatten(1)
-        if self.drop_rate:
-            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
-        x = self.fc(x)
-        return x
-
-
 class RegNet(nn.Module):
     """RegNet model.
 
@@ -343,163 +321,150 @@ class RegNet(nn.Module):
         return x
 
 
-def _regnet(variant, pretrained, **kwargs):
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        features = True
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    model_cfg = model_cfgs[variant]
-    model = RegNet(model_cfg, **kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices=out_indices)
-    return model
+def _create_regnet(variant, pretrained, **kwargs):
+    return build_model_with_cfg(
+        RegNet, variant, pretrained, default_cfg=default_cfgs[variant], model_cfg=model_cfgs[variant], **kwargs)
 
 
 @register_model
 def regnetx_002(pretrained=False, **kwargs):
     """RegNetX-200MF"""
-    return _regnet('regnetx_002', pretrained, **kwargs)
+    return _create_regnet('regnetx_002', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_004(pretrained=False, **kwargs):
     """RegNetX-400MF"""
-    return _regnet('regnetx_004', pretrained, **kwargs)
+    return _create_regnet('regnetx_004', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_006(pretrained=False, **kwargs):
     """RegNetX-600MF"""
-    return _regnet('regnetx_006', pretrained, **kwargs)
+    return _create_regnet('regnetx_006', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_008(pretrained=False, **kwargs):
     """RegNetX-800MF"""
-    return _regnet('regnetx_008', pretrained, **kwargs)
+    return _create_regnet('regnetx_008', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_016(pretrained=False, **kwargs):
     """RegNetX-1.6GF"""
-    return _regnet('regnetx_016', pretrained, **kwargs)
+    return _create_regnet('regnetx_016', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_032(pretrained=False, **kwargs):
     """RegNetX-3.2GF"""
-    return _regnet('regnetx_032', pretrained, **kwargs)
+    return _create_regnet('regnetx_032', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_040(pretrained=False, **kwargs):
     """RegNetX-4.0GF"""
-    return _regnet('regnetx_040', pretrained, **kwargs)
+    return _create_regnet('regnetx_040', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_064(pretrained=False, **kwargs):
     """RegNetX-6.4GF"""
-    return _regnet('regnetx_064', pretrained, **kwargs)
+    return _create_regnet('regnetx_064', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_080(pretrained=False, **kwargs):
     """RegNetX-8.0GF"""
-    return _regnet('regnetx_080', pretrained, **kwargs)
+    return _create_regnet('regnetx_080', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_120(pretrained=False, **kwargs):
     """RegNetX-12GF"""
-    return _regnet('regnetx_120', pretrained, **kwargs)
+    return _create_regnet('regnetx_120', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_160(pretrained=False, **kwargs):
     """RegNetX-16GF"""
-    return _regnet('regnetx_160', pretrained, **kwargs)
+    return _create_regnet('regnetx_160', pretrained, **kwargs)
 
 
 @register_model
 def regnetx_320(pretrained=False, **kwargs):
     """RegNetX-32GF"""
-    return _regnet('regnetx_320', pretrained, **kwargs)
+    return _create_regnet('regnetx_320', pretrained, **kwargs)
 
 
 @register_model
 def regnety_002(pretrained=False, **kwargs):
     """RegNetY-200MF"""
-    return _regnet('regnety_002', pretrained, **kwargs)
+    return _create_regnet('regnety_002', pretrained, **kwargs)
 
 
 @register_model
 def regnety_004(pretrained=False, **kwargs):
     """RegNetY-400MF"""
-    return _regnet('regnety_004', pretrained, **kwargs)
+    return _create_regnet('regnety_004', pretrained, **kwargs)
 
 
 @register_model
 def regnety_006(pretrained=False, **kwargs):
     """RegNetY-600MF"""
-    return _regnet('regnety_006', pretrained, **kwargs)
+    return _create_regnet('regnety_006', pretrained, **kwargs)
 
 
 @register_model
 def regnety_008(pretrained=False, **kwargs):
     """RegNetY-800MF"""
-    return _regnet('regnety_008', pretrained, **kwargs)
+    return _create_regnet('regnety_008', pretrained, **kwargs)
 
 
 @register_model
 def regnety_016(pretrained=False, **kwargs):
     """RegNetY-1.6GF"""
-    return _regnet('regnety_016', pretrained, **kwargs)
+    return _create_regnet('regnety_016', pretrained, **kwargs)
 
 
 @register_model
 def regnety_032(pretrained=False, **kwargs):
     """RegNetY-3.2GF"""
-    return _regnet('regnety_032', pretrained, **kwargs)
+    return _create_regnet('regnety_032', pretrained, **kwargs)
 
 
 @register_model
 def regnety_040(pretrained=False, **kwargs):
     """RegNetY-4.0GF"""
-    return _regnet('regnety_040', pretrained, **kwargs)
+    return _create_regnet('regnety_040', pretrained, **kwargs)
 
 
 @register_model
 def regnety_064(pretrained=False, **kwargs):
     """RegNetY-6.4GF"""
-    return _regnet('regnety_064', pretrained, **kwargs)
+    return _create_regnet('regnety_064', pretrained, **kwargs)
 
 
 @register_model
 def regnety_080(pretrained=False, **kwargs):
     """RegNetY-8.0GF"""
-    return _regnet('regnety_080', pretrained, **kwargs)
+    return _create_regnet('regnety_080', pretrained, **kwargs)
 
 
 @register_model
 def regnety_120(pretrained=False, **kwargs):
     """RegNetY-12GF"""
-    return _regnet('regnety_120', pretrained, **kwargs)
+    return _create_regnet('regnety_120', pretrained, **kwargs)
 
 
 @register_model
 def regnety_160(pretrained=False, **kwargs):
     """RegNetY-16GF"""
-    return _regnet('regnety_160', pretrained, **kwargs)
+    return _create_regnet('regnety_160', pretrained, **kwargs)
 
 
 @register_model
 def regnety_320(pretrained=False, **kwargs):
     """RegNetY-32GF"""
-    return _regnet('regnety_320', pretrained, **kwargs)
+    return _create_regnet('regnety_320', pretrained, **kwargs)

@@ -25,8 +25,7 @@ The resize parameter of the validation transform should be 333, and make sure to
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .helpers import load_pretrained
-from .features import FeatureNet
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
 
@@ -220,25 +219,9 @@ class Xception(nn.Module):
 
 
 def _xception(variant, pretrained=False, **kwargs):
-    load_strict = True
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        load_strict = False
-        features = True
-        kwargs.pop('num_classes', 0)
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    model = Xception(**kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3),
-            strict=load_strict)
-    if features:
-        model = FeatureNet(model, out_indices)
-    return model
+    return build_model_with_cfg(
+        Xception, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(), **kwargs)
 
 
 @register_model

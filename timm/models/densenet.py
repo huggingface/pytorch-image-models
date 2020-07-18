@@ -13,8 +13,7 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .features import FeatureNet
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act, BlurPool2d
 from .registry import register_model
 
@@ -288,26 +287,12 @@ def _filter_torchvision_pretrained(state_dict):
     return state_dict
 
 
-def _densenet(variant, growth_rate, block_config, pretrained, **kwargs):
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        features = True
-        kwargs.pop('num_classes', 0)
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    default_cfg = default_cfgs[variant]
-    model = DenseNet(growth_rate=growth_rate, block_config=block_config, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model, default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3),
-            filter_fn=_filter_torchvision_pretrained,
-            strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices, flatten_sequential=True)
-    return model
+def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
+    kwargs['growth_rate'] = growth_rate
+    kwargs['block_config'] = block_config
+    return build_model_with_cfg(
+        DenseNet, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), pretrained_filter_fn=_filter_torchvision_pretrained, **kwargs)
 
 
 @register_model
@@ -315,7 +300,7 @@ def densenet121(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet121', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, **kwargs)
     return model
 
@@ -325,7 +310,7 @@ def densenetblur121d(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenetblur121d', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, stem_type='deep',
         aa_layer=BlurPool2d, **kwargs)
     return model
@@ -336,7 +321,7 @@ def densenet121d(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
         pretrained=pretrained, **kwargs)
     return model
@@ -347,7 +332,7 @@ def densenet169(pretrained=False, **kwargs):
     r"""Densenet-169 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet169', growth_rate=32, block_config=(6, 12, 32, 32), pretrained=pretrained, **kwargs)
     return model
 
@@ -357,7 +342,7 @@ def densenet201(pretrained=False, **kwargs):
     r"""Densenet-201 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet201', growth_rate=32, block_config=(6, 12, 48, 32), pretrained=pretrained, **kwargs)
     return model
 
@@ -367,7 +352,7 @@ def densenet161(pretrained=False, **kwargs):
     r"""Densenet-161 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet161', growth_rate=48, block_config=(6, 12, 36, 24), pretrained=pretrained, **kwargs)
     return model
 
@@ -377,7 +362,7 @@ def densenet264(pretrained=False, **kwargs):
     r"""Densenet-264 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet264', growth_rate=48, block_config=(6, 12, 64, 48), pretrained=pretrained, **kwargs)
     return model
 
@@ -388,7 +373,7 @@ def densenet264d_iabn(pretrained=False, **kwargs):
     """
     def norm_act_fn(num_features, **kwargs):
         return create_norm_act('iabn', num_features, **kwargs)
-    model = _densenet(
+    model = _create_densenet(
         'densenet264d_iabn', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep',
         norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
@@ -399,6 +384,6 @@ def tv_densenet121(pretrained=False, **kwargs):
     r"""Densenet-121 model with original Torchvision weights, from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'tv_densenet121', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, **kwargs)
     return model

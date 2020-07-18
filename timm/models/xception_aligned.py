@@ -10,9 +10,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .features import FeatureNet
-from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, ConvBnAct, create_conv2d
+from .helpers import build_model_with_cfg
+from .layers import ClassifierHead, ConvBnAct, create_conv2d
+from .layers.helpers import tup_triple
 from .registry import register_model
 
 __all__ = ['XceptionAligned']
@@ -81,10 +81,7 @@ class XceptionModule(nn.Module):
             start_with_relu=True, no_skip=False, act_layer=nn.ReLU, norm_layer=None, norm_kwargs=None):
         super(XceptionModule, self).__init__()
         norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
-        if isinstance(out_chs, (list, tuple)):
-            assert len(out_chs) == 3
-        else:
-            out_chs = (out_chs,) * 3
+        out_chs = tup_triple(out_chs)
         self.in_channels = in_chs
         self.out_channels = out_chs[-1]
         self.no_skip = no_skip
@@ -115,26 +112,6 @@ class XceptionModule(nn.Module):
         return x
 
 
-class ClassifierHead(nn.Module):
-    """Head."""
-
-    def __init__(self, in_chs, num_classes, pool_type='avg', drop_rate=0.):
-        super(ClassifierHead, self).__init__()
-        self.drop_rate = drop_rate
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-        if num_classes > 0:
-            self.fc = nn.Linear(in_chs, num_classes, bias=True)
-        else:
-            self.fc = nn.Identity()
-
-    def forward(self, x):
-        x = self.global_pool(x).flatten(1)
-        if self.drop_rate:
-            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
-        x = self.fc(x)
-        return x
-
-
 class XceptionAligned(nn.Module):
     """Modified Aligned Xception
     """
@@ -147,32 +124,29 @@ class XceptionAligned(nn.Module):
         assert output_stride in (8, 16, 32)
         norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
 
-        xtra_args = dict(act_layer=act_layer, norm_layer=norm_layer, norm_kwargs=norm_kwargs)
+        layer_args = dict(act_layer=act_layer, norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.stem = nn.Sequential(*[
-            ConvBnAct(in_chans, 32, kernel_size=3, stride=2, **xtra_args),
-            ConvBnAct(32, 64, kernel_size=3, stride=1, **xtra_args)
+            ConvBnAct(in_chans, 32, kernel_size=3, stride=2, **layer_args),
+            ConvBnAct(32, 64, kernel_size=3, stride=1, **layer_args)
         ])
+
         curr_dilation = 1
         curr_stride = 2
-        self.feature_info = [dict(num_chs=64, reduction=curr_stride, module='stem.1')]
-
+        self.feature_info = []
         self.blocks = nn.Sequential()
         for i, b in enumerate(block_cfg):
-            feature_extract = False
             b['dilation'] = curr_dilation
             if b['stride'] > 1:
-                feature_extract = True
+                self.feature_info += [dict(
+                    num_chs=tup_triple(b['out_chs'])[-2], reduction=curr_stride, module=f'blocks.{i}.stack.act3')]
                 next_stride = curr_stride * b['stride']
                 if next_stride > output_stride:
                     curr_dilation *= b['stride']
                     b['stride'] = 1
                 else:
                     curr_stride = next_stride
-            self.blocks.add_module(str(i), XceptionModule(**b, **xtra_args))
+            self.blocks.add_module(str(i), XceptionModule(**b, **layer_args))
             self.num_features = self.blocks[-1].out_channels
-            if feature_extract:
-                self.feature_info += [dict(
-                    num_chs=self.num_features, reduction=curr_stride, module=f'blocks.{i}.stack.act2')]
 
         self.feature_info += [dict(
             num_chs=self.num_features, reduction=curr_stride, module='blocks.' + str(len(self.blocks) - 1))]
@@ -198,24 +172,9 @@ class XceptionAligned(nn.Module):
 
 
 def _xception(variant, pretrained=False, **kwargs):
-    features = False
-    out_indices = None
-    if kwargs.pop('features_only', False):
-        features = True
-        kwargs.pop('num_classes', 0)
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    model = XceptionAligned(**kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3),
-            strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices)
-    return model
-
+    return build_model_with_cfg(
+        XceptionAligned, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True, use_hooks=True), **kwargs)
 
 
 @register_model

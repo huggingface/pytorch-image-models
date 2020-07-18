@@ -7,8 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .features import FeatureNet
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
 
@@ -340,20 +339,9 @@ class InceptionResnetV2(nn.Module):
         return x
 
 
-def _inception_resnet_v2(variant, pretrained=False, **kwargs):
-    features, out_indices = False, None
-    if kwargs.pop('features_only', False):
-        features = True
-        out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
-    model = InceptionResnetV2(**kwargs)
-    model.default_cfg = default_cfgs[variant]
-    if pretrained:
-        load_pretrained(
-            model,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=not features)
-    if features:
-        model = FeatureNet(model, out_indices)
-    return model
+def _create_inception_resnet_v2(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        InceptionResnetV2, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
 
 
 @register_model
@@ -361,7 +349,7 @@ def inception_resnet_v2(pretrained=False, **kwargs):
     r"""InceptionResnetV2 model architecture from the
     `"InceptionV4, Inception-ResNet..." <https://arxiv.org/abs/1602.07261>` paper.
     """
-    return _inception_resnet_v2('inception_resnet_v2', pretrained=pretrained, **kwargs)
+    return _create_inception_resnet_v2('inception_resnet_v2', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -370,4 +358,4 @@ def ens_adv_inception_resnet_v2(pretrained=False, **kwargs):
     As per https://arxiv.org/abs/1705.07204 and
     https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models.
     """
-    return _inception_resnet_v2('ens_adv_inception_resnet_v2', pretrained=pretrained, **kwargs)
+    return _create_inception_resnet_v2('ens_adv_inception_resnet_v2', pretrained=pretrained, **kwargs)

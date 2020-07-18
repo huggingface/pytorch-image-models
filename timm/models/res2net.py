@@ -8,9 +8,9 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .registry import register_model
-from .resnet import _create_resnet_with_cfg
+from .resnet import ResNet
 
 __all__ = []
 
@@ -133,8 +133,8 @@ class Bottle2neck(nn.Module):
 
 
 def _create_res2net(variant, pretrained=False, **kwargs):
-    default_cfg = default_cfgs[variant]
-    return _create_resnet_with_cfg(variant, default_cfg, pretrained=pretrained, **kwargs)
+    return build_model_with_cfg(
+        ResNet, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
 
 
 @register_model

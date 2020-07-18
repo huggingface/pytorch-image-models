@@ -5,9 +5,10 @@ by Ross Wightman
 """
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .helpers import build_model_with_cfg
 from .layers import SEModule
 from .registry import register_model
-from .resnet import _create_resnet_with_cfg, Bottleneck, BasicBlock
+from .resnet import ResNet, Bottleneck, BasicBlock
 
 
 def _cfg(url='', **kwargs):
@@ -47,8 +48,7 @@ default_cfgs = {
 
 
 def _create_resnet(variant, pretrained=False, **kwargs):
-    default_cfg = default_cfgs[variant]
-    return _create_resnet_with_cfg(variant, default_cfg, pretrained=pretrained, **kwargs)
+    return build_model_with_cfg(ResNet, variant, default_cfg=default_cfgs[variant], pretrained=pretrained, **kwargs)
 
 
 @register_model

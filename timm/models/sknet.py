@@ -13,10 +13,10 @@ import math
 from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectiveKernelConv, ConvBnAct, create_attn
 from .registry import register_model
-from .resnet import _create_resnet_with_cfg
+from .resnet import ResNet
 
 
 def _cfg(url='', **kwargs):
@@ -139,8 +139,8 @@ class SelectiveKernelBottleneck(nn.Module):
 
 
 def _create_skresnet(variant, pretrained=False, **kwargs):
-    default_cfg = default_cfgs[variant]
-    return _create_resnet_with_cfg(variant, default_cfg, pretrained=pretrained, **kwargs)
+    return build_model_with_cfg(
+        ResNet, variant, default_cfg=default_cfgs[variant], pretrained=pretrained, **kwargs)
 
 
 @register_model
