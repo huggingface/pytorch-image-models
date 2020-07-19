@@ -37,8 +37,7 @@ def test_model_forward(model_name, batch_size):
 
 
 @pytest.mark.timeout(120)
-# DLA models have an issue TBD, add them to exclusions
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + ['dla*']))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [2])
 def test_model_backward(model_name, batch_size):
     """Run a single forward pass with each model"""

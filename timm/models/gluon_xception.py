@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, get_padding
 from .registry import register_model
 
@@ -141,13 +141,15 @@ class Xception65(nn.Module):
         # Entry flow
         self.conv1 = nn.Conv2d(in_chans, 32, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn1 = norm_layer(num_features=32, **norm_kwargs)
-        self.relu = nn.ReLU(inplace=True)
+        self.act1 = nn.ReLU(inplace=True)
 
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = norm_layer(num_features=64)
+        self.act2 = nn.ReLU(inplace=True)
 
         self.block1 = Block(
             64, 128, stride=2, start_with_relu=False, norm_layer=norm_layer, norm_kwargs=norm_kwargs)
+        self.block1_act = nn.ReLU(inplace=True)
         self.block2 = Block(
             128, 256, stride=2, start_with_relu=False, norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.block3 = Block(
@@ -162,22 +164,34 @@ class Xception65(nn.Module):
         self.block20 = Block(
             728, (728, 1024, 1024), stride=exit_block20_stride, dilation=exit_block_dilations[0],
             norm_layer=norm_layer, norm_kwargs=norm_kwargs)
+        self.block20_act = nn.ReLU(inplace=True)
 
         self.conv3 = SeparableConv2d(
             1024, 1536, 3, stride=1, dilation=exit_block_dilations[1],
             norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.bn3 = norm_layer(num_features=1536, **norm_kwargs)
+        self.act3 = nn.ReLU(inplace=True)
 
         self.conv4 = SeparableConv2d(
             1536, 1536, 3, stride=1, dilation=exit_block_dilations[1],
             norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.bn4 = norm_layer(num_features=1536, **norm_kwargs)
+        self.act4 = nn.ReLU(inplace=True)
 
         self.num_features = 2048
         self.conv5 = SeparableConv2d(
             1536, self.num_features, 3, stride=1, dilation=exit_block_dilations[1],
             norm_layer=norm_layer, norm_kwargs=norm_kwargs)
         self.bn5 = norm_layer(num_features=self.num_features, **norm_kwargs)
+        self.act5 = nn.ReLU(inplace=True)
+        self.feature_info = [
+            dict(num_chs=64, reduction=2, module='act2'),
+            dict(num_chs=128, reduction=4, module='block1_act'),
+            dict(num_chs=256, reduction=8, module='block3.rep.act1'),
+            dict(num_chs=728, reduction=16, module='block20.rep.act1'),
+            dict(num_chs=2048, reduction=32, module='act5'),
+        ]
+
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
@@ -193,15 +207,14 @@ class Xception65(nn.Module):
         # Entry flow
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.relu(x)
+        x = self.act1(x)
 
         x = self.conv2(x)
         x = self.bn2(x)
-        x = self.relu(x)
+        x = self.act2(x)
 
         x = self.block1(x)
-        # add relu here
-        x = self.relu(x)
+        x = self.block1_act(x)
         # c1 = x
         x = self.block2(x)
         # c2 = x
@@ -213,18 +226,18 @@ class Xception65(nn.Module):
 
         # Exit flow
         x = self.block20(x)
-        x = self.relu(x)
+        x = self.block20_act(x)
         x = self.conv3(x)
         x = self.bn3(x)
-        x = self.relu(x)
+        x = self.act3(x)
 
         x = self.conv4(x)
         x = self.bn4(x)
-        x = self.relu(x)
+        x = self.act4(x)
 
         x = self.conv5(x)
         x = self.bn5(x)
-        x = self.relu(x)
+        x = self.act5(x)
         return x
 
     def forward(self, x):
@@ -236,13 +249,14 @@ class Xception65(nn.Module):
         return x
 
 
+def _create_gluon_xception(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        Xception65, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(use_hooks=True), **kwargs)
+
+
 @register_model
-def gluon_xception65(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def gluon_xception65(pretrained=False, **kwargs):
     """ Modified Aligned Xception-65
     """
-    default_cfg = default_cfgs['gluon_xception65']
-    model = Xception65(num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+    return _create_gluon_xception('gluon_xception65', pretrained, **kwargs)

@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
 
@@ -212,10 +212,19 @@ class DlaTree(nn.Module):
             root_dim = 2 * out_channels
         if level_root:
             root_dim += in_channels
+        self.downsample = nn.MaxPool2d(stride, stride=stride) if stride > 1 else nn.Identity()
+        self.project = nn.Identity()
         cargs = dict(dilation=dilation, cardinality=cardinality, base_width=base_width)
         if levels == 1:
             self.tree1 = block(in_channels, out_channels, stride, **cargs)
             self.tree2 = block(out_channels, out_channels, 1, **cargs)
+            if in_channels != out_channels:
+                # NOTE the official impl/weights have  project layers in levels > 1 case that are never
+                # used, I've moved the project layer here to avoid wasted params but old checkpoints will
+                # need strict=False while loading.
+                self.project = nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
+                    nn.BatchNorm2d(out_channels))
         else:
             cargs.update(dict(root_kernel_size=root_kernel_size, root_residual=root_residual))
             self.tree1 = DlaTree(
@@ -226,22 +235,12 @@ class DlaTree(nn.Module):
             self.root = DlaRoot(root_dim, out_channels, root_kernel_size, root_residual)
         self.level_root = level_root
         self.root_dim = root_dim
-        self.downsample = nn.MaxPool2d(stride, stride=stride) if stride > 1 else None
-        self.project = None
-        if in_channels != out_channels:
-            self.project = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
-                nn.BatchNorm2d(out_channels)
-            )
         self.levels = levels
 
     def forward(self, x, residual=None, children=None):
         children = [] if children is None else children
-        # FIXME the way downsample / project are used here and residual is passed to next level up
-        # the tree, the residual is overridden and some project weights are thus never used and
-        # have no gradients. This appears to be an issue with the original model / weights.
-        bottom = self.downsample(x) if self.downsample is not None else x
-        residual = self.project(bottom) if self.project is not None else bottom
+        bottom = self.downsample(x)
+        residual = self.project(bottom)
         if self.level_root:
             children.append(bottom)
         x1 = self.tree1(x, residual)
@@ -255,8 +254,8 @@ class DlaTree(nn.Module):
 
 
 class DLA(nn.Module):
-    def __init__(self, levels, channels, num_classes=1000, in_chans=3, cardinality=1, base_width=64,
-                 block=DlaBottle2neck, residual_root=False, linear_root=False,
+    def __init__(self, levels, channels, output_stride=32, num_classes=1000, in_chans=3,
+                 cardinality=1, base_width=64, block=DlaBottle2neck, residual_root=False,
                  drop_rate=0.0, global_pool='avg'):
         super(DLA, self).__init__()
         self.channels = channels
@@ -264,6 +263,7 @@ class DLA(nn.Module):
         self.cardinality = cardinality
         self.base_width = base_width
         self.drop_rate = drop_rate
+        assert output_stride == 32  # FIXME support dilation
 
         self.base_layer = nn.Sequential(
             nn.Conv2d(in_chans, channels[0], kernel_size=7, stride=1, padding=3, bias=False),
@@ -276,6 +276,14 @@ class DLA(nn.Module):
         self.level3 = DlaTree(levels[3], block, channels[2], channels[3], 2, level_root=True, **cargs)
         self.level4 = DlaTree(levels[4], block, channels[3], channels[4], 2, level_root=True, **cargs)
         self.level5 = DlaTree(levels[5], block, channels[4], channels[5], 2, level_root=True, **cargs)
+        self.feature_info = [
+            dict(num_chs=channels[0], reduction=1, module='level0'),  # rare to have a meaningful stride 1 level
+            dict(num_chs=channels[1], reduction=2, module='level1'),
+            dict(num_chs=channels[2], reduction=4, module='level2'),
+            dict(num_chs=channels[3], reduction=8, module='level3'),
+            dict(num_chs=channels[4], reduction=16, module='level4'),
+            dict(num_chs=channels[5], reduction=32, module='level5'),
+        ]
 
         self.num_features = channels[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
@@ -331,142 +339,103 @@ class DLA(nn.Module):
         return x.flatten(1)
 
 
-@register_model
-def dla60_res2net(pretrained=None, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dla60_res2net']
-    model = DLA(levels=(1, 1, 1, 2, 3, 1), channels=(16, 32, 128, 256, 512, 1024),
-                block=DlaBottle2neck, cardinality=1, base_width=28,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def _create_dla(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        DLA, variant, pretrained, default_cfg=default_cfgs[variant],
+        pretrained_strict=False, feature_cfg=dict(out_indices=(1, 2, 3, 4, 5)), **kwargs)
 
 
 @register_model
-def dla60_res2next(pretrained=None, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['dla60_res2next']
-    model = DLA(levels=(1, 1, 1, 2, 3, 1), channels=(16, 32, 128, 256, 512, 1024),
-                block=DlaBottle2neck, cardinality=8, base_width=4,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla60_res2net(pretrained=False, **kwargs):
+    model_kwargs = dict(
+        levels=(1, 1, 1, 2, 3, 1), channels=(16, 32, 128, 256, 512, 1024),
+        block=DlaBottle2neck, cardinality=1, base_width=28, **kwargs)
+    return _create_dla('dla60_res2net', pretrained, **model_kwargs)
 
 
 @register_model
-def dla34(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-34
-    default_cfg = default_cfgs['dla34']
-    model = DLA([1, 1, 1, 2, 2, 1], [16, 32, 64, 128, 256, 512], block=DlaBasic,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla60_res2next(pretrained=False,**kwargs):
+    model_kwargs = dict(
+        levels=(1, 1, 1, 2, 3, 1), channels=(16, 32, 128, 256, 512, 1024),
+        block=DlaBottle2neck, cardinality=8, base_width=4, **kwargs)
+    return _create_dla('dla60_res2next', pretrained, **model_kwargs)
 
 
 @register_model
-def dla46_c(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-46-C
-    default_cfg = default_cfgs['dla46_c']
-    model = DLA(levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 64, 128, 256],
-                block=DlaBottleneck, num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla34(pretrained=False, **kwargs):  # DLA-34
+    model_kwargs = dict(
+        levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 128, 256, 512],
+        block=DlaBasic, **kwargs)
+    return _create_dla('dla34', pretrained, **model_kwargs)
 
 
 @register_model
-def dla46x_c(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-X-46-C
-    default_cfg = default_cfgs['dla46x_c']
-    model = DLA(levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 64, 128, 256],
-                block=DlaBottleneck, cardinality=32, base_width=4,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla46_c(pretrained=False, **kwargs):  # DLA-46-C
+    model_kwargs = dict(
+        levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 64, 128, 256],
+        block=DlaBottleneck, **kwargs)
+    return _create_dla('dla46_c', pretrained, **model_kwargs)
 
 
 @register_model
-def dla60x_c(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-X-60-C
-    default_cfg = default_cfgs['dla60x_c']
-    model = DLA([1, 1, 1, 2, 3, 1], [16, 32, 64, 64, 128, 256],
-                block=DlaBottleneck, cardinality=32, base_width=4,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla46x_c(pretrained=False, **kwargs):  # DLA-X-46-C
+    model_kwargs = dict(
+        levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 64, 128, 256],
+        block=DlaBottleneck, cardinality=32, base_width=4, **kwargs)
+    return _create_dla('dla46x_c', pretrained, **model_kwargs)
 
 
 @register_model
-def dla60(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-60
-    default_cfg = default_cfgs['dla60']
-    model = DLA([1, 1, 1, 2, 3, 1], [16, 32, 128, 256, 512, 1024],
-                block=DlaBottleneck, num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla60x_c(pretrained=False, **kwargs):  # DLA-X-60-C
+    model_kwargs = dict(
+        levels=[1, 1, 1, 2, 3, 1], channels=[16, 32, 64, 64, 128, 256],
+        block=DlaBottleneck, cardinality=32, base_width=4, **kwargs)
+    return _create_dla('dla60x_c', pretrained, **model_kwargs)
 
 
 @register_model
-def dla60x(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-X-60
-    default_cfg = default_cfgs['dla60x']
-    model = DLA([1, 1, 1, 2, 3, 1], [16, 32, 128, 256, 512, 1024],
-                block=DlaBottleneck, cardinality=32, base_width=4,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla60(pretrained=False, **kwargs):  # DLA-60
+    model_kwargs = dict(
+        levels=[1, 1, 1, 2, 3, 1], channels=[16, 32, 128, 256, 512, 1024],
+        block=DlaBottleneck, **kwargs)
+    return _create_dla('dla60', pretrained, **model_kwargs)
 
 
 @register_model
-def dla102(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-102
-    default_cfg = default_cfgs['dla102']
-    model = DLA([1, 1, 1, 3, 4, 1], [16, 32, 128, 256, 512, 1024],
-                block=DlaBottleneck, residual_root=True,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla60x(pretrained=False, **kwargs):  # DLA-X-60
+    model_kwargs = dict(
+        levels=[1, 1, 1, 2, 3, 1], channels=[16, 32, 128, 256, 512, 1024],
+        block=DlaBottleneck, cardinality=32, base_width=4, **kwargs)
+    return _create_dla('dla60x', pretrained, **model_kwargs)
 
 
 @register_model
-def dla102x(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-X-102
-    default_cfg = default_cfgs['dla102x']
-    model = DLA([1, 1, 1, 3, 4, 1], [16, 32, 128, 256, 512, 1024],
-                block=DlaBottleneck, cardinality=32, base_width=4, residual_root=True,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla102(pretrained=False, **kwargs):  # DLA-102
+    model_kwargs = dict(
+        levels=[1, 1, 1, 3, 4, 1], channels=[16, 32, 128, 256, 512, 1024],
+        block=DlaBottleneck, residual_root=True, **kwargs)
+    return _create_dla('dla102', pretrained, **model_kwargs)
 
 
 @register_model
-def dla102x2(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-X-102 64
-    default_cfg = default_cfgs['dla102x2']
-    model = DLA([1, 1, 1, 3, 4, 1], [16, 32, 128, 256, 512, 1024],
-                block=DlaBottleneck, cardinality=64, base_width=4, residual_root=True,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla102x(pretrained=False, **kwargs):  # DLA-X-102
+    model_kwargs = dict(
+        levels=[1, 1, 1, 3, 4, 1], channels=[16, 32, 128, 256, 512, 1024],
+        block=DlaBottleneck, cardinality=32, base_width=4, residual_root=True, **kwargs)
+    return _create_dla('dla102x', pretrained, **model_kwargs)
 
 
 @register_model
-def dla169(pretrained=None, num_classes=1000, in_chans=3, **kwargs):  # DLA-169
-    default_cfg = default_cfgs['dla169']
-    model = DLA([1, 1, 2, 3, 5, 1], [16, 32, 128, 256, 512, 1024],
-                block=DlaBottleneck, residual_root=True,
-                num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def dla102x2(pretrained=False, **kwargs):  # DLA-X-102 64
+    model_kwargs = dict(
+        levels=[1, 1, 1, 3, 4, 1], channels=[16, 32, 128, 256, 512, 1024],
+        block=DlaBottleneck, cardinality=64, base_width=4, residual_root=True, **kwargs)
+    return _create_dla('dla102x2', pretrained, **model_kwargs)
+
+
+@register_model
+def dla169(pretrained=False, **kwargs):  # DLA-169
+    model_kwargs = dict(
+        levels=[1, 1, 2, 3, 5, 1], channels=[16, 32, 128, 256, 512, 1024],
+        block=DlaBottleneck, residual_root=True, **kwargs)
+    return _create_dla('dla169', pretrained, **model_kwargs)

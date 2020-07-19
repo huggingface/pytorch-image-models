@@ -5,15 +5,13 @@
  https://github.com/Cadene/pretrained-models.pytorch/blob/master/pretrainedmodels/models/pnasnet.py
 
 """
-from __future__ import print_function, division, absolute_import
-
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, ConvBnAct, create_conv2d, create_pool2d
 from .registry import register_model
 
@@ -147,35 +145,35 @@ class CellBase(nn.Module):
 
 class CellStem0(CellBase):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, padding=''):
+    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type=''):
         super(CellStem0, self).__init__()
-        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, kernel_size=1, padding=padding)
+        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, kernel_size=1, padding=pad_type)
 
         self.comb_iter_0_left = BranchSeparables(
-            in_chs_left, out_chs_left, kernel_size=5, stride=2, stem_cell=True, padding=padding)
+            in_chs_left, out_chs_left, kernel_size=5, stride=2, stem_cell=True, padding=pad_type)
         self.comb_iter_0_right = nn.Sequential(OrderedDict([
-            ('max_pool', create_pool2d('max', 3, stride=2, padding=padding)),
-            ('conv', create_conv2d(in_chs_left, out_chs_left, kernel_size=1, padding=padding)),
+            ('max_pool', create_pool2d('max', 3, stride=2, padding=pad_type)),
+            ('conv', create_conv2d(in_chs_left, out_chs_left, kernel_size=1, padding=pad_type)),
             ('bn', nn.BatchNorm2d(out_chs_left, eps=0.001)),
         ]))
 
         self.comb_iter_1_left = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=7, stride=2, padding=padding)
-        self.comb_iter_1_right = create_pool2d('max', 3, stride=2, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=7, stride=2, padding=pad_type)
+        self.comb_iter_1_right = create_pool2d('max', 3, stride=2, padding=pad_type)
 
         self.comb_iter_2_left = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=5, stride=2, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=5, stride=2, padding=pad_type)
         self.comb_iter_2_right = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=3, stride=2, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=3, stride=2, padding=pad_type)
 
         self.comb_iter_3_left = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=3, padding=padding)
-        self.comb_iter_3_right = create_pool2d('max', 3, stride=2, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=3, padding=pad_type)
+        self.comb_iter_3_right = create_pool2d('max', 3, stride=2, padding=pad_type)
 
         self.comb_iter_4_left = BranchSeparables(
-            in_chs_right, out_chs_right, kernel_size=3, stride=2, stem_cell=True, padding=padding)
+            in_chs_right, out_chs_right, kernel_size=3, stride=2, stem_cell=True, padding=pad_type)
         self.comb_iter_4_right = ActConvBn(
-            out_chs_right, out_chs_right, kernel_size=1, stride=2, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=1, stride=2, padding=pad_type)
 
     def forward(self, x_left):
         x_right = self.conv_1x1(x_left)
@@ -185,12 +183,12 @@ class CellStem0(CellBase):
 
 class Cell(CellBase):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, padding='',
+    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type='',
                  is_reduction=False, match_prev_layer_dims=False):
         super(Cell, self).__init__()
 
         # If `is_reduction` is set to `True` stride 2 is used for
-        # convolutional and pooling layers to reduce the spatial size of
+        # convolution and pooling layers to reduce the spatial size of
         # the output of a cell approximately by a factor of 2.
         stride = 2 if is_reduction else 1
 
@@ -199,32 +197,32 @@ class Cell(CellBase):
         # of the left input of a cell approximately by a factor of 2.
         self.match_prev_layer_dimensions = match_prev_layer_dims
         if match_prev_layer_dims:
-            self.conv_prev_1x1 = FactorizedReduction(in_chs_left, out_chs_left, padding=padding)
+            self.conv_prev_1x1 = FactorizedReduction(in_chs_left, out_chs_left, padding=pad_type)
         else:
-            self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, kernel_size=1, padding=padding)
-        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, kernel_size=1, padding=padding)
+            self.conv_prev_1x1 = ActConvBn(in_chs_left, out_chs_left, kernel_size=1, padding=pad_type)
+        self.conv_1x1 = ActConvBn(in_chs_right, out_chs_right, kernel_size=1, padding=pad_type)
 
         self.comb_iter_0_left = BranchSeparables(
-            out_chs_left, out_chs_left, kernel_size=5, stride=stride, padding=padding)
-        self.comb_iter_0_right = create_pool2d('max', 3, stride=stride, padding=padding)
+            out_chs_left, out_chs_left, kernel_size=5, stride=stride, padding=pad_type)
+        self.comb_iter_0_right = create_pool2d('max', 3, stride=stride, padding=pad_type)
 
         self.comb_iter_1_left = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=7, stride=stride, padding=padding)
-        self.comb_iter_1_right = create_pool2d('max', 3, stride=stride, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=7, stride=stride, padding=pad_type)
+        self.comb_iter_1_right = create_pool2d('max', 3, stride=stride, padding=pad_type)
 
         self.comb_iter_2_left = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=5, stride=stride, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=5, stride=stride, padding=pad_type)
         self.comb_iter_2_right = BranchSeparables(
-            out_chs_right, out_chs_right, kernel_size=3, stride=stride, padding=padding)
+            out_chs_right, out_chs_right, kernel_size=3, stride=stride, padding=pad_type)
 
         self.comb_iter_3_left = BranchSeparables(out_chs_right, out_chs_right, kernel_size=3)
-        self.comb_iter_3_right = create_pool2d('max', 3, stride=stride, padding=padding)
+        self.comb_iter_3_right = create_pool2d('max', 3, stride=stride, padding=pad_type)
 
         self.comb_iter_4_left = BranchSeparables(
-            out_chs_left, out_chs_left, kernel_size=3, stride=stride, padding=padding)
+            out_chs_left, out_chs_left, kernel_size=3, stride=stride, padding=pad_type)
         if is_reduction:
             self.comb_iter_4_right = ActConvBn(
-                out_chs_right, out_chs_right, kernel_size=1, stride=stride, padding=padding)
+                out_chs_right, out_chs_right, kernel_size=1, stride=stride, padding=pad_type)
         else:
             self.comb_iter_4_right = None
 
@@ -236,7 +234,7 @@ class Cell(CellBase):
 
 
 class PNASNet5Large(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, output_stride=32, drop_rate=0.5, global_pool='avg', padding=''):
+    def __init__(self, num_classes=1001, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg', pad_type=''):
         super(PNASNet5Large, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -248,43 +246,51 @@ class PNASNet5Large(nn.Module):
             norm_kwargs=dict(eps=0.001, momentum=0.1), act_layer=None)
 
         self.cell_stem_0 = CellStem0(
-            in_chs_left=96, out_chs_left=54, in_chs_right=96, out_chs_right=54, padding=padding)
+            in_chs_left=96, out_chs_left=54, in_chs_right=96, out_chs_right=54, pad_type=pad_type)
 
         self.cell_stem_1 = Cell(
-            in_chs_left=96, out_chs_left=108, in_chs_right=270, out_chs_right=108, padding=padding,
+            in_chs_left=96, out_chs_left=108, in_chs_right=270, out_chs_right=108, pad_type=pad_type,
             match_prev_layer_dims=True, is_reduction=True)
         self.cell_0 = Cell(
-            in_chs_left=270, out_chs_left=216, in_chs_right=540, out_chs_right=216, padding=padding,
+            in_chs_left=270, out_chs_left=216, in_chs_right=540, out_chs_right=216, pad_type=pad_type,
             match_prev_layer_dims=True)
         self.cell_1 = Cell(
-            in_chs_left=540, out_chs_left=216, in_chs_right=1080, out_chs_right=216, padding=padding)
+            in_chs_left=540, out_chs_left=216, in_chs_right=1080, out_chs_right=216, pad_type=pad_type)
         self.cell_2 = Cell(
-            in_chs_left=1080, out_chs_left=216, in_chs_right=1080, out_chs_right=216, padding=padding)
+            in_chs_left=1080, out_chs_left=216, in_chs_right=1080, out_chs_right=216, pad_type=pad_type)
         self.cell_3 = Cell(
-            in_chs_left=1080, out_chs_left=216, in_chs_right=1080, out_chs_right=216, padding=padding)
+            in_chs_left=1080, out_chs_left=216, in_chs_right=1080, out_chs_right=216, pad_type=pad_type)
 
         self.cell_4 = Cell(
-            in_chs_left=1080, out_chs_left=432, in_chs_right=1080, out_chs_right=432, padding=padding,
+            in_chs_left=1080, out_chs_left=432, in_chs_right=1080, out_chs_right=432, pad_type=pad_type,
             is_reduction=True)
         self.cell_5 = Cell(
-            in_chs_left=1080, out_chs_left=432, in_chs_right=2160, out_chs_right=432, padding=padding,
+            in_chs_left=1080, out_chs_left=432, in_chs_right=2160, out_chs_right=432, pad_type=pad_type,
             match_prev_layer_dims=True)
         self.cell_6 = Cell(
-            in_chs_left=2160, out_chs_left=432, in_chs_right=2160, out_chs_right=432, padding=padding)
+            in_chs_left=2160, out_chs_left=432, in_chs_right=2160, out_chs_right=432, pad_type=pad_type)
         self.cell_7 = Cell(
-            in_chs_left=2160, out_chs_left=432, in_chs_right=2160, out_chs_right=432, padding=padding)
+            in_chs_left=2160, out_chs_left=432, in_chs_right=2160, out_chs_right=432, pad_type=pad_type)
 
         self.cell_8 = Cell(
-            in_chs_left=2160, out_chs_left=864, in_chs_right=2160, out_chs_right=864, padding=padding,
+            in_chs_left=2160, out_chs_left=864, in_chs_right=2160, out_chs_right=864, pad_type=pad_type,
             is_reduction=True)
         self.cell_9 = Cell(
-            in_chs_left=2160, out_chs_left=864, in_chs_right=4320, out_chs_right=864, padding=padding,
+            in_chs_left=2160, out_chs_left=864, in_chs_right=4320, out_chs_right=864, pad_type=pad_type,
             match_prev_layer_dims=True)
         self.cell_10 = Cell(
-            in_chs_left=4320, out_chs_left=864, in_chs_right=4320, out_chs_right=864, padding=padding)
+            in_chs_left=4320, out_chs_left=864, in_chs_right=4320, out_chs_right=864, pad_type=pad_type)
         self.cell_11 = Cell(
-            in_chs_left=4320, out_chs_left=864, in_chs_right=4320, out_chs_right=864, padding=padding)
-        self.relu = nn.ReLU()
+            in_chs_left=4320, out_chs_left=864, in_chs_right=4320, out_chs_right=864, pad_type=pad_type)
+        self.act = nn.ReLU()
+        self.feature_info = [
+            dict(num_chs=96, reduction=2, module='conv_0'),
+            dict(num_chs=270, reduction=4, module='cell_stem_1.conv_1x1.act'),
+            dict(num_chs=1080, reduction=8, module='cell_4.conv_1x1.act'),
+            dict(num_chs=2160, reduction=16, module='cell_8.conv_1x1.act'),
+            dict(num_chs=4320, reduction=32, module='act'),
+        ]
+
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
@@ -316,7 +322,7 @@ class PNASNet5Large(nn.Module):
         x_cell_9 = self.cell_9(x_cell_7, x_cell_8)
         x_cell_10 = self.cell_10(x_cell_8, x_cell_9)
         x_cell_11 = self.cell_11(x_cell_9, x_cell_10)
-        x = self.relu(x_cell_11)
+        x = self.act(x_cell_11)
         return x
 
     def forward(self, x):
@@ -328,16 +334,18 @@ class PNASNet5Large(nn.Module):
         return x
 
 
+def _create_pnasnet(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        PNASNet5Large, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(feature_cls='hook'),  # not possible to re-write this model, must use FeatureHookNet
+        **kwargs)
+
+
 @register_model
-def pnasnet5large(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def pnasnet5large(pretrained=False, **kwargs):
     r"""PNASNet-5 model architecture from the
     `"Progressive Neural Architecture Search"
     <https://arxiv.org/abs/1712.00559>`_ paper.
     """
-    default_cfg = default_cfgs['pnasnet5large']
-    model = PNASNet5Large(num_classes=num_classes, in_chans=in_chans, padding='same', **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-
-    return model
+    model_kwargs = dict(pad_type='same', **kwargs)
+    return _create_pnasnet('pnasnet5large', pretrained, **model_kwargs)

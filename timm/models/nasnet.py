@@ -1,8 +1,11 @@
+"""
+
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, ConvBnAct, create_conv2d, create_pool2d
 from .registry import register_model
 
@@ -484,8 +487,15 @@ class NASNetALarge(nn.Module):
         self.cell_17 = NormalCell(
             in_chs_left=24 * channels, out_chs_left=4 * channels,
             in_chs_right=24 * channels, out_chs_right=4 * channels, pad_type=pad_type)
-
         self.act = nn.ReLU(inplace=True)
+        self.feature_info = [
+            dict(num_chs=96, reduction=2, module='conv0'),
+            dict(num_chs=168, reduction=4, module='cell_stem_1.conv_1x1.act'),
+            dict(num_chs=1008, reduction=8, module='reduction_cell_0.conv_1x1.act'),
+            dict(num_chs=2016, reduction=16, module='reduction_cell_1.conv_1x1.act'),
+            dict(num_chs=4032, reduction=32, module='act'),
+        ]
+
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
@@ -503,11 +513,9 @@ class NASNetALarge(nn.Module):
 
     def forward_features(self, x):
         x_conv0 = self.conv0(x)
-        #0
 
         x_stem_0 = self.cell_stem_0(x_conv0)
         x_stem_1 = self.cell_stem_1(x_conv0, x_stem_0)
-        #1
 
         x_cell_0 = self.cell_0(x_stem_1, x_stem_0)
         x_cell_1 = self.cell_1(x_cell_0, x_stem_1)
@@ -515,7 +523,6 @@ class NASNetALarge(nn.Module):
         x_cell_3 = self.cell_3(x_cell_2, x_cell_1)
         x_cell_4 = self.cell_4(x_cell_3, x_cell_2)
         x_cell_5 = self.cell_5(x_cell_4, x_cell_3)
-        #2
 
         x_reduction_cell_0 = self.reduction_cell_0(x_cell_5, x_cell_4)
         x_cell_6 = self.cell_6(x_reduction_cell_0, x_cell_4)
@@ -524,7 +531,6 @@ class NASNetALarge(nn.Module):
         x_cell_9 = self.cell_9(x_cell_8, x_cell_7)
         x_cell_10 = self.cell_10(x_cell_9, x_cell_8)
         x_cell_11 = self.cell_11(x_cell_10, x_cell_9)
-        #3
 
         x_reduction_cell_1 = self.reduction_cell_1(x_cell_11, x_cell_10)
         x_cell_12 = self.cell_12(x_reduction_cell_1, x_cell_10)
@@ -534,8 +540,6 @@ class NASNetALarge(nn.Module):
         x_cell_16 = self.cell_16(x_cell_15, x_cell_14)
         x_cell_17 = self.cell_17(x_cell_16, x_cell_15)
         x = self.act(x_cell_17)
-        #4
-
         return x
 
     def forward(self, x):
@@ -547,14 +551,16 @@ class NASNetALarge(nn.Module):
         return x
 
 
+def _create_nasnet(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        NASNetALarge, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(feature_cls='hook'),  # not possible to re-write this model, must use FeatureHookNet
+        **kwargs)
+
+
 @register_model
-def nasnetalarge(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def nasnetalarge(pretrained=False, **kwargs):
     """NASNet-A large model architecture.
     """
-    default_cfg = default_cfgs['nasnetalarge']
-    model = NASNetALarge(num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-
-    return model
+    model_kwargs = dict(pad_type='same', **kwargs)
+    return _create_nasnet('nasnetalarge', pretrained, **model_kwargs)

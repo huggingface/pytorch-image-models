@@ -735,6 +735,7 @@ class HighResolutionNet(nn.Module):
 
 
 def _create_hrnet(variant, pretrained, **model_kwargs):
+    assert not model_kwargs.pop('features_only', False)  # feature extraction not figured out yet
     return build_model_with_cfg(
         HighResolutionNet, variant, pretrained, default_cfg=default_cfgs[variant],
         model_cfg=cfg_cls[variant], **model_kwargs)

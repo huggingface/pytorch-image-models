@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
-from .features import FeatureNet
+from .features import FeatureNet, FeatureHookNet
 from .layers import Conv2dSame
 
 
@@ -207,6 +207,7 @@ def build_model_with_cfg(
         default_cfg: dict,
         model_cfg: dict = None,
         feature_cfg: dict = None,
+        pretrained_strict: bool = True,
         pretrained_filter_fn: Callable = None,
         **kwargs):
     pruned = kwargs.pop('pruned', False)
@@ -230,10 +231,18 @@ def build_model_with_cfg(
             model,
             num_classes=kwargs.get('num_classes', 0),
             in_chans=kwargs.get('in_chans', 3),
-            filter_fn=pretrained_filter_fn)
+            filter_fn=pretrained_filter_fn, strict=pretrained_strict)
     
     if features:
         feature_cls = feature_cfg.pop('feature_cls', FeatureNet)
+        if isinstance(feature_cls, str):
+            feature_cls = feature_cls.lower()
+            if feature_cls == 'hook' or feature_cls == 'featurehooknet':
+                feature_cls = FeatureHookNet
+            else:
+                assert False, f'Unknown feature class {feature_cls}'
+        if feature_cls == FeatureHookNet and hasattr(model, 'reset_classifier'):
+            model.reset_classifier(0)
         model = feature_cls(model, **feature_cfg)
     
     return model

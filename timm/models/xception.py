@@ -154,6 +154,13 @@ class Xception(nn.Module):
         self.conv4 = SeparableConv2d(1536, self.num_features, 3, 1, 1)
         self.bn4 = nn.BatchNorm2d(self.num_features)
         self.act4 = nn.ReLU(inplace=True)
+        self.feature_info = [
+            dict(num_chs=64, reduction=2, module='act2'),
+            dict(num_chs=128, reduction=4, module='block2.rep.0'),
+            dict(num_chs=256, reduction=8, module='block3.rep.0'),
+            dict(num_chs=728, reduction=16, module='block12.rep.0'),
+            dict(num_chs=2048, reduction=32, module='act4'),
+        ]
 
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
@@ -221,7 +228,7 @@ class Xception(nn.Module):
 def _xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         Xception, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(), **kwargs)
+        feature_cfg=dict(use_hooks=True), **kwargs)
 
 
 @register_model

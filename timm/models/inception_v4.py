@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d
 from .registry import register_model
 
@@ -39,9 +39,9 @@ class BasicConv2d(nn.Module):
         return x
 
 
-class Mixed_3a(nn.Module):
+class Mixed3a(nn.Module):
     def __init__(self):
-        super(Mixed_3a, self).__init__()
+        super(Mixed3a, self).__init__()
         self.maxpool = nn.MaxPool2d(3, stride=2)
         self.conv = BasicConv2d(64, 96, kernel_size=3, stride=2)
 
@@ -52,9 +52,9 @@ class Mixed_3a(nn.Module):
         return out
 
 
-class Mixed_4a(nn.Module):
+class Mixed4a(nn.Module):
     def __init__(self):
-        super(Mixed_4a, self).__init__()
+        super(Mixed4a, self).__init__()
 
         self.branch0 = nn.Sequential(
             BasicConv2d(160, 64, kernel_size=1, stride=1),
@@ -75,9 +75,9 @@ class Mixed_4a(nn.Module):
         return out
 
 
-class Mixed_5a(nn.Module):
+class Mixed5a(nn.Module):
     def __init__(self):
-        super(Mixed_5a, self).__init__()
+        super(Mixed5a, self).__init__()
         self.conv = BasicConv2d(192, 192, kernel_size=3, stride=2)
         self.maxpool = nn.MaxPool2d(3, stride=2)
 
@@ -88,9 +88,9 @@ class Mixed_5a(nn.Module):
         return out
 
 
-class Inception_A(nn.Module):
+class InceptionA(nn.Module):
     def __init__(self):
-        super(Inception_A, self).__init__()
+        super(InceptionA, self).__init__()
         self.branch0 = BasicConv2d(384, 96, kernel_size=1, stride=1)
 
         self.branch1 = nn.Sequential(
@@ -118,9 +118,9 @@ class Inception_A(nn.Module):
         return out
 
 
-class Reduction_A(nn.Module):
+class ReductionA(nn.Module):
     def __init__(self):
-        super(Reduction_A, self).__init__()
+        super(ReductionA, self).__init__()
         self.branch0 = BasicConv2d(384, 384, kernel_size=3, stride=2)
 
         self.branch1 = nn.Sequential(
@@ -139,9 +139,9 @@ class Reduction_A(nn.Module):
         return out
 
 
-class Inception_B(nn.Module):
+class InceptionB(nn.Module):
     def __init__(self):
-        super(Inception_B, self).__init__()
+        super(InceptionB, self).__init__()
         self.branch0 = BasicConv2d(1024, 384, kernel_size=1, stride=1)
 
         self.branch1 = nn.Sequential(
@@ -172,9 +172,9 @@ class Inception_B(nn.Module):
         return out
 
 
-class Reduction_B(nn.Module):
+class ReductionB(nn.Module):
     def __init__(self):
-        super(Reduction_B, self).__init__()
+        super(ReductionB, self).__init__()
 
         self.branch0 = nn.Sequential(
             BasicConv2d(1024, 192, kernel_size=1, stride=1),
@@ -198,9 +198,9 @@ class Reduction_B(nn.Module):
         return out
 
 
-class Inception_C(nn.Module):
+class InceptionC(nn.Module):
     def __init__(self):
-        super(Inception_C, self).__init__()
+        super(InceptionC, self).__init__()
 
         self.branch0 = BasicConv2d(1536, 256, kernel_size=1, stride=1)
 
@@ -241,8 +241,9 @@ class Inception_C(nn.Module):
 
 
 class InceptionV4(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
+    def __init__(self, num_classes=1001, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg'):
         super(InceptionV4, self).__init__()
+        assert output_stride == 32
         self.drop_rate = drop_rate
         self.num_classes = num_classes
         self.num_features = 1536
@@ -251,26 +252,33 @@ class InceptionV4(nn.Module):
             BasicConv2d(in_chans, 32, kernel_size=3, stride=2),
             BasicConv2d(32, 32, kernel_size=3, stride=1),
             BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            Mixed_3a(),
-            Mixed_4a(),
-            Mixed_5a(),
-            Inception_A(),
-            Inception_A(),
-            Inception_A(),
-            Inception_A(),
-            Reduction_A(),  # Mixed_6a
-            Inception_B(),
-            Inception_B(),
-            Inception_B(),
-            Inception_B(),
-            Inception_B(),
-            Inception_B(),
-            Inception_B(),
-            Reduction_B(),  # Mixed_7a
-            Inception_C(),
-            Inception_C(),
-            Inception_C(),
+            Mixed3a(),
+            Mixed4a(),
+            Mixed5a(),
+            InceptionA(),
+            InceptionA(),
+            InceptionA(),
+            InceptionA(),
+            ReductionA(),  # Mixed6a
+            InceptionB(),
+            InceptionB(),
+            InceptionB(),
+            InceptionB(),
+            InceptionB(),
+            InceptionB(),
+            InceptionB(),
+            ReductionB(),  # Mixed7a
+            InceptionC(),
+            InceptionC(),
+            InceptionC(),
         )
+        self.feature_info = [
+            dict(num_chs=64, reduction=2, module='features.2'),
+            dict(num_chs=160, reduction=4, module='features.3'),
+            dict(num_chs=384, reduction=8, module='features.9'),
+            dict(num_chs=1024, reduction=16, module='features.17'),
+            dict(num_chs=1536, reduction=32, module='features.21'),
+        ]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
 
@@ -298,11 +306,12 @@ class InceptionV4(nn.Module):
         return x
 
 
+def _create_inception_v4(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        InceptionV4, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), **kwargs)
+
+
 @register_model
-def inception_v4(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
-    default_cfg = default_cfgs['inception_v4']
-    model = InceptionV4(num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-    return model
+def inception_v4(pretrained=False, **kwargs):
+    return _create_inception_v4('inception_v4', pretrained, **kwargs)
