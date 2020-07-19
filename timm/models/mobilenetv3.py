@@ -16,9 +16,8 @@ from typing import List
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
-from .feature_hooks import FeatureHooks
-from .features import FeatureInfo
-from .helpers import load_pretrained
+from .features import FeatureInfo, FeatureHooks
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
@@ -215,27 +214,19 @@ class MobileNetV3Features(nn.Module):
             return self.feature_hooks.get_output(x.device)
 
 
-def _create_mnv3(model_kwargs, default_cfg, pretrained=False):
+def _create_mnv3(model_kwargs, variant, pretrained=False):
     if model_kwargs.pop('features_only', False):
         load_strict = False
         model_kwargs.pop('num_classes', 0)
         model_kwargs.pop('num_features', 0)
         model_kwargs.pop('head_conv', None)
-        model_class = MobileNetV3Features
+        model_cls = MobileNetV3Features
     else:
         load_strict = True
-        model_class = MobileNetV3
-
-    model = model_class(**model_kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=model_kwargs.get('num_classes', 0),
-            in_chans=model_kwargs.get('in_chans', 3),
-            strict=load_strict)
-    return model
+        model_cls = MobileNetV3
+    return build_model_with_cfg(
+        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
+        pretrained_strict=load_strict, **model_kwargs)
 
 
 def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
@@ -272,7 +263,7 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
         **kwargs,
     )
-    model = _create_mnv3(model_kwargs, default_cfgs[variant], pretrained)
+    model = _create_mnv3(model_kwargs, variant, pretrained)
     return model
 
 
@@ -368,7 +359,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
         **kwargs,
     )
-    model = _create_mnv3(model_kwargs, default_cfgs[variant], pretrained)
+    model = _create_mnv3(model_kwargs, variant, pretrained)
     return model
 
 
