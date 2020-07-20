@@ -211,7 +211,8 @@ class MobileNetV3Features(nn.Module):
             return features
         else:
             self.blocks(x)
-            return self.feature_hooks.get_output(x.device)
+            out = self.feature_hooks.get_output(x.device)
+            return list(out.values())
 
 
 def _create_mnv3(model_kwargs, variant, pretrained=False):
@@ -220,6 +221,7 @@ def _create_mnv3(model_kwargs, variant, pretrained=False):
         model_kwargs.pop('num_classes', 0)
         model_kwargs.pop('num_features', 0)
         model_kwargs.pop('head_conv', None)
+        model_kwargs.pop('head_bias', None)
         model_cls = MobileNetV3Features
     else:
         load_strict = True

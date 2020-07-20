@@ -554,7 +554,7 @@ class NASNetALarge(nn.Module):
 def _create_nasnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         NASNetALarge, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(feature_cls='hook'),  # not possible to re-write this model, must use FeatureHookNet
+        feature_cfg=dict(feature_cls='hook', no_rewrite=True),  # not possible to re-write this model
         **kwargs)
 
 

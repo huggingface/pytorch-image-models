@@ -174,7 +174,7 @@ class XceptionAligned(nn.Module):
 def _xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         XceptionAligned, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(flatten_sequential=True, use_hooks=True), **kwargs)
+        feature_cfg=dict(flatten_sequential=True, feature_cls='hook'), **kwargs)
 
 
 @register_model

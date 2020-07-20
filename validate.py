@@ -100,6 +100,8 @@ def validate(args):
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
+    if args.legacy_jit:
+        set_jit_legacy()
 
     # create model
     model = create_model(
@@ -119,8 +121,6 @@ def validate(args):
     model, test_time_pool = apply_test_time_pool(model, data_config, args)
 
     if args.torchscript:
-        if args.legacy_jit:
-            set_jit_legacy()
         torch.jit.optimized_execution(True)
         model = torch.jit.script(model)
 

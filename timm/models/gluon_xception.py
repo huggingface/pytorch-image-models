@@ -252,7 +252,7 @@ class Xception65(nn.Module):
 def _create_gluon_xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         Xception65, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(use_hooks=True), **kwargs)
+        feature_cfg=dict(feature_cls='hook'), **kwargs)
 
 
 @register_model

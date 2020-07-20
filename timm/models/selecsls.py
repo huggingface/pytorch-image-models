@@ -74,6 +74,29 @@ class SequentialList(nn.Sequential):
         return x
 
 
+class SelectSeq(nn.Module):
+    def __init__(self, mode='index', index=0):
+        super(SelectSeq, self).__init__()
+        self.mode = mode
+        self.index = index
+
+    @torch.jit._overload_method  # noqa: F811
+    def forward(self, x):
+        # type: (List[torch.Tensor]) -> (torch.Tensor)
+        pass
+
+    @torch.jit._overload_method  # noqa: F811
+    def forward(self, x):
+        # type: (Tuple[torch.Tensor]) -> (torch.Tensor)
+        pass
+
+    def forward(self, x) -> torch.Tensor:
+        if self.mode == 'index':
+            return x[self.index]
+        else:
+            return torch.cat(x, dim=1)
+
+
 def conv_bn(in_chs, out_chs, k=3, stride=1, padding=None, dilation=1):
     if padding is None:
         padding = ((stride - 1) + dilation * (k - 1)) // 2
@@ -137,8 +160,10 @@ class SelecSLS(nn.Module):
 
         self.stem = conv_bn(in_chans, 32, stride=2)
         self.features = SequentialList(*[cfg['block'](*block_args) for block_args in cfg['features']])
+        self.from_seq = SelectSeq()  # from List[tensor] -> Tensor in module compatible way
         self.head = nn.Sequential(*[conv_bn(*conv_args) for conv_args in cfg['head']])
         self.num_features = cfg['num_features']
+        self.feature_info = cfg['feature_info']
 
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
@@ -165,7 +190,7 @@ class SelecSLS(nn.Module):
     def forward_features(self, x):
         x = self.stem(x)
         x = self.features(x)
-        x = self.head(x[0])
+        x = self.head(self.from_seq(x))
         return x
 
     def forward(self, x):
@@ -297,6 +322,7 @@ def _create_selecsls(variant, pretrained, model_kwargs):
         ])
     else:
         raise ValueError('Invalid net configuration ' + variant + ' !!!')
+    cfg['feature_info'] = feature_info
 
     # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
     return build_model_with_cfg(

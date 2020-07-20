@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
-from .features import FeatureNet, FeatureHookNet
+from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
 from .layers import Conv2dSame
 
 
@@ -234,15 +234,15 @@ def build_model_with_cfg(
             filter_fn=pretrained_filter_fn, strict=pretrained_strict)
     
     if features:
-        feature_cls = feature_cfg.pop('feature_cls', FeatureNet)
-        if isinstance(feature_cls, str):
-            feature_cls = feature_cls.lower()
-            if feature_cls == 'hook' or feature_cls == 'featurehooknet':
-                feature_cls = FeatureHookNet
-            else:
-                assert False, f'Unknown feature class {feature_cls}'
-        if feature_cls == FeatureHookNet and hasattr(model, 'reset_classifier'):
-            model.reset_classifier(0)
+        feature_cls = FeatureListNet
+        if 'feature_cls' in feature_cfg:
+            feature_cls = feature_cfg.pop('feature_cls')
+            if isinstance(feature_cls, str):
+                feature_cls = feature_cls.lower()
+                if 'hook' in feature_cls:
+                    feature_cls = FeatureHookNet
+                else:
+                    assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)
     
     return model

@@ -160,15 +160,15 @@ class Bottleneck(nn.Module):
                     conv2d_iabn(planes, planes, kernel_size=3, stride=1, act_layer=act_layer, act_param=1e-3),
                     aa_layer(channels=planes, filt_size=3, stride=2))
 
+        reduce_layer_planes = max(planes * self.expansion // 8, 64)
+        self.se = FastSEModule(planes, reduce_layer_planes) if use_se else None
+
         self.conv3 = conv2d_iabn(
             planes, planes * self.expansion, kernel_size=1, stride=1, act_layer="identity")
 
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
-
-        reduce_layer_planes = max(planes * self.expansion // 8, 64)
-        self.se = FastSEModule(planes, reduce_layer_planes) if use_se else None
 
     def forward(self, x):
         if self.downsample is not None:
@@ -225,8 +225,8 @@ class TResNet(nn.Module):
             dict(num_chs=self.planes, reduction=2, module=''),  # Not with S2D?
             dict(num_chs=self.planes, reduction=4, module='body.layer1'),
             dict(num_chs=self.planes * 2, reduction=8, module='body.layer2'),
-            dict(num_chs=self.planes * 4, reduction=16, module='body.layer3'),
-            dict(num_chs=self.planes * 8, reduction=32, module='body.layer4'),
+            dict(num_chs=self.planes * 4 * Bottleneck.expansion, reduction=16, module='body.layer3'),
+            dict(num_chs=self.planes * 8 * Bottleneck.expansion, reduction=32, module='body.layer4'),
         ]
 
         # head

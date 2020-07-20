@@ -106,3 +106,26 @@ def test_model_forward_torchscript(model_name, batch_size):
 
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
+
+
+EXCLUDE_FEAT_FILTERS = [
+    'hrnet*',  '*pruned*',  # hopefully fix at some point
+    'legacy*',  # not going to bother
+]
+
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_features(model_name, batch_size):
+    """Run a single forward pass with each model in feature extraction mode"""
+    model = create_model(model_name, pretrained=False, features_only=True)
+    model.eval()
+    expected_channels = model.feature_info.channels()
+    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
+    input_size = (3, 128, 128)  # jit compile is already a bit slow and we've tested normal res already...
+    outputs = model(torch.randn((batch_size, *input_size)))
+    assert len(expected_channels) == len(outputs)
+    for e, o in zip(expected_channels, outputs):
+        assert e == o.shape[1]
+        assert o.shape[0] == batch_size
+        assert not torch.isnan(o).any()
