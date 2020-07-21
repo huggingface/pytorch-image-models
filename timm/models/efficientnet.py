@@ -416,12 +416,6 @@ class EfficientNetFeatures(nn.Module):
                  se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(EfficientNetFeatures, self).__init__()
         norm_kwargs = norm_kwargs or {}
-
-        # TODO only create stages needed, currently all stages are created regardless of out_indices
-        num_stages = max(out_indices) + 1
-
-        self.out_indices = out_indices
-        self.feature_location = feature_location
         self.drop_rate = drop_rate
         self._in_chs = in_chans
 
@@ -439,14 +433,10 @@ class EfficientNetFeatures(nn.Module):
             norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)
-        self._stage_to_feature_idx = {
-            v['stage_idx']: fi for fi, v in enumerate(self.feature_info) if fi in self.out_indices}
+        self._stage_out_idx = {v['stage']: i for i, v in enumerate(self.feature_info) if i in out_indices}
         self._in_chs = builder.in_chs
 
         efficientnet_init_weights(self)
-        if _DEBUG:
-            for fi, v in enumerate(self.feature_info):
-                print('Feature idx: {}: Name: {}, Channels: {}'.format(fi, v['module'], v['num_chs']))
 
         # Register feature extraction hooks with FeatureHooks helper
         self.feature_hooks = None
@@ -460,14 +450,17 @@ class EfficientNetFeatures(nn.Module):
         x = self.act1(x)
         if self.feature_hooks is None:
             features = []
+            if 0 in self._stage_out_idx:
+                features.append(x)  # add stem out
             for i, b in enumerate(self.blocks):
                 x = b(x)
-                if i in self._stage_to_feature_idx:
+                if i + 1 in self._stage_out_idx:
                     features.append(x)
             return features
         else:
             self.blocks(x)
-            return self.feature_hooks.get_output(x.device)
+            out = self.feature_hooks.get_output(x.device)
+            return list(out.values())
 
 
 def _create_effnet(model_kwargs, variant, pretrained=False):
