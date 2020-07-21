@@ -110,8 +110,10 @@ def test_model_forward_torchscript(model_name, batch_size):
 
 EXCLUDE_FEAT_FILTERS = [
     'hrnet*',  '*pruned*',  # hopefully fix at some point
-    'legacy*',  # not going to bother
 ]
+if 'GITHUB_ACTIONS' in os.environ and 'Linux' in platform.system():
+    # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
+    EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d']
 
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
