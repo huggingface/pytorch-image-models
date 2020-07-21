@@ -38,5 +38,8 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install git+https://github.com/mapillary/inplace_abn.git@v1.0.11
     - name: Run tests
+      env:
+        OMP_NUM_THREADS=2
+        MKL_NUM_THREADS=2
       run: |
         pytest -vv --durations=0 ./tests
