@@ -5,4 +5,6 @@ from .radam import RAdam
 from .novograd import NovoGrad
 from .nvnovograd import NvNovoGrad
 from .lookahead import Lookahead
+from .adamp import AdamP
+from .sgdp import SGDP
 from .optim_factory import create_optimizer
