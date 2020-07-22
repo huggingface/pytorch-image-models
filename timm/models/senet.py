@@ -423,14 +423,14 @@ def legacy_seresnet34(pretrained=False, **kwargs):
 
 
 @register_model
-def legacy_seresnet50(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet50(pretrained=False, **kwargs):
     model_args = dict(
         block=SEResNetBottleneck, layers=[3, 4, 6, 3], groups=1, reduction=16, **kwargs)
     return _create_senet('seresnet50', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnet101(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def legacy_seresnet101(pretrained=False, **kwargs):
     model_args = dict(
         block=SEResNetBottleneck, layers=[3, 4, 23, 3], groups=1, reduction=16, **kwargs)
     return _create_senet('seresnet101', pretrained, **model_args)

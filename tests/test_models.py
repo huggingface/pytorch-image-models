@@ -109,11 +109,12 @@ def test_model_forward_torchscript(model_name, batch_size):
 
 
 EXCLUDE_FEAT_FILTERS = [
-    'hrnet*',  '*pruned*',  # hopefully fix at some point
+    '*pruned*',  # hopefully fix at some point
 ]
 if 'GITHUB_ACTIONS' in os.environ and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d']
+
 
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
@@ -124,7 +125,7 @@ def test_model_forward_features(model_name, batch_size):
     model.eval()
     expected_channels = model.feature_info.channels()
     assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
-    input_size = (3, 128, 128)  # jit compile is already a bit slow and we've tested normal res already...
+    input_size = (3, 96, 96)  # jit compile is already a bit slow and we've tested normal res already...
     outputs = model(torch.randn((batch_size, *input_size)))
     assert len(expected_channels) == len(outputs)
     for e, o in zip(expected_channels, outputs):
