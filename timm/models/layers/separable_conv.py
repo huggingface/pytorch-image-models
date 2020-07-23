@@ -23,6 +23,14 @@ class SeparableConvBnAct(nn.Module):
         norm_act_layer, norm_act_args = convert_norm_act_type(norm_layer, act_layer, norm_kwargs)
         self.bn = norm_act_layer(out_channels, apply_act=apply_act, drop_block=drop_block, **norm_act_args)
 
+    @property
+    def in_channels(self):
+        return self.conv_dw.in_channels
+
+    @property
+    def out_channels(self):
+        return self.conv_pw.out_channels
+
     def forward(self, x):
         x = self.conv_dw(x)
         x = self.conv_pw(x)
@@ -44,6 +52,14 @@ class SeparableConv2d(nn.Module):
 
         self.conv_pw = create_conv2d(
             int(in_channels * channel_multiplier), out_channels, pw_kernel_size, padding=padding, bias=bias)
+
+    @property
+    def in_channels(self):
+        return self.conv_dw.in_channels
+
+    @property
+    def out_channels(self):
+        return self.conv_pw.out_channels
 
     def forward(self, x):
         x = self.conv_dw(x)
