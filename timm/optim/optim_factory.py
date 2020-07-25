@@ -64,7 +64,7 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
         optimizer = AdamP(
             parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps,
             delta=0.1, wd_ratio=0.01, nesterov=True)
-    elif opt_lower == 'sdgp':        
+    elif opt_lower == 'sgdp':        
         optimizer = SGDP(
             parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, 
             eps=args.opt_eps, nesterov=True)        
