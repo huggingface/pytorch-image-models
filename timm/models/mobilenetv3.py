@@ -186,7 +186,7 @@ class MobileNetV3Features(nn.Module):
         # Register feature extraction hooks with FeatureHooks helper
         self.feature_hooks = None
         if feature_location != 'bottleneck':
-            hooks = self.feature_info.get_by_key(keys=('module', 'hook_type'))
+            hooks = self.feature_info.get_dicts(keys=('module', 'hook_type'))
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
 
     def forward(self, x) -> List[torch.Tensor]:

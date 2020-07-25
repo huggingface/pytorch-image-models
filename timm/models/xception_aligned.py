@@ -31,9 +31,12 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = dict(
-    xception41=_cfg(url=''),
-    xception65=_cfg(url=''),
-    xception71=_cfg(url=''),
+    xception41=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_41-e6439c97.pth'),
+    xception65=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_65-c9ae96e8.pth'),
+    xception71=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_71-8eec7df1.pth'),
 )
 
 
@@ -214,7 +217,6 @@ def xception65(pretrained=False, **kwargs):
     ]
     model_args = dict(block_cfg=block_cfg, norm_kwargs=dict(eps=.001, momentum=.1), **kwargs)
     return _xception('xception65', pretrained=pretrained, **model_args)
-
 
 
 @register_model
