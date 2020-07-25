@@ -1,10 +1,11 @@
 """
-AdamP
-Copyright (c) 2020-present NAVER Corp.
-MIT license
+AdamP Optimizer Implementation copied from https://github.com/clovaai/AdamP/blob/master/adamp/adamp.py
 
 Paper: `Slowing Down the Weight Norm Increase in Momentum-based Optimizers` - https://arxiv.org/abs/2006.08217
 Code: https://github.com/clovaai/AdamP
+
+Copyright (c) 2020-present NAVER Corp.
+MIT license
 """
 
 import torch
