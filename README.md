@@ -53,6 +53,24 @@ The default dropout rate is 0.
 
 The default optimizer is SGD, but some other choices include Adam ("adam"), RMSProp ("rmsprop"), etc. The optimizer choices are in the timm/optim/optim_factory.py file.
 
+## Run training with the EfficientNet-B2 model
+
+There are a couple of examples for running different kinds of EfficientNet models. The one below is for EfficientNet-B2, but it is also possible to run EfficientNet-B3 and EfficientNet-B0.
+
+### EfficientNet-B2 with RandAugment - 80.4 top-1, 95.1 top-5
+These params are for dual Titan RTX cards with NVIDIA Apex installed:
+
+`./distributed_train.sh 2 /imagenet/ --model efficientnet_b2 -b 128 --sched step --epochs 450 --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --amp --lr .016`
+
+Breakdown of the arguments used:
+
+`./distributed_train.sh <num of GPUs> <path to imagenet directory> --model efficientnet_b2 -b <input batch size per GPU> --sched <learning rate scheduler> --epochs <number of epochs to train (default: 2)> --decay-epochs <epoch interval to decay learning rate> --decay-rate <learning rate decay rate (default: 0.1)> --opt <Optimizer (default: "sgd")> --opt-eps <Optimizer Epsilon (default: 1e-8)> -j <how many training processes to use/number of workers (default: 1)> --warmup-lr <warmup learning rate (default: 0.0001)> --weight-decay <weight decay default: 0.0001> --drop <Dropout rate (default: 0.)> --drop-connect <Drop connect rate, DEPRECATED, use drop-path (default: None)> --model-ema <flag that enable tracking moving average of model weights> --model-ema-decay <decay factor for model weights moving average (default: 0.9998)> --aa <Use AutoAugment policy. "v0" or "original". (default: None)> --remode <Random erase mode (default: "const")> --reprob <Random erase prob (default: 0.)> --amp <use NVIDIA amp for mixed precision training> --lr <learning rate (default: 0.01)>`
+
+
+The log interval parameter may also be helpful here:
+
+`--log-interval <how many batches to wait before logging training status>`
+
 ----------------------------------------------------------------------------------------
 ## What's New
 
