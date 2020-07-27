@@ -12,6 +12,9 @@ from .layers import CondConv2d, get_condconv_initializer
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"]
 
 
+logger = logging.getLogger(__name__)
+
+
 def _parse_ksize(ss):
     if ss.isdigit():
         return int(ss)
@@ -248,7 +251,7 @@ class EfficientNetBuilder:
             ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
-                logging.info('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)))
+                logger.info('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)))
             if ba.get('num_experts', 0) > 0:
                 block = CondConvResidual(**ba)
             else:
@@ -257,17 +260,17 @@ class EfficientNetBuilder:
             ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
-                logging.info('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)))
+                logger.info('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)))
             block = DepthwiseSeparableConv(**ba)
         elif bt == 'er':
             ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
             if self.verbose:
-                logging.info('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)))
+                logger.info('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)))
             block = EdgeResidual(**ba)
         elif bt == 'cn':
             if self.verbose:
-                logging.info('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)))
+                logger.info('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)))
             block = ConvBnAct(**ba)
         else:
             assert False, 'Uknkown block type (%s) while building model.' % bt
@@ -285,7 +288,7 @@ class EfficientNetBuilder:
              List of block stacks (each stack wrapped in nn.Sequential)
         """
         if self.verbose:
-            logging.info('Building model trunk with %d stages...' % len(model_block_args))
+            logger.info('Building model trunk with %d stages...' % len(model_block_args))
         self.in_chs = in_chs
         total_block_count = sum([len(x) for x in model_block_args])
         total_block_idx = 0
@@ -297,7 +300,7 @@ class EfficientNetBuilder:
         for stage_idx, stage_block_args in enumerate(model_block_args):
             last_stack = stage_idx == (len(model_block_args) - 1)
             if self.verbose:
-                logging.info('Stack: {}'.format(stage_idx))
+                logger.info('Stack: {}'.format(stage_idx))
             assert isinstance(stage_block_args, list)
 
             blocks = []
@@ -306,7 +309,7 @@ class EfficientNetBuilder:
                 last_block = block_idx == (len(stage_block_args) - 1)
                 extract_features = ''  # No features extracted
                 if self.verbose:
-                    logging.info(' Block: {}'.format(block_idx))
+                    logger.info(' Block: {}'.format(block_idx))
 
                 # Sort out stride, dilation, and feature extraction details
                 assert block_args['stride'] in (1, 2)
@@ -336,7 +339,7 @@ class EfficientNetBuilder:
                         next_dilation = current_dilation * block_args['stride']
                         block_args['stride'] = 1
                         if self.verbose:
-                            logging.info('  Converting stride to dilation to maintain output_stride=={}'.format(
+                            logger.info('  Converting stride to dilation to maintain output_stride=={}'.format(
                                 self.output_stride))
                     else:
                         current_stride = next_output_stride
