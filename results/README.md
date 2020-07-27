@@ -4,7 +4,7 @@ This folder contains validation results for the models in this collection having
 
 ## Datasets
 
-There are currently results for the ImageNet validation set and 3 additional test sets.
+There are currently results for the ImageNet validation set and 5 additional test/label sets.
 
 ### ImageNet Validation - [`results-imagenet.csv`](results-imagenet.csv)
 
@@ -33,6 +33,18 @@ An ImageNet test set of 10,000 images sampled from new images roughly 10 years a
 * Paper: "Natural Adversarial Examples" - https://arxiv.org/abs/1907.07174
 
 A collection of 7500 images covering 200 of the 1000 ImageNet classes. Images are naturally occuring adversarial examples that confuse typical ImageNet classifiers. This is a challenging dataset, your typical ResNet-50 will score 0% top-1.
+
+### ImageNet-Robustness - [`results-imagenet-r.csv`](results-imagenet-r.csv)
+
+* Source: https://github.com/hendrycks/imagenet-r
+* Paper: "The Many Faces of Robustness" - https://arxiv.org/abs/2006.16241
+
+Renditions of 200 ImageNet classes resulting in 30,000 images for testing robustness.
+
+### ImageNet-"Real Labels" - [`results-imagenet-real.csv`](results-imagenet-real.csv)
+
+* Source: https://github.com/google-research/reassessed-imagenet
+* Paper: "Are we done with ImageNet?" - https://arxiv.org/abs/2006.07159
 
 ## TODO
 * Explore adding a reduced version of ImageNet-C (Corruptions) and ImageNet-P (Perturbations) from https://github.com/hendrycks/robustness. The originals are huge and image size specific.
