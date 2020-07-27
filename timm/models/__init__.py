@@ -1,4 +1,4 @@
-from .csp import *
+from .cspnet import *
 from .densenet import *
 from .dla import *
 from .dpn import *
