@@ -4,7 +4,7 @@ This is a port of the Gluon Xception code and weights, itself ported from a PyTo
 Gluon model: (https://gluon-cv.mxnet.io/_modules/gluoncv/model_zoo/xception.html)
 Original PyTorch DeepLab impl: https://github.com/jfzhang95/pytorch-deeplab-xception
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from collections import OrderedDict
 

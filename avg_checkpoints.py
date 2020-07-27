@@ -9,7 +9,7 @@ For any hope of decent results, the checkpoints should be from the same or child
 EMA (exponential moving average) of the model weights or performing SWA (stochastic
 weight averaging), but post-training.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import torch
 import argparse

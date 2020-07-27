@@ -1,6 +1,6 @@
 """ Conv2d + BN + Act
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from torch import nn as nn
 

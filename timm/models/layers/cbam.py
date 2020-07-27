@@ -5,7 +5,7 @@ Experimental impl of CBAM: Convolutional Block Attention Module: https://arxiv.o
 WARNING: Results with these attention layers have been mixed. They can significantly reduce performance on
 some tasks, especially fine-grained it seems. I may end up removing this impl.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import torch

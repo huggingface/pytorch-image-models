@@ -1,3 +1,10 @@
+""" Depthwise Separable Conv Modules
+
+Basic DWS convs. Other variations of DWS exist with batch norm or activations between the
+DW and PW convs such as the Depthwise modules in MobileNetV2 / EfficientNet and Xception.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 from torch import nn as nn
 
 from .create_conv2d import create_conv2d

@@ -1,3 +1,7 @@
+""" Quick n Simple Image Folder, Tarfile based DataSet
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function

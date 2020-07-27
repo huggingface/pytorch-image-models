@@ -1,3 +1,11 @@
+""" EfficientNet, MobileNetV3, etc Builder
+
+Assembles EfficieNet and related network feature blocks from string definitions.
+Handles stride, dilation calculations, and selects feature extraction points.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 import logging
 import math
 import re

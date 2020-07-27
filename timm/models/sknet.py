@@ -6,7 +6,7 @@ This was inspired by reading 'Compounding the Performance Improvements...' (http
 and a streamlined impl at https://github.com/clovaai/assembled-cnn but I ended up building something closer
 to the original paper with some modifications of my own to better balance param count vs accuracy.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
 

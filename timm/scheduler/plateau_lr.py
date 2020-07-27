@@ -1,3 +1,9 @@
+""" Plateau Scheduler
+
+Adapts PyTorch plateau scheduler and allows application of noise, warmup.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import torch
 
 from .scheduler import Scheduler

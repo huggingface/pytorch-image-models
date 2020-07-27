@@ -8,7 +8,7 @@ Looked at  https://github.com/youngwanLEE/vovnet-detectron2 &
 https://github.com/stigma0617/VoVNet.pytorch/blob/master/models_vovnet/vovnet.py
 for some reference, rewrote most of the code.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 from typing import List

@@ -2,8 +2,9 @@
 Based on original MXNet implementation https://github.com/cypw/DPNs with
 many ideas from another PyTorch implementation https://github.com/oyam/pytorch-DPNs.
 
-This implementation is compatible with the pretrained weights
-from cypw's MXNet implementation.
+This implementation is compatible with the pretrained weights from cypw's MXNet implementation.
+
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from __future__ import absolute_import
 from __future__ import division

@@ -1,6 +1,6 @@
 """ AvgPool2d w/ Same Padding
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn

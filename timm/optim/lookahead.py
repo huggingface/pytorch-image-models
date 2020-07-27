@@ -1,6 +1,8 @@
 """ Lookahead Optimizer Wrapper.
 Implementation modified from: https://github.com/alphadl/lookahead.pytorch
 Paper: `Lookahead Optimizer: k steps forward, 1 step back` - https://arxiv.org/abs/1907.08610
+
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 from torch.optim.optimizer import Optimizer

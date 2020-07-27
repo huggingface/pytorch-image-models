@@ -1,3 +1,8 @@
+""" Inception-V3
+
+Originally from torchvision Inception3 model
+Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

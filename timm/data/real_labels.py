@@ -1,3 +1,9 @@
+""" Real labels evaluator for ImageNet
+Paper: `Are we done with ImageNet?` - https://arxiv.org/abs/2006.07159
+Based on Numpy example at https://github.com/google-research/reassessed-imagenet
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import os
 import json
 import numpy as np

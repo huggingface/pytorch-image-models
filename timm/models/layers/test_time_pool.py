@@ -1,6 +1,6 @@
 """ Test Time Pooling (Average-Max Pool)
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import logging

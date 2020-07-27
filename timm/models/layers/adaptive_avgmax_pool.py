@@ -7,7 +7,7 @@ Adaptive pooling with the ability to select the type of pooling from:
 
 Both a functional and a nn.Module version of the pooling is provided.
 
-Author: Ross Wightman (rwightman)
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn

@@ -22,7 +22,7 @@ An implementation of EfficienNet that covers variety of related models with effi
 
 * And likely more...
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn

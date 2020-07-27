@@ -1,6 +1,6 @@
 """ Create Conv2d Factory Method
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 from .mixed_conv2d import MixedConv2d

@@ -1,3 +1,8 @@
+""" Common training and validation utilities
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 from copy import deepcopy
 
 import torch

@@ -11,6 +11,7 @@ Weights from original impl have been modified
 * removed training specific dict entries from checkpoints and keep model state_dict only
 * remap names to match the ones here
 
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import numpy as np
 import torch.nn as nn

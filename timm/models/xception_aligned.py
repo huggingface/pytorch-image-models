@@ -3,7 +3,7 @@
 This is a correct, from scratch impl of Aligned Xception (Deeplab) models compatible with TF weights at
 https://github.com/tensorflow/models/blob/master/research/deeplab/g3doc/model_zoo.md
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from collections import OrderedDict
 

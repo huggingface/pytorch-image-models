@@ -12,7 +12,7 @@ DropBlock impl inspired by two Tensorflow impl that I liked:
  - https://github.com/tensorflow/tpu/blob/master/models/official/resnet/resnet_model.py#L74
  - https://github.com/clovaai/assembled-cnn/blob/master/nets/blocks.py
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn

@@ -6,7 +6,7 @@ in terms of memory usage and throughput (roughly 5x mem, 1/2 - 1/3x speed).
 
 Still very much a WIP, fiddling with buffer usage, in-place/jit optimizations, and layouts.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import torch

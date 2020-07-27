@@ -5,7 +5,7 @@ This is intended to be a lean and easily modifiable ImageNet validation script f
 models or training checkpoints against ImageNet or similarly organized image datasets. It prioritizes
 canonical PyTorch, standard Python style, and good performance. Repurpose as you see fit.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
 import os

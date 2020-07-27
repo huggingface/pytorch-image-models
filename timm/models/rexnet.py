@@ -7,6 +7,7 @@ Adapted from original impl at https://github.com/clovaai/rexnet
 Copyright (c) 2020-present NAVER Corp. MIT license
 
 Changes for timm, feature extraction, and rounded channel variant hacked together by Ross Wightman
+Copyright 2020 Ross Wightman
 """
 
 import torch.nn as nn

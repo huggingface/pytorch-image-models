@@ -3,7 +3,7 @@
 
 An example inference script that outputs top-k class ids for images in a folder into a csv.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import os
 import time

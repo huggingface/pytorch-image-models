@@ -7,7 +7,7 @@ All jit scripted activations are lacking in-place variations on purpose, scripte
 currently work across in-place op boundaries, thus performance is equal to or less than the non-scripted
 versions if they contain in-place ops.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import torch

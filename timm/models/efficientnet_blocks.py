@@ -1,3 +1,8 @@
+""" EfficientNet, MobileNetV3, etc Blocks
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F

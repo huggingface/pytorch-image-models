@@ -1,3 +1,7 @@
+""" Model Registry
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 import sys
 import re
 import fnmatch

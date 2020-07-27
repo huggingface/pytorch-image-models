@@ -6,7 +6,7 @@ easily be swapped. All have an `inplace` arg even if not used.
 These activations are not compatible with jit scripting or ONNX export of the model, please use either
 the JIT or basic versions of the activations.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import torch

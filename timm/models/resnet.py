@@ -4,6 +4,7 @@ This started as a copy of https://github.com/pytorch/vision 'resnet.py' (BSD-3-C
 additional dropout and dynamic global avg/max pool.
 
 ResNeXt, SE-ResNeXt, SENet, and MXNet Gluon stem/downsample variants, tiered stems added by Ross Wightman
+Copyright 2020 Ross Wightman
 """
 import math
 import copy
