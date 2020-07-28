@@ -7,7 +7,7 @@ import fnmatch
 from timm import list_models, create_model, set_scriptable
 
 
-if 'GITHUB_ACTIONS' in os.environ and 'Linux' in platform.system():
+if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d']
 else:
@@ -111,7 +111,7 @@ def test_model_forward_torchscript(model_name, batch_size):
 EXCLUDE_FEAT_FILTERS = [
     '*pruned*',  # hopefully fix at some point
 ]
-if 'GITHUB_ACTIONS' in os.environ and 'Linux' in platform.system():
+if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
 
