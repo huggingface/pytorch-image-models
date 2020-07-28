@@ -2,11 +2,14 @@ import numpy as np
 import pandas as pd
 
 results = {
-    'results-imagenet.csv'                    : pd.read_csv('results-imagenet.csv'), 
+    'results-imagenet.csv': pd.read_csv('results-imagenet.csv'),
     'results-imagenetv2-matched-frequency.csv': pd.read_csv('results-imagenetv2-matched-frequency.csv'),
-    'results-sketch.csv'                      : pd.read_csv('results-sketch.csv'),
-    'results-imagenet-a.csv'                  : pd.read_csv('results-imagenet-a.csv'),
+    'results-sketch.csv': pd.read_csv('results-sketch.csv'),
+    'results-imagenet-a.csv': pd.read_csv('results-imagenet-a.csv'),
+    'results-imagenet-r.csv': pd.read_csv('results-imagenet-r.csv'),
+    'results-imagenet-real.csv': pd.read_csv('results-imagenet-real.csv'),
 }
+
 
 def diff(csv_file):    
     base_models = results['results-imagenet.csv']['model'].values
@@ -48,5 +51,7 @@ def diff(csv_file):
 
     results[csv_file].to_csv(csv_file, index=False, float_format='%.3f')
 
+
 for csv_file in results:
-    if csv_file != 'results-imagenet.csv': diff(csv_file)
+    if csv_file != 'results-imagenet.csv':
+        diff(csv_file)
