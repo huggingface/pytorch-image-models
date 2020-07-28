@@ -12,7 +12,7 @@ import torch
 from .scheduler import Scheduler
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class TanhLRScheduler(Scheduler):

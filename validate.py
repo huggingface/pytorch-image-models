@@ -5,7 +5,7 @@ This is intended to be a lean and easily modifiable ImageNet validation script f
 models or training checkpoints against ImageNet or similarly organized image datasets. It prioritizes
 canonical PyTorch, standard Python style, and good performance. Repurpose as you see fit.
 
-Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
+Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
 import os
@@ -29,6 +29,8 @@ from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config, R
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
+_logger = logging.getLogger('validate')
+
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
 parser.add_argument('data', metavar='DIR',
@@ -115,7 +117,7 @@ def validate(args):
         load_checkpoint(model, args.checkpoint, args.use_ema)
 
     param_count = sum([m.numel() for m in model.parameters()])
-    logging.info('Model %s created, param count: %d' % (args.model, param_count))
+    _logger.info('Model %s created, param count: %d' % (args.model, param_count))
 
     data_config = resolve_data_config(vars(args), model=model)
     model, test_time_pool = apply_test_time_pool(model, data_config, args)
@@ -194,7 +196,7 @@ def validate(args):
             end = time.time()
 
             if batch_idx % args.log_freq == 0:
-                logging.info(
+                _logger.info(
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
@@ -220,9 +222,9 @@ def validate(args):
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
         cropt_pct=crop_pct,
-        interpolation=data_config['interpolation']
-    ))
-    logging.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
+        interpolation=data_config['interpolation']))
+
+    _logger.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
 
     return results
@@ -252,7 +254,7 @@ def main():
 
     if len(model_cfgs):
         results_file = args.results_file or './results-all.csv'
-        logging.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
+        _logger.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         results = []
         try:
             start_batch_size = args.batch_size

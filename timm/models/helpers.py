@@ -12,6 +12,9 @@ from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
 from .layers import Conv2dSame
 
 
+_logger = logging.getLogger(__name__)
+
+
 def load_state_dict(checkpoint_path, use_ema=False):
     if checkpoint_path and os.path.isfile(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
@@ -28,10 +31,10 @@ def load_state_dict(checkpoint_path, use_ema=False):
             state_dict = new_state_dict
         else:
             state_dict = checkpoint
-        logging.info("Loaded {} from checkpoint '{}'".format(state_dict_key, checkpoint_path))
+        _logger.info("Loaded {} from checkpoint '{}'".format(state_dict_key, checkpoint_path))
         return state_dict
     else:
-        logging.error("No checkpoint found at '{}'".format(checkpoint_path))
+        _logger.error("No checkpoint found at '{}'".format(checkpoint_path))
         raise FileNotFoundError()
 
 
@@ -59,13 +62,13 @@ def resume_checkpoint(model, checkpoint_path):
                 resume_epoch = checkpoint['epoch']
                 if 'version' in checkpoint and checkpoint['version'] > 1:
                     resume_epoch += 1  # start at the next epoch, old checkpoints incremented before save
-            logging.info("Loaded checkpoint '{}' (epoch {})".format(checkpoint_path, checkpoint['epoch']))
+            _logger.info("Loaded checkpoint '{}' (epoch {})".format(checkpoint_path, checkpoint['epoch']))
         else:
             model.load_state_dict(checkpoint)
-            logging.info("Loaded checkpoint '{}'".format(checkpoint_path))
+            _logger.info("Loaded checkpoint '{}'".format(checkpoint_path))
         return other_state, resume_epoch
     else:
-        logging.error("No checkpoint found at '{}'".format(checkpoint_path))
+        _logger.error("No checkpoint found at '{}'".format(checkpoint_path))
         raise FileNotFoundError()
 
 
@@ -73,7 +76,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
     if cfg is None:
         cfg = getattr(model, 'default_cfg')
     if cfg is None or 'url' not in cfg or not cfg['url']:
-        logging.warning("Pretrained model URL is invalid, using random initialization.")
+        _logger.warning("Pretrained model URL is invalid, using random initialization.")
         return
 
     state_dict = model_zoo.load_url(cfg['url'], progress=False, map_location='cpu')
@@ -83,7 +86,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
 
     if in_chans == 1:
         conv1_name = cfg['first_conv']
-        logging.info('Converting first conv (%s) from 3 to 1 channel' % conv1_name)
+        _logger.info('Converting first conv (%s) from 3 to 1 channel' % conv1_name)
         conv1_weight = state_dict[conv1_name + '.weight']
         state_dict[conv1_name + '.weight'] = conv1_weight.sum(dim=1, keepdim=True)
     elif in_chans != 3:

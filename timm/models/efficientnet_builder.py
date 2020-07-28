@@ -18,10 +18,12 @@ from .layers import CondConv2d, get_condconv_initializer
 
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"]
 
+_logger = logging.getLogger(__name__)
+
 
 def _log_info_if(msg, condition):
     if condition:
-        logging.info(msg)
+        _logger.info(msg)
 
 
 def _parse_ksize(ss):
@@ -233,7 +235,7 @@ class EfficientNetBuilder:
         self.drop_path_rate = drop_path_rate
         if feature_location == 'depthwise':
             # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
-            logging.warning("feature_location=='depthwise' is deprecated, using 'expansion'")
+            _logger.warning("feature_location=='depthwise' is deprecated, using 'expansion'")
             feature_location = 'expansion'
         self.feature_location = feature_location
         assert feature_location in ('bottleneck', 'expansion', '')
@@ -291,7 +293,7 @@ class EfficientNetBuilder:
         """ Build the blocks
         Args:
             in_chs: Number of input-channels passed to first block
-            model_block_args: A list of lists, outer list defines stacks (block stages), inner
+            model_block_args: A list of lists, outer list defines stages, inner
                 list contains strings defining block configuration(s)
         Return:
              List of block stacks (each stack wrapped in nn.Sequential)

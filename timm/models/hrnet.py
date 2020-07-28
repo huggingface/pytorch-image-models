@@ -23,7 +23,7 @@ from .registry import register_model
 from .resnet import BasicBlock, Bottleneck  # leveraging ResNet blocks w/ additional features like SE
 
 _BN_MOMENTUM = 0.1
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 def _cfg(url='', **kwargs):
@@ -412,7 +412,7 @@ class HighResolutionModule(nn.Module):
         elif num_branches != len(num_inchannels):
             error_msg = 'NUM_BRANCHES({}) <> NUM_INCHANNELS({})'.format(num_branches, len(num_inchannels))
         if error_msg:
-            logger.error(error_msg)
+            _logger.error(error_msg)
             raise ValueError(error_msg)
 
     def _make_one_branch(self, branch_index, block, num_blocks, num_channels, stride=1):

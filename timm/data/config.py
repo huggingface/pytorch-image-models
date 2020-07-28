@@ -2,6 +2,9 @@ import logging
 from .constants import *
 
 
+_logger = logging.getLogger(__name__)
+
+
 def resolve_data_config(args, default_cfg={}, model=None, verbose=True):
     new_config = {}
     default_cfg = default_cfg
@@ -65,8 +68,8 @@ def resolve_data_config(args, default_cfg={}, model=None, verbose=True):
         new_config['crop_pct'] = default_cfg['crop_pct']
 
     if verbose:
-        logging.info('Data processing configuration for current model + dataset:')
+        _logger.info('Data processing configuration for current model + dataset:')
         for n, v in new_config.items():
-            logging.info('\t%s: %s' % (n, str(v)))
+            _logger.info('\t%s: %s' % (n, str(v)))
 
     return new_config

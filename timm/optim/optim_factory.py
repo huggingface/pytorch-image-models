@@ -3,7 +3,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 from torch import optim as optim
-from timm.optim import Nadam, RMSpropTF, AdamW, RAdam, NovoGrad, NvNovoGrad, Lookahead
+from timm.optim import Nadam, RMSpropTF, AdamW, RAdam, NovoGrad, NvNovoGrad, Lookahead, AdamP, SGDP
 try:
     from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
     has_apex = True
@@ -63,6 +63,14 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
     elif opt_lower == 'radam':
         optimizer = RAdam(
             parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+    elif opt_lower == 'adamp':        
+        optimizer = AdamP(
+            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps,
+            delta=0.1, wd_ratio=0.01, nesterov=True)
+    elif opt_lower == 'sgdp':        
+        optimizer = SGDP(
+            parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, 
+            eps=args.opt_eps, nesterov=True)        
     elif opt_lower == 'adadelta':
         optimizer = optim.Adadelta(
             parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)

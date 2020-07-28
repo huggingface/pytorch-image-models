@@ -14,6 +14,7 @@ import glob
 import csv
 import operator
 import logging
+import logging.handlers
 import numpy as np
 from collections import OrderedDict
 try:
@@ -24,6 +25,9 @@ except ImportError:
     has_apex = False
 
 from torch import distributed as dist
+
+
+_logger = logging.getLogger(__name__)
 
 
 def unwrap_model(model):
@@ -89,7 +93,7 @@ class CheckpointSaver:
             checkpoints_str = "Current checkpoints:\n"
             for c in self.checkpoint_files:
                 checkpoints_str += ' {}\n'.format(c)
-            logging.info(checkpoints_str)
+            _logger.info(checkpoints_str)
 
             if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
                 self.best_epoch = epoch
@@ -126,10 +130,10 @@ class CheckpointSaver:
         to_delete = self.checkpoint_files[delete_index:]
         for d in to_delete:
             try:
-                logging.debug("Cleaning checkpoint: {}".format(d))
+                _logger.debug("Cleaning checkpoint: {}".format(d))
                 os.remove(d[0])
             except Exception as e:
-                logging.error("Exception '{}' while deleting checkpoint".format(e))
+                _logger.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
     def save_recovery(self, model, optimizer, args, epoch, model_ema=None, use_amp=False, batch_idx=0):
@@ -139,10 +143,10 @@ class CheckpointSaver:
         self._save(save_path, model, optimizer, args, epoch, model_ema, use_amp=use_amp)
         if os.path.exists(self.last_recovery_file):
             try:
-                logging.debug("Cleaning recovery: {}".format(self.last_recovery_file))
+                _logger.debug("Cleaning recovery: {}".format(self.last_recovery_file))
                 os.remove(self.last_recovery_file)
             except Exception as e:
-                logging.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
+                _logger.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
         self.last_recovery_file = self.curr_recovery_file
         self.curr_recovery_file = save_path
 
@@ -284,9 +288,9 @@ class ModelEma:
                     name = k
                 new_state_dict[name] = v
             self.ema.load_state_dict(new_state_dict)
-            logging.info("Loaded state_dict_ema")
+            _logger.info("Loaded state_dict_ema")
         else:
-            logging.warning("Failed to find state_dict_ema, starting from loaded model weights")
+            _logger.warning("Failed to find state_dict_ema, starting from loaded model weights")
 
     def update(self, model):
         # correct a mismatch in state dict keys
@@ -312,8 +316,13 @@ class FormatterNoInfo(logging.Formatter):
         return logging.Formatter.format(self, record)
 
 
-def setup_default_logging(default_level=logging.INFO):
+def setup_default_logging(default_level=logging.INFO, log_path=''):
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(FormatterNoInfo())
     logging.root.addHandler(console_handler)
     logging.root.setLevel(default_level)
+    if log_path:
+        file_handler = logging.handlers.RotatingFileHandler(log_path, maxBytes=(1024 ** 2 * 2), backupCount=3)
+        file_formatter = logging.Formatter("%(asctime)s - %(name)20s: [%(levelname)8s] - %(message)s")
+        file_handler.setFormatter(file_formatter)
+        logging.root.addHandler(file_handler)
