@@ -61,7 +61,6 @@ class SEWithNorm(nn.Module):
         super(SEWithNorm, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         reduction_channels = reduction_channels or make_divisible(channels // reduction, divisor=divisor)
-        print(reduction_channels)
         self.fc1 = nn.Conv2d(
             channels, reduction_channels, kernel_size=1, padding=0, bias=True)
         self.bn = nn.BatchNorm2d(reduction_channels)
