@@ -114,7 +114,7 @@ default_cfgs = {
         url='',
         interpolation='bicubic'),
     'seresnet50': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet50_ra_224-8efdb4bb.pth',
         interpolation='bicubic'),
     'seresnet50tn': _cfg(
         url='',
