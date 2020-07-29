@@ -83,6 +83,8 @@ parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
                     help='Output csv file for validation results (summary)')
 parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
                     help='Real labels JSON file for imagenet evaluation')
+parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
+                    help='Valid label indices txt file for validation of partial label space')
 
 
 def set_jit_legacy():
@@ -141,6 +143,13 @@ def validate(args):
     else:
         dataset = Dataset(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
 
+    if args.valid_labels:
+        with open(args.valid_labels, 'r') as f:
+            valid_labels = {int(line.rstrip()) for line in f}
+            valid_labels = [i in valid_labels for i in range(args.num_classes)]
+    else:
+        valid_labels = None
+
     if args.real_labels:
         real_labels = RealLabelsImagenet(dataset.filenames(basename=True), real_json=args.real_labels)
     else:
@@ -180,6 +189,8 @@ def validate(args):
 
             # compute output
             output = model(input)
+            if valid_labels is not None:
+                output = output[:, valid_labels]
             loss = criterion(output, target)
 
             if real_labels is not None:
