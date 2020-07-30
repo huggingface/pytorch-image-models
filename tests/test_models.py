@@ -86,6 +86,15 @@ def test_model_default_cfgs(model_name, batch_size):
     assert any([k.startswith(first_conv) for k in state_dict.keys()]), f'{first_conv} not in model params'
 
 
+if 'GITHUB_ACTIONS' not in os.environ:
+    @pytest.mark.timeout(120)
+    @pytest.mark.parametrize('model_name', list_models())
+    @pytest.mark.parametrize('batch_size', [1])
+    def test_model_load_pretrained(model_name, batch_size):
+        """Run a single forward pass with each model"""
+        create_model(model_name, pretrained=True)
+
+
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
     'dla*', 'hrnet*',  # hopefully fix at some point

@@ -189,7 +189,7 @@ def res2net50_48w_2s(pretrained=False, **kwargs):
     """
     model_args = dict(
         block=Bottle2neck, layers=[3, 4, 6, 3], base_width=48, block_args=dict(scale=2), **kwargs)
-    return _create_res2net('res2net50_26w_8s', pretrained, **model_args)
+    return _create_res2net('res2net50_48w_2s', pretrained, **model_args)
 
 
 @register_model
@@ -200,7 +200,7 @@ def res2net50_14w_8s(pretrained=False, **kwargs):
     """
     model_args = dict(
         block=Bottle2neck, layers=[3, 4, 6, 3], base_width=14, block_args=dict(scale=8), **kwargs)
-    return _create_res2net('res2net50_26w_8s', pretrained, **model_args)
+    return _create_res2net('res2net50_14w_8s', pretrained, **model_args)
 
 
 @register_model

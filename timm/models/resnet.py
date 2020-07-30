@@ -624,7 +624,7 @@ def resnet26d(pretrained=False, **kwargs):
     """Constructs a ResNet-26 v1d model.
     This is technically a 28 layer ResNet, sticking with 'd' modifier from Gluon for now.
     """
-    model_args = dict(block=Bottleneck, layers=[2, 2, 2, 2], stem_type='deep', avg_down=True, **kwargs)
+    model_args = dict(block=Bottleneck, layers=[2, 2, 2, 2], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     return _create_resnet('resnet26d', pretrained, **model_args)
 
 
@@ -1129,9 +1129,3 @@ def senet154(pretrained=False, **kwargs):
         block=Bottleneck, layers=[3, 8, 36, 3], cardinality=64, base_width=4, stem_type='deep',
         down_kernel_size=3, block_reduce_first=2, block_args=dict(attn_layer='se'), **kwargs)
     return _create_resnet('senet154', pretrained, **model_args)
-
-
-@register_model
-def eseresnet50(pretrained=False, **kwargs):
-    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], block_args=dict(attn_layer='ese'), **kwargs)
-    return _create_resnet('seresnet50', pretrained, **model_args)

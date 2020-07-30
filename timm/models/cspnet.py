@@ -433,7 +433,7 @@ def cspresnext50(pretrained=False, **kwargs):
 @register_model
 def cspresnext50_iabn(pretrained=False, **kwargs):
     norm_layer = get_norm_act_layer('iabn')
-    return _create_cspnet('cspresnext50', pretrained=pretrained, norm_layer=norm_layer, **kwargs)
+    return _create_cspnet('cspresnext50_iabn', pretrained=pretrained, norm_layer=norm_layer, **kwargs)
 
 
 @register_model
@@ -444,7 +444,7 @@ def cspdarknet53(pretrained=False, **kwargs):
 @register_model
 def cspdarknet53_iabn(pretrained=False, **kwargs):
     norm_layer = get_norm_act_layer('iabn')
-    return _create_cspnet('cspdarknet53', pretrained=pretrained, block_fn=DarkBlock, norm_layer=norm_layer, **kwargs)
+    return _create_cspnet('cspdarknet53_iabn', pretrained=pretrained, block_fn=DarkBlock, norm_layer=norm_layer, **kwargs)
 
 
 @register_model
