@@ -271,6 +271,7 @@ def main():
                 result = OrderedDict(model=args.model)
                 r = {}
                 while not r and batch_size >= args.num_gpu:
+                    torch.cuda.empty_cache()
                     try:
                         args.batch_size = batch_size
                         print('Validating with batch size: %d' % args.batch_size)
@@ -281,7 +282,6 @@ def main():
                             raise e
                         batch_size = max(batch_size // 2, args.num_gpu)
                         print("Validation failed, reducing batch size by 50%")
-                        torch.cuda.empty_cache()
                 result.update(r)
                 if args.checkpoint:
                     result['checkpoint'] = args.checkpoint
