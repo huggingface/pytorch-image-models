@@ -1,3 +1,20 @@
+# Changes
+
+### Aug 1, 2020
+Universal feature extraction, new models, new weights, new test sets.
+* All models support the `features_only=True` argument for `create_model` call to return a network that extracts features from the deepest layer at each stride.
+* New models
+  * CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet
+  * ReXNet
+  * (Aligned) Xception41/65/71 (a proper port of TF models)
+* New trained weights
+  * SEResNet50 - 80.3
+  * CSPDarkNet53 - 80.1 top-1
+  * CSPResNeXt50 - 80.0 to-1
+  * DPN68b - 79.2 top-1
+  * EfficientNet-Lite0 (non-TF ver) - 75.5 (submitted by @hal-314)
+* Add 'real' labels for ImageNet and ImageNet-Renditions test set, see [`results/README.md`](results/README.md)
+
 ### June 11, 2020
 Bunch of changes:
 
@@ -35,28 +52,3 @@ Bunch of changes:
 ### March 18, 2020
 * Add EfficientNet-Lite models w/ weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite)
 * Add RandAugment trained ResNeXt-50 32x4d weights with 79.8 top-1. Trained by [Andrew Lavin](https://github.com/andravin) (see Training section for hparams)
-
-### Feb 29, 2020
-* New MobileNet-V3 Large weights trained from stratch with this code to 75.77% top-1
-* IMPORTANT CHANGE - default weight init changed for all MobilenetV3 / EfficientNet / related models
-  * overall results similar to a bit better training from scratch on a few smaller models tried
-  * performance early in training seems consistently improved but less difference by end
-  * set `fix_group_fanout=False` in `_init_weight_goog` fn if you need to reproducte past behaviour
-* Experimental LR noise feature added applies a random perturbation to LR each epoch in specified range of training
-
-### Feb 18, 2020
-* Big refactor of model layers and addition of several attention mechanisms. Several additions motivated by 'Compounding the Performance Improvements...' (https://arxiv.org/abs/2001.06268):
-  * Move layer/module impl into `layers` subfolder/module of `models` and organize in a more granular fashion
-  * ResNet downsample paths now properly support dilation (output stride != 32) for avg_pool ('D' variant) and 3x3 (SENets) networks
-  * Add Selective Kernel Nets on top of ResNet base, pretrained weights
-    * skresnet18 - 73% top-1
-    * skresnet34 - 76.9% top-1 
-    * skresnext50_32x4d (equiv to SKNet50) - 80.2% top-1
-  * ECA and CECA (circular padding) attention layer contributed by [Chris Ha](https://github.com/VRandme)
-  * CBAM attention experiment (not the best results so far, may remove)
-  * Attention factory to allow dynamically selecting one of SE, ECA, CBAM in the `.se` position for all ResNets
-  * Add DropBlock and DropPath (formerly DropConnect for EfficientNet/MobileNetv3) support to all ResNet variants
-* Full dataset results updated that incl NoisyStudent weights and 2 of the 3 SK weights
-
-### Feb 12, 2020
-* Add EfficientNet-L2 and B0-B7 NoisyStudent weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet)
