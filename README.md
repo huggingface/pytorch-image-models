@@ -66,7 +66,7 @@ Bunch of changes:
 
 ## Introduction 
 
-For each competition, personal, or freelance project involving images + Convolution Neural Networks, I build on top of an evolving collection of code and models. This repo contains a (somewhat) cleaned up and paired down iteration of that code. Hopefully it'll be of use to others.
+For each competition, personal, or freelance project involving images + Convolution Neural Networks, I build on top of an evolving collection of code and models. This repo contains a (somewhat) cleaned up and pared down iteration of that code. Hopefully it'll be of use to others.
 
 The work of many others is present here. I've tried to make sure all source material is acknowledged:
 * Training/validation scripts evolved from early versions of the [PyTorch Imagenet Examples](https://github.com/pytorch/examples)
