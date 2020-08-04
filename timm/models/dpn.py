@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_conv2d, ConvBnAct
+from .layers import BatchNormAct2d, ConvBnAct, create_conv2d, create_classifier
 from .registry import register_model
 
 __all__ = ['DPN']
@@ -237,21 +237,16 @@ class DPN(nn.Module):
         self.features = nn.Sequential(blocks)
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        num_features = self.num_features * self.global_pool.feat_mult()
-        self.classifier = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
+        self.global_pool, self.classifier = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
 
     def get_classifier(self):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.classifier = nn.Conv2d(num_features, num_classes, kernel_size=1, bias=True)
-        else:
-            self.classifier = nn.Identity()
+        self.global_pool, self.classifier = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
 
     def forward_features(self, x):
         return self.features(x)
@@ -261,8 +256,10 @@ class DPN(nn.Module):
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        out = self.classifier(x)
-        return out.flatten(1)
+        x = self.classifier(x)
+        if not self.global_pool.is_identity():
+            x = x.flatten(1)  # conv classifier, flatten if pooling isn't pass-through (disabled)
+        return x
 
 
 def _create_dpn(variant, pretrained=False, **kwargs):

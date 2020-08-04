@@ -14,7 +14,7 @@ from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act, BlurPool2d
+from .layers import BatchNormAct2d, create_norm_act, BlurPool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['DenseNet']
@@ -236,8 +236,8 @@ class DenseNet(nn.Module):
         self.num_features = num_features
 
         # Linear layer
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.global_pool, self.classifier = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
         # Official init from torch repo.
         for m in self.modules():
@@ -254,19 +254,15 @@ class DenseNet(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.classifier = nn.Linear(num_features, num_classes)
-        else:
-            self.classifier = nn.Identity()
+        self.global_pool, self.classifier = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         return self.features(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         # both classifier and block drop?
         # if self.drop_rate > 0.:
         #     x = F.dropout(x, p=self.drop_rate, training=self.training)

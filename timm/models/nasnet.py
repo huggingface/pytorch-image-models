@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d, ConvBnAct, create_conv2d, create_pool2d
+from .layers import ConvBnAct, create_conv2d, create_pool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['NASNetALarge']
@@ -496,20 +496,16 @@ class NASNetALarge(nn.Module):
             dict(num_chs=4032, reduction=32, module='act'),
         ]
 
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.global_pool, self.last_linear = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def get_classifier(self):
         return self.last_linear
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.last_linear = nn.Linear(num_features, num_classes)
-        else:
-            self.last_linear = nn.Identity()
+        self.global_pool, self.last_linear = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x_conv0 = self.conv0(x)
@@ -544,7 +540,7 @@ class NASNetALarge(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
         x = self.last_linear(x)

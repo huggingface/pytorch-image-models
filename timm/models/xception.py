@@ -26,7 +26,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d
+from .layers import create_classifier
 from .registry import register_model
 
 __all__ = ['Xception']
@@ -162,8 +162,7 @@ class Xception(nn.Module):
             dict(num_chs=2048, reduction=32, module='act4'),
         ]
 
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
         # #------- init weights --------
         for m in self.modules():
@@ -178,12 +177,7 @@ class Xception(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.fc = nn.Linear(num_features, num_classes)
-        else:
-            self.fc = nn.Identity()
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x = self.conv1(x)
@@ -218,7 +212,7 @@ class Xception(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)

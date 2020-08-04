@@ -72,19 +72,23 @@ class SelectAdaptivePool2d(nn.Module):
     """
     def __init__(self, output_size=1, pool_type='avg', flatten=False):
         super(SelectAdaptivePool2d, self).__init__()
-        self.output_size = output_size
-        self.pool_type = pool_type
+        self.pool_type = pool_type or ''  # convert other falsy values to empty string for consistent TS typing
         self.flatten = flatten
-        if pool_type == 'avgmax':
+        if pool_type == '':
+            self.pool = nn.Identity()  # pass through
+        elif pool_type == 'avg':
+            self.pool = nn.AdaptiveAvgPool2d(output_size)
+        elif pool_type == 'avgmax':
             self.pool = AdaptiveAvgMaxPool2d(output_size)
         elif pool_type == 'catavgmax':
             self.pool = AdaptiveCatAvgMaxPool2d(output_size)
         elif pool_type == 'max':
             self.pool = nn.AdaptiveMaxPool2d(output_size)
         else:
-            if pool_type != 'avg':
-                assert False, 'Invalid pool type: %s' % pool_type
-            self.pool = nn.AdaptiveAvgPool2d(output_size)
+            assert False, 'Invalid pool type: %s' % pool_type
+
+    def is_identity(self):
+        return self.pool_type == ''
 
     def forward(self, x):
         x = self.pool(x)
@@ -97,5 +101,6 @@ class SelectAdaptivePool2d(nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-               + 'output_size=' + str(self.output_size) \
-               + ', pool_type=' + self.pool_type + ')'
+               + 'pool_type=' + self.pool_type \
+               + ', flatten=' + str(self.flatten) + ')'
+

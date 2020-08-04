@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d
+from .layers import create_classifier
 from .registry import register_model
 
 __all__ = ['InceptionResnetV2']
@@ -296,21 +296,14 @@ class InceptionResnetV2(nn.Module):
         self.conv2d_7b = BasicConv2d(2080, self.num_features, kernel_size=1, stride=1)
         self.feature_info += [dict(num_chs=self.num_features, reduction=32, module='conv2d_7b')]
 
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        # NOTE some variants/checkpoints for this model may have 'last_linear' as the name for the FC
-        self.classif = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def get_classifier(self):
         return self.classif
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.classif = nn.Linear(num_features, num_classes)
-        else:
-            self.classif = nn.Identity()
+        self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x = self.conv2d_1a(x)
@@ -332,7 +325,7 @@ class InceptionResnetV2(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.classif(x)

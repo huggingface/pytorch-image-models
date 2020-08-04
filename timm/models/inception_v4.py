@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d
+from .layers import create_classifier
 from .registry import register_model
 
 __all__ = ['InceptionV4']
@@ -279,27 +279,23 @@ class InceptionV4(nn.Module):
             dict(num_chs=1024, reduction=16, module='features.17'),
             dict(num_chs=1536, reduction=32, module='features.21'),
         ]
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.last_linear = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.global_pool, self.last_linear = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def get_classifier(self):
         return self.last_linear
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.last_linear = nn.Linear(num_features, num_classes)
-        else:
-            self.last_linear = nn.Identity()
+        self.global_pool, self.last_linear = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         return self.features(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.last_linear(x)

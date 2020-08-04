@@ -85,30 +85,27 @@ class MobileNetV3(nn.Module):
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
-        self._in_chs = in_chans
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
-        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
-        self._in_chs = stem_size
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, 32, pad_type, act_layer, se_kwargs,
             norm_layer, norm_kwargs, drop_path_rate, verbose=_DEBUG)
-        self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
+        self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
-        self._in_chs = builder.in_chs
+        head_chs = builder.in_chs
 
         # Head + Pooling
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.conv_head = create_conv2d(self._in_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool) if global_pool else nn.Identity()
+        num_pooled_chs = head_chs * self.global_pool.feat_mult()
+        self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
         self.act2 = act_layer(inplace=True)
-
-        # Classifier
-        self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), self.num_classes)
+        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
 
@@ -123,13 +120,10 @@ class MobileNetV3(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.classifier = nn.Linear(num_features, num_classes)
-        else:
-            self.classifier = nn.Identity()
+        # cannot meaningfully change pooling of efficient head after creation
+        assert global_pool == self.global_pool.pool_type
+        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -142,8 +136,7 @@ class MobileNetV3(nn.Module):
         return x
 
     def forward(self, x):
-        x = self.forward_features(x)
-        x = x.flatten(1)
+        x = self.forward_features(x).flatten(1)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return self.classifier(x)
@@ -163,23 +156,20 @@ class MobileNetV3Features(nn.Module):
         super(MobileNetV3Features, self).__init__()
         norm_kwargs = norm_kwargs or {}
         self.drop_rate = drop_rate
-        self._in_chs = in_chans
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
-        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
-        self._in_chs = stem_size
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, output_stride, pad_type, act_layer, se_kwargs,
             norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
-        self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
+        self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)
         self._stage_out_idx = {v['stage']: i for i, v in enumerate(self.feature_info) if i in out_indices}
-        self._in_chs = builder.in_chs
 
         efficientnet_init_weights(self)
 

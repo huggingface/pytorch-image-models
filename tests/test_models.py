@@ -4,8 +4,14 @@ import platform
 import os
 import fnmatch
 
+import timm
 from timm import list_models, create_model, set_scriptable
 
+if hasattr(torch._C, '_jit_set_profiling_executor'):
+    # legacy executor is too slow to compile large models for unit tests
+    # no need for the fusion performance here
+    torch._C._jit_set_profiling_executor(True)
+    torch._C._jit_set_profiling_mode(False)
 
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
@@ -78,10 +84,28 @@ def test_model_default_cfgs(model_name, batch_size):
 
     if all([x <= MAX_FWD_FEAT_SIZE for x in input_size]) and \
             not any([fnmatch.fnmatch(model_name, x) for x in EXCLUDE_FILTERS]):
-        # pool size only checked if default res <= 448 * 448 to keep resource down
+        # output sizes only checked if default res <= 448 * 448 to keep resource down
         input_size = tuple([min(x, MAX_FWD_FEAT_SIZE) for x in input_size])
-        outputs = model.forward_features(torch.randn((batch_size, *input_size)))
+        input_tensor = torch.randn((batch_size, *input_size))
+
+        # test forward_features (always unpooled)
+        outputs = model.forward_features(input_tensor)
         assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
+
+        # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
+        model.reset_classifier(0)
+        outputs = model.forward(input_tensor)
+        assert len(outputs.shape) == 2
+        assert outputs.shape[-1] == model.num_features
+
+        # test model forward without pooling and classifier
+        if not isinstance(model, timm.models.MobileNetV3):
+            model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
+            outputs = model.forward(input_tensor)
+            assert len(outputs.shape) == 4
+            assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
+
+    # check classifier and first convolution names match those in default_cfg
     assert any([k.startswith(classifier) for k in state_dict.keys()]), f'{classifier} not in model params'
     assert any([k.startswith(first_conv) for k in state_dict.keys()]), f'{first_conv} not in model params'
 

@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d, get_padding
+from .layers import create_classifier, get_padding
 from .registry import register_model
 
 __all__ = ['Xception65']
@@ -192,16 +192,14 @@ class Xception65(nn.Module):
             dict(num_chs=2048, reduction=32, module='act5'),
         ]
 
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def get_classifier(self):
         return self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.fc = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         # Entry flow
@@ -242,7 +240,7 @@ class Xception65(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)
