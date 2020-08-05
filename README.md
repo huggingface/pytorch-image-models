@@ -19,7 +19,6 @@ Universal feature extraction, new models, new weights, new test sets.
 * Train script and loader/transform tweaks to punch through more aug arguments
 * README and documentation overhaul. See initial (WIP) documentation at https://rwightman.github.io/pytorch-image-models/
 
-
 ### June 11, 2020
 Bunch of changes:
 * DenseNet models updated with memory efficient addition from torchvision (fixed a bug), blur pooling and deep stem additions
@@ -65,7 +64,9 @@ The work of many others is present here. I've tried to make sure all source mate
 
 ## Models
 
-Most included models have pretrained weights. The weights are either from their original sources, ported by myself from their original framework (e.g. Tensorflow models), or trained from scratch using the included training script. A full version of the list below with source links and references can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
+All model architecture families include variants with pretrained weights. The are variants without any weights. Help training new or better weights is always appreciated. Here are some example [training hparams](https://rwightman.github.io/pytorch-image-models/training_hparam_examples) to get you started.
+
+A full version of the list below with source links can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
 
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DenseNet - https://arxiv.org/abs/1608.06993
@@ -102,7 +103,7 @@ Most included models have pretrained weights. The weights are either from their 
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * TResNet - https://arxiv.org/abs/2003.13630
-* VovNet V2 (with V1 support) - https://arxiv.org/abs/1911.06667
+* VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
 * Xception (Modified Aligned, Gluon) - https://arxiv.org/abs/1802.02611
 * Xception (Modified Aligned, TF) - https://arxiv.org/abs/1802.02611
@@ -113,12 +114,12 @@ Several (less common) features that I often utilize in my projects are included.
 
 * All models have a common default configuration interface and API for
     * accessing/changing the classifier - `get_classifier` and `reset_classifier`
-    * doing a forward pass on just the features - `forward_features`
+    * doing a forward pass on just the features - `forward_features` (see [documentation](https://rwightman.github.io/pytorch-image-models/feature_extraction/))
     * these makes it easy to write consistent network wrappers that work with any of the models
-* All models support multi-scale feature map extraction (feature pyramids) via create_model
+* All models support multi-scale feature map extraction (feature pyramids) via create_model (see [documentation](https://rwightman.github.io/pytorch-image-models/feature_extraction/))
     * `create_model(name, features_only=True, out_indices=..., output_stride=...)`
-    * `out_indices` creation arg specifies which feature maps to return, these indices are 0 based and generally correspond to the `C(i + 1)` feature level. Most models start with stride 2 features (`C1`) at index 0 and end with `C5` at index 4. Some models start with stride 1 or 4 and end with 6 (stride 64).
-    * `output_stride` creation arg controls output stride of the network, most networks are stride 32 by default. Dilated convs are used to limit the output stride. Not all networks support this.
+    * `out_indices` creation arg specifies which feature maps to return, these indices are 0 based and generally correspond to the `C(i + 1)` feature level.
+    * `output_stride` creation arg controls output stride of the network by using dilated convolutions. Most networks are stride 32 by default. Not all networks support this.
     * feature map channel counts, reduction level (stride) can be queried AFTER model creation via the `.feature_info` member
 * All models have a consistent pretrained weight loader that adapts last linear if necessary, and from 3 to 1 channel input if desired
 * High performance [reference training, validation, and inference scripts](https://rwightman.github.io/pytorch-image-models/scripts/) that work in several process/GPU modes:

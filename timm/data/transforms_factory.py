@@ -22,7 +22,7 @@ def transforms_noaug_train(
         std=IMAGENET_DEFAULT_STD,
 ):
     if interpolation == 'random':
-        # random interpolation no supported with no-aug
+        # random interpolation not supported with no-aug
         interpolation = 'bilinear'
     tfl = [
         transforms.Resize(img_size, _pil_interp(interpolation)),
