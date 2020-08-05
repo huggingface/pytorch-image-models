@@ -2,7 +2,7 @@
 
 ## What's New
 
-### Aug 1, 2020
+### Aug 5, 2020
 Universal feature extraction, new models, new weights, new test sets.
 * All models support the `features_only=True` argument for `create_model` call to return a network that extracts feature maps from the deepest layer at each stride.
 * New models
