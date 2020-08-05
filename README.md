@@ -4,11 +4,11 @@
 
 ### Aug 1, 2020
 Universal feature extraction, new models, new weights, new test sets.
-* All models support the `features_only=True` argument for `create_model` call to return a network that extracts features from the deepest layer at each stride.
+* All models support the `features_only=True` argument for `create_model` call to return a network that extracts feature maps from the deepest layer at each stride.
 * New models
   * CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet
   * ReXNet
-  * (Aligned) Xception41/65/71 (a proper port of TF models)
+  * (Modified Aligned) Xception41/65/71 (a proper port of TF models)
 * New trained weights
   * SEResNet50 - 80.3
   * CSPDarkNet53 - 80.1 top-1
@@ -56,76 +56,58 @@ Bunch of changes:
 
 ## Introduction
 
-Py**T**orch **Im**age **M**odels is a collection of image models, layers, utilities, optimizers, schedulers, data-loaders / augmentations, and reference training / validation scripts that aim to pull together a wide variety of SOTA models with ability to reproduce ImageNet training results.
+Py**T**orch **Im**age **M**odels (`timm`) is a collection of image models, layers, utilities, optimizers, schedulers, data-loaders / augmentations, and reference training / validation scripts that aim to pull together a wide variety of SOTA models with ability to reproduce ImageNet training results.
 
-The work of many others is present here. I've tried to make sure all source material is acknowledged via links to github, arxiv papers, etc in the README, documentation, and code comments. Please let me know if I missed anything.
+The work of many others is present here. I've tried to make sure all source material is acknowledged via links to github, arxiv papers, etc in the README, documentation, and code docstrings. Please let me know if I missed anything.
 
 ## Models
 
-Most included models have pretrained weights. The weights are either from their original sources, ported by myself from their original framework (e.g. Tensorflow models), or trained from scratch using the included training script.
+Most included models have pretrained weights. The weights are either from their original sources, ported by myself from their original framework (e.g. Tensorflow models), or trained from scratch using the included training script. A full version of the list below with source links and references can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
 
-Included models:
-* ResNet/ResNeXt (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models) with mods by myself)
-    * ResNet-18, ResNet-34, ResNet-50, ResNet-101, ResNet-152, ResNeXt50 (32x4d), ResNeXt101 (32x4d and 64x4d)
-    * 'Bag of Tricks' / Gluon C, D, E, S variations (https://arxiv.org/abs/1812.01187)
-    * Instagram trained / ImageNet tuned ResNeXt101-32x8d to 32x48d from from [facebookresearch](https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/)
-    * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
-    * Selective Kernel (SK) Nets (https://arxiv.org/abs/1903.06586)
-    * ResNeSt (code adapted from https://github.com/zhanghang1989/ResNeSt, paper https://arxiv.org/abs/2004.08955)
-* DLA
-    * Original (https://github.com/ucbdrive/dla, https://arxiv.org/abs/1707.06484)
-    * Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
-* DenseNet (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models))
-    * DenseNet-121, DenseNet-169, DenseNet-201, DenseNet-161
-* Squeeze-and-Excitation ResNet/ResNeXt (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) with some pretrained weight additions by myself)
-    * SENet-154, SE-ResNet-18, SE-ResNet-34, SE-ResNet-50, SE-ResNet-101, SE-ResNet-152, SE-ResNeXt-26 (32x4d), SE-ResNeXt50 (32x4d), SE-ResNeXt101 (32x4d)
-* Inception-V3 (from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models))
-* Inception-ResNet-V2 and Inception-V4 (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch) )
-* Xception
-    * Original Xception from [Cadene](https://github.com/Cadene/pretrained-models.pytorch)
-    * MXNet Gluon 'modified aligned' Xception-65 from [Gluon ModelZoo](https://github.com/dmlc/gluon-cv/tree/master/gluoncv/model_zoo)
-    * DeepLab (Aligned) Xception-41, 65, and 71 from [Tensorflow Models](https://github.com/tensorflow/models/tree/master/research/deeplab)
-* PNasNet & NASNet-A (from [Cadene](https://github.com/Cadene/pretrained-models.pytorch))
-* DPN (from [myself](https://github.com/rwightman/pytorch-dpn-pretrained))
-    * DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107
-* EfficientNet (from my standalone [GenEfficientNet](https://github.com/rwightman/gen-efficientnet-pytorch)) - A generic model that implements many of the efficient models that utilize similar DepthwiseSeparable and InvertedResidual blocks
-    * EfficientNet NoisyStudent (B0-B7, L2) (https://arxiv.org/abs/1911.04252)
-    * EfficientNet AdvProp (B0-B8) (https://arxiv.org/abs/1911.09665)
-    * EfficientNet (B0-B7) (https://arxiv.org/abs/1905.11946)
-    * EfficientNet-EdgeTPU (S, M, L) (https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
-    * MixNet (https://arxiv.org/abs/1907.09595)
-    * MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
-    * MobileNet-V2 (https://arxiv.org/abs/1801.04381)    
-    * FBNet-C (https://arxiv.org/abs/1812.03443)
-    * Single-Path NAS (https://arxiv.org/abs/1904.02877)
-* MobileNet-V3 (https://arxiv.org/abs/1905.02244)
-* HRNet
-    * code from https://github.com/HRNet/HRNet-Image-Classification
-    * paper https://arxiv.org/abs/1908.07919
-* SelecSLS
-    * code from https://github.com/mehtadushy/SelecSLS-Pytorch
-    * paper https://arxiv.org/abs/1907.00837
-* TResNet
-    * code from https://github.com/mrT23/TResNet
-    * paper https://arxiv.org/abs/2003.13630
-* RegNet
-    * paper `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
-    * reference code at https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
-* VovNet V2 (with V1 support)
-    * paper `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
-    * reference code at https://github.com/youngwanLEE/vovnet-detectron2
-* CspNet (Cross-Stage Partial Networks)
-    * paper `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
-    * reference impl at https://github.com/WongKinYiu/CrossStagePartialNetworks
-* ReXNet
-    * paper `ReXNet: Diminishing Representational Bottleneck on CNN` - https://arxiv.org/abs/2007.00992
-    * code from https://github.com/clovaai/rexnet
-
-Use the  `--model` arg to specify model for train, validation, inference scripts. Match the all lowercase
-creation fn for the model you'd like.
+* CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
+* DenseNet - https://arxiv.org/abs/1608.06993
+* DLA - https://arxiv.org/abs/1707.06484
+* DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
+* EfficientNet (MBConvNet Family)
+    * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
+    * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
+    * EfficientNet (B0-B7) - https://arxiv.org/abs/1905.11946
+    * EfficientNet-EdgeTPU (S, M, L) - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
+    * FBNet-C - https://arxiv.org/abs/1812.03443
+    * MixNet - https://arxiv.org/abs/1907.09595
+    * MNASNet B1, A1 (Squeeze-Excite), and Small - https://arxiv.org/abs/1807.11626
+    * MobileNet-V2 - https://arxiv.org/abs/1801.04381
+    * Single-Path NAS - https://arxiv.org/abs/1904.02877
+* HRNet - https://arxiv.org/abs/1908.07919
+* Inception-V3 - https://arxiv.org/abs/1512.00567
+* Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
+* MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
+* NASNet-A - https://arxiv.org/abs/1707.07012
+* PNasNet - https://arxiv.org/abs/1712.00559
+* RegNet - https://arxiv.org/abs/2003.13678
+* ResNet/ResNeXt
+    * ResNet (v1b/v1.5) - https://arxiv.org/abs/1512.03385
+    * ResNeXt - https://arxiv.org/abs/1611.05431
+    * 'Bag of Tricks' / Gluon C, D, E, S variations - https://arxiv.org/abs/1812.01187
+    * Weakly-supervised (WSL) Instagram pretrained / ImageNet tuned ResNeXt101 - https://arxiv.org/abs/1805.00932
+    * Semi-supervised (SSL) / Semi-weakly Supervised (SWSL) ResNet/ResNeXts - https://arxiv.org/abs/1905.00546
+    * ECA-Net (ECAResNet) - https://arxiv.org/abs/1910.03151v4
+    * Squeeze-and-Excitation Networks (SEResNet) - https://arxiv.org/abs/1709.01507
+* Res2Net - https://arxiv.org/abs/1904.01169
+* ResNeSt - https://arxiv.org/abs/2004.08955
+* ReXNet - https://arxiv.org/abs/2007.00992
+* SelecSLS - https://arxiv.org/abs/1907.00837
+* Selective Kernel Networks - https://arxiv.org/abs/1903.06586
+* TResNet - https://arxiv.org/abs/2003.13630
+* VovNet V2 (with V1 support) - https://arxiv.org/abs/1911.06667
+* Xception - https://arxiv.org/abs/1610.02357
+* Xception (Modified Aligned, Gluon) - https://arxiv.org/abs/1802.02611
+* Xception (Modified Aligned, TF) - https://arxiv.org/abs/1802.02611
 
 ## Features
+
 Several (less common) features that I often utilize in my projects are included. Many of their additions are the reason why I maintain my own set of models, instead of using others' via PIP:
+
 * All models have a common default configuration interface and API for
     * accessing/changing the classifier - `get_classifier` and `reset_classifier`
     * doing a forward pass on just the features - `forward_features`
@@ -165,6 +147,7 @@ Several (less common) features that I often utilize in my projects are included.
 * DropBlock (https://arxiv.org/abs/1810.12890)
 * Efficient Channel Attention - ECA (https://arxiv.org/abs/1910.03151)
 * Blur Pooling (https://arxiv.org/abs/1904.11486)
+* Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
 
 ## Results
 
@@ -172,4 +155,4 @@ Model validation results can be found in the [documentation](https://rwightman.g
 
 ## Getting Started
 
-See [documentation](https://rwightman.github.io/pytorch-image-models/)
+See the [documentation](https://rwightman.github.io/pytorch-image-models/)

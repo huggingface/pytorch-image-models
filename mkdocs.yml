@@ -7,6 +7,7 @@ nav:
   - models.md
   - results.md
   - scripts.md
+  - training_hparam_examples.md
   - changes.md
   - archived_changes.md
 theme:

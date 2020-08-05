@@ -38,8 +38,8 @@ m.eval()
 ```python
 import timm
 from pprint import pprint
-m = timm.create_model('mobilenetv3_large_100', pretrained=True)
-pprint(timm.list_models(pretrained=True))
+model_names = timm.list_models(pretrained=True)
+pprint(model_names)
 >>> ['adv_inception_v3',
  'cspdarknet53',
  'cspresnext50',
@@ -58,7 +58,8 @@ pprint(timm.list_models(pretrained=True))
 ```python
 import timm
 from pprint import pprint
-pprint(timm.list_models('*resne*t*'))
+model_names = timm.list_models('*resne*t*')
+pprint(model_names)
 >>> ['cspresnet50',
  'cspresnet50d',
  'cspresnet50w',

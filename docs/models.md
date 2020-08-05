@@ -1,112 +1,145 @@
 # Model Architectures
 
-__FIXME - Clean This Up!__
+The model architectures included come from a wide variety of sources. Sources, including papers, original impl ("reference code") that I rewrote / adapted, and PyTorch impl that I leveraged directly ("code") are listed below.
 
-### ResNet / ResNeXt
+Most included models have pretrained weights. The weights are either:
+1. from their original sources
+2. ported by myself from their original impl in a different framework (e.g. Tensorflow models)
+3. trained from scratch using the included training script
 
-* ResNet-18, ResNet-34, ResNet-50, ResNet-101, ResNet-152, ResNeXt50 (32x4d), ResNeXt101 (32x4d and 64x4d) 
-* 'Bag of Tricks' / Gluon C, D, E, S variations (https://arxiv.org/abs/1812.01187)
-* Instagram trained / ImageNet tuned ResNeXt101-32x8d to 32x48d from from [facebookresearch](https://pytorch.org/hub/facebookresearch_WSL-Images_resnext/)
-* Res2Net (https://github.com/gasvn/Res2Net, https://arxiv.org/abs/1904.01169)
-* Selective Kernel (SK) Nets (https://arxiv.org/abs/1903.06586)
-* ResNeSt (code adapted from https://github.com/zhanghang1989/ResNeSt, paper https://arxiv.org/abs/2004.08955)
+The validation results for the pretrained weights can be found [here](results.md)
 
-Originally based on ResNet from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models)
+## Cross-Stage Partial Networks [[cspnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/cspnet.py)]
+* Paper: `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
+* Reference impl: https://github.com/WongKinYiu/CrossStagePartialNetworks
 
-### DLA
+## DenseNet [[densenet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/densenet.py)]
+* Paper: `Densely Connected Convolutional Networks` - https://arxiv.org/abs/1608.06993
+* Code: https://github.com/pytorch/vision/tree/master/torchvision/models
 
-* Original
-  * code: https://github.com/ucbdrive/dla
-  * paper: https://arxiv.org/abs/1707.06484
-* Res2Net
-  * code: https://github.com/gasvn/Res2Net
-  * paper: https://arxiv.org/abs/1904.01169
+## DLA [[dla.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/dla.py)]
+* Paper: https://arxiv.org/abs/1707.06484
+* Code: https://github.com/ucbdrive/dla
 
-### DenseNet 
+## Dual-Path Networks [[dpn.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/dpn.py)]
+* Paper: `Dual Path Networks` - https://arxiv.org/abs/1707.01629
+* My PyTorch code: https://github.com/rwightman/pytorch-dpn-pretrained
+* Reference code: https://github.com/cypw/DPNs
 
-* DenseNet-121, DenseNet-169, DenseNet-201, DenseNet-161
+## HRNet [[hrnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/hrnet.py)]
+* Paper: `Deep High-Resolution Representation Learning for Visual Recognition` - https://arxiv.org/abs/1908.07919
+* Code: https://github.com/HRNet/HRNet-Image-Classification
 
-Code from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models)
+## Inception-V3 [[inception_v3.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/inception_v3.py)]
+* Paper: `Rethinking the Inception Architecture for Computer Vision` - https://arxiv.org/abs/1512.00567
+* Code: https://github.com/pytorch/vision/tree/master/torchvision/models
 
-### Squeeze-and-Excitation ResNet/ResNeXt 
+## Inception-V4 [[inception_v4.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/inception_v4.py)]
+* Paper: `Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning` - https://arxiv.org/abs/1602.07261
+* Code: https://github.com/Cadene/pretrained-models.pytorch
+* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets
 
-* SENet-154, SE-ResNet-18, SE-ResNet-34, SE-ResNet-50, SE-ResNet-101, SE-ResNet-152, SE-ResNeXt-26 (32x4d), SE-ResNeXt50 (32x4d), SE-ResNeXt101 (32x4d)
+## Inception-ResNet-V2 [[inception_resnet_v2.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/inception_resnet_v2.py)]
+* Paper: `Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning` - https://arxiv.org/abs/1602.07261
+* Code: https://github.com/Cadene/pretrained-models.pytorch
+* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets
 
-Code from [Cadene pretrained-models.pytorch](https://github.com/Cadene/pretrained-models.pytorch) with modifications
+## NASNet-A [[nasnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/nasnet.py)]
+* Papers: `Learning Transferable Architectures for Scalable Image Recognition` - https://arxiv.org/abs/1707.07012
+* Code: https://github.com/Cadene/pretrained-models.pytorch
+* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/nasnet
 
-### Inception-V3 
+## PNasNet-5 [[pnasnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/pnasnet.py)]
+* Papers: `Progressive Neural Architecture Search` - https://arxiv.org/abs/1712.00559
+* Code: https://github.com/Cadene/pretrained-models.pytorch
+* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/nasnet
 
-Code from [torchvision](https://github.com/pytorch/vision/tree/master/torchvision/models)
+## EfficientNet [[efficientnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/efficientnet.py)]
+* Papers
+    * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
+    * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
+    * EfficientNet (B0-B7) - https://arxiv.org/abs/1905.11946
+    * EfficientNet-EdgeTPU (S, M, L) - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
+    * MixNet - https://arxiv.org/abs/1907.09595
+    * MNASNet B1, A1 (Squeeze-Excite), and Small - https://arxiv.org/abs/1807.11626
+    * MobileNet-V2 - https://arxiv.org/abs/1801.04381
+    * FBNet-C - https://arxiv.org/abs/1812.03443
+    * Single-Path NAS - https://arxiv.org/abs/1904.02877
+* My PyTorch code: https://github.com/rwightman/gen-efficientnet-pytorch
+* Reference code: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet
 
-### Inception-ResNet-V2 and Inception-V4 
+## MobileNet-V3 [[mobilenetv3.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/mobilenetv3.py)]
+* Paper: `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
+* Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/mobilenet
 
-Code from [Cadene pretrained-models.pytorch](https://github.com/Cadene/pretrained-models.pytorch)
+## RegNet [[regnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/regnet.py)]
+* Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
+* Reference code: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
 
-### Xception and Aligned-Xception (DeepLab)
+## ResNet, ResNeXt [[resnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnet.py)]
+* ResNet (V1B)
+    * Paper: `Deep Residual Learning for Image Recognition` - https://arxiv.org/abs/1512.03385
+    * Code: https://github.com/pytorch/vision/tree/master/torchvision/models
+* ResNeXt
+    * Paper: `Aggregated Residual Transformations for Deep Neural Networks` - https://arxiv.org/abs/1611.05431
+    * Code: https://github.com/pytorch/vision/tree/master/torchvision/models
+* 'Bag of Tricks' / Gluon C, D, E, S ResNet variants
+    * Paper: `Bag of Tricks for Image Classification with CNNs` - https://arxiv.org/abs/1812.01187
+    * Code: https://github.com/dmlc/gluon-cv/blob/master/gluoncv/model_zoo/resnetv1b.py
+* Instagram pretrained / ImageNet tuned ResNeXt101
+    * Paper: `Exploring the Limits of Weakly Supervised Pretraining` - https://arxiv.org/abs/1805.00932
+    * Weights: https://pytorch.org/hub/facebookresearch_WSL-Images_resnext (NOTE: CC BY-NC 4.0 License, NOT commercial friendly)
+* Semi-supervised (SSL) / Semi-weakly Supervised (SWSL) ResNet and ResNeXts
+    * Paper: `Billion-scale semi-supervised learning for image classification` - https://arxiv.org/abs/1905.00546
+    * Weights: https://github.com/facebookresearch/semi-supervised-ImageNet1K-models (NOTE: CC BY-NC 4.0 License, NOT commercial friendly)
+* Squeeze-and-Excitation Networks
+    * Paper: `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
+    * Code: Added code to my ResNet base, this is current version going forward, old senet.py is being deprecated  
+* ECAResNet (ECA-Net)
+    * Paper: `ECA-Net: Efficient Channel Attention for Deep CNN` - https://arxiv.org/abs/1910.03151v4
+    * Code: Added to ResNet base, ECA module contributed by @VRandme, reference https://github.com/BangguWu/ECANet
 
-* Original variant from [Cadene pretrained-models.pytorch](https://github.com/Cadene/pretrained-models.pytorch)
-* MXNet Gluon 'modified aligned' Xception-65 and 71 models from [Gluon ModelZoo](https://github.com/dmlc/gluon-cv/tree/master/gluoncv/model_zoo)
-* DeepLab (Aligned) Xception-41, 65, and 71 from [Tensorflow Models](https://github.com/tensorflow/models/tree/master/research/deeplab)
+## Res2Net [[res2net.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/res2net.py)]
+* Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
+* Code: https://github.com/gasvn/Res2Net
 
-### PNasNet & NASNet-A
+## ResNeSt [[resnest.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnest.py)]
+* Paper: `ResNeSt: Split-Attention Networks` - https://arxiv.org/abs/2004.08955
+* Code: https://github.com/zhanghang1989/ResNeSt
 
-Code from [Cadene pretrained-models.pytorch](https://github.com/Cadene/pretrained-models.pytorch)
- 
-### DPN
+## ReXNet [[rexnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/rexnet.py)]
+* Paper: `ReXNet: Diminishing Representational Bottleneck on CNN` - https://arxiv.org/abs/2007.00992
+* Code: https://github.com/clovaai/rexnet
 
-* DPN-68, DPN-68b, DPN-92, DPN-98, DPN-131, DPN-107 
+## Selective-Kernel Networks [[sknet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/sknet.py)]
+* Paper: `Selective-Kernel Networks` - https://arxiv.org/abs/1903.06586
+* Code: https://github.com/implus/SKNet, https://github.com/clovaai/assembled-cnn
 
-Code adapted by [myself](https://github.com/rwightman/pytorch-dpn-pretrained) from MXNet originals (https://github.com/cypw/DPNs)
+## SelecSLS [[selecsls.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/selecsls.py)]
+* Paper: `XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera` - https://arxiv.org/abs/1907.00837
+* Code: https://github.com/mehtadushy/SelecSLS-Pytorch
 
-### EfficientNet 
+## Squeeze-and-Excitation Networks [[senet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/senet.py)]
+NOTE: I am deprecating this version of the networks, the new ones are part of `resnet.py`
+* Paper: `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
+* Code: https://github.com/Cadene/pretrained-models.pytorch 
 
-* EfficientNet NoisyStudent (B0-B7, L2) (https://arxiv.org/abs/1911.04252)
-* EfficientNet AdvProp (B0-B8) (https://arxiv.org/abs/1911.09665)
-* EfficientNet (B0-B7) (https://arxiv.org/abs/1905.11946)
-* EfficientNet-EdgeTPU (S, M, L) (https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html)
-* MixNet (https://arxiv.org/abs/1907.09595)
-* MNASNet B1, A1 (Squeeze-Excite), and Small (https://arxiv.org/abs/1807.11626)
-* MobileNet-V2 (https://arxiv.org/abs/1801.04381)    
-* FBNet-C (https://arxiv.org/abs/1812.03443)
-* Single-Path NAS (https://arxiv.org/abs/1904.02877)
+## TResNet [[tresnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/tresnet.py)]
+* Paper: `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
+* Code: https://github.com/mrT23/TResNet
 
-Code from my standalone [GenEfficientNet](https://github.com/rwightman/gen-efficientnet-pytorch), adapted from [Tensorflow originals](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet).
+## VovNet V2 and V1 [[vovnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vovnet.py)]
+* Paper: `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
+* Reference code: https://github.com/youngwanLEE/vovnet-detectron2
 
-### MobileNet-V3
- 
-* MobileNetV3-Large, MobileNetV3-Small (https://arxiv.org/abs/1905.02244)
+## Xception [[xception.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/xception.py)]
+* Paper: `Xception: Deep Learning with Depthwise Separable Convolutions` - https://arxiv.org/abs/1610.02357
+* Code: https://github.com/Cadene/pretrained-models.pytorch
 
-Code from my standalone [GenEfficientNet](https://github.com/rwightman/gen-efficientnet-pytorch), adapted from [Tensorflow originals](https://github.com/tensorflow/models/tree/master/research/slim/nets/mobilenet).
+## Xception (Modified Aligned, Gluon) [[gluon_xception.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/gluon_xception.py)]
+* Paper: `Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation` - https://arxiv.org/abs/1802.02611
+* Reference code: https://github.com/dmlc/gluon-cv/tree/master/gluoncv/model_zoo, https://github.com/jfzhang95/pytorch-deeplab-xception/
 
-### HRNet
-
-* code from https://github.com/HRNet/HRNet-Image-Classification
-* paper https://arxiv.org/abs/1908.07919
-
-### SelecSLS
-
-* paper https://arxiv.org/abs/1907.00837
-* code from https://github.com/mehtadushy/SelecSLS-Pytorch
-
-### TResNet
-
-* paper https://arxiv.org/abs/2003.13630
-* code from https://github.com/mrT23/TResNet
-
-### RegNet
-
-* paper `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
-* reference code at https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
-
-### VovNet V2 / V1
-
-* paper `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
-* reference code at https://github.com/youngwanLEE/vovnet-detectron2
-
-### CspNet (Cross-Stage Partial Networks)
-* paper `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
-* reference impl at https://github.com/WongKinYiu/CrossStagePartialNetworks
-
-### ReXNet
-* paper `ReXNet: Diminishing Representational Bottleneck on CNN` - https://arxiv.org/abs/2007.00992
-* code from https://github.com/clovaai/rexnet
+## Xception (Modified Aligned, TF) [[aligned_xception.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/aligned_xception.py)]
+* Paper: `Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation` - https://arxiv.org/abs/1802.02611
+* Reference code: https://github.com/tensorflow/models/tree/master/research/deeplab
