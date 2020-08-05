@@ -94,7 +94,7 @@ The validation results for the pretrained weights can be found [here](results.md
     * Weights: https://github.com/facebookresearch/semi-supervised-ImageNet1K-models (NOTE: CC BY-NC 4.0 License, NOT commercial friendly)
 * Squeeze-and-Excitation Networks
     * Paper: `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
-    * Code: Added code to my ResNet base, this is current version going forward, old senet.py is being deprecated  
+    * Code: Added to ResNet base, this is current version going forward, old `senet.py` is being deprecated
 * ECAResNet (ECA-Net)
     * Paper: `ECA-Net: Efficient Channel Attention for Deep CNN` - https://arxiv.org/abs/1910.03151v4
     * Code: Added to ResNet base, ECA module contributed by @VRandme, reference https://github.com/BangguWu/ECANet

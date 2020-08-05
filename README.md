@@ -16,6 +16,9 @@ Universal feature extraction, new models, new weights, new test sets.
   * DPN68b - 79.2 top-1
   * EfficientNet-Lite0 (non-TF ver) - 75.5 (trained by @hal-314)
 * Add 'real' labels for ImageNet and ImageNet-Renditions test set, see [`results/README.md`](results/README.md)
+* Train script and loader/transform tweaks to punch through more aug arguments
+* README and documentation overhaul. See initial (WIP) documentation at https://rwightman.github.io/pytorch-image-models/
+
 
 ### June 11, 2020
 Bunch of changes:
