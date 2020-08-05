@@ -14,9 +14,39 @@ from timm.data.transforms import _pil_interp, RandomResizedCropAndInterpolation,
 from timm.data.random_erasing import RandomErasing
 
 
+def transforms_noaug_train(
+        img_size=224,
+        interpolation='bilinear',
+        use_prefetcher=False,
+        mean=IMAGENET_DEFAULT_MEAN,
+        std=IMAGENET_DEFAULT_STD,
+):
+    if interpolation == 'random':
+        # random interpolation no supported with no-aug
+        interpolation = 'bilinear'
+    tfl = [
+        transforms.Resize(img_size, _pil_interp(interpolation)),
+        transforms.CenterCrop(img_size)
+    ]
+    if use_prefetcher:
+        # prefetcher and collate will handle tensor conversion and norm
+        tfl += [ToNumpy()]
+    else:
+        tfl += [
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=torch.tensor(mean),
+                std=torch.tensor(std))
+        ]
+    return transforms.Compose(tfl)
+
+
 def transforms_imagenet_train(
         img_size=224,
-        scale=(0.08, 1.0),
+        scale=None,
+        ratio=None,
+        hflip=0.5,
+        vflip=0.,
         color_jitter=0.4,
         auto_augment=None,
         interpolation='random',
@@ -36,11 +66,14 @@ def transforms_imagenet_train(
      * a portion of the data through the secondary transform
      * normalizes and converts the branches above with the third, final transform
     """
+    scale = tuple(scale or (0.08, 1.0))  # default imagenet scale range
+    ratio = tuple(ratio or (3./4., 4./3.))  # default imagenet ratio range
     primary_tfl = [
-        RandomResizedCropAndInterpolation(
-            img_size, scale=scale, interpolation=interpolation),
-        transforms.RandomHorizontalFlip()
-    ]
+        RandomResizedCropAndInterpolation(img_size, scale=scale, ratio=ratio, interpolation=interpolation)]
+    if hflip > 0.:
+        primary_tfl += [transforms.RandomHorizontalFlip(p=hflip)]
+    if vflip > 0.:
+        primary_tfl += [transforms.RandomVerticalFlip(p=vflip)]
 
     secondary_tfl = []
     if auto_augment:
@@ -135,6 +168,11 @@ def create_transform(
         input_size,
         is_training=False,
         use_prefetcher=False,
+        no_aug=False,
+        scale=None,
+        ratio=None,
+        hflip=0.5,
+        vflip=0.,
         color_jitter=0.4,
         auto_augment=None,
         interpolation='bilinear',
@@ -159,9 +197,21 @@ def create_transform(
         transform = TfPreprocessTransform(
             is_training=is_training, size=img_size, interpolation=interpolation)
     else:
-        if is_training:
+        if is_training and no_aug:
+            assert not separate, "Cannot perform split augmentation with no_aug"
+            transform = transforms_noaug_train(
+                img_size,
+                interpolation=interpolation,
+                use_prefetcher=use_prefetcher,
+                mean=mean,
+                std=std)
+        elif is_training:
             transform = transforms_imagenet_train(
                 img_size,
+                scale=scale,
+                ratio=ratio,
+                hflip=hflip,
+                vflip=vflip,
                 color_jitter=color_jitter,
                 auto_augment=auto_augment,
                 interpolation=interpolation,

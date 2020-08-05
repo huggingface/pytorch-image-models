@@ -131,10 +131,15 @@ def create_loader(
         batch_size,
         is_training=False,
         use_prefetcher=True,
+        no_aug=False,
         re_prob=0.,
         re_mode='const',
         re_count=1,
         re_split=False,
+        scale=None,
+        ratio=None,
+        hflip=0.5,
+        vflip=0.,
         color_jitter=0.4,
         auto_augment=None,
         num_aug_splits=0,
@@ -158,6 +163,11 @@ def create_loader(
         input_size,
         is_training=is_training,
         use_prefetcher=use_prefetcher,
+        no_aug=no_aug,
+        scale=scale,
+        ratio=ratio,
+        hflip=hflip,
+        vflip=vflip,
         color_jitter=color_jitter,
         auto_augment=auto_augment,
         interpolation=interpolation,
@@ -200,12 +210,13 @@ def create_loader(
         drop_last=is_training,
     )
     if use_prefetcher:
+        prefetch_re_prob = re_prob if is_training and not no_aug else 0.
         loader = PrefetchLoader(
             loader,
             mean=mean,
             std=std,
             fp16=fp16,
-            re_prob=re_prob if is_training else 0.,
+            re_prob=prefetch_re_prob,
             re_mode=re_mode,
             re_count=re_count,
             re_num_splits=re_num_splits
