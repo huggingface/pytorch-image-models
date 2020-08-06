@@ -221,8 +221,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#load-pretrained-model" class="md-nav__link">
-    Load Pretrained Model
+  <a href="#load-a-pretrained-model" class="md-nav__link">
+    Load a Pretrained Model
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#list-models-with-pretrained-weights" class="md-nav__link">
+    List Models with Pretrained Weights
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#list-model-architectures-by-wildcard" class="md-nav__link">
+    List Model Architectures by Wildcard
   </a>
   
 </li>
@@ -240,8 +254,8 @@
 
 
   <li class="md-nav__item">
-    <a href="models/" title="Models" class="md-nav__link">
-      Models
+    <a href="models/" title="Model Architectures" class="md-nav__link">
+      Model Architectures
     </a>
   </li>
 
@@ -252,8 +266,68 @@
 
 
   <li class="md-nav__item">
-    <a href="changes/" title="Changes" class="md-nav__link">
-      Changes
+    <a href="results/" title="Results" class="md-nav__link">
+      Results
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="scripts/" title="Scripts" class="md-nav__link">
+      Scripts
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="training_hparam_examples/" title="Training Examples" class="md-nav__link">
+      Training Examples
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="feature_extraction/" title="Feature Extraction" class="md-nav__link">
+      Feature Extraction
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="changes/" title="Recent Changes" class="md-nav__link">
+      Recent Changes
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="archived_changes/" title="Archived Changes" class="md-nav__link">
+      Archived Changes
     </a>
   </li>
 
@@ -291,8 +365,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#load-pretrained-model" class="md-nav__link">
-    Load Pretrained Model
+  <a href="#load-a-pretrained-model" class="md-nav__link">
+    Load a Pretrained Model
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#list-models-with-pretrained-weights" class="md-nav__link">
+    List Models with Pretrained Weights
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#list-model-architectures-by-wildcard" class="md-nav__link">
+    List Model Architectures by Wildcard
   </a>
   
 </li>
@@ -325,17 +413,17 @@
 
 <div class="admonition info">
 <p class="admonition-title">Conda Environment</p>
-<p>All development and testing has been done in Conda Python 3 environments
- on Linux x86-64 systems, specifically Python 3.6.x and 3.7.x. </p>
-<p>To install <code>timm</code> in a conda environment:
+<p>All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x, 3.7.x., 3.8.x.</p>
+<p>Little to no care has been taken to be Python 2.x friendly and will not support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.</p>
+<p>PyTorch versions 1.4, 1.5.x, and 1.6 have been tested with this code.</p>
+<p>I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
 <div class="highlight"><pre><span></span><code>conda create -n torch-env
 conda activate torch-env
-conda install -c pytorch pytorch torchvision cudatoolkit=10.1
+conda install -c pytorch pytorch torchvision cudatoolkit=10.2
 conda install pyyaml
-pip install timm
 </code></pre></div></p>
 </div>
-<h2 id="load-pretrained-model">Load Pretrained Model</h2>
+<h2 id="load-a-pretrained-model">Load a Pretrained Model</h2>
 <p>Pretrained models can be loaded using <code>timm.create_model</code></p>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">timm</span>
 
@@ -343,8 +431,37 @@ pip install timm
 <span class="n">m</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
 </code></pre></div>
 
-<p>To load a different model see <a href="/models
-/#pretrained-imagenet-weights">the list of pretrained weights</a>.</p>
+<h2 id="list-models-with-pretrained-weights">List Models with Pretrained Weights</h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">timm</span>
+<span class="kn">from</span> <span class="nn">pprint</span> <span class="kn">import</span> <span class="n">pprint</span>
+<span class="n">model_names</span> <span class="o">=</span> <span class="n">timm</span><span class="o">.</span><span class="n">list_models</span><span class="p">(</span><span class="n">pretrained</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">pprint</span><span class="p">(</span><span class="n">model_names</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="s1">&#39;adv_inception_v3&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;cspdarknet53&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;cspresnext50&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;densenet121&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;densenet161&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;densenet169&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;densenet201&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;densenetblur121d&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;dla34&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;dla46_c&#39;</span><span class="p">,</span>
+<span class="o">...</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<h2 id="list-model-architectures-by-wildcard">List Model Architectures by Wildcard</h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">timm</span>
+<span class="kn">from</span> <span class="nn">pprint</span> <span class="kn">import</span> <span class="n">pprint</span>
+<span class="n">model_names</span> <span class="o">=</span> <span class="n">timm</span><span class="o">.</span><span class="n">list_models</span><span class="p">(</span><span class="s1">&#39;*resne*t*&#39;</span><span class="p">)</span>
+<span class="n">pprint</span><span class="p">(</span><span class="n">model_names</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="s1">&#39;cspresnet50&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;cspresnet50d&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;cspresnet50w&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;cspresnext50&#39;</span><span class="p">,</span>
+<span class="o">...</span>
+<span class="p">]</span>
+</code></pre></div>
                 
               
               
@@ -364,13 +481,13 @@ pip install timm
       <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
         
         
-          <a href="models/" title="Models" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
+          <a href="models/" title="Model Architectures" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
             <div class="md-footer-nav__title">
               <div class="md-ellipsis">
                 <span class="md-footer-nav__direction">
                   Next
                 </span>
-                Models
+                Model Architectures
               </div>
             </div>
             <div class="md-footer-nav__button md-icon">
@@ -411,6 +528,10 @@ pip install timm
       </script>
       
         <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js"></script>
+      
+        <script src="javascripts/tables.js"></script>
       
     
   </body>

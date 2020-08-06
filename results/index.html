@@ -1,0 +1,1797 @@
+
+
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Pretained Image Recognition Models">
+      
+      
+      
+      <link rel="shortcut icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-5.4.0">
+    
+    
+      
+        <title>Results - Pytorch Image Models</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.fe0cca5b.min.css">
+      
+      
+    
+    
+    
+      
+        <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback">
+        <style>body,input{font-family:"Roboto",-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono",SFMono-Regular,Consolas,Menlo,monospace}</style>
+      
+    
+    
+    
+    
+      
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#results" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid" aria-label="Header">
+    <a href=".." title="Pytorch Image Models" class="md-header-nav__button md-logo" aria-label="Pytorch Image Models">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 003-3 3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    <label class="md-header-nav__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg>
+    </label>
+    <div class="md-header-nav__title" data-md-component="header-title">
+      
+        <div class="md-header-nav__ellipsis">
+          <span class="md-header-nav__topic md-ellipsis">
+            Pytorch Image Models
+          </span>
+          <span class="md-header-nav__topic md-ellipsis">
+            
+              Results
+            
+          </span>
+        </div>
+      
+    </div>
+    
+      <label class="md-header-nav__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+      </label>
+      
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active">
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </label>
+      <button type="reset" class="md-search__icon md-icon" aria-label="Clear" data-md-component="search-reset" tabindex="-1">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header-nav__source">
+        
+<a href="https://github.com/rwightman/pytorch-image-models/" title="Go to repository" class="md-source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05L244 40.45a28.87 28.87 0 00-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 01-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 000 40.81l195.61 195.6a28.86 28.86 0 0040.8 0l194.69-194.69a28.86 28.86 0 000-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rwightman/pytorch-image-models
+  </div>
+</a>
+      </div>
+    
+  </nav>
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+        
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Pytorch Image Models" class="md-nav__button md-logo" aria-label="Pytorch Image Models">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 003-3 3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    Pytorch Image Models
+  </label>
+  
+    <div class="md-nav__source">
+      
+<a href="https://github.com/rwightman/pytorch-image-models/" title="Go to repository" class="md-source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05L244 40.45a28.87 28.87 0 00-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 01-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 000 40.81l195.61 195.6a28.86 28.86 0 0040.8 0l194.69-194.69a28.86 28.86 0 000-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    rwightman/pytorch-image-models
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href=".." title="Getting Started" class="md-nav__link">
+      Getting Started
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../models/" title="Model Architectures" class="md-nav__link">
+      Model Architectures
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+    
+      
+    
+    
+      <label class="md-nav__link md-nav__link--active" for="__toc">
+        Results
+        <span class="md-nav__icon md-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9h14V7H3v2m0 4h14v-2H3v2m0 4h14v-2H3v2m16 0h2v-2h-2v2m0-10v2h2V7h-2m0 6h2v-2h-2v2z"/></svg>
+        </span>
+      </label>
+    
+    <a href="./" title="Results" class="md-nav__link md-nav__link--active">
+      Results
+    </a>
+    
+      
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#self-trained-weights" class="md-nav__link">
+    Self-trained Weights
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ported-weights" class="md-nav__link">
+    Ported Weights
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+    
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../scripts/" title="Scripts" class="md-nav__link">
+      Scripts
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../training_hparam_examples/" title="Training Examples" class="md-nav__link">
+      Training Examples
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../feature_extraction/" title="Feature Extraction" class="md-nav__link">
+      Feature Extraction
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../changes/" title="Recent Changes" class="md-nav__link">
+      Recent Changes
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../archived_changes/" title="Archived Changes" class="md-nav__link">
+      Archived Changes
+    </a>
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#self-trained-weights" class="md-nav__link">
+    Self-trained Weights
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ported-weights" class="md-nav__link">
+    Ported Weights
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/rwightman/pytorch-image-models/edit/master/docs/results.md" title="Edit this page" class="md-content__button md-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
+                  </a>
+                
+                
+                  
+                
+                
+                <h1 id="results">Results</h1>
+<p>CSV files containing an ImageNet-1K validation and OOD test set validation results for all included models with pretrained weights and default configurations is located <a href="https://github.com/rwightman/pytorch-image-models/tree/master/results">here</a>.</p>
+<h2 id="self-trained-weights">Self-trained Weights</h2>
+<p>I've leveraged the training scripts in this repository to train a few of the models with to good levels of performance.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Acc@1 (Err)</th>
+<th>Acc@5 (Err)</th>
+<th>Param # (M)</th>
+<th>Interpolation</th>
+<th>Image Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>efficientnet_b3a</td>
+<td>81.874 (18.126)</td>
+<td>95.840 (4.160)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>320 (1.0 crop)</td>
+</tr>
+<tr>
+<td>efficientnet_b3</td>
+<td>81.498 (18.502)</td>
+<td>95.718 (4.282)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>skresnext50d_32x4d</td>
+<td>81.278 (18.722)</td>
+<td>95.366 (4.634)</td>
+<td>27.5</td>
+<td>bicubic</td>
+<td>288 (1.0 crop)</td>
+</tr>
+<tr>
+<td>efficientnet_b2a</td>
+<td>80.608 (19.392)</td>
+<td>95.310 (4.690)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>288 (1.0 crop)</td>
+</tr>
+<tr>
+<td>mixnet_xl</td>
+<td>80.478 (19.522)</td>
+<td>94.932 (5.068)</td>
+<td>11.90</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>efficientnet_b2</td>
+<td>80.402 (19.598)</td>
+<td>95.076 (4.924)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>skresnext50d_32x4d</td>
+<td>80.156 (19.844)</td>
+<td>94.642 (5.358)</td>
+<td>27.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnext50_32x4d</td>
+<td>79.762 (20.238)</td>
+<td>94.600 (5.400)</td>
+<td>25</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnext50d_32x4d</td>
+<td>79.674 (20.326)</td>
+<td>94.868 (5.132)</td>
+<td>25.1</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>ese_vovnet39b</td>
+<td>79.320 (20.680)</td>
+<td>94.710 (5.290)</td>
+<td>24.6</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnetblur50</td>
+<td>79.290 (20.710)</td>
+<td>94.632 (5.368)</td>
+<td>25.6</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnet50</td>
+<td>79.038 (20.962)</td>
+<td>94.390 (5.610)</td>
+<td>25.6</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mixnet_l</td>
+<td>78.976 (21.024</td>
+<td>94.184 (5.816)</td>
+<td>7.33</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>efficientnet_b1</td>
+<td>78.692 (21.308)</td>
+<td>94.086 (5.914)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>efficientnet_es</td>
+<td>78.066 (21.934)</td>
+<td>93.926 (6.074)</td>
+<td>5.44</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>seresnext26t_32x4d</td>
+<td>77.998 (22.002)</td>
+<td>93.708 (6.292)</td>
+<td>16.8</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>seresnext26tn_32x4d</td>
+<td>77.986 (22.014)</td>
+<td>93.746 (6.254)</td>
+<td>16.8</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>efficientnet_b0</td>
+<td>77.698 (22.302)</td>
+<td>93.532 (6.468)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>seresnext26d_32x4d</td>
+<td>77.602 (22.398)</td>
+<td>93.608 (6.392)</td>
+<td>16.8</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mobilenetv2_120d</td>
+<td>77.294 (22.706</td>
+<td>93.502 (6.498)</td>
+<td>5.8</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mixnet_m</td>
+<td>77.256 (22.744)</td>
+<td>93.418 (6.582)</td>
+<td>5.01</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>seresnext26_32x4d</td>
+<td>77.104 (22.896)</td>
+<td>93.316 (6.684)</td>
+<td>16.8</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>skresnet34</td>
+<td>76.912 (23.088)</td>
+<td>93.322 (6.678)</td>
+<td>22.2</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>ese_vovnet19b_dw</td>
+<td>76.798 (23.202)</td>
+<td>93.268 (6.732)</td>
+<td>6.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnet26d</td>
+<td>76.68 (23.32)</td>
+<td>93.166 (6.834)</td>
+<td>16</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>densenetblur121d</td>
+<td>76.576 (23.424)</td>
+<td>93.190 (6.810)</td>
+<td>8.0</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mobilenetv2_140</td>
+<td>76.524 (23.476)</td>
+<td>92.990 (7.010)</td>
+<td>6.1</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mixnet_s</td>
+<td>75.988 (24.012)</td>
+<td>92.794 (7.206)</td>
+<td>4.13</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mobilenetv3_large_100</td>
+<td>75.766 (24.234)</td>
+<td>92.542 (7.458)</td>
+<td>5.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mobilenetv3_rw</td>
+<td>75.634 (24.366)</td>
+<td>92.708 (7.292)</td>
+<td>5.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mnasnet_a1</td>
+<td>75.448 (24.552)</td>
+<td>92.604 (7.396)</td>
+<td>3.89</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnet26</td>
+<td>75.292 (24.708)</td>
+<td>92.57 (7.43)</td>
+<td>16</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>fbnetc_100</td>
+<td>75.124 (24.876)</td>
+<td>92.386 (7.614)</td>
+<td>5.6</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnet34</td>
+<td>75.110 (24.890)</td>
+<td>92.284 (7.716)</td>
+<td>22</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mobilenetv2_110d</td>
+<td>75.052 (24.948)</td>
+<td>92.180 (7.820)</td>
+<td>4.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>seresnet34</td>
+<td>74.808 (25.192)</td>
+<td>92.124 (7.876)</td>
+<td>22</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mnasnet_b1</td>
+<td>74.658 (25.342)</td>
+<td>92.114 (7.886)</td>
+<td>4.38</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>spnasnet_100</td>
+<td>74.084 (25.916)</td>
+<td>91.818 (8.182)</td>
+<td>4.42</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>skresnet18</td>
+<td>73.038 (26.962)</td>
+<td>91.168 (8.832)</td>
+<td>11.9</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>mobilenetv2_100</td>
+<td>72.978 (27.022)</td>
+<td>91.016 (8.984)</td>
+<td>3.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>seresnet18</td>
+<td>71.742 (28.258)</td>
+<td>90.334 (9.666)</td>
+<td>11.8</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ported-weights">Ported Weights</h2>
+<p>For the models below, the model code and weight porting from Tensorflow or MXNet Gluon to Pytorch was done by myself. There are weights/models ported by others included in this repository, they are not listed below.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Acc@1 (Err)</th>
+<th>Acc@5 (Err)</th>
+<th>Param # (M)</th>
+<th>Interpolation</th>
+<th>Image Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tf_efficientnet_l2_ns *tfp</td>
+<td>88.352 (11.648)</td>
+<td>98.652 (1.348)</td>
+<td>480</td>
+<td>bicubic</td>
+<td>800</td>
+</tr>
+<tr>
+<td>tf_efficientnet_l2_ns</td>
+<td>TBD</td>
+<td>TBD</td>
+<td>480</td>
+<td>bicubic</td>
+<td>800</td>
+</tr>
+<tr>
+<td>tf_efficientnet_l2_ns_475</td>
+<td>88.234 (11.766)</td>
+<td>98.546 (1.454)f</td>
+<td>480</td>
+<td>bicubic</td>
+<td>475</td>
+</tr>
+<tr>
+<td>tf_efficientnet_l2_ns_475 *tfp</td>
+<td>88.172 (11.828)</td>
+<td>98.566 (1.434)</td>
+<td>480</td>
+<td>bicubic</td>
+<td>475</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b7_ns *tfp</td>
+<td>86.844 (13.156)</td>
+<td>98.084 (1.916)</td>
+<td>66.35</td>
+<td>bicubic</td>
+<td>600</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b7_ns</td>
+<td>86.840 (13.160)</td>
+<td>98.094 (1.906)</td>
+<td>66.35</td>
+<td>bicubic</td>
+<td>600</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b6_ns</td>
+<td>86.452 (13.548)</td>
+<td>97.882 (2.118)</td>
+<td>43.04</td>
+<td>bicubic</td>
+<td>528</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b6_ns *tfp</td>
+<td>86.444 (13.556)</td>
+<td>97.880 (2.120)</td>
+<td>43.04</td>
+<td>bicubic</td>
+<td>528</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b5_ns *tfp</td>
+<td>86.064 (13.936)</td>
+<td>97.746 (2.254)</td>
+<td>30.39</td>
+<td>bicubic</td>
+<td>456</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b5_ns</td>
+<td>86.088 (13.912)</td>
+<td>97.752 (2.248)</td>
+<td>30.39</td>
+<td>bicubic</td>
+<td>456</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b8_ap *tfp</td>
+<td>85.436 (14.564)</td>
+<td>97.272 (2.728)</td>
+<td>87.4</td>
+<td>bicubic</td>
+<td>672</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b8 *tfp</td>
+<td>85.384 (14.616)</td>
+<td>97.394 (2.606)</td>
+<td>87.4</td>
+<td>bicubic</td>
+<td>672</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b8</td>
+<td>85.370 (14.630)</td>
+<td>97.390 (2.610)</td>
+<td>87.4</td>
+<td>bicubic</td>
+<td>672</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b8_ap</td>
+<td>85.368 (14.632)</td>
+<td>97.294 (2.706)</td>
+<td>87.4</td>
+<td>bicubic</td>
+<td>672</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b4_ns *tfp</td>
+<td>85.298 (14.702)</td>
+<td>97.504 (2.496)</td>
+<td>19.34</td>
+<td>bicubic</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b4_ns</td>
+<td>85.162 (14.838)</td>
+<td>97.470 (2.530)</td>
+<td>19.34</td>
+<td>bicubic</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b7_ap *tfp</td>
+<td>85.154 (14.846)</td>
+<td>97.244 (2.756)</td>
+<td>66.35</td>
+<td>bicubic</td>
+<td>600</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b7_ap</td>
+<td>85.118 (14.882)</td>
+<td>97.252 (2.748)</td>
+<td>66.35</td>
+<td>bicubic</td>
+<td>600</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b7 *tfp</td>
+<td>84.940 (15.060)</td>
+<td>97.214 (2.786)</td>
+<td>66.35</td>
+<td>bicubic</td>
+<td>600</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b7</td>
+<td>84.932 (15.068)</td>
+<td>97.208 (2.792)</td>
+<td>66.35</td>
+<td>bicubic</td>
+<td>600</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b6_ap</td>
+<td>84.786 (15.214)</td>
+<td>97.138 (2.862)</td>
+<td>43.04</td>
+<td>bicubic</td>
+<td>528</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b6_ap *tfp</td>
+<td>84.760 (15.240)</td>
+<td>97.124 (2.876)</td>
+<td>43.04</td>
+<td>bicubic</td>
+<td>528</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b5_ap *tfp</td>
+<td>84.276 (15.724)</td>
+<td>96.932 (3.068)</td>
+<td>30.39</td>
+<td>bicubic</td>
+<td>456</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b5_ap</td>
+<td>84.254 (15.746)</td>
+<td>96.976 (3.024)</td>
+<td>30.39</td>
+<td>bicubic</td>
+<td>456</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b6 *tfp</td>
+<td>84.140 (15.860)</td>
+<td>96.852 (3.148)</td>
+<td>43.04</td>
+<td>bicubic</td>
+<td>528</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b6</td>
+<td>84.110 (15.890)</td>
+<td>96.886 (3.114)</td>
+<td>43.04</td>
+<td>bicubic</td>
+<td>528</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b3_ns *tfp</td>
+<td>84.054 (15.946)</td>
+<td>96.918 (3.082)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b3_ns</td>
+<td>84.048 (15.952)</td>
+<td>96.910 (3.090)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b5 *tfp</td>
+<td>83.822 (16.178)</td>
+<td>96.756 (3.244)</td>
+<td>30.39</td>
+<td>bicubic</td>
+<td>456</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b5</td>
+<td>83.812 (16.188)</td>
+<td>96.748 (3.252)</td>
+<td>30.39</td>
+<td>bicubic</td>
+<td>456</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b4_ap *tfp</td>
+<td>83.278 (16.722)</td>
+<td>96.376 (3.624)</td>
+<td>19.34</td>
+<td>bicubic</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b4_ap</td>
+<td>83.248 (16.752)</td>
+<td>96.388 (3.612)</td>
+<td>19.34</td>
+<td>bicubic</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b4</td>
+<td>83.022 (16.978)</td>
+<td>96.300 (3.700)</td>
+<td>19.34</td>
+<td>bicubic</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b4 *tfp</td>
+<td>82.948 (17.052)</td>
+<td>96.308 (3.692)</td>
+<td>19.34</td>
+<td>bicubic</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b2_ns *tfp</td>
+<td>82.436 (17.564)</td>
+<td>96.268 (3.732)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b2_ns</td>
+<td>82.380 (17.620)</td>
+<td>96.248 (3.752)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b3_ap *tfp</td>
+<td>81.882 (18.118)</td>
+<td>95.662 (4.338)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b3_ap</td>
+<td>81.828 (18.172)</td>
+<td>95.624 (4.376)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b3</td>
+<td>81.636 (18.364)</td>
+<td>95.718 (4.282)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b3 *tfp</td>
+<td>81.576 (18.424)</td>
+<td>95.662 (4.338)</td>
+<td>12.23</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite4</td>
+<td>81.528 (18.472)</td>
+<td>95.668 (4.332)</td>
+<td>13.00</td>
+<td>bilinear</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b1_ns *tfp</td>
+<td>81.514 (18.486)</td>
+<td>95.776 (4.224)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite4 *tfp</td>
+<td>81.502 (18.498)</td>
+<td>95.676 (4.324)</td>
+<td>13.00</td>
+<td>bilinear</td>
+<td>380</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b1_ns</td>
+<td>81.388 (18.612)</td>
+<td>95.738 (4.262)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>gluon_senet154</td>
+<td>81.224 (18.776)</td>
+<td>95.356 (4.644)</td>
+<td>115.09</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnet152_v1s</td>
+<td>81.012 (18.988)</td>
+<td>95.416 (4.584)</td>
+<td>60.32</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_seresnext101_32x4d</td>
+<td>80.902 (19.098)</td>
+<td>95.294 (4.706)</td>
+<td>48.96</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_seresnext101_64x4d</td>
+<td>80.890 (19.110)</td>
+<td>95.304 (4.696)</td>
+<td>88.23</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnext101_64x4d</td>
+<td>80.602 (19.398)</td>
+<td>94.994 (5.006)</td>
+<td>83.46</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_el</td>
+<td>80.534 (19.466)</td>
+<td>95.190 (4.810)</td>
+<td>10.59</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_el *tfp</td>
+<td>80.476 (19.524)</td>
+<td>95.200 (4.800)</td>
+<td>10.59</td>
+<td>bicubic</td>
+<td>300</td>
+</tr>
+<tr>
+<td>gluon_resnet152_v1d</td>
+<td>80.470 (19.530)</td>
+<td>95.206 (4.794)</td>
+<td>60.21</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnet101_v1d</td>
+<td>80.424 (19.576)</td>
+<td>95.020 (4.980)</td>
+<td>44.57</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b2_ap *tfp</td>
+<td>80.420 (19.580)</td>
+<td>95.040 (4.960)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>gluon_resnext101_32x4d</td>
+<td>80.334 (19.666)</td>
+<td>94.926 (5.074)</td>
+<td>44.18</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b2_ap</td>
+<td>80.306 (19.694)</td>
+<td>95.028 (4.972)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>gluon_resnet101_v1s</td>
+<td>80.300 (19.700)</td>
+<td>95.150 (4.850)</td>
+<td>44.67</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b2 *tfp</td>
+<td>80.188 (19.812)</td>
+<td>94.974 (5.026)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b2</td>
+<td>80.086 (19.914)</td>
+<td>94.908 (5.092)</td>
+<td>9.11</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>gluon_resnet152_v1c</td>
+<td>79.916 (20.084)</td>
+<td>94.842 (5.158)</td>
+<td>60.21</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_seresnext50_32x4d</td>
+<td>79.912 (20.088)</td>
+<td>94.818 (5.182)</td>
+<td>27.56</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite3</td>
+<td>79.812 (20.188)</td>
+<td>94.914 (5.086)</td>
+<td>8.20</td>
+<td>bilinear</td>
+<td>300</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite3 *tfp</td>
+<td>79.734 (20.266)</td>
+<td>94.838 (5.162)</td>
+<td>8.20</td>
+<td>bilinear</td>
+<td>300</td>
+</tr>
+<tr>
+<td>gluon_resnet152_v1b</td>
+<td>79.692 (20.308)</td>
+<td>94.738 (5.262)</td>
+<td>60.19</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_xception65</td>
+<td>79.604 (20.396)</td>
+<td>94.748 (5.252)</td>
+<td>39.92</td>
+<td>bicubic</td>
+<td>299</td>
+</tr>
+<tr>
+<td>gluon_resnet101_v1c</td>
+<td>79.544 (20.456)</td>
+<td>94.586 (5.414)</td>
+<td>44.57</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b1_ap *tfp</td>
+<td>79.532 (20.468)</td>
+<td>94.378 (5.622)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_efficientnet_cc_b1_8e *tfp</td>
+<td>79.464 (20.536)</td>
+<td>94.492 (5.508)</td>
+<td>39.7</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>gluon_resnext50_32x4d</td>
+<td>79.356 (20.644)</td>
+<td>94.424 (5.576)</td>
+<td>25.03</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnet101_v1b</td>
+<td>79.304 (20.696)</td>
+<td>94.524 (5.476)</td>
+<td>44.55</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_cc_b1_8e</td>
+<td>79.298 (20.702)</td>
+<td>94.364 (5.636)</td>
+<td>39.7</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b1_ap</td>
+<td>79.278 (20.722)</td>
+<td>94.308 (5.692)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b1 *tfp</td>
+<td>79.172 (20.828)</td>
+<td>94.450 (5.550)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>gluon_resnet50_v1d</td>
+<td>79.074 (20.926)</td>
+<td>94.476 (5.524)</td>
+<td>25.58</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_em *tfp</td>
+<td>78.958 (21.042)</td>
+<td>94.458 (5.542)</td>
+<td>6.90</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_mixnet_l *tfp</td>
+<td>78.846 (21.154)</td>
+<td>94.212 (5.788)</td>
+<td>7.33</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b1</td>
+<td>78.826 (21.174)</td>
+<td>94.198 (5.802)</td>
+<td>7.79</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b0_ns *tfp</td>
+<td>78.806 (21.194)</td>
+<td>94.496 (5.504)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_inception_v3</td>
+<td>78.804 (21.196)</td>
+<td>94.380 (5.620)</td>
+<td>27.16M</td>
+<td>bicubic</td>
+<td>299</td>
+</tr>
+<tr>
+<td>tf_mixnet_l</td>
+<td>78.770 (21.230)</td>
+<td>94.004 (5.996)</td>
+<td>7.33</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_em</td>
+<td>78.742 (21.258)</td>
+<td>94.332 (5.668)</td>
+<td>6.90</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>gluon_resnet50_v1s</td>
+<td>78.712 (21.288)</td>
+<td>94.242 (5.758)</td>
+<td>25.68</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b0_ns</td>
+<td>78.658 (21.342)</td>
+<td>94.376 (5.624)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_cc_b0_8e *tfp</td>
+<td>78.314 (21.686)</td>
+<td>93.790 (6.210)</td>
+<td>24.0</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnet50_v1c</td>
+<td>78.010 (21.990)</td>
+<td>93.988 (6.012)</td>
+<td>25.58</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_cc_b0_8e</td>
+<td>77.908 (22.092)</td>
+<td>93.656 (6.344)</td>
+<td>24.0</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_inception_v3</td>
+<td>77.856 (22.144)</td>
+<td>93.644 (6.356)</td>
+<td>27.16M</td>
+<td>bicubic</td>
+<td>299</td>
+</tr>
+<tr>
+<td>tf_efficientnet_cc_b0_4e *tfp</td>
+<td>77.746 (22.254)</td>
+<td>93.552 (6.448)</td>
+<td>13.3</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_es *tfp</td>
+<td>77.616 (22.384)</td>
+<td>93.750 (6.250)</td>
+<td>5.44</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnet50_v1b</td>
+<td>77.578 (22.422)</td>
+<td>93.718 (6.282)</td>
+<td>25.56</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>adv_inception_v3</td>
+<td>77.576 (22.424)</td>
+<td>93.724 (6.276)</td>
+<td>27.16M</td>
+<td>bicubic</td>
+<td>299</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite2 *tfp</td>
+<td>77.544 (22.456)</td>
+<td>93.800 (6.200)</td>
+<td>6.09</td>
+<td>bilinear</td>
+<td>260</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite2</td>
+<td>77.460 (22.540)</td>
+<td>93.746 (6.254)</td>
+<td>6.09</td>
+<td>bicubic</td>
+<td>260</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b0_ap *tfp</td>
+<td>77.514 (22.486)</td>
+<td>93.576 (6.424)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_cc_b0_4e</td>
+<td>77.304 (22.696)</td>
+<td>93.332 (6.668)</td>
+<td>13.3</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_es</td>
+<td>77.264 (22.736)</td>
+<td>93.600 (6.400)</td>
+<td>5.44</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b0 *tfp</td>
+<td>77.258 (22.742)</td>
+<td>93.478 (6.522)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b0_ap</td>
+<td>77.084 (22.916)</td>
+<td>93.254 (6.746)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mixnet_m *tfp</td>
+<td>77.072 (22.928)</td>
+<td>93.368 (6.632)</td>
+<td>5.01</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mixnet_m</td>
+<td>76.950 (23.050)</td>
+<td>93.156 (6.844)</td>
+<td>5.01</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_b0</td>
+<td>76.848 (23.152)</td>
+<td>93.228 (6.772)</td>
+<td>5.29</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite1 *tfp</td>
+<td>76.764 (23.236)</td>
+<td>93.326 (6.674)</td>
+<td>5.42</td>
+<td>bilinear</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite1</td>
+<td>76.638 (23.362)</td>
+<td>93.232 (6.768)</td>
+<td>5.42</td>
+<td>bicubic</td>
+<td>240</td>
+</tr>
+<tr>
+<td>tf_mixnet_s *tfp</td>
+<td>75.800 (24.200)</td>
+<td>92.788 (7.212)</td>
+<td>4.13</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_large_100 *tfp</td>
+<td>75.768 (24.232)</td>
+<td>92.710 (7.290)</td>
+<td>5.48</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mixnet_s</td>
+<td>75.648 (24.352)</td>
+<td>92.636 (7.364)</td>
+<td>4.13</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_large_100</td>
+<td>75.516 (24.484)</td>
+<td>92.600 (7.400)</td>
+<td>5.48</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite0 *tfp</td>
+<td>75.074 (24.926)</td>
+<td>92.314 (7.686)</td>
+<td>4.65</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_efficientnet_lite0</td>
+<td>74.842 (25.158)</td>
+<td>92.170 (7.830)</td>
+<td>4.65</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>gluon_resnet34_v1b</td>
+<td>74.580 (25.420)</td>
+<td>91.988 (8.012)</td>
+<td>21.80</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_large_075 *tfp</td>
+<td>73.730 (26.270)</td>
+<td>91.616 (8.384)</td>
+<td>3.99</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_large_075</td>
+<td>73.442 (26.558)</td>
+<td>91.352 (8.648)</td>
+<td>3.99</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_large_minimal_100 *tfp</td>
+<td>72.678 (27.322)</td>
+<td>90.860 (9.140)</td>
+<td>3.92</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_large_minimal_100</td>
+<td>72.244 (27.756)</td>
+<td>90.636 (9.364)</td>
+<td>3.92</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_small_100 *tfp</td>
+<td>67.918 (32.082)</td>
+<td>87.958 (12.042</td>
+<td>2.54</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_small_100</td>
+<td>67.918 (32.082)</td>
+<td>87.662 (12.338)</td>
+<td>2.54</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_small_075 *tfp</td>
+<td>66.142 (33.858)</td>
+<td>86.498 (13.502)</td>
+<td>2.04</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_small_075</td>
+<td>65.718 (34.282)</td>
+<td>86.136 (13.864)</td>
+<td>2.04</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_small_minimal_100 *tfp</td>
+<td>63.378 (36.622)</td>
+<td>84.802 (15.198)</td>
+<td>2.04</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+<tr>
+<td>tf_mobilenetv3_small_minimal_100</td>
+<td>62.898 (37.102)</td>
+<td>84.230 (15.770)</td>
+<td>2.04</td>
+<td>bilinear</td>
+<td>224</td>
+</tr>
+</tbody>
+</table>
+<p>Models with <code>*tfp</code> next to them were scored with <code>--tf-preprocessing</code> flag. </p>
+<p>The <code>tf_efficientnet</code>, <code>tf_mixnet</code> models require an equivalent for 'SAME' padding as their arch results in asymmetric padding. I've added this in the model creation wrapper, but it does come with a performance penalty. </p>
+<p>Sources for original weights:
+* <code>tf_efficientnet*</code>: <a href="https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet">Tensorflow TPU</a>
+* <code>tf_efficientnet_e*</code>: <a href="https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu">Tensorflow TPU</a>
+* <code>tf_mixnet*</code>: <a href="https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet">Tensorflow TPU</a>
+* <code>tf_inception*</code>: <a href="https://github.com/tensorflow/models/tree/master/research/slim">Tensorflow Slim</a>
+* <code>gluon_*</code>: <a href="https://gluon-cv.mxnet.io/model_zoo/classification.html">MxNet Gluon</a></p>
+                
+              
+              
+                
+
+
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <div class="md-footer-nav">
+      <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
+        
+          <a href="../models/" title="Model Architectures" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+            </div>
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Previous
+                </span>
+                Model Architectures
+              </div>
+            </div>
+          </a>
+        
+        
+          <a href="../scripts/" title="Scripts" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Scripts
+              </div>
+            </div>
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    </div>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+        Made with
+        <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+          Material for MkDocs
+        </a>
+      </div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+      <script src="../assets/javascripts/vendor.d710d30a.min.js"></script>
+      <script src="../assets/javascripts/bundle.b39636ac.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents"}</script>
+      
+      <script>
+        app = initialize({
+          base: "..",
+          features: [],
+          search: Object.assign({
+            worker: "../assets/javascripts/worker/search.a68abb33.min.js"
+          }, typeof search !== "undefined" && search)
+        })
+      </script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js"></script>
+      
+        <script src="../javascripts/tables.js"></script>
+      
+    
+  </body>
+</html>
