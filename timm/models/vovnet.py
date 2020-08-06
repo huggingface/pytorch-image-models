@@ -8,7 +8,7 @@ Looked at  https://github.com/youngwanLEE/vovnet-detectron2 &
 https://github.com/stigma0617/VoVNet.pytorch/blob/master/models_vovnet/vovnet.py
 for some reference, rewrote most of the code.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 from typing import List
@@ -19,8 +19,8 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
-from .helpers import load_pretrained
-from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, SelectAdaptivePool2d, \
+from .helpers import build_model_with_cfg
+from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, ClassifierHead, \
     create_attn, create_norm_act, get_norm_act_layer
 
 
@@ -179,32 +179,33 @@ class SequentialAppendList(nn.Sequential):
 class OsaBlock(nn.Module):
 
     def __init__(self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
-                 depthwise=False, attn='', norm_layer=BatchNormAct2d):
+                 depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU):
         super(OsaBlock, self).__init__()
 
         self.residual = residual
         self.depthwise = depthwise
+        conv_kwargs = dict(norm_layer=norm_layer, act_layer=act_layer)
 
         next_in_chs = in_chs
         if self.depthwise and next_in_chs != mid_chs:
             assert not residual
-            self.conv_reduction = ConvBnAct(next_in_chs, mid_chs, 1, norm_layer=norm_layer)
+            self.conv_reduction = ConvBnAct(next_in_chs, mid_chs, 1, **conv_kwargs)
         else:
             self.conv_reduction = None
 
         mid_convs = []
         for i in range(layer_per_block):
             if self.depthwise:
-                conv = SeparableConvBnAct(mid_chs, mid_chs, norm_layer=norm_layer)
+                conv = SeparableConvBnAct(mid_chs, mid_chs, **conv_kwargs)
             else:
-                conv = ConvBnAct(next_in_chs, mid_chs, 3, norm_layer=norm_layer)
+                conv = ConvBnAct(next_in_chs, mid_chs, 3, **conv_kwargs)
             next_in_chs = mid_chs
             mid_convs.append(conv)
         self.conv_mid = SequentialAppendList(*mid_convs)
 
         # feature aggregation
         next_in_chs = in_chs + layer_per_block * mid_chs
-        self.conv_concat = ConvBnAct(next_in_chs, out_chs, norm_layer=norm_layer)
+        self.conv_concat = ConvBnAct(next_in_chs, out_chs, **conv_kwargs)
 
         if attn:
             self.attn = create_attn(attn, out_chs)
@@ -226,8 +227,8 @@ class OsaBlock(nn.Module):
 
 class OsaStage(nn.Module):
 
-    def __init__(self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block,
-                 downsample=True, residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d):
+    def __init__(self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
+                 residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU):
         super(OsaStage, self).__init__()
 
         if downsample:
@@ -240,7 +241,7 @@ class OsaStage(nn.Module):
             last_block = i == block_per_stage - 1
             blocks += [OsaBlock(
                 in_chs if i == 0 else out_chs, mid_chs, out_chs, layer_per_block, residual=residual and i > 0,
-                depthwise=depthwise, attn=attn if last_block else '', norm_layer=norm_layer)
+                depthwise=depthwise, attn=attn if last_block else '', norm_layer=norm_layer, act_layer=act_layer)
             ]
         self.blocks = nn.Sequential(*blocks)
 
@@ -251,56 +252,40 @@ class OsaStage(nn.Module):
         return x
 
 
-class ClassifierHead(nn.Module):
-    """Head."""
-
-    def __init__(self, in_chs, num_classes, pool_type='avg', drop_rate=0.):
-        super(ClassifierHead, self).__init__()
-        self.drop_rate = drop_rate
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-        if num_classes > 0:
-            self.fc = nn.Linear(in_chs, num_classes, bias=True)
-        else:
-            self.fc = nn.Identity()
-
-    def forward(self, x):
-        x = self.global_pool(x).flatten(1)
-        if self.drop_rate:
-            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
-        x = self.fc(x)
-        return x
-
-
 class VovNet(nn.Module):
 
     def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
-                 norm_layer=BatchNormAct2d):
+                 output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU):
         """ VovNet (v2)
         """
         super(VovNet, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert stem_stride in (4, 2)
+        assert output_stride == 32  # FIXME support dilation
 
         stem_chs = cfg["stem_chs"]
         stage_conv_chs = cfg["stage_conv_chs"]
         stage_out_chs = cfg["stage_out_chs"]
         block_per_stage = cfg["block_per_stage"]
         layer_per_block = cfg["layer_per_block"]
+        conv_kwargs = dict(norm_layer=norm_layer, act_layer=act_layer)
 
         # Stem module
         last_stem_stride = stem_stride // 2
         conv_type = SeparableConvBnAct if cfg["depthwise"] else ConvBnAct
         self.stem = nn.Sequential(*[
-            ConvBnAct(in_chans, stem_chs[0], 3, stride=2, norm_layer=norm_layer),
-            conv_type(stem_chs[0], stem_chs[1], 3, stride=1, norm_layer=norm_layer),
-            conv_type(stem_chs[1], stem_chs[2], 3, stride=last_stem_stride, norm_layer=norm_layer),
+            ConvBnAct(in_chans, stem_chs[0], 3, stride=2, **conv_kwargs),
+            conv_type(stem_chs[0], stem_chs[1], 3, stride=1, **conv_kwargs),
+            conv_type(stem_chs[1], stem_chs[2], 3, stride=last_stem_stride, **conv_kwargs),
         ])
+        self.feature_info = [dict(
+            num_chs=stem_chs[1], reduction=2, module=f'stem.{1 if stem_stride == 4 else 2}')]
+        current_stride = stem_stride
 
         # OSA stages
         in_ch_list = stem_chs[-1:] + stage_out_chs[:-1]
-        stage_args = dict(
-            residual=cfg["residual"], depthwise=cfg["depthwise"], attn=cfg["attn"], norm_layer=norm_layer)
+        stage_args = dict(residual=cfg["residual"], depthwise=cfg["depthwise"], attn=cfg["attn"], **conv_kwargs)
         stages = []
         for i in range(4):  # num_stages
             downsample = stem_stride == 2 or i > 0  # first stage has no stride/downsample if stem_stride is 4
@@ -309,6 +294,9 @@ class VovNet(nn.Module):
                 downsample=downsample, **stage_args)
             ]
             self.num_features = stage_out_chs[i]
+            current_stride *= 2 if downsample else 1
+            self.feature_info += [dict(num_chs=self.num_features, reduction=current_stride, module=f'stages.{i}')]
+
         self.stages = nn.Sequential(*stages)
 
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
@@ -337,79 +325,68 @@ class VovNet(nn.Module):
         return self.head(x)
 
 
-def _vovnet(variant, pretrained=False, **kwargs):
-    load_strict = True
-    model_class = VovNet
-    if kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
-        kwargs.pop('num_classes', 0)
-    model_cfg = model_cfgs[variant]
-    default_cfg = default_cfgs[variant]
-    model = model_class(model_cfg, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model, default_cfg,
-            num_classes=kwargs.get('num_classes', 0), in_chans=kwargs.get('in_chans', 3), strict=load_strict)
-    return model
-
+def _create_vovnet(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        VovNet, variant, pretrained, default_cfg=default_cfgs[variant], model_cfg=model_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), **kwargs)
 
 
 @register_model
 def vovnet39a(pretrained=False, **kwargs):
-    return _vovnet('vovnet39a', pretrained=pretrained, **kwargs)
+    return _create_vovnet('vovnet39a', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def vovnet57a(pretrained=False, **kwargs):
-    return _vovnet('vovnet57a', pretrained=pretrained, **kwargs)
+    return _create_vovnet('vovnet57a', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet19b_slim_dw(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet19b_slim_dw', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet19b_slim_dw', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet19b_dw(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet19b_dw', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet19b_dw', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet19b_slim(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet19b_slim', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet19b_slim', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet39b(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet39b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet39b', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet57b(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet57b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet57b', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def ese_vovnet99b(pretrained=False, **kwargs):
-    return _vovnet('ese_vovnet99b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('ese_vovnet99b', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def eca_vovnet39b(pretrained=False, **kwargs):
-    return _vovnet('eca_vovnet39b', pretrained=pretrained, **kwargs)
+    return _create_vovnet('eca_vovnet39b', pretrained=pretrained, **kwargs)
 
 
 # Experimental Models
 
 @register_model
 def ese_vovnet39b_evos(pretrained=False, **kwargs):
-    def norm_act_fn(num_features, **kwargs):
-        return create_norm_act('EvoNormSample', num_features, jit=False, **kwargs)
-    return _vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
+    def norm_act_fn(num_features, **nkwargs):
+        return create_norm_act('EvoNormSample', num_features, jit=False, **nkwargs)
+    return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
+
 
 @register_model
 def ese_vovnet99b_iabn(pretrained=False, **kwargs):
     norm_layer = get_norm_act_layer('iabn')
-    return _vovnet('ese_vovnet99b_iabn', pretrained=pretrained, norm_layer=norm_layer, **kwargs)
+    return _create_vovnet(
+        'ese_vovnet99b_iabn', pretrained=pretrained, norm_layer=norm_layer, act_layer=nn.LeakyReLU, **kwargs)

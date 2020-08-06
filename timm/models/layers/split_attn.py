@@ -51,6 +51,14 @@ class SplitAttnConv2d(nn.Module):
         self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=groups)
         self.rsoftmax = RadixSoftmax(radix, groups)
 
+    @property
+    def in_channels(self):
+        return self.conv.in_channels
+
+    @property
+    def out_channels(self):
+        return self.fc1.out_channels
+
     def forward(self, x):
         x = self.conv(x)
         if self.bn0 is not None:

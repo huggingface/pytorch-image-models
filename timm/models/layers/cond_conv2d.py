@@ -3,7 +3,7 @@
 Paper: CondConv: Conditionally Parameterized Convolutions for Efficient Inference
 (https://arxiv.org/abs/1904.04971)
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import math

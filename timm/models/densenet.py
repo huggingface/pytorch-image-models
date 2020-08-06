@@ -13,8 +13,8 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d, BatchNormAct2d, create_norm_act, BlurPool2d
+from .helpers import build_model_with_cfg
+from .layers import BatchNormAct2d, create_norm_act, BlurPool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['DenseNet']
@@ -199,6 +199,9 @@ class DenseNet(nn.Module):
                 ('norm0', norm_layer(num_init_features)),
                 ('pool0', stem_pool),
             ]))
+        self.feature_info = [
+            dict(num_chs=num_init_features, reduction=2, module=f'features.norm{2 if deep_stem else 0}')]
+        current_stride = 4
 
         # DenseBlocks
         num_features = num_init_features
@@ -212,23 +215,29 @@ class DenseNet(nn.Module):
                 drop_rate=drop_rate,
                 memory_efficient=memory_efficient
             )
-            self.features.add_module('denseblock%d' % (i + 1), block)
+            module_name = f'denseblock{(i + 1)}'
+            self.features.add_module(module_name, block)
             num_features = num_features + num_layers * growth_rate
             transition_aa_layer = None if aa_stem_only else aa_layer
             if i != len(block_config) - 1:
+                self.feature_info += [
+                    dict(num_chs=num_features, reduction=current_stride, module='features.' + module_name)]
+                current_stride *= 2
                 trans = DenseTransition(
                     num_input_features=num_features, num_output_features=num_features // 2,
                     norm_layer=norm_layer, aa_layer=transition_aa_layer)
-                self.features.add_module('transition%d' % (i + 1), trans)
+                self.features.add_module(f'transition{i + 1}', trans)
                 num_features = num_features // 2
 
         # Final batch norm
         self.features.add_module('norm5', norm_layer(num_features))
 
-        # Linear layer
+        self.feature_info += [dict(num_chs=num_features, reduction=current_stride, module='features.norm5')]
         self.num_features = num_features
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+
+        # Linear layer
+        self.global_pool, self.classifier = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
         # Official init from torch repo.
         for m in self.modules():
@@ -245,19 +254,15 @@ class DenseNet(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.classifier = nn.Linear(num_features, num_classes)
-        else:
-            self.classifier = nn.Identity()
+        self.global_pool, self.classifier = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         return self.features(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         # both classifier and block drop?
         # if self.drop_rate > 0.:
         #     x = F.dropout(x, p=self.drop_rate, training=self.training)
@@ -278,26 +283,12 @@ def _filter_torchvision_pretrained(state_dict):
     return state_dict
 
 
-def _densenet(variant, growth_rate, block_config, pretrained, **kwargs):
-    if kwargs.pop('features_only', False):
-        assert False, 'Not Implemented'  # TODO
-        load_strict = False
-        kwargs.pop('num_classes', 0)
-        model_class = DenseNet
-    else:
-        load_strict = True
-        model_class = DenseNet
-    default_cfg = default_cfgs[variant]
-    model = model_class(growth_rate=growth_rate, block_config=block_config, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model, default_cfg,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3),
-            filter_fn=_filter_torchvision_pretrained,
-            strict=load_strict)
-    return model
+def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
+    kwargs['growth_rate'] = growth_rate
+    kwargs['block_config'] = block_config
+    return build_model_with_cfg(
+        DenseNet, variant, pretrained, default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), pretrained_filter_fn=_filter_torchvision_pretrained, **kwargs)
 
 
 @register_model
@@ -305,7 +296,7 @@ def densenet121(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet121', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, **kwargs)
     return model
 
@@ -315,7 +306,7 @@ def densenetblur121d(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenetblur121d', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, stem_type='deep',
         aa_layer=BlurPool2d, **kwargs)
     return model
@@ -326,7 +317,7 @@ def densenet121d(pretrained=False, **kwargs):
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet121d', growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep',
         pretrained=pretrained, **kwargs)
     return model
@@ -337,7 +328,7 @@ def densenet169(pretrained=False, **kwargs):
     r"""Densenet-169 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet169', growth_rate=32, block_config=(6, 12, 32, 32), pretrained=pretrained, **kwargs)
     return model
 
@@ -347,7 +338,7 @@ def densenet201(pretrained=False, **kwargs):
     r"""Densenet-201 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet201', growth_rate=32, block_config=(6, 12, 48, 32), pretrained=pretrained, **kwargs)
     return model
 
@@ -357,7 +348,7 @@ def densenet161(pretrained=False, **kwargs):
     r"""Densenet-161 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet161', growth_rate=48, block_config=(6, 12, 36, 24), pretrained=pretrained, **kwargs)
     return model
 
@@ -367,7 +358,7 @@ def densenet264(pretrained=False, **kwargs):
     r"""Densenet-264 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'densenet264', growth_rate=48, block_config=(6, 12, 64, 48), pretrained=pretrained, **kwargs)
     return model
 
@@ -378,7 +369,7 @@ def densenet264d_iabn(pretrained=False, **kwargs):
     """
     def norm_act_fn(num_features, **kwargs):
         return create_norm_act('iabn', num_features, **kwargs)
-    model = _densenet(
+    model = _create_densenet(
         'densenet264d_iabn', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep',
         norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
     return model
@@ -389,6 +380,6 @@ def tv_densenet121(pretrained=False, **kwargs):
     r"""Densenet-121 model with original Torchvision weights, from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _densenet(
+    model = _create_densenet(
         'tv_densenet121', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, **kwargs)
     return model

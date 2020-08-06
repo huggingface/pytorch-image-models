@@ -1,6 +1,6 @@
 """ Conv2d + BN + Act
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from torch import nn as nn
 
@@ -14,6 +14,7 @@ class ConvBnAct(nn.Module):
                  drop_block=None, aa_layer=None):
         super(ConvBnAct, self).__init__()
         use_aa = aa_layer is not None
+
         self.conv = create_conv2d(
             in_channels, out_channels, kernel_size, stride=1 if use_aa else stride,
             padding=padding, dilation=dilation, groups=groups, bias=False)
@@ -22,6 +23,14 @@ class ConvBnAct(nn.Module):
         norm_act_layer, norm_act_args = convert_norm_act_type(norm_layer, act_layer, norm_kwargs)
         self.bn = norm_act_layer(out_channels, apply_act=apply_act, drop_block=drop_block, **norm_act_args)
         self.aa = aa_layer(channels=out_channels) if stride == 2 and use_aa else None
+
+    @property
+    def in_channels(self):
+        return self.conv.in_channels
+
+    @property
+    def out_channels(self):
+        return self.conv.out_channels
 
     def forward(self, x):
         x = self.conv(x)

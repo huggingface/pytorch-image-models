@@ -21,7 +21,8 @@ class BatchNormAct2d(nn.BatchNorm2d):
         if isinstance(act_layer, str):
             act_layer = get_act_layer(act_layer)
         if act_layer is not None and apply_act:
-            self.act = act_layer(inplace=inplace)
+            act_args = dict(inplace=True) if inplace else {}
+            self.act = act_layer(**act_args)
         else:
             self.act = None
 

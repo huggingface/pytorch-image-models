@@ -1,3 +1,6 @@
+""" Scheduler Factory
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 from .cosine_lr import CosineLRScheduler
 from .tanh_lr import TanhLRScheduler
 from .step_lr import StepLRScheduler

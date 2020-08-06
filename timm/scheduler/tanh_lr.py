@@ -1,3 +1,9 @@
+""" TanH Scheduler
+
+TanH schedule with warmup, cycle/restarts, noise.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import logging
 import math
 import numpy as np
@@ -6,7 +12,7 @@ import torch
 from .scheduler import Scheduler
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class TanhLRScheduler(Scheduler):

@@ -1,6 +1,6 @@
 """ AvgPool2d w/ Same Padding
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn
@@ -44,6 +44,7 @@ class MaxPool2dSame(nn.MaxPool2d):
     def __init__(self, kernel_size: int, stride=None, padding=0, dilation=1, ceil_mode=False, count_include_pad=True):
         kernel_size = tup_pair(kernel_size)
         stride = tup_pair(stride)
+        dilation = tup_pair(dilation)
         super(MaxPool2dSame, self).__init__(kernel_size, stride, (0, 0), dilation, ceil_mode, count_include_pad)
 
     def forward(self, x):

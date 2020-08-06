@@ -5,7 +5,7 @@ A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
 
 Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn
@@ -16,8 +16,8 @@ from typing import List
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
-from .feature_hooks import FeatureHooks
-from .helpers import load_pretrained
+from .features import FeatureInfo, FeatureHooks
+from .helpers import build_model_with_cfg
 from .layers import SelectAdaptivePool2d, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
@@ -85,30 +85,27 @@ class MobileNetV3(nn.Module):
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
-        self._in_chs = in_chans
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
-        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
-        self._in_chs = stem_size
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, 32, pad_type, act_layer, se_kwargs,
             norm_layer, norm_kwargs, drop_path_rate, verbose=_DEBUG)
-        self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
+        self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
-        self._in_chs = builder.in_chs
+        head_chs = builder.in_chs
 
         # Head + Pooling
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.conv_head = create_conv2d(self._in_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool) if global_pool else nn.Identity()
+        num_pooled_chs = head_chs * self.global_pool.feat_mult()
+        self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
         self.act2 = act_layer(inplace=True)
-
-        # Classifier
-        self.classifier = nn.Linear(self.num_features * self.global_pool.feat_mult(), self.num_classes)
+        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
 
@@ -123,13 +120,10 @@ class MobileNetV3(nn.Module):
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        if num_classes:
-            num_features = self.num_features * self.global_pool.feat_mult()
-            self.classifier = nn.Linear(num_features, num_classes)
-        else:
-            self.classifier = nn.Identity()
+        # cannot meaningfully change pooling of efficient head after creation
+        assert global_pool == self.global_pool.pool_type
+        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -142,8 +136,7 @@ class MobileNetV3(nn.Module):
         return x
 
     def forward(self, x):
-        x = self.forward_features(x)
-        x = x.flatten(1)
+        x = self.forward_features(x).flatten(1)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return self.classifier(x)
@@ -162,61 +155,29 @@ class MobileNetV3Features(nn.Module):
                  norm_layer=nn.BatchNorm2d, norm_kwargs=None):
         super(MobileNetV3Features, self).__init__()
         norm_kwargs = norm_kwargs or {}
-
-        # TODO only create stages needed, currently all stages are created regardless of out_indices
-        num_stages = max(out_indices) + 1
-
-        self.out_indices = out_indices
         self.drop_rate = drop_rate
-        self._in_chs = in_chans
 
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
-        self.conv_stem = create_conv2d(self._in_chs, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
-        self._in_chs = stem_size
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, output_stride, pad_type, act_layer, se_kwargs,
             norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
-        self.blocks = nn.Sequential(*builder(self._in_chs, block_args))
-        self._feature_info = builder.features  # builder provides info about feature channels for each block
-        self._stage_to_feature_idx = {
-            v['stage_idx']: fi for fi, v in self._feature_info.items() if fi in self.out_indices}
-        self._in_chs = builder.in_chs
+        self.blocks = nn.Sequential(*builder(stem_size, block_args))
+        self.feature_info = FeatureInfo(builder.features, out_indices)
+        self._stage_out_idx = {v['stage']: i for i, v in enumerate(self.feature_info) if i in out_indices}
 
         efficientnet_init_weights(self)
-        if _DEBUG:
-            for k, v in self._feature_info.items():
-                print('Feature idx: {}: Name: {}, Channels: {}'.format(k, v['name'], v['num_chs']))
 
         # Register feature extraction hooks with FeatureHooks helper
         self.feature_hooks = None
         if feature_location != 'bottleneck':
-            hooks = [dict(
-                name=self._feature_info[idx]['module'],
-                type=self._feature_info[idx]['hook_type']) for idx in out_indices]
+            hooks = self.feature_info.get_dicts(keys=('module', 'hook_type'))
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
-
-    def feature_channels(self, idx=None):
-        """ Feature Channel Shortcut
-        Returns feature channel count for each output index if idx == None. If idx is an integer, will
-        return feature channel count for that feature block index (independent of out_indices setting).
-        """
-        if isinstance(idx, int):
-            return self._feature_info[idx]['num_chs']
-        return [self._feature_info[i]['num_chs'] for i in self.out_indices]
-
-    def feature_info(self, idx=None):
-        """ Feature Channel Shortcut
-        Returns feature channel count for each output index if idx == None. If idx is an integer, will
-        return feature channel count for that feature block index (independent of out_indices setting).
-        """
-        if isinstance(idx, int):
-            return self._feature_info[idx]
-        return [self._feature_info[i] for i in self.out_indices]
 
     def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)
@@ -224,37 +185,33 @@ class MobileNetV3Features(nn.Module):
         x = self.act1(x)
         if self.feature_hooks is None:
             features = []
+            if 0 in self._stage_out_idx:
+                features.append(x)  # add stem out
             for i, b in enumerate(self.blocks):
                 x = b(x)
-                if i in self._stage_to_feature_idx:
+                if i + 1 in self._stage_out_idx:
                     features.append(x)
             return features
         else:
             self.blocks(x)
-            return self.feature_hooks.get_output(x.device)
+            out = self.feature_hooks.get_output(x.device)
+            return list(out.values())
 
 
-def _create_model(model_kwargs, default_cfg, pretrained=False):
+def _create_mnv3(model_kwargs, variant, pretrained=False):
     if model_kwargs.pop('features_only', False):
         load_strict = False
         model_kwargs.pop('num_classes', 0)
         model_kwargs.pop('num_features', 0)
         model_kwargs.pop('head_conv', None)
-        model_class = MobileNetV3Features
+        model_kwargs.pop('head_bias', None)
+        model_cls = MobileNetV3Features
     else:
         load_strict = True
-        model_class = MobileNetV3
-
-    model = model_class(**model_kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(
-            model,
-            default_cfg,
-            num_classes=model_kwargs.get('num_classes', 0),
-            in_chans=model_kwargs.get('in_chans', 3),
-            strict=load_strict)
-    return model
+        model_cls = MobileNetV3
+    return build_model_with_cfg(
+        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
+        pretrained_strict=load_strict, **model_kwargs)
 
 
 def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
@@ -291,7 +248,7 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
         **kwargs,
     )
-    model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
+    model = _create_mnv3(model_kwargs, variant, pretrained)
     return model
 
 
@@ -387,7 +344,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
         **kwargs,
     )
-    model = _create_model(model_kwargs, default_cfgs[variant], pretrained)
+    model = _create_mnv3(model_kwargs, variant, pretrained)
     return model
 
 

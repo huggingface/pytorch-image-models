@@ -7,3 +7,4 @@ from .transforms_factory import create_transform
 from .mixup import mixup_batch, FastCollateMixup
 from .auto_augment import RandAugment, AutoAugment, rand_augment_ops, auto_augment_policy,\
     rand_augment_transform, auto_augment_transform
+from .real_labels import RealLabelsImagenet

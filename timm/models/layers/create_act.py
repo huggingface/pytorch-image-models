@@ -1,3 +1,6 @@
+""" Activation Factory
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 from .activations import *
 from .activations_jit import *
 from .activations_me import *

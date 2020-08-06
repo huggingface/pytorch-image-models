@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ master ]
 
+env:
+  OMP_NUM_THREADS: 2
+  MKL_NUM_THREADS: 2
+
 jobs:
   test:
     name: Run tests on ${{ matrix.os }} with Python ${{ matrix.python }}

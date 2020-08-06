@@ -9,7 +9,7 @@ This allows easily removing the auxiliary BN layers after training to efficientl
 achieve the 'Auxiliary BatchNorm' as described in the AdvProp Paper, section 4.2,
 'Disentangled Learning via An Auxiliary BN'
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn

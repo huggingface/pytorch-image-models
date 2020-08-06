@@ -1,3 +1,6 @@
+""" Optimizer Factory w/ Custom Weight Decay
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import torch
 from torch import optim as optim
 from timm.optim import Nadam, RMSpropTF, AdamW, RAdam, NovoGrad, NvNovoGrad, Lookahead, AdamP, SGDP

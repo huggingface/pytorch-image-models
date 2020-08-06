@@ -1,3 +1,8 @@
+""" Mixup
+Paper: `mixup: Beyond Empirical Risk Minimization` - https://arxiv.org/abs/1710.09412
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import numpy as np
 import torch
 

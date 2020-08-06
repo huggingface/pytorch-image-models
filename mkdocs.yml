@@ -5,13 +5,20 @@ repo_url: 'https://github.com/rwightman/pytorch-image-models'
 nav:
   - index.md
   - models.md
+  - results.md
+  - scripts.md
+  - training_hparam_examples.md
+  - feature_extraction.md
   - changes.md
+  - archived_changes.md
 theme:
   name: 'material'
   feature:
     tabs: false
 extra_javascript:
   - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML'
+  - https://cdnjs.cloudflare.com/ajax/libs/tablesort/5.2.1/tablesort.min.js
+  - javascripts/tables.js
 markdown_extensions:
   - codehilite:
       linenums: true

@@ -1,6 +1,6 @@
 """ Select AttentionFactory Method
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 from .se import SEModule, EffectiveSEModule

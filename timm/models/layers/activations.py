@@ -3,7 +3,7 @@
 A collection of activations fn and modules with a common interface so that they can
 easily be swapped. All have an `inplace` arg even if not used.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import torch
