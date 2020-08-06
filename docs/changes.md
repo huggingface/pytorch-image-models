@@ -1,7 +1,8 @@
 # Recent Changes
 
-### Aug 1, 2020
+### Aug 5, 2020
 Universal feature extraction, new models, new weights, new test sets.
+
 * All models support the `features_only=True` argument for `create_model` call to return a network that extracts features from the deepest layer at each stride.
 * New models
   * CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet
@@ -14,6 +15,8 @@ Universal feature extraction, new models, new weights, new test sets.
   * DPN68b - 79.2 top-1
   * EfficientNet-Lite0 (non-TF ver) - 75.5 (submitted by @hal-314)
 * Add 'real' labels for ImageNet and ImageNet-Renditions test set, see [`results/README.md`](results/README.md)
+* Train script and loader/transform tweaks to punch through more aug arguments
+* README and documentation overhaul. See initial (WIP) documentation at https://rwightman.github.io/pytorch-image-models/
 
 ### June 11, 2020
 Bunch of changes:
