@@ -10,14 +10,16 @@ Universal feature extraction, new models, new weights, new test sets.
   * ReXNet
   * (Modified Aligned) Xception41/65/71 (a proper port of TF models)
 * New trained weights
-  * SEResNet50 - 80.3
+  * SEResNet50 - 80.3 top-1
   * CSPDarkNet53 - 80.1 top-1
-  * CSPResNeXt50 - 80.0 to-1
+  * CSPResNeXt50 - 80.0 top-1
   * DPN68b - 79.2 top-1
-  * EfficientNet-Lite0 (non-TF ver) - 75.5 (trained by @hal-314)
+  * EfficientNet-Lite0 (non-TF ver) - 75.5 (submitted by [@hal-314](https://github.com/hal-314))
 * Add 'real' labels for ImageNet and ImageNet-Renditions test set, see [`results/README.md`](results/README.md)
+* Test set ranking/top-n diff script by [@KushajveerSingh](https://github.com/KushajveerSingh)
 * Train script and loader/transform tweaks to punch through more aug arguments
 * README and documentation overhaul. See initial (WIP) documentation at https://rwightman.github.io/pytorch-image-models/
+* adamp and sgdp optimizers added by [@hellbell](https://github.com/hellbell)
 
 ### June 11, 2020
 Bunch of changes:
