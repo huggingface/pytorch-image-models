@@ -701,10 +701,12 @@
                 
                 <h1 id="model-architectures">Model Architectures</h1>
 <p>The model architectures included come from a wide variety of sources. Sources, including papers, original impl ("reference code") that I rewrote / adapted, and PyTorch impl that I leveraged directly ("code") are listed below.</p>
-<p>Most included models have pretrained weights. The weights are either:
-1. from their original sources
-2. ported by myself from their original impl in a different framework (e.g. Tensorflow models)
-3. trained from scratch using the included training script</p>
+<p>Most included models have pretrained weights. The weights are either:</p>
+<ol>
+<li>from their original sources</li>
+<li>ported by myself from their original impl in a different framework (e.g. Tensorflow models)</li>
+<li>trained from scratch using the included training script</li>
+</ol>
 <p>The validation results for the pretrained weights can be found <a href="../results/">here</a></p>
 <h2 id="cross-stage-partial-networks-cspnetpy">Cross-Stage Partial Networks [<a href="https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/cspnet.py">cspnet.py</a>]</h2>
 <ul>
@@ -763,7 +765,7 @@
 </ul>
 <h2 id="efficientnet-efficientnetpy">EfficientNet [<a href="https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/efficientnet.py">efficientnet.py</a>]</h2>
 <ul>
-<li>Papers<ul>
+<li>Papers:<ul>
 <li>EfficientNet NoisyStudent (B0-B7, L2) - <a href="https://arxiv.org/abs/1911.04252">https://arxiv.org/abs/1911.04252</a></li>
 <li>EfficientNet AdvProp (B0-B8) - <a href="https://arxiv.org/abs/1911.09665">https://arxiv.org/abs/1911.09665</a></li>
 <li>EfficientNet (B0-B7) - <a href="https://arxiv.org/abs/1905.11946">https://arxiv.org/abs/1905.11946</a></li>
@@ -852,9 +854,11 @@
 <li>Code: <a href="https://github.com/mehtadushy/SelecSLS-Pytorch">https://github.com/mehtadushy/SelecSLS-Pytorch</a></li>
 </ul>
 <h2 id="squeeze-and-excitation-networks-senetpy">Squeeze-and-Excitation Networks [<a href="https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/senet.py">senet.py</a>]</h2>
-<p>NOTE: I am deprecating this version of the networks, the new ones are part of <code>resnet.py</code>
-* Paper: <code>Squeeze-and-Excitation Networks</code> - <a href="https://arxiv.org/abs/1709.01507">https://arxiv.org/abs/1709.01507</a>
-* Code: <a href="https://github.com/Cadene/pretrained-models.pytorch">https://github.com/Cadene/pretrained-models.pytorch</a> </p>
+<p>NOTE: I am deprecating this version of the networks, the new ones are part of <code>resnet.py</code></p>
+<ul>
+<li>Paper: <code>Squeeze-and-Excitation Networks</code> - <a href="https://arxiv.org/abs/1709.01507">https://arxiv.org/abs/1709.01507</a></li>
+<li>Code: <a href="https://github.com/Cadene/pretrained-models.pytorch">https://github.com/Cadene/pretrained-models.pytorch</a> </li>
+</ul>
 <h2 id="tresnet-tresnetpy">TResNet [<a href="https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/tresnet.py">tresnet.py</a>]</h2>
 <ul>
 <li>Paper: <code>TResNet: High Performance GPU-Dedicated Architecture</code> - <a href="https://arxiv.org/abs/2003.13630">https://arxiv.org/abs/2003.13630</a></li>

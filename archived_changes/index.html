@@ -549,15 +549,17 @@
 <h3 id="feb-29-2020">Feb 29, 2020</h3>
 <ul>
 <li>New MobileNet-V3 Large weights trained from stratch with this code to 75.77% top-1</li>
-<li>IMPORTANT CHANGE - default weight init changed for all MobilenetV3 / EfficientNet / related models</li>
+<li>IMPORTANT CHANGE - default weight init changed for all MobilenetV3 / EfficientNet / related models<ul>
 <li>overall results similar to a bit better training from scratch on a few smaller models tried</li>
 <li>performance early in training seems consistently improved but less difference by end</li>
 <li>set <code>fix_group_fanout=False</code> in <code>_init_weight_goog</code> fn if you need to reproducte past behaviour</li>
+</ul>
+</li>
 <li>Experimental LR noise feature added applies a random perturbation to LR each epoch in specified range of training</li>
 </ul>
 <h3 id="feb-18-2020">Feb 18, 2020</h3>
 <ul>
-<li>Big refactor of model layers and addition of several attention mechanisms. Several additions motivated by 'Compounding the Performance Improvements...' (<a href="https://arxiv.org/abs/2001.06268">https://arxiv.org/abs/2001.06268</a>):</li>
+<li>Big refactor of model layers and addition of several attention mechanisms. Several additions motivated by 'Compounding the Performance Improvements...' (<a href="https://arxiv.org/abs/2001.06268">https://arxiv.org/abs/2001.06268</a>):<ul>
 <li>Move layer/module impl into <code>layers</code> subfolder/module of <code>models</code> and organize in a more granular fashion</li>
 <li>ResNet downsample paths now properly support dilation (output stride != 32) for avg_pool ('D' variant) and 3x3 (SENets) networks</li>
 <li>Add Selective Kernel Nets on top of ResNet base, pretrained weights<ul>
@@ -570,6 +572,8 @@
 <li>CBAM attention experiment (not the best results so far, may remove)</li>
 <li>Attention factory to allow dynamically selecting one of SE, ECA, CBAM in the <code>.se</code> position for all ResNets</li>
 <li>Add DropBlock and DropPath (formerly DropConnect for EfficientNet/MobileNetv3) support to all ResNet variants</li>
+</ul>
+</li>
 <li>Full dataset results updated that incl NoisyStudent weights and 2 of the 3 SK weights</li>
 </ul>
 <h3 id="feb-12-2020">Feb 12, 2020</h3>
@@ -609,7 +613,7 @@
 </ul>
 <h3 id="dec-28-2019">Dec 28, 2019</h3>
 <ul>
-<li>Add new model weights and training hparams (see Training Hparams section)</li>
+<li>Add new model weights and training hparams (see Training Hparams section)<ul>
 <li><code>efficientnet_b3</code> - 81.5 top-1, 95.7 top-5 at default res/crop, 81.9, 95.8 at 320x320 1.0 crop-pct<ul>
 <li>trained with RandAugment, ended up with an interesting but less than perfect result (see training section)</li>
 </ul>
@@ -625,6 +629,8 @@
 </ul>
 </li>
 </ul>
+</li>
+</ul>
 <h3 id="dec-23-2019">Dec 23, 2019</h3>
 <ul>
 <li>Add RandAugment trained MixNet-XL weights with 80.48 top-1.</li>
@@ -636,13 +642,17 @@
 </ul>
 <h3 id="nov-29-2019">Nov 29, 2019</h3>
 <ul>
-<li>Brought EfficientNet and MobileNetV3 up to date with my <a href="https://github.com/rwightman/gen-efficientnet-pytorch">https://github.com/rwightman/gen-efficientnet-pytorch</a> code. Torchscript and ONNX export compat excluded.</li>
+<li>Brought EfficientNet and MobileNetV3 up to date with my <a href="https://github.com/rwightman/gen-efficientnet-pytorch">https://github.com/rwightman/gen-efficientnet-pytorch</a> code. Torchscript and ONNX export compat excluded.<ul>
 <li>AdvProp weights added</li>
 <li>Official TF MobileNetv3 weights added</li>
+</ul>
+</li>
 <li>EfficientNet and MobileNetV3 hook based 'feature extraction' classes added. Will serve as basis for using models as backbones in obj detection/segmentation tasks. Lots more to be done here...</li>
 <li>HRNet classification models and weights added from <a href="https://github.com/HRNet/HRNet-Image-Classification">https://github.com/HRNet/HRNet-Image-Classification</a></li>
-<li>Consistency in global pooling, <code>reset_classifer</code>, and <code>forward_features</code> across models</li>
+<li>Consistency in global pooling, <code>reset_classifer</code>, and <code>forward_features</code> across models<ul>
 <li><code>forward_features</code> always returns unpooled feature maps now</li>
+</ul>
+</li>
 <li>Reasonable chance I broke something... let me know</li>
 </ul>
 <h3 id="nov-22-2019">Nov 22, 2019</h3>

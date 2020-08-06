@@ -449,28 +449,36 @@
                 
                 <h1 id="recent-changes">Recent Changes</h1>
 <h3 id="aug-1-2020">Aug 1, 2020</h3>
-<p>Universal feature extraction, new models, new weights, new test sets.
-* All models support the <code>features_only=True</code> argument for <code>create_model</code> call to return a network that extracts features from the deepest layer at each stride.
-* New models
-  * CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet
-  * ReXNet
-  * (Aligned) Xception41/65/71 (a proper port of TF models)
-* New trained weights
-  * SEResNet50 - 80.3
-  * CSPDarkNet53 - 80.1 top-1
-  * CSPResNeXt50 - 80.0 to-1
-  * DPN68b - 79.2 top-1
-  * EfficientNet-Lite0 (non-TF ver) - 75.5 (submitted by @hal-314)
-* Add 'real' labels for ImageNet and ImageNet-Renditions test set, see <a href="results/README.md"><code>results/README.md</code></a></p>
+<p>Universal feature extraction, new models, new weights, new test sets.</p>
+<ul>
+<li>All models support the <code>features_only=True</code> argument for <code>create_model</code> call to return a network that extracts features from the deepest layer at each stride.</li>
+<li>New models<ul>
+<li>CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet</li>
+<li>ReXNet</li>
+<li>(Aligned) Xception41/65/71 (a proper port of TF models)</li>
+</ul>
+</li>
+<li>New trained weights<ul>
+<li>SEResNet50 - 80.3</li>
+<li>CSPDarkNet53 - 80.1 top-1</li>
+<li>CSPResNeXt50 - 80.0 to-1</li>
+<li>DPN68b - 79.2 top-1</li>
+<li>EfficientNet-Lite0 (non-TF ver) - 75.5 (submitted by @hal-314)</li>
+</ul>
+</li>
+<li>Add 'real' labels for ImageNet and ImageNet-Renditions test set, see <a href="results/README.md"><code>results/README.md</code></a></li>
+</ul>
 <h3 id="june-11-2020">June 11, 2020</h3>
 <p>Bunch of changes:</p>
 <ul>
 <li>DenseNet models updated with memory efficient addition from torchvision (fixed a bug), blur pooling and deep stem additions</li>
 <li>VoVNet V1 and V2 models added, 39 V2 variant (ese_vovnet_39b) trained to 79.3 top-1</li>
-<li>Activation factory added along with new activations:</li>
+<li>Activation factory added along with new activations:<ul>
 <li>select act at model creation time for more flexibility in using activations compatible with scripting or tracing (ONNX export)</li>
 <li>hard_mish (experimental) added with memory-efficient grad, along with ME hard_swish</li>
 <li>context mgr for setting exportable/scriptable/no_jit states</li>
+</ul>
+</li>
 <li>Norm + Activation combo layers added with initial trial support in DenseNet and VoVNet along with impl of EvoNorm and InplaceAbn wrapper that fit the interface</li>
 <li>Torchscript works for all but two of the model types as long as using Pytorch 1.5+, tests added for this</li>
 <li>Some import cleanup and classifier reset changes, all models will have classifier reset to nn.Identity on reset_classifer(0) call</li>
@@ -486,19 +494,23 @@
 </ul>
 <h3 id="may-1-2020">May 1, 2020</h3>
 <ul>
-<li>Merged a number of execellent contributions in the ResNet model family over the past month</li>
+<li>Merged a number of execellent contributions in the ResNet model family over the past month<ul>
 <li>BlurPool2D and resnetblur models initiated by <a href="https://github.com/VRandme">Chris Ha</a>, I trained resnetblur50 to 79.3.</li>
 <li>TResNet models and SpaceToDepth, AntiAliasDownsampleLayer layers by <a href="https://github.com/mrT23">mrT23</a></li>
 <li>ecaresnet (50d, 101d, light) models and two pruned variants using pruning as per (<a href="https://arxiv.org/abs/2002.08258">https://arxiv.org/abs/2002.08258</a>) by <a href="https://github.com/yoniaflalo">Yonathan Aflalo</a></li>
+</ul>
+</li>
 <li>200 pretrained models in total now with updated results csv in results folder</li>
 </ul>
 <h3 id="april-5-2020">April 5, 2020</h3>
 <ul>
-<li>Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite</li>
+<li>Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite<ul>
 <li>3.5M param MobileNet-V2 100 @ 73%</li>
 <li>4.5M param MobileNet-V2 110d @ 75%</li>
 <li>6.1M param MobileNet-V2 140 @ 76.5%</li>
 <li>5.8M param MobileNet-V2 120d @ 77.3%</li>
+</ul>
+</li>
 </ul>
 <h3 id="march-18-2020">March 18, 2020</h3>
 <ul>
