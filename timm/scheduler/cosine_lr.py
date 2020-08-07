@@ -1,3 +1,9 @@
+""" Cosine Scheduler
+
+Cosine LR schedule with warmup, cycle/restarts, noise.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import logging
 import math
 import numpy as np
@@ -6,7 +12,7 @@ import torch
 from .scheduler import Scheduler
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class CosineLRScheduler(Scheduler):
@@ -29,13 +35,20 @@ class CosineLRScheduler(Scheduler):
                  warmup_prefix=False,
                  cycle_limit=0,
                  t_in_epochs=True,
+                 noise_range_t=None,
+                 noise_pct=0.67,
+                 noise_std=1.0,
+                 noise_seed=42,
                  initialize=True) -> None:
-        super().__init__(optimizer, param_group_field="lr", initialize=initialize)
+        super().__init__(
+            optimizer, param_group_field="lr",
+            noise_range_t=noise_range_t, noise_pct=noise_pct, noise_std=noise_std, noise_seed=noise_seed,
+            initialize=initialize)
 
         assert t_initial > 0
         assert lr_min >= 0
         if t_initial == 1 and t_mul == 1 and decay_rate == 1:
-            logger.warning("Cosine annealing scheduler will have no effect on the learning "
+            _logger.warning("Cosine annealing scheduler will have no effect on the learning "
                            "rate since t_initial = t_mul = eta_mul = 1.")
         self.t_initial = t_initial
         self.t_mul = t_mul
@@ -96,7 +109,7 @@ class CosineLRScheduler(Scheduler):
     def get_cycle_length(self, cycles=0):
         if not cycles:
             cycles = self.cycle_limit
-        assert cycles > 0
+        cycles = max(1, cycles)
         if self.t_mul == 1.0:
             return self.t_initial * cycles
         else:

@@ -12,7 +12,7 @@ This script was started from an early version of the PyTorch ImageNet example
 NVIDIA CUDA specific speedups adopted from NVIDIA Apex examples
 (https://github.com/NVIDIA/apex/tree/master/examples/imagenet)
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
 import time
@@ -28,8 +28,7 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mix_batch, AugMixDataset,\
-    FastCollateMixupElementwise, FastCollateMixupBatchwise
+from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mix_batch, AugMixDataset
 from timm.models import create_model, resume_checkpoint, convert_splitbn_model
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
@@ -41,6 +40,7 @@ import torch.nn as nn
 import torchvision.utils
 
 torch.backends.cudnn.benchmark = True
+_logger = logging.getLogger('train')
 
 
 # The first arg parser parses out only the --config argument, this argument is used to
@@ -51,6 +51,7 @@ parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
+
 # Dataset / Model parameters
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
@@ -82,12 +83,7 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
                     help='ratio of validation batch size to training batch size (default: 1)')
-parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
-                    help='Dropout rate (default: 0.)')
-parser.add_argument('--drop-connect', type=float, default=0.0, metavar='DROP',
-                    help='Drop connect rate (default: 0.)')
-parser.add_argument('--jsd', action='store_true', default=False,
-                    help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
+
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
@@ -97,11 +93,22 @@ parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
 parser.add_argument('--weight-decay', type=float, default=0.0001,
                     help='weight decay (default: 0.0001)')
+
 # Learning rate schedule parameters
 parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
                     help='LR scheduler (default: "step"')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
+parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
+                    help='learning rate noise on/off epoch percentages')
+parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
+                    help='learning rate noise limit percent (default: 0.67)')
+parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
+                    help='learning rate noise std-dev (default: 1.0)')
+parser.add_argument('--lr-cycle-mul', type=float, default=1.0, metavar='MULT',
+                    help='learning rate cycle len multiplier (default: 1.0)')
+parser.add_argument('--lr-cycle-limit', type=int, default=1, metavar='N',
+                    help='learning rate cycle limit')
 parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
                     help='warmup learning rate (default: 0.0001)')
 parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
@@ -116,15 +123,30 @@ parser.add_argument('--warmup-epochs', type=int, default=3, metavar='N',
                     help='epochs to warmup LR, if scheduler supports')
 parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N',
                     help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
+parser.add_argument('--patience-epochs', type=int, default=10, metavar='N',
+                    help='patience epochs for Plateau LR scheduler (default: 10')
 parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
                     help='LR decay rate (default: 0.1)')
-# Augmentation parameters
+
+# Augmentation & regularization parameters
+parser.add_argument('--no-aug', action='store_true', default=False,
+                    help='Disable all training augmentation, override other train aug args')
+parser.add_argument('--scale', type=float, nargs='+', default=[0.08, 1.0], metavar='PCT',
+                    help='Random resize scale (default: 0.08 1.0)')
+parser.add_argument('--ratio', type=float, nargs='+', default=[3./4., 4./3.], metavar='RATIO',
+                    help='Random resize aspect ratio (default: 0.75 1.33)')
+parser.add_argument('--hflip', type=float, default=0.5,
+                    help='Horizontal flip training aug probability')
+parser.add_argument('--vflip', type=float, default=0.,
+                    help='Vertical flip training aug probability')
 parser.add_argument('--color-jitter', type=float, default=0.4, metavar='PCT',
                     help='Color jitter factor (default: 0.4)')
 parser.add_argument('--aa', type=str, default=None, metavar='NAME',
                     help='Use AutoAugment policy. "v0" or "original". (default: None)'),
 parser.add_argument('--aug-splits', type=int, default=0,
                     help='Number of augmentation splits (default: 0, valid: 0 or >=2)')
+parser.add_argument('--jsd', action='store_true', default=False,
+                    help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
 parser.add_argument('--remode', type=str, default='const',
@@ -136,13 +158,22 @@ parser.add_argument('--resplit', action='store_true', default=False,
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
 parser.add_argument('--mixup-mode', type=str, default='mixup',
-                    help='Mixup mode ("mixup", "cutmix", "random", default: "mixup")')
+                    help='Mixup mode. One of "mixup", "cutmix", "random" (default: "mixup")')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
-                    help='turn off mixup after this epoch, disabled if 0 (default: 0)')
+                    help='Turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
-                    help='label smoothing (default: 0.1)')
+                    help='Label smoothing (default: 0.1)')
 parser.add_argument('--train-interpolation', type=str, default='random',
                     help='Training interpolation (random, bilinear, bicubic default: "random")')
+parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
+                    help='Dropout rate (default: 0.)')
+parser.add_argument('--drop-connect', type=float, default=None, metavar='PCT',
+                    help='Drop connect rate, DEPRECATED, use drop-path (default: None)')
+parser.add_argument('--drop-path', type=float, default=None, metavar='PCT',
+                    help='Drop path rate (default: None)')
+parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
+                    help='Drop block rate (default: None)')
+
 # Batch norm parameters (only works with gen_efficientnet based models currently)
 parser.add_argument('--bn-tf', action='store_true', default=False,
                     help='Use Tensorflow BatchNorm defaults for models that support it (default: False)')
@@ -156,6 +187,7 @@ parser.add_argument('--dist-bn', type=str, default='',
                     help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
 parser.add_argument('--split-bn', action='store_true',
                     help='Enable separate BN layers per augmentation split.')
+
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
                     help='Enable tracking moving average of model weights')
@@ -163,6 +195,7 @@ parser.add_argument('--model-ema-force-cpu', action='store_true', default=False,
                     help='Force ema to be tracked on CPU, rank=0 node only. Disables EMA validation.')
 parser.add_argument('--model-ema-decay', type=float, default=0.9998,
                     help='decay factor for model weights moving average (default: 0.9998)')
+
 # Misc
 parser.add_argument('--seed', type=int, default=42, metavar='S',
                     help='random seed (default: 42)')
@@ -184,11 +217,13 @@ parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
                     help='path to output folder (default: none, current dir)')
-parser.add_argument('--eval-metric', default='prec1', type=str, metavar='EVAL_METRIC',
-                    help='Best metric (default: "prec1"')
+parser.add_argument('--eval-metric', default='top1', type=str, metavar='EVAL_METRIC',
+                    help='Best metric (default: "top1"')
 parser.add_argument('--tta', type=int, default=0, metavar='N',
                     help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
 parser.add_argument("--local_rank", default=0, type=int)
+parser.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
+                    help='use the multi-epochs-loader to save time at the beginning of every epoch')
 
 
 def _parse_args():
@@ -217,7 +252,7 @@ def main():
     if 'WORLD_SIZE' in os.environ:
         args.distributed = int(os.environ['WORLD_SIZE']) > 1
         if args.distributed and args.num_gpu > 1:
-            logging.warning('Using more than one GPU per process in distributed mode is not allowed. Setting num_gpu to 1.')
+            _logger.warning('Using more than one GPU per process in distributed mode is not allowed. Setting num_gpu to 1.')
             args.num_gpu = 1
 
     args.device = 'cuda:0'
@@ -233,10 +268,10 @@ def main():
     assert args.rank >= 0
 
     if args.distributed:
-        logging.info('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'
+        _logger.info('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'
                      % (args.rank, args.world_size))
     else:
-        logging.info('Training with a single process on %d GPUs.' % args.num_gpu)
+        _logger.info('Training with a single process on %d GPUs.' % args.num_gpu)
 
     torch.manual_seed(args.seed + args.rank)
 
@@ -245,7 +280,9 @@ def main():
         pretrained=args.pretrained,
         num_classes=args.num_classes,
         drop_rate=args.drop,
-        drop_connect_rate=args.drop_connect,
+        drop_connect_rate=args.drop_connect,  # DEPRECATED, use drop_path
+        drop_path_rate=args.drop_path,
+        drop_block_rate=args.drop_block,
         global_pool=args.gp,
         bn_tf=args.bn_tf,
         bn_momentum=args.bn_momentum,
@@ -253,7 +290,7 @@ def main():
         checkpoint_path=args.initial_checkpoint)
 
     if args.local_rank == 0:
-        logging.info('Model %s created, param count: %d' %
+        _logger.info('Model %s created, param count: %d' %
                      (args.model, sum([m.numel() for m in model.parameters()])))
 
     data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
@@ -269,7 +306,7 @@ def main():
 
     if args.num_gpu > 1:
         if args.amp:
-            logging.warning(
+            _logger.warning(
                 'AMP does not work well with nn.DataParallel, disabling. Use distributed mode for multi-GPU AMP.')
             args.amp = False
         model = nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
@@ -283,7 +320,7 @@ def main():
         model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
         use_amp = True
     if args.local_rank == 0:
-        logging.info('NVIDIA APEX {}. AMP {}.'.format(
+        _logger.info('NVIDIA APEX {}. AMP {}.'.format(
             'installed' if has_apex else 'not installed', 'on' if use_amp else 'off'))
 
     # optionally resume from a checkpoint
@@ -294,11 +331,11 @@ def main():
     if resume_state and not args.no_resume_opt:
         if 'optimizer' in resume_state:
             if args.local_rank == 0:
-                logging.info('Restoring Optimizer state from checkpoint')
+                _logger.info('Restoring Optimizer state from checkpoint')
             optimizer.load_state_dict(resume_state['optimizer'])
         if use_amp and 'amp' in resume_state and 'load_state_dict' in amp.__dict__:
             if args.local_rank == 0:
-                logging.info('Restoring NVIDIA AMP state from checkpoint')
+                _logger.info('Restoring NVIDIA AMP state from checkpoint')
             amp.load_state_dict(resume_state['amp'])
     del resume_state
 
@@ -320,16 +357,16 @@ def main():
                 else:
                     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
                 if args.local_rank == 0:
-                    logging.info(
+                    _logger.info(
                         'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
                         'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
             except Exception as e:
-                logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
+                _logger.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
         if has_apex:
             model = DDP(model, delay_allreduce=True)
         else:
             if args.local_rank == 0:
-                logging.info("Using torch DistributedDataParallel. Install NVIDIA Apex for Apex DDP.")
+                _logger.info("Using torch DistributedDataParallel. Install NVIDIA Apex for Apex DDP.")
             model = DDP(model, device_ids=[args.local_rank])  # can use device str in Torch >= 1.1
         # NOTE: EMA model does not need to be wrapped by DDP
 
@@ -344,11 +381,11 @@ def main():
         lr_scheduler.step(start_epoch)
 
     if args.local_rank == 0:
-        logging.info('Scheduled epochs: {}'.format(num_epochs))
+        _logger.info('Scheduled epochs: {}'.format(num_epochs))
 
     train_dir = os.path.join(args.data, 'train')
     if not os.path.exists(train_dir):
-        logging.error('Training folder does not exist at: {}'.format(train_dir))
+        _logger.error('Training folder does not exist at: {}'.format(train_dir))
         exit(1)
     dataset_train = Dataset(train_dir)
 
@@ -360,33 +397,42 @@ def main():
     if num_aug_splits > 1:
         dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
 
+    train_interpolation = args.train_interpolation
+    if args.no_aug or not train_interpolation:
+        train_interpolation = data_config['interpolation']
     loader_train = create_loader(
         dataset_train,
         input_size=data_config['input_size'],
         batch_size=args.batch_size,
         is_training=True,
         use_prefetcher=args.prefetcher,
+        no_aug=args.no_aug,
         re_prob=args.reprob,
         re_mode=args.remode,
         re_count=args.recount,
         re_split=args.resplit,
+        scale=args.scale,
+        ratio=args.ratio,
+        hflip=args.hflip,
+        vflip=args.vflip,
         color_jitter=args.color_jitter,
         auto_augment=args.aa,
         num_aug_splits=num_aug_splits,
-        interpolation=args.train_interpolation,
+        interpolation=train_interpolation,
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
         distributed=args.distributed,
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
+        use_multi_epochs_loader=args.use_multi_epochs_loader
     )
 
     eval_dir = os.path.join(args.data, 'val')
     if not os.path.isdir(eval_dir):
         eval_dir = os.path.join(args.data, 'validation')
         if not os.path.isdir(eval_dir):
-            logging.error('Validation folder does not exist at: {}'.format(eval_dir))
+            _logger.error('Validation folder does not exist at: {}'.format(eval_dir))
             exit(1)
     dataset_eval = Dataset(eval_dir)
 
@@ -450,7 +496,7 @@ def main():
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if args.local_rank == 0:
-                    logging.info("Distributing BatchNorm running means and vars")
+                    _logger.info("Distributing BatchNorm running means and vars")
                 distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
             eval_metrics = validate(model, loader_eval, validate_loss_fn, args)
@@ -481,7 +527,7 @@ def main():
     except KeyboardInterrupt:
         pass
     if best_metric is not None:
-        logging.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
+        _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
 
 
 def train_epoch(
@@ -541,7 +587,7 @@ def train_epoch(
                 losses_m.update(reduced_loss.item(), input.size(0))
 
             if args.local_rank == 0:
-                logging.info(
+                _logger.info(
                     'Train: {} [{:>4d}/{} ({:>3.0f}%)]  '
                     'Loss: {loss.val:>9.6f} ({loss.avg:>6.4f})  '
                     'Time: {batch_time.val:.3f}s, {rate:>7.2f}/s  '
@@ -585,8 +631,8 @@ def train_epoch(
 def validate(model, loader, loss_fn, args, log_suffix=''):
     batch_time_m = AverageMeter()
     losses_m = AverageMeter()
-    prec1_m = AverageMeter()
-    prec5_m = AverageMeter()
+    top1_m = AverageMeter()
+    top5_m = AverageMeter()
 
     model.eval()
 
@@ -610,36 +656,35 @@ def validate(model, loader, loss_fn, args, log_suffix=''):
                 target = target[0:target.size(0):reduce_factor]
 
             loss = loss_fn(output, target)
-            prec1, prec5 = accuracy(output, target, topk=(1, 5))
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
             if args.distributed:
                 reduced_loss = reduce_tensor(loss.data, args.world_size)
-                prec1 = reduce_tensor(prec1, args.world_size)
-                prec5 = reduce_tensor(prec5, args.world_size)
+                acc1 = reduce_tensor(acc1, args.world_size)
+                acc5 = reduce_tensor(acc5, args.world_size)
             else:
                 reduced_loss = loss.data
 
             torch.cuda.synchronize()
 
             losses_m.update(reduced_loss.item(), input.size(0))
-            prec1_m.update(prec1.item(), output.size(0))
-            prec5_m.update(prec5.item(), output.size(0))
+            top1_m.update(acc1.item(), output.size(0))
+            top5_m.update(acc5.item(), output.size(0))
 
             batch_time_m.update(time.time() - end)
             end = time.time()
             if args.local_rank == 0 and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
-                logging.info(
+                _logger.info(
                     '{0}: [{1:>4d}/{2}]  '
                     'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
-                    'Prec@1: {top1.val:>7.4f} ({top1.avg:>7.4f})  '
-                    'Prec@5: {top5.val:>7.4f} ({top5.avg:>7.4f})'.format(
-                        log_name, batch_idx, last_idx,
-                        batch_time=batch_time_m, loss=losses_m,
-                        top1=prec1_m, top5=prec5_m))
+                    'Acc@1: {top1.val:>7.4f} ({top1.avg:>7.4f})  '
+                    'Acc@5: {top5.val:>7.4f} ({top5.avg:>7.4f})'.format(
+                        log_name, batch_idx, last_idx, batch_time=batch_time_m,
+                        loss=losses_m, top1=top1_m, top5=top5_m))
 
-    metrics = OrderedDict([('loss', losses_m.avg), ('prec1', prec1_m.avg), ('prec5', prec5_m.avg)])
+    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
 
     return metrics
 

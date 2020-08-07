@@ -8,7 +8,7 @@ CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Fea
 Code Reference:
 CutMix: https://github.com/clovaai/CutMix-PyTorch
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import numpy as np
@@ -84,8 +84,8 @@ def cutmix_batch(input, target, alpha=0.2, num_classes=1000, smoothing=0.1, disa
 def _resolve_mode(mode):
     mode = MixupMode.from_str(mode) if isinstance(mode, str) else mode
     if mode == MixupMode.RANDOM:
-        mode = MixupMode(np.random.rand() > 0.5)
-    return mode # will be one of cutmix or mixup
+        mode = MixupMode(np.random.rand() > 0.7)
+    return mode  # will be one of cutmix or mixup
 
 
 def mix_batch(
@@ -108,61 +108,8 @@ class FastCollateMixup:
         self.num_classes = num_classes
         self.mode = MixupMode.from_str(mode) if isinstance(mode, str) else mode
         self.mixup_enabled = True
-        self.correct_lam = False  # correct lambda based on clipped area for cutmix
+        self.correct_lam = True  # correct lambda based on clipped area for cutmix
         self.ratio_minmax = None  # (0.2, 0.8)
-
-    def _do_mix(self, tensor, batch):
-        batch_size = len(batch)
-        lam_out = torch.ones(batch_size)
-        for i in range(batch_size//2):
-            j = batch_size - i - 1
-            lam = 1.
-            if self.mixup_enabled:
-                lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
-
-            if _resolve_mode(self.mode) == MixupMode.CUTMIX:
-                mixed_i, mixed_j = batch[i][0].astype(np.float32), batch[j][0].astype(np.float32)
-                ratio = calc_ratio(lam, self.ratio_minmax)
-                if lam != 1:
-                    yl, yh, xl, xh = rand_bbox(tensor.size(), ratio)
-                    mixed_i[:, yl:yh, xl:xh] = batch[j][0][:, yl:yh, xl:xh].astype(np.float32)
-                    mixed_j[:, yl:yh, xl:xh] = batch[i][0][:, yl:yh, xl:xh].astype(np.float32)
-                    if self.correct_lam:
-                        lam_corrected = (yh - yl) * (xh - xl) / (tensor.shape[-2] * tensor.shape[-1])
-                        lam_out[i] -= lam_corrected
-                        lam_out[j] -= lam_corrected
-                    else:
-                        lam_out[i] = lam
-                        lam_out[j] = lam
-            else:
-                mixed_i = batch[i][0].astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
-                mixed_j = batch[j][0].astype(np.float32) * lam + batch[i][0].astype(np.float32) * (1 - lam)
-                lam_out[i] = lam
-                lam_out[j] = lam
-            np.round(mixed_i, out=mixed_i)
-            np.round(mixed_j, out=mixed_j)
-            tensor[i] += torch.from_numpy(mixed_i.astype(np.uint8))
-            tensor[j] += torch.from_numpy(mixed_j.astype(np.uint8))
-        return lam_out.unsqueeze(1)
-
-    def __call__(self, batch):
-        batch_size = len(batch)
-        assert batch_size % 2 == 0, 'Batch size should be even when using this'
-        tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
-        lam = self._do_mix(tensor, batch)
-        target = torch.tensor([b[1] for b in batch], dtype=torch.int64)
-        target = mixup_target(target, self.num_classes, lam, self.label_smoothing, device='cpu')
-
-        return tensor, target
-
-
-class FastCollateMixupElementwise(FastCollateMixup):
-    """Fast Collate Mixup that applies different params to each batch element
-
-    NOTE this is for experimentation, may remove at some point
-    """
-    def __init__(self, mixup_alpha=1., label_smoothing=0.1, num_classes=1000, mode=MixupMode.MIXUP):
-        super(FastCollateMixupElementwise, self).__init__(mixup_alpha, label_smoothing, num_classes, mode)
 
     def _do_mix(self, tensor, batch):
         batch_size = len(batch)
@@ -189,6 +136,16 @@ class FastCollateMixupElementwise(FastCollateMixup):
             np.round(mixed, out=mixed)
             tensor[i] += torch.from_numpy(mixed.astype(np.uint8))
         return lam_out.unsqueeze(1)
+
+    def __call__(self, batch):
+        batch_size = len(batch)
+        assert batch_size % 2 == 0, 'Batch size should be even when using this'
+        tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
+        lam = self._do_mix(tensor, batch)
+        target = torch.tensor([b[1] for b in batch], dtype=torch.int64)
+        target = mixup_target(target, self.num_classes, lam, self.label_smoothing, device='cpu')
+
+        return tensor, target
 
 
 class FastCollateMixupBatchwise(FastCollateMixup):

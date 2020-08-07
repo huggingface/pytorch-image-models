@@ -3,7 +3,7 @@
 
 An example inference script that outputs top-k class ids for images in a folder into a csv.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import os
 import time
@@ -17,6 +17,8 @@ from timm.data import Dataset, create_loader, resolve_data_config
 from timm.utils import AverageMeter, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
+_logger = logging.getLogger('inference')
+
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Inference')
 parser.add_argument('data', metavar='DIR',
@@ -29,7 +31,7 @@ parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--img-size', default=224, type=int,
+parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
@@ -67,7 +69,7 @@ def main():
         pretrained=args.pretrained,
         checkpoint_path=args.checkpoint)
 
-    logging.info('Model %s created, param count: %d' %
+    _logger.info('Model %s created, param count: %d' %
                  (args.model, sum([m.numel() for m in model.parameters()])))
 
     config = resolve_data_config(vars(args), model=model)
@@ -107,7 +109,7 @@ def main():
             end = time.time()
 
             if batch_idx % args.log_freq == 0:
-                logging.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
+                _logger.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
                     batch_idx, len(loader), batch_time=batch_time))
 
     topk_ids = np.concatenate(topk_ids, axis=0).squeeze()

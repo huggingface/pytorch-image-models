@@ -1,3 +1,12 @@
+""" RMSProp modified to behave like Tensorflow impl
+
+Originally cut & paste from PyTorch RMSProp
+https://github.com/pytorch/pytorch/blob/063946d2b3f3f1e953a2a3b54e0b34f1393de295/torch/optim/rmsprop.py
+Licensed under BSD-Clause 3 (ish), https://github.com/pytorch/pytorch/blob/master/LICENSE
+
+Modifications Copyright 2020 Ross Wightman
+"""
+
 import torch
 from torch.optim import Optimizer
 
@@ -6,7 +15,12 @@ class RMSpropTF(Optimizer):
     """Implements RMSprop algorithm (TensorFlow style epsilon)
 
     NOTE: This is a direct cut-and-paste of PyTorch RMSprop with eps applied before sqrt
-    to closer match Tensorflow for matching hyper-params.
+    and a few other modifications to closer match Tensorflow for matching hyper-params.
+
+    Noteworthy changes include:
+    1. Epsilon applied inside square-root
+    2. square_avg initialized to ones
+    3. LR scaling of update accumulated in momentum buffer
 
     Proposed by G. Hinton in his
     `course <http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf>`_.

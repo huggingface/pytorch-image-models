@@ -1,14 +1,13 @@
 """ Conv2d w/ Same Padding
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union, List, Tuple, Optional, Callable
-import math
+from typing import Tuple, Optional
 
-from .padding import get_padding, pad_same, is_static_pad
+from .padding import pad_same, get_padding_value
 
 
 def conv2d_same(
@@ -29,29 +28,6 @@ class Conv2dSame(nn.Conv2d):
 
     def forward(self, x):
         return conv2d_same(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
-
-
-def get_padding_value(padding, kernel_size, **kwargs) -> Tuple[Tuple, bool]:
-    dynamic = False
-    if isinstance(padding, str):
-        # for any string padding, the padding will be calculated for you, one of three ways
-        padding = padding.lower()
-        if padding == 'same':
-            # TF compatible 'SAME' padding, has a performance and GPU memory allocation impact
-            if is_static_pad(kernel_size, **kwargs):
-                # static case, no extra overhead
-                padding = get_padding(kernel_size, **kwargs)
-            else:
-                # dynamic 'SAME' padding, has runtime/GPU memory overhead
-                padding = 0
-                dynamic = True
-        elif padding == 'valid':
-            # 'VALID' padding, same as padding=0
-            padding = 0
-        else:
-            # Default to PyTorch style 'same'-ish symmetric padding
-            padding = get_padding(kernel_size, **kwargs)
-    return padding, dynamic
 
 
 def create_conv2d_pad(in_chs, out_chs, kernel_size, **kwargs):

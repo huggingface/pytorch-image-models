@@ -1,6 +1,6 @@
 """ Layer/Module Helpers
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from itertools import repeat
 from torch._six import container_abcs
@@ -19,7 +19,7 @@ tup_single = _ntuple(1)
 tup_pair = _ntuple(2)
 tup_triple = _ntuple(3)
 tup_quadruple = _ntuple(4)
-
+ntup = _ntuple
 
 
 

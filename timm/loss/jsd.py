@@ -12,7 +12,7 @@ class JsdCrossEntropy(nn.Module):
     From paper: 'AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty -
     https://arxiv.org/abs/1912.02781
 
-    Hacked together by Ross Wightman
+    Hacked together by / Copyright 2020 Ross Wightman
     """
     def __init__(self, num_splits=3, alpha=12, smoothing=0.1):
         super().__init__()

@@ -1,12 +1,16 @@
 """ Test Time Pooling (Average-Max Pool)
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import logging
 from torch import nn
 import torch.nn.functional as F
+
 from .adaptive_avgmax_pool import adaptive_avgmax_pool2d
+
+
+_logger = logging.getLogger(__name__)
 
 
 class TestTimePoolHead(nn.Module):
@@ -39,7 +43,7 @@ def apply_test_time_pool(model, config, args):
     if not args.no_test_pool and \
             config['input_size'][-1] > model.default_cfg['input_size'][-1] and \
             config['input_size'][-2] > model.default_cfg['input_size'][-2]:
-        logging.info('Target input size %s > pretrained default %s, using test time pooling' %
+        _logger.info('Target input size %s > pretrained default %s, using test time pooling' %
                      (str(config['input_size'][-2:]), str(model.default_cfg['input_size'][-2:])))
         model = TestTimePoolHead(model, original_pool=model.default_cfg['pool_size'])
         test_time_pool = True

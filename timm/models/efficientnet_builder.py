@@ -1,13 +1,29 @@
+""" EfficientNet, MobileNetV3, etc Builder
+
+Assembles EfficieNet and related network feature blocks from string definitions.
+Handles stride, dilation calculations, and selects feature extraction points.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 import logging
 import math
 import re
-from collections.__init__ import OrderedDict
 from copy import deepcopy
 
 import torch.nn as nn
-from .layers import CondConv2d, get_condconv_initializer
-from .layers.activations import HardSwish, Swish
+
 from .efficientnet_blocks import *
+from .layers import CondConv2d, get_condconv_initializer
+
+__all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"]
+
+_logger = logging.getLogger(__name__)
+
+
+def _log_info_if(msg, condition):
+    if condition:
+        _logger.info(msg)
 
 
 def _parse_ksize(ss):
@@ -57,13 +73,13 @@ def _decode_block_str(block_str):
             key = op[0]
             v = op[1:]
             if v == 're':
-                value = nn.ReLU
+                value = get_act_layer('relu')
             elif v == 'r6':
-                value = nn.ReLU6
+                value = get_act_layer('relu6')
             elif v == 'hs':
-                value = HardSwish
+                value = get_act_layer('hard_swish')
             elif v == 'sw':
-                value = Swish
+                value = get_act_layer('swish')
             else:
                 continue
             options[key] = value
@@ -174,7 +190,7 @@ def _scale_stage_depth(stack_args, repeats, depth_multiplier=1.0, depth_trunc='c
     return sa_scaled
 
 
-def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_multiplier=1):
+def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_multiplier=1, fix_first_last=False):
     arch_args = []
     for stack_idx, block_strings in enumerate(arch_def):
         assert isinstance(block_strings, list)
@@ -187,7 +203,10 @@ def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_
                 ba['num_experts'] *= experts_multiplier
             stack_args.append(ba)
             repeats.append(rep)
-        arch_args.append(_scale_stage_depth(stack_args, repeats, depth_multiplier, depth_trunc))
+        if fix_first_last and (stack_idx == 0 or stack_idx == len(arch_def) - 1):
+            arch_args.append(_scale_stage_depth(stack_args, repeats, 1.0, depth_trunc))
+        else:
+            arch_args.append(_scale_stage_depth(stack_args, repeats, depth_multiplier, depth_trunc))
     return arch_args
 
 
@@ -202,7 +221,7 @@ class EfficientNetBuilder:
     """
     def __init__(self, channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  output_stride=32, pad_type='', act_layer=None, se_kwargs=None,
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_connect_rate=0., feature_location='',
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0., feature_location='',
                  verbose=False):
         self.channel_multiplier = channel_multiplier
         self.channel_divisor = channel_divisor
@@ -213,20 +232,24 @@ class EfficientNetBuilder:
         self.se_kwargs = se_kwargs
         self.norm_layer = norm_layer
         self.norm_kwargs = norm_kwargs
-        self.drop_connect_rate = drop_connect_rate
+        self.drop_path_rate = drop_path_rate
+        if feature_location == 'depthwise':
+            # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
+            _logger.warning("feature_location=='depthwise' is deprecated, using 'expansion'")
+            feature_location = 'expansion'
         self.feature_location = feature_location
-        assert feature_location in ('pre_pwl', 'post_exp', '')
+        assert feature_location in ('bottleneck', 'expansion', '')
         self.verbose = verbose
 
         # state updated during build, consumed by model
         self.in_chs = None
-        self.features = OrderedDict()
+        self.features = []
 
     def _round_channels(self, chs):
         return round_channels(chs, self.channel_multiplier, self.channel_divisor, self.channel_min)
 
     def _make_block(self, ba, block_idx, block_count):
-        drop_connect_rate = self.drop_connect_rate * block_idx / block_count
+        drop_path_rate = self.drop_path_rate * block_idx / block_count
         bt = ba.pop('block_type')
         ba['in_chs'] = self.in_chs
         ba['out_chs'] = self._round_channels(ba['out_chs'])
@@ -240,29 +263,25 @@ class EfficientNetBuilder:
         ba['act_layer'] = ba['act_layer'] if ba['act_layer'] is not None else self.act_layer
         assert ba['act_layer'] is not None
         if bt == 'ir':
-            ba['drop_connect_rate'] = drop_connect_rate
+            ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
-            if self.verbose:
-                logging.info('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)))
+            _log_info_if('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             if ba.get('num_experts', 0) > 0:
                 block = CondConvResidual(**ba)
             else:
                 block = InvertedResidual(**ba)
         elif bt == 'ds' or bt == 'dsa':
-            ba['drop_connect_rate'] = drop_connect_rate
+            ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
-            if self.verbose:
-                logging.info('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)))
+            _log_info_if('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = DepthwiseSeparableConv(**ba)
         elif bt == 'er':
-            ba['drop_connect_rate'] = drop_connect_rate
+            ba['drop_path_rate'] = drop_path_rate
             ba['se_kwargs'] = self.se_kwargs
-            if self.verbose:
-                logging.info('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)))
+            _log_info_if('  EdgeResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = EdgeResidual(**ba)
         elif bt == 'cn':
-            if self.verbose:
-                logging.info('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)))
+            _log_info_if('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = ConvBnAct(**ba)
         else:
             assert False, 'Uknkown block type (%s) while building model.' % bt
@@ -279,49 +298,41 @@ class EfficientNetBuilder:
         Return:
              List of block stacks (each stack wrapped in nn.Sequential)
         """
-        if self.verbose:
-            logging.info('Building model trunk with %d stages...' % len(model_block_args))
+        _log_info_if('Building model trunk with %d stages...' % len(model_block_args), self.verbose)
         self.in_chs = in_chs
         total_block_count = sum([len(x) for x in model_block_args])
         total_block_idx = 0
         current_stride = 2
         current_dilation = 1
-        feature_idx = 0
         stages = []
-        # outer list of block_args defines the stacks ('stages' by some conventions)
-        for stage_idx, stage_block_args in enumerate(model_block_args):
-            last_stack = stage_idx == (len(model_block_args) - 1)
-            if self.verbose:
-                logging.info('Stack: {}'.format(stage_idx))
-            assert isinstance(stage_block_args, list)
+        if model_block_args[0][0]['stride'] > 1:
+            # if the first block starts with a stride, we need to extract first level feat from stem
+            feature_info = dict(
+                module='act1', num_chs=in_chs, stage=0, reduction=current_stride,
+                hook_type='forward' if self.feature_location != 'bottleneck' else '')
+            self.features.append(feature_info)
+
+        # outer list of block_args defines the stacks
+        for stack_idx, stack_args in enumerate(model_block_args):
+            last_stack = stack_idx + 1 == len(model_block_args)
+            _log_info_if('Stack: {}'.format(stack_idx), self.verbose)
+            assert isinstance(stack_args, list)
 
             blocks = []
-            # each stack (stage) contains a list of block arguments
-            for block_idx, block_args in enumerate(stage_block_args):
-                last_block = block_idx == (len(stage_block_args) - 1)
-                extract_features = ''  # No features extracted
-                if self.verbose:
-                    logging.info(' Block: {}'.format(block_idx))
+            # each stack (stage of blocks) contains a list of block arguments
+            for block_idx, block_args in enumerate(stack_args):
+                last_block = block_idx + 1 == len(stack_args)
+                _log_info_if(' Block: {}'.format(block_idx), self.verbose)
 
-                # Sort out stride, dilation, and feature extraction details
                 assert block_args['stride'] in (1, 2)
-                if block_idx >= 1:
-                    # only the first block in any stack can have a stride > 1
+                if block_idx >= 1:   # only the first block in any stack can have a stride > 1
                     block_args['stride'] = 1
 
-                do_extract = False
-                if self.feature_location == 'pre_pwl':
-                    if last_block:
-                        next_stage_idx = stage_idx + 1
-                        if next_stage_idx >= len(model_block_args):
-                            do_extract = True
-                        else:
-                            do_extract = model_block_args[next_stage_idx][0]['stride'] > 1
-                elif self.feature_location == 'post_exp':
-                    if block_args['stride'] > 1 or (last_stack and last_block) :
-                        do_extract = True
-                if do_extract:
-                    extract_features = self.feature_location
+                extract_features = False
+                if last_block:
+                    next_stack_idx = stack_idx + 1
+                    extract_features = next_stack_idx >= len(model_block_args) or \
+                        model_block_args[next_stack_idx][0]['stride'] > 1
 
                 next_dilation = current_dilation
                 if block_args['stride'] > 1:
@@ -329,9 +340,8 @@ class EfficientNetBuilder:
                     if next_output_stride > self.output_stride:
                         next_dilation = current_dilation * block_args['stride']
                         block_args['stride'] = 1
-                        if self.verbose:
-                            logging.info('  Converting stride to dilation to maintain output_stride=={}'.format(
-                                self.output_stride))
+                        _log_info_if('  Converting stride to dilation to maintain output_stride=={}'.format(
+                            self.output_stride), self.verbose)
                     else:
                         current_stride = next_output_stride
                 block_args['dilation'] = current_dilation
@@ -344,30 +354,25 @@ class EfficientNetBuilder:
 
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
-                    feature_module = block.feature_module(extract_features)
-                    if feature_module:
-                        feature_module = 'blocks.{}.{}.'.format(stage_idx, block_idx) + feature_module
-                    feature_channels = block.feature_channels(extract_features)
-                    self.features[feature_idx] = dict(
-                        name=feature_module,
-                        num_chs=feature_channels
-                    )
-                    feature_idx += 1
+                    feature_info = dict(
+                        stage=stack_idx + 1, reduction=current_stride, **block.feature_info(self.feature_location))
+                    module_name = f'blocks.{stack_idx}.{block_idx}'
+                    leaf_name = feature_info.get('module', '')
+                    feature_info['module'] = '.'.join([module_name, leaf_name]) if leaf_name else module_name
+                    self.features.append(feature_info)
 
                 total_block_idx += 1  # incr global block idx (across all stacks)
             stages.append(nn.Sequential(*blocks))
         return stages
 
 
-def _init_weight_goog(m, n='', fix_group_fanout=False):
+def _init_weight_goog(m, n='', fix_group_fanout=True):
     """ Weight initialization as per Tensorflow official implementations.
 
     Args:
         m (nn.Module): module to init
         n (str): module name
-        fix_group_fanout (bool): enable correct fanout calculation w/ group convs
-
-    FIXME change fix_group_fanout to default to True if experiments show better training results
+        fix_group_fanout (bool): enable correct (matching Tensorflow TPU impl) fanout calculation w/ group convs
 
     Handles layers in EfficientNet, EfficientNet-CondConv, MixNet, MnasNet, MobileNetV3, etc:
     * https://github.com/tensorflow/tpu/blob/master/models/official/mnasnet/mnasnet_model.py

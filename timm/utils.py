@@ -1,3 +1,8 @@
+""" Common training and validation utilities
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 from copy import deepcopy
 
 import torch
@@ -9,6 +14,7 @@ import glob
 import csv
 import operator
 import logging
+import logging.handlers
 import numpy as np
 from collections import OrderedDict
 try:
@@ -19,6 +25,9 @@ except ImportError:
     has_apex = False
 
 from torch import distributed as dist
+
+
+_logger = logging.getLogger(__name__)
 
 
 def unwrap_model(model):
@@ -62,6 +71,12 @@ class CheckpointSaver:
 
     def save_checkpoint(self, model, optimizer, args, epoch, model_ema=None, metric=None, use_amp=False):
         assert epoch >= 0
+        tmp_save_path = os.path.join(self.checkpoint_dir, 'tmp' + self.extension)
+        last_save_path = os.path.join(self.checkpoint_dir, 'last' + self.extension)
+        self._save(tmp_save_path, model, optimizer, args, epoch, model_ema, metric, use_amp)
+        if os.path.exists(last_save_path):
+            os.unlink(last_save_path) # required for Windows support.
+        os.rename(tmp_save_path, last_save_path)
         worst_file = self.checkpoint_files[-1] if self.checkpoint_files else None
         if (len(self.checkpoint_files) < self.max_history
                 or metric is None or self.cmp(metric, worst_file[1])):
@@ -69,7 +84,7 @@ class CheckpointSaver:
                 self._cleanup_checkpoints(1)
             filename = '-'.join([self.save_prefix, str(epoch)]) + self.extension
             save_path = os.path.join(self.checkpoint_dir, filename)
-            self._save(save_path, model, optimizer, args, epoch, model_ema, metric, use_amp)
+            os.link(last_save_path, save_path)
             self.checkpoint_files.append((save_path, metric))
             self.checkpoint_files = sorted(
                 self.checkpoint_files, key=lambda x: x[1],
@@ -78,12 +93,15 @@ class CheckpointSaver:
             checkpoints_str = "Current checkpoints:\n"
             for c in self.checkpoint_files:
                 checkpoints_str += ' {}\n'.format(c)
-            logging.info(checkpoints_str)
+            _logger.info(checkpoints_str)
 
             if metric is not None and (self.best_metric is None or self.cmp(metric, self.best_metric)):
                 self.best_epoch = epoch
                 self.best_metric = metric
-                shutil.copyfile(save_path, os.path.join(self.checkpoint_dir, 'model_best' + self.extension))
+                best_save_path = os.path.join(self.checkpoint_dir, 'model_best' + self.extension)
+                if os.path.exists(best_save_path):
+                    os.unlink(best_save_path)
+                os.link(last_save_path, best_save_path)
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
@@ -112,10 +130,10 @@ class CheckpointSaver:
         to_delete = self.checkpoint_files[delete_index:]
         for d in to_delete:
             try:
-                logging.debug("Cleaning checkpoint: {}".format(d))
+                _logger.debug("Cleaning checkpoint: {}".format(d))
                 os.remove(d[0])
             except Exception as e:
-                logging.error("Exception '{}' while deleting checkpoint".format(e))
+                _logger.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
     def save_recovery(self, model, optimizer, args, epoch, model_ema=None, use_amp=False, batch_idx=0):
@@ -125,10 +143,10 @@ class CheckpointSaver:
         self._save(save_path, model, optimizer, args, epoch, model_ema, use_amp=use_amp)
         if os.path.exists(self.last_recovery_file):
             try:
-                logging.debug("Cleaning recovery: {}".format(self.last_recovery_file))
+                _logger.debug("Cleaning recovery: {}".format(self.last_recovery_file))
                 os.remove(self.last_recovery_file)
             except Exception as e:
-                logging.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
+                _logger.error("Exception '{}' while removing {}".format(e, self.last_recovery_file))
         self.last_recovery_file = self.curr_recovery_file
         self.curr_recovery_file = save_path
 
@@ -161,10 +179,9 @@ class AverageMeter:
 
 
 def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
+    """Computes the accuracy over the k top predictions for the specified values of k"""
     maxk = max(topk)
     batch_size = target.size(0)
-
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
     correct = pred.eq(target.view(1, -1).expand_as(pred))
@@ -271,9 +288,9 @@ class ModelEma:
                     name = k
                 new_state_dict[name] = v
             self.ema.load_state_dict(new_state_dict)
-            logging.info("Loaded state_dict_ema")
+            _logger.info("Loaded state_dict_ema")
         else:
-            logging.warning("Failed to find state_dict_ema, starting from loaded model weights")
+            _logger.warning("Failed to find state_dict_ema, starting from loaded model weights")
 
     def update(self, model):
         # correct a mismatch in state dict keys
@@ -299,8 +316,21 @@ class FormatterNoInfo(logging.Formatter):
         return logging.Formatter.format(self, record)
 
 
-def setup_default_logging(default_level=logging.INFO):
+def setup_default_logging(default_level=logging.INFO, log_path=''):
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(FormatterNoInfo())
     logging.root.addHandler(console_handler)
     logging.root.setLevel(default_level)
+    if log_path:
+        file_handler = logging.handlers.RotatingFileHandler(log_path, maxBytes=(1024 ** 2 * 2), backupCount=3)
+        file_formatter = logging.Formatter("%(asctime)s - %(name)20s: [%(levelname)8s] - %(message)s")
+        file_handler.setFormatter(file_formatter)
+        logging.root.addHandler(file_handler)
+
+
+def add_bool_arg(parser, name, default=False, help=''):
+    dest_name = name.replace('-', '_')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('--' + name, dest=dest_name, action='store_true', help=help)
+    group.add_argument('--no-' + name, dest=dest_name, action='store_false', help=help)
+    parser.set_defaults(**{dest_name: default})

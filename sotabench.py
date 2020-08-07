@@ -93,7 +93,7 @@ model_list = [
     _entry('semnasnet_100', 'MnasNet-A1', '1807.11626'),
     _entry('spnasnet_100', 'Single-Path NAS', '1904.02877',
            model_desc='Trained in PyTorch with SGD, cosine LR decay'),
-    _entry('mobilenetv3_rw', 'MobileNet V3-Large 1.0', '1905.02244',
+    _entry('mobilenetv3_large_100', 'MobileNet V3-Large 1.0', '1905.02244',
            model_desc='Trained in PyTorch with RMSProp, exponential LR decay, and hyper-params matching '
                       'paper as closely as possible.'),
 
@@ -123,7 +123,23 @@ model_list = [
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
 
     _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
+    _entry('skresnet34', 'SK-ResNet-34', '1903.06586'),
     _entry('skresnext50_32x4d', 'SKNet-50', '1903.06586'),
+
+    _entry('ecaresnetlight', 'ECA-ResNet-Light', '1910.03151',
+           model_desc='A tweaked ResNet50d with ECA attn.'),
+    _entry('ecaresnet50d', 'ECA-ResNet-50d', '1910.03151',
+           model_desc='A ResNet50d with ECA attn'),
+    _entry('ecaresnet101d', 'ECA-ResNet-101d', '1910.03151',
+           model_desc='A ResNet101d with ECA attn'),
+
+    _entry('resnetblur50', 'ResNet-Blur-50', '1904.11486'),
+
+    _entry('densenet121', 'DenseNet-121', '1608.06993'),
+    _entry('densenetblur121d', 'DenseNet-Blur-121D', '1904.11486',
+           model_desc='DenseNet with blur pooling and deep stem'),
+
+    _entry('ese_vovnet39b', 'VoVNet-39-V2', '1911.06667'),
 
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
@@ -190,12 +206,25 @@ model_list = [
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_cc_b1_8e', 'EfficientNet-CondConv-B1 8 experts', '1904.04971',
            model_desc='Ported from official Google AI Tensorflow weights'),
+
     _entry('tf_efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_em', 'EfficientNet-EdgeTPU-M', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientnet_el', 'EfficientNet-EdgeTPU-L', '1905.11946', batch_size=BATCH_SIZE//2,
            model_desc='Ported from official Google AI Tensorflow weights'),
+
+    _entry('tf_efficientnet_lite0', 'EfficientNet-Lite0', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_lite1', 'EfficientNet-Lite1', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_lite2', 'EfficientNet-Lite2', '1905.11946',
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_lite3', 'EfficientNet-Lite3', '1905.11946', batch_size=BATCH_SIZE // 2,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+    _entry('tf_efficientnet_lite4', 'EfficientNet-Lite4', '1905.11946', batch_size=BATCH_SIZE // 2,
+           model_desc='Ported from official Google AI Tensorflow weights'),
+
     _entry('tf_inception_v3', 'Inception V3', '1512.00567', model_desc='Ported from official Tensorflow weights'),
     _entry('tf_mixnet_l', 'MixNet-L', '1907.09595', model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_mixnet_m', 'MixNet-M', '1907.09595', model_desc='Ported from official Google AI Tensorflow weights'),
@@ -366,6 +395,52 @@ model_list = [
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
     _entry('selecsls60b', 'SelecSLS-60_B', '1907.00837',
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
+
+    ## ResNeSt official impl weights
+    _entry('resnest14d', 'ResNeSt-14', '2004.08955',
+           model_desc='Originally from GluonCV'),
+    _entry('resnest26d', 'ResNeSt-26', '2004.08955',
+           model_desc='Originally from GluonCV'),
+    _entry('resnest50d', 'ResNeSt-50', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest101e', 'ResNeSt-101', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest200e', 'ResNeSt-200', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest269e', 'ResNeSt-269', '2004.08955', batch_size=BATCH_SIZE // 2,
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest50d_4s2x40d', 'ResNeSt-50 4s2x40d', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest50d_1s4x24d', 'ResNeSt-50 1s4x24d', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+
+    ## RegNet official impl weighs
+    _entry('regnetx_002', 'RegNetX-200MF', '2003.13678'),
+    _entry('regnetx_004', 'RegNetX-400MF', '2003.13678'),
+    _entry('regnetx_006', 'RegNetX-600MF', '2003.13678'),
+    _entry('regnetx_008', 'RegNetX-800MF', '2003.13678'),
+    _entry('regnetx_016', 'RegNetX-1.6GF', '2003.13678'),
+    _entry('regnetx_032', 'RegNetX-3.2GF', '2003.13678'),
+    _entry('regnetx_040', 'RegNetX-4.0GF', '2003.13678'),
+    _entry('regnetx_064', 'RegNetX-6.4GF', '2003.13678'),
+    _entry('regnetx_080', 'RegNetX-8.0GF', '2003.13678'),
+    _entry('regnetx_120', 'RegNetX-12GF', '2003.13678'),
+    _entry('regnetx_160', 'RegNetX-16GF', '2003.13678'),
+    _entry('regnetx_320', 'RegNetX-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
+
+    _entry('regnety_002', 'RegNetY-200MF', '2003.13678'),
+    _entry('regnety_004', 'RegNetY-400MF', '2003.13678'),
+    _entry('regnety_006', 'RegNetY-600MF', '2003.13678'),
+    _entry('regnety_008', 'RegNetY-800MF', '2003.13678'),
+    _entry('regnety_016', 'RegNetY-1.6GF', '2003.13678'),
+    _entry('regnety_032', 'RegNetY-3.2GF', '2003.13678'),
+    _entry('regnety_040', 'RegNetY-4.0GF', '2003.13678'),
+    _entry('regnety_064', 'RegNetY-6.4GF', '2003.13678'),
+    _entry('regnety_080', 'RegNetY-8.0GF', '2003.13678'),
+    _entry('regnety_120', 'RegNetY-12GF', '2003.13678'),
+    _entry('regnety_160', 'RegNetY-16GF', '2003.13678'),
+    _entry('regnety_320', 'RegNetY-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
+
 ]
 
 for m in model_list:

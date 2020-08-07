@@ -1,3 +1,7 @@
+""" Quick n Simple Image Folder, Tarfile based DataSet
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -35,14 +39,13 @@ def find_images_and_targets(folder, types=IMG_EXTENSIONS, class_to_idx=None, lea
         unique_labels = set(labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    images_and_targets = zip(filenames, [class_to_idx[l] for l in labels])
+    images_and_targets = [(f, class_to_idx[l]) for f, l in zip(filenames, labels) if l in class_to_idx]
     if sort:
         images_and_targets = sorted(images_and_targets, key=lambda k: natural_key(k[0]))
     return images_and_targets, class_to_idx
 
 
 def load_class_map(filename, root=''):
-    class_to_idx = {}
     class_map_path = filename
     if not os.path.exists(class_map_path):
         class_map_path = os.path.join(root, filename)
@@ -70,8 +73,8 @@ class Dataset(data.Dataset):
             class_to_idx = load_class_map(class_map, root)
         images, class_to_idx = find_images_and_targets(root, class_to_idx=class_to_idx)
         if len(images) == 0:
-            raise(RuntimeError("Found 0 images in subfolders of: " + root + "\n"
-                               "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
+            raise RuntimeError(f'Found 0 images in subfolders of {root}. '
+                               f'Supported image extensions are {", ".join(IMG_EXTENSIONS)}')
         self.root = root
         self.samples = images
         self.imgs = self.samples  # torchvision ImageFolder compat
@@ -120,7 +123,7 @@ def _extract_tar_info(tarfile, class_to_idx=None, sort=True):
         unique_labels = set(labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    tarinfo_and_targets = zip(files, [class_to_idx[l] for l in labels])
+    tarinfo_and_targets = [(f, class_to_idx[l]) for f, l in zip(files, labels) if l in class_to_idx]
     if sort:
         tarinfo_and_targets = sorted(tarinfo_and_targets, key=lambda k: natural_key(k[0].path))
     return tarinfo_and_targets, class_to_idx
@@ -137,6 +140,7 @@ class DatasetTar(data.Dataset):
         self.root = root
         with tarfile.open(root) as tf:  # cannot keep this open across processes, reopen later
             self.samples, self.class_to_idx = _extract_tar_info(tf, class_to_idx)
+        self.imgs = self.samples
         self.tarfile = None  # lazy init in __getitem__
         self.load_bytes = load_bytes
         self.transform = transform

@@ -1,3 +1,12 @@
+""" Tensorflow Preprocessing Adapter
+
+Allows use of Tensorflow preprocessing pipeline in PyTorch Transform
+
+Copyright of original Tensorflow code below.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 # Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

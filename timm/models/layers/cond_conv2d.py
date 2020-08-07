@@ -3,7 +3,7 @@
 Paper: CondConv: Conditionally Parameterized Convolutions for Efficient Inference
 (https://arxiv.org/abs/1904.04971)
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import math
@@ -14,7 +14,8 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from .helpers import tup_pair
-from .conv2d_same import get_padding_value, conv2d_same
+from .conv2d_same import conv2d_same
+from .padding import get_padding_value
 
 
 def get_condconv_initializer(initializer, num_experts, expert_shape):
@@ -37,7 +38,7 @@ class CondConv2d(nn.Module):
     Grouped convolution hackery for parallel execution of the per-sample kernel filters inspired by this discussion:
     https://github.com/pytorch/pytorch/issues/17983
     """
-    __constants__ = ['bias', 'in_channels', 'out_channels', 'dynamic_padding']
+    __constants__ = ['in_channels', 'out_channels', 'dynamic_padding']
 
     def __init__(self, in_channels, out_channels, kernel_size=3,
                  stride=1, padding='', dilation=1, groups=1, bias=False, num_experts=4):
