@@ -231,9 +231,9 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
         if self.batch_sampler is None:
-            self.sampler = RepeatSampler(self.sampler)
+            self.sampler = _RepeatSampler(self.sampler)
         else:
-            self.batch_sampler = RepeatSampler(self.batch_sampler)
+            self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
         self.iterator = super().__iter__()
 
