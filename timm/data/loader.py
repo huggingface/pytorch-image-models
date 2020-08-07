@@ -5,6 +5,7 @@ https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#d
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+import warnings
 
 import torch.utils.data
 import numpy as np
@@ -246,6 +247,8 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         # It's inefficient but I can't come up with a better way to do this.
         # Probably avoiding this class completely is more efficient if you're skipping a bunch of items in every epoch.
         for _ in range(self._items_to_consume - 1 - self._last_consumed_item):
+            warnings.warn("Consuming the rest of the sampler items from a previous call. "
+                          "Consider not using MultiEpochsDataLoader as it may take a lot of time.")
             next(self.iterator)
 
         self._items_to_consume = len(self)
