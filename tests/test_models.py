@@ -112,7 +112,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
 if 'GITHUB_ACTIONS' not in os.environ:
     @pytest.mark.timeout(120)
-    @pytest.mark.parametrize('model_name', list_models())
+    @pytest.mark.parametrize('model_name', list_models(pretrained=True))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_load_pretrained(model_name, batch_size):
         """Run a single forward pass with each model"""
