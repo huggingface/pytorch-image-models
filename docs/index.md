@@ -30,7 +30,7 @@ Pretrained models can be loaded using `timm.create_model`
 ```python
 import timm
 
-m = timm.create_model('mobilenetv3_100', pretrained=True)
+m = timm.create_model('mobilenetv3_large_100', pretrained=True)
 m.eval()
 ```
 
