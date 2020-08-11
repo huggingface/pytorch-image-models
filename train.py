@@ -157,8 +157,16 @@ parser.add_argument('--resplit', action='store_true', default=False,
                     help='Do not random erase first (clean) augmentation split')
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
-parser.add_argument('--mixup-mode', type=str, default='mixup',
-                    help='Mixup mode. One of "mixup", "cutmix", "random" (default: "mixup")')
+parser.add_argument('--cutmix', type=float, default=0.0,
+                    help='cutmix alpha, cutmix enabled if > 0. (default: 0.)')
+parser.add_argument('--cutmix-minmax', type=float, nargs='+', default=None,
+                    help='cutmix min/max ratio, overrides alpha and enables cutmix if set (default: None)')
+parser.add_argument('--mixup-prob', type=float, default=1.0,
+                    help='Probability of performing mixup or cutmix when either/both is enabled')
+parser.add_argument('--mixup-switch-prob', type=float, default=0.5,
+                    help='Probability of switching to cutmix when both mixup and cutmix enabled')
+parser.add_argument('--mixup-elem', action='store_true', default=False,
+                    help='Apply mixup/cutmix params uniquely per batch element instead of per batch.')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                     help='Turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
@@ -390,9 +398,12 @@ def main():
     dataset_train = Dataset(train_dir)
 
     collate_fn = None
-    if args.prefetcher and args.mixup > 0:
+    if args.prefetcher and (args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None):
         assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
-        collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes, args.mixup_mode)
+        collate_fn = FastCollateMixup(
+            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, elementwise=args.mixup_elem,
+            label_smoothing=args.smoothing, num_classes=args.num_classes)
 
     if num_aug_splits > 1:
         dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
@@ -555,8 +566,9 @@ def train_epoch(
             if args.mixup > 0.:
                 input, target = mix_batch(
                     input, target,
-                    alpha=args.mixup, num_classes=args.num_classes, smoothing=args.smoothing,
-                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch, mode=args.mixup_mode)
+                    mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, prob=args.mixup_prob,
+                    switch_prob=args.mixup_switch_prob, num_classes=args.num_classes, smoothing=args.smoothing,
+                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch)
 
         output = model(input)
 
