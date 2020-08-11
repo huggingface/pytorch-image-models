@@ -25,7 +25,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (10, 10),
         'crop_pct': 0.903, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'stem.0', 'classifier': 'head.fc',
+        'first_conv': 'stem.0.conv', 'classifier': 'head.fc',
         **kwargs
     }
 
