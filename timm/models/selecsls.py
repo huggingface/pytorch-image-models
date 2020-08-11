@@ -29,7 +29,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (4, 4),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem', 'classifier': 'fc',
+        'first_conv': 'stem.0', 'classifier': 'fc',
         **kwargs
     }
 

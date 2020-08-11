@@ -36,7 +36,8 @@ default_cfgs = {
     'skresnet34': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet34_ra-bdc0ccde.pth'),
     'skresnet50': _cfg(),
-    'skresnet50d': _cfg(),
+    'skresnet50d': _cfg(
+        first_conv='conv1.0'),
     'skresnext50_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnext50_ra-f40e40bf.pth'),
 }

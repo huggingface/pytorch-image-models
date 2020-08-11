@@ -42,13 +42,15 @@ default_cfgs = {
         interpolation='bicubic'),
     'resnet26d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26d-69e92c46.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'resnet50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth',
         interpolation='bicubic'),
     'resnet50d': _cfg(
         url='',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
     'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
     'tv_resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
@@ -62,7 +64,8 @@ default_cfgs = {
         interpolation='bicubic'),
     'resnext50d_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50d_32x4d-103e99f8.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'resnext101_32x4d': _cfg(url=''),
     'resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth'),
     'resnext101_64x4d': _cfg(url=''),
@@ -118,7 +121,8 @@ default_cfgs = {
         interpolation='bicubic'),
     'seresnet50tn': _cfg(
         url='',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'seresnet101': _cfg(
         url='',
         interpolation='bicubic'),
@@ -132,13 +136,16 @@ default_cfgs = {
         interpolation='bicubic'),
     'seresnext26d_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26d_32x4d-80fa48a3.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'seresnext26t_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26t_32x4d-361bc1c4.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'seresnext26tn_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26tn_32x4d-569cb627.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'seresnext50_32x4d': _cfg(
         interpolation='bicubic'),
     'seresnext101_32x4d': _cfg(
@@ -149,7 +156,8 @@ default_cfgs = {
         interpolation='bicubic'),
     'senet154': _cfg(
         url='',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
 
     # Efficient Channel Attention ResNets
     'ecaresnet18': _cfg(),
@@ -159,21 +167,26 @@ default_cfgs = {
         interpolation='bicubic'),
     'ecaresnet50d': _cfg(
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45402/outputs/ECAResNet50D_833caf58.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'ecaresnet50d_pruned': _cfg(
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45899/outputs/ECAResNet50D_P_9c67f710.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'ecaresnet101d': _cfg(
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45402/outputs/ECAResNet101D_281c5844.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'ecaresnet101d_pruned': _cfg(
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45610/outputs/ECAResNet101D_P_75a3370e.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
 
     # Efficient Channel Attention ResNeXts
     'ecaresnext26tn_32x4d': _cfg(
         url='',
-        interpolation='bicubic'),
+        interpolation='bicubic',
+        first_conv='conv1.0'),
     'ecaresnext50_32x4d': _cfg(
         url='',
         interpolation='bicubic'),

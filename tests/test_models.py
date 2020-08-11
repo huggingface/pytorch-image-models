@@ -69,6 +69,7 @@ def test_model_backward(model_name, batch_size):
 
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models())
+#@pytest.mark.parametrize('model_name', ["xception41"])
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -106,8 +107,8 @@ def test_model_default_cfgs(model_name, batch_size):
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier and first convolution names match those in default_cfg
-    assert any([k.startswith(classifier) for k in state_dict.keys()]), f'{classifier} not in model params'
-    assert any([k.startswith(first_conv) for k in state_dict.keys()]), f'{first_conv} not in model params'
+    assert classifier + ".weight" in state_dict.keys(), f'{classifier} not in model params'
+    assert first_conv + ".weight" in state_dict.keys(), f'{first_conv} not in model params'
 
 
 if 'GITHUB_ACTIONS' not in os.environ:
