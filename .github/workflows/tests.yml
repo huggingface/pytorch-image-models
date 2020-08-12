@@ -33,14 +33,14 @@ jobs:
         pip install pytest pytest-timeout
     - name: Install torch on mac
       if: startsWith(matrix.os, 'macOS')
-      run: pip install torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
+      run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
     - name: Install torch on ubuntu
       if: startsWith(matrix.os, 'ubuntu')
-      run: pip install torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      run: pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - name: Install requirements
       run: |
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install git+https://github.com/mapillary/inplace_abn.git@v1.0.11
+        pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git@v1.0.12
     - name: Run tests
       run: |
         pytest -vv --durations=0 ./tests
