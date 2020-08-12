@@ -37,7 +37,8 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    'cspresnet50': _cfg(url=''),
+    'cspresnet50': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnet50_ra-d3e8d487.pth'),
     'cspresnet50d': _cfg(url=''),
     'cspresnet50w': _cfg(url=''),
     'cspresnext50': _cfg(
