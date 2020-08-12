@@ -115,8 +115,9 @@ if 'GITHUB_ACTIONS' not in os.environ:
     @pytest.mark.parametrize('model_name', list_models(pretrained=True))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_load_pretrained(model_name, batch_size):
-        """Run a single forward pass with each model"""
-        create_model(model_name, pretrained=True)
+        """Create that pretrained weights load, verify support for in_chans != 3 while doing so."""
+        in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
+        create_model(model_name, pretrained=True, in_chans=in_chans)
 
 
 EXCLUDE_JIT_FILTERS = [
