@@ -1,5 +1,13 @@
 # Recent Changes
 
+### Aug 12, 2020
+* New/updated weights from training experiments
+  * EfficientNet-B3 - 82.1 top-1 (vs 81.6 for official with AA and 81.9 for AdvProp)
+  * RegNetY-3.2GF - 82.0 top-1 (78.9 from official ver)
+  * CSPResNet50 - 79.6 top-1 (76.6 from official ver)
+* Add CutMix integrated w/ Mixup. See [pull request](https://github.com/rwightman/pytorch-image-models/pull/218) for some usage examples
+* Some fixes for using pretrained weights with `in_chans` != 3 on several models.
+
 ### Aug 5, 2020
 Universal feature extraction, new models, new weights, new test sets.
 
