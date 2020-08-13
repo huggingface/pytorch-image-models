@@ -152,8 +152,8 @@ Several (less common) features that I often utilize in my projects are included.
     * `fused<name>` optimizers by name with [NVIDIA Apex](https://github.com/NVIDIA/apex/tree/master/apex/optimizers) installed
     * `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) (https://arxiv.org/abs/2006.08217)
 * Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py)  (https://arxiv.org/abs/1708.04896)
-* Mixup (as in https://arxiv.org/abs/1710.09412) - currently implementing/testing
-* An inference script that dumps output to CSV is provided as an example
+* Mixup (https://arxiv.org/abs/1710.09412)
+* CutMix (https://arxiv.org/abs/1905.04899)
 * AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
 * AugMix w/ JSD loss (https://arxiv.org/abs/1912.02781), JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
@@ -170,3 +170,7 @@ Model validation results can be found in the [documentation](https://rwightman.g
 ## Getting Started
 
 See the [documentation](https://rwightman.github.io/pytorch-image-models/)
+
+## Train, Validation, Inference Scripts
+
+The root folder of the repository contains reference train, validation, and inference scripts that work with the included models and other features of this repository. They are adaptable for other datasets and use cases with a little hacking. See [documentation](https://rwightman.github.io/pytorch-image-models/scripts/) for some basics and [training hparams](https://rwightman.github.io/pytorch-image-models/training_hparam_examples) for some train examples that produce SOTA ImageNet results.
