@@ -28,7 +28,7 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_batch, AugMixDataset
+from timm.data import Dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.models import create_model, resume_checkpoint, convert_splitbn_model
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
@@ -156,7 +156,17 @@ parser.add_argument('--recount', type=int, default=1,
 parser.add_argument('--resplit', action='store_true', default=False,
                     help='Do not random erase first (clean) augmentation split')
 parser.add_argument('--mixup', type=float, default=0.0,
-                    help='Mixup alpha, mixup enabled if > 0. (default: 0.)')
+                    help='mixup alpha, mixup enabled if > 0. (default: 0.)')
+parser.add_argument('--cutmix', type=float, default=0.0,
+                    help='cutmix alpha, cutmix enabled if > 0. (default: 0.)')
+parser.add_argument('--cutmix-minmax', type=float, nargs='+', default=None,
+                    help='cutmix min/max ratio, overrides alpha and enables cutmix if set (default: None)')
+parser.add_argument('--mixup-prob', type=float, default=1.0,
+                    help='Probability of performing mixup or cutmix when either/both is enabled')
+parser.add_argument('--mixup-switch-prob', type=float, default=0.5,
+                    help='Probability of switching to cutmix when both mixup and cutmix enabled')
+parser.add_argument('--mixup-elem', action='store_true', default=False,
+                    help='Apply mixup/cutmix params uniquely per batch element instead of per batch.')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                     help='Turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
@@ -388,9 +398,18 @@ def main():
     dataset_train = Dataset(train_dir)
 
     collate_fn = None
-    if args.prefetcher and args.mixup > 0:
-        assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
-        collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
+    mixup_fn = None
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        mixup_args = dict(
+            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, elementwise=args.mixup_elem,
+            label_smoothing=args.smoothing, num_classes=args.num_classes)
+        if args.prefetcher:
+            assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
+            collate_fn = FastCollateMixup(**mixup_args)
+        else:
+            mixup_fn = Mixup(**mixup_args)
 
     if num_aug_splits > 1:
         dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
@@ -452,17 +471,14 @@ def main():
     if args.jsd:
         assert num_aug_splits > 1  # JSD only valid with aug splits set
         train_loss_fn = JsdCrossEntropy(num_splits=num_aug_splits, smoothing=args.smoothing).cuda()
-        validate_loss_fn = nn.CrossEntropyLoss().cuda()
-    elif args.mixup > 0.:
-        # smoothing is handled with mixup label transform
+    elif mixup_active:
+        # smoothing is handled with mixup target transform
         train_loss_fn = SoftTargetCrossEntropy().cuda()
-        validate_loss_fn = nn.CrossEntropyLoss().cuda()
     elif args.smoothing:
         train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing).cuda()
-        validate_loss_fn = nn.CrossEntropyLoss().cuda()
     else:
         train_loss_fn = nn.CrossEntropyLoss().cuda()
-        validate_loss_fn = train_loss_fn
+    validate_loss_fn = nn.CrossEntropyLoss().cuda()
 
     eval_metric = args.eval_metric
     best_metric = None
@@ -490,7 +506,7 @@ def main():
             train_metrics = train_epoch(
                 epoch, model, loader_train, optimizer, train_loss_fn, args,
                 lr_scheduler=lr_scheduler, saver=saver, output_dir=output_dir,
-                use_amp=use_amp, model_ema=model_ema)
+                use_amp=use_amp, model_ema=model_ema, mixup_fn=mixup_fn)
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if args.local_rank == 0:
@@ -530,11 +546,13 @@ def main():
 
 def train_epoch(
         epoch, model, loader, optimizer, loss_fn, args,
-        lr_scheduler=None, saver=None, output_dir='', use_amp=False, model_ema=None):
+        lr_scheduler=None, saver=None, output_dir='', use_amp=False, model_ema=None, mixup_fn=None):
 
-    if args.prefetcher and args.mixup > 0 and loader.mixup_enabled:
-        if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
+    if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
+        if args.prefetcher and loader.mixup_enabled:
             loader.mixup_enabled = False
+        elif mixup_fn is not None:
+            mixup_fn.mixup_enabled = False
 
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
@@ -550,11 +568,8 @@ def train_epoch(
         data_time_m.update(time.time() - end)
         if not args.prefetcher:
             input, target = input.cuda(), target.cuda()
-            if args.mixup > 0.:
-                input, target = mixup_batch(
-                    input, target,
-                    alpha=args.mixup, num_classes=args.num_classes, smoothing=args.smoothing,
-                    disable=args.mixup_off_epoch and epoch >= args.mixup_off_epoch)
+            if mixup_fn is not None:
+                input, target = mixup_fn(input, target)
 
         output = model(input)
 

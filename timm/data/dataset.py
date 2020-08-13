@@ -92,7 +92,7 @@ class Dataset(data.Dataset):
         return img, target
 
     def __len__(self):
-        return len(self.imgs)
+        return len(self.samples)
 
     def filenames(self, indices=[], basename=False):
         if indices:
