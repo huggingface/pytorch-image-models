@@ -99,10 +99,11 @@ def test_model_default_cfgs(model_name, batch_size):
         assert outputs.shape[-1] == model.num_features
 
         # test model forward without pooling and classifier
+        model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
+        outputs = model.forward(input_tensor)
+        assert len(outputs.shape) == 4
         if not isinstance(model, timm.models.MobileNetV3):
-            model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
-            outputs = model.forward(input_tensor)
-            assert len(outputs.shape) == 4
+            # FIXME mobilenetv3 forward_features vs removed pooling differ
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier and first convolution names match those in default_cfg
