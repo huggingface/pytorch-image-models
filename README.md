@@ -174,3 +174,35 @@ See the [documentation](https://rwightman.github.io/pytorch-image-models/)
 ## Train, Validation, Inference Scripts
 
 The root folder of the repository contains reference train, validation, and inference scripts that work with the included models and other features of this repository. They are adaptable for other datasets and use cases with a little hacking. See [documentation](https://rwightman.github.io/pytorch-image-models/scripts/) for some basics and [training hparams](https://rwightman.github.io/pytorch-image-models/training_hparam_examples) for some train examples that produce SOTA ImageNet results.
+
+## Awesome PyTorch Resources
+
+One of the greatest assets of PyTorch is the community and their contributions. A few of my favourite resources that pair well with the models and componenets here are listed below.
+
+### Training / Frameworks
+* PyTorch Lightning - https://github.com/PyTorchLightning/pytorch-lightning
+* fastai - https://github.com/fastai/fastai
+
+### Computer Vision / Image Augmentation
+* Albumentations - https://github.com/albumentations-team/albumentations
+* Kornia - https://github.com/kornia/kornia
+
+### Metric Learning
+* PyTorch Metric Learning - https://github.com/KevinMusgrave/pytorch-metric-learning
+
+### Object Detection, Instance and Semantic Segmentation
+* Detectron2 - https://github.com/facebookresearch/detectron2
+* Segmentation Models (Semantic) - https://github.com/qubvel/segmentation_models.pytorch/issues
+* EfficientDet (Obj Det, Semantic soon) - https://github.com/rwightman/efficientdet-pytorch
+
+## Licenses
+
+### Code
+The code here is licensed Apache 2.0. I've taken care to make sure any third party code included or adapted has compatible (permissive) licenses such as MIT, BSD, etc. I've made an effort to avoid any GPL / LGPL conflicts. That said, it is your responsibility to ensure you comply with license here and conditions of any dependent licenses. Where applicable, I've linked the sources/references for various components in docstrings. If you think I've missed anything please create an issue.
+
+### Pretrained Weights
+So far all of the pretrained weights available here are pretrained on ImageNet with a select few that have some additional pretraining (see extra note below). ImageNet was released for non-commercial research purposes only (http://www.image-net.org/download-faq). It's not clear what the implications of that are for the use of pretrained weights from that dataset. Any models I have trained with ImageNet are done for research purposes and one should assume that the original dataset license applies to the weights. It's best to seek legal advice if you intend to use the pretrained weights in a commercial product.
+
+#### Pretrained on more than ImageNet
+Several weights included or references here were pretrained with proprietary datasets that I do not have access to. These include the Facebook WSL, SSL, SWSL ResNe(Xt) and the Google Noisy Student EfficientNet models. The Facebook models have an explicit non-commercial license (CC-BY-NC 4.0, https://github.com/facebookresearch/semi-supervised-ImageNet1K-models, https://github.com/facebookresearch/WSL-Images). The Google models do not appear to have any restriction beyond the Apache 2.0 license (and ImageNet concerns). In either case, you should contact Facebook or Google with any questions.
+
