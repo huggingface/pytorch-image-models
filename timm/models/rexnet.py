@@ -59,18 +59,15 @@ class SEWithNorm(nn.Module):
     def __init__(self, channels, reduction=16, act_layer=nn.ReLU, divisor=1, reduction_channels=None,
                  gate_layer='sigmoid'):
         super(SEWithNorm, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         reduction_channels = reduction_channels or make_divisible(channels // reduction, divisor=divisor)
-        self.fc1 = nn.Conv2d(
-            channels, reduction_channels, kernel_size=1, padding=0, bias=True)
+        self.fc1 = nn.Conv2d(channels, reduction_channels, kernel_size=1, bias=True)
         self.bn = nn.BatchNorm2d(reduction_channels)
         self.act = act_layer(inplace=True)
-        self.fc2 = nn.Conv2d(
-            reduction_channels, channels, kernel_size=1, padding=0, bias=True)
+        self.fc2 = nn.Conv2d(reduction_channels, channels, kernel_size=1, bias=True)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
-        x_se = self.avg_pool(x)
+        x_se = x.mean((2, 3), keepdim=True)
         x_se = self.fc1(x_se)
         x_se = self.bn(x_se)
         x_se = self.act(x_se)

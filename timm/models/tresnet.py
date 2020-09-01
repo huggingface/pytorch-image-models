@@ -56,10 +56,9 @@ class FastGlobalAvgPool2d(nn.Module):
 
     def forward(self, x):
         if self.flatten:
-            in_size = x.size()
-            return x.view((in_size[0], in_size[1], -1)).mean(dim=2)
+            return x.mean((2, 3))
         else:
-            return x.view(x.size(0), x.size(1), -1).mean(-1).view(x.size(0), x.size(1), 1, 1)
+            return x.mean((2, 3), keepdim=True)
 
     def feat_mult(self):
         return 1
