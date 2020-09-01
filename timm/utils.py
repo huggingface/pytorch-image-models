@@ -49,7 +49,8 @@ class CheckpointSaver:
             checkpoint_dir='',
             recovery_dir='',
             decreasing=False,
-            max_history=10):
+            max_history=10,
+            save_amp=False):
 
         # state
         self.checkpoint_files = []  # (filename, metric) tuples in order of decreasing betterness
@@ -67,13 +68,14 @@ class CheckpointSaver:
         self.decreasing = decreasing  # a lower metric is better if True
         self.cmp = operator.lt if decreasing else operator.gt  # True if lhs better than rhs
         self.max_history = max_history
+        self.save_apex_amp = save_amp  # save APEX amp state
         assert self.max_history >= 1
 
-    def save_checkpoint(self, model, optimizer, args, epoch, model_ema=None, metric=None, use_amp=False):
+    def save_checkpoint(self, model, optimizer, args, epoch, model_ema=None, metric=None):
         assert epoch >= 0
         tmp_save_path = os.path.join(self.checkpoint_dir, 'tmp' + self.extension)
         last_save_path = os.path.join(self.checkpoint_dir, 'last' + self.extension)
-        self._save(tmp_save_path, model, optimizer, args, epoch, model_ema, metric, use_amp)
+        self._save(tmp_save_path, model, optimizer, args, epoch, model_ema, metric)
         if os.path.exists(last_save_path):
             os.unlink(last_save_path) # required for Windows support.
         os.rename(tmp_save_path, last_save_path)
@@ -105,7 +107,7 @@ class CheckpointSaver:
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
-    def _save(self, save_path, model, optimizer, args, epoch, model_ema=None, metric=None, use_amp=False):
+    def _save(self, save_path, model, optimizer, args, epoch, model_ema=None, metric=None):
         save_state = {
             'epoch': epoch,
             'arch': args.model,
@@ -114,7 +116,7 @@ class CheckpointSaver:
             'args': args,
             'version': 2,  # version < 2 increments epoch before save
         }
-        if use_amp and 'state_dict' in amp.__dict__:
+        if self.save_apex_amp and 'state_dict' in amp.__dict__:
             save_state['amp'] = amp.state_dict()
         if model_ema is not None:
             save_state['state_dict_ema'] = get_state_dict(model_ema)
@@ -136,11 +138,11 @@ class CheckpointSaver:
                 _logger.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 
-    def save_recovery(self, model, optimizer, args, epoch, model_ema=None, use_amp=False, batch_idx=0):
+    def save_recovery(self, model, optimizer, args, epoch, model_ema=None, batch_idx=0):
         assert epoch >= 0
         filename = '-'.join([self.recovery_prefix, str(epoch), str(batch_idx)]) + self.extension
         save_path = os.path.join(self.recovery_dir, filename)
-        self._save(save_path, model, optimizer, args, epoch, model_ema, use_amp=use_amp)
+        self._save(save_path, model, optimizer, args, epoch, model_ema)
         if os.path.exists(self.last_recovery_file):
             try:
                 _logger.debug("Cleaning recovery: {}".format(self.last_recovery_file))
