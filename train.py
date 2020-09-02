@@ -20,7 +20,6 @@ import yaml
 from datetime import datetime
 from contextlib import suppress
 
-import torch
 import torch.nn as nn
 import torchvision.utils
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
@@ -31,6 +30,7 @@ from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
+from timm.utils import ApexScaler, NativeScaler
 
 try:
     from apex import amp
@@ -264,23 +264,6 @@ def _parse_args():
     return args, args_text
 
 
-class ApexScaler:
-    def __call__(self, loss, optimizer):
-        with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        optimizer.step()
-
-
-class NativeScaler:
-    def __init__(self):
-        self._scaler = torch.cuda.amp.GradScaler()
-
-    def __call__(self, loss, optimizer):
-        self._scaler.scale(loss).backward()
-        self._scaler.step(optimizer)
-        self._scaler.update()
-
-
 def main():
     setup_default_logging()
     args, args_text = _parse_args()
@@ -389,20 +372,13 @@ def main():
             _logger.info('AMP not enabled. Training in float32.')
 
     # optionally resume from a checkpoint
-    resume_state = {}
     resume_epoch = None
     if args.resume:
-        resume_state, resume_epoch = resume_checkpoint(model, args.resume)
-    if resume_state and not args.no_resume_opt:
-        if 'optimizer' in resume_state:
-            if args.local_rank == 0:
-                _logger.info('Restoring optimizer state from checkpoint')
-            optimizer.load_state_dict(resume_state['optimizer'])
-        if use_amp and 'amp' in resume_state and 'load_state_dict' in amp.__dict__:
-            if args.local_rank == 0:
-                _logger.info('Restoring NVIDIA AMP state from checkpoint')
-            amp.load_state_dict(resume_state['amp'])
-    del resume_state
+        resume_epoch = resume_checkpoint(
+            model, args.resume,
+            optimizer=None if args.no_resume_opt else optimizer,
+            loss_scaler=None if args.no_resume_opt else loss_scaler,
+            log_info=args.local_rank == 0)
 
     model_ema = None
     if args.model_ema:
@@ -555,7 +531,9 @@ def main():
         ])
         output_dir = get_outdir(output_base, 'train', exp_name)
         decreasing = True if eval_metric == 'loss' else False
-        saver = CheckpointSaver(checkpoint_dir=output_dir, decreasing=decreasing, save_amp=use_amp == 'apex')
+        saver = CheckpointSaver(
+            model=model, optimizer=optimizer, args=args, model_ema=model_ema, amp_scaler=loss_scaler,
+            checkpoint_dir=output_dir, recovery_dir=output_dir, decreasing=decreasing)
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
@@ -594,8 +572,7 @@ def main():
             if saver is not None:
                 # save proper checkpoint with eval metric
                 save_metric = eval_metrics[eval_metric]
-                best_metric, best_epoch = saver.save_checkpoint(
-                    model, optimizer, args, epoch=epoch, model_ema=model_ema, metric=save_metric)
+                best_metric, best_epoch = saver.save_checkpoint(epoch, metric=save_metric)
 
     except KeyboardInterrupt:
         pass
@@ -688,8 +665,7 @@ def train_epoch(
 
         if saver is not None and args.recovery_interval and (
                 last_batch or (batch_idx + 1) % args.recovery_interval == 0):
-            
-            saver.save_recovery(model, optimizer, args, epoch, model_ema=model_ema, batch_idx=batch_idx)
+            saver.save_recovery(epoch, batch_idx=batch_idx)
 
         if lr_scheduler is not None:
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)

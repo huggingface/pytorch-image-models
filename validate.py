@@ -21,7 +21,7 @@ from contextlib import suppress
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config, RealLabelsImagenet
-from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging
+from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_legacy
 
 has_apex = False
 try:
@@ -100,19 +100,6 @@ parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
                     help='Real labels JSON file for imagenet evaluation')
 parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
                     help='Valid label indices txt file for validation of partial label space')
-
-
-def set_jit_legacy():
-    """ Set JIT executor to legacy w/ support for op fusion
-    This is hopefully a temporary need in 1.5/1.5.1/1.6 to restore performance due to changes
-    in the JIT exectutor. These API are not supported so could change.
-    """
-    #
-    assert hasattr(torch._C, '_jit_set_profiling_executor'), "Old JIT behavior doesn't exist!"
-    torch._C._jit_set_profiling_executor(False)
-    torch._C._jit_set_profiling_mode(False)
-    torch._C._jit_override_can_fuse_on_gpu(True)
-    #torch._C._jit_set_texpr_fuser_enabled(True)
 
 
 def validate(args):
