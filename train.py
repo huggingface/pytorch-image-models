@@ -74,8 +74,8 @@ parser.add_argument('--no-resume-opt', action='store_true', default=False,
                     help='prevent resume of optimizer state when resuming model')
 parser.add_argument('--num-classes', type=int, default=1000, metavar='N',
                     help='number of label classes (default: 1000)')
-parser.add_argument('--gp', default='avg', type=str, metavar='POOL',
-                    help='Type of global pool, "avg", "max", "avgmax", "avgmaxc" (default: "avg")')
+parser.add_argument('--gp', default=None, type=str, metavar='POOL',
+                    help='Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.')
 parser.add_argument('--img-size', type=int, default=None, metavar='N',
                     help='Image patch size (default: None => model default)')
 parser.add_argument('--crop-pct', default=None, type=float,

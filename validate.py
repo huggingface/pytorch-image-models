@@ -64,6 +64,8 @@ parser.add_argument('--num-classes', type=int, default=1000,
                     help='Number classes in dataset')
 parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
                     help='path to class to idx mapping file (default: "")')
+parser.add_argument('--gp', default=None, type=str, metavar='POOL',
+                    help='Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
@@ -127,6 +129,7 @@ def validate(args):
         pretrained=args.pretrained,
         num_classes=args.num_classes,
         in_chans=3,
+        global_pool=args.gp,
         scriptable=args.torchscript)
 
     if args.checkpoint:
