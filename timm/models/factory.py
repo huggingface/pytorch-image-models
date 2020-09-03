@@ -39,11 +39,6 @@ def create_model(
         kwargs.pop('bn_momentum', None)
         kwargs.pop('bn_eps', None)
 
-    # Parameters that aren't supported by all models should default to None in command line args,
-    # remove them if they are present and not set so that non-supporting models don't break.
-    if kwargs.get('drop_block_rate', None) is None:
-        kwargs.pop('drop_block_rate', None)
-
     # handle backwards compat with drop_connect -> drop_path change
     drop_connect_rate = kwargs.pop('drop_connect_rate', None)
     if drop_connect_rate is not None and kwargs.get('drop_path_rate', None) is None:
@@ -51,8 +46,10 @@ def create_model(
               " Setting drop_path to %f." % drop_connect_rate)
         kwargs['drop_path_rate'] = drop_connect_rate
 
-    if kwargs.get('drop_path_rate', None) is None:
-        kwargs.pop('drop_path_rate', None)
+    # Parameters that aren't supported by all models or are intended to only override model defaults if set
+    # should default to None in command line args/cfg. Remove them if they are present and not set so that
+    # non-supporting models don't break and default args remain in effect.
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
     with set_layer_config(scriptable=scriptable, exportable=exportable, no_jit=no_jit):
         if is_model(model_name):

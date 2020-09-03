@@ -120,6 +120,12 @@ if 'GITHUB_ACTIONS' not in os.environ:
         in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
         create_model(model_name, pretrained=True, in_chans=in_chans)
 
+    @pytest.mark.timeout(120)
+    @pytest.mark.parametrize('model_name', list_models(pretrained=True))
+    @pytest.mark.parametrize('batch_size', [1])
+    def test_model_features_pretrained(model_name, batch_size):
+        """Create that pretrained weights load when features_only==True."""
+        create_model(model_name, pretrained=True, features_only=True)
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
