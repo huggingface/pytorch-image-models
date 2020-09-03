@@ -55,7 +55,9 @@ default_cfgs = {
     'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
     'tv_resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
     'tv_resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
-    'wide_resnet50_2': _cfg(url='https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth'),
+    'wide_resnet50_2': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/wide_resnet50_racm-8234f177.pth',
+        interpolation='bicubic'),
     'wide_resnet101_2': _cfg(url='https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth'),
 
     # ResNeXt
@@ -147,6 +149,7 @@ default_cfgs = {
         interpolation='bicubic',
         first_conv='conv1.0'),
     'seresnext50_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext50_32x4d_racm-a304a460.pth',
         interpolation='bicubic'),
     'seresnext101_32x4d': _cfg(
         url='',

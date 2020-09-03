@@ -2,6 +2,13 @@
 
 ## What's New
 
+### Sept 3, 2020
+* New weights
+  * Wide-ResNet50 - 81.5 top-1 (vs 78.5 torchvision)
+  * SEResNeXt50-32x4d - 81.3 top-1 (vs 79.1 cadene)
+* Support for native Torch AMP and channels_last memory format added to train/validate scripts
+* Models tested with channels_last on latest NGC 20.08 container. AdaptiveAvgPool in attn layers changed to mean((2,3)) to work around bug with NHWC kernel.
+
 ### Aug 12, 2020
 * New/updated weights from training experiments
   * EfficientNet-B3 - 82.1 top-1 (vs 81.6 for official with AA and 81.9 for AdvProp)
