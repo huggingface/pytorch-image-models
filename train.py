@@ -17,9 +17,13 @@ Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 import argparse
 import time
 import yaml
-from datetime import datetime
+import os
+import logging
+from collections import OrderedDict
 from contextlib import suppress
+from datetime import datetime
 
+import torch
 import torch.nn as nn
 import torchvision.utils
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
@@ -172,8 +176,8 @@ parser.add_argument('--mixup-prob', type=float, default=1.0,
                     help='Probability of performing mixup or cutmix when either/both is enabled')
 parser.add_argument('--mixup-switch-prob', type=float, default=0.5,
                     help='Probability of switching to cutmix when both mixup and cutmix enabled')
-parser.add_argument('--mixup-elem', action='store_true', default=False,
-                    help='Apply mixup/cutmix params uniquely per batch element instead of per batch.')
+parser.add_argument('--mixup-mode', type=str, default='batch',
+                    help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                     help='Turn off mixup after this epoch, disabled if 0 (default: 0)')
 parser.add_argument('--smoothing', type=float, default=0.1,
@@ -440,7 +444,7 @@ def main():
     if mixup_active:
         mixup_args = dict(
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, elementwise=args.mixup_elem,
+            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.num_classes)
         if args.prefetcher:
             assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
