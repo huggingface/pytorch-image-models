@@ -35,26 +35,37 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     # ResNet and Wide ResNet
     'resnet18': _cfg(url='https://download.pytorch.org/models/resnet18-5c106cde.pth'),
+    'resnet18d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet18d_ra2-48a79e06.pth',
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnet34': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34-43635321.pth'),
+    'resnet34d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34d_ra2-f8dcfcaf.pth',
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnet26': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26-9aa10e23.pth',
         interpolation='bicubic'),
     'resnet26d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26d-69e92c46.pth',
-        interpolation='bicubic',
-        first_conv='conv1.0'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnet50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth',
         interpolation='bicubic'),
     'resnet50d': _cfg(
-        url='',
-        interpolation='bicubic',
-        first_conv='conv1.0'),
-    'resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
-    'resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
+        interpolation='bicubic', first_conv='conv1.0'),
+    'resnet66d': _cfg(url='', interpolation='bicubic', first_conv='conv1.0'),
+    'resnet101': _cfg(url='', interpolation='bicubic'),
+    'resnet101d': _cfg(url='', interpolation='bicubic', first_conv='conv1.0'),
+    'resnet152': _cfg(url='', interpolation='bicubic'),
+    'resnet152d': _cfg(url='', interpolation='bicubic', first_conv='conv1.0'),
+    'resnet200': _cfg(url='', interpolation='bicubic'),
+    'resnet200d': _cfg(url='', interpolation='bicubic', first_conv='conv1.0'),
     'tv_resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
     'tv_resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
+    'tv_resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
+    'tv_resnet152': _cfg(url='https://download.pytorch.org/models/resnet152-b121ed2d.pth'),
     'wide_resnet50_2': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/wide_resnet50_racm-8234f177.pth',
         interpolation='bicubic'),
@@ -614,11 +625,29 @@ def resnet18(pretrained=False, **kwargs):
 
 
 @register_model
+def resnet18d(pretrained=False, **kwargs):
+    """Constructs a ResNet-18-D model.
+    """
+    model_args = dict(
+        block=BasicBlock, layers=[2, 2, 2, 2], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet18d', pretrained, **model_args)
+
+
+@register_model
 def resnet34(pretrained=False, **kwargs):
     """Constructs a ResNet-34 model.
     """
     model_args = dict(block=BasicBlock, layers=[3, 4, 6, 3], **kwargs)
     return _create_resnet('resnet34', pretrained, **model_args)
+
+
+@register_model
+def resnet34d(pretrained=False, **kwargs):
+    """Constructs a ResNet-34-D model.
+    """
+    model_args = dict(
+        block=BasicBlock, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet34d', pretrained, **model_args)
 
 
 @register_model
@@ -631,8 +660,7 @@ def resnet26(pretrained=False, **kwargs):
 
 @register_model
 def resnet26d(pretrained=False, **kwargs):
-    """Constructs a ResNet-26 v1d model.
-    This is technically a 28 layer ResNet, sticking with 'd' modifier from Gluon for now.
+    """Constructs a ResNet-26-D model.
     """
     model_args = dict(block=Bottleneck, layers=[2, 2, 2, 2], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     return _create_resnet('resnet26d', pretrained, **model_args)
@@ -656,6 +684,14 @@ def resnet50d(pretrained=False, **kwargs):
 
 
 @register_model
+def resnet66d(pretrained=False, **kwargs):
+    """Constructs a ResNet-66-D model.
+    """
+    model_args = dict(block=BasicBlock, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet66d', pretrained, **model_args)
+
+
+@register_model
 def resnet101(pretrained=False, **kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -664,11 +700,45 @@ def resnet101(pretrained=False, **kwargs):
 
 
 @register_model
+def resnet101d(pretrained=False, **kwargs):
+    """Constructs a ResNet-101-D model.
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet101d', pretrained, **model_args)
+
+
+@register_model
 def resnet152(pretrained=False, **kwargs):
     """Constructs a ResNet-152 model.
     """
     model_args = dict(block=Bottleneck, layers=[3, 8, 36, 3], **kwargs)
     return _create_resnet('resnet152', pretrained, **model_args)
+
+
+@register_model
+def resnet152d(pretrained=False, **kwargs):
+    """Constructs a ResNet-152-D model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet152d', pretrained, **model_args)
+
+
+@register_model
+def resnet200(pretrained=False, **kwargs):
+    """Constructs a ResNet-200 model.
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 24, 36, 3], **kwargs)
+    return _create_resnet('resnet200', pretrained, **model_args)
+
+
+@register_model
+def resnet200d(pretrained=False, **kwargs):
+    """Constructs a ResNet-200-D model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet200d', pretrained, **model_args)
 
 
 @register_model
@@ -685,6 +755,22 @@ def tv_resnet50(pretrained=False, **kwargs):
     """
     model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3],  **kwargs)
     return _create_resnet('tv_resnet50', pretrained, **model_args)
+
+
+@register_model
+def tv_resnet101(pretrained=False, **kwargs):
+    """Constructs a ResNet-101 model w/ Torchvision pretrained weights.
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], **kwargs)
+    return _create_resnet('tv_resnet101', pretrained, **model_args)
+
+
+@register_model
+def tv_resnet152(pretrained=False, **kwargs):
+    """Constructs a ResNet-152 model w/ Torchvision pretrained weights.
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 8, 36, 3], **kwargs)
+    return _create_resnet('tv_resnet152', pretrained, **model_args)
 
 
 @register_model

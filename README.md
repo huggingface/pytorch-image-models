@@ -2,6 +2,10 @@
 
 ## What's New
 
+### Sept 18, 2020
+* New ResNet 'D' weights. 72.7 (top-1) ResNet-18-D, 77.1 ResNet-34-D, 80.5 ResNet-50-D
+* Added a few untrained defs for other ResNet models (66D, 101D, 152D, 200/200D)
+
 ### Sept 3, 2020
 * New weights
   * Wide-ResNet50 - 81.5 top-1 (vs 78.5 torchvision)
