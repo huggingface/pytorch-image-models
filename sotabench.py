@@ -443,6 +443,12 @@ model_list = [
 
 ]
 
+# FIXME debug sotabench dataset issues
+from pprint import pprint
+from glob import glob
+pprint([glob('./.data/**', recursive=True)])
+pprint([glob('./.data/vision/**', recursive=True)])
+
 for m in model_list:
     model_name = m['model']
     # create model from name
@@ -466,7 +472,7 @@ for m in model_list:
         input_transform=input_transform,
         batch_size=m['batch_size'],
         num_gpu=NUM_GPU,
-        data_root=os.environ.get('IMAGENET_DIR', './imagenet')
+        data_root=os.environ.get('IMAGENET_DIR', './.data/vision/imagenet')
     )
 
     torch.cuda.empty_cache()
