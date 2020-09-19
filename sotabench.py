@@ -446,7 +446,7 @@ model_list = [
 # FIXME debug sotabench dataset issues
 from pprint import pprint
 from glob import glob
-pprint([glob('./.data/**', recursive=True)])
+pprint([glob('./**', recursive=True)])
 pprint([glob('./.data/vision/**', recursive=True)])
 
 for m in model_list:
