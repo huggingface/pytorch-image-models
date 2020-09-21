@@ -24,7 +24,6 @@ from .tresnet import *
 from .vovnet import *
 from .xception import *
 from .xception_aligned import *
-from .frostnet import *
 from .quantization.efficientnet import *
 from .quantization.mobilenetv3 import *
 from .quantization.rexnet import *
