@@ -114,7 +114,8 @@ default_cfgs = {
     'efficientnet_es': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_es_ra-f111e99c.pth'),
     'efficientnet_em': _cfg(
-        url='', input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_em_ra2-66250f76.pth',
+        input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
     'efficientnet_el': _cfg(
         url='', input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
 

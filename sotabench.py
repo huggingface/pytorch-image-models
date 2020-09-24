@@ -56,6 +56,8 @@ model_list = [
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
     _entry('efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946',
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
+    _entry('efficientnet_em', 'EfficientNet-EdgeTPU-M', '1905.11946',
+           model_desc='Trained from scratch in PyTorch w/ RandAugment'),
 
     _entry('gluon_inception_v3', 'Inception V3', '1512.00567', model_desc='Ported from GluonCV Model Zoo'),
     _entry('gluon_resnet18_v1b', 'ResNet-18', '1812.01187', model_desc='Ported from GluonCV Model Zoo'),
@@ -111,8 +113,11 @@ model_list = [
            model_desc="'D' variant (3x3 deep stem w/ avg-pool downscale). Trained with "
                       "SGD w/ cosine LR decay, random-erasing (gaussian per-pixel noise) and label-smoothing"),
 
+    _entry('wide_resnet50_2', 'Wide-ResNet-50', '1605.07146'),
+
     _entry('seresnet18', 'SE-ResNet-18', '1709.01507'),
     _entry('seresnet34', 'SE-ResNet-34', '1709.01507'),
+    _entry('seresnet50', 'SE-ResNet-50', '1709.01507'),
     _entry('seresnext26_32x4d', 'SE-ResNeXt-26 32x4d', '1709.01507',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck'),
     _entry('seresnext26d_32x4d', 'SE-ResNeXt-26-D 32x4d', '1812.01187',
@@ -121,6 +126,7 @@ model_list = [
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered stem, and avg-pool in downsample layers.'),
     _entry('seresnext26tn_32x4d', 'SE-ResNeXt-26-TN 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
+    _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
 
     _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
     _entry('skresnet34', 'SK-ResNet-34', '1903.06586'),
@@ -139,6 +145,7 @@ model_list = [
     _entry('densenetblur121d', 'DenseNet-Blur-121D', '1904.11486',
            model_desc='DenseNet with blur pooling and deep stem'),
 
+    _entry('ese_vovnet19b_dw', 'VoVNet-19-DW-V2', '1911.06667'),
     _entry('ese_vovnet39b', 'VoVNet-39-V2', '1911.06667'),
 
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
@@ -247,13 +254,13 @@ model_list = [
     _entry('inception_v4', 'Inception V4', '1602.07261'),
     _entry('nasnetalarge', 'NASNet-A Large', '1707.07012', batch_size=BATCH_SIZE // 4),
     _entry('pnasnet5large', 'PNASNet-5', '1712.00559', batch_size=BATCH_SIZE // 4),
-    _entry('seresnet50', 'SE-ResNet-50', '1709.01507'),
-    _entry('seresnet101', 'SE-ResNet-101', '1709.01507'),
-    _entry('seresnet152', 'SE-ResNet-152', '1709.01507'),
-    _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
-    _entry('seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
-    _entry('senet154', 'SENet-154', '1709.01507'),
     _entry('xception', 'Xception', '1610.02357',  batch_size=BATCH_SIZE//2),
+    _entry('legacy_seresnet50', 'SE-ResNet-50', '1709.01507'),
+    _entry('legacy_seresnet101', 'SE-ResNet-101', '1709.01507'),
+    _entry('legacy_seresnet152', 'SE-ResNet-152', '1709.01507'),
+    _entry('legacy_seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
+    _entry('legacy_seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
+    _entry('legacy_senet154', 'SENet-154', '1709.01507'),
 
     ## Torchvision weights
     # _entry('densenet121'),
@@ -442,12 +449,6 @@ model_list = [
     _entry('regnety_320', 'RegNetY-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
 
 ]
-
-# FIXME debug sotabench dataset issues
-from pprint import pprint
-from glob import glob
-pprint([glob('./**', recursive=True)])
-pprint([glob('./.data/vision/**', recursive=True)])
 
 for m in model_list:
     model_name = m['model']
