@@ -94,17 +94,21 @@ class Dataset(data.Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def filenames(self, indices=[], basename=False):
-        if indices:
-            if basename:
-                return [os.path.basename(self.samples[i][0]) for i in indices]
-            else:
-                return [self.samples[i][0] for i in indices]
-        else:
-            if basename:
-                return [os.path.basename(x[0]) for x in self.samples]
-            else:
-                return [x[0] for x in self.samples]
+    def filename(self, index, basename=False, absolute=False):
+        filename = self.samples[index][0]
+        if basename:
+            filename = os.path.basename(filename)
+        elif not absolute:
+            filename = os.path.relpath(filename, self.root)
+        return filename
+
+    def filenames(self, basename=False, absolute=False):
+        fn = lambda x: x
+        if basename:
+            fn = os.path.basename
+        elif not absolute:
+            fn = lambda x: os.path.relpath(x, self.root)
+        return [fn(x[0]) for x in self.samples]
 
 
 def _extract_tar_info(tarfile, class_to_idx=None, sort=True):
@@ -159,6 +163,16 @@ class DatasetTar(data.Dataset):
 
     def __len__(self):
         return len(self.samples)
+
+    def filename(self, index, basename=False):
+        filename = self.samples[index][0].name
+        if basename:
+            filename = os.path.basename(filename)
+        return filename
+
+    def filenames(self, basename=False):
+        fn = os.path.basename if basename else lambda x: x
+        return [fn(x[0].name) for x in self.samples]
 
 
 class AugMixDataset(torch.utils.data.Dataset):

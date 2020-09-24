@@ -166,6 +166,7 @@ class ReXNetV1(nn.Module):
                  se_rd=12, ch_div=1, drop_rate=0.2, feature_location='bottleneck'):
         super(ReXNetV1, self).__init__()
         self.drop_rate = drop_rate
+        self.num_classes = num_classes
 
         assert output_stride == 32  # FIXME support dilation
         stem_base_chs = 32 / width_mult if width_mult < 1.0 else 32

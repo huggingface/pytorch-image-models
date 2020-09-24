@@ -36,13 +36,12 @@ class TestTimePoolHead(nn.Module):
         return x.view(x.size(0), -1)
 
 
-def apply_test_time_pool(model, config, args):
+def apply_test_time_pool(model, config):
     test_time_pool = False
     if not hasattr(model, 'default_cfg') or not model.default_cfg:
         return model, False
-    if not args.no_test_pool and \
-            config['input_size'][-1] > model.default_cfg['input_size'][-1] and \
-            config['input_size'][-2] > model.default_cfg['input_size'][-2]:
+    if (config['input_size'][-1] > model.default_cfg['input_size'][-1] and
+            config['input_size'][-2] > model.default_cfg['input_size'][-2]):
         _logger.info('Target input size %s > pretrained default %s, using test time pooling' %
                      (str(config['input_size'][-2:]), str(model.default_cfg['input_size'][-2:])))
         model = TestTimePoolHead(model, original_pool=model.default_cfg['pool_size'])

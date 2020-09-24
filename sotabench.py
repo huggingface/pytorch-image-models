@@ -1,8 +1,10 @@
 import torch
-from torchbench.image_classification import ImageNet
+from sotabencheval.image_classification import ImageNetEvaluator
+from sotabencheval.utils import is_server
 from timm import create_model
-from timm.data import resolve_data_config, create_transform
-from timm.models import TestTimePoolHead
+from timm.data import resolve_data_config, create_loader, DatasetTar
+from timm.models import apply_test_time_pool
+from tqdm import tqdm
 import os
 
 NUM_GPU = 1
@@ -147,6 +149,10 @@ model_list = [
 
     _entry('ese_vovnet19b_dw', 'VoVNet-19-DW-V2', '1911.06667'),
     _entry('ese_vovnet39b', 'VoVNet-39-V2', '1911.06667'),
+
+    _entry('cspresnet50', 'CSPResNet-50', '1911.11929'),
+    _entry('cspresnext50', 'CSPResNeXt-50', '1911.11929'),
+    _entry('cspdarknet53', 'CSPDarkNet-53', '1911.11929'),
 
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
@@ -448,7 +454,19 @@ model_list = [
     _entry('regnety_160', 'RegNetY-16GF', '2003.13678'),
     _entry('regnety_320', 'RegNetY-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
 
+    _entry('rexnet_100', 'ReXNet-1.0x', '2007.00992'),
+    _entry('rexnet_130', 'ReXNet-1.3x', '2007.00992'),
+    _entry('rexnet_150', 'ReXNet-1.5x', '2007.00992'),
+    _entry('rexnet_200', 'ReXNet-2.0x', '2007.00992'),
 ]
+
+if is_server():
+    DATA_ROOT = './.data/vision/imagenet'
+else:
+    # local settings
+    DATA_ROOT = './'
+DATA_FILENAME = 'ILSVRC2012_img_val.tar'
+TAR_PATH = os.path.join(DATA_ROOT, DATA_FILENAME)
 
 for m in model_list:
     model_name = m['model']
@@ -457,25 +475,60 @@ for m in model_list:
     param_count = sum([m.numel() for m in model.parameters()])
     print('Model %s, %s created. Param count: %d' % (model_name, m['paper_model_name'], param_count))
 
+    dataset = DatasetTar(TAR_PATH)
+    filenames = [os.path.splitext(f)[0] for f in dataset.filenames()]
+
     # get appropriate transform for model's default pretrained config
     data_config = resolve_data_config(m['args'], model=model, verbose=True)
+    test_time_pool = False
     if m['ttp']:
-        model = TestTimePoolHead(model, model.default_cfg['pool_size'])
+        model, test_time_pool = apply_test_time_pool(model, data_config)
         data_config['crop_pct'] = 1.0
-    input_transform = create_transform(**data_config)
 
-    # Run the benchmark
-    ImageNet.benchmark(
-        model=model,
-        model_description=m.get('model_description', None),
-        paper_model_name=m['paper_model_name'],
+    batch_size = m['batch_size']
+    loader = create_loader(
+        dataset,
+        input_size=data_config['input_size'],
+        batch_size=batch_size,
+        use_prefetcher=True,
+        interpolation=data_config['interpolation'],
+        mean=data_config['mean'],
+        std=data_config['std'],
+        num_workers=6,
+        crop_pct=data_config['crop_pct'],
+        pin_memory=True)
+
+    evaluator = ImageNetEvaluator(
+        root=DATA_ROOT,
+        model_name=m['paper_model_name'],
         paper_arxiv_id=m['paper_arxiv_id'],
-        input_transform=input_transform,
-        batch_size=m['batch_size'],
-        num_gpu=NUM_GPU,
-        data_root=os.environ.get('IMAGENET_DIR', './.data/vision/imagenet')
+        model_description=m.get('model_description', None),
     )
+    model.cuda()
+    model.eval()
+    with torch.no_grad():
+        # warmup
+        input = torch.randn((batch_size,) + data_config['input_size']).cuda()
+        model(input)
 
+        bar = tqdm(desc="Evaluation", mininterval=5, total=50000)
+        evaluator.reset_time()
+        sample_count = 0
+        for input, target in loader:
+            output = model(input)
+            num_samples = len(output)
+            image_ids = [filenames[i] for i in range(sample_count, sample_count + num_samples)]
+            output = output.cpu().numpy()
+            evaluator.add(dict(zip(image_ids, list(output))))
+            sample_count += num_samples
+            bar.update(num_samples)
+        bar.close()
+
+    evaluator.save()
+    for k, v in evaluator.results.items():
+        print(k, v)
+    for k, v in evaluator.speed_mem_metrics.items():
+        print(k, v)
     torch.cuda.empty_cache()
 
 
