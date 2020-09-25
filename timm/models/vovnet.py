@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
 from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, ClassifierHead, \
+from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, ClassifierHead, DropPath,\
     create_attn, create_norm_act, get_norm_act_layer
 
 
@@ -179,7 +179,7 @@ class SequentialAppendList(nn.Sequential):
 class OsaBlock(nn.Module):
 
     def __init__(self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
-                 depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU):
+                 depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path=None):
         super(OsaBlock, self).__init__()
 
         self.residual = residual
@@ -212,6 +212,8 @@ class OsaBlock(nn.Module):
         else:
             self.attn = None
 
+        self.drop_path = drop_path
+
     def forward(self, x):
         output = [x]
         if self.conv_reduction is not None:
@@ -220,6 +222,8 @@ class OsaBlock(nn.Module):
         x = self.conv_concat(x)
         if self.attn is not None:
             x = self.attn(x)
+        if self.drop_path is not None:
+            x = self.drop_path(x)
         if self.residual:
             x = x + output[0]
         return x
@@ -228,7 +232,8 @@ class OsaBlock(nn.Module):
 class OsaStage(nn.Module):
 
     def __init__(self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
-                 residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU):
+                 residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU,
+                 drop_path_rates=None):
         super(OsaStage, self).__init__()
 
         if downsample:
@@ -239,10 +244,15 @@ class OsaStage(nn.Module):
         blocks = []
         for i in range(block_per_stage):
             last_block = i == block_per_stage - 1
+            if drop_path_rates is not None and drop_path_rates[i] > 0.:
+                drop_path = DropPath(drop_path_rates[i])
+            else:
+                drop_path = None
             blocks += [OsaBlock(
-                in_chs if i == 0 else out_chs, mid_chs, out_chs, layer_per_block, residual=residual and i > 0,
-                depthwise=depthwise, attn=attn if last_block else '', norm_layer=norm_layer, act_layer=act_layer)
+                in_chs, mid_chs, out_chs, layer_per_block, residual=residual and i > 0, depthwise=depthwise,
+                attn=attn if last_block else '', norm_layer=norm_layer, act_layer=act_layer, drop_path=drop_path)
             ]
+            in_chs = out_chs
         self.blocks = nn.Sequential(*blocks)
 
     def forward(self, x):
@@ -255,7 +265,7 @@ class OsaStage(nn.Module):
 class VovNet(nn.Module):
 
     def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
-                 output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU):
+                 output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path_rate=0.):
         """ VovNet (v2)
         """
         super(VovNet, self).__init__()
@@ -284,6 +294,7 @@ class VovNet(nn.Module):
         current_stride = stem_stride
 
         # OSA stages
+        stage_dpr = torch.split(torch.linspace(0, drop_path_rate, sum(block_per_stage)), block_per_stage)
         in_ch_list = stem_chs[-1:] + stage_out_chs[:-1]
         stage_args = dict(residual=cfg["residual"], depthwise=cfg["depthwise"], attn=cfg["attn"], **conv_kwargs)
         stages = []
@@ -291,7 +302,7 @@ class VovNet(nn.Module):
             downsample = stem_stride == 2 or i > 0  # first stage has no stride/downsample if stem_stride is 4
             stages += [OsaStage(
                 in_ch_list[i], stage_conv_chs[i], stage_out_chs[i], block_per_stage[i], layer_per_block,
-                downsample=downsample, **stage_args)
+                downsample=downsample, drop_path_rates=stage_dpr[i], **stage_args)
             ]
             self.num_features = stage_out_chs[i]
             current_stride *= 2 if downsample else 1
