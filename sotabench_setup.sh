@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 source /workspace/venv/bin/activate
 
+pip install --upgrade pip
 pip install -r requirements-sotabench.txt
 
+apt-get update
 apt-get install -y libjpeg-dev zlib1g-dev libpng-dev libwebp-dev
 pip uninstall -y pillow
 CC="cc -mavx2" pip install -U --force-reinstall pillow-simd

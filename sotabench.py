@@ -117,11 +117,7 @@ model_list = [
 
     _entry('wide_resnet50_2', 'Wide-ResNet-50', '1605.07146'),
 
-    _entry('seresnet18', 'SE-ResNet-18', '1709.01507'),
-    _entry('seresnet34', 'SE-ResNet-34', '1709.01507'),
     _entry('seresnet50', 'SE-ResNet-50', '1709.01507'),
-    _entry('seresnext26_32x4d', 'SE-ResNeXt-26 32x4d', '1709.01507',
-           model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck'),
     _entry('seresnext26d_32x4d', 'SE-ResNeXt-26-D 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep stem, and avg-pool in downsample layers.'),
     _entry('seresnext26t_32x4d', 'SE-ResNeXt-26-T 32x4d', '1812.01187',
@@ -261,9 +257,13 @@ model_list = [
     _entry('nasnetalarge', 'NASNet-A Large', '1707.07012', batch_size=BATCH_SIZE // 4),
     _entry('pnasnet5large', 'PNASNet-5', '1712.00559', batch_size=BATCH_SIZE // 4),
     _entry('xception', 'Xception', '1610.02357',  batch_size=BATCH_SIZE//2),
+    _entry('legacy_seresnet18', 'SE-ResNet-18', '1709.01507'),
+    _entry('legacy_seresnet34', 'SE-ResNet-34', '1709.01507'),
     _entry('legacy_seresnet50', 'SE-ResNet-50', '1709.01507'),
     _entry('legacy_seresnet101', 'SE-ResNet-101', '1709.01507'),
     _entry('legacy_seresnet152', 'SE-ResNet-152', '1709.01507'),
+    _entry('legacy_seresnext26_32x4d', 'SE-ResNeXt-26 32x4d', '1709.01507',
+           model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck'),
     _entry('legacy_seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
     _entry('legacy_seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
     _entry('legacy_senet154', 'SENet-154', '1709.01507'),
@@ -522,6 +522,9 @@ for m in model_list:
             evaluator.add(dict(zip(image_ids, list(output))))
             sample_count += num_samples
             bar.update(num_samples)
+            if evaluator.cache_exists:
+                break
+
         bar.close()
 
     evaluator.save()
