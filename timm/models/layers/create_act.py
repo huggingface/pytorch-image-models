@@ -46,6 +46,7 @@ _ACT_LAYER_DEFAULT = dict(
     mish=Mish,
     relu=nn.ReLU,
     relu6=nn.ReLU6,
+    leaky_relu=nn.LeakyReLU,
     elu=nn.ELU,
     prelu=nn.PReLU,
     celu=nn.CELU,
