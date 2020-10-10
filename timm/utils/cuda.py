@@ -15,10 +15,10 @@ except ImportError:
 class ApexScaler:
     state_dict_key = "amp"
 
-    def __call__(self, loss, optimizer, clip_grad=None, parameters=None):
+    def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False):
         with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        if clip_grad:
+            scaled_loss.backward(create_graph=create_graph)
+        if clip_grad is not None:
             torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), clip_grad)
         optimizer.step()
 
@@ -37,9 +37,9 @@ class NativeScaler:
     def __init__(self):
         self._scaler = torch.cuda.amp.GradScaler()
 
-    def __call__(self, loss, optimizer, clip_grad=None, parameters=None):
-        self._scaler.scale(loss).backward()
-        if clip_grad:
+    def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False):
+        self._scaler.scale(loss).backward(create_graph=create_graph)
+        if clip_grad is not None:
             assert parameters is not None
             self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
             torch.nn.utils.clip_grad_norm_(parameters, clip_grad)

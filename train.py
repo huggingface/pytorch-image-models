@@ -98,12 +98,18 @@ parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, defau
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
-parser.add_argument('--opt-eps', default=1e-8, type=float, metavar='EPSILON',
-                    help='Optimizer Epsilon (default: 1e-8)')
+parser.add_argument('--opt-eps', default=None, type=float, metavar='EPSILON',
+                    help='Optimizer Epsilon (default: None, use opt default)')
+parser.add_argument('--opt-betas', default=None, type=float, nargs='+', metavar='BETA',
+                    help='Optimizer Betas (default: None, use opt default)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
-                    help='SGD momentum (default: 0.9)')
+                    help='Optimizer momentum (default: 0.9)')
 parser.add_argument('--weight-decay', type=float, default=0.0001,
                     help='weight decay (default: 0.0001)')
+parser.add_argument('--clip-grad', type=float, default=None, metavar='NORM',
+                    help='Clip gradient norm (default: None, no clipping)')
+
+
 
 # Learning rate schedule parameters
 parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
@@ -595,6 +601,7 @@ def train_epoch(
         elif mixup_fn is not None:
             mixup_fn.mixup_enabled = False
 
+    second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
     losses_m = AverageMeter()
@@ -623,9 +630,12 @@ def train_epoch(
 
         optimizer.zero_grad()
         if loss_scaler is not None:
-            loss_scaler(loss, optimizer)
+            loss_scaler(
+                loss, optimizer, clip_grad=args.clip_grad, parameters=model.parameters(), create_graph=second_order)
         else:
-            loss.backward()
+            loss.backward(create_graph=second_order)
+            if args.clip_grad is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
             optimizer.step()
 
         torch.cuda.synchronize()

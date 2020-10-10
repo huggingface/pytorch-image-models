@@ -3,7 +3,18 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 from torch import optim as optim
-from timm.optim import Nadam, RMSpropTF, AdamW, RAdam, NovoGrad, NvNovoGrad, Lookahead, AdamP, SGDP
+
+from .adafactor import Adafactor
+from .adahessian import Adahessian
+from .adamp import AdamP
+from .lookahead import Lookahead
+from .nadam import Nadam
+from .novograd import NovoGrad
+from .nvnovograd import NvNovoGrad
+from .radam import RAdam
+from .rmsprop_tf import RMSpropTF
+from .sgdp import SGDP
+
 try:
     from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
     has_apex = True
@@ -29,11 +40,6 @@ def add_weight_decay(model, weight_decay=1e-5, skip_list=()):
 def create_optimizer(args, model, filter_bias_and_bn=True):
     opt_lower = args.opt.lower()
     weight_decay = args.weight_decay
-    if 'adamw' in opt_lower or 'radam' in opt_lower:
-        # Compensate for the way current AdamW and RAdam optimizers apply LR to the weight-decay
-        # I don't believe they follow the paper or original Torch7 impl which schedules weight
-        # decay based on the ratio of current_lr/initial_lr
-        weight_decay /= args.lr
     if weight_decay and filter_bias_and_bn:
         parameters = add_weight_decay(model, weight_decay)
         weight_decay = 0.
@@ -43,66 +49,59 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
     if 'fused' in opt_lower:
         assert has_apex and torch.cuda.is_available(), 'APEX and CUDA required for fused optimizers'
 
+    opt_args = dict(lr=args.lr, weight_decay=weight_decay)
+    if args.opt_eps is not None:
+        opt_args['eps'] = args.opt_eps
+    if args.opt_betas is not None:
+        opt_args['betas'] = args.opt_betas
+
     opt_split = opt_lower.split('_')
     opt_lower = opt_split[-1]
     if opt_lower == 'sgd' or opt_lower == 'nesterov':
-        optimizer = optim.SGD(
-            parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, nesterov=True)
+        optimizer = optim.SGD(parameters, momentum=args.momentum, nesterov=True, **opt_args)
     elif opt_lower == 'momentum':
-        optimizer = optim.SGD(
-            parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, nesterov=False)
+        optimizer = optim.SGD(parameters, momentum=args.momentum, nesterov=False, **opt_args)
     elif opt_lower == 'adam':
-        optimizer = optim.Adam(
-            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = optim.Adam(parameters, **opt_args)
     elif opt_lower == 'adamw':
-        optimizer = AdamW(
-            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = optim.AdamW(parameters, **opt_args)
     elif opt_lower == 'nadam':
-        optimizer = Nadam(
-            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = Nadam(parameters, **opt_args)
     elif opt_lower == 'radam':
-        optimizer = RAdam(
-            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = RAdam(parameters, **opt_args)
     elif opt_lower == 'adamp':        
-        optimizer = AdamP(
-            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps,
-            delta=0.1, wd_ratio=0.01, nesterov=True)
+        optimizer = AdamP(parameters, wd_ratio=0.01, nesterov=True, **opt_args)
     elif opt_lower == 'sgdp':        
-        optimizer = SGDP(
-            parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, 
-            eps=args.opt_eps, nesterov=True)        
+        optimizer = SGDP(parameters, momentum=args.momentum, nesterov=True, **opt_args)
     elif opt_lower == 'adadelta':
-        optimizer = optim.Adadelta(
-            parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = optim.Adadelta(parameters, **opt_args)
+    elif opt_lower == 'adafactor':
+        if not args.lr:
+            opt_args['lr'] = None
+        optimizer = Adafactor(parameters, **opt_args)
+    elif opt_lower == 'adahessian':
+        optimizer = Adahessian(parameters, **opt_args)
     elif opt_lower == 'rmsprop':
-        optimizer = optim.RMSprop(
-            parameters, lr=args.lr, alpha=0.9, eps=args.opt_eps,
-            momentum=args.momentum, weight_decay=weight_decay)
+        optimizer = optim.RMSprop(parameters, alpha=0.9, momentum=args.momentum, **opt_args)
     elif opt_lower == 'rmsproptf':
-        optimizer = RMSpropTF(
-            parameters, lr=args.lr, alpha=0.9, eps=args.opt_eps,
-            momentum=args.momentum, weight_decay=weight_decay)
+        optimizer = RMSpropTF(parameters, alpha=0.9, momentum=args.momentum, **opt_args)
     elif opt_lower == 'novograd':
-        optimizer = NovoGrad(parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = NovoGrad(parameters, **opt_args)
     elif opt_lower == 'nvnovograd':
-        optimizer = NvNovoGrad(parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = NvNovoGrad(parameters, **opt_args)
     elif opt_lower == 'fusedsgd':
-        optimizer = FusedSGD(
-            parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, nesterov=True)
+        optimizer = FusedSGD(parameters, momentum=args.momentum, nesterov=True, **opt_args)
     elif opt_lower == 'fusedmomentum':
-        optimizer = FusedSGD(
-            parameters, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay, nesterov=False)
+        optimizer = FusedSGD(parameters, momentum=args.momentum, nesterov=False, **opt_args)
     elif opt_lower == 'fusedadam':
-        optimizer = FusedAdam(
-            parameters, lr=args.lr, adam_w_mode=False, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = FusedAdam(parameters, adam_w_mode=False, **opt_args)
     elif opt_lower == 'fusedadamw':
-        optimizer = FusedAdam(
-            parameters, lr=args.lr, adam_w_mode=True, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = FusedAdam(parameters, adam_w_mode=True, **opt_args)
     elif opt_lower == 'fusedlamb':
-        optimizer = FusedLAMB(parameters, lr=args.lr, weight_decay=weight_decay, eps=args.opt_eps)
+        optimizer = FusedLAMB(parameters, **opt_args)
     elif opt_lower == 'fusednovograd':
-        optimizer = FusedNovoGrad(
-            parameters, lr=args.lr, betas=(0.95, 0.98), weight_decay=weight_decay, eps=args.opt_eps)
+        opt_args.setdefault('betas', (0.95, 0.98))
+        optimizer = FusedNovoGrad(parameters, **opt_args)
     else:
         assert False and "Invalid optimizer"
         raise ValueError
