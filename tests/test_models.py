@@ -15,9 +15,9 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d']
+    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d', 'vit_*']
 else:
-    EXCLUDE_FILTERS = []
+    EXCLUDE_FILTERS = ['vit_*']
 MAX_FWD_SIZE = 384
 MAX_BWD_SIZE = 128
 MAX_FWD_FEAT_SIZE = 448
