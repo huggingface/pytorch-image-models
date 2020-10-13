@@ -15,9 +15,9 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d']
+    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d', 'vit_*']
 else:
-    EXCLUDE_FILTERS = []
+    EXCLUDE_FILTERS = ['vit_*']
 MAX_FWD_SIZE = 384
 MAX_BWD_SIZE = 128
 MAX_FWD_FEAT_SIZE = 448
@@ -68,7 +68,7 @@ def test_model_backward(model_name, batch_size):
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models())
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=['vit_*']))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""

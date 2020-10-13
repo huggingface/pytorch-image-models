@@ -2,6 +2,12 @@
 
 ## What's New
 
+### Oct 13, 2020
+* Initial impl of Vision Transformer models. Both patch and hybrid (CNN backbone) variants. Currently trying to train...
+* Adafactor and AdaHessian (FP32 only, no AMP) optimizers
+* EdgeTPU-M (`efficientnet_em`) model trained in PyTorch, 79.3 top-1
+* Pip release, doc updates pending a few more changes...
+
 ### Sept 18, 2020
 * New ResNet 'D' weights. 72.7 (top-1) ResNet-18-D, 77.1 ResNet-34-D, 80.5 ResNet-50-D
 * Added a few untrained defs for other ResNet models (66D, 101D, 152D, 200/200D)
@@ -124,6 +130,7 @@ A full version of the list below with source links can be found in the [document
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * TResNet - https://arxiv.org/abs/2003.13630
+* Vision Transformer - https://openreview.net/forum?id=YicbFdNTTy
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
 * Xception (Modified Aligned, Gluon) - https://arxiv.org/abs/1802.02611
@@ -162,6 +169,8 @@ Several (less common) features that I often utilize in my projects are included.
     * `lookahead` adapted from impl by [Liam](https://github.com/alphadl/lookahead.pytorch) (https://arxiv.org/abs/1907.08610)
     * `fused<name>` optimizers by name with [NVIDIA Apex](https://github.com/NVIDIA/apex/tree/master/apex/optimizers) installed
     * `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) (https://arxiv.org/abs/2006.08217)
+    * `adafactor` adapted from [FAIRSeq impl](https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py) (https://arxiv.org/abs/1804.04235)
+    * `adahessian` by [David Samuel](https://github.com/davda54/ada-hessian) (https://arxiv.org/abs/2006.00719)
 * Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py)  (https://arxiv.org/abs/1708.04896)
 * Mixup (https://arxiv.org/abs/1710.09412)
 * CutMix (https://arxiv.org/abs/1905.04899)

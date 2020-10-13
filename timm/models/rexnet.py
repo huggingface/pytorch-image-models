@@ -17,6 +17,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
 from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath
 from .registry import register_model
+from .efficientnet_builder import efficientnet_init_weights
 
 
 def _cfg(url=''):
@@ -186,7 +187,7 @@ class ReXNetV1(nn.Module):
 
         self.head = ClassifierHead(self.num_features, num_classes, global_pool, drop_rate)
 
-        # FIXME weight init, the original appears to use PyTorch defaults
+        efficientnet_init_weights(self)
 
     def get_classifier(self):
         return self.head.fc

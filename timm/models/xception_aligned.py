@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg
 from .layers import ClassifierHead, ConvBnAct, create_conv2d
-from .layers.helpers import tup_triple
+from .layers.helpers import to_3tuple
 from .registry import register_model
 
 __all__ = ['XceptionAligned']
@@ -85,7 +85,7 @@ class XceptionModule(nn.Module):
             start_with_relu=True, no_skip=False, act_layer=nn.ReLU, norm_layer=None, norm_kwargs=None):
         super(XceptionModule, self).__init__()
         norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
-        out_chs = tup_triple(out_chs)
+        out_chs = to_3tuple(out_chs)
         self.in_channels = in_chs
         self.out_channels = out_chs[-1]
         self.no_skip = no_skip
@@ -142,7 +142,7 @@ class XceptionAligned(nn.Module):
             b['dilation'] = curr_dilation
             if b['stride'] > 1:
                 self.feature_info += [dict(
-                    num_chs=tup_triple(b['out_chs'])[-2], reduction=curr_stride, module=f'blocks.{i}.stack.act3')]
+                    num_chs=to_3tuple(b['out_chs'])[-2], reduction=curr_stride, module=f'blocks.{i}.stack.act3')]
                 next_stride = curr_stride * b['stride']
                 if next_stride > output_stride:
                     curr_dilation *= b['stride']
