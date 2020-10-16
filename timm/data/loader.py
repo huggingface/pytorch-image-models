@@ -1,3 +1,11 @@
+""" Loader Factory, Fast Collate, CUDA Prefetcher
+
+Prefetcher and Fast Collate inspired by NVIDIA APEX example at
+https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#diff-cf86c282ff7fba81fad27a559379d5bf
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 import torch.utils.data
 import numpy as np
 
@@ -123,10 +131,15 @@ def create_loader(
         batch_size,
         is_training=False,
         use_prefetcher=True,
+        no_aug=False,
         re_prob=0.,
         re_mode='const',
         re_count=1,
         re_split=False,
+        scale=None,
+        ratio=None,
+        hflip=0.5,
+        vflip=0.,
         color_jitter=0.4,
         auto_augment=None,
         num_aug_splits=0,
@@ -140,6 +153,7 @@ def create_loader(
         pin_memory=False,
         fp16=False,
         tf_preprocessing=False,
+        use_multi_epochs_loader=False
 ):
     re_num_splits = 0
     if re_split:
@@ -149,6 +163,11 @@ def create_loader(
         input_size,
         is_training=is_training,
         use_prefetcher=use_prefetcher,
+        no_aug=no_aug,
+        scale=scale,
+        ratio=ratio,
+        hflip=hflip,
+        vflip=vflip,
         color_jitter=color_jitter,
         auto_augment=auto_augment,
         interpolation=interpolation,
@@ -175,7 +194,12 @@ def create_loader(
     if collate_fn is None:
         collate_fn = fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate
 
-    loader = torch.utils.data.DataLoader(
+    loader_class = torch.utils.data.DataLoader
+
+    if use_multi_epochs_loader:
+        loader_class = MultiEpochsDataLoader
+
+    loader = loader_class(
         dataset,
         batch_size=batch_size,
         shuffle=sampler is None and is_training,
@@ -186,15 +210,48 @@ def create_loader(
         drop_last=is_training,
     )
     if use_prefetcher:
+        prefetch_re_prob = re_prob if is_training and not no_aug else 0.
         loader = PrefetchLoader(
             loader,
             mean=mean,
             std=std,
             fp16=fp16,
-            re_prob=re_prob if is_training else 0.,
+            re_prob=prefetch_re_prob,
             re_mode=re_mode,
             re_count=re_count,
             re_num_splits=re_num_splits
         )
 
     return loader
+
+
+class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._DataLoader__initialized = False
+        self.batch_sampler = _RepeatSampler(self.batch_sampler)
+        self._DataLoader__initialized = True
+        self.iterator = super().__iter__()
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield next(self.iterator)
+
+
+class _RepeatSampler(object):
+    """ Sampler that repeats forever.
+
+    Args:
+        sampler (Sampler)
+    """
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)

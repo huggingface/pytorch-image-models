@@ -1,9 +1,9 @@
 """ Select AttentionFactory Method
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
-from .se import SEModule
+from .se import SEModule, EffectiveSEModule
 from .eca import EcaModule, CecaModule
 from .cbam import CbamModule, LightCbamModule
 
@@ -15,6 +15,8 @@ def create_attn(attn_type, channels, **kwargs):
             attn_type = attn_type.lower()
             if attn_type == 'se':
                 module_cls = SEModule
+            elif attn_type == 'ese':
+                module_cls = EffectiveSEModule
             elif attn_type == 'eca':
                 module_cls = EcaModule
             elif attn_type == 'ceca':

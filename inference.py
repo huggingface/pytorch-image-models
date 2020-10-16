@@ -3,7 +3,7 @@
 
 An example inference script that outputs top-k class ids for images in a folder into a csv.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import os
 import time
@@ -17,6 +17,8 @@ from timm.data import Dataset, create_loader, resolve_data_config
 from timm.utils import AverageMeter, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
+_logger = logging.getLogger('inference')
+
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Inference')
 parser.add_argument('data', metavar='DIR',
@@ -67,11 +69,11 @@ def main():
         pretrained=args.pretrained,
         checkpoint_path=args.checkpoint)
 
-    logging.info('Model %s created, param count: %d' %
+    _logger.info('Model %s created, param count: %d' %
                  (args.model, sum([m.numel() for m in model.parameters()])))
 
     config = resolve_data_config(vars(args), model=model)
-    model, test_time_pool = apply_test_time_pool(model, config, args)
+    model, test_time_pool = (model, False) if args.no_test_pool else apply_test_time_pool(model, config)
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
@@ -107,15 +109,14 @@ def main():
             end = time.time()
 
             if batch_idx % args.log_freq == 0:
-                logging.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
+                _logger.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
                     batch_idx, len(loader), batch_time=batch_time))
 
     topk_ids = np.concatenate(topk_ids, axis=0).squeeze()
 
     with open(os.path.join(args.output_dir, './topk_ids.csv'), 'w') as out_file:
-        filenames = loader.dataset.filenames()
+        filenames = loader.dataset.filenames(basename=True)
         for filename, label in zip(filenames, topk_ids):
-            filename = os.path.basename(filename)
             out_file.write('{0},{1},{2},{3},{4},{5}\n'.format(
                 filename, label[0], label[1], label[2], label[3], label[4]))
 

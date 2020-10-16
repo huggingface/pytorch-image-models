@@ -5,11 +5,12 @@ Experimental impl of CBAM: Convolutional Block Attention Module: https://arxiv.o
 WARNING: Results with these attention layers have been mixed. They can significantly reduce performance on
 some tasks, especially fine-grained it seems. I may end up removing this impl.
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import torch
 from torch import nn as nn
+import torch.nn.functional as F
 from .conv_bn_act import ConvBnAct
 
 
@@ -18,15 +19,13 @@ class ChannelAttn(nn.Module):
     """
     def __init__(self, channels, reduction=16, act_layer=nn.ReLU):
         super(ChannelAttn, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
         self.fc1 = nn.Conv2d(channels, channels // reduction, 1, bias=False)
         self.act = act_layer(inplace=True)
         self.fc2 = nn.Conv2d(channels // reduction, channels, 1, bias=False)
 
     def forward(self, x):
-        x_avg = self.avg_pool(x)
-        x_max = self.max_pool(x)
+        x_avg = x.mean((2, 3), keepdim=True)
+        x_max = F.adaptive_max_pool2d(x, 1)
         x_avg = self.fc2(self.act(self.fc1(x_avg)))
         x_max = self.fc2(self.act(self.fc1(x_max)))
         x_attn = x_avg + x_max
@@ -40,7 +39,7 @@ class LightChannelAttn(ChannelAttn):
         super(LightChannelAttn, self).__init__(channels, reduction)
 
     def forward(self, x):
-        x_pool = 0.5 * self.avg_pool(x) + 0.5 * self.max_pool(x)
+        x_pool = 0.5 * x.mean((2, 3), keepdim=True) + 0.5 * F.adaptive_max_pool2d(x, 1)
         x_attn = self.fc2(self.act(self.fc1(x_pool)))
         return x * x_attn.sigmoid()
 

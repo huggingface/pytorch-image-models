@@ -9,7 +9,7 @@ For any hope of decent results, the checkpoints should be from the same or child
 EMA (exponential moving average) of the model weights or performing SWA (stochastic
 weight averaging), but post-training.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import torch
 import argparse
@@ -103,7 +103,11 @@ def main():
         v = v.clamp(float32_info.min, float32_info.max)
         final_state_dict[k] = v.to(dtype=torch.float32)
 
-    torch.save(final_state_dict, args.output)
+    try:
+        torch.save(final_state_dict, args.output, _use_new_zipfile_serialization=False)
+    except:
+        torch.save(final_state_dict, args.output)
+
     with open(args.output, 'rb') as f:
         sha_hash = hashlib.sha256(f.read()).hexdigest()
     print("=> Saved state_dict to '{}, SHA256: {}'".format(args.output, sha_hash))

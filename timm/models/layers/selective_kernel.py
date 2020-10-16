@@ -2,9 +2,8 @@
 
 Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
-
 import torch
 from torch import nn as nn
 
@@ -28,7 +27,6 @@ class SelectiveKernelAttn(nn.Module):
         """
         super(SelectiveKernelAttn, self).__init__()
         self.num_paths = num_paths
-        self.pool = nn.AdaptiveAvgPool2d(1)
         self.fc_reduce = nn.Conv2d(channels, attn_channels, kernel_size=1, bias=False)
         self.bn = norm_layer(attn_channels)
         self.act = act_layer(inplace=True)
@@ -36,8 +34,7 @@ class SelectiveKernelAttn(nn.Module):
 
     def forward(self, x):
         assert x.shape[1] == self.num_paths
-        x = torch.sum(x, dim=1)
-        x = self.pool(x)
+        x = x.sum(1).mean((2, 3), keepdim=True)
         x = self.fc_reduce(x)
         x = self.bn(x)
         x = self.act(x)
@@ -52,7 +49,7 @@ class SelectiveKernelConv(nn.Module):
 
     def __init__(self, in_channels, out_channels, kernel_size=None, stride=1, dilation=1, groups=1,
                  attn_reduction=16, min_attn_channels=32, keep_3x3=True, split_input=False,
-                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None):
         """ Selective Kernel Convolution Module
 
         As described in Selective Kernel Networks (https://arxiv.org/abs/1903.06586) with some modifications.
@@ -98,7 +95,8 @@ class SelectiveKernelConv(nn.Module):
         groups = min(out_channels, groups)
 
         conv_kwargs = dict(
-            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer)
+            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer,
+            aa_layer=aa_layer)
         self.paths = nn.ModuleList([
             ConvBnAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
             for k, d in zip(kernel_size, dilation)])

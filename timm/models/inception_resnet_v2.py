@@ -6,10 +6,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .registry import register_model
-from .helpers import load_pretrained
-from .layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from .helpers import build_model_with_cfg
+from .layers import create_classifier
+from .registry import register_model
 
 __all__ = ['InceptionResnetV2']
 
@@ -193,7 +193,6 @@ class Mixed_7a(nn.Module):
 
 
 class Block8(nn.Module):
-    __constants__ = ['relu']  # for pre 1.4 torchscript compat
 
     def __init__(self, scale=1.0, no_relu=False):
         super(Block8, self).__init__()
@@ -223,18 +222,23 @@ class Block8(nn.Module):
 
 
 class InceptionResnetV2(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., global_pool='avg'):
+    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., output_stride=32, global_pool='avg'):
         super(InceptionResnetV2, self).__init__()
         self.drop_rate = drop_rate
         self.num_classes = num_classes
         self.num_features = 1536
+        assert output_stride == 32
 
         self.conv2d_1a = BasicConv2d(in_chans, 32, kernel_size=3, stride=2)
         self.conv2d_2a = BasicConv2d(32, 32, kernel_size=3, stride=1)
         self.conv2d_2b = BasicConv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.feature_info = [dict(num_chs=64, reduction=2, module='conv2d_2b')]
+
         self.maxpool_3a = nn.MaxPool2d(3, stride=2)
         self.conv2d_3b = BasicConv2d(64, 80, kernel_size=1, stride=1)
         self.conv2d_4a = BasicConv2d(80, 192, kernel_size=3, stride=1)
+        self.feature_info += [dict(num_chs=192, reduction=4, module='conv2d_4a')]
+
         self.maxpool_5a = nn.MaxPool2d(3, stride=2)
         self.mixed_5b = Mixed_5b()
         self.repeat = nn.Sequential(
@@ -249,6 +253,8 @@ class InceptionResnetV2(nn.Module):
             Block35(scale=0.17),
             Block35(scale=0.17)
         )
+        self.feature_info += [dict(num_chs=320, reduction=8, module='repeat')]
+
         self.mixed_6a = Mixed_6a()
         self.repeat_1 = nn.Sequential(
             Block17(scale=0.10),
@@ -272,6 +278,8 @@ class InceptionResnetV2(nn.Module):
             Block17(scale=0.10),
             Block17(scale=0.10)
         )
+        self.feature_info += [dict(num_chs=1088, reduction=16, module='repeat_1')]
+
         self.mixed_7a = Mixed_7a()
         self.repeat_2 = nn.Sequential(
             Block8(scale=0.20),
@@ -286,18 +294,16 @@ class InceptionResnetV2(nn.Module):
         )
         self.block8 = Block8(no_relu=True)
         self.conv2d_7b = BasicConv2d(2080, self.num_features, kernel_size=1, stride=1)
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        # NOTE some variants/checkpoints for this model may have 'last_linear' as the name for the FC
-        self.classif = nn.Linear(self.num_features * self.global_pool.feat_mult(), num_classes)
+        self.feature_info += [dict(num_chs=self.num_features, reduction=32, module='conv2d_7b')]
+
+        self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def get_classifier(self):
         return self.classif
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.num_classes = num_classes
-        self.classif = nn.Linear(
-            self.num_features * self.global_pool.feat_mult(), num_classes) if num_classes else None
+        self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x = self.conv2d_1a(x)
@@ -319,37 +325,30 @@ class InceptionResnetV2(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x).flatten(1)
+        x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.classif(x)
         return x
 
 
+def _create_inception_resnet_v2(variant, pretrained=False, **kwargs):
+    return build_model_with_cfg(
+        InceptionResnetV2, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
+
+
 @register_model
-def inception_resnet_v2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def inception_resnet_v2(pretrained=False, **kwargs):
     r"""InceptionResnetV2 model architecture from the
     `"InceptionV4, Inception-ResNet..." <https://arxiv.org/abs/1602.07261>` paper.
     """
-    default_cfg = default_cfgs['inception_resnet_v2']
-    model = InceptionResnetV2(num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-
-    return model
+    return _create_inception_resnet_v2('inception_resnet_v2', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ens_adv_inception_resnet_v2(pretrained=False, num_classes=1000, in_chans=3, **kwargs):
+def ens_adv_inception_resnet_v2(pretrained=False, **kwargs):
     r""" Ensemble Adversarially trained InceptionResnetV2 model architecture
     As per https://arxiv.org/abs/1705.07204 and
     https://github.com/tensorflow/models/tree/master/research/adv_imagenet_models.
     """
-    default_cfg = default_cfgs['ens_adv_inception_resnet_v2']
-    model = InceptionResnetV2(num_classes=num_classes, in_chans=in_chans, **kwargs)
-    model.default_cfg = default_cfg
-    if pretrained:
-        load_pretrained(model, default_cfg, num_classes, in_chans)
-
-    return model
+    return _create_inception_resnet_v2('ens_adv_inception_resnet_v2', pretrained=pretrained, **kwargs)

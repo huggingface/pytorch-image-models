@@ -1,3 +1,10 @@
+""" Random Erasing (Cutout)
+
+Originally inspired by impl at https://github.com/zhunzhong07/Random-Erasing, Apache 2.0
+Copyright Zhun Zhong & Liang Zheng
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import random
 import math
 import torch

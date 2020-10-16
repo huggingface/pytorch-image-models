@@ -1,6 +1,6 @@
 """ Layer/Module Helpers
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 from itertools import repeat
 from torch._six import container_abcs
@@ -15,11 +15,11 @@ def _ntuple(n):
     return parse
 
 
-tup_single = _ntuple(1)
-tup_pair = _ntuple(2)
-tup_triple = _ntuple(3)
-tup_quadruple = _ntuple(4)
-
+to_1tuple = _ntuple(1)
+to_2tuple = _ntuple(2)
+to_3tuple = _ntuple(3)
+to_4tuple = _ntuple(4)
+to_ntuple = _ntuple
 
 
 

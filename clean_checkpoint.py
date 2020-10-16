@@ -5,7 +5,7 @@ Takes training checkpoints with GPU tensors, optimizer state, extra dict keys, e
 and outputs a CPU  tensor checkpoint with only the `state_dict` along with SHA256
 calculation for model zoo compatibility.
 
-Hacked together by Ross Wightman (https://github.com/rwightman)
+Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import torch
 import argparse
@@ -57,7 +57,11 @@ def main():
             new_state_dict[name] = v
         print("=> Loaded state_dict from '{}'".format(args.checkpoint))
 
-        torch.save(new_state_dict, _TEMP_NAME)
+        try:
+            torch.save(new_state_dict, _TEMP_NAME, _use_new_zipfile_serialization=False)
+        except:
+            torch.save(new_state_dict, _TEMP_NAME)
+
         with open(_TEMP_NAME, 'rb') as f:
             sha_hash = hashlib.sha256(f.read()).hexdigest()
 

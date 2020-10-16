@@ -1,8 +1,10 @@
 import torch
-from torchbench.image_classification import ImageNet
+from sotabencheval.image_classification import ImageNetEvaluator
+from sotabencheval.utils import is_server
 from timm import create_model
-from timm.data import resolve_data_config, create_transform
-from timm.models import TestTimePoolHead
+from timm.data import resolve_data_config, create_loader, DatasetTar
+from timm.models import apply_test_time_pool
+from tqdm import tqdm
 import os
 
 NUM_GPU = 1
@@ -55,6 +57,8 @@ model_list = [
     _entry('efficientnet_b3a', 'EfficientNet-B3 (320x320, 1.0 crop)', '1905.11946',
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
     _entry('efficientnet_es', 'EfficientNet-EdgeTPU-S', '1905.11946',
+           model_desc='Trained from scratch in PyTorch w/ RandAugment'),
+    _entry('efficientnet_em', 'EfficientNet-EdgeTPU-M', '1905.11946',
            model_desc='Trained from scratch in PyTorch w/ RandAugment'),
 
     _entry('gluon_inception_v3', 'Inception V3', '1512.00567', model_desc='Ported from GluonCV Model Zoo'),
@@ -111,20 +115,40 @@ model_list = [
            model_desc="'D' variant (3x3 deep stem w/ avg-pool downscale). Trained with "
                       "SGD w/ cosine LR decay, random-erasing (gaussian per-pixel noise) and label-smoothing"),
 
-    _entry('seresnet18', 'SE-ResNet-18', '1709.01507'),
-    _entry('seresnet34', 'SE-ResNet-34', '1709.01507'),
-    _entry('seresnext26_32x4d', 'SE-ResNeXt-26 32x4d', '1709.01507',
-           model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck'),
+    _entry('wide_resnet50_2', 'Wide-ResNet-50', '1605.07146'),
+
+    _entry('seresnet50', 'SE-ResNet-50', '1709.01507'),
     _entry('seresnext26d_32x4d', 'SE-ResNeXt-26-D 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep stem, and avg-pool in downsample layers.'),
     _entry('seresnext26t_32x4d', 'SE-ResNeXt-26-T 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered stem, and avg-pool in downsample layers.'),
     _entry('seresnext26tn_32x4d', 'SE-ResNeXt-26-TN 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
+    _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
 
     _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
     _entry('skresnet34', 'SK-ResNet-34', '1903.06586'),
     _entry('skresnext50_32x4d', 'SKNet-50', '1903.06586'),
+
+    _entry('ecaresnetlight', 'ECA-ResNet-Light', '1910.03151',
+           model_desc='A tweaked ResNet50d with ECA attn.'),
+    _entry('ecaresnet50d', 'ECA-ResNet-50d', '1910.03151',
+           model_desc='A ResNet50d with ECA attn'),
+    _entry('ecaresnet101d', 'ECA-ResNet-101d', '1910.03151',
+           model_desc='A ResNet101d with ECA attn'),
+
+    _entry('resnetblur50', 'ResNet-Blur-50', '1904.11486'),
+
+    _entry('densenet121', 'DenseNet-121', '1608.06993'),
+    _entry('densenetblur121d', 'DenseNet-Blur-121D', '1904.11486',
+           model_desc='DenseNet with blur pooling and deep stem'),
+
+    _entry('ese_vovnet19b_dw', 'VoVNet-19-DW-V2', '1911.06667'),
+    _entry('ese_vovnet39b', 'VoVNet-39-V2', '1911.06667'),
+
+    _entry('cspresnet50', 'CSPResNet-50', '1911.11929'),
+    _entry('cspresnext50', 'CSPResNeXt-50', '1911.11929'),
+    _entry('cspdarknet53', 'CSPDarkNet-53', '1911.11929'),
 
     _entry('tf_efficientnet_b0', 'EfficientNet-B0 (AutoAugment)', '1905.11946',
            model_desc='Ported from official Google AI Tensorflow weights'),
@@ -232,13 +256,17 @@ model_list = [
     _entry('inception_v4', 'Inception V4', '1602.07261'),
     _entry('nasnetalarge', 'NASNet-A Large', '1707.07012', batch_size=BATCH_SIZE // 4),
     _entry('pnasnet5large', 'PNASNet-5', '1712.00559', batch_size=BATCH_SIZE // 4),
-    _entry('seresnet50', 'SE-ResNet-50', '1709.01507'),
-    _entry('seresnet101', 'SE-ResNet-101', '1709.01507'),
-    _entry('seresnet152', 'SE-ResNet-152', '1709.01507'),
-    _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
-    _entry('seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
-    _entry('senet154', 'SENet-154', '1709.01507'),
     _entry('xception', 'Xception', '1610.02357',  batch_size=BATCH_SIZE//2),
+    _entry('legacy_seresnet18', 'SE-ResNet-18', '1709.01507'),
+    _entry('legacy_seresnet34', 'SE-ResNet-34', '1709.01507'),
+    _entry('legacy_seresnet50', 'SE-ResNet-50', '1709.01507'),
+    _entry('legacy_seresnet101', 'SE-ResNet-101', '1709.01507'),
+    _entry('legacy_seresnet152', 'SE-ResNet-152', '1709.01507'),
+    _entry('legacy_seresnext26_32x4d', 'SE-ResNeXt-26 32x4d', '1709.01507',
+           model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck'),
+    _entry('legacy_seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
+    _entry('legacy_seresnext101_32x4d', 'SE-ResNeXt-101 32x4d', '1709.01507'),
+    _entry('legacy_senet154', 'SENet-154', '1709.01507'),
 
     ## Torchvision weights
     # _entry('densenet121'),
@@ -380,7 +408,65 @@ model_list = [
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
     _entry('selecsls60b', 'SelecSLS-60_B', '1907.00837',
            model_desc='Originally from https://github.com/mehtadushy/SelecSLS-Pytorch'),
+
+    ## ResNeSt official impl weights
+    _entry('resnest14d', 'ResNeSt-14', '2004.08955',
+           model_desc='Originally from GluonCV'),
+    _entry('resnest26d', 'ResNeSt-26', '2004.08955',
+           model_desc='Originally from GluonCV'),
+    _entry('resnest50d', 'ResNeSt-50', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest101e', 'ResNeSt-101', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest200e', 'ResNeSt-200', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest269e', 'ResNeSt-269', '2004.08955', batch_size=BATCH_SIZE // 2,
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest50d_4s2x40d', 'ResNeSt-50 4s2x40d', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+    _entry('resnest50d_1s4x24d', 'ResNeSt-50 1s4x24d', '2004.08955',
+           model_desc='Originally from https://github.com/zhanghang1989/ResNeSt'),
+
+    ## RegNet official impl weighs
+    _entry('regnetx_002', 'RegNetX-200MF', '2003.13678'),
+    _entry('regnetx_004', 'RegNetX-400MF', '2003.13678'),
+    _entry('regnetx_006', 'RegNetX-600MF', '2003.13678'),
+    _entry('regnetx_008', 'RegNetX-800MF', '2003.13678'),
+    _entry('regnetx_016', 'RegNetX-1.6GF', '2003.13678'),
+    _entry('regnetx_032', 'RegNetX-3.2GF', '2003.13678'),
+    _entry('regnetx_040', 'RegNetX-4.0GF', '2003.13678'),
+    _entry('regnetx_064', 'RegNetX-6.4GF', '2003.13678'),
+    _entry('regnetx_080', 'RegNetX-8.0GF', '2003.13678'),
+    _entry('regnetx_120', 'RegNetX-12GF', '2003.13678'),
+    _entry('regnetx_160', 'RegNetX-16GF', '2003.13678'),
+    _entry('regnetx_320', 'RegNetX-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
+
+    _entry('regnety_002', 'RegNetY-200MF', '2003.13678'),
+    _entry('regnety_004', 'RegNetY-400MF', '2003.13678'),
+    _entry('regnety_006', 'RegNetY-600MF', '2003.13678'),
+    _entry('regnety_008', 'RegNetY-800MF', '2003.13678'),
+    _entry('regnety_016', 'RegNetY-1.6GF', '2003.13678'),
+    _entry('regnety_032', 'RegNetY-3.2GF', '2003.13678'),
+    _entry('regnety_040', 'RegNetY-4.0GF', '2003.13678'),
+    _entry('regnety_064', 'RegNetY-6.4GF', '2003.13678'),
+    _entry('regnety_080', 'RegNetY-8.0GF', '2003.13678'),
+    _entry('regnety_120', 'RegNetY-12GF', '2003.13678'),
+    _entry('regnety_160', 'RegNetY-16GF', '2003.13678'),
+    _entry('regnety_320', 'RegNetY-32GF', '2003.13678', batch_size=BATCH_SIZE // 2),
+
+    _entry('rexnet_100', 'ReXNet-1.0x', '2007.00992'),
+    _entry('rexnet_130', 'ReXNet-1.3x', '2007.00992'),
+    _entry('rexnet_150', 'ReXNet-1.5x', '2007.00992'),
+    _entry('rexnet_200', 'ReXNet-2.0x', '2007.00992'),
 ]
+
+if is_server():
+    DATA_ROOT = './.data/vision/imagenet'
+else:
+    # local settings
+    DATA_ROOT = './'
+DATA_FILENAME = 'ILSVRC2012_img_val.tar'
+TAR_PATH = os.path.join(DATA_ROOT, DATA_FILENAME)
 
 for m in model_list:
     model_name = m['model']
@@ -389,25 +475,63 @@ for m in model_list:
     param_count = sum([m.numel() for m in model.parameters()])
     print('Model %s, %s created. Param count: %d' % (model_name, m['paper_model_name'], param_count))
 
+    dataset = DatasetTar(TAR_PATH)
+    filenames = [os.path.splitext(f)[0] for f in dataset.filenames()]
+
     # get appropriate transform for model's default pretrained config
     data_config = resolve_data_config(m['args'], model=model, verbose=True)
+    test_time_pool = False
     if m['ttp']:
-        model = TestTimePoolHead(model, model.default_cfg['pool_size'])
+        model, test_time_pool = apply_test_time_pool(model, data_config)
         data_config['crop_pct'] = 1.0
-    input_transform = create_transform(**data_config)
 
-    # Run the benchmark
-    ImageNet.benchmark(
-        model=model,
-        model_description=m.get('model_description', None),
-        paper_model_name=m['paper_model_name'],
+    batch_size = m['batch_size']
+    loader = create_loader(
+        dataset,
+        input_size=data_config['input_size'],
+        batch_size=batch_size,
+        use_prefetcher=True,
+        interpolation=data_config['interpolation'],
+        mean=data_config['mean'],
+        std=data_config['std'],
+        num_workers=6,
+        crop_pct=data_config['crop_pct'],
+        pin_memory=True)
+
+    evaluator = ImageNetEvaluator(
+        root=DATA_ROOT,
+        model_name=m['paper_model_name'],
         paper_arxiv_id=m['paper_arxiv_id'],
-        input_transform=input_transform,
-        batch_size=m['batch_size'],
-        num_gpu=NUM_GPU,
-        data_root=os.environ.get('IMAGENET_DIR', './imagenet')
+        model_description=m.get('model_description', None),
     )
+    model.cuda()
+    model.eval()
+    with torch.no_grad():
+        # warmup
+        input = torch.randn((batch_size,) + data_config['input_size']).cuda()
+        model(input)
 
+        bar = tqdm(desc="Evaluation", mininterval=5, total=50000)
+        evaluator.reset_time()
+        sample_count = 0
+        for input, target in loader:
+            output = model(input)
+            num_samples = len(output)
+            image_ids = [filenames[i] for i in range(sample_count, sample_count + num_samples)]
+            output = output.cpu().numpy()
+            evaluator.add(dict(zip(image_ids, list(output))))
+            sample_count += num_samples
+            bar.update(num_samples)
+            if evaluator.cache_exists:
+                break
+
+        bar.close()
+
+    evaluator.save()
+    for k, v in evaluator.results.items():
+        print(k, v)
+    for k, v in evaluator.speed_mem_metrics.items():
+        print(k, v)
     torch.cuda.empty_cache()
 
 
