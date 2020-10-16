@@ -3,7 +3,7 @@
 Paper: CondConv: Conditionally Parameterized Convolutions for Efficient Inference
 (https://arxiv.org/abs/1904.04971)
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import math
@@ -13,9 +13,9 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-from .helpers import tup_pair
+from .helpers import to_2tuple
 from .conv2d_same import conv2d_same
-from timm.models.layers.padding import get_padding_value
+from .padding import get_padding_value
 
 
 def get_condconv_initializer(initializer, num_experts, expert_shape):
@@ -38,7 +38,7 @@ class CondConv2d(nn.Module):
     Grouped convolution hackery for parallel execution of the per-sample kernel filters inspired by this discussion:
     https://github.com/pytorch/pytorch/issues/17983
     """
-    __constants__ = ['bias', 'in_channels', 'out_channels', 'dynamic_padding']
+    __constants__ = ['in_channels', 'out_channels', 'dynamic_padding']
 
     def __init__(self, in_channels, out_channels, kernel_size=3,
                  stride=1, padding='', dilation=1, groups=1, bias=False, num_experts=4):
@@ -46,13 +46,13 @@ class CondConv2d(nn.Module):
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = tup_pair(kernel_size)
-        self.stride = tup_pair(stride)
+        self.kernel_size = to_2tuple(kernel_size)
+        self.stride = to_2tuple(stride)
         padding_val, is_padding_dynamic = get_padding_value(
             padding, kernel_size, stride=stride, dilation=dilation)
         self.dynamic_padding = is_padding_dynamic  # if in forward to work with torchscript
-        self.padding = tup_pair(padding_val)
-        self.dilation = tup_pair(dilation)
+        self.padding = to_2tuple(padding_val)
+        self.dilation = to_2tuple(dilation)
         self.groups = groups
         self.num_experts = num_experts
 

@@ -1,14 +1,13 @@
 """ Conv2d w/ Same Padding
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 
-from timm.models.layers.padding import get_padding_value
-from .padding import pad_same
+from .padding import pad_same, get_padding_value
 
 
 def conv2d_same(

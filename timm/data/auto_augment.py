@@ -15,7 +15,7 @@ Papers:
     RandAugment: Practical automated data augmentation... - https://arxiv.org/abs/1909.13719
     AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty - https://arxiv.org/abs/1912.02781
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import random
 import math

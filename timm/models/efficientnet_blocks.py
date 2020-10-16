@@ -1,9 +1,14 @@
+""" EfficientNet, MobileNetV3, etc Blocks
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from .layers.activations import sigmoid
-from .layers import create_conv2d, drop_path
 
+from .layers import create_conv2d, drop_path, get_act_layer
+from .layers.activations import sigmoid
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
@@ -52,6 +57,13 @@ def resolve_se_args(kwargs, in_chs, act_layer=None):
     return se_kwargs
 
 
+def resolve_act_layer(kwargs, default='relu'):
+    act_layer = kwargs.pop('act_layer', default)
+    if isinstance(act_layer, str):
+        act_layer = get_act_layer(act_layer)
+    return act_layer
+
+
 def make_divisible(v, divisor=8, min_value=None):
     min_value = min_value or divisor
     new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
@@ -94,20 +106,18 @@ class SqueezeExcite(nn.Module):
     def __init__(self, in_chs, se_ratio=0.25, reduced_base_chs=None,
                  act_layer=nn.ReLU, gate_fn=sigmoid, divisor=1, **_):
         super(SqueezeExcite, self).__init__()
-        self.gate_fn = gate_fn
         reduced_chs = make_divisible((reduced_base_chs or in_chs) * se_ratio, divisor)
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv_reduce = nn.Conv2d(in_chs, reduced_chs, 1, bias=True)
         self.act1 = act_layer(inplace=True)
         self.conv_expand = nn.Conv2d(reduced_chs, in_chs, 1, bias=True)
+        self.gate_fn = gate_fn
 
     def forward(self, x):
-        x_se = self.avg_pool(x)
+        x_se = x.mean((2, 3), keepdim=True)
         x_se = self.conv_reduce(x_se)
         x_se = self.act1(x_se)
         x_se = self.conv_expand(x_se)
-        x = x * self.gate_fn(x_se)
-        return x
+        return x * self.gate_fn(x_se)
 
 
 class ConvBnAct(nn.Module):
@@ -121,10 +131,9 @@ class ConvBnAct(nn.Module):
         self.act1 = act_layer(inplace=True)
 
     def feature_info(self, location):
-        if location == 'expansion' or location == 'depthwise':
-            # no expansion or depthwise this block, use act after conv
+        if location == 'expansion':  # output of conv after act, same as block coutput
             info = dict(module='act1', hook_type='forward', num_chs=self.conv.out_channels)
-        else:  # location == 'bottleneck'
+        else:  # location == 'bottleneck', block output
             info = dict(module='', hook_type='', num_chs=self.conv.out_channels)
         return info
 
@@ -168,12 +177,9 @@ class DepthwiseSeparableConv(nn.Module):
         self.act2 = act_layer(inplace=True) if self.has_pw_act else nn.Identity()
 
     def feature_info(self, location):
-        if location == 'expansion':
-            # no expansion in this block, use depthwise, before SE
-            info = dict(module='act1', hook_type='forward', num_chs=self.conv_pw.in_channels)
-        elif location == 'depthwise':  # after SE
+        if location == 'expansion':  # after SE, input to PW
             info = dict(module='conv_pw', hook_type='forward_pre', num_chs=self.conv_pw.in_channels)
-        else:  # location == 'bottleneck'
+        else:  # location == 'bottleneck', block output
             info = dict(module='', hook_type='', num_chs=self.conv_pw.out_channels)
         return info
 
@@ -238,11 +244,9 @@ class InvertedResidual(nn.Module):
         self.bn3 = norm_layer(out_chs, **norm_kwargs)
 
     def feature_info(self, location):
-        if location == 'expansion':
-            info = dict(module='act1', hook_type='forward', num_chs=self.conv_pw.in_channels)
-        elif location == 'depthwise':  # after SE
+        if location == 'expansion':  # after SE, input to PWL
             info = dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
-        else:  # location == 'bottleneck'
+        else:  # location == 'bottleneck', block output
             info = dict(module='', hook_type='', num_chs=self.conv_pwl.out_channels)
         return info
 
@@ -363,12 +367,9 @@ class EdgeResidual(nn.Module):
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
 
     def feature_info(self, location):
-        if location == 'expansion':
-            info = dict(module='act1', hook_type='forward', num_chs=self.conv_exp.out_channels)
-        elif location == 'depthwise':
-            # there is no depthwise, take after SE, before PWL
+        if location == 'expansion':  # after SE, before PWL
             info = dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
-        else:  # location == 'bottleneck'
+        else:  # location == 'bottleneck', block output
             info = dict(module='', hook_type='', num_chs=self.conv_pwl.out_channels)
         return info
 

@@ -5,13 +5,14 @@ import torch.nn.functional as F
 
 
 class AntiAliasDownsampleLayer(nn.Module):
-    def __init__(self, remove_aa_jit: bool = False, filt_size: int = 3, stride: int = 2,
-                 channels: int = 0):
+    def __init__(self, channels: int = 0, filt_size: int = 3, stride: int = 2, no_jit: bool = False):
         super(AntiAliasDownsampleLayer, self).__init__()
-        if not remove_aa_jit:
-            self.op = DownsampleJIT(filt_size, stride, channels)
+        if no_jit:
+            self.op = Downsample(channels, filt_size, stride)
         else:
-            self.op = Downsample(filt_size, stride, channels)
+            self.op = DownsampleJIT(channels, filt_size, stride)
+
+        # FIXME I should probably override _apply and clear DownsampleJIT filter cache for .cuda(), .half(), etc calls
 
     def forward(self, x):
         return self.op(x)
@@ -19,38 +20,36 @@ class AntiAliasDownsampleLayer(nn.Module):
 
 @torch.jit.script
 class DownsampleJIT(object):
-    def __init__(self, filt_size: int = 3, stride: int = 2, channels: int = 0):
+    def __init__(self, channels: int = 0, filt_size: int = 3, stride: int = 2):
+        self.channels = channels
         self.stride = stride
         self.filt_size = filt_size
-        self.channels = channels
-
         assert self.filt_size == 3
         assert stride == 2
-        a = torch.tensor([1., 2., 1.])
+        self.filt = {}  # lazy init by device for DataParallel compat
 
-        filt = (a[:, None] * a[None, :]).clone().detach()
+    def _create_filter(self, like: torch.Tensor):
+        filt = torch.tensor([1., 2., 1.], dtype=like.dtype, device=like.device)
+        filt = filt[:, None] * filt[None, :]
         filt = filt / torch.sum(filt)
-        self.filt = filt[None, None, :, :].repeat((self.channels, 1, 1, 1)).cuda().half()
+        return filt[None, None, :, :].repeat((self.channels, 1, 1, 1))
 
     def __call__(self, input: torch.Tensor):
-        if input.dtype != self.filt.dtype:
-            self.filt = self.filt.float()
         input_pad = F.pad(input, (1, 1, 1, 1), 'reflect')
-        return F.conv2d(input_pad, self.filt, stride=2, padding=0, groups=input.shape[1])
+        filt = self.filt.get(str(input.device), self._create_filter(input))
+        return F.conv2d(input_pad, filt, stride=2, padding=0, groups=input.shape[1])
 
 
 class Downsample(nn.Module):
-    def __init__(self, filt_size=3, stride=2, channels=None):
+    def __init__(self, channels=None, filt_size=3, stride=2):
         super(Downsample, self).__init__()
+        self.channels = channels
         self.filt_size = filt_size
         self.stride = stride
-        self.channels = channels
-
 
         assert self.filt_size == 3
-        a = torch.tensor([1., 2., 1.])
-
-        filt = (a[:, None] * a[None, :])
+        filt = torch.tensor([1., 2., 1.])
+        filt = filt[:, None] * filt[None, :]
         filt = filt / torch.sum(filt)
 
         # self.filt = filt[None, None, :, :].repeat((self.channels, 1, 1, 1))

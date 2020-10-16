@@ -1,3 +1,7 @@
+""" Quick n Simple Image Folder, Tarfile based DataSet
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -35,14 +39,13 @@ def find_images_and_targets(folder, types=IMG_EXTENSIONS, class_to_idx=None, lea
         unique_labels = set(labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    images_and_targets = zip(filenames, [class_to_idx[l] for l in labels])
+    images_and_targets = [(f, class_to_idx[l]) for f, l in zip(filenames, labels) if l in class_to_idx]
     if sort:
         images_and_targets = sorted(images_and_targets, key=lambda k: natural_key(k[0]))
     return images_and_targets, class_to_idx
 
 
 def load_class_map(filename, root=''):
-    class_to_idx = {}
     class_map_path = filename
     if not os.path.exists(class_map_path):
         class_map_path = os.path.join(root, filename)
@@ -70,8 +73,8 @@ class Dataset(data.Dataset):
             class_to_idx = load_class_map(class_map, root)
         images, class_to_idx = find_images_and_targets(root, class_to_idx=class_to_idx)
         if len(images) == 0:
-            raise(RuntimeError("Found 0 images in subfolders of: " + root + "\n"
-                               "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
+            raise RuntimeError(f'Found 0 images in subfolders of {root}. '
+                               f'Supported image extensions are {", ".join(IMG_EXTENSIONS)}')
         self.root = root
         self.samples = images
         self.imgs = self.samples  # torchvision ImageFolder compat
@@ -89,19 +92,23 @@ class Dataset(data.Dataset):
         return img, target
 
     def __len__(self):
-        return len(self.imgs)
+        return len(self.samples)
 
-    def filenames(self, indices=[], basename=False):
-        if indices:
-            if basename:
-                return [os.path.basename(self.samples[i][0]) for i in indices]
-            else:
-                return [self.samples[i][0] for i in indices]
-        else:
-            if basename:
-                return [os.path.basename(x[0]) for x in self.samples]
-            else:
-                return [x[0] for x in self.samples]
+    def filename(self, index, basename=False, absolute=False):
+        filename = self.samples[index][0]
+        if basename:
+            filename = os.path.basename(filename)
+        elif not absolute:
+            filename = os.path.relpath(filename, self.root)
+        return filename
+
+    def filenames(self, basename=False, absolute=False):
+        fn = lambda x: x
+        if basename:
+            fn = os.path.basename
+        elif not absolute:
+            fn = lambda x: os.path.relpath(x, self.root)
+        return [fn(x[0]) for x in self.samples]
 
 
 def _extract_tar_info(tarfile, class_to_idx=None, sort=True):
@@ -120,7 +127,7 @@ def _extract_tar_info(tarfile, class_to_idx=None, sort=True):
         unique_labels = set(labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    tarinfo_and_targets = zip(files, [class_to_idx[l] for l in labels])
+    tarinfo_and_targets = [(f, class_to_idx[l]) for f, l in zip(files, labels) if l in class_to_idx]
     if sort:
         tarinfo_and_targets = sorted(tarinfo_and_targets, key=lambda k: natural_key(k[0].path))
     return tarinfo_and_targets, class_to_idx
@@ -137,6 +144,7 @@ class DatasetTar(data.Dataset):
         self.root = root
         with tarfile.open(root) as tf:  # cannot keep this open across processes, reopen later
             self.samples, self.class_to_idx = _extract_tar_info(tf, class_to_idx)
+        self.imgs = self.samples
         self.tarfile = None  # lazy init in __getitem__
         self.load_bytes = load_bytes
         self.transform = transform
@@ -155,6 +163,16 @@ class DatasetTar(data.Dataset):
 
     def __len__(self):
         return len(self.samples)
+
+    def filename(self, index, basename=False):
+        filename = self.samples[index][0].name
+        if basename:
+            filename = os.path.basename(filename)
+        return filename
+
+    def filenames(self, basename=False):
+        fn = os.path.basename if basename else lambda x: x
+        return [fn(x[0].name) for x in self.samples]
 
 
 class AugMixDataset(torch.utils.data.Dataset):
