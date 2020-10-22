@@ -2,6 +2,9 @@
 
 ## What's New
 
+### Oct 21, 2020
+* Weights added for Vision Transformer (ViT) models. 77.86 top-1 for 'small' and 79.35 for 'base'. Thanks to [Christof](https://www.kaggle.com/christofhenkel) for training the base model w/ lots of GPUs.
+
 ### Oct 13, 2020
 * Initial impl of Vision Transformer models. Both patch and hybrid (CNN backbone) variants. Currently trying to train...
 * Adafactor and AdaHessian (FP32 only, no AMP) optimizers
