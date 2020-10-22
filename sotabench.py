@@ -458,6 +458,9 @@ model_list = [
     _entry('rexnet_130', 'ReXNet-1.3x', '2007.00992'),
     _entry('rexnet_150', 'ReXNet-1.5x', '2007.00992'),
     _entry('rexnet_200', 'ReXNet-2.0x', '2007.00992'),
+
+    _entry('vit_small_patch16_224', 'ViT-S/16', None),
+    _entry('vit_base_patch16_224', 'ViT-B/16', None),
 ]
 
 if is_server():
