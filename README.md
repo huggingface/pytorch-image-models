@@ -2,6 +2,14 @@
 
 ## What's New
 
+### Oct 26, 2020
+* Update Vision Transformer models to be compatible with official code release at https://github.com/google-research/vision_transformer
+* Add Vision Transformer weights (ImageNet-21k pretrain) for 384x384 base and large models converted from official jax impl
+  * ViT-B/16 - 84.2
+  * ViT-B/32 - 81.7
+  * ViT-L/16 - 85.2
+  * ViT-L/32 - 81.5
+
 ### Oct 21, 2020
 * Weights added for Vision Transformer (ViT) models. 77.86 top-1 for 'small' and 79.35 for 'base'. Thanks to [Christof](https://www.kaggle.com/christofhenkel) for training the base model w/ lots of GPUs.
 
