@@ -206,7 +206,7 @@ class VisionTransformer(nn.Module):
                  drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm):
         super().__init__()
         self.num_classes = num_classes
-        self.embed_dim = embed_dim
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
 
         if hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
