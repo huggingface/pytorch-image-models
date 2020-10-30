@@ -132,6 +132,10 @@ NOTE: I am deprecating this version of the networks, the new ones are part of `r
 * Paper: `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
 * Code: https://github.com/mrT23/TResNet
 
+## Vision Transformer [[vision_transformer.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py)]
+* Paper: `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+* Reference code and pretrained weights: https://github.com/google-research/vision_transformer
+
 ## VovNet V2 and V1 [[vovnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vovnet.py)]
 * Paper: `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
 * Reference code: https://github.com/youngwanLEE/vovnet-detectron2

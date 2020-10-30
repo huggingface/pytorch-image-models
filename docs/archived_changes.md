@@ -1,5 +1,16 @@
 # Archived Changes
 
+### April 5, 2020
+* Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite
+  * 3.5M param MobileNet-V2 100 @ 73%
+  * 4.5M param MobileNet-V2 110d @ 75%
+  * 6.1M param MobileNet-V2 140 @ 76.5%
+  * 5.8M param MobileNet-V2 120d @ 77.3%
+
+### March 18, 2020
+* Add EfficientNet-Lite models w/ weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite)
+* Add RandAugment trained ResNeXt-50 32x4d weights with 79.8 top-1. Trained by [Andrew Lavin](https://github.com/andravin) (see Training section for hparams)
+
 ### Feb 29, 2020
 * New MobileNet-V3 Large weights trained from stratch with this code to 75.77% top-1
 * IMPORTANT CHANGE - default weight init changed for all MobilenetV3 / EfficientNet / related models

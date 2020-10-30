@@ -2,6 +2,13 @@
 
 ## What's New
 
+### Oct 30, 2020
+* Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.
+* Convert newly added 224x224 Vision Transformer weights from official JAX repo. 81.8 top-1 for B/16, 83.1 L/16.
+* Support PyTorch 1.7 optimized, native SiLU (aka Swish) activation. Add mapping to 'silu' name, custom swish will eventually be deprecated.
+* Fix regression for loading pretrained classifier via direct model entrypoint functions. Didn't impact create_model() factory usage.
+* PyPi release @ 0.3.0 version!
+
 ### Oct 26, 2020
 * Update Vision Transformer models to be compatible with official code release at https://github.com/google-research/vision_transformer
 * Add Vision Transformer weights (ImageNet-21k pretrain) for 384x384 base and large models converted from official jax impl
@@ -141,7 +148,7 @@ A full version of the list below with source links can be found in the [document
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * TResNet - https://arxiv.org/abs/2003.13630
-* Vision Transformer - https://openreview.net/forum?id=YicbFdNTTy
+* Vision Transformer - https://arxiv.org/abs/2010.11929
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
 * Xception (Modified Aligned, Gluon) - https://arxiv.org/abs/1802.02611

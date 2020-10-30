@@ -1,5 +1,40 @@
 # Recent Changes
 
+### Oct 30, 2020
+* Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.
+* Convert newly added 224x224 Vision Transformer weights from official JAX repo. 81.8 top-1 for B/16, 83.1 L/16.
+* Support PyTorch 1.7 optimized, native SiLU (aka Swish) activation. Add mapping to 'silu' name, custom swish will eventually be deprecated.
+* Fix regression for loading pretrained classifier via direct model entrypoint functions. Didn't impact create_model() factory usage.
+* PyPi release @ 0.3.0 version!
+
+### Oct 26, 2020
+* Update Vision Transformer models to be compatible with official code release at https://github.com/google-research/vision_transformer
+* Add Vision Transformer weights (ImageNet-21k pretrain) for 384x384 base and large models converted from official jax impl
+  * ViT-B/16 - 84.2
+  * ViT-B/32 - 81.7
+  * ViT-L/16 - 85.2
+  * ViT-L/32 - 81.5
+
+### Oct 21, 2020
+* Weights added for Vision Transformer (ViT) models. 77.86 top-1 for 'small' and 79.35 for 'base'. Thanks to [Christof](https://www.kaggle.com/christofhenkel) for training the base model w/ lots of GPUs.
+
+### Oct 13, 2020
+* Initial impl of Vision Transformer models. Both patch and hybrid (CNN backbone) variants. Currently trying to train...
+* Adafactor and AdaHessian (FP32 only, no AMP) optimizers
+* EdgeTPU-M (`efficientnet_em`) model trained in PyTorch, 79.3 top-1
+* Pip release, doc updates pending a few more changes...
+
+### Sept 18, 2020
+* New ResNet 'D' weights. 72.7 (top-1) ResNet-18-D, 77.1 ResNet-34-D, 80.5 ResNet-50-D
+* Added a few untrained defs for other ResNet models (66D, 101D, 152D, 200/200D)
+
+### Sept 3, 2020
+* New weights
+  * Wide-ResNet50 - 81.5 top-1 (vs 78.5 torchvision)
+  * SEResNeXt50-32x4d - 81.3 top-1 (vs 79.1 cadene)
+* Support for native Torch AMP and channels_last memory format added to train/validate scripts (`--channels-last`, `--native-amp` vs `--apex-amp`)
+* Models tested with channels_last on latest NGC 20.08 container. AdaptiveAvgPool in attn layers changed to mean((2,3)) to work around bug with NHWC kernel.
+
 ### Aug 12, 2020
 * New/updated weights from training experiments
   * EfficientNet-B3 - 82.1 top-1 (vs 81.6 for official with AA and 81.9 for AdvProp)
@@ -54,14 +89,3 @@ Bunch of changes:
   * TResNet models and SpaceToDepth, AntiAliasDownsampleLayer layers by [mrT23](https://github.com/mrT23)
   * ecaresnet (50d, 101d, light) models and two pruned variants using pruning as per (https://arxiv.org/abs/2002.08258) by [Yonathan Aflalo](https://github.com/yoniaflalo)
 * 200 pretrained models in total now with updated results csv in results folder
-
-### April 5, 2020
-* Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite
-  * 3.5M param MobileNet-V2 100 @ 73%
-  * 4.5M param MobileNet-V2 110d @ 75%
-  * 6.1M param MobileNet-V2 140 @ 76.5%
-  * 5.8M param MobileNet-V2 120d @ 77.3%
-
-### March 18, 2020
-* Add EfficientNet-Lite models w/ weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite)
-* Add RandAugment trained ResNeXt-50 32x4d weights with 79.8 top-1. Trained by [Andrew Lavin](https://github.com/andravin) (see Training section for hparams)

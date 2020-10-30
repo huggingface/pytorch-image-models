@@ -13,13 +13,13 @@ pip install timm
     
     Little to no care has been taken to be Python 2.x friendly and will not support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.
     
-    PyTorch versions 1.4, 1.5.x, and 1.6 have been tested with this code.
+    PyTorch versions 1.4, 1.5.x, 1.6, and 1.7 have been tested with this code.
     
     I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
     ```
     conda create -n torch-env
     conda activate torch-env
-    conda install -c pytorch pytorch torchvision cudatoolkit=10.2
+    conda install -c pytorch pytorch torchvision cudatoolkit=11
     conda install pyyaml
     ```
 
