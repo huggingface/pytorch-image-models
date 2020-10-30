@@ -776,6 +776,7 @@ def _create_hrnet(variant, pretrained, **model_kwargs):
     strict = True
     if model_kwargs.pop('features_only', False):
         model_cls = HighResolutionNetFeatures
+        model_kwargs['num_classes'] = 0
         strict = False
 
     return build_model_with_cfg(

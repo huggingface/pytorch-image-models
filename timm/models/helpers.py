@@ -277,11 +277,12 @@ def build_model_with_cfg(
     if pruned:
         model = adapt_model_from_file(model, variant)
 
+    # for classification models, check class attr, then kwargs, then default to 1k, otherwise 0 for feats
+    num_classes_pretrained = 0 if features else getattr(model, 'num_classes', kwargs.get('num_classes', 1000))
     if pretrained:
         load_pretrained(
             model,
-            num_classes=kwargs.get('num_classes', 0),
-            in_chans=kwargs.get('in_chans', 3),
+            num_classes=num_classes_pretrained, in_chans=kwargs.get('in_chans', 3),
             filter_fn=pretrained_filter_fn, strict=pretrained_strict)
     
     if features:
