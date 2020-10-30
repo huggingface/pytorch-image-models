@@ -415,11 +415,11 @@
 <p class="admonition-title">Conda Environment</p>
 <p>All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x, 3.7.x., 3.8.x.</p>
 <p>Little to no care has been taken to be Python 2.x friendly and will not support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.</p>
-<p>PyTorch versions 1.4, 1.5.x, and 1.6 have been tested with this code.</p>
+<p>PyTorch versions 1.4, 1.5.x, 1.6, and 1.7 have been tested with this code.</p>
 <p>I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
 <div class="highlight"><pre><span></span><code>conda create -n torch-env
 conda activate torch-env
-conda install -c pytorch pytorch torchvision cudatoolkit=10.2
+conda install -c pytorch pytorch torchvision cudatoolkit=11
 conda install pyyaml
 </code></pre></div></p>
 </div>
@@ -427,7 +427,7 @@ conda install pyyaml
 <p>Pretrained models can be loaded using <code>timm.create_model</code></p>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">timm</span>
 
-<span class="n">m</span> <span class="o">=</span> <span class="n">timm</span><span class="o">.</span><span class="n">create_model</span><span class="p">(</span><span class="s1">&#39;mobilenetv3_100&#39;</span><span class="p">,</span> <span class="n">pretrained</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">timm</span><span class="o">.</span><span class="n">create_model</span><span class="p">(</span><span class="s1">&#39;mobilenetv3_large_100&#39;</span><span class="p">,</span> <span class="n">pretrained</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
 <span class="n">m</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
 </code></pre></div>
 

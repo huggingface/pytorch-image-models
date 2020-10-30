@@ -245,8 +245,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ported-weights" class="md-nav__link">
-    Ported Weights
+  <a href="#ported-and-other-weights" class="md-nav__link">
+    Ported and Other Weights
   </a>
   
 </li>
@@ -351,8 +351,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ported-weights" class="md-nav__link">
-    Ported Weights
+  <a href="#ported-and-other-weights" class="md-nav__link">
+    Ported and Other Weights
   </a>
   
 </li>
@@ -378,7 +378,7 @@
                 
                 
                 <h1 id="results">Results</h1>
-<p>CSV files containing an ImageNet-1K validation and OOD test set validation results for all included models with pretrained weights and default configurations is located <a href="https://github.com/rwightman/pytorch-image-models/tree/master/results">here</a>.</p>
+<p>CSV files containing an ImageNet-1K validation and out-of-distribution (OOD) test set validation results for all included models with pretrained weights and default configurations is located <a href="https://github.com/rwightman/pytorch-image-models/tree/master/results">here</a>.</p>
 <h2 id="self-trained-weights">Self-trained Weights</h2>
 <p>I've leveraged the training scripts in this repository to train a few of the models with to good levels of performance.</p>
 <table>
@@ -395,19 +395,27 @@
 <tbody>
 <tr>
 <td>efficientnet_b3a</td>
-<td>81.874 (18.126)</td>
-<td>95.840 (4.160)</td>
+<td>82.242 (17.758)</td>
+<td>96.114 (3.886)</td>
 <td>12.23</td>
 <td>bicubic</td>
 <td>320 (1.0 crop)</td>
 </tr>
 <tr>
 <td>efficientnet_b3</td>
-<td>81.498 (18.502)</td>
-<td>95.718 (4.282)</td>
+<td>82.076 (17.924)</td>
+<td>96.020 (3.980)</td>
 <td>12.23</td>
 <td>bicubic</td>
 <td>300</td>
+</tr>
+<tr>
+<td>regnet_32</td>
+<td>82.002 (17.998)</td>
+<td>95.906 (4.094)</td>
+<td>19.44</td>
+<td>bicubic</td>
+<td>224</td>
 </tr>
 <tr>
 <td>skresnext50d_32x4d</td>
@@ -418,12 +426,28 @@
 <td>288 (1.0 crop)</td>
 </tr>
 <tr>
+<td>seresnext50d_32x4d</td>
+<td>81.266 (18.734)</td>
+<td>95.620 (4.380)</td>
+<td>27.6</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
 <td>efficientnet_b2a</td>
 <td>80.608 (19.392)</td>
 <td>95.310 (4.690)</td>
 <td>9.11</td>
 <td>bicubic</td>
 <td>288 (1.0 crop)</td>
+</tr>
+<tr>
+<td>resnet50d</td>
+<td>80.530 (19.470)</td>
+<td>95.160 (4.840)</td>
+<td>25.6</td>
+<td>bicubic</td>
+<td>224</td>
 </tr>
 <tr>
 <td>mixnet_xl</td>
@@ -442,10 +466,34 @@
 <td>260</td>
 </tr>
 <tr>
+<td>seresnet50</td>
+<td>80.274 (19.726)</td>
+<td>95.070 (4.930)</td>
+<td>28.1</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
 <td>skresnext50d_32x4d</td>
 <td>80.156 (19.844)</td>
 <td>94.642 (5.358)</td>
 <td>27.5</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>cspdarknet53</td>
+<td>80.058 (19.942)</td>
+<td>95.084 (4.916)</td>
+<td>27.6</td>
+<td>bicubic</td>
+<td>256</td>
+</tr>
+<tr>
+<td>cspresnext50</td>
+<td>80.040 (19.960)</td>
+<td>94.944 (5.056)</td>
+<td>20.6</td>
 <td>bicubic</td>
 <td>224</td>
 </tr>
@@ -466,6 +514,14 @@
 <td>224</td>
 </tr>
 <tr>
+<td>cspresnet50</td>
+<td>79.574 (20.426)</td>
+<td>94.712 (5.288)</td>
+<td>21.6</td>
+<td>bicubic</td>
+<td>256</td>
+</tr>
+<tr>
 <td>ese_vovnet39b</td>
 <td>79.320 (20.680)</td>
 <td>94.710 (5.290)</td>
@@ -478,6 +534,14 @@
 <td>79.290 (20.710)</td>
 <td>94.632 (5.368)</td>
 <td>25.6</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>dpn68b</td>
+<td>79.216 (20.784)</td>
+<td>94.414 (5.586)</td>
+<td>12.6</td>
 <td>bicubic</td>
 <td>224</td>
 </tr>
@@ -558,6 +622,14 @@
 <td>77.256 (22.744)</td>
 <td>93.418 (6.582)</td>
 <td>5.01</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
+<td>resnet34d</td>
+<td>77.116 (22.884)</td>
+<td>93.382 (6.618)</td>
+<td>21.8</td>
 <td>bicubic</td>
 <td>224</td>
 </tr>
@@ -714,6 +786,14 @@
 <td>224</td>
 </tr>
 <tr>
+<td>resnet18d</td>
+<td>72.260 (27.740)</td>
+<td>90.696 (9.304)</td>
+<td>11.7</td>
+<td>bicubic</td>
+<td>224</td>
+</tr>
+<tr>
 <td>seresnet18</td>
 <td>71.742 (28.258)</td>
 <td>90.334 (9.666)</td>
@@ -723,990 +803,9 @@
 </tr>
 </tbody>
 </table>
-<h2 id="ported-weights">Ported Weights</h2>
-<p>For the models below, the model code and weight porting from Tensorflow or MXNet Gluon to Pytorch was done by myself. There are weights/models ported by others included in this repository, they are not listed below.</p>
-<table>
-<thead>
-<tr>
-<th>Model</th>
-<th>Acc@1 (Err)</th>
-<th>Acc@5 (Err)</th>
-<th>Param # (M)</th>
-<th>Interpolation</th>
-<th>Image Size</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>tf_efficientnet_l2_ns *tfp</td>
-<td>88.352 (11.648)</td>
-<td>98.652 (1.348)</td>
-<td>480</td>
-<td>bicubic</td>
-<td>800</td>
-</tr>
-<tr>
-<td>tf_efficientnet_l2_ns</td>
-<td>TBD</td>
-<td>TBD</td>
-<td>480</td>
-<td>bicubic</td>
-<td>800</td>
-</tr>
-<tr>
-<td>tf_efficientnet_l2_ns_475</td>
-<td>88.234 (11.766)</td>
-<td>98.546 (1.454)f</td>
-<td>480</td>
-<td>bicubic</td>
-<td>475</td>
-</tr>
-<tr>
-<td>tf_efficientnet_l2_ns_475 *tfp</td>
-<td>88.172 (11.828)</td>
-<td>98.566 (1.434)</td>
-<td>480</td>
-<td>bicubic</td>
-<td>475</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b7_ns *tfp</td>
-<td>86.844 (13.156)</td>
-<td>98.084 (1.916)</td>
-<td>66.35</td>
-<td>bicubic</td>
-<td>600</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b7_ns</td>
-<td>86.840 (13.160)</td>
-<td>98.094 (1.906)</td>
-<td>66.35</td>
-<td>bicubic</td>
-<td>600</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b6_ns</td>
-<td>86.452 (13.548)</td>
-<td>97.882 (2.118)</td>
-<td>43.04</td>
-<td>bicubic</td>
-<td>528</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b6_ns *tfp</td>
-<td>86.444 (13.556)</td>
-<td>97.880 (2.120)</td>
-<td>43.04</td>
-<td>bicubic</td>
-<td>528</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b5_ns *tfp</td>
-<td>86.064 (13.936)</td>
-<td>97.746 (2.254)</td>
-<td>30.39</td>
-<td>bicubic</td>
-<td>456</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b5_ns</td>
-<td>86.088 (13.912)</td>
-<td>97.752 (2.248)</td>
-<td>30.39</td>
-<td>bicubic</td>
-<td>456</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b8_ap *tfp</td>
-<td>85.436 (14.564)</td>
-<td>97.272 (2.728)</td>
-<td>87.4</td>
-<td>bicubic</td>
-<td>672</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b8 *tfp</td>
-<td>85.384 (14.616)</td>
-<td>97.394 (2.606)</td>
-<td>87.4</td>
-<td>bicubic</td>
-<td>672</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b8</td>
-<td>85.370 (14.630)</td>
-<td>97.390 (2.610)</td>
-<td>87.4</td>
-<td>bicubic</td>
-<td>672</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b8_ap</td>
-<td>85.368 (14.632)</td>
-<td>97.294 (2.706)</td>
-<td>87.4</td>
-<td>bicubic</td>
-<td>672</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b4_ns *tfp</td>
-<td>85.298 (14.702)</td>
-<td>97.504 (2.496)</td>
-<td>19.34</td>
-<td>bicubic</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b4_ns</td>
-<td>85.162 (14.838)</td>
-<td>97.470 (2.530)</td>
-<td>19.34</td>
-<td>bicubic</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b7_ap *tfp</td>
-<td>85.154 (14.846)</td>
-<td>97.244 (2.756)</td>
-<td>66.35</td>
-<td>bicubic</td>
-<td>600</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b7_ap</td>
-<td>85.118 (14.882)</td>
-<td>97.252 (2.748)</td>
-<td>66.35</td>
-<td>bicubic</td>
-<td>600</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b7 *tfp</td>
-<td>84.940 (15.060)</td>
-<td>97.214 (2.786)</td>
-<td>66.35</td>
-<td>bicubic</td>
-<td>600</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b7</td>
-<td>84.932 (15.068)</td>
-<td>97.208 (2.792)</td>
-<td>66.35</td>
-<td>bicubic</td>
-<td>600</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b6_ap</td>
-<td>84.786 (15.214)</td>
-<td>97.138 (2.862)</td>
-<td>43.04</td>
-<td>bicubic</td>
-<td>528</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b6_ap *tfp</td>
-<td>84.760 (15.240)</td>
-<td>97.124 (2.876)</td>
-<td>43.04</td>
-<td>bicubic</td>
-<td>528</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b5_ap *tfp</td>
-<td>84.276 (15.724)</td>
-<td>96.932 (3.068)</td>
-<td>30.39</td>
-<td>bicubic</td>
-<td>456</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b5_ap</td>
-<td>84.254 (15.746)</td>
-<td>96.976 (3.024)</td>
-<td>30.39</td>
-<td>bicubic</td>
-<td>456</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b6 *tfp</td>
-<td>84.140 (15.860)</td>
-<td>96.852 (3.148)</td>
-<td>43.04</td>
-<td>bicubic</td>
-<td>528</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b6</td>
-<td>84.110 (15.890)</td>
-<td>96.886 (3.114)</td>
-<td>43.04</td>
-<td>bicubic</td>
-<td>528</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b3_ns *tfp</td>
-<td>84.054 (15.946)</td>
-<td>96.918 (3.082)</td>
-<td>12.23</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b3_ns</td>
-<td>84.048 (15.952)</td>
-<td>96.910 (3.090)</td>
-<td>12.23</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b5 *tfp</td>
-<td>83.822 (16.178)</td>
-<td>96.756 (3.244)</td>
-<td>30.39</td>
-<td>bicubic</td>
-<td>456</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b5</td>
-<td>83.812 (16.188)</td>
-<td>96.748 (3.252)</td>
-<td>30.39</td>
-<td>bicubic</td>
-<td>456</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b4_ap *tfp</td>
-<td>83.278 (16.722)</td>
-<td>96.376 (3.624)</td>
-<td>19.34</td>
-<td>bicubic</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b4_ap</td>
-<td>83.248 (16.752)</td>
-<td>96.388 (3.612)</td>
-<td>19.34</td>
-<td>bicubic</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b4</td>
-<td>83.022 (16.978)</td>
-<td>96.300 (3.700)</td>
-<td>19.34</td>
-<td>bicubic</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b4 *tfp</td>
-<td>82.948 (17.052)</td>
-<td>96.308 (3.692)</td>
-<td>19.34</td>
-<td>bicubic</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b2_ns *tfp</td>
-<td>82.436 (17.564)</td>
-<td>96.268 (3.732)</td>
-<td>9.11</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b2_ns</td>
-<td>82.380 (17.620)</td>
-<td>96.248 (3.752)</td>
-<td>9.11</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b3_ap *tfp</td>
-<td>81.882 (18.118)</td>
-<td>95.662 (4.338)</td>
-<td>12.23</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b3_ap</td>
-<td>81.828 (18.172)</td>
-<td>95.624 (4.376)</td>
-<td>12.23</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b3</td>
-<td>81.636 (18.364)</td>
-<td>95.718 (4.282)</td>
-<td>12.23</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b3 *tfp</td>
-<td>81.576 (18.424)</td>
-<td>95.662 (4.338)</td>
-<td>12.23</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite4</td>
-<td>81.528 (18.472)</td>
-<td>95.668 (4.332)</td>
-<td>13.00</td>
-<td>bilinear</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b1_ns *tfp</td>
-<td>81.514 (18.486)</td>
-<td>95.776 (4.224)</td>
-<td>7.79</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite4 *tfp</td>
-<td>81.502 (18.498)</td>
-<td>95.676 (4.324)</td>
-<td>13.00</td>
-<td>bilinear</td>
-<td>380</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b1_ns</td>
-<td>81.388 (18.612)</td>
-<td>95.738 (4.262)</td>
-<td>7.79</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>gluon_senet154</td>
-<td>81.224 (18.776)</td>
-<td>95.356 (4.644)</td>
-<td>115.09</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnet152_v1s</td>
-<td>81.012 (18.988)</td>
-<td>95.416 (4.584)</td>
-<td>60.32</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_seresnext101_32x4d</td>
-<td>80.902 (19.098)</td>
-<td>95.294 (4.706)</td>
-<td>48.96</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_seresnext101_64x4d</td>
-<td>80.890 (19.110)</td>
-<td>95.304 (4.696)</td>
-<td>88.23</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnext101_64x4d</td>
-<td>80.602 (19.398)</td>
-<td>94.994 (5.006)</td>
-<td>83.46</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_el</td>
-<td>80.534 (19.466)</td>
-<td>95.190 (4.810)</td>
-<td>10.59</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_el *tfp</td>
-<td>80.476 (19.524)</td>
-<td>95.200 (4.800)</td>
-<td>10.59</td>
-<td>bicubic</td>
-<td>300</td>
-</tr>
-<tr>
-<td>gluon_resnet152_v1d</td>
-<td>80.470 (19.530)</td>
-<td>95.206 (4.794)</td>
-<td>60.21</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnet101_v1d</td>
-<td>80.424 (19.576)</td>
-<td>95.020 (4.980)</td>
-<td>44.57</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b2_ap *tfp</td>
-<td>80.420 (19.580)</td>
-<td>95.040 (4.960)</td>
-<td>9.11</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>gluon_resnext101_32x4d</td>
-<td>80.334 (19.666)</td>
-<td>94.926 (5.074)</td>
-<td>44.18</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b2_ap</td>
-<td>80.306 (19.694)</td>
-<td>95.028 (4.972)</td>
-<td>9.11</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>gluon_resnet101_v1s</td>
-<td>80.300 (19.700)</td>
-<td>95.150 (4.850)</td>
-<td>44.67</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b2 *tfp</td>
-<td>80.188 (19.812)</td>
-<td>94.974 (5.026)</td>
-<td>9.11</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b2</td>
-<td>80.086 (19.914)</td>
-<td>94.908 (5.092)</td>
-<td>9.11</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>gluon_resnet152_v1c</td>
-<td>79.916 (20.084)</td>
-<td>94.842 (5.158)</td>
-<td>60.21</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_seresnext50_32x4d</td>
-<td>79.912 (20.088)</td>
-<td>94.818 (5.182)</td>
-<td>27.56</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite3</td>
-<td>79.812 (20.188)</td>
-<td>94.914 (5.086)</td>
-<td>8.20</td>
-<td>bilinear</td>
-<td>300</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite3 *tfp</td>
-<td>79.734 (20.266)</td>
-<td>94.838 (5.162)</td>
-<td>8.20</td>
-<td>bilinear</td>
-<td>300</td>
-</tr>
-<tr>
-<td>gluon_resnet152_v1b</td>
-<td>79.692 (20.308)</td>
-<td>94.738 (5.262)</td>
-<td>60.19</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_xception65</td>
-<td>79.604 (20.396)</td>
-<td>94.748 (5.252)</td>
-<td>39.92</td>
-<td>bicubic</td>
-<td>299</td>
-</tr>
-<tr>
-<td>gluon_resnet101_v1c</td>
-<td>79.544 (20.456)</td>
-<td>94.586 (5.414)</td>
-<td>44.57</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b1_ap *tfp</td>
-<td>79.532 (20.468)</td>
-<td>94.378 (5.622)</td>
-<td>7.79</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_efficientnet_cc_b1_8e *tfp</td>
-<td>79.464 (20.536)</td>
-<td>94.492 (5.508)</td>
-<td>39.7</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>gluon_resnext50_32x4d</td>
-<td>79.356 (20.644)</td>
-<td>94.424 (5.576)</td>
-<td>25.03</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnet101_v1b</td>
-<td>79.304 (20.696)</td>
-<td>94.524 (5.476)</td>
-<td>44.55</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_cc_b1_8e</td>
-<td>79.298 (20.702)</td>
-<td>94.364 (5.636)</td>
-<td>39.7</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b1_ap</td>
-<td>79.278 (20.722)</td>
-<td>94.308 (5.692)</td>
-<td>7.79</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b1 *tfp</td>
-<td>79.172 (20.828)</td>
-<td>94.450 (5.550)</td>
-<td>7.79</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>gluon_resnet50_v1d</td>
-<td>79.074 (20.926)</td>
-<td>94.476 (5.524)</td>
-<td>25.58</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_em *tfp</td>
-<td>78.958 (21.042)</td>
-<td>94.458 (5.542)</td>
-<td>6.90</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_mixnet_l *tfp</td>
-<td>78.846 (21.154)</td>
-<td>94.212 (5.788)</td>
-<td>7.33</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b1</td>
-<td>78.826 (21.174)</td>
-<td>94.198 (5.802)</td>
-<td>7.79</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b0_ns *tfp</td>
-<td>78.806 (21.194)</td>
-<td>94.496 (5.504)</td>
-<td>5.29</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_inception_v3</td>
-<td>78.804 (21.196)</td>
-<td>94.380 (5.620)</td>
-<td>27.16M</td>
-<td>bicubic</td>
-<td>299</td>
-</tr>
-<tr>
-<td>tf_mixnet_l</td>
-<td>78.770 (21.230)</td>
-<td>94.004 (5.996)</td>
-<td>7.33</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_em</td>
-<td>78.742 (21.258)</td>
-<td>94.332 (5.668)</td>
-<td>6.90</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>gluon_resnet50_v1s</td>
-<td>78.712 (21.288)</td>
-<td>94.242 (5.758)</td>
-<td>25.68</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b0_ns</td>
-<td>78.658 (21.342)</td>
-<td>94.376 (5.624)</td>
-<td>5.29</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_cc_b0_8e *tfp</td>
-<td>78.314 (21.686)</td>
-<td>93.790 (6.210)</td>
-<td>24.0</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnet50_v1c</td>
-<td>78.010 (21.990)</td>
-<td>93.988 (6.012)</td>
-<td>25.58</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_cc_b0_8e</td>
-<td>77.908 (22.092)</td>
-<td>93.656 (6.344)</td>
-<td>24.0</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_inception_v3</td>
-<td>77.856 (22.144)</td>
-<td>93.644 (6.356)</td>
-<td>27.16M</td>
-<td>bicubic</td>
-<td>299</td>
-</tr>
-<tr>
-<td>tf_efficientnet_cc_b0_4e *tfp</td>
-<td>77.746 (22.254)</td>
-<td>93.552 (6.448)</td>
-<td>13.3</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_es *tfp</td>
-<td>77.616 (22.384)</td>
-<td>93.750 (6.250)</td>
-<td>5.44</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnet50_v1b</td>
-<td>77.578 (22.422)</td>
-<td>93.718 (6.282)</td>
-<td>25.56</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>adv_inception_v3</td>
-<td>77.576 (22.424)</td>
-<td>93.724 (6.276)</td>
-<td>27.16M</td>
-<td>bicubic</td>
-<td>299</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite2 *tfp</td>
-<td>77.544 (22.456)</td>
-<td>93.800 (6.200)</td>
-<td>6.09</td>
-<td>bilinear</td>
-<td>260</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite2</td>
-<td>77.460 (22.540)</td>
-<td>93.746 (6.254)</td>
-<td>6.09</td>
-<td>bicubic</td>
-<td>260</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b0_ap *tfp</td>
-<td>77.514 (22.486)</td>
-<td>93.576 (6.424)</td>
-<td>5.29</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_cc_b0_4e</td>
-<td>77.304 (22.696)</td>
-<td>93.332 (6.668)</td>
-<td>13.3</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_es</td>
-<td>77.264 (22.736)</td>
-<td>93.600 (6.400)</td>
-<td>5.44</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b0 *tfp</td>
-<td>77.258 (22.742)</td>
-<td>93.478 (6.522)</td>
-<td>5.29</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b0_ap</td>
-<td>77.084 (22.916)</td>
-<td>93.254 (6.746)</td>
-<td>5.29</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mixnet_m *tfp</td>
-<td>77.072 (22.928)</td>
-<td>93.368 (6.632)</td>
-<td>5.01</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mixnet_m</td>
-<td>76.950 (23.050)</td>
-<td>93.156 (6.844)</td>
-<td>5.01</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_b0</td>
-<td>76.848 (23.152)</td>
-<td>93.228 (6.772)</td>
-<td>5.29</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite1 *tfp</td>
-<td>76.764 (23.236)</td>
-<td>93.326 (6.674)</td>
-<td>5.42</td>
-<td>bilinear</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite1</td>
-<td>76.638 (23.362)</td>
-<td>93.232 (6.768)</td>
-<td>5.42</td>
-<td>bicubic</td>
-<td>240</td>
-</tr>
-<tr>
-<td>tf_mixnet_s *tfp</td>
-<td>75.800 (24.200)</td>
-<td>92.788 (7.212)</td>
-<td>4.13</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_large_100 *tfp</td>
-<td>75.768 (24.232)</td>
-<td>92.710 (7.290)</td>
-<td>5.48</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mixnet_s</td>
-<td>75.648 (24.352)</td>
-<td>92.636 (7.364)</td>
-<td>4.13</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_large_100</td>
-<td>75.516 (24.484)</td>
-<td>92.600 (7.400)</td>
-<td>5.48</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite0 *tfp</td>
-<td>75.074 (24.926)</td>
-<td>92.314 (7.686)</td>
-<td>4.65</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_efficientnet_lite0</td>
-<td>74.842 (25.158)</td>
-<td>92.170 (7.830)</td>
-<td>4.65</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>gluon_resnet34_v1b</td>
-<td>74.580 (25.420)</td>
-<td>91.988 (8.012)</td>
-<td>21.80</td>
-<td>bicubic</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_large_075 *tfp</td>
-<td>73.730 (26.270)</td>
-<td>91.616 (8.384)</td>
-<td>3.99</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_large_075</td>
-<td>73.442 (26.558)</td>
-<td>91.352 (8.648)</td>
-<td>3.99</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_large_minimal_100 *tfp</td>
-<td>72.678 (27.322)</td>
-<td>90.860 (9.140)</td>
-<td>3.92</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_large_minimal_100</td>
-<td>72.244 (27.756)</td>
-<td>90.636 (9.364)</td>
-<td>3.92</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_small_100 *tfp</td>
-<td>67.918 (32.082)</td>
-<td>87.958 (12.042</td>
-<td>2.54</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_small_100</td>
-<td>67.918 (32.082)</td>
-<td>87.662 (12.338)</td>
-<td>2.54</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_small_075 *tfp</td>
-<td>66.142 (33.858)</td>
-<td>86.498 (13.502)</td>
-<td>2.04</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_small_075</td>
-<td>65.718 (34.282)</td>
-<td>86.136 (13.864)</td>
-<td>2.04</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_small_minimal_100 *tfp</td>
-<td>63.378 (36.622)</td>
-<td>84.802 (15.198)</td>
-<td>2.04</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-<tr>
-<td>tf_mobilenetv3_small_minimal_100</td>
-<td>62.898 (37.102)</td>
-<td>84.230 (15.770)</td>
-<td>2.04</td>
-<td>bilinear</td>
-<td>224</td>
-</tr>
-</tbody>
-</table>
-<p>Models with <code>*tfp</code> next to them were scored with <code>--tf-preprocessing</code> flag. </p>
-<p>The <code>tf_efficientnet</code>, <code>tf_mixnet</code> models require an equivalent for 'SAME' padding as their arch results in asymmetric padding. I've added this in the model creation wrapper, but it does come with a performance penalty. </p>
-<p>Sources for original weights:
-* <code>tf_efficientnet*</code>: <a href="https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet">Tensorflow TPU</a>
-* <code>tf_efficientnet_e*</code>: <a href="https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu">Tensorflow TPU</a>
-* <code>tf_mixnet*</code>: <a href="https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet">Tensorflow TPU</a>
-* <code>tf_inception*</code>: <a href="https://github.com/tensorflow/models/tree/master/research/slim">Tensorflow Slim</a>
-* <code>gluon_*</code>: <a href="https://gluon-cv.mxnet.io/model_zoo/classification.html">MxNet Gluon</a></p>
+<h2 id="ported-and-other-weights">Ported and Other Weights</h2>
+<p>For weights ported from other deep learning frameworks (Tensorflow, MXNet GluonCV) or copied from other PyTorch sources, please see the full results tables for ImageNet and various OOD test sets at in the <a href="https://github.com/rwightman/pytorch-image-models/tree/master/results">results tables</a>.</p>
+<p>Model code .py files contain links to original sources of models and weights.</p>
                 
               
               
