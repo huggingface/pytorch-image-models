@@ -3,8 +3,8 @@ name: Bug report
 about: Create a bug report to help us improve. Issues are for reporting bugs or requesting
   features, the discussion forum is available for asking questions or seeking help
   from the community.
-title: ''
-labels: ''
+title: "[BUG] Issue title..."
+labels: bug
 assignees: rwightman
 
 ---
@@ -24,9 +24,9 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Desktop (please complete the following information):**
- - OS: [e.g. iOS]
+ - OS: [e.g. Windows 10, Ubuntu 18.04]
  - This repository version [e.g. pip 0.3.1 or commit ref]
- - PyTorch Version [e.g. 1.7] w/ CUDA/cuDNN version
+ - PyTorch version w/ CUDA/cuDNN  [e.g. from `conda list`, 1.7.0  py3.8_cuda11.0.221_cudnn8.0.3_0]
 
 **Additional context**
 Add any other context about the problem here.
