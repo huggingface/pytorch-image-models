@@ -1,13 +1,13 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest an idea for this project. Issues are for reporting bugs or requesting
+  features, the discussion forum is available for asking questions or seeking help
+  from the community.
 title: ''
 labels: ''
 assignees: ''
 
 ---
-
-Issues are for reporting bugs or requesting features, not asking for help or tutorials. The discussion forum has been activated and can be used for asking questions outside the scope of bugs or feature requests.
 
 **Is your feature request related to a problem? Please describe.**
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]

@@ -1,13 +1,13 @@
 ---
 name: Bug report
-about: Create a bug report to help us improve
+about: Create a bug report to help us improve. Issues are for reporting bugs or requesting
+  features, the discussion forum is available for asking questions or seeking help
+  from the community.
 title: ''
 labels: ''
-assignees: ''
+assignees: rwightman
 
 ---
-
-Issues are for reporting bugs or requesting features, not asking for help or tutorials. The discussion forum has been activated and can be used for asking questions outside the scope of bugs or feature requests.
 
 **Describe the bug**
 A clear and concise description of what the bug is.
