@@ -30,6 +30,9 @@ class SwishJitAutoFn(torch.autograd.Function):
     Inspired by conversation btw Jeremy Howard & Adam Pazske
     https://twitter.com/jeremyphoward/status/1188251041835315200
     """
+    @staticmethod
+    def symbolic(g, x):
+        return g.op("Mul", x, g.op("Sigmoid", x))
 
     @staticmethod
     def forward(ctx, x):
