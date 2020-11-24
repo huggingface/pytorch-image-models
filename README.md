@@ -230,7 +230,7 @@ One of the greatest assets of PyTorch is the community and their contributions. 
 
 ### Object Detection, Instance and Semantic Segmentation
 * Detectron2 - https://github.com/facebookresearch/detectron2
-* Segmentation Models (Semantic) - https://github.com/qubvel/segmentation_models.pytorch/issues
+* Segmentation Models (Semantic) - https://github.com/qubvel/segmentation_models.pytorch
 * EfficientDet (Obj Det, Semantic soon) - https://github.com/rwightman/efficientdet-pytorch
 
 ## Licenses
