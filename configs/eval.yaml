@@ -1,0 +1,8 @@
+model: 'tf_efficientnet_b0'   # model architecture (default: dpn92)
+img_size: 224                 # Input image dimension
+mean: null                    # Override mean pixel value of dataset
+std: null                     # Override std deviation of of dataset
+num_classes: 2                # Number classes in dataset
+checkpoint: 'output/train/20201124-182940-tf_efficientnet_b0-224/model_best.pth.tar'   # path to latest checkpoint (default: none)
+pretrained: False             # use pre-trained model
+num_gpu: 1                    # Number of GPUS to use
