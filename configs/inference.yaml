@@ -1,0 +1,16 @@
+data: 'dataset/test'          # path to dataset
+output_dir: 'output/'         # path to output files
+model: 'tf_efficientnet_b5'   # model architecture (default: dpn92)
+workers: 4                    # number of McD loading workers (default: 2
+batch_size: 256               # mini-batch size (default: 256)
+img_size: 224                 # Input image dimension
+mean: null                    # Override mean pixel value of dataset
+std: null                     # Override std deviation of of dataset
+interpolation: ''             # Image resize interpolation type (overrides model)
+num_classes: 1000             # Number classes in dataset
+log_freq: 10                  # batch logging frequency (default: 10)
+checkpoint: ''                # path to latest checkpoint (default: none)
+pretrained: True              # use pre-trained model
+num_gpu: 1                    # Number of GPUS to use
+no_test_pool: False           # disable test time pool
+topk: 5                       # Top-k to output to CSV

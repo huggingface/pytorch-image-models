@@ -7,17 +7,19 @@ canonical PyTorch, standard Python style, and good performance. Repurpose as you
 
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
-import argparse
 import os
 import csv
 import glob
 import time
+import yaml
 import logging
 import torch
 import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 from contextlib import suppress
+from fire import Fire
+from addict import Dict
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config, RealLabelsImagenet
@@ -41,67 +43,37 @@ torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('validate')
 
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--model', '-m', metavar='MODEL', default='dpn92',
-                    help='model architecture (default: dpn92)')
-parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 2)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--img-size', default=None, type=int,
-                    metavar='N', help='Input image dimension, uses model default if empty')
-parser.add_argument('--crop-pct', default=None, type=float,
-                    metavar='N', help='Input image center crop pct')
-parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
-                    help='Override mean pixel value of dataset')
-parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
-                    help='Override std deviation of of dataset')
-parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
-                    help='Image resize interpolation type (overrides model)')
-parser.add_argument('--num-classes', type=int, default=1000,
-                    help='Number classes in dataset')
-parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
-                    help='path to class to idx mapping file (default: "")')
-parser.add_argument('--gp', default=None, type=str, metavar='POOL',
-                    help='Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.')
-parser.add_argument('--log-freq', default=10, type=int,
-                    metavar='N', help='batch logging frequency (default: 10)')
-parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
-parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                    help='use pre-trained model')
-parser.add_argument('--num-gpu', type=int, default=1,
-                    help='Number of GPUS to use')
-parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
-                    help='disable test time pool')
-parser.add_argument('--no-prefetcher', action='store_true', default=False,
-                    help='disable fast prefetcher')
-parser.add_argument('--pin-mem', action='store_true', default=False,
-                    help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
-parser.add_argument('--channels-last', action='store_true', default=False,
-                    help='Use channels_last memory layout')
-parser.add_argument('--amp', action='store_true', default=False,
-                    help='Use AMP mixed precision. Defaults to Apex, fallback to native Torch AMP.')
-parser.add_argument('--apex-amp', action='store_true', default=False,
-                    help='Use NVIDIA Apex AMP mixed precision')
-parser.add_argument('--native-amp', action='store_true', default=False,
-                    help='Use Native Torch AMP mixed precision')
-parser.add_argument('--tf-preprocessing', action='store_true', default=False,
-                    help='Use Tensorflow preprocessing pipeline (require CPU TF installed')
-parser.add_argument('--use-ema', dest='use_ema', action='store_true',
-                    help='use ema version of weights if present')
-parser.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
-parser.add_argument('--legacy-jit', dest='legacy_jit', action='store_true',
-                    help='use legacy jit mode for pytorch 1.5/1.5.1/1.6 to get back fusion performance')
-parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
-                    help='Output csv file for validation results (summary)')
-parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
-                    help='Real labels JSON file for imagenet evaluation')
-parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
-                    help='Valid label indices txt file for validation of partial label space')
+def _update_config(config, params):
+    for k, v in params.items():
+        *path, key = k.split(".")
+        config.update({k: v})
+        print(f"Overwriting {k} = {v} (was {config.get(key)})")
+    return config
+
+
+def _fit(config_path, **kwargs):
+    with open(config_path) as stream:
+        base_config = yaml.safe_load(stream)
+
+    if "config" in kwargs.keys():
+        cfg_path = kwargs["config"]
+        with open(cfg_path) as cfg:
+            cfg_yaml = yaml.load(cfg, Loader=yaml.FullLoader)
+
+        merged_cfg = _update_config(base_config, cfg_yaml)
+    else:
+        merged_cfg = base_config
+
+    update_cfg = _update_config(merged_cfg, kwargs)
+    return update_cfg
+
+
+def _parse_args(config_path):
+    args = Dict(Fire(_fit(config_path)))
+
+    # Cache the args as a text string to save them in the output dir later
+    args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
+    return args, args_text
 
 
 def validate(args):
@@ -254,14 +226,15 @@ def validate(args):
         interpolation=data_config['interpolation'])
 
     _logger.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
-       results['top1'], results['top1_err'], results['top5'], results['top5_err']))
+        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
 
     return results
 
 
 def main():
     setup_default_logging()
-    args = parser.parse_args()
+    args, args_text = _parse_args('configs/validate.yaml')
+
     model_cfgs = []
     model_names = []
     if os.path.isdir(args.checkpoint):

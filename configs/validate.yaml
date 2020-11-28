@@ -1,0 +1,34 @@
+data: 'dataset/splitted/val'       # path to dataset
+model: 'tf_efficientnet_b0'      # Name of model to train (default: "countception"
+# path to latest checkpoint (default: none)
+checkpoint: 'output/train/tf_efficientnet_b0-224/model_best.pth.tar'
+
+workers: 4                # number of McD loading workers (default: 2)
+batch_size: 16            # mini-batch size (default: 256)
+img_size: 224             # Input image dimension, uses model default if empty
+crop_pct: null            # Input image center crop pct
+mean: null                # Override mean pixel value of dataset
+std: null                 # Override std deviation of of dataset
+interpolation: ''         # Image resize interpolation type (overrides model)
+num_classes: 2            # Number classes in dataset
+class_map: ''             # path to class to idx mapping file (default: "")
+gp: null                  # Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.
+log_freq: 10              # batch logging frequency (default: 10)
+pretrained: False         # use pre-trained model
+num_gpu: 1                # Number of GPUS to use
+no_test_pool: False       # disable test time pool
+no_prefetcher: False      # disable fast prefetcher
+pin_mem: False            # Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU
+channels_last: False      # Use channels_last memory layout
+amp: False                # Use AMP mixed precision. Defaults to Apex, fallback to native Torch AMP.
+apex_amp: False           # Use NVIDIA Apex AMP mixed precision
+native_amp: False         # Use Native Torch AMP mixed precision
+tf_preprocessing: False   # Use Tensorflow preprocessing pipeline (require CPU TF installed
+use_ema: False            # use ema version of weights if present
+torchscript: False        # convert model torchscript for inference
+lagacy_jit: False         # use legacy jit mode for pytorch 1.5/1.5.1/1.6 to get back fusion performance
+results_file: ''          # Output csv file for validation results (summary)
+real_labels: ''           # Real labels JSON file for imagenet evaluation
+valid_labels: ''          # Valid label indices txt file for validation of partial label space
+
+

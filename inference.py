@@ -7,8 +7,11 @@ Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import os
 import time
-import argparse
 import logging
+import yaml
+from fire import Fire
+from addict import Dict
+
 import numpy as np
 import torch
 
@@ -20,44 +23,42 @@ torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('inference')
 
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Inference')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--output_dir', metavar='DIR', default='./',
-                    help='path to output files')
-parser.add_argument('--model', '-m', metavar='MODEL', default='dpn92',
-                    help='model architecture (default: dpn92)')
-parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
-                    help='number of data loading workers (default: 2)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
-                    metavar='N', help='mini-batch size (default: 256)')
-parser.add_argument('--img-size', default=None, type=int,
-                    metavar='N', help='Input image dimension')
-parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
-                    help='Override mean pixel value of dataset')
-parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
-                    help='Override std deviation of of dataset')
-parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
-                    help='Image resize interpolation type (overrides model)')
-parser.add_argument('--num-classes', type=int, default=1000,
-                    help='Number classes in dataset')
-parser.add_argument('--log-freq', default=10, type=int,
-                    metavar='N', help='batch logging frequency (default: 10)')
-parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
-parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                    help='use pre-trained model')
-parser.add_argument('--num-gpu', type=int, default=1,
-                    help='Number of GPUS to use')
-parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
-                    help='disable test time pool')
-parser.add_argument('--topk', default=5, type=int,
-                    metavar='N', help='Top-k to output to CSV')
+def _update_config(config, params):
+    for k, v in params.items():
+        *path, key = k.split(".")
+        config.update({k: v})
+        print(f"Overwriting {k} = {v} (was {config.get(key)})")
+    return config
+
+
+def _fit(config_path, **kwargs):
+    with open(config_path) as stream:
+        base_config = yaml.safe_load(stream)
+
+    if "config" in kwargs.keys():
+        cfg_path = kwargs["config"]
+        with open(cfg_path) as cfg:
+            cfg_yaml = yaml.load(cfg, Loader=yaml.FullLoader)
+
+        merged_cfg = _update_config(base_config, cfg_yaml)
+    else:
+        merged_cfg = base_config
+
+    update_cfg = _update_config(merged_cfg, kwargs)
+    return update_cfg
+
+
+def _parse_args(config_path):
+    args = Dict(Fire(_fit(config_path)))
+
+    # Cache the args as a text string to save them in the output dir later
+    args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
+    return args, args_text
 
 
 def main():
     setup_default_logging()
-    args = parser.parse_args()
+    args, args_text = _parse_args('configs/inference.yaml')
     # might as well try to do something useful...
     args.pretrained = args.pretrained or not args.checkpoint
 
