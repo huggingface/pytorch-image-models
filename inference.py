@@ -31,8 +31,8 @@ def _update_config(config, params):
     return config
 
 
-def _fit(config_path, **kwargs):
-    with open(config_path) as stream:
+def _fit(**kwargs):
+    with open('configs/inference.yaml') as stream:
         base_config = yaml.safe_load(stream)
 
     if "config" in kwargs.keys():
@@ -48,8 +48,8 @@ def _fit(config_path, **kwargs):
     return update_cfg
 
 
-def _parse_args(config_path):
-    args = Dict(Fire(_fit(config_path)))
+def _parse_args():
+    args = Dict(Fire(_fit))
 
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
@@ -58,7 +58,7 @@ def _parse_args(config_path):
 
 def main():
     setup_default_logging()
-    args, args_text = _parse_args('configs/inference.yaml')
+    args, args_text = _parse_args()
     # might as well try to do something useful...
     args.pretrained = args.pretrained or not args.checkpoint
 
