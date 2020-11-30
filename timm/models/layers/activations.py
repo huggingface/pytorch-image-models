@@ -119,3 +119,27 @@ class HardMish(nn.Module):
 
     def forward(self, x):
         return hard_mish(x, self.inplace)
+
+
+class PReLU(nn.PReLU):
+    """Applies PReLU (w/ dummy inplace arg)
+    """
+    def __init__(self, num_parameters: int = 1, init: float = 0.25, inplace: bool = False) -> None:
+        super(PReLU, self).__init__(num_parameters=num_parameters, init=init)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.prelu(input, self.weight)
+
+
+def gelu(x: torch.Tensor, inplace: bool = False) -> torch.Tensor:
+    return F.gelu(x)
+
+
+class GELU(nn.Module):
+    """Applies the Gaussian Error Linear Units function (w/ dummy inplace arg)
+    """
+    def __init__(self, inplace: bool = False):
+        super(GELU, self).__init__()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.gelu(input)
