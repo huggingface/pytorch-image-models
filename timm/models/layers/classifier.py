@@ -6,6 +6,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from .adaptive_avgmax_pool import SelectAdaptivePool2d
+from .linear import Linear
 
 
 def create_classifier(num_features, num_classes, pool_type='avg', use_conv=False):
@@ -21,7 +22,8 @@ def create_classifier(num_features, num_classes, pool_type='avg', use_conv=False
     elif use_conv:
         fc = nn.Conv2d(num_pooled_features, num_classes, 1, bias=True)
     else:
-        fc = nn.Linear(num_pooled_features, num_classes, bias=True)
+        # NOTE: using my Linear wrapper that fixes AMP + torchscript casting issue
+        fc = Linear(num_pooled_features, num_classes, bias=True)
     return global_pool, fc
 
 
