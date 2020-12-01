@@ -327,6 +327,7 @@ def main():
         bn_tf=args.bn_tf,
         bn_momentum=args.bn_momentum,
         bn_eps=args.bn_eps,
+        scriptable=args.torchscript,
         checkpoint_path=args.initial_checkpoint)
 
     if args.local_rank == 0:

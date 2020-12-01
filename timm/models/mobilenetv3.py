@@ -18,7 +18,7 @@ from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_la
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .features import FeatureInfo, FeatureHooks
 from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d, create_conv2d, get_act_fn, hard_sigmoid
+from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
 __all__ = ['MobileNetV3']
@@ -105,7 +105,7 @@ class MobileNetV3(nn.Module):
         num_pooled_chs = head_chs * self.global_pool.feat_mult()
         self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
         self.act2 = act_layer(inplace=True)
-        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
 
@@ -123,7 +123,7 @@ class MobileNetV3(nn.Module):
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)

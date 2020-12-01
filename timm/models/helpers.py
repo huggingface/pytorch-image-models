@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
-from .layers import Conv2dSame
+from .layers import Conv2dSame, Linear
 
 
 _logger = logging.getLogger(__name__)
@@ -234,7 +234,7 @@ def adapt_model_from_string(parent_module, model_string):
         if isinstance(old_module, nn.Linear):
             # FIXME extra checks to ensure this is actually the FC classifier layer and not a diff Linear layer?
             num_features = state_dict[n + '.weight'][1]
-            new_fc = nn.Linear(
+            new_fc = Linear(
                 in_features=num_features, out_features=old_module.out_features, bias=old_module.bias is not None)
             set_layer(new_module, n, new_fc)
             if hasattr(new_module, 'num_features'):
