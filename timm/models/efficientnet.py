@@ -453,19 +453,19 @@ class EfficientNetFeatures(nn.Module):
 
 
 def _create_effnet(model_kwargs, variant, pretrained=False):
+    features_only = False
+    model_cls = EfficientNet
     if model_kwargs.pop('features_only', False):
-        load_strict = False
+        features_only = True
         model_kwargs.pop('num_classes', 0)
         model_kwargs.pop('num_features', 0)
         model_kwargs.pop('head_conv', None)
         model_cls = EfficientNetFeatures
-    else:
-        load_strict = True
-        model_cls = EfficientNet
     model = build_model_with_cfg(
         model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=load_strict, **model_kwargs)
-    model.default_cfg = default_cfg_for_features(model.default_cfg)
+        pretrained_strict=not features_only, **model_kwargs)
+    if features_only:
+        model.default_cfg = default_cfg_for_features(model.default_cfg)
     return model
 
 
