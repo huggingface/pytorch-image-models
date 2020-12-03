@@ -251,6 +251,15 @@ def adapt_model_from_file(parent_module, model_variant):
         return adapt_model_from_string(parent_module, f.read().strip())
 
 
+def default_cfg_for_features(default_cfg):
+    default_cfg = deepcopy(default_cfg)
+    # remove default pretrained cfg fields that don't have much relevance for feature backbone
+    to_remove = ('num_classes', 'crop_pct', 'classifier')  # add default final pool size?
+    for tr in to_remove:
+        default_cfg.pop(tr, None)
+    return default_cfg
+
+
 def build_model_with_cfg(
         model_cls: Callable,
         variant: str,
@@ -296,5 +305,6 @@ def build_model_with_cfg(
                 else:
                     assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)
+        model.default_cfg = default_cfg_for_features(default_cfg)  # add back default_cfg
     
     return model

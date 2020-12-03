@@ -17,7 +17,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCE
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, default_cfg_for_features
 from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
@@ -211,9 +211,11 @@ def _create_mnv3(model_kwargs, variant, pretrained=False):
     else:
         load_strict = True
         model_cls = MobileNetV3
-    return build_model_with_cfg(
+    model = build_model_with_cfg(
         model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
         pretrained_strict=load_strict, **model_kwargs)
+    model.default_cfg = default_cfg_for_features(model.default_cfg)
+    return model
 
 
 def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
