@@ -19,10 +19,9 @@ _ACT_FN_DEFAULT = dict(
     relu6=F.relu6,
     leaky_relu=F.leaky_relu,
     elu=F.elu,
-    prelu=F.prelu,
     celu=F.celu,
     selu=F.selu,
-    gelu=F.gelu,
+    gelu=gelu,
     sigmoid=sigmoid,
     tanh=tanh,
     hard_sigmoid=hard_sigmoid,
@@ -56,10 +55,10 @@ _ACT_LAYER_DEFAULT = dict(
     relu6=nn.ReLU6,
     leaky_relu=nn.LeakyReLU,
     elu=nn.ELU,
-    prelu=nn.PReLU,
+    prelu=PReLU,
     celu=nn.CELU,
     selu=nn.SELU,
-    gelu=nn.GELU,
+    gelu=GELU,
     sigmoid=Sigmoid,
     tanh=Tanh,
     hard_sigmoid=HardSigmoid,
@@ -98,7 +97,10 @@ def get_act_fn(name='relu'):
         # custom autograd, then fallback
         if name in _ACT_FN_ME:
             return _ACT_FN_ME[name]
-    if not is_no_jit():
+    if is_exportable() and name in ('silu', 'swish'):
+        # FIXME PyTorch SiLU doesn't ONNX export, this is a temp hack
+        return swish
+    if not (is_no_jit() or is_exportable()):
         if name in _ACT_FN_JIT:
             return _ACT_FN_JIT[name]
     return _ACT_FN_DEFAULT[name]
@@ -114,7 +116,10 @@ def get_act_layer(name='relu'):
     if not (is_no_jit() or is_exportable() or is_scriptable()):
         if name in _ACT_LAYER_ME:
             return _ACT_LAYER_ME[name]
-    if not is_no_jit():
+    if is_exportable() and name in ('silu', 'swish'):
+        # FIXME PyTorch SiLU doesn't ONNX export, this is a temp hack
+        return Swish
+    if not (is_no_jit() or is_exportable()):
         if name in _ACT_LAYER_JIT:
             return _ACT_LAYER_JIT[name]
     return _ACT_LAYER_DEFAULT[name]

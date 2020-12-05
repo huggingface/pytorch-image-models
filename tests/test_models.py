@@ -121,7 +121,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
         create_model(model_name, pretrained=True, in_chans=in_chans)
 
     @pytest.mark.timeout(120)
-    @pytest.mark.parametrize('model_name', list_models(pretrained=True))
+    @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=['vit_*']))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""

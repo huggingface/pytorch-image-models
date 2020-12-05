@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
-from .layers import Conv2dSame
+from .layers import Conv2dSame, Linear
 
 
 _logger = logging.getLogger(__name__)
@@ -234,7 +234,7 @@ def adapt_model_from_string(parent_module, model_string):
         if isinstance(old_module, nn.Linear):
             # FIXME extra checks to ensure this is actually the FC classifier layer and not a diff Linear layer?
             num_features = state_dict[n + '.weight'][1]
-            new_fc = nn.Linear(
+            new_fc = Linear(
                 in_features=num_features, out_features=old_module.out_features, bias=old_module.bias is not None)
             set_layer(new_module, n, new_fc)
             if hasattr(new_module, 'num_features'):
@@ -249,6 +249,15 @@ def adapt_model_from_file(parent_module, model_variant):
     adapt_file = os.path.join(os.path.dirname(__file__), 'pruned', model_variant + '.txt')
     with open(adapt_file, 'r') as f:
         return adapt_model_from_string(parent_module, f.read().strip())
+
+
+def default_cfg_for_features(default_cfg):
+    default_cfg = deepcopy(default_cfg)
+    # remove default pretrained cfg fields that don't have much relevance for feature backbone
+    to_remove = ('num_classes', 'crop_pct', 'classifier')  # add default final pool size?
+    for tr in to_remove:
+        default_cfg.pop(tr, None)
+    return default_cfg
 
 
 def build_model_with_cfg(
@@ -296,5 +305,6 @@ def build_model_with_cfg(
                 else:
                     assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)
+        model.default_cfg = default_cfg_for_features(default_cfg)  # add back default_cfg
     
     return model
