@@ -57,6 +57,8 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
         opt_args['eps'] = args.opt_eps
     if hasattr(args, 'opt_betas') and args.opt_betas is not None:
         opt_args['betas'] = args.opt_betas
+    if hasattr(args, 'opt_args') and args.opt_args is not None:
+        opt_args.update(args.opt_args)
 
     opt_split = opt_lower.split('_')
     opt_lower = opt_split[-1]
