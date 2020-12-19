@@ -58,15 +58,18 @@ default_cfgs = {
     'resnet101': _cfg(url='', interpolation='bicubic'),
     'resnet101d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94),
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
     'resnet152': _cfg(url='', interpolation='bicubic'),
     'resnet152d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet152d_ra2-5cac0439.pth',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94),
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
     'resnet200': _cfg(url='', interpolation='bicubic'),
     'resnet200d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet200d_ra2-bdba9bf9.pth',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94),
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'resnet200d_320': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet200d_ra2-bdba9bf9.pth',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), crop_pct=1.0, pool_size=(10, 10)),
     'tv_resnet34': _cfg(url='https://download.pytorch.org/models/resnet34-333f7ec4.pth'),
     'tv_resnet50': _cfg(url='https://download.pytorch.org/models/resnet50-19c8e357.pth'),
     'tv_resnet101': _cfg(url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth'),
@@ -149,7 +152,7 @@ default_cfgs = {
         interpolation='bicubic'),
     'seresnet152d': _cfg(
         url='',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94),
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
 
     #  Squeeze-Excitation ResNeXts, to eventually replace the models in senet.py
     'seresnext26_32x4d': _cfg(
@@ -739,6 +742,15 @@ def resnet200d(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     return _create_resnet('resnet200d', pretrained, **model_args)
+
+
+@register_model
+def resnet200d_320(pretrained=False, **kwargs):
+    """Constructs a ResNet-200-D model. NOTE: Duplicate of 200D above w/ diff default cfg for 320x320.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet200d_320', pretrained, **model_args)
 
 
 @register_model
