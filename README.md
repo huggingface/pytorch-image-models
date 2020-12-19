@@ -2,6 +2,12 @@
 
 ## What's New
 
+### Dec 18, 2020
+* Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256
+  * 256x256 val (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)
+  * 288x288 val, 1.0 crop - 101D (82.64), 152D (83.48), 200D (83.76)
+  * 320x320 val, 1.0 crop - 101D (83.00), 152D (83.66), 200D (84.01)
+
 ### Dec 7, 2020
 * Simplify EMA module (ModelEmaV2), compatible with fully torchscripted models
 * Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
