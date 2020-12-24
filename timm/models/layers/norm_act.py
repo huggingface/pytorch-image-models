@@ -68,8 +68,8 @@ class BatchNormAct2d(nn.BatchNorm2d):
 
 
 class GroupNormAct(nn.GroupNorm):
-
-    def __init__(self, num_groups, num_channels, eps=1e-5, affine=True,
+    # NOTE num_channel and num_groups order flipped for easier layer swaps / binding of fixed args
+    def __init__(self, num_channels, num_groups, eps=1e-5, affine=True,
                  apply_act=True, act_layer=nn.ReLU, inplace=True, drop_block=None):
         super(GroupNormAct, self).__init__(num_groups, num_channels, eps=eps, affine=affine)
         if isinstance(act_layer, str):

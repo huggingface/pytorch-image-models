@@ -403,7 +403,7 @@ class ReductionCell1(nn.Module):
 class NASNetALarge(nn.Module):
     """NASNetALarge (6 @ 4032) """
 
-    def __init__(self, num_classes=1000, in_chans=1, stem_size=96, channel_multiplier=2,
+    def __init__(self, num_classes=1000, in_chans=3, stem_size=96, channel_multiplier=2,
                  num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
         super(NASNetALarge, self).__init__()
         self.num_classes = num_classes
