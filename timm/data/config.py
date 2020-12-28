@@ -23,8 +23,10 @@ def resolve_data_config(args, default_cfg={}, model=None, verbose=True):
         input_size = tuple(args['input_size'])
         in_chans = input_size[0]  # input_size overrides in_chans
     elif 'img_size' in args and args['img_size'] is not None:
-        assert isinstance(args['img_size'], int)
-        input_size = (in_chans, args['img_size'], args['img_size'])
+        assert isinstance(args['img_size'], (tuple, list))
+        assert len(args['img_size']) == 3
+        input_size = tuple(args['img_size'])
+        in_chans = input_size[0]  # input_size overrides in_chans
     elif 'input_size' in default_cfg:
         input_size = default_cfg['input_size']
     new_config['input_size'] = input_size
