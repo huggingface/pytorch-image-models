@@ -2,7 +2,6 @@ import os
 import io
 import torch
 
-from PIL import Image
 from timm.utils.misc import natural_key
 
 from .parser import Parser
@@ -37,25 +36,21 @@ class ParserImageFolder(Parser):
     def __init__(
             self,
             root,
-            load_bytes=False,
             class_map=''):
         super().__init__()
 
         self.root = root
-        self.load_bytes = load_bytes
-
         class_to_idx = None
         if class_map:
             class_to_idx = load_class_map(class_map, root)
         self.samples, self.class_to_idx = find_images_and_targets(root, class_to_idx=class_to_idx)
         if len(self.samples) == 0:
-            raise RuntimeError(f'Found 0 images in subfolders of {root}. '
-                               f'Supported image extensions are {", ".join(IMG_EXTENSIONS)}')
+            raise RuntimeError(
+                f'Found 0 images in subfolders of {root}. Supported image extensions are {", ".join(IMG_EXTENSIONS)}')
 
     def __getitem__(self, index):
         path, target = self.samples[index]
-        img = open(path, 'rb').read() if self.load_bytes else Image.open(path).convert('RGB')
-        return img, target
+        return open(path, 'rb'), target
 
     def __len__(self):
         return len(self.samples)

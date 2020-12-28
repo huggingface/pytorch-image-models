@@ -1,3 +1,4 @@
+import os
 
 
 def load_class_map(filename, root=''):

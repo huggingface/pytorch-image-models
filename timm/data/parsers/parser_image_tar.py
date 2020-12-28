@@ -1,16 +1,13 @@
 import os
-import io
-import torch
 import tarfile
 
 from .parser import Parser
 from .class_map import load_class_map
 from .constants import IMG_EXTENSIONS
-from PIL import Image
 from timm.utils.misc import natural_key
 
 
-def extract_tar_info(tarfile, class_to_idx=None, sort=True):
+def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
     files = []
     labels = []
     for ti in tarfile.getmembers():
@@ -33,8 +30,9 @@ def extract_tar_info(tarfile, class_to_idx=None, sort=True):
 
 
 class ParserImageTar(Parser):
-
-    def __init__(self, root, load_bytes=False, class_map=''):
+    """ Single tarfile dataset where classes are mapped to folders within tar
+    """
+    def __init__(self, root, class_map=''):
         super().__init__()
 
         class_to_idx = None
@@ -42,19 +40,18 @@ class ParserImageTar(Parser):
             class_to_idx = load_class_map(class_map, root)
         assert os.path.isfile(root)
         self.root = root
+
         with tarfile.open(root) as tf:  # cannot keep this open across processes, reopen later
-            self.samples, self.class_to_idx = extract_tar_info(tf, class_to_idx)
+            self.samples, self.class_to_idx = extract_tarinfo(tf, class_to_idx)
         self.imgs = self.samples
         self.tarfile = None  # lazy init in __getitem__
-        self.load_bytes = load_bytes
 
     def __getitem__(self, index):
         if self.tarfile is None:
             self.tarfile = tarfile.open(self.root)
         tarinfo, target = self.samples[index]
-        iob = self.tarfile.extractfile(tarinfo)
-        img = iob.read() if self.load_bytes else Image.open(iob).convert('RGB')
-        return img, target
+        fileobj = self.tarfile.extractfile(tarinfo)
+        return fileobj, target
 
     def __len__(self):
         return len(self.samples)
