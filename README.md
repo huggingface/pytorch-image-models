@@ -2,6 +2,12 @@
 
 ## What's New
 
+### Jan 3, 2021
+* Add SE-ResNet-152D weights
+  * 256x256 val, 0.94 crop top-1 - 83.75
+  * 320x320 val, 1.0 crop - 84.36
+* Update [results files](results/)
+
 ### Dec 18, 2020
 * Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256
   * 256x256 val, 0.94 crop (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)
