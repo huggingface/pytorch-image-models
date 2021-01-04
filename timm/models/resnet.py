@@ -59,10 +59,16 @@ default_cfgs = {
     'resnet101d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'resnet101d_320': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), crop_pct=1.0, pool_size=(10, 10)),
     'resnet152': _cfg(url='', interpolation='bicubic'),
     'resnet152d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet152d_ra2-5cac0439.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'resnet152d_320': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet152d_ra2-5cac0439.pth',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), crop_pct=1.0, pool_size=(10, 10)),
     'resnet200': _cfg(url='', interpolation='bicubic'),
     'resnet200d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet200d_ra2-bdba9bf9.pth',
@@ -151,8 +157,12 @@ default_cfgs = {
         url='',
         interpolation='bicubic'),
     'seresnet152d': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet152d_ra2-04464dd2.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'seresnet152d_320': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet152d_ra2-04464dd2.pth',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), crop_pct=1.0, pool_size=(10, 10)),
+
 
     #  Squeeze-Excitation ResNeXts, to eventually replace the models in senet.py
     'seresnext26_32x4d': _cfg(
@@ -711,6 +721,14 @@ def resnet101d(pretrained=False, **kwargs):
 
 
 @register_model
+def resnet101d_320(pretrained=False, **kwargs):
+    """Constructs a ResNet-101-D model.
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet101d_320', pretrained, **model_args)
+
+
+@register_model
 def resnet152(pretrained=False, **kwargs):
     """Constructs a ResNet-152 model.
     """
@@ -725,6 +743,15 @@ def resnet152d(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     return _create_resnet('resnet152d', pretrained, **model_args)
+
+
+@register_model
+def resnet152d_320(pretrained=False, **kwargs):
+    """Constructs a ResNet-152-D model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnet152d_320', pretrained, **model_args)
 
 
 @register_model
@@ -1169,6 +1196,14 @@ def seresnet152d(pretrained=False, **kwargs):
         block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', avg_down=True,
         block_args=dict(attn_layer='se'), **kwargs)
     return _create_resnet('seresnet152d', pretrained, **model_args)
+
+
+@register_model
+def seresnet152d_320(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet152d_320', pretrained, **model_args)
 
 
 @register_model

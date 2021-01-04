@@ -12,7 +12,7 @@ from .constants import IMG_EXTENSIONS
 def find_images_and_targets(folder, types=IMG_EXTENSIONS, class_to_idx=None, leaf_name_only=True, sort=True):
     labels = []
     filenames = []
-    for root, subdirs, files in os.walk(folder, topdown=False):
+    for root, subdirs, files in os.walk(folder, topdown=False, followlinks=True):
         rel_path = os.path.relpath(root, folder) if (root != folder) else ''
         label = os.path.basename(rel_path) if leaf_name_only else rel_path.replace(os.path.sep, '_')
         for f in files:
