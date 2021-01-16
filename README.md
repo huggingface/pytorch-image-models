@@ -130,6 +130,7 @@ All model architecture families include variants with pretrained weights. The ar
 
 A full version of the list below with source links can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
 
+* Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DenseNet - https://arxiv.org/abs/1608.06993
 * DLA - https://arxiv.org/abs/1707.06484
@@ -241,6 +242,10 @@ One of the greatest assets of PyTorch is the community and their contributions. 
 ### Computer Vision / Image Augmentation
 * Albumentations - https://github.com/albumentations-team/albumentations
 * Kornia - https://github.com/kornia/kornia
+
+### Knowledge Distillation
+* RepDistiller - https://github.com/HobbitLong/RepDistiller
+* torchdistill - https://github.com/yoshitomo-matsubara/torchdistill
 
 ### Metric Learning
 * PyTorch Metric Learning - https://github.com/KevinMusgrave/pytorch-metric-learning
