@@ -9,7 +9,7 @@ import logging
 
 from PIL import Image
 
-from .parsers import ParserImageFolder, ParserImageTar, ParserImageClassInTar
+from .parsers import create_parser
 
 _logger = logging.getLogger(__name__)
 
@@ -27,11 +27,8 @@ class ImageDataset(data.Dataset):
             load_bytes=False,
             transform=None,
     ):
-        if parser is None:
-            if os.path.isfile(root) and os.path.splitext(root)[1] == '.tar':
-                parser = ParserImageTar(root, class_map=class_map)
-            else:
-                parser = ParserImageFolder(root, class_map=class_map)
+        if parser is None or isinstance(parser, str):
+            parser = create_parser(parser or '', root=root, class_map=class_map)
         self.parser = parser
         self.load_bytes = load_bytes
         self.transform = transform
@@ -60,6 +57,49 @@ class ImageDataset(data.Dataset):
 
     def filename(self, index, basename=False, absolute=False):
         return self.parser.filename(index, basename, absolute)
+
+    def filenames(self, basename=False, absolute=False):
+        return self.parser.filenames(basename, absolute)
+
+
+class IterableImageDataset(data.IterableDataset):
+
+    def __init__(
+            self,
+            root,
+            parser=None,
+            split='train',
+            is_training=False,
+            batch_size=None,
+            class_map='',
+            load_bytes=False,
+            transform=None,
+    ):
+        assert parser is not None
+        if isinstance(parser, str):
+            self.parser = create_parser(
+                parser, root=root, split=split, is_training=is_training, batch_size=batch_size)
+        else:
+            self.parser = parser
+        self.transform = transform
+        self._consecutive_errors = 0
+
+    def __iter__(self):
+        for img, target in self.parser:
+            if self.transform is not None:
+                img = self.transform(img)
+            if target is None:
+                target = torch.tensor(-1, dtype=torch.long)
+            yield img, target
+
+    def __len__(self):
+        if hasattr(self.parser, '__len__'):
+            return len(self.parser)
+        else:
+            return 0
+
+    def filename(self, index, basename=False, absolute=False):
+        assert False, 'Filename lookup by index not supported, use filenames().'
 
     def filenames(self, basename=False, absolute=False):
         return self.parser.filenames(basename, absolute)

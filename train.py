@@ -28,7 +28,7 @@ import torch.nn as nn
 import torchvision.utils
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
-from timm.data import ImageDataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
+from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.models import create_model, resume_checkpoint, load_checkpoint, convert_splitbn_model
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
@@ -64,8 +64,14 @@ parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
 # Dataset / Model parameters
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('data_dir', metavar='DIR',
                     help='path to dataset')
+parser.add_argument('--dataset', '-d', metavar='NAME', default='',
+                    help='dataset type (default: ImageFolder/ImageTar if empty)')
+parser.add_argument('--train-split', metavar='NAME', default='train',
+                    help='dataset train split (default: train)')
+parser.add_argument('--val-split', metavar='NAME', default='validation',
+                    help='dataset validation split (default: validation)')
 parser.add_argument('--model', default='resnet101', type=str, metavar='MODEL',
                     help='Name of model to train (default: "countception"')
 parser.add_argument('--pretrained', action='store_true', default=False,
@@ -437,19 +443,10 @@ def main():
         _logger.info('Scheduled epochs: {}'.format(num_epochs))
 
     # create the train and eval datasets
-    train_dir = os.path.join(args.data, 'train')
-    if not os.path.exists(train_dir):
-        _logger.error('Training folder does not exist at: {}'.format(train_dir))
-        exit(1)
-    dataset_train = ImageDataset(train_dir)
-
-    eval_dir = os.path.join(args.data, 'val')
-    if not os.path.isdir(eval_dir):
-        eval_dir = os.path.join(args.data, 'validation')
-        if not os.path.isdir(eval_dir):
-            _logger.error('Validation folder does not exist at: {}'.format(eval_dir))
-            exit(1)
-    dataset_eval = ImageDataset(eval_dir)
+    dataset_train = create_dataset(
+        args.dataset, root=args.data_dir, split=args.train_split, is_training=True, batch_size=args.batch_size)
+    dataset_eval = create_dataset(
+        args.dataset, root=args.data_dir, split=args.val_split, is_training=False, batch_size=args.batch_size)
 
     # setup mixup / cutmix
     collate_fn = None
@@ -553,10 +550,10 @@ def main():
 
     try:
         for epoch in range(start_epoch, num_epochs):
-            if args.distributed:
-                loader_train.sampler.set_epoch(epoch)
+            if args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
+                loader_train.set_epoch(epoch)
 
-            train_metrics = train_epoch(
+            train_metrics = train_one_epoch(
                 epoch, model, loader_train, optimizer, train_loss_fn, args,
                 lr_scheduler=lr_scheduler, saver=saver, output_dir=output_dir,
                 amp_autocast=amp_autocast, loss_scaler=loss_scaler, model_ema=model_ema, mixup_fn=mixup_fn)
@@ -594,7 +591,7 @@ def main():
         _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
 
 
-def train_epoch(
+def train_one_epoch(
         epoch, model, loader, optimizer, loss_fn, args,
         lr_scheduler=None, saver=None, output_dir='', amp_autocast=suppress,
         loss_scaler=None, model_ema=None, mixup_fn=None):

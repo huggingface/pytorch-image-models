@@ -507,42 +507,42 @@ def resnetv2_152x4_bitm(pretrained=False, **kwargs):
 @register_model
 def resnetv2_50x1_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_50x1_bitm_in21k', pretrained=pretrained, num_classes=kwargs.get('num_classes', 21843),
+        'resnetv2_50x1_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 4, 6, 3], width_factor=1, stem_type='fixed', **kwargs)
 
 
 @register_model
 def resnetv2_50x3_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_50x3_bitm_in21k', pretrained=pretrained, num_classes=kwargs.get('num_classes', 21843),
+        'resnetv2_50x3_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 4, 6, 3], width_factor=3, stem_type='fixed', **kwargs)
 
 
 @register_model
 def resnetv2_101x1_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_101x1_bitm_in21k', pretrained=pretrained, num_classes=kwargs.get('num_classes', 21843),
+        'resnetv2_101x1_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 4, 23, 3], width_factor=1, stem_type='fixed', **kwargs)
 
 
 @register_model
 def resnetv2_101x3_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_101x3_bitm_in21k', pretrained=pretrained, num_classes=kwargs.get('num_classes', 21843),
+        'resnetv2_101x3_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 4, 23, 3], width_factor=3, stem_type='fixed', **kwargs)
 
 
 @register_model
 def resnetv2_152x2_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_152x2_bitm_in21k', pretrained=pretrained, num_classes=kwargs.get('num_classes', 21843),
+        'resnetv2_152x2_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 8, 36, 3], width_factor=2, stem_type='fixed', **kwargs)
 
 
 @register_model
 def resnetv2_152x4_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_152x4_bitm_in21k', pretrained=pretrained, num_classes=kwargs.get('num_classes', 21843),
+        'resnetv2_152x4_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 8, 36, 3], width_factor=4, stem_type='fixed', **kwargs)
 
 
