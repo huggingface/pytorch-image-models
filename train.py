@@ -551,7 +551,7 @@ def main():
     try:
         for epoch in range(start_epoch, num_epochs):
             if args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
-                loader_train.set_epoch(epoch)
+                loader_train.sampler.set_epoch(epoch)
 
             train_metrics = train_one_epoch(
                 epoch, model, loader_train, optimizer, train_loss_fn, args,
