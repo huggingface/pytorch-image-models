@@ -1,6 +1,11 @@
+""" A dataset parser that reads images from folders
+
+Folders are scannerd recursively to find image files. Labels are based
+on the folder hierarchy, just leaf folders by default.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import os
-import io
-import torch
 
 from timm.utils.misc import natural_key
 

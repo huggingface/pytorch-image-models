@@ -1,3 +1,10 @@
+""" A dataset parser that reads single tarfile based datasets
+
+This parser can read datasets consisting if a single tarfile containing images.
+I am planning to deprecated it in favour of ParerImageInTar.
+
+Hacked together by / Copyright 2020 Ross Wightman
+"""
 import os
 import tarfile
 
@@ -31,6 +38,8 @@ def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
 
 class ParserImageTar(Parser):
     """ Single tarfile dataset where classes are mapped to folders within tar
+    NOTE: This class is being deprecated in favour of the more capable ParserImageInTar that can
+    operate on folders of tars or tars in tars.
     """
     def __init__(self, root, class_map=''):
         super().__init__()

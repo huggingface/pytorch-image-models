@@ -37,14 +37,14 @@ class ParserTfds(Parser):
          dataloader workers, the train iterator wraps to avoid returning partial batches that trigger drop_last
          https://github.com/pytorch/pytorch/issues/33413
       * With PyTorch IterableDatasets, each worker in each replica operates in isolation, the final batch
-        from each worker could be a different size. For training this is avoid by option above, for
-        validation extra samples are inserted iff distributed mode is enabled so the batches being reduced
-        across replicas are of same size. This will slightlyalter the results, distributed validation will not be
+        from each worker could be a different size. For training this is worked around by option above, for
+        validation extra samples are inserted iff distributed mode is enabled so that the batches being reduced
+        across replicas are of same size. This will slightly alter the results, distributed validation will not be
         100% correct. This is similar to common handling in DistributedSampler for normal Datasets but a bit worse
-        since there are to N * J extra samples.
+        since there are up to N * J extra samples with IterableDatasets.
       * The sharding (splitting of dataset into TFRecord) files imposes limitations on the number of
         replicas and dataloader workers you can use. For really small datasets that only contain a few shards
-        you may have to train non-distributed w/ 1-2 dataloader workers. This may not be a huge concern as the
+        you may have to train non-distributed w/ 1-2 dataloader workers. This is likely not a huge concern as the
         benefit of distributed training or fast dataloading should be much less for small datasets.
       * This wrapper is currently configured to return individual, decompressed image samples from the TFDS
         dataset. The augmentation (transforms) and batching is still done in PyTorch. It would be possible
@@ -64,8 +64,8 @@ class ParserTfds(Parser):
         self.batch_size = batch_size
 
         self.builder = tfds.builder(name, data_dir=root)
-        # NOTE: please use tfds command line app to download & prepare datasets, I don't want to trigger
-        # it by default here as it's caused issues generating unwanted paths in data directories.
+        # NOTE: please use tfds command line app to download & prepare datasets, I don't want to call
+        # download_and_prepare() by default here as it's caused issues generating unwanted paths.
         self.num_samples = self.builder.info.splits[split].num_examples
         self.ds = None  # initialized lazily on each dataloader worker process
 
@@ -102,7 +102,7 @@ class ParserTfds(Parser):
             """
             InputContext will assign subset of underlying TFRecord files to each 'pipeline' if used.
             My understanding is that using split, the underling TFRecord files will shuffle (shuffle_files=True)
-            between the splits each iteration but that could be wrong.
+            between the splits each iteration, but that understanding could be wrong.
             Possible split options include:
               * InputContext for both distributed & worker processes (current)
               * InputContext for distributed and sub-splits for worker processes
@@ -154,7 +154,7 @@ class ParserTfds(Parser):
             sample_count += 1
             if self.is_training and sample_count >= target_sample_count:
                 # Need to break out of loop when repeat() is enabled for training w/ oversampling
-                # this results in 'extra' samples per epoch but seems more desirable than dropping
+                # this results in extra samples per epoch but seems more desirable than dropping
                 # up to N*J batches per epoch (where N = num distributed processes, and J = num worker processes)
                 break
         if not self.is_training and self.dist_num_replicas and 0 < sample_count < target_sample_count:

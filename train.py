@@ -283,7 +283,7 @@ def _parse_args():
 
 
 def main():
-    setup_default_logging(log_path='./train.log')
+    setup_default_logging()
     args, args_text = _parse_args()
 
     args.prefetcher = not args.no_prefetcher

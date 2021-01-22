@@ -2,7 +2,7 @@ import os
 
 from .parser_image_folder import ParserImageFolder
 from .parser_image_tar import ParserImageTar
-from .parser_image_class_in_tar import ParserImageClassInTar
+from .parser_image_in_tar import ParserImageInTar
 
 
 def create_parser(name, root, split='train', **kwargs):
@@ -23,7 +23,7 @@ def create_parser(name, root, split='train', **kwargs):
         # default fallback path (backwards compat), use image tar if root is a .tar file, otherwise image folder
         # FIXME support split here, in parser?
         if os.path.isfile(root) and os.path.splitext(root)[1] == '.tar':
-            parser = ParserImageTar(root, **kwargs)
+            parser = ParserImageInTar(root, **kwargs)
         else:
             parser = ParserImageFolder(root, **kwargs)
     return parser
