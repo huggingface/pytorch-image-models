@@ -155,9 +155,11 @@ def extract_tarinfos(root, class_name_to_idx=None, cache_tarinfo=None, extension
     samples_and_targets = [(s, class_name_to_idx[l]) for s, l in zip(samples, labels) if l in class_name_to_idx]
     if sort:
         samples_and_targets = sorted(samples_and_targets, key=lambda k: natural_key(k[0][0].path))
-
-    _logger.info(f'Finished processing {len(samples_and_targets)} samples across {len(tarfiles)} tar files.')
-    return samples_and_targets, class_name_to_idx, tarfiles
+    samples, targets = zip(*samples_and_targets)
+    samples = np.array(samples)
+    targets = np.array(targets)
+    _logger.info(f'Finished processing {len(samples)} samples across {len(tarfiles)} tar files.')
+    return samples, targets, class_name_to_idx, tarfiles
 
 
 class ParserImageInTar(Parser):
@@ -171,7 +173,7 @@ class ParserImageInTar(Parser):
         if class_map:
             class_name_to_idx = load_class_map(class_map, root)
         self.root = root
-        self.samples_and_targets, self.class_name_to_idx, tarfiles = extract_tarinfos(
+        self.samples, self.targets, self.class_name_to_idx, tarfiles = extract_tarinfos(
             self.root,
             class_name_to_idx=class_name_to_idx,
             cache_tarinfo=cache_tarinfo,
@@ -186,10 +188,11 @@ class ParserImageInTar(Parser):
         self.cache_tarfiles = cache_tarfiles
 
     def __len__(self):
-        return len(self.samples_and_targets)
+        return len(self.samples)
 
     def __getitem__(self, index):
-        sample, target = self.samples_and_targets[index]
+        sample = self.samples[index]
+        target = self.targets[index]
         sample_ti, parent_fn, child_ti = sample
         parent_abs = os.path.join(self.root, parent_fn) if parent_fn else self.root
 
@@ -213,7 +216,7 @@ class ParserImageInTar(Parser):
         return tf.extractfile(sample_ti), target
 
     def _filename(self, index, basename=False, absolute=False):
-        filename = self.samples_and_targets[index][0][0].name
+        filename = self.samples[index][0].name
         if basename:
             filename = os.path.basename(filename)
         return filename
