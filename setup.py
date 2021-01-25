@@ -31,6 +31,7 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'Topic :: Software Development',
@@ -42,6 +43,6 @@ setup(
     keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet',
     packages=find_packages(exclude=['convert', 'tests', 'results']),
     include_package_data=True,
-    install_requires=['torch >= 1.0', 'torchvision'],
+    install_requires=['torch >= 1.4', 'torchvision'],
     python_requires='>=3.6',
 )
