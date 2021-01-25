@@ -13,11 +13,16 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_executor(True)
     torch._C._jit_set_profiling_mode(False)
 
+# transformer models don't support many of the spatial / feature based model functionalities
+NON_STD_FILTERS = ['vit_*']
+
+# exclude models that cause specific test failures
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d', 'vit_*']
+    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm'] + NON_STD_FILTERS
 else:
-    EXCLUDE_FILTERS = ['vit_*']
+    EXCLUDE_FILTERS = NON_STD_FILTERS
+
 MAX_FWD_SIZE = 384
 MAX_BWD_SIZE = 128
 MAX_FWD_FEAT_SIZE = 448
@@ -68,7 +73,7 @@ def test_model_backward(model_name, batch_size):
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=['vit_*']))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -121,7 +126,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
         create_model(model_name, pretrained=True, in_chans=in_chans)
 
     @pytest.mark.timeout(120)
-    @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=['vit_*']))
+    @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""

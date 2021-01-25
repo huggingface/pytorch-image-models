@@ -162,6 +162,12 @@ default_cfgs = {
     'seresnet152d_320': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet152d_ra2-04464dd2.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), crop_pct=1.0, pool_size=(10, 10)),
+    'seresnet200d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'seresnet269d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
 
 
     #  Squeeze-Excitation ResNeXts, to eventually replace the models in senet.py
@@ -216,6 +222,12 @@ default_cfgs = {
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45610/outputs/ECAResNet101D_P_75a3370e.pth',
         interpolation='bicubic',
         first_conv='conv1.0'),
+    'ecaresnet200d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'ecaresnet269d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
 
     # Efficient Channel Attention ResNeXts
     'ecaresnext26tn_32x4d': _cfg(
@@ -1124,6 +1136,26 @@ def ecaresnet101d_pruned(pretrained=False, **kwargs):
 
 
 @register_model
+def ecaresnet200d(pretrained=False, **kwargs):
+    """Constructs a ResNet-200-D model with ECA.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(attn_layer='eca'), **kwargs)
+    return _create_resnet('ecaresnet200d', pretrained, **model_args)
+
+
+@register_model
+def ecaresnet269d(pretrained=False, **kwargs):
+    """Constructs a ResNet-269-D model with ECA.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 30, 48, 8], stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(attn_layer='eca'), **kwargs)
+    return _create_resnet('ecaresnet269d', pretrained, **model_args)
+
+
+@register_model
 def ecaresnext26tn_32x4d(pretrained=False, **kwargs):
     """Constructs an ECA-ResNeXt-26-TN model.
     This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
@@ -1196,6 +1228,26 @@ def seresnet152d(pretrained=False, **kwargs):
         block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', avg_down=True,
         block_args=dict(attn_layer='se'), **kwargs)
     return _create_resnet('seresnet152d', pretrained, **model_args)
+
+
+@register_model
+def seresnet200d(pretrained=False, **kwargs):
+    """Constructs a ResNet-200-D model with SE attn.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet200d', pretrained, **model_args)
+
+
+@register_model
+def seresnet269d(pretrained=False, **kwargs):
+    """Constructs a ResNet-269-D model with SE attn.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 30, 48, 8], stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnet269d', pretrained, **model_args)
 
 
 @register_model

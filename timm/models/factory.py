@@ -6,8 +6,6 @@ from .layers import set_layer_config
 def create_model(
         model_name,
         pretrained=False,
-        num_classes=1000,
-        in_chans=3,
         checkpoint_path='',
         scriptable=None,
         exportable=None,
@@ -18,8 +16,6 @@ def create_model(
     Args:
         model_name (str): name of model to instantiate
         pretrained (bool): load pretrained ImageNet-1k weights if true
-        num_classes (int): number of classes for final fully connected layer (default: 1000)
-        in_chans (int): number of input channels / colors (default: 3)
         checkpoint_path (str): path of checkpoint to load after model is initialized
         scriptable (bool): set layer config so that model is jit scriptable (not working for all models yet)
         exportable (bool): set layer config so that model is traceable / ONNX exportable (not fully impl/obeyed yet)
@@ -30,7 +26,7 @@ def create_model(
         global_pool (str): global pool type (default: 'avg')
         **: other kwargs are model specific
     """
-    model_args = dict(pretrained=pretrained, num_classes=num_classes, in_chans=in_chans)
+    model_args = dict(pretrained=pretrained)
 
     # Only EfficientNet and MobileNetV3 models have support for batchnorm params or drop_connect_rate passed as args
     is_efficientnet = is_model_in_modules(model_name, ['efficientnet', 'mobilenetv3'])

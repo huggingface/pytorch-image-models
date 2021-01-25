@@ -11,7 +11,11 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
-import torch.utils.model_zoo as model_zoo
+from torch.hub import load_state_dict_from_url, download_url_to_file, urlparse, HASH_REGEX
+try:
+    from torch.hub import get_dir
+except ImportError:
+    from torch.hub import _get_torch_home as get_dir
 
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
 from .layers import Conv2dSame, Linear
@@ -88,15 +92,70 @@ def resume_checkpoint(model, checkpoint_path, optimizer=None, loss_scaler=None, 
         raise FileNotFoundError()
 
 
-def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=None, strict=True):
+def load_custom_pretrained(model, cfg=None, load_fn=None, progress=False, check_hash=False):
+    r"""Loads a custom (read non .pth) weight file
+
+    Downloads checkpoint file into cache-dir like torch.hub based loaders, but calls
+    a passed in custom load fun, or the `load_pretrained` model member fn.
+
+    If the object is already present in `model_dir`, it's deserialized and returned.
+    The default value of `model_dir` is ``<hub_dir>/checkpoints`` where
+    `hub_dir` is the directory returned by :func:`~torch.hub.get_dir`.
+
+    Args:
+        model: The instantiated model to load weights into
+        cfg (dict): Default pretrained model cfg
+        load_fn: An external stand alone fn that loads weights into provided model, otherwise a fn named
+            'laod_pretrained' on the model will be called if it exists
+        progress (bool, optional): whether or not to display a progress bar to stderr. Default: False
+        check_hash(bool, optional): If True, the filename part of the URL should follow the naming convention
+            ``filename-<sha256>.ext`` where ``<sha256>`` is the first eight or more
+            digits of the SHA256 hash of the contents of the file. The hash is used to
+            ensure unique names and to verify the contents of the file. Default: False
+    """
     if cfg is None:
         cfg = getattr(model, 'default_cfg')
     if cfg is None or 'url' not in cfg or not cfg['url']:
-        _logger.warning("Pretrained model URL is invalid, using random initialization.")
+        _logger.warning("Pretrained model URL does not exist, using random initialization.")
+        return
+    url = cfg['url']
+
+    # Issue warning to move data if old env is set
+    if os.getenv('TORCH_MODEL_ZOO'):
+        _logger.warning('TORCH_MODEL_ZOO is deprecated, please use env TORCH_HOME instead')
+
+    hub_dir = get_dir()
+    model_dir = os.path.join(hub_dir, 'checkpoints')
+
+    os.makedirs(model_dir, exist_ok=True)
+
+    parts = urlparse(url)
+    filename = os.path.basename(parts.path)
+    cached_file = os.path.join(model_dir, filename)
+    if not os.path.exists(cached_file):
+        _logger.info('Downloading: "{}" to {}\n'.format(url, cached_file))
+        hash_prefix = None
+        if check_hash:
+            r = HASH_REGEX.search(filename)  # r is Optional[Match[str]]
+            hash_prefix = r.group(1) if r else None
+        download_url_to_file(url, cached_file, hash_prefix, progress=progress)
+
+    if load_fn is not None:
+        load_fn(model, cached_file)
+    elif hasattr(model, 'load_pretrained'):
+        model.load_pretrained(cached_file)
+    else:
+        _logger.warning("Valid function to load pretrained weights is not available, using random initialization.")
+
+
+def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=None, strict=True, progress=False):
+    if cfg is None:
+        cfg = getattr(model, 'default_cfg')
+    if cfg is None or 'url' not in cfg or not cfg['url']:
+        _logger.warning("Pretrained model URL does not exist, using random initialization.")
         return
 
-    state_dict = model_zoo.load_url(cfg['url'], progress=False, map_location='cpu')
-
+    state_dict = load_state_dict_from_url(cfg['url'], progress=progress, map_location='cpu')
     if filter_fn is not None:
         state_dict = filter_fn(state_dict)
 
@@ -139,6 +198,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
 
     classifier_name = cfg['classifier']
     if num_classes == 1000 and cfg['num_classes'] == 1001:
+        # FIXME this special case is problematic as number of pretrained weight sources increases
         # special case for imagenet trained models with extra background class in pretrained weights
         classifier_weight = state_dict[classifier_name + '.weight']
         state_dict[classifier_name + '.weight'] = classifier_weight[1:]
@@ -269,6 +329,7 @@ def build_model_with_cfg(
         feature_cfg: dict = None,
         pretrained_strict: bool = True,
         pretrained_filter_fn: Callable = None,
+        pretrained_custom_load: bool = False,
         **kwargs):
     pruned = kwargs.pop('pruned', False)
     features = False
@@ -289,10 +350,13 @@ def build_model_with_cfg(
     # for classification models, check class attr, then kwargs, then default to 1k, otherwise 0 for feats
     num_classes_pretrained = 0 if features else getattr(model, 'num_classes', kwargs.get('num_classes', 1000))
     if pretrained:
-        load_pretrained(
-            model,
-            num_classes=num_classes_pretrained, in_chans=kwargs.get('in_chans', 3),
-            filter_fn=pretrained_filter_fn, strict=pretrained_strict)
+        if pretrained_custom_load:
+            load_custom_pretrained(model)
+        else:
+            load_pretrained(
+                model,
+                num_classes=num_classes_pretrained, in_chans=kwargs.get('in_chans', 3),
+                filter_fn=pretrained_filter_fn, strict=pretrained_strict)
     
     if features:
         feature_cls = FeatureListNet

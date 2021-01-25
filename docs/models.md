@@ -10,6 +10,10 @@ Most included models have pretrained weights. The weights are either:
 
 The validation results for the pretrained weights can be found [here](results.md)
 
+## Big Transfer ResNetV2 (BiT) [[resnetv2.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnetv2.py)]
+* Paper: `Big Transfer (BiT): General Visual Representation Learning` - https://arxiv.org/abs/1912.11370
+* Reference code: https://github.com/google-research/big_transfer
+
 ## Cross-Stage Partial Networks [[cspnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/cspnet.py)]
 * Paper: `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
 * Reference impl: https://github.com/WongKinYiu/CrossStagePartialNetworks

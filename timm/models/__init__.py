@@ -16,6 +16,7 @@ from .regnet import *
 from .res2net import *
 from .resnest import *
 from .resnet import *
+from .resnetv2 import *
 from .rexnet import *
 from .selecsls import *
 from .senet import *

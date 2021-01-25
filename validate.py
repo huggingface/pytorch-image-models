@@ -20,7 +20,7 @@ from collections import OrderedDict
 from contextlib import suppress
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
-from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config, RealLabelsImagenet
+from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_legacy
 
 has_apex = False
@@ -44,7 +44,11 @@ _logger = logging.getLogger('validate')
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('--model', '-m', metavar='MODEL', default='dpn92',
+parser.add_argument('--dataset', '-d', metavar='NAME', default='',
+                    help='dataset type (default: ImageFolder/ImageTar if empty)')
+parser.add_argument('--split', metavar='NAME', default='validation',
+                    help='dataset split (default: validation)')
+parser.add_argument('--model', '-m', metavar='NAME', default='dpn92',
                     help='model architecture (default: dpn92)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
@@ -62,7 +66,7 @@ parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD'
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('--num-classes', type=int, default=1000,
+parser.add_argument('--num-classes', type=int, default=None,
                     help='Number classes in dataset')
 parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
                     help='path to class to idx mapping file (default: "")')
@@ -133,6 +137,9 @@ def validate(args):
         in_chans=3,
         global_pool=args.gp,
         scriptable=args.torchscript)
+    if args.num_classes is None:
+        assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
+        args.num_classes = model.num_classes
 
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)
@@ -159,10 +166,9 @@ def validate(args):
 
     criterion = nn.CrossEntropyLoss().cuda()
 
-    if os.path.splitext(args.data)[1] == '.tar' and os.path.isfile(args.data):
-        dataset = DatasetTar(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
-    else:
-        dataset = Dataset(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
+    dataset = create_dataset(
+        root=args.data, name=args.dataset, split=args.split,
+        load_bytes=args.tf_preprocessing, class_map=args.class_map)
 
     if args.valid_labels:
         with open(args.valid_labels, 'r') as f:
