@@ -2,6 +2,17 @@
 
 ## What's New
 
+### Jan 25, 2021
+* Add ResNetV2 Big Transfer (BiT) models w/ ImageNet-1k and 21k weights from https://github.com/google-research/big_transfer
+* Add official R50+ViT-B/16 hybrid models + weights from https://github.com/google-research/vision_transformer
+* Add model defs and weights for DeiT Vision Transformer models from https://github.com/facebookresearch/deit
+* Refactor dataset classes into ImageDataset/IterableImageDataset + dataset specific parser classes
+* Add Tensorflow-Datasets (TFDS) wrapper to allow use of TFDS image classification sets with train script
+  * Ex: `train.py /data/tfds --dataset tfds/oxford_iiit_pet --val-split test --model resnet50 -b 256 --amp --num-classes 37 --opt adamw --lr 3e-4 --weight-decay .001 --pretrained -j 2`
+* Add improved .tar dataset parser that reads images from .tar, folder of .tar files, or .tar within .tar
+  * Run validation on full ImageNet-21k directly from tar w/ BiT model: `validate.py /data/fall11_whole.tar --model resnetv2_50x1_bitm_in21k --amp`
+* Models in this update should be stable w/ possible exception of ViT/BiT, possibility of some regressions with train/val scripts and dataset handling
+
 ### Jan 3, 2021
 * Add SE-ResNet-152D weights
   * 256x256 val, 0.94 crop top-1 - 83.75
@@ -132,6 +143,7 @@ A full version of the list below with source links can be found in the [document
 
 * Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
+* DeiT (Vision Transformer) - https://arxiv.org/abs/2012.12877
 * DenseNet - https://arxiv.org/abs/1608.06993
 * DLA - https://arxiv.org/abs/1707.06484
 * DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
