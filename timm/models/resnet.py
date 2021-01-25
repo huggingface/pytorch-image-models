@@ -226,6 +226,59 @@ default_cfgs = {
         url='',
         interpolation='bicubic'),
 
+    # Triplet Attention ResNets
+    'triplet_resnet18': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnet34': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnet50': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnet50tn': _cfg(
+        url='',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'triplet_resnet101': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnet152': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnet152d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'triplet_resnet152d_320': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), crop_pct=1.0, pool_size=(10, 10)),
+
+    # Triplet Atention ResNeXts
+    'triplet_resnext26_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnext26d_32x4d': _cfg(
+        url='',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'triplet_resnext26t_32x4d': _cfg(
+        url='',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'triplet_resnext26tn_32x4d': _cfg(
+        url='',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'triplet_resnext50_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnext101_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'triplet_resnext101_32x8d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    
     # ResNets with anti-aliasing blur pool
     'resnetblur18': _cfg(
         interpolation='bicubic'),
