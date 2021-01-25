@@ -337,6 +337,9 @@ def main():
         bn_eps=args.bn_eps,
         scriptable=args.torchscript,
         checkpoint_path=args.initial_checkpoint)
+    if args.num_classes is None:
+        assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
+        args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
 
     if args.local_rank == 0:
         _logger.info('Model %s created, param count: %d' %

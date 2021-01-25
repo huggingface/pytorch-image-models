@@ -137,6 +137,9 @@ def validate(args):
         in_chans=3,
         global_pool=args.gp,
         scriptable=args.torchscript)
+    if args.num_classes is None:
+        assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
+        args.num_classes = model.num_classes
 
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)
