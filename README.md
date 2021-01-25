@@ -5,6 +5,8 @@
 ### Jan 25, 2021
 * Add ResNetV2 Big Transfer (BiT) models w/ ImageNet-1k and 21k weights from https://github.com/google-research/big_transfer
 * Add official R50+ViT-B/16 hybrid models + weights from https://github.com/google-research/vision_transformer
+* ImageNet-21k ViT weights are added w/ model defs and representation layer (pre logits) support
+  * NOTE: ImageNet-21k classifier heads were zero'd in original weights, they are only useful for transfer learning
 * Add model defs and weights for DeiT Vision Transformer models from https://github.com/facebookresearch/deit
 * Refactor dataset classes into ImageDataset/IterableImageDataset + dataset specific parser classes
 * Add Tensorflow-Datasets (TFDS) wrapper to allow use of TFDS image classification sets with train script
