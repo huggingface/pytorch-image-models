@@ -11,6 +11,7 @@ from .inception_v3 import *
 from .inception_v4 import *
 from .mobilenetv3 import *
 from .nasnet import *
+from .nfnet import *
 from .pnasnet import *
 from .regnet import *
 from .res2net import *
