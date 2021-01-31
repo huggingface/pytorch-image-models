@@ -28,9 +28,9 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import load_pretrained
-from .layers import DropPath, to_2tuple, trunc_normal_
+from .layers import StdConv2dSame, DropPath, to_2tuple, trunc_normal_
 from .resnet import resnet26d, resnet50d
-from .resnetv2 import ResNetV2, StdConv2dSame
+from .resnetv2 import ResNetV2
 from .registry import register_model
 
 _logger = logging.getLogger(__name__)

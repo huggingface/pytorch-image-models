@@ -2,6 +2,9 @@
 
 ## What's New
 
+### Jan 30, 2012
+* Add initial "Normalization Free" NF-RegNet-B* and NF-ResNet model definitions based on [paper](https://arxiv.org/abs/2101.08692)
+
 ### Jan 25, 2021
 * Add ResNetV2 Big Transfer (BiT) models w/ ImageNet-1k and 21k weights from https://github.com/google-research/big_transfer
 * Add official R50+ViT-B/16 hybrid models + weights from https://github.com/google-research/vision_transformer
@@ -164,6 +167,7 @@ A full version of the list below with source links can be found in the [document
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
 * NASNet-A - https://arxiv.org/abs/1707.07012
+* NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
 * PNasNet - https://arxiv.org/abs/1712.00559
 * RegNet - https://arxiv.org/abs/2003.13678
 * ResNet/ResNeXt

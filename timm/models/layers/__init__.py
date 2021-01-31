@@ -10,13 +10,13 @@ from .config import is_exportable, is_scriptable, is_no_jit, set_exportable, set
 from .conv2d_same import Conv2dSame, conv2d_same
 from .conv_bn_act import ConvBnAct
 from .create_act import create_act_layer, get_act_layer, get_act_fn
-from .create_attn import create_attn
+from .create_attn import get_attn, create_attn
 from .create_conv2d import create_conv2d
 from .create_norm_act import create_norm_act, get_norm_act_layer
 from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
 from .eca import EcaModule, CecaModule
 from .evo_norm import EvoNormBatch2d, EvoNormSample2d
-from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple
+from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
@@ -29,5 +29,6 @@ from .separable_conv import SeparableConv2d, SeparableConvBnAct
 from .space_to_depth import SpaceToDepthModule
 from .split_attn import SplitAttnConv2d
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
+from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .weight_init import trunc_normal_

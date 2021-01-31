@@ -32,13 +32,12 @@ from collections import OrderedDict  # pylint: disable=g-importing-member
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from functools import partial
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg
 from .registry import register_model
-from .layers import get_padding, GroupNormAct, ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, conv2d_same
+from .layers import GroupNormAct, ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, StdConv2d
 
 
 def _cfg(url='', **kwargs):
@@ -110,43 +109,6 @@ def make_div(v, divisor=8):
     if new_v < 0.9 * v:
         new_v += divisor
     return new_v
-
-
-class StdConv2d(nn.Conv2d):
-
-    def __init__(
-            self, in_channel, out_channels, kernel_size, stride=1, dilation=1, bias=False, groups=1, eps=1e-5):
-        padding = get_padding(kernel_size, stride, dilation)
-        super().__init__(
-            in_channel, out_channels, kernel_size, stride=stride,
-            padding=padding, dilation=dilation, bias=bias, groups=groups)
-        self.eps = eps
-
-    def forward(self, x):
-        w = self.weight
-        v, m = torch.var_mean(w, dim=[1, 2, 3], keepdim=True, unbiased=False)
-        w = (w - m) / (torch.sqrt(v) + self.eps)
-        x = F.conv2d(x, w, self.bias, self.stride, self.padding, self.dilation, self.groups)
-        return x
-
-
-class StdConv2dSame(nn.Conv2d):
-    """StdConv2d w/ TF compatible SAME padding. Used for ViT Hybrid model.
-    """
-    def __init__(
-            self, in_channel, out_channels, kernel_size, stride=1, dilation=1, bias=False, groups=1, eps=1e-5):
-        padding = get_padding(kernel_size, stride, dilation)
-        super().__init__(
-            in_channel, out_channels, kernel_size, stride=stride,
-            padding=padding, dilation=dilation, bias=bias, groups=groups)
-        self.eps = eps
-
-    def forward(self, x):
-        w = self.weight
-        v, m = torch.var_mean(w, dim=[1, 2, 3], keepdim=True, unbiased=False)
-        w = (w - m) / (torch.sqrt(v) + self.eps)
-        x = conv2d_same(x, w, self.bias, self.stride, self.padding, self.dilation, self.groups)
-        return x
 
 
 def tf2th(conv_weights):
