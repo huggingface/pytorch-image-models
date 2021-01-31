@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from .padding import get_padding
 from .conv2d_same import conv2d_same
@@ -69,20 +68,24 @@ class ScaledStdConv2d(nn.Conv2d):
         https://arxiv.org/abs/2101.08692
     """
 
-    def __init__(self, in_channels, out_channels, kernel_size,
-                 stride=1, padding=None, dilation=1, groups=1, bias=True, gain=True, gamma=1.0, eps=1e-5):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=None, dilation=1, groups=1,
+                 bias=True, gain=True, gamma=1.0, eps=1e-5, use_layernorm=False):
         if padding is None:
             padding = get_padding(kernel_size, stride, dilation)
         super().__init__(
             in_channels, out_channels, kernel_size, stride=stride,
             padding=padding, dilation=dilation, groups=groups, bias=bias)
         self.gain = nn.Parameter(torch.ones(self.out_channels, 1, 1, 1)) if gain else None
-        self.gamma = gamma * self.weight[0].numel() ** 0.5  # gamma * sqrt(fan-in)
-        self.eps = eps
+        self.scale = gamma * self.weight[0].numel() ** -0.5  # gamma * 1 / sqrt(fan-in)
+        self.eps = eps ** 2 if use_layernorm else eps
+        self.use_layernorm = use_layernorm  # experimental, slightly faster/less GPU memory use
 
     def get_weight(self):
-        std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-        weight = (self.weight - mean) / (self.gamma * std + self.eps)
+        if self.use_layernorm:
+            weight = self.scale * F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
+        else:
+            std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
+            weight = self.scale * (self.weight - mean) / (std + self.eps)
         if self.gain is not None:
             weight = weight * self.gain
         return weight
