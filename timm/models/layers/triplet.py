@@ -48,9 +48,9 @@ class AttentionGate(nn.Module):
         scale = torch.sigmoid_(x_out) 
         return x * scale
 
-class TripletModule(nn.Module):
+class TripletAttention(nn.Module):
     def __init__(self, no_spatial=False):
-        super(TripletModule, self).__init__()
+        super(TripletAttention, self).__init__()
         self.cw = AttentionGate()
         self.hc = AttentionGate()
         self.no_spatial=no_spatial

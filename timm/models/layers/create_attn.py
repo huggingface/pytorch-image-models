@@ -6,7 +6,7 @@ import torch
 from .se import SEModule, EffectiveSEModule
 from .eca import EcaModule, CecaModule
 from .cbam import CbamModule, LightCbamModule
-from .triplet import TripletModule
+from .triplet import TripletAttention
 
 
 def create_attn(attn_type, channels, **kwargs):
@@ -27,7 +27,7 @@ def create_attn(attn_type, channels, **kwargs):
             elif attn_type == 'lcbam':
                 module_cls = LightCbamModule
             elif attn_type == 'triplet':
-                module_cls = TripletModule
+                module_cls = TripletAttention
             else:
                 assert False, "Invalid attn module (%s)" % attn_type
         elif isinstance(attn_type, bool):
