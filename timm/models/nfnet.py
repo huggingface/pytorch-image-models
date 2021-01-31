@@ -97,7 +97,7 @@ model_cfgs = dict(
         stem_type='7x7_pool', stem_chs=64, width_factor=1.0, bottle_ratio=0.25, efficient=False, group_size=None,
         act_layer='relu', attn_layer=None),
     nf_resnet101=NfCfg(
-        depths=(3, 4, 6, 3), channels=(256, 512, 1024, 2048),
+        depths=(3, 4, 23, 3), channels=(256, 512, 1024, 2048),
         stem_type='7x7_pool', stem_chs=64, width_factor=1.0, bottle_ratio=0.25, efficient=False, group_size=None,
         act_layer='relu', attn_layer=None),
 
@@ -111,7 +111,7 @@ model_cfgs = dict(
         stem_type='7x7_pool', stem_chs=64, width_factor=1.0, bottle_ratio=0.25, efficient=False, group_size=None,
         act_layer='relu', attn_layer='se', attn_kwargs=dict(reduction_ratio=0.25)),
     nf_seresnet101=NfCfg(
-        depths=(3, 4, 6, 3), channels=(256, 512, 1024, 2048),
+        depths=(3, 4, 23, 3), channels=(256, 512, 1024, 2048),
         stem_type='7x7_pool', stem_chs=64, width_factor=1.0, bottle_ratio=0.25, efficient=False, group_size=None,
         act_layer='relu', attn_layer='se', attn_kwargs=dict(reduction_ratio=0.25)),
 
@@ -125,7 +125,7 @@ model_cfgs = dict(
         stem_type='7x7_pool', stem_chs=64, width_factor=1.0, bottle_ratio=0.25, efficient=False, group_size=None,
         act_layer='relu', attn_layer='eca', attn_kwargs=dict()),
     nf_ecaresnet101=NfCfg(
-        depths=(3, 4, 6, 3), channels=(256, 512, 1024, 2048),
+        depths=(3, 4, 23, 3), channels=(256, 512, 1024, 2048),
         stem_type='7x7_pool', stem_chs=64, width_factor=1.0, bottle_ratio=0.25, efficient=False, group_size=None,
         act_layer='relu', attn_layer='eca', attn_kwargs=dict()),
 
@@ -440,6 +440,11 @@ def nf_resnet50(pretrained=False, **kwargs):
 
 
 @register_model
+def nf_resnet101(pretrained=False, **kwargs):
+    return _create_normfreenet('nf_resnet101', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def nf_seresnet26(pretrained=False, **kwargs):
     return _create_normfreenet('nf_seresnet26', pretrained=pretrained, **kwargs)
 
@@ -450,6 +455,11 @@ def nf_seresnet50(pretrained=False, **kwargs):
 
 
 @register_model
+def nf_seresnet101(pretrained=False, **kwargs):
+    return _create_normfreenet('nf_seresnet101', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def nf_ecaresnet26(pretrained=False, **kwargs):
     return _create_normfreenet('nf_ecaresnet26', pretrained=pretrained, **kwargs)
 
@@ -457,3 +467,7 @@ def nf_ecaresnet26(pretrained=False, **kwargs):
 @register_model
 def nf_ecaresnet50(pretrained=False, **kwargs):
     return _create_normfreenet('nf_ecaresnet50', pretrained=pretrained, **kwargs)
+
+@register_model
+def nf_ecaresnet101(pretrained=False, **kwargs):
+    return _create_normfreenet('nf_ecaresnet101', pretrained=pretrained, **kwargs)
