@@ -3,6 +3,9 @@
 Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
     - https://arxiv.org/abs/2101.08692
 
+NOTE: These models are a work in progress, no pretrained weights yet but I'm currently training some.
+Details may change, especially once the paper authors release their official models.
+
 Hacked together by / copyright Ross Wightman, 2021.
 """
 import math
@@ -34,11 +37,11 @@ def _dcfg(url='', **kwargs):
 # FIXME finish
 default_cfgs = {
     'nf_regnet_b0': _dcfg(url=''),
-    'nf_regnet_b1': _dcfg(url='', input_size=(3, 240, 240)),
-    'nf_regnet_b2': _dcfg(url='', input_size=(3, 256, 256)),
-    'nf_regnet_b3': _dcfg(url='', input_size=(3, 272, 272)),
-    'nf_regnet_b4': _dcfg(url='', input_size=(3, 320, 320)),
-    'nf_regnet_b5': _dcfg(url='', input_size=(3, 384, 384)),
+    'nf_regnet_b1': _dcfg(url='', input_size=(3, 240, 240), pool_size=(8, 8)),
+    'nf_regnet_b2': _dcfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'nf_regnet_b3': _dcfg(url='', input_size=(3, 272, 272), pool_size=(9, 9)),
+    'nf_regnet_b4': _dcfg(url='', input_size=(3, 320, 320), pool_size=(10, 10)),
+    'nf_regnet_b5': _dcfg(url='', input_size=(3, 384, 384), pool_size=(12, 12)),
 
     'nf_resnet26': _dcfg(url='', first_conv='stem.conv'),
     'nf_resnet50': _dcfg(url='', first_conv='stem.conv'),
