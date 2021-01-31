@@ -1298,7 +1298,7 @@ def senet154(pretrained=False, **kwargs):
 @register_model
 def triplet_resnet18d(pretrained=False, **kwargs):
     model_args = dict(block=BasicBlock, layers=[2, 2, 2, 2], block_args=dict(attn_layer='triplet'), **kwargs)
-    return _create_resnet('triplet_resnet18', pretrained, **model_args)
+    return _create_resnet('triplet_resnet18d', pretrained, **model_args)
 
 
 @register_model
@@ -1306,7 +1306,7 @@ def triplet_resnet50d(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
         block_args=dict(attn_layer='triplet'), **kwargs)
-    return _create_resnet('triplet_resnet50', pretrained, **model_args)
+    return _create_resnet('triplet_resnet50d', pretrained, **model_args)
 
 
 @register_model
@@ -1314,4 +1314,4 @@ def triplet_resnet101d(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True,
         block_args=dict(attn_layer='triplet'), **kwargs)
-    return _create_resnet('triplet_resnet101', pretrained, **model_args)
+    return _create_resnet('triplet_resnet101d', pretrained, **model_args)
