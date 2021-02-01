@@ -66,7 +66,7 @@ class CheckpointSaver:
         last_save_path = os.path.join(self.checkpoint_dir, 'last' + self.extension)
         self._save(tmp_save_path, epoch, metric)
         if os.path.exists(last_save_path):
-            os.unlink(last_save_path) # required for Windows support.
+            os.unlink(last_save_path)  # required for Windows support.
         os.rename(tmp_save_path, last_save_path)
         worst_file = self.checkpoint_files[-1] if self.checkpoint_files else None
         if (len(self.checkpoint_files) < self.max_history
@@ -118,7 +118,7 @@ class CheckpointSaver:
     def _cleanup_checkpoints(self, trim=0):
         trim = min(len(self.checkpoint_files), trim)
         delete_index = self.max_history - trim
-        if delete_index <= 0 or len(self.checkpoint_files) <= delete_index:
+        if delete_index < 0 or len(self.checkpoint_files) <= delete_index:
             return
         to_delete = self.checkpoint_files[delete_index:]
         for d in to_delete:
@@ -147,7 +147,4 @@ class CheckpointSaver:
         recovery_path = os.path.join(self.recovery_dir, self.recovery_prefix)
         files = glob.glob(recovery_path + '*' + self.extension)
         files = sorted(files)
-        if len(files):
-            return files[0]
-        else:
-            return ''
+        return files[0] if len(files) else ''
