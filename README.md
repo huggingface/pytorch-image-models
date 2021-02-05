@@ -2,7 +2,7 @@
 
 ## What's New
 
-### Jan 30, 2012
+### Jan 30, 2021
 * Add initial "Normalization Free" NF-RegNet-B* and NF-ResNet model definitions based on [paper](https://arxiv.org/abs/2101.08692)
 
 ### Jan 25, 2021
