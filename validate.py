@@ -147,8 +147,10 @@ def validate(args):
     param_count = sum([m.numel() for m in model.parameters()])
     _logger.info('Model %s created, param count: %d' % (args.model, param_count))
 
-    data_config = resolve_data_config(vars(args), model=model)
-    model, test_time_pool = (model, False) if args.no_test_pool else apply_test_time_pool(model, data_config)
+    data_config = resolve_data_config(vars(args), model=model, use_test_size=True)
+    test_time_pool = False
+    if not args.no_test_pool:
+        model, test_time_pool = apply_test_time_pool(model, data_config, use_test_size=True)
 
     if args.torchscript:
         torch.jit.optimized_execution(True)

@@ -2,6 +2,14 @@
 
 ## What's New
 
+### Feb 8, 2021
+* Add several ResNet weights with ECA attention. 26t & 50t trained @ 256, test @ 320. 269d train @ 256, fine-tune @320, test @ 352.
+  * `ecaresnet26t` - 79.88 top-1 @ 320x320, 79.08 @ 256x256
+  * `ecaresnet50t` - 82.35 top-1 @ 320x320, 81.52 @ 256x256
+  * `ecaresnet269d` - 84.93 top-1 @ 352x352, 84.87 @ 320x320
+* Remove separate tiered (`t`) vs tiered_narrow (`tn`) ResNet model defs, all `tn` changed to `t` and `t` models removed (`seresnext26t_32x4d` only model w/ weights that was removed).
+* Support model default_cfgs with separate train vs test resolution `test_input_size`
+
 ### Jan 30, 2021
 * Add initial "Normalization Free" NF-RegNet-B* and NF-ResNet model definitions based on [paper](https://arxiv.org/abs/2101.08692)
 

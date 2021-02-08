@@ -122,8 +122,6 @@ model_list = [
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep stem, and avg-pool in downsample layers.'),
     _entry('seresnext26t_32x4d', 'SE-ResNeXt-26-T 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered stem, and avg-pool in downsample layers.'),
-    _entry('seresnext26tn_32x4d', 'SE-ResNeXt-26-TN 32x4d', '1812.01187',
-           model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
     _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
 
     _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
