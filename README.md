@@ -10,7 +10,7 @@
 * Remove separate tiered (`t`) vs tiered_narrow (`tn`) ResNet model defs, all `tn` changed to `t` and `t` models removed (`seresnext26t_32x4d` only model w/ weights that was removed).
 * Support model default_cfgs with separate train vs test resolution `test_input_size`
 
-### Jan 30, 2012
+### Jan 30, 2021
 * Add initial "Normalization Free" NF-RegNet-B* and NF-ResNet model definitions based on [paper](https://arxiv.org/abs/2101.08692)
 
 ### Jan 25, 2021

@@ -30,6 +30,9 @@ class SwishJitAutoFn(torch.autograd.Function):
     Inspired by conversation btw Jeremy Howard & Adam Pazske
     https://twitter.com/jeremyphoward/status/1188251041835315200
     """
+    @staticmethod
+    def symbolic(g, x):
+        return g.op("Mul", x, g.op("Sigmoid", x))
 
     @staticmethod
     def forward(ctx, x):
@@ -151,6 +154,13 @@ class HardSwishJitAutoFn(torch.autograd.Function):
     def backward(ctx, grad_output):
         x = ctx.saved_tensors[0]
         return hard_swish_jit_bwd(x, grad_output)
+
+    @staticmethod
+    def symbolic(g, self):
+        input = g.op("Add", self, g.op('Constant', value_t=torch.tensor(3, dtype=torch.float)))
+        hardtanh_ = g.op("Clip", input, g.op('Constant', value_t=torch.tensor(0, dtype=torch.float)), g.op('Constant', value_t=torch.tensor(6, dtype=torch.float)))
+        hardtanh_ = g.op("Div", hardtanh_, g.op('Constant', value_t=torch.tensor(6, dtype=torch.float)))
+        return g.op("Mul", self, hardtanh_)
 
 
 def hard_swish_me(x, inplace=False):
