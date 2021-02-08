@@ -217,7 +217,7 @@ default_cfgs = {
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
     'ecaresnet269d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecaresnet269d_320_ra2-7baa55cb.pth',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), pool_size=(8, 8),
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), pool_size=(10, 10),
         crop_pct=1.0, test_input_size=(3, 352, 352)),
 
     # Efficient Channel Attention ResNeXts
@@ -1030,14 +1030,6 @@ def swsl_resnext101_32x16d(pretrained=True, **kwargs):
 
 
 @register_model
-def ecaresnet18(pretrained=False, **kwargs):
-    """ Constructs an ECA-ResNet-18 model.
-    """
-    model_args = dict(block=BasicBlock, layers=[2, 2, 2, 2], block_args=dict(attn_layer='eca'), **kwargs)
-    return _create_resnet('ecaresnet18', pretrained, **model_args)
-
-
-@register_model
 def ecaresnet26t(pretrained=False, **kwargs):
     """Constructs an ECA-ResNeXt-26-T model.
     This is technically a 28 layer ResNet, like a 'D' bag-of-tricks model but with tiered 24, 32, 64 channels
@@ -1047,14 +1039,6 @@ def ecaresnet26t(pretrained=False, **kwargs):
         block=Bottleneck, layers=[2, 2, 2, 2], stem_width=32,
         stem_type='deep_tiered', avg_down=True, block_args=dict(attn_layer='eca'), **kwargs)
     return _create_resnet('ecaresnet26t', pretrained, **model_args)
-
-
-@register_model
-def ecaresnet50(pretrained=False, **kwargs):
-    """Constructs an ECA-ResNet-50 model.
-    """
-    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], block_args=dict(attn_layer='eca'), **kwargs)
-    return _create_resnet('ecaresnet50', pretrained, **model_args)
 
 
 @register_model
