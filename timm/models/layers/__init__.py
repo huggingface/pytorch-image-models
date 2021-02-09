@@ -12,7 +12,7 @@ from .conv_bn_act import ConvBnAct
 from .create_act import create_act_layer, get_act_layer, get_act_fn
 from .create_attn import get_attn, create_attn
 from .create_conv2d import create_conv2d
-from .create_norm_act import create_norm_act, get_norm_act_layer
+from .create_norm_act import get_norm_act_layer, create_norm_act, convert_norm_act
 from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
 from .eca import EcaModule, CecaModule
 from .evo_norm import EvoNormBatch2d, EvoNormSample2d

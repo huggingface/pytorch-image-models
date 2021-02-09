@@ -148,6 +148,31 @@ def load_custom_pretrained(model, cfg=None, load_fn=None, progress=False, check_
         _logger.warning("Valid function to load pretrained weights is not available, using random initialization.")
 
 
+def adapt_input_conv(in_chans, conv_weight):
+    conv_type = conv_weight.dtype
+    conv_weight = conv_weight.float()  # Some weights are in torch.half, ensure it's float for sum on CPU
+    O, I, J, K = conv_weight.shape
+    if in_chans == 1:
+        if I > 3:
+            assert conv_weight.shape[1] % 3 == 0
+            # For models with space2depth stems
+            conv_weight = conv_weight.reshape(O, I // 3, 3, J, K)
+            conv_weight = conv_weight.sum(dim=2, keepdim=False)
+        else:
+            conv_weight = conv_weight.sum(dim=1, keepdim=True)
+    elif in_chans != 3:
+        if I != 3:
+            raise NotImplementedError('Weight format not supported by conversion.')
+        else:
+            # NOTE this strategy should be better than random init, but there could be other combinations of
+            # the original RGB input layer weights that'd work better for specific cases.
+            repeat = int(math.ceil(in_chans / 3))
+            conv_weight = conv_weight.repeat(1, repeat, 1, 1)[:, :in_chans, :, :]
+            conv_weight *= (3 / float(in_chans))
+    conv_weight = conv_weight.to(conv_type)
+    return conv_weight
+
+
 def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=None, strict=True, progress=False):
     if cfg is None:
         cfg = getattr(model, 'default_cfg')
@@ -159,56 +184,35 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
     if filter_fn is not None:
         state_dict = filter_fn(state_dict)
 
-    if in_chans == 1:
-        conv1_name = cfg['first_conv']
-        _logger.info('Converting first conv (%s) pretrained weights from 3 to 1 channel' % conv1_name)
-        conv1_weight = state_dict[conv1_name + '.weight']
-        # Some weights are in torch.half, ensure it's float for sum on CPU
-        conv1_type = conv1_weight.dtype
-        conv1_weight = conv1_weight.float()
-        O, I, J, K = conv1_weight.shape
-        if I > 3:
-            assert conv1_weight.shape[1] % 3 == 0
-            # For models with space2depth stems
-            conv1_weight = conv1_weight.reshape(O, I // 3, 3, J, K)
-            conv1_weight = conv1_weight.sum(dim=2, keepdim=False)
-        else:
-            conv1_weight = conv1_weight.sum(dim=1, keepdim=True)
-        conv1_weight = conv1_weight.to(conv1_type)
-        state_dict[conv1_name + '.weight'] = conv1_weight
-    elif in_chans != 3:
-        conv1_name = cfg['first_conv']
-        conv1_weight = state_dict[conv1_name + '.weight']
-        conv1_type = conv1_weight.dtype
-        conv1_weight = conv1_weight.float()
-        O, I, J, K = conv1_weight.shape
-        if I != 3:
-            _logger.warning('Deleting first conv (%s) from pretrained weights.' % conv1_name)
-            del state_dict[conv1_name + '.weight']
-            strict = False
-        else:
-            # NOTE this strategy should be better than random init, but there could be other combinations of
-            # the original RGB input layer weights that'd work better for specific cases.
-            _logger.info('Repeating first conv (%s) weights in channel dim.' % conv1_name)
-            repeat = int(math.ceil(in_chans / 3))
-            conv1_weight = conv1_weight.repeat(1, repeat, 1, 1)[:, :in_chans, :, :]
-            conv1_weight *= (3 / float(in_chans))
-            conv1_weight = conv1_weight.to(conv1_type)
-            state_dict[conv1_name + '.weight'] = conv1_weight
+    input_convs = cfg.get('first_conv', None)
+    if input_convs is not None:
+        if isinstance(input_convs, str):
+            input_convs = (input_convs,)
+        for input_conv_name in input_convs:
+            weight_name = input_conv_name + '.weight'
+            try:
+                state_dict[weight_name] = adapt_input_conv(in_chans, state_dict[weight_name])
+                _logger.info(
+                    f'Converted input conv {input_conv_name} pretrained weights from 3 to {in_chans} channel(s)')
+            except NotImplementedError as e:
+                del state_dict[weight_name]
+                strict = False
+                _logger.warning(
+                    f'Unable to convert pretrained {input_conv_name} weights, using random init for this layer.')
 
     classifier_name = cfg['classifier']
-    if num_classes == 1000 and cfg['num_classes'] == 1001:
-        # FIXME this special case is problematic as number of pretrained weight sources increases
-        # special case for imagenet trained models with extra background class in pretrained weights
-        classifier_weight = state_dict[classifier_name + '.weight']
-        state_dict[classifier_name + '.weight'] = classifier_weight[1:]
-        classifier_bias = state_dict[classifier_name + '.bias']
-        state_dict[classifier_name + '.bias'] = classifier_bias[1:]
-    elif num_classes != cfg['num_classes']:
-        # completely discard fully connected for all other differences between pretrained and created model
+    label_offset = cfg.get('label_offset', 0)
+    if num_classes != cfg['num_classes']:
+        # completely discard fully connected if model num_classes doesn't match pretrained weights
         del state_dict[classifier_name + '.weight']
         del state_dict[classifier_name + '.bias']
         strict = False
+    elif label_offset > 0:
+        # special case for pretrained weights with an extra background class in pretrained weights
+        classifier_weight = state_dict[classifier_name + '.weight']
+        state_dict[classifier_name + '.weight'] = classifier_weight[label_offset:]
+        classifier_bias = state_dict[classifier_name + '.bias']
+        state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
 
     model.load_state_dict(state_dict, strict=strict)
 

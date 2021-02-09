@@ -1,6 +1,9 @@
+""" NasNet-A (Large)
+ nasnetalarge implementation grabbed from Cadene's pretrained models
+ https://github.com/Cadene/pretrained-models.pytorch
 """
+from functools import partial
 
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -20,9 +23,10 @@ default_cfgs = {
         'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
-        'num_classes': 1001,
+        'num_classes': 1000,
         'first_conv': 'conv0.conv',
         'classifier': 'last_linear',
+        'label_offset': 1,  # 1001 classes in pretrained weights
     },
 }
 
@@ -418,7 +422,7 @@ class NASNetALarge(nn.Module):
 
         self.conv0 = ConvBnAct(
             in_channels=in_chans, out_channels=self.stem_size, kernel_size=3, padding=0, stride=2,
-            norm_kwargs=dict(eps=0.001, momentum=0.1), act_layer=None)
+            norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
 
         self.cell_stem_0 = CellStem0(
             self.stem_size, num_channels=channels // (channel_multiplier ** 2), pad_type=pad_type)
