@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Checkpoint Averaging Script
 
 This script averages all model weights for checkpoints in specified path that match

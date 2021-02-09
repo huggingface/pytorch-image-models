@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ ImageNet Validation Script
 
 This is intended to be a lean and easily modifiable ImageNet validation script for evaluating pretrained
