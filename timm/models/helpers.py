@@ -185,7 +185,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
         state_dict = filter_fn(state_dict)
 
     input_convs = cfg.get('first_conv', None)
-    if input_convs is not None:
+    if input_convs is not None and in_chans != 3:
         if isinstance(input_convs, str):
             input_convs = (input_convs,)
         for input_conv_name in input_convs:
