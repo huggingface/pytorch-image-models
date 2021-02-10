@@ -177,7 +177,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
     if cfg is None:
         cfg = getattr(model, 'default_cfg')
     if cfg is None or 'url' not in cfg or not cfg['url']:
-        _logger.warning("Pretrained model URL does not exist, using random initialization.")
+        _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
 
     state_dict = load_state_dict_from_url(cfg['url'], progress=progress, map_location='cpu')
