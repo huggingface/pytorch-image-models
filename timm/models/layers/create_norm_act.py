@@ -19,6 +19,7 @@ from .inplace_abn import InplaceAbn
 _NORM_ACT_TYPES = {BatchNormAct2d, GroupNormAct, EvoNormBatch2d, EvoNormSample2d, InplaceAbn}
 _NORM_ACT_REQUIRES_ARG = {BatchNormAct2d, GroupNormAct, InplaceAbn}  # requires act_layer arg to define act type
 
+
 def get_norm_act_layer(layer_class):
     layer_class = layer_class.replace('_', '').lower()
     if layer_class.startswith("batchnorm"):
@@ -47,16 +48,22 @@ def create_norm_act(layer_type, num_features, apply_act=True, jit=False, **kwarg
     return layer_instance
 
 
-def convert_norm_act_type(norm_layer, act_layer, norm_kwargs=None):
+def convert_norm_act(norm_layer, act_layer):
     assert isinstance(norm_layer, (type, str,  types.FunctionType, functools.partial))
     assert act_layer is None or isinstance(act_layer, (type, str, types.FunctionType, functools.partial))
-    norm_act_args = norm_kwargs.copy() if norm_kwargs else {}
+    norm_act_kwargs = {}
+
+    # unbind partial fn, so args can be rebound later
+    if isinstance(norm_layer, functools.partial):
+        norm_act_kwargs.update(norm_layer.keywords)
+        norm_layer = norm_layer.func
+
     if isinstance(norm_layer, str):
         norm_act_layer = get_norm_act_layer(norm_layer)
     elif norm_layer in _NORM_ACT_TYPES:
         norm_act_layer = norm_layer
-    elif isinstance(norm_layer,  (types.FunctionType, functools.partial)):
-        # assuming this is a lambda/fn/bound partial that creates norm_act layer
+    elif isinstance(norm_layer,  types.FunctionType):
+        # if function type, must be a lambda/fn that creates a norm_act layer
         norm_act_layer = norm_layer
     else:
         type_name = norm_layer.__name__.lower()
@@ -66,9 +73,11 @@ def convert_norm_act_type(norm_layer, act_layer, norm_kwargs=None):
             norm_act_layer = GroupNormAct
         else:
             assert False, f"No equivalent norm_act layer for {type_name}"
+
     if norm_act_layer in _NORM_ACT_REQUIRES_ARG:
-        # Must pass `act_layer` through for backwards compat where `act_layer=None` implies no activation.
+        # pass `act_layer` through for backwards compat where `act_layer=None` implies no activation.
         # In the future, may force use of `apply_act` with `act_layer` arg bound to relevant NormAct types
-        # It is intended that functions/partial does not trigger this, they should define act.
-        norm_act_args.update(dict(act_layer=act_layer))
-    return norm_act_layer, norm_act_args
+        norm_act_kwargs.setdefault('act_layer', act_layer)
+    if norm_act_kwargs:
+        norm_act_layer = functools.partial(norm_act_layer, **norm_act_kwargs)  # bind/rebind args
+    return norm_act_layer

@@ -10,9 +10,9 @@ The variety of training args is large and not all combinations of options (or ev
 
 To train an SE-ResNet34 on ImageNet, locally distributed, 4 GPUs, one process per GPU w/ cosine schedule, random-erasing prob of 50% and per-pixel random value:
 
-`./distributed_train.sh 4 /data/imagenet --model seresnet34 --sched cosine --epochs 150 --warmup-epochs 5 --lr 0.4 --reprob 0.5 --remode pixel --batch-size 256 -j 4`
+`./distributed_train.sh 4 /data/imagenet --model seresnet34 --sched cosine --epochs 150 --warmup-epochs 5 --lr 0.4 --reprob 0.5 --remode pixel --batch-size 256 --amp -j 4`
 
-NOTE: NVIDIA APEX should be installed to run in per-process distributed via DDP or to enable AMP mixed precision with the --amp flag
+NOTE: It is recommended to use PyTorch 1.7+ w/ PyTorch native AMP and DDP instead of APEX AMP. `--amp` defaults to native AMP as of timm ver 0.4.3.  `--apex-amp` will force use of APEX components if they are installed.
  
 ## Validation / Inference Scripts
 
@@ -24,4 +24,4 @@ To validate with the model's pretrained weights (if they exist):
 
 To run inference from a checkpoint:
 
-`python inference.py /imagenet/validation/ --model mobilenetv3_large_100 --checkpoint ./output/model_best.pth.tar`
+`python inference.py /imagenet/validation/ --model mobilenetv3_large_100 --checkpoint ./output/train/model_best.pth.tar`

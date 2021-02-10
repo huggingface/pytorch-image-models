@@ -31,6 +31,10 @@ The validation results for the pretrained weights can be found [here](results.md
 * My PyTorch code: https://github.com/rwightman/pytorch-dpn-pretrained
 * Reference code: https://github.com/cypw/DPNs
 
+## GPU-Efficient Networks [[byobnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/byobnet.py)]
+* Paper: `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+* Reference code: https://github.com/idstcv/GPU-Efficient-Networks
+
 ## HRNet [[hrnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/hrnet.py)]
 * Paper: `Deep High-Resolution Representation Learning for Visual Recognition` - https://arxiv.org/abs/1908.07919
 * Code: https://github.com/HRNet/HRNet-Image-Classification
@@ -81,6 +85,10 @@ The validation results for the pretrained weights can be found [here](results.md
 ## RegNet [[regnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/regnet.py)]
 * Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
 * Reference code: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
+
+## RepVGG [[byobnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/byobnet.py)]
+* Paper: `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+* Reference code: https://github.com/DingXiaoH/RepVGG
 
 ## ResNet, ResNeXt [[resnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnet.py)]
 
@@ -135,6 +143,10 @@ NOTE: I am deprecating this version of the networks, the new ones are part of `r
 ## TResNet [[tresnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/tresnet.py)]
 * Paper: `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
 * Code: https://github.com/mrT23/TResNet
+
+## VGG [[vgg.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vgg.py)]
+* Paper: `Very Deep Convolutional Networks For Large-Scale Image Recognition` - https://arxiv.org/pdf/1409.1556.pdf
+* Reference code: https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
 
 ## Vision Transformer [[vision_transformer.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py)]
 * Paper: `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929

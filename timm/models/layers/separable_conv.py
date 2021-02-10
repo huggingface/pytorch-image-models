@@ -8,17 +8,16 @@ Hacked together by / Copyright 2020 Ross Wightman
 from torch import nn as nn
 
 from .create_conv2d import create_conv2d
-from .create_norm_act import convert_norm_act_type
+from .create_norm_act import convert_norm_act
 
 
 class SeparableConvBnAct(nn.Module):
     """ Separable Conv w/ trailing Norm and Activation
     """
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, dilation=1, padding='', bias=False,
-                 channel_multiplier=1.0, pw_kernel_size=1, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 act_layer=nn.ReLU, apply_act=True, drop_block=None):
+                 channel_multiplier=1.0, pw_kernel_size=1, norm_layer=nn.BatchNorm2d, act_layer=nn.ReLU,
+                 apply_act=True, drop_block=None):
         super(SeparableConvBnAct, self).__init__()
-        norm_kwargs = norm_kwargs or {}
 
         self.conv_dw = create_conv2d(
             in_channels, int(in_channels * channel_multiplier), kernel_size,
@@ -27,8 +26,8 @@ class SeparableConvBnAct(nn.Module):
         self.conv_pw = create_conv2d(
             int(in_channels * channel_multiplier), out_channels, pw_kernel_size, padding=padding, bias=bias)
 
-        norm_act_layer, norm_act_args = convert_norm_act_type(norm_layer, act_layer, norm_kwargs)
-        self.bn = norm_act_layer(out_channels, apply_act=apply_act, drop_block=drop_block, **norm_act_args)
+        norm_act_layer = convert_norm_act(norm_layer, act_layer)
+        self.bn = norm_act_layer(out_channels, apply_act=apply_act, drop_block=drop_block)
 
     @property
     def in_channels(self):

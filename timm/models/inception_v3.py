@@ -32,12 +32,12 @@ default_cfgs = {
     # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
     'tf_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_inception_v3-e0069de4.pth',
-        num_classes=1001, has_aux=False),
+        num_classes=1000, has_aux=False, label_offset=1),
     # my port of Tensorflow adversarially trained Inception V3 from
     # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
     'adv_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/adv_inception_v3-9e27bd63.pth',
-        num_classes=1001, has_aux=False),
+        num_classes=1000, has_aux=False, label_offset=1),
     # from gluon pretrained models, best performing in terms of accuracy/loss metrics
     # https://gluon-cv.mxnet.io/model_zoo/classification.html
     'gluon_inception_v3': _cfg(

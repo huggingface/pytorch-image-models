@@ -310,11 +310,11 @@ def main():
     # resolve AMP arguments based on PyTorch / Apex availability
     use_amp = None
     if args.amp:
-        # for backwards compat, `--amp` arg tries apex before native amp
-        if has_apex:
-            args.apex_amp = True
-        elif has_native_amp:
+        # `--amp` chooses native amp before apex (APEX ver not actively maintained)
+        if has_native_amp:
             args.native_amp = True
+        elif has_apex:
+            args.apex_amp = True
     if args.apex_amp and has_apex:
         use_amp = 'apex'
     elif args.native_amp and has_native_amp:

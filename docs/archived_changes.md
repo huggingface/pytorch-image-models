@@ -1,5 +1,29 @@
 # Archived Changes
 
+### May 12, 2020
+* Add ResNeSt models (code adapted from https://github.com/zhanghang1989/ResNeSt, paper https://arxiv.org/abs/2004.08955))
+
+### May 3, 2020
+* Pruned EfficientNet B1, B2, and B3 (https://arxiv.org/abs/2002.08258) contributed by [Yonathan Aflalo](https://github.com/yoniaflalo)
+
+### May 1, 2020
+* Merged a number of execellent contributions in the ResNet model family over the past month
+  * BlurPool2D and resnetblur models initiated by [Chris Ha](https://github.com/VRandme), I trained resnetblur50 to 79.3.
+  * TResNet models and SpaceToDepth, AntiAliasDownsampleLayer layers by [mrT23](https://github.com/mrT23)
+  * ecaresnet (50d, 101d, light) models and two pruned variants using pruning as per (https://arxiv.org/abs/2002.08258) by [Yonathan Aflalo](https://github.com/yoniaflalo)
+* 200 pretrained models in total now with updated results csv in results folder
+
+### April 5, 2020
+* Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite
+  * 3.5M param MobileNet-V2 100 @ 73%
+  * 4.5M param MobileNet-V2 110d @ 75%
+  * 6.1M param MobileNet-V2 140 @ 76.5%
+  * 5.8M param MobileNet-V2 120d @ 77.3%
+
+### March 18, 2020
+* Add EfficientNet-Lite models w/ weights ported from [Tensorflow TPU](https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite)
+* Add RandAugment trained ResNeXt-50 32x4d weights with 79.8 top-1. Trained by [Andrew Lavin](https://github.com/andravin) (see Training section for hparams)
+
 ### April 5, 2020
 * Add some newly trained MobileNet-V2 models trained with latest h-params, rand augment. They compare quite favourably to EfficientNet-Lite
   * 3.5M param MobileNet-V2 100 @ 73%

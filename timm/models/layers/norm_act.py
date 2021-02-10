@@ -24,7 +24,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
             act_args = dict(inplace=True) if inplace else {}
             self.act = act_layer(**act_args)
         else:
-            self.act = None
+            self.act = nn.Identity()
 
     def _forward_jit(self, x):
         """ A cut & paste of the contents of the PyTorch BatchNorm2d forward function
@@ -62,8 +62,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
             x = self._forward_jit(x)
         else:
             x = self._forward_python(x)
-        if self.act is not None:
-            x = self.act(x)
+        x = self.act(x)
         return x
 
 
@@ -75,12 +74,12 @@ class GroupNormAct(nn.GroupNorm):
         if isinstance(act_layer, str):
             act_layer = get_act_layer(act_layer)
         if act_layer is not None and apply_act:
-            self.act = act_layer(inplace=inplace)
+            act_args = dict(inplace=True) if inplace else {}
+            self.act = act_layer(**act_args)
         else:
-            self.act = None
+            self.act = nn.Identity()
 
     def forward(self, x):
         x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
-        if self.act is not None:
-            x = self.act(x)
+        x = self.act(x)
         return x

@@ -395,8 +395,11 @@ def _create_normfreenet(variant, pretrained=False, **kwargs):
         feature_cfg['out_indices'] = (1, 2, 3, 4)  # no stride 2, 0 level feat for stride 4 maxpool stems in ResNet
 
     return build_model_with_cfg(
-        NormalizerFreeNet, variant, pretrained, model_cfg=model_cfg, default_cfg=default_cfgs[variant],
-        feature_cfg=feature_cfg, **kwargs)
+        NormalizerFreeNet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        model_cfg=model_cfg,
+        feature_cfg=feature_cfg,
+        **kwargs)
 
 
 @register_model
