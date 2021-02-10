@@ -12,7 +12,9 @@ import logging
 import numpy as np
 import torch
 
-from timm.models import create_model, apply_test_time_pool
+import torchvision.models as models
+
+from timm.models import create_model, apply_test_time_pool, load_checkpoint
 from timm.data import ImageDataset, create_loader, resolve_data_config
 from timm.utils import AverageMeter, setup_default_logging
 
@@ -27,6 +29,12 @@ parser.add_argument('--output_dir', metavar='DIR', default='./',
                     help='path to output files')
 parser.add_argument('--model', '-m', metavar='MODEL', default='dpn92',
                     help='model architecture (default: dpn92)')
+parser.add_argument('--torchvision-model', default='', type=str, metavar='MODEL',
+                    help='Get a Torchvision model by name')
+parser.add_argument('--hub-model', default='', type=str, metavar='MODEL',
+                    help='Get a model from PyTorch Hub by name')
+parser.add_argument('--hub-model-github-or-dir', type=str,
+                    help='Specify local directory or Github repository to load model by PyTorch Hub')
 parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -43,7 +51,7 @@ parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('--num-classes', type=int, default=1000,
                     help='Number classes in dataset')
-parser.add_argument('--log-freq', default=10, type=int,
+parser.add_argument('--log-interval', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
@@ -64,15 +72,27 @@ def main():
     args.pretrained = args.pretrained or not args.checkpoint
 
     # create model
-    model = create_model(
-        args.model,
-        num_classes=args.num_classes,
-        in_chans=3,
-        pretrained=args.pretrained,
-        checkpoint_path=args.checkpoint)
+    model_name = args.model
+    if args.torchvision_model:
+        model_name = args.torchvision_model
+        model = models.__dict__[args.torchvision_model](pretrained=args.pretrained, num_classes=args.num_classes)
+        if args.checkpoint:
+            load_checkpoint(model, args.checkpoint)
+    elif args.hub_model and args.hub_model_github_or_dir:
+        model_name = args.hub_model
+        model = torch.hub.load(args.hub_model_github_or_dir, args.hub_model, pretrained=args.pretrained)
+        if args.checkpoint:
+            load_checkpoint(model, args.checkpoint)
+    else:
+        model = create_model(
+            args.model,
+            num_classes=args.num_classes,
+            in_chans=3,
+            pretrained=args.pretrained,
+            checkpoint_path=args.checkpoint)
 
     _logger.info('Model %s created, param count: %d' %
-                 (args.model, sum([m.numel() for m in model.parameters()])))
+                 (model_name, sum([m.numel() for m in model.parameters()])))
 
     config = resolve_data_config(vars(args), model=model)
     model, test_time_pool = (model, False) if args.no_test_pool else apply_test_time_pool(model, config)
@@ -110,7 +130,7 @@ def main():
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if batch_idx % args.log_freq == 0:
+            if batch_idx % args.log_interval == 0:
                 _logger.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
                     batch_idx, len(loader), batch_time=batch_time))
 

@@ -25,6 +25,7 @@ from datetime import datetime
 
 import torch
 import torch.nn as nn
+import torchvision.models as models
 import torchvision.utils
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
@@ -74,7 +75,13 @@ parser.add_argument('--train-split', metavar='NAME', default='train',
 parser.add_argument('--val-split', metavar='NAME', default='validation',
                     help='dataset validation split (default: validation)')
 parser.add_argument('--model', default='resnet101', type=str, metavar='MODEL',
-                    help='Name of model to train (default: "countception"')
+                    help='Name of model to train (default: "resnet101"')
+parser.add_argument('--torchvision-model', default='', type=str, metavar='MODEL',
+                    help='Get a Torchvision model by name')
+parser.add_argument('--hub-model', default='', type=str, metavar='MODEL',
+                    help='Get a model from PyTorch Hub by name')
+parser.add_argument('--hub-model-github-or-dir', type=str,
+                    help='Specify local directory or Github repository to load model by PyTorch Hub')
 parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
 parser.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH',
@@ -327,20 +334,33 @@ def main():
 
     torch.manual_seed(args.seed + args.rank)
 
-    model = create_model(
-        args.model,
-        pretrained=args.pretrained,
-        num_classes=args.num_classes,
-        drop_rate=args.drop,
-        drop_connect_rate=args.drop_connect,  # DEPRECATED, use drop_path
-        drop_path_rate=args.drop_path,
-        drop_block_rate=args.drop_block,
-        global_pool=args.gp,
-        bn_tf=args.bn_tf,
-        bn_momentum=args.bn_momentum,
-        bn_eps=args.bn_eps,
-        scriptable=args.torchscript,
-        checkpoint_path=args.initial_checkpoint)
+    model_name = args.model
+    if args.torchvision_model:
+        model_name = args.torchvision_model
+        model = models.__dict__[args.torchvision_model](pretrained=args.pretrained, num_classes=args.num_classes)
+        if args.initial_checkpoint:
+            load_checkpoint(model, args.initial_checkpoint)
+    elif args.hub_model and args.hub_model_github_or_dir:
+        model_name = args.hub_model
+        model = torch.hub.load(args.hub_model_github_or_dir, args.hub_model, pretrained=args.pretrained)
+        if args.initial_checkpoint:
+            load_checkpoint(model, args.initial_checkpoint)
+    else:
+        model = create_model(
+            args.model,
+            pretrained=args.pretrained,
+            num_classes=args.num_classes,
+            drop_rate=args.drop,
+            drop_connect_rate=args.drop_connect,  # DEPRECATED, use drop_path
+            drop_path_rate=args.drop_path,
+            drop_block_rate=args.drop_block,
+            global_pool=args.gp,
+            bn_tf=args.bn_tf,
+            bn_momentum=args.bn_momentum,
+            bn_eps=args.bn_eps,
+            scriptable=args.torchscript,
+            checkpoint_path=args.initial_checkpoint)
+
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
