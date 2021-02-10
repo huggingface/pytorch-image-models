@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Checkpoint Cleaning Script
 
 Takes training checkpoints with GPU tensors, optimizer state, extra dict keys, etc.
