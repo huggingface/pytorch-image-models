@@ -1,5 +1,5 @@
 from .registry import is_model, is_model_in_modules, model_entrypoint
-from .helpers import load_checkpoint
+from .helpers import load_checkpoint, load_hf_checkpoint_config
 from .layers import set_layer_config
 
 
@@ -52,7 +52,16 @@ def create_model(
             create_fn = model_entrypoint(model_name)
             model = create_fn(**model_args, **kwargs)
         else:
-            raise RuntimeError('Unknown model (%s)' % model_name)
+            try:
+                model_cfg = load_hf_checkpoint_config(model_name, revision=kwargs.get("hf_revision"))
+                # This does not work, but there is probably a way to have the values in the config override 
+                # the defaults if needed.
+                # model_args["model_cfg"] = model_cfg
+                create_fn = model_entrypoint(model_cfg.pop("architecture"))
+                model = create_fn(**model_args, **kwargs)
+            except Exception as e:
+                raise RuntimeError('Unknown model or checkpoint from the Hugging Face hub (%s)' % model_name)
+ 
 
     if checkpoint_path:
         load_checkpoint(model, checkpoint_path)
