@@ -34,17 +34,21 @@ def _dcfg(url='', **kwargs):
         **kwargs
     }
 
-# FIXME finish
+
 default_cfgs = {
     'nf_regnet_b0': _dcfg(url=''),
-    'nf_regnet_b1': _dcfg(url='', input_size=(3, 240, 240), pool_size=(8, 8)),
+    'nf_regnet_b1': _dcfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_regnet_b1_256_ra2-ad85cfef.pth',
+        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 288, 288), crop_pct=0.9),
     'nf_regnet_b2': _dcfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
     'nf_regnet_b3': _dcfg(url='', input_size=(3, 272, 272), pool_size=(9, 9)),
     'nf_regnet_b4': _dcfg(url='', input_size=(3, 320, 320), pool_size=(10, 10)),
     'nf_regnet_b5': _dcfg(url='', input_size=(3, 384, 384), pool_size=(12, 12)),
 
     'nf_resnet26': _dcfg(url='', first_conv='stem.conv'),
-    'nf_resnet50': _dcfg(url='', first_conv='stem.conv'),
+    'nf_resnet50': _dcfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_resnet50_ra2-9f236009.pth',
+        first_conv='stem.conv', pool_size=(8, 8), input_size=(3, 256, 256), crop_pct=0.94),
     'nf_resnet101': _dcfg(url='', first_conv='stem.conv'),
 
     'nf_seresnet26': _dcfg(url='', first_conv='stem.conv'),

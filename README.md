@@ -3,6 +3,9 @@
 ## What's New
 
 ### Feb 10, 2021
+* First Normalizer-Free model training experiments done,
+  * nf_resnet50 - 80.68 top-1 @ 288x288, 80.31 @ 256x256
+  * nf_regnet_b1 - 79.30 @ 288x288, 78.75 @ 256x256
 * More model archs, incl a flexible ByobNet backbone ('Bring-your-own-blocks')
   * GPU-Efficient-Networks (https://github.com/idstcv/GPU-Efficient-Networks), impl in `byobnet.py`
   * RepVGG (https://github.com/DingXiaoH/RepVGG), impl in `byobnet.py`
