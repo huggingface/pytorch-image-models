@@ -286,6 +286,55 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#feb-10-2021" class="md-nav__link">
+    Feb 10, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-8-2021" class="md-nav__link">
+    Feb 8, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jan-30-2021" class="md-nav__link">
+    Jan 30, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jan-25-2021" class="md-nav__link">
+    Jan 25, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jan-3-2021" class="md-nav__link">
+    Jan 3, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dec-18-2020" class="md-nav__link">
+    Dec 18, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dec-7-2020" class="md-nav__link">
+    Dec 7, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#oct-30-2020" class="md-nav__link">
     Oct 30, 2020
   </a>
@@ -414,6 +463,55 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#feb-10-2021" class="md-nav__link">
+    Feb 10, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-8-2021" class="md-nav__link">
+    Feb 8, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jan-30-2021" class="md-nav__link">
+    Jan 30, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jan-25-2021" class="md-nav__link">
+    Jan 25, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jan-3-2021" class="md-nav__link">
+    Jan 3, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dec-18-2020" class="md-nav__link">
+    Dec 18, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dec-7-2020" class="md-nav__link">
+    Dec 7, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#oct-30-2020" class="md-nav__link">
     Oct 30, 2020
   </a>
@@ -518,6 +616,77 @@
                 
                 
                 <h1 id="recent-changes">Recent Changes</h1>
+<h3 id="feb-10-2021">Feb 10, 2021</h3>
+<ul>
+<li>More model archs, incl a flexible ByobNet backbone ('Bring-your-own-blocks')<ul>
+<li>GPU-Efficient-Networks (<a href="https://github.com/idstcv/GPU-Efficient-Networks">https://github.com/idstcv/GPU-Efficient-Networks</a>), impl in <code>byobnet.py</code></li>
+<li>RepVGG (<a href="https://github.com/DingXiaoH/RepVGG">https://github.com/DingXiaoH/RepVGG</a>), impl in <code>byobnet.py</code></li>
+<li>classic VGG (from torchvision, impl in <code>vgg</code>)</li>
+</ul>
+</li>
+<li>Refinements to normalizer layer arg handling and normalizer+act layer handling in some models</li>
+<li>Default AMP mode changed to native PyTorch AMP instead of APEX. Issues not being fixed with APEX. Native works with <code>--channels-last</code> and <code>--torchscript</code> model training, APEX does not.</li>
+<li>Fix a few bugs introduced since last pypi release</li>
+</ul>
+<h3 id="feb-8-2021">Feb 8, 2021</h3>
+<ul>
+<li>Add several ResNet weights with ECA attention. 26t &amp; 50t trained @ 256, test @ 320. 269d train @ 256, fine-tune @320, test @ 352.<ul>
+<li><code>ecaresnet26t</code> - 79.88 top-1 @ 320x320, 79.08 @ 256x256</li>
+<li><code>ecaresnet50t</code> - 82.35 top-1 @ 320x320, 81.52 @ 256x256</li>
+<li><code>ecaresnet269d</code> - 84.93 top-1 @ 352x352, 84.87 @ 320x320</li>
+</ul>
+</li>
+<li>Remove separate tiered (<code>t</code>) vs tiered_narrow (<code>tn</code>) ResNet model defs, all <code>tn</code> changed to <code>t</code> and <code>t</code> models removed (<code>seresnext26t_32x4d</code> only model w/ weights that was removed).</li>
+<li>Support model default_cfgs with separate train vs test resolution <code>test_input_size</code> and remove extra <code>_320</code> suffix ResNet model defs that were just for test.</li>
+</ul>
+<h3 id="jan-30-2021">Jan 30, 2021</h3>
+<ul>
+<li>Add initial "Normalization Free" NF-RegNet-B* and NF-ResNet model definitions based on <a href="https://arxiv.org/abs/2101.08692">paper</a></li>
+</ul>
+<h3 id="jan-25-2021">Jan 25, 2021</h3>
+<ul>
+<li>Add ResNetV2 Big Transfer (BiT) models w/ ImageNet-1k and 21k weights from <a href="https://github.com/google-research/big_transfer">https://github.com/google-research/big_transfer</a></li>
+<li>Add official R50+ViT-B/16 hybrid models + weights from <a href="https://github.com/google-research/vision_transformer">https://github.com/google-research/vision_transformer</a></li>
+<li>ImageNet-21k ViT weights are added w/ model defs and representation layer (pre logits) support<ul>
+<li>NOTE: ImageNet-21k classifier heads were zero'd in original weights, they are only useful for transfer learning</li>
+</ul>
+</li>
+<li>Add model defs and weights for DeiT Vision Transformer models from <a href="https://github.com/facebookresearch/deit">https://github.com/facebookresearch/deit</a></li>
+<li>Refactor dataset classes into ImageDataset/IterableImageDataset + dataset specific parser classes</li>
+<li>Add Tensorflow-Datasets (TFDS) wrapper to allow use of TFDS image classification sets with train script<ul>
+<li>Ex: <code>train.py /data/tfds --dataset tfds/oxford_iiit_pet --val-split test --model resnet50 -b 256 --amp --num-classes 37 --opt adamw --lr 3e-4 --weight-decay .001 --pretrained -j 2</code></li>
+</ul>
+</li>
+<li>Add improved .tar dataset parser that reads images from .tar, folder of .tar files, or .tar within .tar<ul>
+<li>Run validation on full ImageNet-21k directly from tar w/ BiT model: <code>validate.py /data/fall11_whole.tar --model resnetv2_50x1_bitm_in21k --amp</code></li>
+</ul>
+</li>
+<li>Models in this update should be stable w/ possible exception of ViT/BiT, possibility of some regressions with train/val scripts and dataset handling</li>
+</ul>
+<h3 id="jan-3-2021">Jan 3, 2021</h3>
+<ul>
+<li>Add SE-ResNet-152D weights<ul>
+<li>256x256 val, 0.94 crop top-1 - 83.75</li>
+<li>320x320 val, 1.0 crop - 84.36</li>
+</ul>
+</li>
+<li>Update results files</li>
+</ul>
+<h3 id="dec-18-2020">Dec 18, 2020</h3>
+<ul>
+<li>Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256<ul>
+<li>256x256 val, 0.94 crop (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)</li>
+<li>288x288 val, 1.0 crop - 101D (82.64), 152D (83.48), 200D (83.76)</li>
+<li>320x320 val, 1.0 crop - 101D (83.00), 152D (83.66), 200D (84.01)</li>
+</ul>
+</li>
+</ul>
+<h3 id="dec-7-2020">Dec 7, 2020</h3>
+<ul>
+<li>Simplify EMA module (ModelEmaV2), compatible with fully torchscripted models</li>
+<li>Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript</li>
+<li>PyPi release @ 0.3.2 (needed by EfficientDet)</li>
+</ul>
 <h3 id="oct-30-2020">Oct 30, 2020</h3>
 <ul>
 <li>Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.</li>
