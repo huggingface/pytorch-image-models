@@ -52,7 +52,8 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth',
         interpolation='bicubic'),
     'resnet50d': _cfg(
-        url='https://huggingface.co/sgugger/resnet50d/resolve/main/pytorch_model.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
+        hf_revision="master", hf_model_id="sgugger/resnet50d",
         interpolation='bicubic', first_conv='conv1.0'),
     'resnet101': _cfg(url='', interpolation='bicubic'),
     'resnet101d': _cfg(
