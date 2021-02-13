@@ -236,7 +236,7 @@ class DownsampleAvg(nn.Module):
 
 
 class NormFreeBlock(nn.Module):
-    """Normalization-free pre-activation block.
+    """Normalization-Free pre-activation block.
     """
 
     def __init__(
@@ -351,6 +351,7 @@ def create_stem(in_chs, out_chs, stem_type='', conv_layer=None, act_layer=None):
     return nn.Sequential(stem), stem_stride, stem_feature
 
 
+# from https://github.com/deepmind/deepmind-research/tree/master/nfnets
 _nonlin_gamma = dict(
     identity=1.0,
     celu=1.270926833152771,
@@ -371,10 +372,13 @@ _nonlin_gamma = dict(
 
 
 class NormFreeNet(nn.Module):
-    """ Normalization-free ResNets and RegNets
+    """ Normalization-Free Network
 
-    As described in `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+    As described in :
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
         - https://arxiv.org/abs/2101.08692
+    and
+    `High-Performance Large-Scale Image Recognition Without Normalization` - https://arxiv.org/abs/2102.06171
 
     This model aims to cover both the NFRegNet-Bx models as detailed in the paper's code snippets and
     the (preact) ResNet models described earlier in the paper.
@@ -432,7 +436,7 @@ class NormFreeNet(nn.Module):
                 blocks += [NormFreeBlock(
                     in_chs=prev_chs, out_chs=out_chs,
                     alpha=cfg.alpha,
-                    beta=1. / expected_var ** 0.5,  # NOTE: beta used as multiplier in block
+                    beta=1. / expected_var ** 0.5,
                     stride=stride if block_idx == 0 else 1,
                     dilation=dilation,
                     first_dilation=first_dilation,
@@ -477,8 +481,6 @@ class NormFreeNet(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
             elif isinstance(m, nn.Conv2d):
-                # as per discussion with paper authors, original in haiku is
-                # hk.initializers.VarianceScaling(1.0, 'fan_in', 'normal')' w/ zero'd bias
                 nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='linear')
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
