@@ -2,6 +2,9 @@
 
 ## What's New
 
+### Feb 12, 2021
+* Update Normalization-Free nets to include new NFNet-F (https://arxiv.org/abs/2102.06171) model defs
+
 ### Feb 10, 2021
 * First Normalization-Free model training experiments done,
   * nf_resnet50 - 80.68 top-1 @ 288x288, 80.31 @ 256x256
@@ -164,6 +167,7 @@ A full version of the list below with source links can be found in the [document
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
 * NASNet-A - https://arxiv.org/abs/1707.07012
+* NFNet-F - https://arxiv.org/abs/2102.06171
 * NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
 * PNasNet - https://arxiv.org/abs/1712.00559
 * RegNet - https://arxiv.org/abs/2003.13678
