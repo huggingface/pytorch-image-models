@@ -78,6 +78,13 @@ default_cfgs = dict(
     nfnet_f7s=_dcfg(
         url='', pool_size=(15, 15), input_size=(3, 480, 480), test_input_size=(3, 608, 608), first_conv='stem.conv1'),
 
+    nfnet_l0a=_dcfg(
+        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv1'),
+    nfnet_l0b=_dcfg(
+        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv1'),
+    nfnet_l0c=_dcfg(
+        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv1'),
+
     nf_regnet_b0=_dcfg(url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256)),
     nf_regnet_b1=_dcfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_regnet_b1_256_ra2-ad85cfef.pth',
@@ -144,13 +151,15 @@ def _nfreg_cfg(depths, channels=(48, 104, 208, 440)):
     return cfg
 
 
-def _nfnet_cfg(depths, act_layer='gelu', attn_layer='se', attn_kwargs=None):
-    channels = (256, 512, 1536, 1536)
-    num_features = channels[-1] * 2
-    attn_kwargs = attn_kwargs or dict(reduction_ratio=0.5, divisor=8)
+def _nfnet_cfg(
+        depths, channels=(256, 512, 1536, 1536), group_size=128, bottle_ratio=0.5, feat_mult=2.,
+        act_layer='gelu', attn_layer='se', attn_kwargs=None):
+    num_features = int(channels[-1] * feat_mult)
+    attn_kwargs = attn_kwargs if attn_kwargs is not None else dict(reduction_ratio=0.5, divisor=8)
     cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='deep_quad', group_size=128, bottle_ratio=0.5, extra_conv=True,
-        num_features=num_features, act_layer=act_layer, attn_layer=attn_layer, attn_kwargs=attn_kwargs)
+        depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=group_size,
+        bottle_ratio=bottle_ratio, extra_conv=True, num_features=num_features, act_layer=act_layer,
+        attn_layer=attn_layer, attn_kwargs=attn_kwargs)
     return cfg
 
 
@@ -174,6 +183,17 @@ model_cfgs = dict(
     nfnet_f5s=_nfnet_cfg(depths=(6, 12, 36, 18), act_layer='silu'),
     nfnet_f6s=_nfnet_cfg(depths=(7, 14, 42, 21), act_layer='silu'),
     nfnet_f7s=_nfnet_cfg(depths=(8, 16, 48, 24), act_layer='silu'),
+
+    # Experimental 'light' versions of nfnet-f that are little leaner
+    nfnet_l0a=_nfnet_cfg(
+        depths=(1, 2, 6, 3), channels=(256, 512, 1280, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        attn_kwargs=dict(reduction_ratio=0.25, divisor=8), act_layer='silu'),
+    nfnet_l0b=_nfnet_cfg(
+        depths=(1, 2, 6, 3), channels=(256, 512, 1536, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        attn_kwargs=dict(reduction_ratio=0.25, divisor=8), act_layer='silu'),
+    nfnet_l0c=_nfnet_cfg(
+        depths=(1, 2, 6, 3), channels=(256, 512, 1536, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
 
     # EffNet influenced RegNet defs.
     # NOTE: These aren't quite the official ver, ch_div=1 must be set for exact ch counts. I round to ch_div=8.
@@ -316,26 +336,26 @@ def create_stem(in_chs, out_chs, stem_type='', conv_layer=None, act_layer=None):
     stem_feature = dict(num_chs=out_chs, reduction=2, module='')
     stem = OrderedDict()
     assert stem_type in ('', 'deep', 'deep_tiered', 'deep_quad', '3x3', '7x7', 'deep_pool', '3x3_pool', '7x7_pool')
-    if 'deep' in stem_type or 'nff' in stem_type:
-        # 3 deep 3x3  conv stack as in ResNet V1D models. NOTE: doesn't work as well here
+    if 'deep' in stem_type:
         if 'quad' in stem_type:
+            # 4 deep conv stack as in NFNet-F models
             assert not 'pool' in stem_type
-            stem_chs = (16, 32, 64, out_chs)
+            stem_chs = (out_chs // 8, out_chs // 4, out_chs // 2, out_chs)
             strides = (2, 1, 1, 2)
             stem_stride = 4
-            stem_feature = dict(num_chs=64, reduction=2, module='stem.act4')
+            stem_feature = dict(num_chs=out_chs // 2, reduction=2, module='stem.act4')
         else:
             if 'tiered' in stem_type:
-                stem_chs = (3 * out_chs // 8, out_chs // 2, out_chs)  # like 'T' resnets in resnet.py
+                stem_chs = (3 * out_chs // 8, out_chs // 2, out_chs)  # 'T' resnets in resnet.py
             else:
                 stem_chs = (out_chs // 2, out_chs // 2, out_chs)  # 'D' ResNets
             strides = (2, 1, 1)
             stem_feature = dict(num_chs=out_chs // 2, reduction=2, module='stem.act3')
         last_idx = len(stem_chs) - 1
         for i, (c, s) in enumerate(zip(stem_chs, strides)):
-            stem[f'conv{i+1}'] = conv_layer(in_chs, c, kernel_size=3, stride=s)
+            stem[f'conv{i + 1}'] = conv_layer(in_chs, c, kernel_size=3, stride=s)
             if i != last_idx:
-                stem[f'act{i+2}'] = act_layer(inplace=True)
+                stem[f'act{i + 2}'] = act_layer(inplace=True)
             in_chs = c
     elif '3x3' in stem_type:
         # 3x3 stem conv as in RegNet
@@ -407,8 +427,7 @@ class NormFreeNet(nn.Module):
             conv_layer = partial(ScaledStdConv2d, bias=True, gain=True, gamma=_nonlin_gamma[cfg.act_layer])
         attn_layer = partial(get_attn(cfg.attn_layer), **cfg.attn_kwargs) if cfg.attn_layer else None
 
-        stem_chs = cfg.stem_chs or cfg.channels[0]
-        stem_chs = make_divisible(stem_chs * cfg.width_factor, cfg.ch_div)
+        stem_chs = make_divisible((cfg.stem_chs or cfg.channels[0]) * cfg.width_factor, cfg.ch_div)
         self.stem, stem_stride, stem_feat = create_stem(
             in_chans, stem_chs, cfg.stem_type, conv_layer=conv_layer, act_layer=act_layer)
 
@@ -521,184 +540,290 @@ def _create_normfreenet(variant, pretrained=False, **kwargs):
 
 @register_model
 def nfnet_f0(pretrained=False, **kwargs):
+    """ NFNet-F0
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f0', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f1(pretrained=False, **kwargs):
+    """ NFNet-F1
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f1', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f2(pretrained=False, **kwargs):
+    """ NFNet-F2
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f2', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f3(pretrained=False, **kwargs):
+    """ NFNet-F3
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f3', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f4(pretrained=False, **kwargs):
+    """ NFNet-F4
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f4', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f5(pretrained=False, **kwargs):
+    """ NFNet-F5
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f5', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f6(pretrained=False, **kwargs):
+    """ NFNet-F6
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f6', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f7(pretrained=False, **kwargs):
+    """ NFNet-F7
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f7', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f0s(pretrained=False, **kwargs):
+    """ NFNet-F0 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f0s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f1s(pretrained=False, **kwargs):
+    """ NFNet-F1 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f1s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f2s(pretrained=False, **kwargs):
+    """ NFNet-F2 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f2s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f3s(pretrained=False, **kwargs):
+    """ NFNet-F3 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f3s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f4s(pretrained=False, **kwargs):
+    """ NFNet-F4 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f4s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f5s(pretrained=False, **kwargs):
+    """ NFNet-F5 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f5s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f6s(pretrained=False, **kwargs):
+    """ NFNet-F6 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f6s', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nfnet_f7s(pretrained=False, **kwargs):
+    """ NFNet-F7 w/ SiLU
+    `High-Performance Large-Scale Image Recognition Without Normalization`
+        - https://arxiv.org/abs/2102.06171
+    """
     return _create_normfreenet('nfnet_f7s', pretrained=pretrained, **kwargs)
 
 
 @register_model
+def nfnet_l0a(pretrained=False, **kwargs):
+    """ NFNet-L0a w/ SiLU
+    My experimental 'light' model w/ 1280 width stage 3, 1.5x final_conv mult, 64 group_size, .25 bottleneck & SE ratio
+    """
+    return _create_normfreenet('nfnet_l0a', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def nfnet_l0b(pretrained=False, **kwargs):
+    """ NFNet-L0b w/ SiLU
+    My experimental 'light' model w/ 1.5x final_conv mult, 64 group_size, .25 bottleneck & SE ratio
+    """
+    return _create_normfreenet('nfnet_l0b', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def nfnet_l0c(pretrained=False, **kwargs):
+    """ NFNet-L0c w/ SiLU
+    My experimental 'light' model w/ 1.5x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
+    """
+    return _create_normfreenet('nfnet_l0c', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def nf_regnet_b0(pretrained=False, **kwargs):
+    """ Normalization-Free RegNet-B0
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_regnet_b0', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_regnet_b1(pretrained=False, **kwargs):
+    """ Normalization-Free RegNet-B1
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_regnet_b1', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_regnet_b2(pretrained=False, **kwargs):
+    """ Normalization-Free RegNet-B2
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_regnet_b2', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_regnet_b3(pretrained=False, **kwargs):
+    """ Normalization-Free RegNet-B3
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_regnet_b3', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_regnet_b4(pretrained=False, **kwargs):
+    """ Normalization-Free RegNet-B4
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_regnet_b4', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_regnet_b5(pretrained=False, **kwargs):
-    return _create_normfreenet('nf_regnet_b5', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nf_regnet_b0(pretrained=False, **kwargs):
-    return _create_normfreenet('nf_regnet_b0', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nf_regnet_b1(pretrained=False, **kwargs):
-    return _create_normfreenet('nf_regnet_b1', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nf_regnet_b2(pretrained=False, **kwargs):
-    return _create_normfreenet('nf_regnet_b2', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nf_regnet_b3(pretrained=False, **kwargs):
-    return _create_normfreenet('nf_regnet_b3', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nf_regnet_b4(pretrained=False, **kwargs):
-    return _create_normfreenet('nf_regnet_b4', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nf_regnet_b5(pretrained=False, **kwargs):
+    """ Normalization-Free RegNet-B5
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_regnet_b5', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_resnet26(pretrained=False, **kwargs):
+    """ Normalization-Free ResNet-26
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_resnet26', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_resnet50(pretrained=False, **kwargs):
+    """ Normalization-Free ResNet-50
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_resnet50', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_resnet101(pretrained=False, **kwargs):
+    """ Normalization-Free ResNet-101
+    `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+        - https://arxiv.org/abs/2101.08692
+    """
     return _create_normfreenet('nf_resnet101', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_seresnet26(pretrained=False, **kwargs):
+    """ Normalization-Free SE-ResNet26
+    """
     return _create_normfreenet('nf_seresnet26', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_seresnet50(pretrained=False, **kwargs):
+    """ Normalization-Free SE-ResNet50
+    """
     return _create_normfreenet('nf_seresnet50', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_seresnet101(pretrained=False, **kwargs):
+    """ Normalization-Free SE-ResNet101
+    """
     return _create_normfreenet('nf_seresnet101', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_ecaresnet26(pretrained=False, **kwargs):
+    """ Normalization-Free ECA-ResNet26
+    """
     return _create_normfreenet('nf_ecaresnet26', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_ecaresnet50(pretrained=False, **kwargs):
+    """ Normalization-Free ECA-ResNet50
+    """
     return _create_normfreenet('nf_ecaresnet50', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def nf_ecaresnet101(pretrained=False, **kwargs):
+    """ Normalization-Free ECA-ResNet101
+    """
     return _create_normfreenet('nf_ecaresnet101', pretrained=pretrained, **kwargs)
