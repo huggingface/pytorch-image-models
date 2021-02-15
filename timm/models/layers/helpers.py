@@ -3,13 +3,13 @@
 Hacked together by / Copyright 2020 Ross Wightman
 """
 from itertools import repeat
-from torch._six import container_abcs
+import collections.abc
 
 
 # From PyTorch internals
 def _ntuple(n):
     def parse(x):
-        if isinstance(x, container_abcs.Iterable):
+        if isinstance(x, collections.abc.Iterable):
             return x
         return tuple(repeat(x, n))
     return parse
@@ -22,6 +22,10 @@ to_4tuple = _ntuple(4)
 to_ntuple = _ntuple
 
 
-
-
-
+def make_divisible(v, divisor=8, min_value=None):
+    min_value = min_value or divisor
+    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
+    # Make sure that round down does not go down by more than 10%.
+    if new_v < 0.9 * v:
+        new_v += divisor
+    return new_v

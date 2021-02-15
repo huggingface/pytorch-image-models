@@ -1,5 +1,55 @@
 # Recent Changes
 
+### Feb 10, 2021
+* More model archs, incl a flexible ByobNet backbone ('Bring-your-own-blocks')
+  * GPU-Efficient-Networks (https://github.com/idstcv/GPU-Efficient-Networks), impl in `byobnet.py`
+  * RepVGG (https://github.com/DingXiaoH/RepVGG), impl in `byobnet.py`
+  * classic VGG (from torchvision, impl in `vgg`)
+* Refinements to normalizer layer arg handling and normalizer+act layer handling in some models
+* Default AMP mode changed to native PyTorch AMP instead of APEX. Issues not being fixed with APEX. Native works with `--channels-last` and `--torchscript` model training, APEX does not.
+* Fix a few bugs introduced since last pypi release
+
+### Feb 8, 2021
+* Add several ResNet weights with ECA attention. 26t & 50t trained @ 256, test @ 320. 269d train @ 256, fine-tune @320, test @ 352.
+  * `ecaresnet26t` - 79.88 top-1 @ 320x320, 79.08 @ 256x256
+  * `ecaresnet50t` - 82.35 top-1 @ 320x320, 81.52 @ 256x256
+  * `ecaresnet269d` - 84.93 top-1 @ 352x352, 84.87 @ 320x320
+* Remove separate tiered (`t`) vs tiered_narrow (`tn`) ResNet model defs, all `tn` changed to `t` and `t` models removed (`seresnext26t_32x4d` only model w/ weights that was removed).
+* Support model default_cfgs with separate train vs test resolution `test_input_size` and remove extra `_320` suffix ResNet model defs that were just for test.
+
+### Jan 30, 2021
+* Add initial "Normalization Free" NF-RegNet-B* and NF-ResNet model definitions based on [paper](https://arxiv.org/abs/2101.08692)
+
+### Jan 25, 2021
+* Add ResNetV2 Big Transfer (BiT) models w/ ImageNet-1k and 21k weights from https://github.com/google-research/big_transfer
+* Add official R50+ViT-B/16 hybrid models + weights from https://github.com/google-research/vision_transformer
+* ImageNet-21k ViT weights are added w/ model defs and representation layer (pre logits) support
+  * NOTE: ImageNet-21k classifier heads were zero'd in original weights, they are only useful for transfer learning
+* Add model defs and weights for DeiT Vision Transformer models from https://github.com/facebookresearch/deit
+* Refactor dataset classes into ImageDataset/IterableImageDataset + dataset specific parser classes
+* Add Tensorflow-Datasets (TFDS) wrapper to allow use of TFDS image classification sets with train script
+  * Ex: `train.py /data/tfds --dataset tfds/oxford_iiit_pet --val-split test --model resnet50 -b 256 --amp --num-classes 37 --opt adamw --lr 3e-4 --weight-decay .001 --pretrained -j 2`
+* Add improved .tar dataset parser that reads images from .tar, folder of .tar files, or .tar within .tar
+  * Run validation on full ImageNet-21k directly from tar w/ BiT model: `validate.py /data/fall11_whole.tar --model resnetv2_50x1_bitm_in21k --amp`
+* Models in this update should be stable w/ possible exception of ViT/BiT, possibility of some regressions with train/val scripts and dataset handling
+
+### Jan 3, 2021
+* Add SE-ResNet-152D weights
+  * 256x256 val, 0.94 crop top-1 - 83.75
+  * 320x320 val, 1.0 crop - 84.36
+* Update results files
+
+### Dec 18, 2020
+* Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256
+  * 256x256 val, 0.94 crop (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)
+  * 288x288 val, 1.0 crop - 101D (82.64), 152D (83.48), 200D (83.76)
+  * 320x320 val, 1.0 crop - 101D (83.00), 152D (83.66), 200D (84.01)
+
+### Dec 7, 2020
+* Simplify EMA module (ModelEmaV2), compatible with fully torchscripted models
+* Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
+* PyPi release @ 0.3.2 (needed by EfficientDet)
+
 ### Oct 30, 2020
 * Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.
 * Convert newly added 224x224 Vision Transformer weights from official JAX repo. 81.8 top-1 for B/16, 83.1 L/16.

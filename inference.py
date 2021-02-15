@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """PyTorch Inference Script
 
 An example inference script that outputs top-k class ids for images in a folder into a csv.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ ImageNet Validation Script
 
 This is intended to be a lean and easily modifiable ImageNet validation script for evaluating pretrained
@@ -116,15 +116,20 @@ def validate(args):
     args.prefetcher = not args.no_prefetcher
     amp_autocast = suppress  # do nothing
     if args.amp:
-        if has_apex:
-            args.apex_amp = True
-        elif has_native_amp:
+        if has_native_amp:
             args.native_amp = True
+        elif has_apex:
+            args.apex_amp = True
         else:
-            _logger.warning("Neither APEX or Native Torch AMP is available, using FP32.")
+            _logger.warning("Neither APEX or Native Torch AMP is available.")
     assert not args.apex_amp or not args.native_amp, "Only one AMP mode should be set."
     if args.native_amp:
         amp_autocast = torch.cuda.amp.autocast
+        _logger.info('Validating in mixed precision with native PyTorch AMP.')
+    elif args.apex_amp:
+        _logger.info('Validating in mixed precision with NVIDIA APEX AMP.')
+    else:
+        _logger.info('Validating in float32. AMP not enabled.')
 
     if args.legacy_jit:
         set_jit_legacy()
@@ -147,8 +152,10 @@ def validate(args):
     param_count = sum([m.numel() for m in model.parameters()])
     _logger.info('Model %s created, param count: %d' % (args.model, param_count))
 
-    data_config = resolve_data_config(vars(args), model=model)
-    model, test_time_pool = (model, False) if args.no_test_pool else apply_test_time_pool(model, data_config)
+    data_config = resolve_data_config(vars(args), model=model, use_test_size=True)
+    test_time_pool = False
+    if not args.no_test_pool:
+        model, test_time_pool = apply_test_time_pool(model, data_config, use_test_size=True)
 
     if args.torchscript:
         torch.jit.optimized_execution(True)
@@ -282,7 +289,7 @@ def main():
         if args.model == 'all':
             # validate all models in a list of names with pretrained checkpoints
             args.pretrained = True
-            model_names = list_models(pretrained=True)
+            model_names = list_models(pretrained=True, exclude_filters=['*in21k'])
             model_cfgs = [(n, '') for n in model_names]
         elif not is_model(args.model):
             # model name doesn't exist, try as wildcard filter

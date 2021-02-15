@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ ImageNet Training Script
 
 This is intended to be a lean and easily modifiable ImageNet training script that reproduces ImageNet
@@ -236,6 +236,8 @@ parser.add_argument('--log-interval', type=int, default=50, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--recovery-interval', type=int, default=0, metavar='N',
                     help='how many batches to wait before writing recovery checkpoint')
+parser.add_argument('--checkpoint-hist', type=int, default=10, metavar='N',
+                    help='number of checkpoints to keep (default: 10)')
 parser.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                     help='how many training processes to use (default: 1)')
 parser.add_argument('--save-images', action='store_true', default=False,
@@ -308,11 +310,11 @@ def main():
     # resolve AMP arguments based on PyTorch / Apex availability
     use_amp = None
     if args.amp:
-        # for backwards compat, `--amp` arg tries apex before native amp
-        if has_apex:
-            args.apex_amp = True
-        elif has_native_amp:
+        # `--amp` chooses native amp before apex (APEX ver not actively maintained)
+        if has_native_amp:
             args.native_amp = True
+        elif has_apex:
+            args.apex_amp = True
     if args.apex_amp and has_apex:
         use_amp = 'apex'
     elif args.native_amp and has_native_amp:
@@ -547,7 +549,7 @@ def main():
         decreasing = True if eval_metric == 'loss' else False
         saver = CheckpointSaver(
             model=model, optimizer=optimizer, args=args, model_ema=model_ema, amp_scaler=loss_scaler,
-            checkpoint_dir=output_dir, recovery_dir=output_dir, decreasing=decreasing)
+            checkpoint_dir=output_dir, recovery_dir=output_dir, decreasing=decreasing, max_history=args.checkpoint_hist)
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 

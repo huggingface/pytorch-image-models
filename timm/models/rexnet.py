@@ -15,7 +15,7 @@ from math import ceil
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath
+from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath, make_divisible
 from .registry import register_model
 from .efficientnet_builder import efficientnet_init_weights
 
@@ -47,12 +47,6 @@ default_cfgs = dict(
     rexnetr_200=_cfg(
         url=''),
 )
-
-
-def make_divisible(v, divisor=8, min_value=None):
-    min_value = min_value or divisor
-    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
-    return new_v
 
 
 class SEWithNorm(nn.Module):

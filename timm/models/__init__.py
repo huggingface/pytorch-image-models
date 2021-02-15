@@ -1,3 +1,4 @@
+from .byobnet import *
 from .cspnet import *
 from .densenet import *
 from .dla import *
@@ -11,6 +12,7 @@ from .inception_v3 import *
 from .inception_v4 import *
 from .mobilenetv3 import *
 from .nasnet import *
+from .nfnet import *
 from .pnasnet import *
 from .regnet import *
 from .res2net import *
@@ -22,6 +24,7 @@ from .selecsls import *
 from .senet import *
 from .sknet import *
 from .tresnet import *
+from .vgg import *
 from .vision_transformer import *
 from .vovnet import *
 from .xception import *

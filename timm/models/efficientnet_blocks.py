@@ -350,7 +350,8 @@ class EdgeResidual(nn.Module):
         self.drop_path_rate = drop_path_rate
 
         # Expansion convolution
-        self.conv_exp = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type)
+        self.conv_exp = create_conv2d(
+            in_chs, mid_chs, exp_kernel_size, stride=stride, dilation=dilation, padding=pad_type)
         self.bn1 = norm_layer(mid_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
@@ -362,8 +363,7 @@ class EdgeResidual(nn.Module):
             self.se = None
 
         # Point-wise linear projection
-        self.conv_pwl = create_conv2d(
-            mid_chs, out_chs, pw_kernel_size, stride=stride, dilation=dilation, padding=pad_type)
+        self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
 
     def feature_info(self, location):
