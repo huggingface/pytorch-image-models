@@ -7,7 +7,7 @@
   * AGC w/ default clipping factor `--clip-grad .01 --clip-mode agc`
   * PyTorch global norm of 1.0 (old behaviour, always norm), `--clip-grad 1.0`
   * PyTorch value clipping of 10, `--clip-grad 10. --clip-mode value`
-  * AGC performance is definitely sensitive to the clipping factor. More experimentation needed to determine good values for smaller batch sizes and optimizers besides those in paper. So far I've found .001-.005 is necessary for stable RMSProp training.
+  * AGC performance is definitely sensitive to the clipping factor. More experimentation needed to determine good values for smaller batch sizes and optimizers besides those in paper. So far I've found .001-.005 is necessary for stable RMSProp training w/ NFNet/NF-ResNet.
 
 ### Feb 12, 2021
 * Update Normalization-Free nets to include new NFNet-F (https://arxiv.org/abs/2102.06171) model defs
