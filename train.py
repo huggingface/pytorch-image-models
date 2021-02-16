@@ -29,7 +29,7 @@ import torchvision.utils
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
-from timm.models import create_model, resume_checkpoint, load_checkpoint, convert_splitbn_model
+from timm.models import create_model, resume_checkpoint, load_checkpoint, convert_splitbn_model, model_parameters
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
 from timm.optim import create_optimizer
@@ -637,11 +637,16 @@ def train_one_epoch(
         optimizer.zero_grad()
         if loss_scaler is not None:
             loss_scaler(
-                loss, optimizer, clip_grad=args.clip_grad, parameters=model.parameters(), create_graph=second_order)
+                loss, optimizer,
+                clip_grad=args.clip_grad, clip_mode=args.clip_mode,
+                parameters=model_parameters(model, exclude_head='agc' in args.clip_mode),
+                create_graph=second_order)
         else:
             loss.backward(create_graph=second_order)
             if args.clip_grad is not None:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+                dispatch_clip_grad(
+                    model_parameters(model, exclude_head='agc' in args.clip_mode),
+                    value=args.clip_grad, mode=args.clip_mode)
             optimizer.step()
 
         if model_ema is not None:
