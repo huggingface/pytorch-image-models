@@ -2,6 +2,13 @@
 
 ## What's New
 
+### Feb 16, 2021
+* Add Adaptive Gradient Clipping (AGC) as per https://arxiv.org/abs/2102.06171. Integrated w/ PyTorch gradient clipping via mode arg that defaults to prev 'norm' mode. For backward arg compat, clip-grad arg must be specified to enable when using train.py.
+  * AGC w/ default clipping factor `--clip-grad .01 --clip-mode agc`
+  * PyTorch global norm of 1.0 (old behaviour, always norm), `--clip-grad 1.0`
+  * PyTorch value clipping of 10, `--clip-grad 10. --clip-mode value`
+  * AGC performance is definitely sensitive to the clipping factor. More experimentation needed to determine good values for smaller batch sizes and optimizers besides those in paper. So far I've found .001-.005 is necessary for stable RMSProp training.
+
 ### Feb 12, 2021
 * Update Normalization-Free nets to include new NFNet-F (https://arxiv.org/abs/2102.06171) model defs
 
@@ -238,6 +245,7 @@ Several (less common) features that I often utilize in my projects are included.
 * Efficient Channel Attention - ECA (https://arxiv.org/abs/1910.03151)
 * Blur Pooling (https://arxiv.org/abs/1904.11486)
 * Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
+* Adaptive Gradient Clipping (https://arxiv.org/abs/2102.06171, https://github.com/deepmind/deepmind-research/tree/master/nfnets)
 
 ## Results
 
