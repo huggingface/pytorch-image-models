@@ -132,10 +132,9 @@ def load_custom_pretrained(model, cfg=None, load_fn=None, progress=False, check_
             digits of the SHA256 hash of the contents of the file. The hash is used to
             ensure unique names and to verify the contents of the file. Default: False
     """
-    if cfg is None:
-        cfg = getattr(model, 'default_cfg')
-    if cfg is None or 'url' not in cfg or not cfg['url']:
-        _logger.warning("Pretrained model URL does not exist, using random initialization.")
+    cfg = cfg or getattr(model, 'default_cfg')
+    if cfg is None or not cfg.get('url', None):
+        _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
     url = cfg['url']
 
@@ -186,8 +185,7 @@ def adapt_input_conv(in_chans, conv_weight):
 
 def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=None, strict=True, 
     progress=False, hf_checkpoint=None, hf_revision=None):
-    if cfg is None:
-        cfg = getattr(model, 'default_cfg')
+    cfg = cfg or getattr(model, 'default_cfg')
     if hf_checkpoint is None:
         hg_checkpoint = cfg.get('hf_checkpoint')
     if hf_revision is None:
@@ -405,6 +403,7 @@ def build_model_with_cfg(
     return model
 
 
+
 def load_cfg_from_json(json_file: Union[str, os.PathLike]):
     with open(json_file, "r", encoding="utf-8") as reader:
         text = reader.read()
@@ -417,3 +416,10 @@ def load_hf_checkpoint_config(checkpoint: str, revision: Optional[str] = None):
         url, library_name="timm", library_version=__version__, cache_dir=get_cache_dir()
     )
     return load_cfg_from_json(cached_filed)
+
+def model_parameters(model, exclude_head=False):
+    if exclude_head:
+        # FIXME this a bit of a quick and dirty hack to skip classifier head params based on ordering
+        return [p for p in model.parameters()][:-2]
+    else:
+        return model.parameters()
