@@ -70,6 +70,8 @@ class ScaledStdConv2d(nn.Conv2d):
 
     Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets` -
         https://arxiv.org/abs/2101.08692
+
+    NOTE: the operations used in this impl differ slightly from the DeepMind Haiku impl. The impact is minor.
     """
 
     def __init__(
@@ -100,11 +102,10 @@ class ScaledStdConv2d(nn.Conv2d):
 class ScaledStdConv2dSame(nn.Conv2d):
     """Conv2d layer with Scaled Weight Standardization and Tensorflow-like SAME padding support
 
-    NOTE: operations and default eps slightly changed from non-SAME impl to closer match Deepmind Haiku impl.
-    Fore the sake of completeness, numeric differences are minor with arprox .005 top-1 difference.
-
     Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets` -
         https://arxiv.org/abs/2101.08692
+
+    NOTE: the operations used in this impl differ slightly from the DeepMind Haiku impl. The impact is minor.
     """
 
     def __init__(
