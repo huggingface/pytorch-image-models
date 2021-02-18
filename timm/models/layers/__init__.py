@@ -29,6 +29,6 @@ from .separable_conv import SeparableConv2d, SeparableConvBnAct
 from .space_to_depth import SpaceToDepthModule
 from .split_attn import SplitAttnConv2d
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
-from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d
+from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .weight_init import trunc_normal_
