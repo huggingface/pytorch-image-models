@@ -37,7 +37,7 @@ def register_model(fn):
         # this will catch all models that have entrypoint matching cfg key, but miss any aliasing
         # entrypoints or non-matching combos
         has_pretrained = 'url' in mod.default_cfgs[model_name] and 'http' in mod.default_cfgs[model_name]['url']
-        has_pretrained = has_pretrained or 'hf_checkpoint' in mod.default_cfgs[model_name]
+        has_pretrained = has_pretrained or 'hf_model_id' in mod.default_cfgs[model_name]
     if has_pretrained:
         _model_has_pretrained.add(model_name)
     return fn
