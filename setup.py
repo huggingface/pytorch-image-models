@@ -43,6 +43,6 @@ setup(
     keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet',
     packages=find_packages(exclude=['convert', 'tests', 'results']),
     include_package_data=True,
-    install_requires=['huggingface_hub', 'torch >= 1.4', 'torchvision'],
+    install_requires=['huggingface-hub', 'torch >= 1.4', 'torchvision'],
     python_requires='>=3.6',
 )
