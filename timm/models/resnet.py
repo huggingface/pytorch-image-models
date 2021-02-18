@@ -53,7 +53,7 @@ default_cfgs = {
         interpolation='bicubic'),
     'resnet50d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
-        hf_revision="master", hf_model_id="sgugger/resnet50d",
+        hf_revision="main", hf_model_id="sgugger/resnet50d",
         interpolation='bicubic', first_conv='conv1.0'),
     'resnet101': _cfg(url='', interpolation='bicubic'),
     'resnet101d': _cfg(

@@ -198,7 +198,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
 
     if hf_checkpoint is not None:
         # TODO, progress is ignored.
-        url = hf_hub_url(hf_checkpoint, "pytorch_model.pth", revision=hf_revision)
+        url = hf_hub_url(hf_checkpoint, "pytorch_model.bin", revision=hf_revision)
         cached_filed = cached_download(
             url, library_name="timm", library_version=__version__, cache_dir=get_cache_dir()
         )
