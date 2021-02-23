@@ -32,7 +32,7 @@ from timm.data import create_dataset, create_loader, resolve_data_config, Mixup,
 from timm.models import create_model, resume_checkpoint, load_checkpoint, convert_splitbn_model, model_parameters
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
-from timm.optim import create_optimizer
+from timm.optim import create_optimizer, optimizer_kwargs
 from timm.scheduler import create_scheduler
 from timm.utils import ApexScaler, NativeScaler
 
@@ -384,7 +384,7 @@ def main():
         assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
         model = torch.jit.script(model)
 
-    optimizer = create_optimizer(args, model)
+    optimizer = create_optimizer(model, **optimizer_kwargs(cfg=args))
 
     # setup automatic mixed-precision (AMP) loss scaling and op casting
     amp_autocast = suppress  # do nothing

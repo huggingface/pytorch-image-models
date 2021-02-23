@@ -10,4 +10,4 @@ from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 
-from .optim_factory import create_optimizer
+from .optim_factory import create_optimizer, optimizer_kwargs
