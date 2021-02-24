@@ -541,7 +541,11 @@ def _create_vision_transformer(variant, pretrained=False, distilled=False, **kwa
 
 @register_model
 def vit_small_patch16_224(pretrained=False, **kwargs):
-    """ My custom 'small' ViT model. Depth=8, heads=8= mlp_ratio=3."""
+    """ My custom 'small' ViT model. embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.
+    NOTE:
+        * this differs from the DeiT based 'small' definitions with embed_dim=384, depth=12, num_heads=6
+        * this model does not have a bias for QKV (unlike the official ViT and DeiT models)
+    """
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
         qkv_bias=False, norm_layer=nn.LayerNorm, **kwargs)
