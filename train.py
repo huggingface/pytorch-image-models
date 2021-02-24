@@ -141,6 +141,8 @@ parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
                     help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
 parser.add_argument('--epochs', type=int, default=200, metavar='N',
                     help='number of epochs to train (default: 2)')
+parser.add_argument('--epoch-repeats', type=float, default=0., metavar='N',
+                    help='epoch repeat multiplier (number of times to repeat dataset epoch per train epoch).')
 parser.add_argument('--start-epoch', default=None, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
@@ -450,7 +452,9 @@ def main():
 
     # create the train and eval datasets
     dataset_train = create_dataset(
-        args.dataset, root=args.data_dir, split=args.train_split, is_training=True, batch_size=args.batch_size)
+        args.dataset,
+        root=args.data_dir, split=args.train_split, is_training=True,
+        batch_size=args.batch_size, repeats=args.epoch_repeats)
     dataset_eval = create_dataset(
         args.dataset, root=args.data_dir, split=args.val_split, is_training=False, batch_size=args.batch_size)
 

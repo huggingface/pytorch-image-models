@@ -23,6 +23,7 @@ def create_dataset(name, root, split='validation', search_split=True, is_trainin
             root, parser=name, split=split, is_training=is_training, batch_size=batch_size, **kwargs)
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future
+        kwargs.pop('repeats', 0)  # FIXME currently only Iterable dataset support the repeat multiplier
         if search_split and os.path.isdir(root):
             root = _search_split(root, split)
         ds = ImageDataset(root, parser=name, **kwargs)
