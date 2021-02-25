@@ -113,10 +113,9 @@ def load_custom_pretrained(model, cfg=None, load_fn=None, progress=False, check_
             digits of the SHA256 hash of the contents of the file. The hash is used to
             ensure unique names and to verify the contents of the file. Default: False
     """
-    if cfg is None:
-        cfg = getattr(model, 'default_cfg')
-    if cfg is None or 'url' not in cfg or not cfg['url']:
-        _logger.warning("Pretrained model URL does not exist, using random initialization.")
+    cfg = cfg or getattr(model, 'default_cfg')
+    if cfg is None or not cfg.get('url', None):
+        _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
     url = cfg['url']
 
@@ -174,9 +173,8 @@ def adapt_input_conv(in_chans, conv_weight):
 
 
 def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=None, strict=True, progress=False):
-    if cfg is None:
-        cfg = getattr(model, 'default_cfg')
-    if cfg is None or 'url' not in cfg or not cfg['url']:
+    cfg = cfg or getattr(model, 'default_cfg')
+    if cfg is None or not cfg.get('url', None):
         _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
 
@@ -381,3 +379,11 @@ def build_model_with_cfg(
         model.default_cfg = default_cfg_for_features(default_cfg)  # add back default_cfg
     
     return model
+
+
+def model_parameters(model, exclude_head=False):
+    if exclude_head:
+        # FIXME this a bit of a quick and dirty hack to skip classifier head params based on ordering
+        return [p for p in model.parameters()][:-2]
+    else:
+        return model.parameters()
