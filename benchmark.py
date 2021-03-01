@@ -45,6 +45,8 @@ _logger = logging.getLogger('validate')
 parser = argparse.ArgumentParser(description='PyTorch Benchmark')
 
 # benchmark specific args
+parser.add_argument('--model-list', metavar='NAME', default='',
+                    help='txt file based list of model names to benchmark')
 parser.add_argument('--bench', default='both', type=str,
                     help="Benchmark mode. One of 'inference', 'train', 'both'. Defaults to 'inference'")
 parser.add_argument('--detail', action='store_true', default=False,
@@ -357,7 +359,7 @@ def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
         except RuntimeError as e:
             torch.cuda.empty_cache()
             batch_size = decay_batch_exp(batch_size)
-            print(f'Reducing batch size to {batch_size}')
+            print(f'Error: {str(e)} while running benchmark. Reducing batch size to {batch_size} for retry.')
     return results
 
 
@@ -413,7 +415,12 @@ def main():
     model_cfgs = []
     model_names = []
 
-    if args.model == 'all':
+    if args.model_list:
+        args.model = ''
+        with open(args.model_list) as f:
+            model_names = [line.rstrip() for line in f]
+        model_cfgs = [(n, None) for n in model_names]
+    elif args.model == 'all':
         # validate all models in a list of names with pretrained checkpoints
         args.pretrained = True
         model_names = list_models(pretrained=True, exclude_filters=['*in21k'])
@@ -429,6 +436,8 @@ def main():
         results = []
         try:
             for m, _ in model_cfgs:
+                if not m:
+                    continue
                 args.model = m
                 r = benchmark(args)
                 results.append(r)
