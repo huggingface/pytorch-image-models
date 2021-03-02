@@ -202,7 +202,6 @@ default_cfgs = {
     'vit_deit_tiny_patch16_224': _cfg(
         url='https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth'),
     'vit_deit_tiny_patch16_224_in21k': _cfg(num_classes=21843),
-    'vit_deit_tiny_patch16_224_in21k_norep': _cfg(num_classes=21843),
     'vit_deit_tiny_patch16_384': _cfg(input_size=(3, 384, 384)),
 
     'vit_deit_small_patch16_224': _cfg(
@@ -399,7 +398,7 @@ class VisionTransformer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
-        patch_size = patch_size or 1 if hybrid_backbone is not None else 16
+        patch_size = patch_size or (1 if hybrid_backbone is not None else 16)
 
         if hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
@@ -1100,14 +1099,6 @@ def vit_deit_tiny_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_deit_tiny_patch16_224_in21k_norep(pretrained=False, **kwargs):
-    """ DeiT-tiny model"""
-    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3, **kwargs)
-    model = _create_vision_transformer('vit_deit_tiny_patch16_224_in21k_norep', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
 def vit_deit_tiny_patch16_224_in21k(pretrained=False, **kwargs):
     """ DeiT-tiny model"""
     model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3, representation_size=192, **kwargs)
@@ -1155,7 +1146,7 @@ def vit_deit_small_patch32_224(pretrained=False, **kwargs):
     """ DeiT-small model @ 224x224 from paper (https://arxiv.org/abs/2012.12877).
     ImageNet-1k weights from https://github.com/facebookresearch/deit.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, **kwargs)
     model = _create_vision_transformer('vit_deit_small_patch32_224', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -1163,7 +1154,7 @@ def vit_deit_small_patch32_224(pretrained=False, **kwargs):
 @register_model
 def vit_deit_small_patch32_224_in21k(pretrained=False, **kwargs):
     """ DeiT-small """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, representation_size=384, **kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, representation_size=384, **kwargs)
     model = _create_vision_transformer('vit_deit_small_patch32_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -1171,7 +1162,7 @@ def vit_deit_small_patch32_224_in21k(pretrained=False, **kwargs):
 @register_model
 def vit_deit_small_patch32_384(pretrained=False, **kwargs):
     """ DeiT-small """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, **kwargs)
     model = _create_vision_transformer('vit_deit_small_patch32_384', pretrained=pretrained, **model_kwargs)
     return model
 
