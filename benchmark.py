@@ -208,6 +208,7 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             samples_per_sec=round(num_samples / t_run_elapsed, 2),
             step_time=round(1000 * total_step / num_samples, 3),
             batch_size=self.batch_size,
+            img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
         )
 
@@ -310,6 +311,7 @@ class TrainBenchmarkRunner(BenchmarkRunner):
                 bwd_time=round(1000 * total_bwd / num_samples, 3),
                 opt_time=round(1000 * total_opt / num_samples, 3),
                 batch_size=self.batch_size,
+                img_size=self.input_size[-1],
                 param_count=round(self.param_count / 1e6, 2),
             )
         else:
