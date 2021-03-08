@@ -5,6 +5,8 @@
 ### March 7, 2021
 * First 0.4.x PyPi release w/ NFNets (& related), ByoB (GPU-Efficient, RepVGG, etc).
 * Change feature extraction for pre-activation nets (NFNets, ResNetV2) to return features before activation.
+* Tested with PyTorch 1.8 release. Updated CI to use 1.8.
+* Benchmarked several arch on RTX 3090, Titan RTX, and V100 across 1.7.1, 1.8, NGC 20.12, and 21.02. Some interesting performance variations to take note of https://gist.github.com/rwightman/bb59f9e245162cee0e38bd66bd8cd77f
 
 ### Feb 18, 2021
 * Add pretrained weights and model variants for NFNet-F* models from [DeepMind Haiku impl](https://github.com/deepmind/deepmind-research/tree/master/nfnets).
