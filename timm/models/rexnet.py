@@ -71,7 +71,8 @@ class SEWithNorm(nn.Module):
 
 
 class LinearBottleneck(nn.Module):
-    def __init__(self, in_chs, out_chs, stride, exp_ratio=1.0, se_ratio=0., ch_div=1, drop_path=None):
+    def __init__(self, in_chs, out_chs, stride, exp_ratio=1.0, se_ratio=0., ch_div=1,
+                 act_layer='swish', dw_act_layer='relu6', drop_path=None):
         super(LinearBottleneck, self).__init__()
         self.use_shortcut = stride == 1 and in_chs <= out_chs
         self.in_channels = in_chs
@@ -79,14 +80,14 @@ class LinearBottleneck(nn.Module):
 
         if exp_ratio != 1.:
             dw_chs = make_divisible(round(in_chs * exp_ratio), divisor=ch_div)
-            self.conv_exp = ConvBnAct(in_chs, dw_chs, act_layer="swish")
+            self.conv_exp = ConvBnAct(in_chs, dw_chs, act_layer=act_layer)
         else:
             dw_chs = in_chs
             self.conv_exp = None
 
         self.conv_dw = ConvBnAct(dw_chs, dw_chs, 3, stride=stride, groups=dw_chs, apply_act=False)
         self.se = SEWithNorm(dw_chs, se_ratio=se_ratio, divisor=ch_div) if se_ratio > 0. else None
-        self.act_dw = nn.ReLU6()
+        self.act_dw = create_act_layer(dw_act_layer)
 
         self.conv_pwl = ConvBnAct(dw_chs, out_chs, 1, apply_act=False)
         self.drop_path = drop_path
@@ -131,8 +132,7 @@ def _block_cfg(width_mult=1.0, depth_mult=1.0, initial_chs=16, final_chs=180, se
 
 
 def _build_blocks(
-        block_cfg, prev_chs, width_mult, ch_div=1, drop_path_rate=0., feature_location='bottleneck'):
-    feat_exp = feature_location == 'expansion'
+        block_cfg, prev_chs, width_mult, ch_div=1, act_layer='swish', dw_act_layer='relu6', drop_path_rate=0.):
     feat_chs = [prev_chs]
     feature_info = []
     curr_stride = 2
@@ -141,29 +141,25 @@ def _build_blocks(
     for block_idx, (chs, exp_ratio, stride, se_ratio) in enumerate(block_cfg):
         if stride > 1:
             fname = 'stem' if block_idx == 0 else f'features.{block_idx - 1}'
-            if block_idx > 0 and feat_exp:
-                fname += '.act_dw'
             feature_info += [dict(num_chs=feat_chs[-1], reduction=curr_stride, module=fname)]
             curr_stride *= stride
         block_dpr = drop_path_rate * block_idx / (num_blocks - 1)  # stochastic depth linear decay rule
         drop_path = DropPath(block_dpr) if block_dpr > 0. else None
         features.append(LinearBottleneck(
             in_chs=prev_chs, out_chs=chs, exp_ratio=exp_ratio, stride=stride, se_ratio=se_ratio,
-            ch_div=ch_div, drop_path=drop_path))
+            ch_div=ch_div, act_layer=act_layer, dw_act_layer=dw_act_layer, drop_path=drop_path))
         prev_chs = chs
-        feat_chs += [features[-1].feat_channels(feat_exp)]
+        feat_chs += [features[-1].feat_channels()]
     pen_chs = make_divisible(1280 * width_mult, divisor=ch_div)
-    feature_info += [dict(
-        num_chs=pen_chs if feat_exp else feat_chs[-1], reduction=curr_stride,
-        module=f'features.{len(features) - int(not feat_exp)}')]
-    features.append(ConvBnAct(prev_chs, pen_chs, act_layer="swish"))
+    feature_info += [dict(num_chs=feat_chs[-1], reduction=curr_stride, module=f'features.{len(features) - 1}')]
+    features.append(ConvBnAct(prev_chs, pen_chs, act_layer=act_layer))
     return features, feature_info
 
 
 class ReXNetV1(nn.Module):
     def __init__(self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32,
                  initial_chs=16, final_chs=180, width_mult=1.0, depth_mult=1.0, se_ratio=1/12.,
-                 ch_div=1, drop_rate=0.2, drop_path_rate=0., feature_location='bottleneck'):
+                 ch_div=1, act_layer='swish', dw_act_layer='relu6', drop_rate=0.2, drop_path_rate=0.):
         super(ReXNetV1, self).__init__()
         self.drop_rate = drop_rate
         self.num_classes = num_classes
@@ -171,11 +167,11 @@ class ReXNetV1(nn.Module):
         assert output_stride == 32  # FIXME support dilation
         stem_base_chs = 32 / width_mult if width_mult < 1.0 else 32
         stem_chs = make_divisible(round(stem_base_chs * width_mult), divisor=ch_div)
-        self.stem = ConvBnAct(in_chans, stem_chs, 3, stride=2, act_layer='swish')
+        self.stem = ConvBnAct(in_chans, stem_chs, 3, stride=2, act_layer=act_layer)
 
         block_cfg = _block_cfg(width_mult, depth_mult, initial_chs, final_chs, se_ratio, ch_div)
         features, self.feature_info = _build_blocks(
-            block_cfg, stem_chs, width_mult, ch_div, drop_path_rate, feature_location)
+            block_cfg, stem_chs, width_mult, ch_div, act_layer, dw_act_layer, drop_path_rate)
         self.num_features = features[-1].out_channels
         self.features = nn.Sequential(*features)
 
@@ -202,8 +198,6 @@ class ReXNetV1(nn.Module):
 
 def _create_rexnet(variant, pretrained, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
-    if kwargs.get('feature_location', '') == 'expansion':
-        feature_cfg['feature_cls'] = 'hook'
     return build_model_with_cfg(
         ReXNetV1, variant, pretrained, default_cfg=default_cfgs[variant], feature_cfg=feature_cfg, **kwargs)
 

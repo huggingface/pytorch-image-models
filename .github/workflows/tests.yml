@@ -17,8 +17,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
         python: ['3.8']
-        torch: ['1.7.0']
-        torchvision: ['0.8.1']
+        torch: ['1.8.0']
+        torchvision: ['0.9.0']
     runs-on: ${{ matrix.os }}
 
     steps:

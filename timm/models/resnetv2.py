@@ -323,8 +323,8 @@ class ResNetV2(nn.Module):
         self.feature_info = []
         stem_chs = make_div(stem_chs * wf)
         self.stem = create_stem(in_chans, stem_chs, stem_type, preact, conv_layer=conv_layer, norm_layer=norm_layer)
-        # NOTE no, reduction 2 feature if preact
-        self.feature_info.append(dict(num_chs=stem_chs, reduction=2, module='' if preact else 'stem.norm'))
+        stem_feat = ('stem.conv3' if 'deep' in stem_type else 'stem.conv') if preact else 'stem.norm'
+        self.feature_info.append(dict(num_chs=stem_chs, reduction=2, module=stem_feat))
 
         prev_chs = stem_chs
         curr_stride = 4
@@ -343,10 +343,7 @@ class ResNetV2(nn.Module):
                 act_layer=act_layer, conv_layer=conv_layer, norm_layer=norm_layer, block_dpr=bdpr, block_fn=block_fn)
             prev_chs = out_chs
             curr_stride *= stride
-            feat_name = f'stages.{stage_idx}'
-            if preact:
-                feat_name = f'stages.{stage_idx + 1}.blocks.0.norm1' if (stage_idx + 1) != len(channels) else 'norm'
-            self.feature_info += [dict(num_chs=prev_chs, reduction=curr_stride, module=feat_name)]
+            self.feature_info += [dict(num_chs=prev_chs, reduction=curr_stride, module=f'stages.{stage_idx}')]
             self.stages.add_module(str(stage_idx), stage)
 
         self.num_features = prev_chs
@@ -414,13 +411,7 @@ class ResNetV2(nn.Module):
 
 
 def _create_resnetv2(variant, pretrained=False, **kwargs):
-    # FIXME feature map extraction is not setup properly for pre-activation mode right now
-    preact = kwargs.get('preact', True)
     feature_cfg = dict(flatten_sequential=True)
-    if preact:
-        feature_cfg['feature_cls'] = 'hook'
-        feature_cfg['out_indices'] = (1, 2, 3, 4)  # no stride 2, 0 level feat for preact
-
     return build_model_with_cfg(
         ResNetV2, variant, pretrained, default_cfg=default_cfgs[variant], pretrained_custom_load=True,
         feature_cfg=feature_cfg, **kwargs)
