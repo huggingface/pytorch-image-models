@@ -2,6 +2,10 @@
 
 ## What's New
 
+### March 7, 2021
+* First 0.4.x PyPi release w/ NFNets (& related), ByoB (GPU-Efficient, RepVGG, etc).
+* Change feature extraction for pre-activation nets (NFNets, ResNetV2) to return features before activation.
+
 ### Feb 18, 2021
 * Add pretrained weights and model variants for NFNet-F* models from [DeepMind Haiku impl](https://github.com/deepmind/deepmind-research/tree/master/nfnets).
   * Models are prefixed with `dm_`. They require SAME padding conv, skipinit enabled, and activation gains applied in act fn.
