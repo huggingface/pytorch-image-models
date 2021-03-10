@@ -1,5 +1,33 @@
 # Recent Changes
 
+### March 7, 2021
+* First 0.4.x PyPi release w/ NFNets (& related), ByoB (GPU-Efficient, RepVGG, etc).
+* Change feature extraction for pre-activation nets (NFNets, ResNetV2) to return features before activation.
+
+### Feb 18, 2021
+* Add pretrained weights and model variants for NFNet-F* models from [DeepMind Haiku impl](https://github.com/deepmind/deepmind-research/tree/master/nfnets).
+  * Models are prefixed with `dm_`. They require SAME padding conv, skipinit enabled, and activation gains applied in act fn.
+  * These models are big, expect to run out of GPU memory. With the GELU activiation + other options, they are roughly 1/2 the inference speed of my SiLU PyTorch optimized `s` variants.
+  * Original model results are based on pre-processing that is not the same as all other models so you'll see different results in the results csv (once updated).
+  * Matching the original pre-processing as closely as possible I get these results:
+    * `dm_nfnet_f6` - 86.352
+    * `dm_nfnet_f5` - 86.100
+    * `dm_nfnet_f4` - 85.834
+    * `dm_nfnet_f3` - 85.676
+    * `dm_nfnet_f2` - 85.178
+    * `dm_nfnet_f1` - 84.696
+    * `dm_nfnet_f0` - 83.464
+
+### Feb 16, 2021
+* Add Adaptive Gradient Clipping (AGC) as per https://arxiv.org/abs/2102.06171. Integrated w/ PyTorch gradient clipping via mode arg that defaults to prev 'norm' mode. For backward arg compat, clip-grad arg must be specified to enable when using train.py.
+  * AGC w/ default clipping factor `--clip-grad .01 --clip-mode agc`
+  * PyTorch global norm of 1.0 (old behaviour, always norm), `--clip-grad 1.0`
+  * PyTorch value clipping of 10, `--clip-grad 10. --clip-mode value`
+  * AGC performance is definitely sensitive to the clipping factor. More experimentation needed to determine good values for smaller batch sizes and optimizers besides those in paper. So far I've found .001-.005 is necessary for stable RMSProp training w/ NFNet/NF-ResNet.
+
+### Feb 12, 2021
+* Update Normalization-Free nets to include new NFNet-F (https://arxiv.org/abs/2102.06171) model defs
+
 ### Feb 10, 2021
 * More model archs, incl a flexible ByobNet backbone ('Bring-your-own-blocks')
   * GPU-Efficient-Networks (https://github.com/idstcv/GPU-Efficient-Networks), impl in `byobnet.py`
