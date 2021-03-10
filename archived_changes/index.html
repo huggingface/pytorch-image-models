@@ -298,6 +298,27 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#aug-12-2020" class="md-nav__link">
+    Aug 12, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aug-5-2020" class="md-nav__link">
+    Aug 5, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#june-11-2020" class="md-nav__link">
+    June 11, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#may-12-2020" class="md-nav__link">
     May 12, 2020
   </a>
@@ -477,6 +498,27 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#aug-12-2020" class="md-nav__link">
+    Aug 12, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aug-5-2020" class="md-nav__link">
+    Aug 5, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#june-11-2020" class="md-nav__link">
+    June 11, 2020
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#may-12-2020" class="md-nav__link">
     May 12, 2020
   </a>
@@ -644,6 +686,47 @@
                 
                 
                 <h1 id="archived-changes">Archived Changes</h1>
+<h3 id="aug-12-2020">Aug 12, 2020</h3>
+<ul>
+<li>New/updated weights from training experiments<ul>
+<li>EfficientNet-B3 - 82.1 top-1 (vs 81.6 for official with AA and 81.9 for AdvProp)</li>
+<li>RegNetY-3.2GF - 82.0 top-1 (78.9 from official ver)</li>
+<li>CSPResNet50 - 79.6 top-1 (76.6 from official ver)</li>
+</ul>
+</li>
+<li>Add CutMix integrated w/ Mixup. See <a href="https://github.com/rwightman/pytorch-image-models/pull/218">pull request</a> for some usage examples</li>
+<li>Some fixes for using pretrained weights with <code>in_chans</code> != 3 on several models.</li>
+</ul>
+<h3 id="aug-5-2020">Aug 5, 2020</h3>
+<p>Universal feature extraction, new models, new weights, new test sets.
+* All models support the <code>features_only=True</code> argument for <code>create_model</code> call to return a network that extracts feature maps from the deepest layer at each stride.
+* New models
+  * CSPResNet, CSPResNeXt, CSPDarkNet, DarkNet
+  * ReXNet
+  * (Modified Aligned) Xception41/65/71 (a proper port of TF models)
+* New trained weights
+  * SEResNet50 - 80.3 top-1
+  * CSPDarkNet53 - 80.1 top-1
+  * CSPResNeXt50 - 80.0 top-1
+  * DPN68b - 79.2 top-1
+  * EfficientNet-Lite0 (non-TF ver) - 75.5 (submitted by <a href="https://github.com/hal-314">@hal-314</a>)
+* Add 'real' labels for ImageNet and ImageNet-Renditions test set, see <a href="results/README.md"><code>results/README.md</code></a>
+* Test set ranking/top-n diff script by <a href="https://github.com/KushajveerSingh">@KushajveerSingh</a>
+* Train script and loader/transform tweaks to punch through more aug arguments
+* README and documentation overhaul. See initial (WIP) documentation at <a href="https://rwightman.github.io/pytorch-image-models/">https://rwightman.github.io/pytorch-image-models/</a>
+* adamp and sgdp optimizers added by <a href="https://github.com/hellbell">@hellbell</a></p>
+<h3 id="june-11-2020">June 11, 2020</h3>
+<p>Bunch of changes:
+* DenseNet models updated with memory efficient addition from torchvision (fixed a bug), blur pooling and deep stem additions
+* VoVNet V1 and V2 models added, 39 V2 variant (ese_vovnet_39b) trained to 79.3 top-1
+* Activation factory added along with new activations:
+   * select act at model creation time for more flexibility in using activations compatible with scripting or tracing (ONNX export)
+   * hard_mish (experimental) added with memory-efficient grad, along with ME hard_swish
+   * context mgr for setting exportable/scriptable/no_jit states
+* Norm + Activation combo layers added with initial trial support in DenseNet and VoVNet along with impl of EvoNorm and InplaceAbn wrapper that fit the interface
+* Torchscript works for all but two of the model types as long as using Pytorch 1.5+, tests added for this
+* Some import cleanup and classifier reset changes, all models will have classifier reset to nn.Identity on reset_classifer(0) call
+* Prep for 0.1.28 pip release</p>
 <h3 id="may-12-2020">May 12, 2020</h3>
 <ul>
 <li>Add ResNeSt models (code adapted from <a href="https://github.com/zhanghang1989/ResNeSt">https://github.com/zhanghang1989/ResNeSt</a>, paper <a href="https://arxiv.org/abs/2004.08955">https://arxiv.org/abs/2004.08955</a>))</li>

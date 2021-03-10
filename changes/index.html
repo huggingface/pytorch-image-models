@@ -286,6 +286,34 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#march-7-2021" class="md-nav__link">
+    March 7, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-18-2021" class="md-nav__link">
+    Feb 18, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-16-2021" class="md-nav__link">
+    Feb 16, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-12-2021" class="md-nav__link">
+    Feb 12, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#feb-10-2021" class="md-nav__link">
     Feb 10, 2021
   </a>
@@ -463,6 +491,34 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#march-7-2021" class="md-nav__link">
+    March 7, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-18-2021" class="md-nav__link">
+    Feb 18, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-16-2021" class="md-nav__link">
+    Feb 16, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feb-12-2021" class="md-nav__link">
+    Feb 12, 2021
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#feb-10-2021" class="md-nav__link">
     Feb 10, 2021
   </a>
@@ -616,6 +672,44 @@
                 
                 
                 <h1 id="recent-changes">Recent Changes</h1>
+<h3 id="march-7-2021">March 7, 2021</h3>
+<ul>
+<li>First 0.4.x PyPi release w/ NFNets (&amp; related), ByoB (GPU-Efficient, RepVGG, etc).</li>
+<li>Change feature extraction for pre-activation nets (NFNets, ResNetV2) to return features before activation.</li>
+</ul>
+<h3 id="feb-18-2021">Feb 18, 2021</h3>
+<ul>
+<li>Add pretrained weights and model variants for NFNet-F* models from <a href="https://github.com/deepmind/deepmind-research/tree/master/nfnets">DeepMind Haiku impl</a>.<ul>
+<li>Models are prefixed with <code>dm_</code>. They require SAME padding conv, skipinit enabled, and activation gains applied in act fn.</li>
+<li>These models are big, expect to run out of GPU memory. With the GELU activiation + other options, they are roughly &frac12; the inference speed of my SiLU PyTorch optimized <code>s</code> variants.</li>
+<li>Original model results are based on pre-processing that is not the same as all other models so you'll see different results in the results csv (once updated).</li>
+<li>Matching the original pre-processing as closely as possible I get these results:<ul>
+<li><code>dm_nfnet_f6</code> - 86.352</li>
+<li><code>dm_nfnet_f5</code> - 86.100</li>
+<li><code>dm_nfnet_f4</code> - 85.834</li>
+<li><code>dm_nfnet_f3</code> - 85.676</li>
+<li><code>dm_nfnet_f2</code> - 85.178</li>
+<li><code>dm_nfnet_f1</code> - 84.696</li>
+<li><code>dm_nfnet_f0</code> - 83.464</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="feb-16-2021">Feb 16, 2021</h3>
+<ul>
+<li>Add Adaptive Gradient Clipping (AGC) as per <a href="https://arxiv.org/abs/2102.06171">https://arxiv.org/abs/2102.06171</a>. Integrated w/ PyTorch gradient clipping via mode arg that defaults to prev 'norm' mode. For backward arg compat, clip-grad arg must be specified to enable when using train.py.<ul>
+<li>AGC w/ default clipping factor <code>--clip-grad .01 --clip-mode agc</code></li>
+<li>PyTorch global norm of 1.0 (old behaviour, always norm), <code>--clip-grad 1.0</code></li>
+<li>PyTorch value clipping of 10, <code>--clip-grad 10. --clip-mode value</code></li>
+<li>AGC performance is definitely sensitive to the clipping factor. More experimentation needed to determine good values for smaller batch sizes and optimizers besides those in paper. So far I've found .001-.005 is necessary for stable RMSProp training w/ NFNet/NF-ResNet.</li>
+</ul>
+</li>
+</ul>
+<h3 id="feb-12-2021">Feb 12, 2021</h3>
+<ul>
+<li>Update Normalization-Free nets to include new NFNet-F (<a href="https://arxiv.org/abs/2102.06171">https://arxiv.org/abs/2102.06171</a>) model defs</li>
+</ul>
 <h3 id="feb-10-2021">Feb 10, 2021</h3>
 <ul>
 <li>More model archs, incl a flexible ByobNet backbone ('Bring-your-own-blocks')<ul>

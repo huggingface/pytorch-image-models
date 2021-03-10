@@ -214,6 +214,13 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#welcome" class="md-nav__link">
+    Welcome
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#install" class="md-nav__link">
     Install
   </a>
@@ -358,6 +365,13 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#welcome" class="md-nav__link">
+    Welcome
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#install" class="md-nav__link">
     Install
   </a>
@@ -406,20 +420,26 @@
                 
                 
                 <h1 id="getting-started">Getting Started</h1>
+<h2 id="welcome">Welcome</h2>
+<p>Welcome to the <code>timm</code> documentation, a lean set of docs that covers the basics of <code>timm</code>.</p>
+<p>For a more comprehensive set of docs (currently under development), please visit <a href="https://fastai.github.io/timmdocs/">timmdocs</a> by <a href="https://github.com/amaarora">Aman Arora</a>.</p>
 <h2 id="install">Install</h2>
 <p>The library can be installed with pip:</p>
 <div class="highlight"><pre><span></span><code>pip install timm
 </code></pre></div>
 
+<p>I update the PyPi (pip) packages when I'm confident there are no significant model regressions from previous releases. If you want to pip install the bleeding edge from GitHub, use:
+<div class="highlight"><pre><span></span><code>pip install git+https://github.com/rwightman/pytorch-image-models.git
+</code></pre></div></p>
 <div class="admonition info">
 <p class="admonition-title">Conda Environment</p>
-<p>All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x, 3.7.x., 3.8.x.</p>
+<p>All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x, 3.7.x., 3.8.x., 3.9</p>
 <p>Little to no care has been taken to be Python 2.x friendly and will not support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.</p>
-<p>PyTorch versions 1.4, 1.5.x, 1.6, and 1.7 have been tested with this code.</p>
+<p>PyTorch versions 1.4, 1.5.x, 1.6, 1.7.x, and 1.8 have been tested with this code.</p>
 <p>I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
 <div class="highlight"><pre><span></span><code>conda create -n torch-env
 conda activate torch-env
-conda install -c pytorch pytorch torchvision cudatoolkit=11
+conda install pytorch torchvision cudatoolkit=11.1 -c pytorch -c conda-forge
 conda install pyyaml
 </code></pre></div></p>
 </div>

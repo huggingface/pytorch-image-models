@@ -568,7 +568,7 @@
                 <h1 id="feature-extraction">Feature Extraction</h1>
 <p>All of the models in <code>timm</code> have consistent mechanisms for obtaining various types of features from the model for tasks besides classification.</p>
 <h2 id="penultimate-layer-features-pre-classifier-features">Penultimate Layer Features (Pre-Classifier Features)</h2>
-<p>The features from the penultimate model layer can be obtained in severay ways without requiring model surgery (although feel free to do surgery). One must first decide if they want pooled or un-pooled features.</p>
+<p>The features from the penultimate model layer can be obtained in several ways without requiring model surgery (although feel free to do surgery). One must first decide if they want pooled or un-pooled features.</p>
 <h3 id="unpooled">Unpooled</h3>
 <p>There are three ways to obtain unpooled features.</p>
 <p>Without modifying the network, one can call <code>model.forward_features(input)</code> on any model instead of the usual <code>model(input)</code>. This will bypass the head classifier and global pooling for networks.</p>
