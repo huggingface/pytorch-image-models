@@ -1,0 +1,270 @@
+# Summary
+
+A **Dual Path Network (DPN)** is a convolutional neural network which presents a new topology of connection paths internally. The intuition is that [ResNets](https://paperswithcode.com/method/resnet) enables feature re-usage while DenseNet enables new feature exploration, and both are important for learning good representations. To enjoy the benefits from both path topologies, Dual Path Networks share common features while maintaining the flexibility to explore new features through dual path architectures. 
+
+The principal building block is an [DPN Block](https://paperswithcode.com/method/dpn-block).
+
+## How do I use this model on an image?
+To load a pretrained model:
+
+```python
+import timm
+model = timm.create_model('dpn68', pretrained=True)
+model.eval()
+```
+
+To load and preprocess the image:
+```python 
+import urllib
+from PIL import Image
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
+
+config = resolve_data_config({}, model=model)
+transform = create_transform(**config)
+
+url, filename = ("https://github.com/pytorch/hub/raw/master/images/dog.jpg", "dog.jpg")
+urllib.request.urlretrieve(url, filename)
+img = Image.open(filename).convert('RGB')
+tensor = transform(img).unsqueeze(0) # transform and add batch dimension
+```
+
+To get the model predictions:
+```python
+import torch
+with torch.no_grad():
+    out = model(tensor)
+probabilities = torch.nn.functional.softmax(out[0], dim=0)
+print(probabilities.shape)
+# prints: torch.Size([1000])
+```
+
+To get the top-5 predictions class names:
+```python
+# Get imagenet class mappings
+url, filename = ("https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt", "imagenet_classes.txt")
+urllib.request.urlretrieve(url, filename) 
+with open("imagenet_classes.txt", "r") as f:
+    categories = [s.strip() for s in f.readlines()]
+
+# Print top categories per image
+top5_prob, top5_catid = torch.topk(probabilities, 5)
+for i in range(top5_prob.size(0)):
+    print(categories[top5_catid[i]], top5_prob[i].item())
+# prints class names and probabilities like:
+# [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
+```
+
+Replace the model name with the variant you want to use, e.g. `dpn68`. You can find the IDs in the model summaries at the top of this page.
+
+To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
+
+## How do I finetune this model?
+You can finetune any of the pre-trained models just by changing the classifier (the last layer).
+```python
+model = timm.create_model('dpn68', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+```
+To finetune on your own dataset, you have to write a training loop or adapt [timm's training
+script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
+
+## How do I train this model?
+
+You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-image-models/scripts/) for training a new model afresh.
+
+## Citation
+
+```BibTeX
+@misc{chen2017dual,
+      title={Dual Path Networks}, 
+      author={Yunpeng Chen and Jianan Li and Huaxin Xiao and Xiaojie Jin and Shuicheng Yan and Jiashi Feng},
+      year={2017},
+      eprint={1707.01629},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```
+
+<!--
+Models:
+- Name: dpn68
+  Metadata:
+    FLOPs: 2990567880
+    Batch Size: 1280
+    Training Data:
+    - ImageNet
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Resources: 40x K80 GPUs
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - DPN Block
+    - Dense Connections
+    - Global Average Pooling
+    - Max Pooling
+    - Softmax
+    File Size: 50761994
+    Tasks:
+    - Image Classification
+    ID: dpn68
+    LR: 0.316
+    Layers: 68
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/dpn.py#L270
+  In Collection: DPN
+- Name: dpn68b
+  Metadata:
+    FLOPs: 2990567880
+    Batch Size: 1280
+    Training Data:
+    - ImageNet
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Resources: 40x K80 GPUs
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - DPN Block
+    - Dense Connections
+    - Global Average Pooling
+    - Max Pooling
+    - Softmax
+    File Size: 50781025
+    Tasks:
+    - Image Classification
+    ID: dpn68b
+    LR: 0.316
+    Layers: 68
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/dpn.py#L278
+  In Collection: DPN
+- Name: dpn92
+  Metadata:
+    FLOPs: 8357659624
+    Batch Size: 1280
+    Training Data:
+    - ImageNet
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Resources: 40x K80 GPUs
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - DPN Block
+    - Dense Connections
+    - Global Average Pooling
+    - Max Pooling
+    - Softmax
+    File Size: 151248422
+    Tasks:
+    - Image Classification
+    ID: dpn92
+    LR: 0.316
+    Layers: 92
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/dpn.py#L286
+  In Collection: DPN
+- Name: dpn131
+  Metadata:
+    FLOPs: 20586274792
+    Batch Size: 960
+    Training Data:
+    - ImageNet
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Resources: 40x K80 GPUs
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - DPN Block
+    - Dense Connections
+    - Global Average Pooling
+    - Max Pooling
+    - Softmax
+    File Size: 318016207
+    Tasks:
+    - Image Classification
+    ID: dpn131
+    LR: 0.316
+    Layers: 131
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/dpn.py#L302
+  In Collection: DPN
+- Name: dpn107
+  Metadata:
+    FLOPs: 23524280296
+    Batch Size: 1280
+    Training Data:
+    - ImageNet
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Resources: 40x K80 GPUs
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - DPN Block
+    - Dense Connections
+    - Global Average Pooling
+    - Max Pooling
+    - Softmax
+    File Size: 348612331
+    Tasks:
+    - Image Classification
+    ID: dpn107
+    LR: 0.316
+    Layers: 107
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/dpn.py#L310
+  In Collection: DPN
+- Name: dpn98
+  Metadata:
+    FLOPs: 15003675112
+    Batch Size: 1280
+    Training Data:
+    - ImageNet
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Resources: 40x K80 GPUs
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - DPN Block
+    - Dense Connections
+    - Global Average Pooling
+    - Max Pooling
+    - Softmax
+    File Size: 247021307
+    Tasks:
+    - Image Classification
+    ID: dpn98
+    LR: 0.4
+    Layers: 98
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/dpn.py#L294
+  In Collection: DPN
+Collections:
+- Name: DPN
+  Paper:
+    title: Dual Path Networks
+    url: https://papperswithcode.com//paper/dual-path-networks
+  type: model-index
+Type: model-index
+-->
