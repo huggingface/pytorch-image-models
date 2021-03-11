@@ -1,3 +1,7 @@
+"""
+Run this script to generate the model-index files in `models` from the templates in `.templates/models`.
+"""
+
 import argparse
 from pathlib import Path
 
