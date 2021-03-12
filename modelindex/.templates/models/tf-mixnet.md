@@ -102,7 +102,7 @@ Collections:
 - Name: TF MixNet
   Paper:
     title: 'MixConv: Mixed Depthwise Convolutional Kernels'
-    url: https://papperswithcode.com//paper/mixnet-mixed-depthwise-convolutional-kernels
+    url: https://paperswithcode.com//paper/mixnet-mixed-depthwise-convolutional-kernels
   type: model-index
 Type: model-index
 -->

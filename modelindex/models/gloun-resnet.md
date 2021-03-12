@@ -448,7 +448,7 @@ Collections:
 - Name: Gloun ResNet
   Paper:
     title: Deep Residual Learning for Image Recognition
-    url: https://papperswithcode.com//paper/deep-residual-learning-for-image-recognition
+    url: https://paperswithcode.com//paper/deep-residual-learning-for-image-recognition
   type: model-index
 Type: model-index
 -->

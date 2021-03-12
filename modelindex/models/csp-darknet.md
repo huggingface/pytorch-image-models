@@ -129,7 +129,7 @@ Collections:
 - Name: CSP DarkNet
   Paper:
     title: 'YOLOv4: Optimal Speed and Accuracy of Object Detection'
-    url: https://papperswithcode.com//paper/yolov4-optimal-speed-and-accuracy-of-object
+    url: https://paperswithcode.com//paper/yolov4-optimal-speed-and-accuracy-of-object
   type: model-index
 Type: model-index
 -->

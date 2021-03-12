@@ -241,7 +241,7 @@ Collections:
 - Name: SSL ResNext
   Paper:
     title: Billion-scale semi-supervised learning for image classification
-    url: https://papperswithcode.com//paper/billion-scale-semi-supervised-learning-for
+    url: https://paperswithcode.com//paper/billion-scale-semi-supervised-learning-for
   type: model-index
 Type: model-index
 -->

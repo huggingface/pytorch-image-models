@@ -66,7 +66,7 @@ Collections:
 - Name: CSP ResNeXt
   Paper:
     title: 'CSPNet: A New Backbone that can Enhance Learning Capability of CNN'
-    url: https://papperswithcode.com//paper/cspnet-a-new-backbone-that-can-enhance
+    url: https://paperswithcode.com//paper/cspnet-a-new-backbone-that-can-enhance
   type: model-index
 Type: model-index
 -->

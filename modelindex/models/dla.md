@@ -537,7 +537,7 @@ Collections:
 - Name: DLA
   Paper:
     title: Deep Layer Aggregation
-    url: https://papperswithcode.com//paper/deep-layer-aggregation
+    url: https://paperswithcode.com//paper/deep-layer-aggregation
   type: model-index
 Type: model-index
 -->

@@ -297,7 +297,7 @@ Collections:
 - Name: HRNet
   Paper:
     title: Deep High-Resolution Representation Learning for Visual Recognition
-    url: https://papperswithcode.com//paper/190807919
+    url: https://paperswithcode.com//paper/190807919
   type: model-index
 Type: model-index
 -->

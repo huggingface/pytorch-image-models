@@ -119,7 +119,7 @@ Collections:
 - Name: PNASNet
   Paper:
     title: Progressive Neural Architecture Search
-    url: https://papperswithcode.com//paper/progressive-neural-architecture-search
+    url: https://paperswithcode.com//paper/progressive-neural-architecture-search
   type: model-index
 Type: model-index
 -->

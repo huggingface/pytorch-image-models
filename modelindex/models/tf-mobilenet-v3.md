@@ -326,7 +326,7 @@ Collections:
 - Name: TF MobileNet V3
   Paper:
     title: Searching for MobileNetV3
-    url: https://papperswithcode.com//paper/searching-for-mobilenetv3
+    url: https://paperswithcode.com//paper/searching-for-mobilenetv3
   type: model-index
 Type: model-index
 -->

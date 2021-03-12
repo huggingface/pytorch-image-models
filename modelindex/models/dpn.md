@@ -264,7 +264,7 @@ Collections:
 - Name: DPN
   Paper:
     title: Dual Path Networks
-    url: https://papperswithcode.com//paper/dual-path-networks
+    url: https://paperswithcode.com//paper/dual-path-networks
   type: model-index
 Type: model-index
 -->

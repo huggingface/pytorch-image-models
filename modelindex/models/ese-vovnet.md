@@ -132,7 +132,7 @@ Collections:
 - Name: ESE VovNet
   Paper:
     title: 'CenterMask : Real-Time Anchor-Free Instance Segmentation'
-    url: https://papperswithcode.com//paper/centermask-real-time-anchor-free-instance-1
+    url: https://paperswithcode.com//paper/centermask-real-time-anchor-free-instance-1
   type: model-index
 Type: model-index
 -->

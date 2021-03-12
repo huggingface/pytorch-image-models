@@ -123,7 +123,7 @@ Collections:
 - Name: Res2NeXt
   Paper:
     title: 'Res2Net: A New Multi-scale Backbone Architecture'
-    url: https://papperswithcode.com//paper/res2net-a-new-multi-scale-backbone
+    url: https://paperswithcode.com//paper/res2net-a-new-multi-scale-backbone
   type: model-index
 Type: model-index
 -->

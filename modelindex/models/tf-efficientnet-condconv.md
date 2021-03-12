@@ -219,7 +219,7 @@ Collections:
 - Name: TF EfficientNet CondConv
   Paper:
     title: 'CondConv: Conditionally Parameterized Convolutions for Efficient Inference'
-    url: https://papperswithcode.com//paper/soft-conditional-computation
+    url: https://paperswithcode.com//paper/soft-conditional-computation
   type: model-index
 Type: model-index
 -->

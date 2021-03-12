@@ -405,7 +405,7 @@ Collections:
 - Name: RegNetY
   Paper:
     title: Designing Network Design Spaces
-    url: https://papperswithcode.com//paper/designing-network-design-spaces
+    url: https://paperswithcode.com//paper/designing-network-design-spaces
   type: model-index
 Type: model-index
 -->

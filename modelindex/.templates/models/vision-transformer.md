@@ -272,7 +272,7 @@ Collections:
 - Name: Vision Transformer
   Paper:
     title: 'An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale'
-    url: https://papperswithcode.com//paper/an-image-is-worth-16x16-words-transformers-1
+    url: https://paperswithcode.com//paper/an-image-is-worth-16x16-words-transformers-1
   type: model-index
 Type: model-index
 -->

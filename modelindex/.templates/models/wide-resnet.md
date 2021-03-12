@@ -81,7 +81,7 @@ Collections:
 - Name: Wide ResNet
   Paper:
     title: Wide Residual Networks
-    url: https://papperswithcode.com//paper/wide-residual-networks
+    url: https://paperswithcode.com//paper/wide-residual-networks
   type: model-index
 Type: model-index
 -->

@@ -316,7 +316,7 @@ Collections:
 - Name: DenseNet
   Paper:
     title: Densely Connected Convolutional Networks
-    url: https://papperswithcode.com//paper/densely-connected-convolutional-networks
+    url: https://paperswithcode.com//paper/densely-connected-convolutional-networks
   type: model-index
 Type: model-index
 -->

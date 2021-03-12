@@ -207,7 +207,7 @@ Collections:
 - Name: ResNeXt
   Paper:
     title: Aggregated Residual Transformations for Deep Neural Networks
-    url: https://papperswithcode.com//paper/aggregated-residual-transformations-for-deep
+    url: https://paperswithcode.com//paper/aggregated-residual-transformations-for-deep
   type: model-index
 Type: model-index
 -->

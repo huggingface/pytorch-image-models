@@ -249,7 +249,7 @@ Collections:
 - Name: Big Transfer
   Paper:
     title: 'Big Transfer (BiT): General Visual Representation Learning'
-    url: https://papperswithcode.com//paper/large-scale-learning-of-general-visual
+    url: https://paperswithcode.com//paper/large-scale-learning-of-general-visual
   type: model-index
 Type: model-index
 -->

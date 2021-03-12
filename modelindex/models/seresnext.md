@@ -199,7 +199,7 @@ Collections:
 - Name: SEResNeXt
   Paper:
     title: Squeeze-and-Excitation Networks
-    url: https://papperswithcode.com//paper/squeeze-and-excitation-networks
+    url: https://paperswithcode.com//paper/squeeze-and-excitation-networks
   type: model-index
 Type: model-index
 -->

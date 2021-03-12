@@ -83,7 +83,7 @@ Collections:
 - Name: Adversarial Inception v3
   Paper:
     title: Adversarial Attacks and Defences Competition
-    url: https://papperswithcode.com//paper/adversarial-attacks-and-defences-competition
+    url: https://paperswithcode.com//paper/adversarial-attacks-and-defences-competition
   type: model-index
 Type: model-index
 -->

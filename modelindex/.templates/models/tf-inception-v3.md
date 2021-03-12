@@ -72,7 +72,7 @@ Collections:
 - Name: TF Inception v3
   Paper:
     title: Rethinking the Inception Architecture for Computer Vision
-    url: https://papperswithcode.com//paper/rethinking-the-inception-architecture-for
+    url: https://paperswithcode.com//paper/rethinking-the-inception-architecture-for
   type: model-index
 Type: model-index
 -->

@@ -168,7 +168,7 @@ Collections:
   Paper:
     title: 'ReXNet: Diminishing Representational Bottleneck on Convolutional Neural
       Network'
-    url: https://papperswithcode.com//paper/rexnet-diminishing-representational
+    url: https://paperswithcode.com//paper/rexnet-diminishing-representational
   type: model-index
 Type: model-index
 -->

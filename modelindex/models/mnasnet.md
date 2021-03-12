@@ -149,7 +149,7 @@ Collections:
 - Name: MNASNet
   Paper:
     title: 'MnasNet: Platform-Aware Neural Architecture Search for Mobile'
-    url: https://papperswithcode.com//paper/mnasnet-platform-aware-neural-architecture
+    url: https://paperswithcode.com//paper/mnasnet-platform-aware-neural-architecture
   type: model-index
 Type: model-index
 -->

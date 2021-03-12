@@ -414,7 +414,7 @@ Collections:
 - Name: ResNeSt
   Paper:
     title: 'ResNeSt: Split-Attention Networks'
-    url: https://papperswithcode.com//paper/resnest-split-attention-networks
+    url: https://paperswithcode.com//paper/resnest-split-attention-networks
   type: model-index
 Type: model-index
 -->

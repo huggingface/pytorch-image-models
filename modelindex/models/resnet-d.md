@@ -263,7 +263,7 @@ Collections:
 - Name: ResNet-D
   Paper:
     title: Bag of Tricks for Image Classification with Convolutional Neural Networks
-    url: https://papperswithcode.com//paper/bag-of-tricks-for-image-classification-with
+    url: https://paperswithcode.com//paper/bag-of-tricks-for-image-classification-with
   type: model-index
 Type: model-index
 -->

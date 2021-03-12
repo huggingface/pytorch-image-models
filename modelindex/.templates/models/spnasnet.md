@@ -49,7 +49,7 @@ Collections:
   Paper:
     title: 'Single-Path NAS: Designing Hardware-Efficient ConvNets in less than 4
       Hours'
-    url: https://papperswithcode.com//paper/single-path-nas-designing-hardware-efficient
+    url: https://paperswithcode.com//paper/single-path-nas-designing-hardware-efficient
   type: model-index
 Type: model-index
 -->

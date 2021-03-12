@@ -172,7 +172,7 @@ Collections:
 - Name: IG ResNeXt
   Paper:
     title: Exploring the Limits of Weakly Supervised Pretraining
-    url: https://papperswithcode.com//paper/exploring-the-limits-of-weakly-supervised
+    url: https://paperswithcode.com//paper/exploring-the-limits-of-weakly-supervised
   type: model-index
 Type: model-index
 -->

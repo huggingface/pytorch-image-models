@@ -511,7 +511,7 @@ Collections:
 - Name: Noisy Student
   Paper:
     title: Self-training with Noisy Student improves ImageNet classification
-    url: https://papperswithcode.com//paper/self-training-with-noisy-student-improves
+    url: https://paperswithcode.com//paper/self-training-with-noisy-student-improves
   type: model-index
 Type: model-index
 -->

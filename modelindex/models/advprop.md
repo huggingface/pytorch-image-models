@@ -439,7 +439,7 @@ Collections:
 - Name: AdvProp
   Paper:
     title: Adversarial Examples Improve Image Recognition
-    url: https://papperswithcode.com//paper/adversarial-examples-improve-image
+    url: https://paperswithcode.com//paper/adversarial-examples-improve-image
   type: model-index
 Type: model-index
 -->

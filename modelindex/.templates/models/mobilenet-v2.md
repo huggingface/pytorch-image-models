@@ -173,7 +173,7 @@ Collections:
 - Name: MobileNet V2
   Paper:
     title: 'MobileNetV2: Inverted Residuals and Linear Bottlenecks'
-    url: https://papperswithcode.com//paper/mobilenetv2-inverted-residuals-and-linear
+    url: https://paperswithcode.com//paper/mobilenetv2-inverted-residuals-and-linear
   type: model-index
 Type: model-index
 -->

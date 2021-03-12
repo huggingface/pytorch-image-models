@@ -124,7 +124,7 @@ Collections:
 - Name: Xception
   Paper:
     title: 'Xception: Deep Learning with Depthwise Separable Convolutions'
-    url: https://papperswithcode.com//paper/xception-deep-learning-with-depthwise
+    url: https://paperswithcode.com//paper/xception-deep-learning-with-depthwise
   type: model-index
 Type: model-index
 -->

@@ -168,7 +168,7 @@ Collections:
 - Name: SelecSLS
   Paper:
     title: 'XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera'
-    url: https://papperswithcode.com//paper/xnect-real-time-multi-person-3d-human-pose
+    url: https://paperswithcode.com//paper/xnect-real-time-multi-person-3d-human-pose
   type: model-index
 Type: model-index
 -->

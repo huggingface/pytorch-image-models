@@ -63,7 +63,7 @@ Collections:
   Paper:
     title: 'FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable Neural
       Architecture Search'
-    url: https://papperswithcode.com//paper/fbnet-hardware-aware-efficient-convnet-design
+    url: https://paperswithcode.com//paper/fbnet-hardware-aware-efficient-convnet-design
   type: model-index
 Type: model-index
 -->

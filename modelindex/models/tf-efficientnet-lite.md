@@ -209,7 +209,7 @@ Collections:
 - Name: TF EfficientNet Lite
   Paper:
     title: 'EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks'
-    url: https://papperswithcode.com//paper/efficientnet-rethinking-model-scaling-for
+    url: https://paperswithcode.com//paper/efficientnet-rethinking-model-scaling-for
   type: model-index
 Type: model-index
 -->

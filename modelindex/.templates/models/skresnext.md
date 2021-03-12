@@ -57,7 +57,7 @@ Collections:
 - Name: SKResNeXt
   Paper:
     title: Selective Kernel Networks
-    url: https://papperswithcode.com//paper/selective-kernel-networks
+    url: https://paperswithcode.com//paper/selective-kernel-networks
   type: model-index
 Type: model-index
 -->

@@ -117,7 +117,7 @@ Collections:
 - Name: EfficientNet Pruned
   Paper:
     title: Knapsack Pruning with Inner Distillation
-    url: https://papperswithcode.com//paper/knapsack-pruning-with-inner-distillation
+    url: https://paperswithcode.com//paper/knapsack-pruning-with-inner-distillation
   type: model-index
 Type: model-index
 -->

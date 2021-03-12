@@ -255,7 +255,7 @@ Collections:
 - Name: ECAResNet
   Paper:
     title: 'ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks'
-    url: https://papperswithcode.com//paper/eca-net-efficient-channel-attention-for-deep
+    url: https://paperswithcode.com//paper/eca-net-efficient-channel-attention-for-deep
   type: model-index
 Type: model-index
 -->

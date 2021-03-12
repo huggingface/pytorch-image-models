@@ -310,7 +310,7 @@ Collections:
 - Name: TResNet
   Paper:
     title: 'TResNet: High Performance GPU-Dedicated Architecture'
-    url: https://papperswithcode.com//paper/tresnet-high-performance-gpu-dedicated
+    url: https://paperswithcode.com//paper/tresnet-high-performance-gpu-dedicated
   type: model-index
 Type: model-index
 -->

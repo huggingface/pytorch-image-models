@@ -59,7 +59,7 @@ Collections:
 - Name: NASNet
   Paper:
     title: Learning Transferable Architectures for Scalable Image Recognition
-    url: https://papperswithcode.com//paper/learning-transferable-architectures-for
+    url: https://paperswithcode.com//paper/learning-transferable-architectures-for
   type: model-index
 Type: model-index
 -->

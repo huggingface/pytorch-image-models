@@ -58,7 +58,7 @@ Collections:
   Paper:
     title: Inception-v4, Inception-ResNet and the Impact of Residual Connections on
       Learning
-    url: https://papperswithcode.com//paper/inception-v4-inception-resnet-and-the-impact
+    url: https://paperswithcode.com//paper/inception-v4-inception-resnet-and-the-impact
   type: model-index
 Type: model-index
 -->
