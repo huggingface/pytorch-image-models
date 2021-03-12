@@ -85,22 +85,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: CSP DarkNet
+  Paper:
+    Title: 'YOLOv4: Optimal Speed and Accuracy of Object Detection'
+    URL: https://paperswithcode.com/paper/yolov4-optimal-speed-and-accuracy-of-object
 Models:
 - Name: cspdarknet53
+  In Collection: CSP DarkNet
   Metadata:
     FLOPs: 8545018880
-    Batch Size: 128
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - CutMix
-    - Label Smoothing
-    - Mosaic
-    - Polynomial Learning Rate Decay
-    - SGD with Momentum
-    - Self-Adversarial Training
-    - Weight Decay
-    Training Resources: 1x NVIDIA RTX 2070 GPU
+    Parameters: 27640000
+    File Size: 110775135
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -109,14 +106,25 @@ Models:
     - Mish
     - Residual Connection
     - Softmax
-    File Size: 110775135
     Tasks:
     - Image Classification
+    Training Techniques:
+    - CutMix
+    - Label Smoothing
+    - Mosaic
+    - Polynomial Learning Rate Decay
+    - SGD with Momentum
+    - Self-Adversarial Training
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 1x NVIDIA RTX 2070 GPU
     ID: cspdarknet53
     LR: 0.1
     Layers: 53
     Crop Pct: '0.887'
     Momentum: 0.9
+    Batch Size: 128
     Image Size: '256'
     Warmup Steps: 1000
     Weight Decay: 0.0005
@@ -124,12 +132,11 @@ Models:
     Training Steps: 8000000
     FPS (GPU RTX 2070): 66
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/cspnet.py#L441
-  In Collection: CSP DarkNet
-Collections:
-- Name: CSP DarkNet
-  Paper:
-    title: 'YOLOv4: Optimal Speed and Accuracy of Object Detection'
-    url: https://paperswithcode.com//paper/yolov4-optimal-speed-and-accuracy-of-object
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspdarknet53_ra_256-d05c7c21.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.05%
+      Top 5 Accuracy: 95.09%
 -->

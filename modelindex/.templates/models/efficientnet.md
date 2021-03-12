@@ -26,156 +26,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: EfficientNet
+  Paper:
+    Title: 'EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks'
+    URL: https://paperswithcode.com/paper/efficientnet-rethinking-model-scaling-for
 Models:
-- Name: efficientnet_b2a
-  Metadata:
-    FLOPs: 1452041554
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 49369973
-    Tasks:
-    - Image Classification
-    ID: efficientnet_b2a
-    Crop Pct: '1.0'
-    Image Size: '288'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1029
-  In Collection: EfficientNet
-- Name: efficientnet_b3a
-  Metadata:
-    FLOPs: 2600628304
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 49369973
-    Tasks:
-    - Image Classification
-    ID: efficientnet_b3a
-    Crop Pct: '1.0'
-    Image Size: '320'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1047
-  In Collection: EfficientNet
-- Name: efficientnet_em
-  Metadata:
-    FLOPs: 3935516480
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 27927309
-    Tasks:
-    - Image Classification
-    ID: efficientnet_em
-    Crop Pct: '0.882'
-    Image Size: '240'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1118
-  In Collection: EfficientNet
-- Name: efficientnet_lite0
-  Metadata:
-    FLOPs: 510605024
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 18820005
-    Tasks:
-    - Image Classification
-    ID: efficientnet_lite0
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1163
-  In Collection: EfficientNet
-- Name: efficientnet_es
-  Metadata:
-    FLOPs: 2317181824
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 22003339
-    Tasks:
-    - Image Classification
-    ID: efficientnet_es
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1110
-  In Collection: EfficientNet
-- Name: efficientnet_b3
-  Metadata:
-    FLOPs: 2327905920
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 49369973
-    Tasks:
-    - Image Classification
-    ID: efficientnet_b3
-    Crop Pct: '0.904'
-    Image Size: '300'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1038
-  In Collection: EfficientNet
 - Name: efficientnet_b0
+  In Collection: EfficientNet
   Metadata:
     FLOPs: 511241564
-    Training Data:
-    - ImageNet
+    Parameters: 5290000
+    File Size: 21376743
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -186,21 +49,29 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 21376743
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: efficientnet_b0
     Layers: 18
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1002
-  In Collection: EfficientNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.71%
+      Top 5 Accuracy: 93.52%
 - Name: efficientnet_b1
+  In Collection: EfficientNet
   Metadata:
     FLOPs: 909691920
-    Training Data:
-    - ImageNet
+    Parameters: 7790000
+    File Size: 31502706
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -211,20 +82,28 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 31502706
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: efficientnet_b1
     Crop Pct: '0.875'
     Image Size: '240'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1011
-  In Collection: EfficientNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.71%
+      Top 5 Accuracy: 94.15%
 - Name: efficientnet_b2
+  In Collection: EfficientNet
   Metadata:
     FLOPs: 1265324514
-    Training Data:
-    - ImageNet
+    Parameters: 9110000
+    File Size: 36788104
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -235,20 +114,212 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 36788104
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: efficientnet_b2
     Crop Pct: '0.875'
     Image Size: '260'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1020
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.38%
+      Top 5 Accuracy: 95.08%
+- Name: efficientnet_b2a
   In Collection: EfficientNet
-Collections:
-- Name: EfficientNet
-  Paper:
-    title: 'EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks'
-    url: https://paperswithcode.com//paper/efficientnet-rethinking-model-scaling-for
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 1452041554
+    Parameters: 9110000
+    File Size: 49369973
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_b2a
+    Crop Pct: '1.0'
+    Image Size: '288'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1029
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra2-cf984f9c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.61%
+      Top 5 Accuracy: 95.32%
+- Name: efficientnet_b3
+  In Collection: EfficientNet
+  Metadata:
+    FLOPs: 2327905920
+    Parameters: 12230000
+    File Size: 49369973
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_b3
+    Crop Pct: '0.904'
+    Image Size: '300'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1038
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra2-cf984f9c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 82.08%
+      Top 5 Accuracy: 96.03%
+- Name: efficientnet_b3a
+  In Collection: EfficientNet
+  Metadata:
+    FLOPs: 2600628304
+    Parameters: 12230000
+    File Size: 49369973
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_b3a
+    Crop Pct: '1.0'
+    Image Size: '320'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1047
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra2-cf984f9c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 82.25%
+      Top 5 Accuracy: 96.11%
+- Name: efficientnet_em
+  In Collection: EfficientNet
+  Metadata:
+    FLOPs: 3935516480
+    Parameters: 6900000
+    File Size: 27927309
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_em
+    Crop Pct: '0.882'
+    Image Size: '240'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1118
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_em_ra2-66250f76.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.26%
+      Top 5 Accuracy: 94.79%
+- Name: efficientnet_es
+  In Collection: EfficientNet
+  Metadata:
+    FLOPs: 2317181824
+    Parameters: 5440000
+    File Size: 22003339
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_es
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1110
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_es_ra-f111e99c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.09%
+      Top 5 Accuracy: 93.93%
+- Name: efficientnet_lite0
+  In Collection: EfficientNet
+  Metadata:
+    FLOPs: 510605024
+    Parameters: 4650000
+    File Size: 18820005
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_lite0
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1163
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_lite0_ra-37913777.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 75.5%
+      Top 5 Accuracy: 92.51%
 -->

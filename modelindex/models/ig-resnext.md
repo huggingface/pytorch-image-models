@@ -11,7 +11,7 @@ To load a pretrained model:
 
 ```python
 import timm
-model = timm.create_model('ig_resnext101_32x32d', pretrained=True)
+model = timm.create_model('ig_resnext101_32x16d', pretrained=True)
 model.eval()
 ```
 
@@ -57,14 +57,14 @@ for i in range(top5_prob.size(0)):
 # [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
 ```
 
-Replace the model name with the variant you want to use, e.g. `ig_resnext101_32x32d`. You can find the IDs in the model summaries at the top of this page.
+Replace the model name with the variant you want to use, e.g. `ig_resnext101_32x16d`. You can find the IDs in the model summaries at the top of this page.
 
 To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
 
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('ig_resnext101_32x32d', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('ig_resnext101_32x16d', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
@@ -87,19 +87,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: IG ResNeXt
+  Paper:
+    Title: Exploring the Limits of Weakly Supervised Pretraining
+    URL: https://paperswithcode.com/paper/exploring-the-limits-of-weakly-supervised
 Models:
-- Name: ig_resnext101_32x32d
+- Name: ig_resnext101_32x16d
+  In Collection: IG ResNeXt
   Metadata:
-    FLOPs: 112225170432
-    Epochs: 100
-    Batch Size: 8064
-    Training Data:
-    - IG-3.5B-17k
-    - ImageNet
-    Training Techniques:
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Training Resources: 336x GPUs
+    FLOPs: 46623691776
+    Parameters: 194030000
+    File Size: 777518664
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -111,66 +111,82 @@ Models:
     - ResNeXt Block
     - Residual Connection
     - Softmax
-    File Size: 1876573776
     Tasks:
     - Image Classification
-    ID: ig_resnext101_32x32d
+    Training Techniques:
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - IG-3.5B-17k
+    - ImageNet
+    Training Resources: 336x GPUs
+    ID: ig_resnext101_32x16d
+    Epochs: 100
     Layers: 101
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 8064
+    Image Size: '224'
+    Weight Decay: 0.001
+    Interpolation: bilinear
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L874
+  Weights: https://download.pytorch.org/models/ig_resnext101_32x16-c6f796b0.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 84.16%
+      Top 5 Accuracy: 97.19%
+- Name: ig_resnext101_32x32d
+  In Collection: IG ResNeXt
+  Metadata:
+    FLOPs: 112225170432
+    Parameters: 468530000
+    File Size: 1876573776
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Convolution
+    - Global Average Pooling
+    - Grouped Convolution
+    - Max Pooling
+    - ReLU
+    - ResNeXt Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - IG-3.5B-17k
+    - ImageNet
+    Training Resources: 336x GPUs
+    ID: ig_resnext101_32x32d
+    Epochs: 100
+    Layers: 101
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 8064
     Image Size: '224'
     Weight Decay: 0.001
     Interpolation: bilinear
     Minibatch Size: 8064
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L885
-  In Collection: IG ResNeXt
-- Name: ig_resnext101_32x16d
-  Metadata:
-    FLOPs: 46623691776
-    Epochs: 100
-    Batch Size: 8064
-    Training Data:
-    - IG-3.5B-17k
-    - ImageNet
-    Training Techniques:
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Training Resources: 336x GPUs
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Convolution
-    - Global Average Pooling
-    - Grouped Convolution
-    - Max Pooling
-    - ReLU
-    - ResNeXt Block
-    - Residual Connection
-    - Softmax
-    File Size: 777518664
-    Tasks:
-    - Image Classification
-    ID: ig_resnext101_32x16d
-    Layers: 101
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.001
-    Interpolation: bilinear
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L874
-  In Collection: IG ResNeXt
+  Weights: https://download.pytorch.org/models/ig_resnext101_32x32-e4b90b00.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 85.09%
+      Top 5 Accuracy: 97.44%
 - Name: ig_resnext101_32x48d
+  In Collection: IG ResNeXt
   Metadata:
     FLOPs: 197446554624
-    Epochs: 100
-    Batch Size: 8064
-    Training Data:
-    - IG-3.5B-17k
-    - ImageNet
-    Training Techniques:
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Training Resources: 336x GPUs
+    Parameters: 828410000
+    File Size: 3317136976
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -182,30 +198,38 @@ Models:
     - ResNeXt Block
     - Residual Connection
     - Softmax
-    File Size: 3317136976
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - IG-3.5B-17k
+    - ImageNet
+    Training Resources: 336x GPUs
     ID: ig_resnext101_32x48d
+    Epochs: 100
     Layers: 101
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 8064
     Image Size: '224'
     Weight Decay: 0.001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L896
-  In Collection: IG ResNeXt
+  Weights: https://download.pytorch.org/models/ig_resnext101_32x48-3e41cc8a.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 85.42%
+      Top 5 Accuracy: 97.58%
 - Name: ig_resnext101_32x8d
+  In Collection: IG ResNeXt
   Metadata:
     FLOPs: 21180417024
-    Epochs: 100
-    Batch Size: 8064
-    Training Data:
-    - IG-3.5B-17k
-    - ImageNet
-    Training Techniques:
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Training Resources: 336x GPUs
+    Parameters: 88790000
+    File Size: 356056638
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -217,23 +241,30 @@ Models:
     - ResNeXt Block
     - Residual Connection
     - Softmax
-    File Size: 356056638
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - IG-3.5B-17k
+    - ImageNet
+    Training Resources: 336x GPUs
     ID: ig_resnext101_32x8d
+    Epochs: 100
     Layers: 101
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 8064
     Image Size: '224'
     Weight Decay: 0.001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L863
-  In Collection: IG ResNeXt
-Collections:
-- Name: IG ResNeXt
-  Paper:
-    title: Exploring the Limits of Weakly Supervised Pretraining
-    url: https://paperswithcode.com//paper/exploring-the-limits-of-weakly-supervised
-  type: model-index
-Type: model-index
+  Weights: https://download.pytorch.org/models/ig_resnext101_32x8-c38310e5.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 82.7%
+      Top 5 Accuracy: 96.64%
 -->

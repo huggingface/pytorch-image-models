@@ -83,19 +83,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Legacy SE ResNet
+  Paper:
+    Title: Squeeze-and-Excitation Networks
+    URL: https://paperswithcode.com/paper/squeeze-and-excitation-networks
 Models:
 - Name: legacy_seresnet101
+  In Collection: Legacy SE ResNet
   Metadata:
     FLOPs: 9762614000
-    Epochs: 100
-    Batch Size: 1024
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x NVIDIA Titan X GPUs
+    Parameters: 49330000
+    File Size: 197822624
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -108,31 +108,39 @@ Models:
     - Residual Connection
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 197822624
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x NVIDIA Titan X GPUs
     ID: legacy_seresnet101
     LR: 0.6
+    Epochs: 100
     Layers: 101
     Dropout: 0.2
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 1024
     Image Size: '224'
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/senet.py#L426
-  In Collection: Legacy SE ResNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet101-7e38fcc6.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.38%
+      Top 5 Accuracy: 94.26%
 - Name: legacy_seresnet152
+  In Collection: Legacy SE ResNet
   Metadata:
     FLOPs: 14553578160
-    Epochs: 100
-    Batch Size: 1024
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x NVIDIA Titan X GPUs
+    Parameters: 66819999
+    File Size: 268033864
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -145,31 +153,39 @@ Models:
     - Residual Connection
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 268033864
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x NVIDIA Titan X GPUs
     ID: legacy_seresnet152
     LR: 0.6
+    Epochs: 100
     Layers: 152
     Dropout: 0.2
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 1024
     Image Size: '224'
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/senet.py#L433
-  In Collection: Legacy SE ResNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet152-d17c99b7.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.67%
+      Top 5 Accuracy: 94.38%
 - Name: legacy_seresnet18
+  In Collection: Legacy SE ResNet
   Metadata:
     FLOPs: 2328876024
-    Epochs: 100
-    Batch Size: 1024
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x NVIDIA Titan X GPUs
+    Parameters: 11780000
+    File Size: 47175663
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -182,31 +198,39 @@ Models:
     - Residual Connection
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 47175663
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x NVIDIA Titan X GPUs
     ID: legacy_seresnet18
     LR: 0.6
+    Epochs: 100
     Layers: 18
     Dropout: 0.2
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 1024
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/senet.py#L405
-  In Collection: Legacy SE ResNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet18-4bb0ce65.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 71.74%
+      Top 5 Accuracy: 90.34%
 - Name: legacy_seresnet34
+  In Collection: Legacy SE ResNet
   Metadata:
     FLOPs: 4706201004
-    Epochs: 100
-    Batch Size: 1024
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x NVIDIA Titan X GPUs
+    Parameters: 21960000
+    File Size: 87958697
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -219,30 +243,39 @@ Models:
     - Residual Connection
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 87958697
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x NVIDIA Titan X GPUs
     ID: legacy_seresnet34
     LR: 0.6
+    Epochs: 100
     Layers: 34
     Dropout: 0.2
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 1024
     Image Size: '224'
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/senet.py#L412
-  In Collection: Legacy SE ResNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet34-a4004e63.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 74.79%
+      Top 5 Accuracy: 92.13%
 - Name: legacy_seresnet50
+  In Collection: Legacy SE ResNet
   Metadata:
     FLOPs: 4974351024
-    Epochs: 100
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x NVIDIA Titan X GPUs
+    Parameters: 28090000
+    File Size: 112611220
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -255,11 +288,18 @@ Models:
     - Residual Connection
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 112611220
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x NVIDIA Titan X GPUs
     ID: legacy_seresnet50
     LR: 0.6
+    Epochs: 100
     Layers: 50
     Dropout: 0.2
     Crop Pct: '0.875'
@@ -268,12 +308,11 @@ Models:
     Interpolation: bilinear
     Minibatch Size: 1024
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/senet.py#L419
-  In Collection: Legacy SE ResNet
-Collections:
-- Name: Legacy SE ResNet
-  Paper:
-    title: Squeeze-and-Excitation Networks
-    url: https://paperswithcode.com//paper/squeeze-and-excitation-networks
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet50-ce0d4300.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.64%
+      Top 5 Accuracy: 93.74%
 -->

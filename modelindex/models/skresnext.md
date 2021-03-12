@@ -83,15 +83,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: SKResNeXt
+  Paper:
+    Title: Selective Kernel Networks
+    URL: https://paperswithcode.com/paper/selective-kernel-networks
 Models:
 - Name: skresnext50_32x4d
+  In Collection: SKResNeXt
   Metadata:
     FLOPs: 5739845824
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Resources: 8x GPUs
+    Parameters: 27480000
+    File Size: 110340975
     Architecture:
     - Convolution
     - Dense Connections
@@ -101,24 +105,27 @@ Models:
     - Residual Connection
     - Selective Kernel
     - Softmax
-    File Size: 110340975
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
+    Training Resources: 8x GPUs
     ID: skresnext50_32x4d
     LR: 0.1
+    Epochs: 100
     Layers: 50
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/sknet.py#L210
-  In Collection: SKResNeXt
-Collections:
-- Name: SKResNeXt
-  Paper:
-    title: Selective Kernel Networks
-    url: https://paperswithcode.com//paper/selective-kernel-networks
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnext50_ra-f40e40bf.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.15%
+      Top 5 Accuracy: 94.64%
 -->

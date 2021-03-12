@@ -43,12 +43,195 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: DenseNet
+  Paper:
+    Title: Densely Connected Convolutional Networks
+    URL: https://paperswithcode.com/paper/densely-connected-convolutional-networks
 Models:
-- Name: densenetblur121d
+- Name: densenet121
+  In Collection: DenseNet
   Metadata:
-    FLOPs: 3947812864
+    FLOPs: 3641843200
+    Parameters: 7980000
+    File Size: 32376726
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Block
+    - Dense Connections
+    - Dropout
+    - Max Pooling
+    - ReLU
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - Kaiming Initialization
+    - Nesterov Accelerated Gradient
+    - Weight Decay
     Training Data:
     - ImageNet
+    ID: densenet121
+    LR: 0.1
+    Epochs: 90
+    Layers: 121
+    Dropout: 0.2
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 256
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L295
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/densenet121_ra-50efcf5c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 75.56%
+      Top 5 Accuracy: 92.65%
+- Name: densenet161
+  In Collection: DenseNet
+  Metadata:
+    FLOPs: 9931959264
+    Parameters: 28680000
+    File Size: 115730790
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Block
+    - Dense Connections
+    - Dropout
+    - Max Pooling
+    - ReLU
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - Kaiming Initialization
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    ID: densenet161
+    LR: 0.1
+    Epochs: 90
+    Layers: 161
+    Dropout: 0.2
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 256
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L347
+  Weights: https://download.pytorch.org/models/densenet161-8d451a50.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.36%
+      Top 5 Accuracy: 93.63%
+- Name: densenet169
+  In Collection: DenseNet
+  Metadata:
+    FLOPs: 4316945792
+    Parameters: 14150000
+    File Size: 57365526
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Block
+    - Dense Connections
+    - Dropout
+    - Max Pooling
+    - ReLU
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - Kaiming Initialization
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    ID: densenet169
+    LR: 0.1
+    Epochs: 90
+    Layers: 169
+    Dropout: 0.2
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 256
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L327
+  Weights: https://download.pytorch.org/models/densenet169-b2777c0a.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 75.9%
+      Top 5 Accuracy: 93.02%
+- Name: densenet201
+  In Collection: DenseNet
+  Metadata:
+    FLOPs: 5514321024
+    Parameters: 20010000
+    File Size: 81131730
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Block
+    - Dense Connections
+    - Dropout
+    - Max Pooling
+    - ReLU
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - Kaiming Initialization
+    - Nesterov Accelerated Gradient
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    ID: densenet201
+    LR: 0.1
+    Epochs: 90
+    Layers: 201
+    Dropout: 0.2
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 256
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L337
+  Weights: https://download.pytorch.org/models/densenet201-c1103571.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.29%
+      Top 5 Accuracy: 93.48%
+- Name: densenetblur121d
+  In Collection: DenseNet
+  Metadata:
+    FLOPs: 3947812864
+    Parameters: 8000000
+    File Size: 32456500
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -60,25 +243,28 @@ Models:
     - Max Pooling
     - ReLU
     - Softmax
-    File Size: 32456500
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: densenetblur121d
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L305
-  In Collection: DenseNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/densenetblur121d_ra-100dcfbc.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 76.59%
+      Top 5 Accuracy: 93.2%
 - Name: tv_densenet121
+  In Collection: DenseNet
   Metadata:
     FLOPs: 3641843200
-    Epochs: 90
-    Batch Size: 32
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
+    Parameters: 7980000
+    File Size: 32342954
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -90,172 +276,30 @@ Models:
     - Max Pooling
     - ReLU
     - Softmax
-    File Size: 32342954
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
     ID: tv_densenet121
     LR: 0.1
+    Epochs: 90
     Crop Pct: '0.875'
     LR Gamma: 0.1
     Momentum: 0.9
+    Batch Size: 32
     Image Size: '224'
     LR Step Size: 30
     Weight Decay: 0.0001
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L379
-  In Collection: DenseNet
-- Name: densenet121
-  Metadata:
-    FLOPs: 3641843200
-    Epochs: 90
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Kaiming Initialization
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Training Resources: ''
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Block
-    - Dense Connections
-    - Dropout
-    - Max Pooling
-    - ReLU
-    - Softmax
-    File Size: 32376726
-    Tasks:
-    - Image Classification
-    Training Time: ''
-    ID: densenet121
-    LR: 0.1
-    Layers: 121
-    Dropout: 0.2
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L295
-  Config: ''
-  In Collection: DenseNet
-- Name: densenet201
-  Metadata:
-    FLOPs: 5514321024
-    Epochs: 90
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Kaiming Initialization
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Block
-    - Dense Connections
-    - Dropout
-    - Max Pooling
-    - ReLU
-    - Softmax
-    File Size: 81131730
-    Tasks:
-    - Image Classification
-    ID: densenet201
-    LR: 0.1
-    Layers: 201
-    Dropout: 0.2
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L337
-  In Collection: DenseNet
-- Name: densenet169
-  Metadata:
-    FLOPs: 4316945792
-    Epochs: 90
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Kaiming Initialization
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Block
-    - Dense Connections
-    - Dropout
-    - Max Pooling
-    - ReLU
-    - Softmax
-    File Size: 57365526
-    Tasks:
-    - Image Classification
-    ID: densenet169
-    LR: 0.1
-    Layers: 169
-    Dropout: 0.2
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L327
-  In Collection: DenseNet
-- Name: densenet161
-  Metadata:
-    FLOPs: 9931959264
-    Epochs: 90
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Kaiming Initialization
-    - Nesterov Accelerated Gradient
-    - Weight Decay
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Block
-    - Dense Connections
-    - Dropout
-    - Max Pooling
-    - ReLU
-    - Softmax
-    File Size: 115730790
-    Tasks:
-    - Image Classification
-    ID: densenet161
-    LR: 0.1
-    Layers: 161
-    Dropout: 0.2
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/densenet.py#L347
-  In Collection: DenseNet
-Collections:
-- Name: DenseNet
-  Paper:
-    title: Densely Connected Convolutional Networks
-    url: https://paperswithcode.com//paper/densely-connected-convolutional-networks
-  type: model-index
-Type: model-index
+  Weights: https://download.pytorch.org/models/densenet121-a639ec97.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 74.74%
+      Top 5 Accuracy: 92.15%
 -->

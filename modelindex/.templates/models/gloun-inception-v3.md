@@ -33,12 +33,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Gloun Inception v3
+  Paper:
+    Title: Rethinking the Inception Architecture for Computer Vision
+    URL: https://paperswithcode.com/paper/rethinking-the-inception-architecture-for
 Models:
 - Name: gluon_inception_v3
+  In Collection: Gloun Inception v3
   Metadata:
     FLOPs: 7352418880
-    Training Data:
-    - ImageNet
+    Parameters: 23830000
+    File Size: 95567055
     Architecture:
     - 1x1 Convolution
     - Auxiliary Classifier
@@ -52,20 +59,20 @@ Models:
     - Max Pooling
     - ReLU
     - Softmax
-    File Size: 95567055
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_inception_v3
     Crop Pct: '0.875'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/inception_v3.py#L464
-  In Collection: Gloun Inception v3
-Collections:
-- Name: Gloun Inception v3
-  Paper:
-    title: Rethinking the Inception Architecture for Computer Vision
-    url: https://paperswithcode.com//paper/rethinking-the-inception-architecture-for
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_inception_v3-9f746940.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.8%
+      Top 5 Accuracy: 94.38%
 -->

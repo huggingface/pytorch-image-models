@@ -89,12 +89,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Wide ResNet
+  Paper:
+    Title: Wide Residual Networks
+    URL: https://paperswithcode.com/paper/wide-residual-networks
 Models:
 - Name: wide_resnet101_2
+  In Collection: Wide ResNet
   Metadata:
     FLOPs: 29304929280
-    Training Data:
-    - ImageNet
+    Parameters: 126890000
+    File Size: 254695146
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -105,20 +112,28 @@ Models:
     - Residual Connection
     - Softmax
     - Wide Residual Block
-    File Size: 254695146
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: wide_resnet101_2
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/5f9aff395c224492e9e44248b15f44b5cc095d9c/timm/models/resnet.py#L802
-  In Collection: Wide ResNet
+  Weights: https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.85%
+      Top 5 Accuracy: 94.28%
 - Name: wide_resnet50_2
+  In Collection: Wide ResNet
   Metadata:
     FLOPs: 14688058368
-    Training Data:
-    - ImageNet
+    Parameters: 68880000
+    File Size: 275853271
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -129,20 +144,20 @@ Models:
     - Residual Connection
     - Softmax
     - Wide Residual Block
-    File Size: 275853271
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: wide_resnet50_2
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/5f9aff395c224492e9e44248b15f44b5cc095d9c/timm/models/resnet.py#L790
-  In Collection: Wide ResNet
-Collections:
-- Name: Wide ResNet
-  Paper:
-    title: Wide Residual Networks
-    url: https://paperswithcode.com//paper/wide-residual-networks
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/wide_resnet50_racm-8234f177.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 81.45%
+      Top 5 Accuracy: 95.52%
 -->

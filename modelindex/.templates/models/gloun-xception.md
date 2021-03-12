@@ -22,12 +22,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Gloun Xception
+  Paper:
+    Title: 'Xception: Deep Learning with Depthwise Separable Convolutions'
+    URL: https://paperswithcode.com/paper/xception-deep-learning-with-depthwise
 Models:
 - Name: gluon_xception65
+  In Collection: Gloun Xception
   Metadata:
     FLOPs: 17594889728
-    Training Data:
-    - ImageNet
+    Parameters: 39920000
+    File Size: 160551306
     Architecture:
     - 1x1 Convolution
     - Convolution
@@ -38,20 +45,20 @@ Models:
     - ReLU
     - Residual Connection
     - Softmax
-    File Size: 160551306
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_xception65
     Crop Pct: '0.903'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_xception.py#L241
-  In Collection: Gloun Xception
-Collections:
-- Name: Gloun Xception
-  Paper:
-    title: 'Xception: Deep Learning with Depthwise Separable Convolutions'
-    url: https://paperswithcode.com//paper/xception-deep-learning-with-depthwise
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_xception-7015a15c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.7%
+      Top 5 Accuracy: 94.87%
 -->

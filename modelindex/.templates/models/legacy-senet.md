@@ -24,19 +24,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Legacy SENet
+  Paper:
+    Title: Squeeze-and-Excitation Networks
+    URL: https://paperswithcode.com/paper/squeeze-and-excitation-networks
 Models:
 - Name: legacy_senet154
+  In Collection: Legacy SENet
   Metadata:
     FLOPs: 26659556016
-    Epochs: 100
-    Batch Size: 1024
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x NVIDIA Titan X GPUs
+    Parameters: 115090000
+    File Size: 461488402
     Architecture:
     - Convolution
     - Dense Connections
@@ -44,24 +44,31 @@ Models:
     - Max Pooling
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 461488402
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x NVIDIA Titan X GPUs
     ID: legacy_senet154
     LR: 0.6
+    Epochs: 100
     Layers: 154
     Dropout: 0.2
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 1024
     Image Size: '224'
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/senet.py#L440
-  In Collection: Legacy SENet
-Collections:
-- Name: Legacy SENet
-  Paper:
-    title: Squeeze-and-Excitation Networks
-    url: https://paperswithcode.com//paper/squeeze-and-excitation-networks
-  type: model-index
-Type: model-index
+  Weights: http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 81.33%
+      Top 5 Accuracy: 95.51%
 -->

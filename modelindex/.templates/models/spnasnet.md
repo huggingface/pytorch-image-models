@@ -22,12 +22,20 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: SPNASNet
+  Paper:
+    Title: 'Single-Path NAS: Designing Hardware-Efficient ConvNets in less than 4
+      Hours'
+    URL: https://paperswithcode.com/paper/single-path-nas-designing-hardware-efficient
 Models:
 - Name: spnasnet_100
+  In Collection: SPNASNet
   Metadata:
     FLOPs: 442385600
-    Training Data:
-    - ImageNet
+    Parameters: 4420000
+    File Size: 17902337
     Architecture:
     - Average Pooling
     - Batch Normalization
@@ -35,21 +43,20 @@ Models:
     - Depthwise Separable Convolution
     - Dropout
     - ReLU
-    File Size: 17902337
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: spnasnet_100
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L995
-  In Collection: SPNASNet
-Collections:
-- Name: SPNASNet
-  Paper:
-    title: 'Single-Path NAS: Designing Hardware-Efficient ConvNets in less than 4
-      Hours'
-    url: https://paperswithcode.com//paper/single-path-nas-designing-hardware-efficient
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/spnasnet_100-048bc3f4.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 74.08%
+      Top 5 Accuracy: 91.82%
 -->

@@ -83,18 +83,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: SKResNet
+  Paper:
+    Title: Selective Kernel Networks
+    URL: https://paperswithcode.com/paper/selective-kernel-networks
 Models:
 - Name: skresnet18
+  In Collection: SKResNet
   Metadata:
     FLOPs: 2333467136
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x GPUs
+    Parameters: 11960000
+    File Size: 47923238
     Architecture:
     - Convolution
     - Dense Connections
@@ -103,30 +104,38 @@ Models:
     - Residual Connection
     - Selective Kernel
     - Softmax
-    File Size: 47923238
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x GPUs
     ID: skresnet18
     LR: 0.1
+    Epochs: 100
     Layers: 18
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 4.0e-05
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/sknet.py#L148
-  In Collection: SKResNet
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet18_ra-4eec2804.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 73.03%
+      Top 5 Accuracy: 91.17%
 - Name: skresnet34
+  In Collection: SKResNet
   Metadata:
     FLOPs: 4711849952
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x GPUs
+    Parameters: 22280000
+    File Size: 89299314
     Architecture:
     - Convolution
     - Dense Connections
@@ -135,24 +144,30 @@ Models:
     - Residual Connection
     - Selective Kernel
     - Softmax
-    File Size: 89299314
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x GPUs
     ID: skresnet34
     LR: 0.1
+    Epochs: 100
     Layers: 34
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 4.0e-05
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/sknet.py#L165
-  In Collection: SKResNet
-Collections:
-- Name: SKResNet
-  Paper:
-    title: Selective Kernel Networks
-    url: https://paperswithcode.com//paper/selective-kernel-networks
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet34_ra-bdc0ccde.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 76.93%
+      Top 5 Accuracy: 93.32%
 -->

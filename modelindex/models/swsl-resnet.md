@@ -96,19 +96,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: SWSL ResNet
+  Paper:
+    Title: Billion-scale semi-supervised learning for image classification
+    URL: https://paperswithcode.com/paper/billion-scale-semi-supervised-learning-for
 Models:
 - Name: swsl_resnet18
+  In Collection: SWSL ResNet
   Metadata:
     FLOPs: 2337073152
-    Epochs: 30
-    Batch Size: 1536
-    Training Data:
-    - IG-1B-Targeted
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 64x GPUs
+    Parameters: 11690000
+    File Size: 46811375
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -120,30 +120,38 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 46811375
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - IG-1B-Targeted
+    - ImageNet
+    Training Resources: 64x GPUs
     ID: swsl_resnet18
     LR: 0.0015
+    Epochs: 30
     Layers: 18
     Crop Pct: '0.875'
+    Batch Size: 1536
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/resnet.py#L954
-  In Collection: SWSL ResNet
+  Weights: https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnet18-118f1556.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 73.28%
+      Top 5 Accuracy: 91.76%
 - Name: swsl_resnet50
+  In Collection: SWSL ResNet
   Metadata:
     FLOPs: 5282531328
-    Epochs: 30
-    Batch Size: 1536
-    Training Data:
-    - IG-1B-Targeted
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 64x GPUs
+    Parameters: 25560000
+    File Size: 102480594
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -155,23 +163,30 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 102480594
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - IG-1B-Targeted
+    - ImageNet
+    Training Resources: 64x GPUs
     ID: swsl_resnet50
     LR: 0.0015
+    Epochs: 30
     Layers: 50
     Crop Pct: '0.875'
+    Batch Size: 1536
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/resnet.py#L965
-  In Collection: SWSL ResNet
-Collections:
-- Name: SWSL ResNet
-  Paper:
-    title: Billion-scale semi-supervised learning for image classification
-    url: https://paperswithcode.com//paper/billion-scale-semi-supervised-learning-for
-  type: model-index
-Type: model-index
+  Weights: https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnet50-16a12f1b.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 81.14%
+      Top 5 Accuracy: 95.97%
 -->

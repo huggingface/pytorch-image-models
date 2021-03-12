@@ -51,12 +51,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Adversarial Inception v3
+  Paper:
+    Title: Adversarial Attacks and Defences Competition
+    URL: https://paperswithcode.com/paper/adversarial-attacks-and-defences-competition
 Models:
 - Name: adv_inception_v3
+  In Collection: Adversarial Inception v3
   Metadata:
     FLOPs: 7352418880
-    Training Data:
-    - ImageNet
+    Parameters: 23830000
+    File Size: 95549439
     Architecture:
     - 1x1 Convolution
     - Auxiliary Classifier
@@ -70,20 +77,20 @@ Models:
     - Max Pooling
     - ReLU
     - Softmax
-    File Size: 95549439
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: adv_inception_v3
     Crop Pct: '0.875'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/inception_v3.py#L456
-  In Collection: Adversarial Inception v3
-Collections:
-- Name: Adversarial Inception v3
-  Paper:
-    title: Adversarial Attacks and Defences Competition
-    url: https://paperswithcode.com//paper/adversarial-attacks-and-defences-competition
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/adv_inception_v3-9e27bd63.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.58%
+      Top 5 Accuracy: 93.74%
 -->

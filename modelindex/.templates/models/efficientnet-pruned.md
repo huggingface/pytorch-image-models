@@ -40,12 +40,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: EfficientNet Pruned
+  Paper:
+    Title: Knapsack Pruning with Inner Distillation
+    URL: https://paperswithcode.com/paper/knapsack-pruning-with-inner-distillation
 Models:
 - Name: efficientnet_b1_pruned
+  In Collection: EfficientNet Pruned
   Metadata:
     FLOPs: 489653114
-    Training Data:
-    - ImageNet
+    Parameters: 6330000
+    File Size: 25595162
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -56,44 +63,28 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 25595162
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: efficientnet_b1_pruned
     Crop Pct: '0.882'
     Image Size: '240'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1208
-  In Collection: EfficientNet Pruned
-- Name: efficientnet_b3_pruned
-  Metadata:
-    FLOPs: 1239590641
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 39770812
-    Tasks:
-    - Image Classification
-    ID: efficientnet_b3_pruned
-    Crop Pct: '0.904'
-    Image Size: '300'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1230
-  In Collection: EfficientNet Pruned
+  Weights: https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45403/outputs/effnetb1_pruned_9ebb3fe6.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.25%
+      Top 5 Accuracy: 93.84%
 - Name: efficientnet_b2_pruned
+  In Collection: EfficientNet Pruned
   Metadata:
     FLOPs: 878133915
-    Training Data:
-    - ImageNet
+    Parameters: 8310000
+    File Size: 33555005
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -104,20 +95,52 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 33555005
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: efficientnet_b2_pruned
     Crop Pct: '0.89'
     Image Size: '260'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1219
+  Weights: https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45403/outputs/effnetb2_pruned_203f55bc.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.91%
+      Top 5 Accuracy: 94.86%
+- Name: efficientnet_b3_pruned
   In Collection: EfficientNet Pruned
-Collections:
-- Name: EfficientNet Pruned
-  Paper:
-    title: Knapsack Pruning with Inner Distillation
-    url: https://paperswithcode.com//paper/knapsack-pruning-with-inner-distillation
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 1239590641
+    Parameters: 9860000
+    File Size: 39770812
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: efficientnet_b3_pruned
+    Crop Pct: '0.904'
+    Image Size: '300'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/a7f95818e44b281137503bcf4b3e3e94d8ffa52f/timm/models/efficientnet.py#L1230
+  Weights: https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45403/outputs/effnetb3_pruned_5abcc29f.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.86%
+      Top 5 Accuracy: 95.24%
 -->

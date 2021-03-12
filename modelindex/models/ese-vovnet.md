@@ -9,7 +9,7 @@ To load a pretrained model:
 
 ```python
 import timm
-model = timm.create_model('ese_vovnet39b', pretrained=True)
+model = timm.create_model('ese_vovnet19b_dw', pretrained=True)
 model.eval()
 ```
 
@@ -55,14 +55,14 @@ for i in range(top5_prob.size(0)):
 # [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
 ```
 
-Replace the model name with the variant you want to use, e.g. `ese_vovnet39b`. You can find the IDs in the model summaries at the top of this page.
+Replace the model name with the variant you want to use, e.g. `ese_vovnet19b_dw`. You can find the IDs in the model summaries at the top of this page.
 
 To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
 
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('ese_vovnet39b', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('ese_vovnet19b_dw', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
@@ -85,54 +85,69 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: ESE VovNet
+  Paper:
+    Title: 'CenterMask : Real-Time Anchor-Free Instance Segmentation'
+    URL: https://paperswithcode.com/paper/centermask-real-time-anchor-free-instance-1
 Models:
-- Name: ese_vovnet39b
-  Metadata:
-    FLOPs: 9089259008
-    Training Data:
-    - ImageNet
-    Architecture:
-    - Batch Normalization
-    - Convolution
-    - Max Pooling
-    - One-Shot Aggregation
-    - ReLU
-    File Size: 98397138
-    Tasks:
-    - Image Classification
-    ID: ese_vovnet39b
-    Layers: 39
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/vovnet.py#L371
-  In Collection: ESE VovNet
 - Name: ese_vovnet19b_dw
+  In Collection: ESE VovNet
   Metadata:
     FLOPs: 1711959904
-    Training Data:
-    - ImageNet
+    Parameters: 6540000
+    File Size: 26243175
     Architecture:
     - Batch Normalization
     - Convolution
     - Max Pooling
     - One-Shot Aggregation
     - ReLU
-    File Size: 26243175
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: ese_vovnet19b_dw
     Layers: 19
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/vovnet.py#L361
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet19b_dw-a8741004.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 76.82%
+      Top 5 Accuracy: 93.28%
+- Name: ese_vovnet39b
   In Collection: ESE VovNet
-Collections:
-- Name: ESE VovNet
-  Paper:
-    title: 'CenterMask : Real-Time Anchor-Free Instance Segmentation'
-    url: https://paperswithcode.com//paper/centermask-real-time-anchor-free-instance-1
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 9089259008
+    Parameters: 24570000
+    File Size: 98397138
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - Max Pooling
+    - One-Shot Aggregation
+    - ReLU
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: ese_vovnet39b
+    Layers: 39
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/vovnet.py#L371
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.31%
+      Top 5 Accuracy: 94.72%
 -->

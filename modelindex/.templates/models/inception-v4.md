@@ -21,17 +21,20 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Inception v4
+  Paper:
+    Title: Inception-v4, Inception-ResNet and the Impact of Residual Connections on
+      Learning
+    URL: https://paperswithcode.com/paper/inception-v4-inception-resnet-and-the-impact
 Models:
 - Name: inception_v4
+  In Collection: Inception v4
   Metadata:
     FLOPs: 15806527936
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - RMSProp
-    - Weight Decay
-    Training Resources: 20x NVIDIA Kepler GPUs
+    Parameters: 42680000
+    File Size: 171082495
     Architecture:
     - Average Pooling
     - Dropout
@@ -41,9 +44,15 @@ Models:
     - Reduction-A
     - Reduction-B
     - Softmax
-    File Size: 171082495
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - RMSProp
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 20x NVIDIA Kepler GPUs
     ID: inception_v4
     LR: 0.045
     Dropout: 0.2
@@ -52,13 +61,11 @@ Models:
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/inception_v4.py#L313
-  In Collection: Inception v4
-Collections:
-- Name: Inception v4
-  Paper:
-    title: Inception-v4, Inception-ResNet and the Impact of Residual Connections on
-      Learning
-    url: https://paperswithcode.com//paper/inception-v4-inception-resnet-and-the-impact
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/inceptionv4-8e4777a0.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 1.01%
+      Top 5 Accuracy: 16.85%
 -->

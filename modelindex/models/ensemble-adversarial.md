@@ -112,12 +112,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Ensemble Adversarial
+  Paper:
+    Title: Adversarial Attacks and Defences Competition
+    URL: https://paperswithcode.com/paper/adversarial-attacks-and-defences-competition
 Models:
 - Name: ens_adv_inception_resnet_v2
+  In Collection: Ensemble Adversarial
   Metadata:
     FLOPs: 16959133120
-    Training Data:
-    - ImageNet
+    Parameters: 55850000
+    File Size: 223774238
     Architecture:
     - 1x1 Convolution
     - Auxiliary Classifier
@@ -131,20 +138,20 @@ Models:
     - Max Pooling
     - ReLU
     - Softmax
-    File Size: 223774238
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: ens_adv_inception_resnet_v2
     Crop Pct: '0.897'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/inception_resnet_v2.py#L351
-  In Collection: Ensemble Adversarial
-Collections:
-- Name: Ensemble Adversarial
-  Paper:
-    title: Adversarial Attacks and Defences Competition
-    url: https://paperswithcode.com//paper/adversarial-attacks-and-defences-competition
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ens_adv_inception_resnet_v2-2592a550.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 1.0%
+      Top 5 Accuracy: 17.32%
 -->

@@ -38,54 +38,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: MobileNet V3
+  Paper:
+    Title: Searching for MobileNetV3
+    URL: https://paperswithcode.com/paper/searching-for-mobilenetv3
 Models:
-- Name: mobilenetv3_rw
-  Metadata:
-    FLOPs: 287190638
-    Batch Size: 4096
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - RMSProp
-    - Weight Decay
-    Training Resources: 4x4 TPU Pod
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Depthwise Separable Convolution
-    - Dropout
-    - Global Average Pooling
-    - Hard Swish
-    - Inverted Residual Block
-    - ReLU
-    - Residual Connection
-    - Softmax
-    - Squeeze-and-Excitation Block
-    File Size: 22064048
-    Tasks:
-    - Image Classification
-    ID: mobilenetv3_rw
-    LR: 0.1
-    Dropout: 0.8
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 1.0e-05
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/mobilenetv3.py#L384
-  In Collection: MobileNet V3
 - Name: mobilenetv3_large_100
+  In Collection: MobileNet V3
   Metadata:
     FLOPs: 287193752
-    Batch Size: 4096
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - RMSProp
-    - Weight Decay
-    Training Resources: 4x4 TPU Pod
+    Parameters: 5480000
+    File Size: 22076443
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -100,24 +65,74 @@ Models:
     - Residual Connection
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 22076443
     Tasks:
     - Image Classification
+    Training Techniques:
+    - RMSProp
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x4 TPU Pod
     ID: mobilenetv3_large_100
     LR: 0.1
     Dropout: 0.8
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 4096
     Image Size: '224'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/mobilenetv3.py#L363
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 75.77%
+      Top 5 Accuracy: 92.54%
+- Name: mobilenetv3_rw
   In Collection: MobileNet V3
-Collections:
-- Name: MobileNet V3
-  Paper:
-    title: Searching for MobileNetV3
-    url: https://paperswithcode.com//paper/searching-for-mobilenetv3
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 287190638
+    Parameters: 5480000
+    File Size: 22064048
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Depthwise Separable Convolution
+    - Dropout
+    - Global Average Pooling
+    - Hard Swish
+    - Inverted Residual Block
+    - ReLU
+    - Residual Connection
+    - Softmax
+    - Squeeze-and-Excitation Block
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - RMSProp
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x4 TPU Pod
+    ID: mobilenetv3_rw
+    LR: 0.1
+    Dropout: 0.8
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 4096
+    Image Size: '224'
+    Weight Decay: 1.0e-05
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/mobilenetv3.py#L384
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 75.62%
+      Top 5 Accuracy: 92.71%
 -->

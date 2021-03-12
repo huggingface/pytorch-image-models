@@ -83,18 +83,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: PNASNet
+  Paper:
+    Title: Progressive Neural Architecture Search
+    URL: https://paperswithcode.com/paper/progressive-neural-architecture-search
 Models:
 - Name: pnasnet5large
+  In Collection: PNASNet
   Metadata:
     FLOPs: 31458865950
-    Batch Size: 1600
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - RMSProp
-    - Weight Decay
-    Training Resources: 100x NVIDIA P100 GPUs
+    Parameters: 86060000
+    File Size: 345153926
     Architecture:
     - Average Pooling
     - Batch Normalization
@@ -102,24 +103,30 @@ Models:
     - Depthwise Separable Convolution
     - Dropout
     - ReLU
-    File Size: 345153926
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Label Smoothing
+    - RMSProp
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 100x NVIDIA P100 GPUs
     ID: pnasnet5large
     LR: 0.015
     Dropout: 0.5
     Crop Pct: '0.911'
     Momentum: 0.9
+    Batch Size: 1600
     Image Size: '331'
     Interpolation: bicubic
     Label Smoothing: 0.1
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/pnasnet.py#L343
-  In Collection: PNASNet
-Collections:
-- Name: PNASNet
-  Paper:
-    title: Progressive Neural Architecture Search
-    url: https://paperswithcode.com//paper/progressive-neural-architecture-search
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/pnasnet5large-bf079911.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 0.98%
+      Top 5 Accuracy: 18.58%
 -->

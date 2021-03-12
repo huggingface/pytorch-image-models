@@ -83,19 +83,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: CSP ResNeXt
+  Paper:
+    Title: 'CSPNet: A New Backbone that can Enhance Learning Capability of CNN'
+    URL: https://paperswithcode.com/paper/cspnet-a-new-backbone-that-can-enhance
 Models:
 - Name: cspresnext50
+  In Collection: CSP ResNeXt
   Metadata:
     FLOPs: 3962945536
-    Batch Size: 128
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Label Smoothing
-    - Polynomial Learning Rate Decay
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 1x GPU
+    Parameters: 20570000
+    File Size: 82562887
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -107,27 +107,32 @@ Models:
     - ResNeXt Block
     - Residual Connection
     - Softmax
-    File Size: 82562887
     Tasks:
     - Image Classification
-    Training Time: ''
+    Training Techniques:
+    - Label Smoothing
+    - Polynomial Learning Rate Decay
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 1x GPU
     ID: cspresnext50
     LR: 0.1
     Layers: 50
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 128
     Image Size: '224'
     Weight Decay: 0.005
     Interpolation: bilinear
     Training Steps: 8000000
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/cspnet.py#L430
-  Config: ''
-  In Collection: CSP ResNeXt
-Collections:
-- Name: CSP ResNeXt
-  Paper:
-    title: 'CSPNet: A New Backbone that can Enhance Learning Capability of CNN'
-    url: https://paperswithcode.com//paper/cspnet-a-new-backbone-that-can-enhance
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnext50_ra_224-648b4713.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.05%
+      Top 5 Accuracy: 94.94%
 -->
