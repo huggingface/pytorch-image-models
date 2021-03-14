@@ -1,4 +1,4 @@
-# Summary
+# NASNet
 
 **NASNet** is a type of convolutional neural network discovered through neural architecture search. The building blocks consist of normal and reduction cells.
 

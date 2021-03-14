@@ -1,4 +1,4 @@
-# Summary
+# Inception Resnet v2
 
 **Inception-ResNet-v2** is a convolutional neural architecture that builds on the Inception family of architectures but incorporates [residual connections](https://paperswithcode.com/method/residual-connection) (replacing the filter concatenation stage of the Inception architecture).
 

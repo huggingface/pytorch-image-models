@@ -1,4 +1,4 @@
-# Summary
+# HRNet
 
 **HRNet**, or **High-Resolution Net**, is a general purpose convolutional neural network for tasks like semantic segmentation, object detection and image classification. It is able to maintain high resolution representations through the whole process. We start from a high-resolution convolution stream, gradually add high-to-low resolution convolution streams one by one, and connect the multi-resolution streams in parallel. The resulting network consists of several ($4$ in the paper) stages and the $n$th stage contains $n$ streams corresponding to $n$ resolutions. The authors conduct repeated multi-resolution fusions by exchanging the information across the parallel streams over and over.
 

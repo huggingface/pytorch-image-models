@@ -1,8 +1,10 @@
-# Summary
+# Adversarial Inception v3
 
 **Inception v3** is a convolutional neural network architecture from the Inception family that makes several improvements including using [Label Smoothing](https://paperswithcode.com/method/label-smoothing), Factorized 7 x 7 convolutions, and the use of an [auxiliary classifer](https://paperswithcode.com/method/auxiliary-classifier) to propagate label information lower down the network (along with the use of batch normalization for layers in the sidehead). The key building block is an [Inception Module](https://paperswithcode.com/method/inception-v3-module).
 
 This particular model was trained for study of adversarial examples (adversarial training).
+
+The weights from this model were ported from [Tensorflow/Models](https://github.com/tensorflow/models).
 
 ## How do I use this model on an image?
 To load a pretrained model:

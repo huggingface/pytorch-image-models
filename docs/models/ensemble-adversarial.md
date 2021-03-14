@@ -1,8 +1,10 @@
-# Summary
+# # Ensemble Adversarial Inception ResNet v2
 
 **Inception-ResNet-v2** is a convolutional neural architecture that builds on the Inception family of architectures but incorporates [residual connections](https://paperswithcode.com/method/residual-connection) (replacing the filter concatenation stage of the Inception architecture).
 
 This particular model was trained for study of adversarial examples (adversarial training).
+
+The weights from this model were ported from [Tensorflow/Models](https://github.com/tensorflow/models).
 
 ## How do I use this model on an image?
 To load a pretrained model:

@@ -1,6 +1,8 @@
-# Summary
+# Xception
 
 **Xception** is a convolutional neural network architecture that relies solely on [depthwise separable convolution layers](https://paperswithcode.com/method/depthwise-separable-convolution).
+
+The weights from this model were ported from [Tensorflow/Models](https://github.com/tensorflow/models).
 
 ## How do I use this model on an image?
 To load a pretrained model:

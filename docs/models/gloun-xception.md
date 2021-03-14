@@ -1,6 +1,8 @@
 # Summary
 
-**Xception** is a convolutional neural network architecture that relies solely on [depthwise separable convolution](https://paperswithcode.com/method/depthwise-separable-convolution) layers. The weights from this model were ported from Gluon.
+**Xception** is a convolutional neural network architecture that relies solely on [depthwise separable convolution](https://paperswithcode.com/method/depthwise-separable-convolution) layers.
+
+The weights from this model were ported from [Gluon](https://cv.gluon.ai/model_zoo/classification.html).
 
 ## How do I use this model on an image?
 To load a pretrained model:

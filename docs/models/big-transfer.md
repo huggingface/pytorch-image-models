@@ -1,4 +1,4 @@
-# Summary
+# Big Transfer (BiT)
 
 **Big Transfer (BiT)** is a type of pretraining recipe that pre-trains  on a large supervised source dataset, and fine-tunes the weights on the target task. Models are trained on the JFT-300M dataset. The finetuned models contained in this collection are finetuned on ImageNet.
 

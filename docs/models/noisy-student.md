@@ -1,4 +1,4 @@
-# Summary
+# Noisy Student (EfficientNet)
 
 **Noisy Student Training** is a semi-supervised learning approach. It extends the idea of self-training
 and distillation with the use of equal-or-larger student models and noise added to the student during learning. It has three main steps: 

@@ -1,4 +1,4 @@
-# Summary
+# SPNASNet
 
 **Single-Path NAS** is a novel differentiable NAS method for designing hardware-efficient ConvNets in less than 4 hours.
 

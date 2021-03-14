@@ -1,8 +1,8 @@
-# Summary
+# Glu on ResNet
 
 **Residual Networks**, or **ResNets**, learn residual functions with reference to the layer inputs, instead of learning unreferenced functions. Instead of hoping each few stacked layers directly fit a desired underlying mapping, residual nets let these layers fit a residual mapping. They stack [residual blocks](https://paperswithcode.com/method/residual-block) ontop of each other to form network: e.g. a ResNet-50 has fifty layers using these blocks. 
 
-The weights from this model were ported from Gluon.
+The weights from this model were ported from [Gluon](https://cv.gluon.ai/model_zoo/classification.html).
 
 ## How do I use this model on an image?
 To load a pretrained model:

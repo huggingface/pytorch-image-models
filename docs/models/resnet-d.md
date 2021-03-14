@@ -1,4 +1,4 @@
-# Summary
+# ResNet-D
 
 **ResNet-D** is a modification on the [ResNet](https://paperswithcode.com/method/resnet) architecture that utilises an [average pooling](https://paperswithcode.com/method/average-pooling) tweak for downsampling. The motivation is that in the unmodified ResNet, the [1×1 convolution](https://paperswithcode.com/method/1x1-convolution) for the downsampling block ignores 3/4 of input feature maps, so this is modified so no information will be ignored
 

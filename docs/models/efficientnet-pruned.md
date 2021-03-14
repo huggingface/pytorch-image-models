@@ -1,4 +1,4 @@
-# Summary
+# EfficientNet (Knapsack Pruned)
 
 **EfficientNet** is a convolutional neural network architecture and scaling method that uniformly scales all dimensions of depth/width/resolution using a *compound coefficient*. Unlike conventional practice that arbitrary scales  these factors, the EfficientNet scaling method uniformly scales network width, depth, and resolution with a set of fixed scaling coefficients. For example, if we want to use $2^N$ times more computational resources, then we can simply increase the network depth by $\alpha ^ N$,  width by $\beta ^ N$, and image size by $\gamma ^ N$, where $\alpha, \beta, \gamma$ are constant coefficients determined by a small grid search on the original small model. EfficientNet uses a compound coefficient $\phi$ to uniformly scales network width, depth, and resolution in a  principled way.
 
@@ -89,14 +89,13 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 ```
-@misc{rw2019timm,
-  author = {Ross Wightman},
-  title = {PyTorch Image Models},
-  year = {2019},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  doi = {10.5281/zenodo.4414861},
-  howpublished = {\url{https://github.com/rwightman/pytorch-image-models}}
+@misc{aflalo2020knapsack,
+      title={Knapsack Pruning with Inner Distillation},
+      author={Yonathan Aflalo and Asaf Noy and Ming Lin and Itamar Friedman and Lihi Zelnik},
+      year={2020},
+      eprint={2002.08258},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
 }
 ```
 

@@ -1,6 +1,8 @@
-# Summary
+# (Tensorflow) MixNet
 
 **MixNet** is a type of convolutional neural network discovered via AutoML that utilises [MixConvs](https://paperswithcode.com/method/mixconv) instead of regular [depthwise convolutions](https://paperswithcode.com/method/depthwise-convolution).
+
+The weights from this model were ported from [Tensorflow/TPU](https://github.com/tensorflow/tpu).
 
 ## How do I use this model on an image?
 To load a pretrained model:

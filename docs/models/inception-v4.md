@@ -1,4 +1,4 @@
-# Summary
+# Inception v4
 
 **Inception-v4** is a convolutional neural network architecture that builds on previous iterations of the Inception family by simplifying the architecture and using more inception modules than [Inception-v3](https://paperswithcode.com/method/inception-v3).
 ## How do I use this model on an image?

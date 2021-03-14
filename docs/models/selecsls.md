@@ -1,4 +1,4 @@
-# Summary
+# SelecSLS
 
 **SelecSLS** uses novel selective long and short range skip connections to improve the information flow allowing for a drastically faster network without compromising accuracy.
 
