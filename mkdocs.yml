@@ -11,6 +11,7 @@ nav:
   - feature_extraction.md
   - changes.md
   - archived_changes.md
+  - ... | models/*.md
 theme:
   name: 'material'
   feature:
@@ -40,3 +41,6 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
   - mdx_truly_sane_lists
+plugins:
+  - search
+  - awesome-pages

@@ -1,0 +1,14 @@
+Import:
+- ./docs/models/*.md
+Library:
+  Name: PyTorch Image Models
+  Headline: PyTorch image models, scripts, pretrained weights
+  Website: https://rwightman.github.io/pytorch-image-models/
+  Repository: https://github.com/rwightman/pytorch-image-models
+  Docs: https://rwightman.github.io/pytorch-image-models/
+  README: "# PyTorch Image Models\r\n\r\nPyTorch Image Models (TIMM) is a library\
+    \ for state-of-the-art image classification. With this library you can:\r\n\r\n\
+    - Choose from 300+ pre-trained state-of-the-art image classification models.\r\
+    \n- Train models afresh on research datasets such as ImageNet using provided scripts.\r\
+    \n- Finetune pre-trained models on your own datasets, including the latest cutting\
+    \ edge models."
