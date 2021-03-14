@@ -16,7 +16,7 @@ To load a pretrained model:
 
 ```python
 import timm
-model = timm.create_model('tf_efficientnet_b3_ns', pretrained=True)
+model = timm.create_model('tf_efficientnet_b0_ns', pretrained=True)
 model.eval()
 ```
 
@@ -62,14 +62,14 @@ for i in range(top5_prob.size(0)):
 # [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
 ```
 
-Replace the model name with the variant you want to use, e.g. `tf_efficientnet_b3_ns`. You can find the IDs in the model summaries at the top of this page.
+Replace the model name with the variant you want to use, e.g. `tf_efficientnet_b0_ns`. You can find the IDs in the model summaries at the top of this page.
 
 To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
 
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('tf_efficientnet_b3_ns', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('tf_efficientnet_b0_ns', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
@@ -92,162 +92,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Noisy Student
+  Paper:
+    Title: Self-training with Noisy Student improves ImageNet classification
+    URL: https://paperswithcode.com/paper/self-training-with-noisy-student-improves
 Models:
-- Name: tf_efficientnet_b3_ns
-  Metadata:
-    FLOPs: 2275247568
-    Epochs: 700
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 49385734
-    Tasks:
-    - Image Classification
-    Training Time: ''
-    ID: tf_efficientnet_b3_ns
-    LR: 0.128
-    Dropout: 0.5
-    Crop Pct: '0.904'
-    Momentum: 0.9
-    Image Size: '300'
-    Weight Decay: 1.0e-05
-    Interpolation: bicubic
-    RMSProp Decay: 0.9
-    Label Smoothing: 0.1
-    BatchNorm Momentum: 0.99
-    Stochastic Depth Survival: 0.8
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1457
-  Config: ''
-  In Collection: Noisy Student
-- Name: tf_efficientnet_b1_ns
-  Metadata:
-    FLOPs: 883633200
-    Epochs: 700
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 31516408
-    Tasks:
-    - Image Classification
-    Training Time: ''
-    ID: tf_efficientnet_b1_ns
-    LR: 0.128
-    Dropout: 0.5
-    Crop Pct: '0.882'
-    Momentum: 0.9
-    Image Size: '240'
-    Weight Decay: 1.0e-05
-    Interpolation: bicubic
-    RMSProp Decay: 0.9
-    Label Smoothing: 0.1
-    BatchNorm Momentum: 0.99
-    Stochastic Depth Survival: 0.8
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1437
-  Config: ''
-  In Collection: Noisy Student
-- Name: tf_efficientnet_l2_ns
-  Metadata:
-    FLOPs: 611646113804
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 1925950424
-    Tasks:
-    - Image Classification
-    Training Time: 6 days
-    ID: tf_efficientnet_l2_ns
-    LR: 0.128
-    Dropout: 0.5
-    Crop Pct: '0.96'
-    Momentum: 0.9
-    Image Size: '800'
-    Weight Decay: 1.0e-05
-    Interpolation: bicubic
-    RMSProp Decay: 0.9
-    Label Smoothing: 0.1
-    BatchNorm Momentum: 0.99
-    Stochastic Depth Survival: 0.8
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1520
-  Config: ''
-  In Collection: Noisy Student
 - Name: tf_efficientnet_b0_ns
+  In Collection: Noisy Student
   Metadata:
     FLOPs: 488688572
-    Epochs: 700
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
+    Parameters: 5290000
+    File Size: 21386709
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -258,15 +115,27 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 21386709
     Tasks:
     - Image Classification
-    Training Time: ''
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
     ID: tf_efficientnet_b0_ns
     LR: 0.128
+    Epochs: 700
     Dropout: 0.5
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 2048
     Image Size: '224'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
@@ -275,25 +144,19 @@ Models:
     BatchNorm Momentum: 0.99
     Stochastic Depth Survival: 0.8
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1427
-  Config: ''
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_ns-c0e6a31c.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.66%
+      Top 5 Accuracy: 94.37%
+- Name: tf_efficientnet_b1_ns
   In Collection: Noisy Student
-- Name: tf_efficientnet_b2_ns
   Metadata:
-    FLOPs: 1234321170
-    Epochs: 700
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
+    FLOPs: 883633200
+    Parameters: 7790000
+    File Size: 31516408
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -304,15 +167,79 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 36801803
     Tasks:
     - Image Classification
-    Training Time: ''
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
+    ID: tf_efficientnet_b1_ns
+    LR: 0.128
+    Epochs: 700
+    Dropout: 0.5
+    Crop Pct: '0.882'
+    Momentum: 0.9
+    Batch Size: 2048
+    Image Size: '240'
+    Weight Decay: 1.0e-05
+    Interpolation: bicubic
+    RMSProp Decay: 0.9
+    Label Smoothing: 0.1
+    BatchNorm Momentum: 0.99
+    Stochastic Depth Survival: 0.8
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1437
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b1_ns-99dd0c41.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 81.39%
+      Top 5 Accuracy: 95.74%
+- Name: tf_efficientnet_b2_ns
+  In Collection: Noisy Student
+  Metadata:
+    FLOPs: 1234321170
+    Parameters: 9110000
+    File Size: 36801803
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
     ID: tf_efficientnet_b2_ns
     LR: 0.128
+    Epochs: 700
     Dropout: 0.5
     Crop Pct: '0.89'
     Momentum: 0.9
+    Batch Size: 2048
     Image Size: '260'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
@@ -321,25 +248,19 @@ Models:
     BatchNorm Momentum: 0.99
     Stochastic Depth Survival: 0.8
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1447
-  Config: ''
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b2_ns-00306e48.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 82.39%
+      Top 5 Accuracy: 96.24%
+- Name: tf_efficientnet_b3_ns
   In Collection: Noisy Student
-- Name: tf_efficientnet_b5_ns
   Metadata:
-    FLOPs: 13176501888
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
+    FLOPs: 2275247568
+    Parameters: 12230000
+    File Size: 49385734
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -350,33 +271,8 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 122404944
     Tasks:
     - Image Classification
-    Training Time: ''
-    ID: tf_efficientnet_b5_ns
-    LR: 0.128
-    Dropout: 0.5
-    Crop Pct: '0.934'
-    Momentum: 0.9
-    Image Size: '456'
-    Weight Decay: 1.0e-05
-    Interpolation: bicubic
-    RMSProp Decay: 0.9
-    Label Smoothing: 0.1
-    BatchNorm Momentum: 0.99
-    Stochastic Depth Survival: 0.8
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1477
-  Config: ''
-  In Collection: Noisy Student
-- Name: tf_efficientnet_b6_ns
-  Metadata:
-    FLOPs: 24180518488
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
     Training Techniques:
     - AutoAugment
     - FixRes
@@ -385,53 +281,38 @@ Models:
     - RMSProp
     - RandAugment
     - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
     Training Resources: Cloud TPU v3 Pod
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 173239537
-    Tasks:
-    - Image Classification
-    Training Time: ''
-    ID: tf_efficientnet_b6_ns
+    ID: tf_efficientnet_b3_ns
     LR: 0.128
+    Epochs: 700
     Dropout: 0.5
-    Crop Pct: '0.942'
+    Crop Pct: '0.904'
     Momentum: 0.9
-    Image Size: '528'
+    Batch Size: 2048
+    Image Size: '300'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
     RMSProp Decay: 0.9
     Label Smoothing: 0.1
     BatchNorm Momentum: 0.99
     Stochastic Depth Survival: 0.8
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1487
-  Config: ''
-  In Collection: Noisy Student
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1457
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b3_ns-9d44bf68.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 84.04%
+      Top 5 Accuracy: 96.91%
 - Name: tf_efficientnet_b4_ns
+  In Collection: Noisy Student
   Metadata:
     FLOPs: 5749638672
-    Epochs: 700
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
+    Parameters: 19340000
+    File Size: 77995057
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -442,15 +323,27 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 77995057
     Tasks:
     - Image Classification
-    Training Time: ''
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
     ID: tf_efficientnet_b4_ns
     LR: 0.128
+    Epochs: 700
     Dropout: 0.5
     Crop Pct: '0.922'
     Momentum: 0.9
+    Batch Size: 2048
     Image Size: '380'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
@@ -459,25 +352,19 @@ Models:
     BatchNorm Momentum: 0.99
     Stochastic Depth Survival: 0.8
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1467
-  Config: ''
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b4_ns-d6313a46.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 85.15%
+      Top 5 Accuracy: 97.47%
+- Name: tf_efficientnet_b5_ns
   In Collection: Noisy Student
-- Name: tf_efficientnet_b7_ns
   Metadata:
-    FLOPs: 48205304880
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    - JFT-300M
-    Training Techniques:
-    - AutoAugment
-    - FixRes
-    - Label Smoothing
-    - Noisy Student
-    - RMSProp
-    - RandAugment
-    - Weight Decay
-    Training Resources: Cloud TPU v3 Pod
+    FLOPs: 13176501888
+    Parameters: 30390000
+    File Size: 122404944
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -488,15 +375,131 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 266853140
     Tasks:
     - Image Classification
-    Training Time: ''
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
+    ID: tf_efficientnet_b5_ns
+    LR: 0.128
+    Epochs: 350
+    Dropout: 0.5
+    Crop Pct: '0.934'
+    Momentum: 0.9
+    Batch Size: 2048
+    Image Size: '456'
+    Weight Decay: 1.0e-05
+    Interpolation: bicubic
+    RMSProp Decay: 0.9
+    Label Smoothing: 0.1
+    BatchNorm Momentum: 0.99
+    Stochastic Depth Survival: 0.8
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1477
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b5_ns-6f26d0cf.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 86.08%
+      Top 5 Accuracy: 97.75%
+- Name: tf_efficientnet_b6_ns
+  In Collection: Noisy Student
+  Metadata:
+    FLOPs: 24180518488
+    Parameters: 43040000
+    File Size: 173239537
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
+    ID: tf_efficientnet_b6_ns
+    LR: 0.128
+    Epochs: 350
+    Dropout: 0.5
+    Crop Pct: '0.942'
+    Momentum: 0.9
+    Batch Size: 2048
+    Image Size: '528'
+    Weight Decay: 1.0e-05
+    Interpolation: bicubic
+    RMSProp Decay: 0.9
+    Label Smoothing: 0.1
+    BatchNorm Momentum: 0.99
+    Stochastic Depth Survival: 0.8
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1487
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b6_ns-51548356.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 86.45%
+      Top 5 Accuracy: 97.88%
+- Name: tf_efficientnet_b7_ns
+  In Collection: Noisy Student
+  Metadata:
+    FLOPs: 48205304880
+    Parameters: 66349999
+    File Size: 266853140
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
     ID: tf_efficientnet_b7_ns
     LR: 0.128
+    Epochs: 350
     Dropout: 0.5
     Crop Pct: '0.949'
     Momentum: 0.9
+    Batch Size: 2048
     Image Size: '600'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
@@ -505,13 +508,64 @@ Models:
     BatchNorm Momentum: 0.99
     Stochastic Depth Survival: 0.8
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1498
-  Config: ''
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b7_ns-1dbc32de.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 86.83%
+      Top 5 Accuracy: 98.08%
+- Name: tf_efficientnet_l2_ns
   In Collection: Noisy Student
-Collections:
-- Name: Noisy Student
-  Paper:
-    title: Self-training with Noisy Student improves ImageNet classification
-    url: https://paperswithcode.com//paper/self-training-with-noisy-student-improves
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 611646113804
+    Parameters: 480310000
+    File Size: 1925950424
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - FixRes
+    - Label Smoothing
+    - Noisy Student
+    - RMSProp
+    - RandAugment
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - JFT-300M
+    Training Resources: Cloud TPU v3 Pod
+    Training Time: 6 days
+    ID: tf_efficientnet_l2_ns
+    LR: 0.128
+    Epochs: 350
+    Dropout: 0.5
+    Crop Pct: '0.96'
+    Momentum: 0.9
+    Batch Size: 2048
+    Image Size: '800'
+    Weight Decay: 1.0e-05
+    Interpolation: bicubic
+    RMSProp Decay: 0.9
+    Label Smoothing: 0.1
+    BatchNorm Momentum: 0.99
+    Stochastic Depth Survival: 0.8
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1520
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_l2_ns-df73bb44.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 88.35%
+      Top 5 Accuracy: 98.66%
 -->

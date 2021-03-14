@@ -13,7 +13,7 @@ To load a pretrained model:
 
 ```python
 import timm
-model = timm.create_model('tf_efficientnet_cc_b1_8e', pretrained=True)
+model = timm.create_model('tf_efficientnet_cc_b0_4e', pretrained=True)
 model.eval()
 ```
 
@@ -59,14 +59,14 @@ for i in range(top5_prob.size(0)):
 # [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
 ```
 
-Replace the model name with the variant you want to use, e.g. `tf_efficientnet_cc_b1_8e`. You can find the IDs in the model summaries at the top of this page.
+Replace the model name with the variant you want to use, e.g. `tf_efficientnet_cc_b0_4e`. You can find the IDs in the model summaries at the top of this page.
 
 To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
 
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('tf_efficientnet_cc_b1_8e', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('tf_efficientnet_cc_b0_4e', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
@@ -97,59 +97,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: TF EfficientNet CondConv
+  Paper:
+    Title: 'CondConv: Conditionally Parameterized Convolutions for Efficient Inference'
+    URL: https://paperswithcode.com/paper/soft-conditional-computation
 Models:
-- Name: tf_efficientnet_cc_b1_8e
-  Metadata:
-    FLOPs: 370427824
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - AutoAugment
-    - Label Smoothing
-    - RMSProp
-    - Stochastic Depth
-    - Weight Decay
-    Architecture:
-    - 1x1 Convolution
-    - Average Pooling
-    - Batch Normalization
-    - CondConv
-    - Convolution
-    - Dense Connections
-    - Dropout
-    - Inverted Residual Block
-    - Squeeze-and-Excitation Block
-    - Swish
-    File Size: 159206198
-    Tasks:
-    - Image Classification
-    ID: tf_efficientnet_cc_b1_8e
-    LR: 0.256
-    Crop Pct: '0.882'
-    Momentum: 0.9
-    Image Size: '240'
-    Weight Decay: 1.0e-05
-    Interpolation: bicubic
-    RMSProp Decay: 0.9
-    Label Smoothing: 0.1
-    BatchNorm Momentum: 0.99
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1584
-  In Collection: TF EfficientNet CondConv
 - Name: tf_efficientnet_cc_b0_4e
+  In Collection: TF EfficientNet CondConv
   Metadata:
     FLOPs: 224153788
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - AutoAugment
-    - Label Smoothing
-    - RMSProp
-    - Stochastic Depth
-    - Weight Decay
+    Parameters: 13310000
+    File Size: 53490940
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -161,13 +121,22 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 53490940
     Tasks:
     - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - Label Smoothing
+    - RMSProp
+    - Stochastic Depth
+    - Weight Decay
+    Training Data:
+    - ImageNet
     ID: tf_efficientnet_cc_b0_4e
     LR: 0.256
+    Epochs: 350
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 2048
     Image Size: '224'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
@@ -175,20 +144,19 @@ Models:
     Label Smoothing: 0.1
     BatchNorm Momentum: 0.99
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1561
-  In Collection: TF EfficientNet CondConv
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_cc_b0_4e-4362b6b2.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.32%
+      Top 5 Accuracy: 93.32%
 - Name: tf_efficientnet_cc_b0_8e
+  In Collection: TF EfficientNet CondConv
   Metadata:
     FLOPs: 224158524
-    Epochs: 350
-    Batch Size: 2048
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - AutoAugment
-    - Label Smoothing
-    - RMSProp
-    - Stochastic Depth
-    - Weight Decay
+    Parameters: 24010000
+    File Size: 96287616
     Architecture:
     - 1x1 Convolution
     - Average Pooling
@@ -200,13 +168,22 @@ Models:
     - Inverted Residual Block
     - Squeeze-and-Excitation Block
     - Swish
-    File Size: 96287616
     Tasks:
     - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - Label Smoothing
+    - RMSProp
+    - Stochastic Depth
+    - Weight Decay
+    Training Data:
+    - ImageNet
     ID: tf_efficientnet_cc_b0_8e
     LR: 0.256
+    Epochs: 350
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 2048
     Image Size: '224'
     Weight Decay: 1.0e-05
     Interpolation: bicubic
@@ -214,12 +191,58 @@ Models:
     Label Smoothing: 0.1
     BatchNorm Momentum: 0.99
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1572
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_cc_b0_8e-66184a25.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.91%
+      Top 5 Accuracy: 93.65%
+- Name: tf_efficientnet_cc_b1_8e
   In Collection: TF EfficientNet CondConv
-Collections:
-- Name: TF EfficientNet CondConv
-  Paper:
-    title: 'CondConv: Conditionally Parameterized Convolutions for Efficient Inference'
-    url: https://paperswithcode.com//paper/soft-conditional-computation
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 370427824
+    Parameters: 39720000
+    File Size: 159206198
+    Architecture:
+    - 1x1 Convolution
+    - Average Pooling
+    - Batch Normalization
+    - CondConv
+    - Convolution
+    - Dense Connections
+    - Dropout
+    - Inverted Residual Block
+    - Squeeze-and-Excitation Block
+    - Swish
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - AutoAugment
+    - Label Smoothing
+    - RMSProp
+    - Stochastic Depth
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    ID: tf_efficientnet_cc_b1_8e
+    LR: 0.256
+    Epochs: 350
+    Crop Pct: '0.882'
+    Momentum: 0.9
+    Batch Size: 2048
+    Image Size: '240'
+    Weight Decay: 1.0e-05
+    Interpolation: bicubic
+    RMSProp Decay: 0.9
+    Label Smoothing: 0.1
+    BatchNorm Momentum: 0.99
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L1584
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_cc_b1_8e-f7c79ae1.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.33%
+      Top 5 Accuracy: 94.37%
 -->

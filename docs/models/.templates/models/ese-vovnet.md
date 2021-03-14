@@ -24,54 +24,69 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: ESE VovNet
+  Paper:
+    Title: 'CenterMask : Real-Time Anchor-Free Instance Segmentation'
+    URL: https://paperswithcode.com/paper/centermask-real-time-anchor-free-instance-1
 Models:
-- Name: ese_vovnet39b
-  Metadata:
-    FLOPs: 9089259008
-    Training Data:
-    - ImageNet
-    Architecture:
-    - Batch Normalization
-    - Convolution
-    - Max Pooling
-    - One-Shot Aggregation
-    - ReLU
-    File Size: 98397138
-    Tasks:
-    - Image Classification
-    ID: ese_vovnet39b
-    Layers: 39
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/vovnet.py#L371
-  In Collection: ESE VovNet
 - Name: ese_vovnet19b_dw
+  In Collection: ESE VovNet
   Metadata:
     FLOPs: 1711959904
-    Training Data:
-    - ImageNet
+    Parameters: 6540000
+    File Size: 26243175
     Architecture:
     - Batch Normalization
     - Convolution
     - Max Pooling
     - One-Shot Aggregation
     - ReLU
-    File Size: 26243175
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: ese_vovnet19b_dw
     Layers: 19
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/vovnet.py#L361
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet19b_dw-a8741004.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 76.82%
+      Top 5 Accuracy: 93.28%
+- Name: ese_vovnet39b
   In Collection: ESE VovNet
-Collections:
-- Name: ESE VovNet
-  Paper:
-    title: 'CenterMask : Real-Time Anchor-Free Instance Segmentation'
-    url: https://paperswithcode.com//paper/centermask-real-time-anchor-free-instance-1
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 9089259008
+    Parameters: 24570000
+    File Size: 98397138
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - Max Pooling
+    - One-Shot Aggregation
+    - ReLU
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: ese_vovnet39b
+    Layers: 39
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/vovnet.py#L371
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.31%
+      Top 5 Accuracy: 94.72%
 -->

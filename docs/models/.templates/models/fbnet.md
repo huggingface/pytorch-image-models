@@ -24,18 +24,20 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: FBNet
+  Paper:
+    Title: 'FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable Neural
+      Architecture Search'
+    URL: https://paperswithcode.com/paper/fbnet-hardware-aware-efficient-convnet-design
 Models:
 - Name: fbnetc_100
+  In Collection: FBNet
   Metadata:
     FLOPs: 508940064
-    Epochs: 360
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 8x GPUs
+    Parameters: 5570000
+    File Size: 22525094
     Architecture:
     - 1x1 Convolution
     - Convolution
@@ -44,26 +46,31 @@ Models:
     - FBNet Block
     - Global Average Pooling
     - Softmax
-    File Size: 22525094
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 8x GPUs
     ID: fbnetc_100
     LR: 0.1
+    Epochs: 360
     Layers: 22
     Dropout: 0.2
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0005
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/efficientnet.py#L985
-  In Collection: FBNet
-Collections:
-- Name: FBNet
-  Paper:
-    title: 'FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable Neural
-      Architecture Search'
-    url: https://paperswithcode.com//paper/fbnet-hardware-aware-efficient-convnet-design
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetc_100-c345b898.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 75.12%
+      Top 5 Accuracy: 92.37%
 -->

@@ -28,41 +28,48 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Res2NeXt
+  Paper:
+    Title: 'Res2Net: A New Multi-scale Backbone Architecture'
+    URL: https://paperswithcode.com/paper/res2net-a-new-multi-scale-backbone
 Models:
 - Name: res2next50
+  In Collection: Res2NeXt
   Metadata:
     FLOPs: 5396798208
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
+    Parameters: 24670000
+    File Size: 99019592
     Architecture:
     - Batch Normalization
     - Convolution
     - Global Average Pooling
     - ReLU
     - Res2NeXt Block
-    File Size: 99019592
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
     ID: res2next50
     LR: 0.1
+    Epochs: 100
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L207
-  In Collection: Res2NeXt
-Collections:
-- Name: Res2NeXt
-  Paper:
-    title: 'Res2Net: A New Multi-scale Backbone Architecture'
-    url: https://paperswithcode.com//paper/res2net-a-new-multi-scale-backbone
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2next50_4s-6ef7e7bf.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.24%
+      Top 5 Accuracy: 93.91%
 -->

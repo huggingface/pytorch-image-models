@@ -27,15 +27,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: SelecSLS
+  Paper:
+    Title: 'XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera'
+    URL: https://paperswithcode.com/paper/xnect-real-time-multi-person-3d-human-pose
 Models:
 - Name: selecsls42b
+  In Collection: SelecSLS
   Metadata:
     FLOPs: 3824022528
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Cosine Annealing
-    - Random Erasing
+    Parameters: 32460000
+    File Size: 129948954
     Architecture:
     - Batch Normalization
     - Convolution
@@ -44,23 +48,31 @@ Models:
     - Global Average Pooling
     - ReLU
     - SelecSLS Block
-    File Size: 129948954
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Cosine Annealing
+    - Random Erasing
+    Training Data:
+    - ImageNet
     ID: selecsls42b
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/b9843f954b0457af2db4f9dea41a8538f51f5d78/timm/models/selecsls.py#L335
-  In Collection: SelecSLS
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls42b-8af30141.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.18%
+      Top 5 Accuracy: 93.39%
 - Name: selecsls60
+  In Collection: SelecSLS
   Metadata:
     FLOPs: 4610472600
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Cosine Annealing
-    - Random Erasing
+    Parameters: 30670000
+    File Size: 122839714
     Architecture:
     - Batch Normalization
     - Convolution
@@ -69,23 +81,31 @@ Models:
     - Global Average Pooling
     - ReLU
     - SelecSLS Block
-    File Size: 122839714
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Cosine Annealing
+    - Random Erasing
+    Training Data:
+    - ImageNet
     ID: selecsls60
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/b9843f954b0457af2db4f9dea41a8538f51f5d78/timm/models/selecsls.py#L342
-  In Collection: SelecSLS
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls60-bbf87526.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.99%
+      Top 5 Accuracy: 93.83%
 - Name: selecsls60b
+  In Collection: SelecSLS
   Metadata:
     FLOPs: 4657653144
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Cosine Annealing
-    - Random Erasing
+    Parameters: 32770000
+    File Size: 131252898
     Architecture:
     - Batch Normalization
     - Convolution
@@ -94,20 +114,23 @@ Models:
     - Global Average Pooling
     - ReLU
     - SelecSLS Block
-    File Size: 131252898
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Cosine Annealing
+    - Random Erasing
+    Training Data:
+    - ImageNet
     ID: selecsls60b
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/b9843f954b0457af2db4f9dea41a8538f51f5d78/timm/models/selecsls.py#L349
-  In Collection: SelecSLS
-Collections:
-- Name: SelecSLS
-  Paper:
-    title: 'XNect: Real-time Multi-Person 3D Motion Capture with a Single RGB Camera'
-    url: https://paperswithcode.com//paper/xnect-real-time-multi-person-3d-human-pose
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls60b-94e619b5.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.41%
+      Top 5 Accuracy: 94.18%
 -->

@@ -7,7 +7,7 @@ To load a pretrained model:
 
 ```python
 import timm
-model = timm.create_model('resnet50d', pretrained=True)
+model = timm.create_model('resnet101d', pretrained=True)
 model.eval()
 ```
 
@@ -53,14 +53,14 @@ for i in range(top5_prob.size(0)):
 # [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
 ```
 
-Replace the model name with the variant you want to use, e.g. `resnet50d`. You can find the IDs in the model summaries at the top of this page.
+Replace the model name with the variant you want to use, e.g. `resnet101d`. You can find the IDs in the model summaries at the top of this page.
 
 To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
 
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('resnet50d', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('resnet101d', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
@@ -83,137 +83,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: ResNet-D
+  Paper:
+    Title: Bag of Tricks for Image Classification with Convolutional Neural Networks
+    URL: https://paperswithcode.com/paper/bag-of-tricks-for-image-classification-with
 Models:
-- Name: resnet50d
-  Metadata:
-    FLOPs: 5591002624
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 102567109
-    Tasks:
-    - Image Classification
-    ID: resnet50d
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L699
-  In Collection: ResNet-D
-- Name: resnet26d
-  Metadata:
-    FLOPs: 3335276032
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 64209122
-    Tasks:
-    - Image Classification
-    ID: resnet26d
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L683
-  In Collection: ResNet-D
-- Name: resnet18d
-  Metadata:
-    FLOPs: 2645205760
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 46893231
-    Tasks:
-    - Image Classification
-    ID: resnet18d
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L649
-  In Collection: ResNet-D
-- Name: resnet34d
-  Metadata:
-    FLOPs: 5026601728
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 87369807
-    Tasks:
-    - Image Classification
-    ID: resnet34d
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L666
-  In Collection: ResNet-D
-- Name: resnet200d
-  Metadata:
-    FLOPs: 26034378752
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 259662933
-    Tasks:
-    - Image Classification
-    ID: resnet200d
-    Crop Pct: '0.94'
-    Image Size: '256'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L749
-  In Collection: ResNet-D
 - Name: resnet101d
+  In Collection: ResNet-D
   Metadata:
     FLOPs: 13805639680
-    Training Data:
-    - ImageNet
+    Parameters: 44570000
+    File Size: 178791263
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -225,20 +107,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 178791263
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: resnet101d
     Crop Pct: '0.94'
     Image Size: '256'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L716
-  In Collection: ResNet-D
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 82.31%
+      Top 5 Accuracy: 96.06%
 - Name: resnet152d
+  In Collection: ResNet-D
   Metadata:
     FLOPs: 20155275264
-    Training Data:
-    - ImageNet
+    Parameters: 60210000
+    File Size: 241596837
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -250,20 +140,185 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 241596837
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: resnet152d
     Crop Pct: '0.94'
     Image Size: '256'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L724
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet152d_ra2-5cac0439.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 83.13%
+      Top 5 Accuracy: 96.35%
+- Name: resnet18d
   In Collection: ResNet-D
-Collections:
-- Name: ResNet-D
-  Paper:
-    title: Bag of Tricks for Image Classification with Convolutional Neural Networks
-    url: https://paperswithcode.com//paper/bag-of-tricks-for-image-classification-with
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 2645205760
+    Parameters: 11710000
+    File Size: 46893231
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: resnet18d
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L649
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet18d_ra2-48a79e06.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 72.27%
+      Top 5 Accuracy: 90.69%
+- Name: resnet200d
+  In Collection: ResNet-D
+  Metadata:
+    FLOPs: 26034378752
+    Parameters: 64690000
+    File Size: 259662933
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: resnet200d
+    Crop Pct: '0.94'
+    Image Size: '256'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L749
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet200d_ra2-bdba9bf9.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 83.24%
+      Top 5 Accuracy: 96.49%
+- Name: resnet26d
+  In Collection: ResNet-D
+  Metadata:
+    FLOPs: 3335276032
+    Parameters: 16010000
+    File Size: 64209122
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: resnet26d
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L683
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26d-69e92c46.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 76.69%
+      Top 5 Accuracy: 93.15%
+- Name: resnet34d
+  In Collection: ResNet-D
+  Metadata:
+    FLOPs: 5026601728
+    Parameters: 21820000
+    File Size: 87369807
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: resnet34d
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L666
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34d_ra2-f8dcfcaf.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.11%
+      Top 5 Accuracy: 93.38%
+- Name: resnet50d
+  In Collection: ResNet-D
+  Metadata:
+    FLOPs: 5591002624
+    Parameters: 25580000
+    File Size: 102567109
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: resnet50d
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/resnet.py#L699
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.55%
+      Top 5 Accuracy: 95.16%
 -->

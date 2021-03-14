@@ -33,37 +33,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Gloun ResNeXt
+  Paper:
+    Title: Aggregated Residual Transformations for Deep Neural Networks
+    URL: https://paperswithcode.com/paper/aggregated-residual-transformations-for-deep
 Models:
-- Name: gluon_resnext50_32x4d
-  Metadata:
-    FLOPs: 5472648192
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Convolution
-    - Global Average Pooling
-    - Grouped Convolution
-    - Max Pooling
-    - ReLU
-    - ResNeXt Block
-    - Residual Connection
-    - Softmax
-    File Size: 100441719
-    Tasks:
-    - Image Classification
-    ID: gluon_resnext50_32x4d
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L185
-  In Collection: Gloun ResNeXt
 - Name: gluon_resnext101_32x4d
+  In Collection: Gloun ResNeXt
   Metadata:
     FLOPs: 10298145792
-    Training Data:
-    - ImageNet
+    Parameters: 44180000
+    File Size: 177367414
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -75,20 +57,28 @@ Models:
     - ResNeXt Block
     - Residual Connection
     - Softmax
-    File Size: 177367414
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnext101_32x4d
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L193
-  In Collection: Gloun ResNeXt
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnext101_32x4d-b253c8c4.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.33%
+      Top 5 Accuracy: 94.91%
 - Name: gluon_resnext101_64x4d
+  In Collection: Gloun ResNeXt
   Metadata:
     FLOPs: 19954172928
-    Training Data:
-    - ImageNet
+    Parameters: 83460000
+    File Size: 334737852
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -100,20 +90,53 @@ Models:
     - ResNeXt Block
     - Residual Connection
     - Softmax
-    File Size: 334737852
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnext101_64x4d
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L201
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnext101_64x4d-f9a8e184.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.63%
+      Top 5 Accuracy: 95.0%
+- Name: gluon_resnext50_32x4d
   In Collection: Gloun ResNeXt
-Collections:
-- Name: Gloun ResNeXt
-  Paper:
-    title: Aggregated Residual Transformations for Deep Neural Networks
-    url: https://paperswithcode.com//paper/aggregated-residual-transformations-for-deep
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 5472648192
+    Parameters: 25030000
+    File Size: 100441719
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Convolution
+    - Global Average Pooling
+    - Grouped Convolution
+    - Max Pooling
+    - ReLU
+    - ResNeXt Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: gluon_resnext50_32x4d
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L185
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnext50_32x4d-e6a097c1.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.35%
+      Top 5 Accuracy: 94.42%
 -->

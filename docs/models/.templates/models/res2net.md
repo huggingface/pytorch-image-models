@@ -28,186 +28,233 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Res2Net
+  Paper:
+    Title: 'Res2Net: A New Multi-scale Backbone Architecture'
+    URL: https://paperswithcode.com/paper/res2net-a-new-multi-scale-backbone
 Models:
 - Name: res2net101_26w_4s
+  In Collection: Res2Net
   Metadata:
     FLOPs: 10415881200
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
+    Parameters: 45210000
+    File Size: 181456059
     Architecture:
     - Batch Normalization
     - Convolution
     - Global Average Pooling
     - ReLU
     - Res2Net Block
-    File Size: 181456059
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
     ID: res2net101_26w_4s
     LR: 0.1
+    Epochs: 100
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L152
-  In Collection: Res2Net
-- Name: res2net50_26w_6s
-  Metadata:
-    FLOPs: 8130156528
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
-    Architecture:
-    - Batch Normalization
-    - Convolution
-    - Global Average Pooling
-    - ReLU
-    - Res2Net Block
-    File Size: 148603239
-    Tasks:
-    - Image Classification
-    ID: res2net50_26w_6s
-    LR: 0.1
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bilinear
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L163
-  In Collection: Res2Net
-- Name: res2net50_26w_8s
-  Metadata:
-    FLOPs: 10760338992
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
-    Architecture:
-    - Batch Normalization
-    - Convolution
-    - Global Average Pooling
-    - ReLU
-    - Res2Net Block
-    File Size: 194085165
-    Tasks:
-    - Image Classification
-    ID: res2net50_26w_8s
-    LR: 0.1
-    Crop Pct: '0.875'
-    Momentum: 0.9
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bilinear
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L174
-  In Collection: Res2Net
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net101_26w_4s-02a759a1.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.19%
+      Top 5 Accuracy: 94.43%
 - Name: res2net50_14w_8s
+  In Collection: Res2Net
   Metadata:
     FLOPs: 5403546768
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
+    Parameters: 25060000
+    File Size: 100638543
     Architecture:
     - Batch Normalization
     - Convolution
     - Global Average Pooling
     - ReLU
     - Res2Net Block
-    File Size: 100638543
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
     ID: res2net50_14w_8s
     LR: 0.1
+    Epochs: 100
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L196
-  In Collection: Res2Net
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_14w_8s-6527dddc.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.14%
+      Top 5 Accuracy: 93.86%
 - Name: res2net50_26w_4s
+  In Collection: Res2Net
   Metadata:
     FLOPs: 5499974064
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
+    Parameters: 25700000
+    File Size: 103110087
     Architecture:
     - Batch Normalization
     - Convolution
     - Global Average Pooling
     - ReLU
     - Res2Net Block
-    File Size: 103110087
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
     ID: res2net50_26w_4s
     LR: 0.1
+    Epochs: 100
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L141
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_26w_4s-06e79181.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.99%
+      Top 5 Accuracy: 93.85%
+- Name: res2net50_26w_6s
   In Collection: Res2Net
-- Name: res2net50_48w_2s
   Metadata:
-    FLOPs: 5375291520
-    Epochs: 100
-    Batch Size: 256
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 4x Titan Xp GPUs
+    FLOPs: 8130156528
+    Parameters: 37050000
+    File Size: 148603239
     Architecture:
     - Batch Normalization
     - Convolution
     - Global Average Pooling
     - ReLU
     - Res2Net Block
-    File Size: 101421406
     Tasks:
     - Image Classification
-    ID: res2net50_48w_2s
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
+    ID: res2net50_26w_6s
     LR: 0.1
+    Epochs: 100
     Crop Pct: '0.875'
     Momentum: 0.9
+    Batch Size: 256
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bilinear
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L163
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_26w_6s-19041792.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.57%
+      Top 5 Accuracy: 94.12%
+- Name: res2net50_26w_8s
+  In Collection: Res2Net
+  Metadata:
+    FLOPs: 10760338992
+    Parameters: 48400000
+    File Size: 194085165
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - Global Average Pooling
+    - ReLU
+    - Res2Net Block
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
+    ID: res2net50_26w_8s
+    LR: 0.1
+    Epochs: 100
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 256
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bilinear
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L174
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_26w_8s-2c7c9f12.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.19%
+      Top 5 Accuracy: 94.37%
+- Name: res2net50_48w_2s
+  In Collection: Res2Net
+  Metadata:
+    FLOPs: 5375291520
+    Parameters: 25290000
+    File Size: 101421406
+    Architecture:
+    - Batch Normalization
+    - Convolution
+    - Global Average Pooling
+    - ReLU
+    - Res2Net Block
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 4x Titan Xp GPUs
+    ID: res2net50_48w_2s
+    LR: 0.1
+    Epochs: 100
+    Crop Pct: '0.875'
+    Momentum: 0.9
+    Batch Size: 256
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/res2net.py#L185
-  In Collection: Res2Net
-Collections:
-- Name: Res2Net
-  Paper:
-    title: 'Res2Net: A New Multi-scale Backbone Architecture'
-    url: https://paperswithcode.com//paper/res2net-a-new-multi-scale-backbone
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net50_48w_2s-afed724a.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.53%
+      Top 5 Accuracy: 93.56%
 -->

@@ -25,12 +25,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Xception
+  Paper:
+    Title: 'Xception: Deep Learning with Depthwise Separable Convolutions'
+    URL: https://paperswithcode.com/paper/xception-deep-learning-with-depthwise
 Models:
 - Name: xception
+  In Collection: Xception
   Metadata:
     FLOPs: 10600506792
-    Training Data:
-    - ImageNet
+    Parameters: 22860000
+    File Size: 91675053
     Architecture:
     - 1x1 Convolution
     - Convolution
@@ -41,20 +48,28 @@ Models:
     - ReLU
     - Residual Connection
     - Softmax
-    File Size: 91675053
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: xception
     Crop Pct: '0.897'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/xception.py#L229
-  In Collection: Xception
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/xception-43020ad28.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.05%
+      Top 5 Accuracy: 94.4%
 - Name: xception41
+  In Collection: Xception
   Metadata:
     FLOPs: 11681983232
-    Training Data:
-    - ImageNet
+    Parameters: 26970000
+    File Size: 108422028
     Architecture:
     - 1x1 Convolution
     - Convolution
@@ -65,20 +80,28 @@ Models:
     - ReLU
     - Residual Connection
     - Softmax
-    File Size: 108422028
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: xception41
     Crop Pct: '0.903'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/xception_aligned.py#L181
-  In Collection: Xception
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_41-e6439c97.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.54%
+      Top 5 Accuracy: 94.28%
 - Name: xception65
+  In Collection: Xception
   Metadata:
     FLOPs: 17585702144
-    Training Data:
-    - ImageNet
+    Parameters: 39920000
+    File Size: 160536780
     Architecture:
     - 1x1 Convolution
     - Convolution
@@ -89,20 +112,28 @@ Models:
     - ReLU
     - Residual Connection
     - Softmax
-    File Size: 160536780
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: xception65
     Crop Pct: '0.903'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/xception_aligned.py#L200
-  In Collection: Xception
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_65-c9ae96e8.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.55%
+      Top 5 Accuracy: 94.66%
 - Name: xception71
+  In Collection: Xception
   Metadata:
     FLOPs: 22817346560
-    Training Data:
-    - ImageNet
+    Parameters: 42340000
+    File Size: 170295556
     Architecture:
     - 1x1 Convolution
     - Convolution
@@ -113,20 +144,20 @@ Models:
     - ReLU
     - Residual Connection
     - Softmax
-    File Size: 170295556
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: xception71
     Crop Pct: '0.903'
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/xception_aligned.py#L219
-  In Collection: Xception
-Collections:
-- Name: Xception
-  Paper:
-    title: 'Xception: Deep Learning with Depthwise Separable Convolutions'
-    url: https://paperswithcode.com//paper/xception-deep-learning-with-depthwise
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_71-8eec7df1.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.88%
+      Top 5 Accuracy: 94.93%
 -->

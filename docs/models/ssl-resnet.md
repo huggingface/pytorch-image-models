@@ -11,7 +11,7 @@ To load a pretrained model:
 
 ```python
 import timm
-model = timm.create_model('ssl_resnet50', pretrained=True)
+model = timm.create_model('ssl_resnet18', pretrained=True)
 model.eval()
 ```
 
@@ -57,14 +57,14 @@ for i in range(top5_prob.size(0)):
 # [('Samoyed', 0.6425196528434753), ('Pomeranian', 0.04062102362513542), ('keeshond', 0.03186424449086189), ('white wolf', 0.01739676296710968), ('Eskimo dog', 0.011717947199940681)]
 ```
 
-Replace the model name with the variant you want to use, e.g. `ssl_resnet50`. You can find the IDs in the model summaries at the top of this page.
+Replace the model name with the variant you want to use, e.g. `ssl_resnet18`. You can find the IDs in the model summaries at the top of this page.
 
 To extract image features with this model, follow the [timm feature extraction examples](https://rwightman.github.io/pytorch-image-models/feature_extraction/), just change the name of the model you want to use.
 
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('ssl_resnet50', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('ssl_resnet18', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
@@ -96,54 +96,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: SSL ResNet
+  Paper:
+    Title: Billion-scale semi-supervised learning for image classification
+    URL: https://paperswithcode.com/paper/billion-scale-semi-supervised-learning-for
 Models:
-- Name: ssl_resnet50
-  Metadata:
-    FLOPs: 5282531328
-    Epochs: 30
-    Batch Size: 1536
-    Training Data:
-    - ImageNet
-    - YFCC-100M
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 64x GPUs
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 102480594
-    Tasks:
-    - Image Classification
-    ID: ssl_resnet50
-    LR: 0.0015
-    Layers: 50
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Weight Decay: 0.0001
-    Interpolation: bilinear
-  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/resnet.py#L904
-  In Collection: SSL ResNet
 - Name: ssl_resnet18
+  In Collection: SSL ResNet
   Metadata:
     FLOPs: 2337073152
-    Epochs: 30
-    Batch Size: 1536
-    Training Data:
-    - ImageNet
-    - YFCC-100M
-    Training Techniques:
-    - SGD with Momentum
-    - Weight Decay
-    Training Resources: 64x GPUs
+    Parameters: 11690000
+    File Size: 46811375
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -155,23 +120,73 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 46811375
     Tasks:
     - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - YFCC-100M
+    Training Resources: 64x GPUs
     ID: ssl_resnet18
     LR: 0.0015
+    Epochs: 30
     Layers: 18
     Crop Pct: '0.875'
+    Batch Size: 1536
     Image Size: '224'
     Weight Decay: 0.0001
     Interpolation: bilinear
   Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/resnet.py#L894
+  Weights: https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnet18-d92f0530.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 72.62%
+      Top 5 Accuracy: 91.42%
+- Name: ssl_resnet50
   In Collection: SSL ResNet
-Collections:
-- Name: SSL ResNet
-  Paper:
-    title: Billion-scale semi-supervised learning for image classification
-    url: https://paperswithcode.com//paper/billion-scale-semi-supervised-learning-for
-  type: model-index
-Type: model-index
+  Metadata:
+    FLOPs: 5282531328
+    Parameters: 25560000
+    File Size: 102480594
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Techniques:
+    - SGD with Momentum
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    - YFCC-100M
+    Training Resources: 64x GPUs
+    ID: ssl_resnet50
+    LR: 0.0015
+    Epochs: 30
+    Layers: 50
+    Crop Pct: '0.875'
+    Batch Size: 1536
+    Image Size: '224'
+    Weight Decay: 0.0001
+    Interpolation: bilinear
+  Code: https://github.com/rwightman/pytorch-image-models/blob/9a25fdf3ad0414b4d66da443fe60ae0aa14edc84/timm/models/resnet.py#L904
+  Weights: https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_supervised_resnet50-08389792.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.24%
+      Top 5 Accuracy: 94.83%
 -->

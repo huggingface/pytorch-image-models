@@ -32,12 +32,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Gloun ResNet
+  Paper:
+    Title: Deep Residual Learning for Image Recognition
+    URL: https://paperswithcode.com/paper/deep-residual-learning-for-image-recognition
 Models:
 - Name: gluon_resnet101_v1b
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 10068547584
-    Training Data:
-    - ImageNet
+    Parameters: 44550000
+    File Size: 178723172
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -49,45 +56,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 178723172
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet101_v1b
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L89
-  In Collection: Gloun ResNet
-- Name: gluon_resnet101_v1s
-  Metadata:
-    FLOPs: 11805511680
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 179221777
-    Tasks:
-    - Image Classification
-    ID: gluon_resnet101_v1s
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L166
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet101_v1b-3b017079.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.3%
+      Top 5 Accuracy: 94.53%
 - Name: gluon_resnet101_v1c
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 10376567296
-    Training Data:
-    - ImageNet
+    Parameters: 44570000
+    File Size: 178802575
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -99,70 +89,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 178802575
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet101_v1c
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L113
-  In Collection: Gloun ResNet
-- Name: gluon_resnet152_v1c
-  Metadata:
-    FLOPs: 15165680128
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 241613404
-    Tasks:
-    - Image Classification
-    ID: gluon_resnet152_v1c
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L121
-  In Collection: Gloun ResNet
-- Name: gluon_resnet152_v1b
-  Metadata:
-    FLOPs: 14857660416
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 241534001
-    Tasks:
-    - Image Classification
-    ID: gluon_resnet152_v1b
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L97
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet101_v1c-1f26822a.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.53%
+      Top 5 Accuracy: 94.59%
 - Name: gluon_resnet101_v1d
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 10377018880
-    Training Data:
-    - ImageNet
+    Parameters: 44570000
+    File Size: 178802755
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -174,20 +122,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 178802755
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet101_v1d
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L138
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet101_v1d-0f9c8644.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.4%
+      Top 5 Accuracy: 95.02%
+- Name: gluon_resnet101_v1s
   In Collection: Gloun ResNet
-- Name: gluon_resnet152_v1d
   Metadata:
-    FLOPs: 15166131712
-    Training Data:
-    - ImageNet
+    FLOPs: 11805511680
+    Parameters: 44670000
+    File Size: 179221777
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -199,20 +155,127 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 241613584
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
+    ID: gluon_resnet101_v1s
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L166
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet101_v1s-60fe0cc1.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.29%
+      Top 5 Accuracy: 95.16%
+- Name: gluon_resnet152_v1b
+  In Collection: Gloun ResNet
+  Metadata:
+    FLOPs: 14857660416
+    Parameters: 60190000
+    File Size: 241534001
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: gluon_resnet152_v1b
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L97
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet152_v1b-c1edb0dd.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.69%
+      Top 5 Accuracy: 94.73%
+- Name: gluon_resnet152_v1c
+  In Collection: Gloun ResNet
+  Metadata:
+    FLOPs: 15165680128
+    Parameters: 60210000
+    File Size: 241613404
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
+    ID: gluon_resnet152_v1c
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L121
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet152_v1c-a3bb0b98.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.91%
+      Top 5 Accuracy: 94.85%
+- Name: gluon_resnet152_v1d
+  In Collection: Gloun ResNet
+  Metadata:
+    FLOPs: 15166131712
+    Parameters: 60210000
+    File Size: 241613584
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet152_v1d
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L147
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet152_v1d-bd354e12.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 80.48%
+      Top 5 Accuracy: 95.2%
 - Name: gluon_resnet152_v1s
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 16594624512
-    Training Data:
-    - ImageNet
+    Parameters: 60320000
+    File Size: 242032606
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -224,45 +287,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 242032606
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet152_v1s
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L175
-  In Collection: Gloun ResNet
-- Name: gluon_resnet50_v1b
-  Metadata:
-    FLOPs: 5282531328
-    Training Data:
-    - ImageNet
-    Architecture:
-    - 1x1 Convolution
-    - Batch Normalization
-    - Bottleneck Residual Block
-    - Convolution
-    - Global Average Pooling
-    - Max Pooling
-    - ReLU
-    - Residual Block
-    - Residual Connection
-    - Softmax
-    File Size: 102493763
-    Tasks:
-    - Image Classification
-    ID: gluon_resnet50_v1b
-    Crop Pct: '0.875'
-    Image Size: '224'
-    Interpolation: bicubic
-  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L81
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet152_v1s-dcc41b81.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 81.02%
+      Top 5 Accuracy: 95.42%
 - Name: gluon_resnet18_v1b
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 2337073152
-    Training Data:
-    - ImageNet
+    Parameters: 11690000
+    File Size: 46816736
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -274,20 +320,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 46816736
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet18_v1b
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L65
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet18_v1b-0757602b.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 70.84%
+      Top 5 Accuracy: 89.76%
 - Name: gluon_resnet34_v1b
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 4718469120
-    Training Data:
-    - ImageNet
+    Parameters: 21800000
+    File Size: 87295112
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -299,20 +353,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 87295112
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet34_v1b
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L73
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet34_v1b-c6d82d59.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 74.59%
+      Top 5 Accuracy: 92.0%
+- Name: gluon_resnet50_v1b
   In Collection: Gloun ResNet
-- Name: gluon_resnet50_v1c
   Metadata:
-    FLOPs: 5590551040
-    Training Data:
-    - ImageNet
+    FLOPs: 5282531328
+    Parameters: 25560000
+    File Size: 102493763
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -324,20 +386,61 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 102573166
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
+    ID: gluon_resnet50_v1b
+    Crop Pct: '0.875'
+    Image Size: '224'
+    Interpolation: bicubic
+  Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L81
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet50_v1b-0ebe02e2.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.58%
+      Top 5 Accuracy: 93.72%
+- Name: gluon_resnet50_v1c
+  In Collection: Gloun ResNet
+  Metadata:
+    FLOPs: 5590551040
+    Parameters: 25580000
+    File Size: 102573166
+    Architecture:
+    - 1x1 Convolution
+    - Batch Normalization
+    - Bottleneck Residual Block
+    - Convolution
+    - Global Average Pooling
+    - Max Pooling
+    - ReLU
+    - Residual Block
+    - Residual Connection
+    - Softmax
+    Tasks:
+    - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet50_v1c
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L105
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet50_v1c-48092f55.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.01%
+      Top 5 Accuracy: 93.99%
 - Name: gluon_resnet50_v1d
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 5591002624
-    Training Data:
-    - ImageNet
+    Parameters: 25580000
+    File Size: 102573346
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -349,20 +452,28 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 102573346
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet50_v1d
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L129
-  In Collection: Gloun ResNet
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet50_v1d-818a1b1b.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 79.06%
+      Top 5 Accuracy: 94.46%
 - Name: gluon_resnet50_v1s
+  In Collection: Gloun ResNet
   Metadata:
     FLOPs: 7019495424
-    Training Data:
-    - ImageNet
+    Parameters: 25680000
+    File Size: 102992368
     Architecture:
     - 1x1 Convolution
     - Batch Normalization
@@ -374,20 +485,20 @@ Models:
     - Residual Block
     - Residual Connection
     - Softmax
-    File Size: 102992368
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_resnet50_v1s
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L156
-  In Collection: Gloun ResNet
-Collections:
-- Name: Gloun ResNet
-  Paper:
-    title: Deep Residual Learning for Image Recognition
-    url: https://paperswithcode.com//paper/deep-residual-learning-for-image-recognition
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_resnet50_v1s-1762acc0.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 78.7%
+      Top 5 Accuracy: 94.25%
 -->

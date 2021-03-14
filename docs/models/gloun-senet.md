@@ -85,12 +85,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Gloun SENet
+  Paper:
+    Title: Squeeze-and-Excitation Networks
+    URL: https://paperswithcode.com/paper/squeeze-and-excitation-networks
 Models:
 - Name: gluon_senet154
+  In Collection: Gloun SENet
   Metadata:
     FLOPs: 26681705136
-    Training Data:
-    - ImageNet
+    Parameters: 115090000
+    File Size: 461546622
     Architecture:
     - Convolution
     - Dense Connections
@@ -98,20 +105,20 @@ Models:
     - Max Pooling
     - Softmax
     - Squeeze-and-Excitation Block
-    File Size: 461546622
     Tasks:
     - Image Classification
+    Training Data:
+    - ImageNet
     ID: gluon_senet154
     Crop Pct: '0.875'
     Image Size: '224'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/gluon_resnet.py#L239
-  In Collection: Gloun SENet
-Collections:
-- Name: Gloun SENet
-  Paper:
-    title: Squeeze-and-Excitation Networks
-    url: https://paperswithcode.com//paper/squeeze-and-excitation-networks
-  type: model-index
-Type: model-index
+  Weights: https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_senet154-70a1a3c0.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 81.23%
+      Top 5 Accuracy: 95.35%
 -->

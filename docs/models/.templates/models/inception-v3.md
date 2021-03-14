@@ -31,18 +31,19 @@ You can follow the [timm recipe scripts](https://rwightman.github.io/pytorch-ima
 ```
 
 <!--
+Type: model-index
+Collections:
+- Name: Inception v3
+  Paper:
+    Title: Rethinking the Inception Architecture for Computer Vision
+    URL: https://paperswithcode.com/paper/rethinking-the-inception-architecture-for
 Models:
 - Name: inception_v3
+  In Collection: Inception v3
   Metadata:
     FLOPs: 7352418880
-    Training Data:
-    - ImageNet
-    Training Techniques:
-    - Gradient Clipping
-    - Label Smoothing
-    - RMSProp
-    - Weight Decay
-    Training Resources: 50x NVIDIA Kepler GPUs
+    Parameters: 23830000
+    File Size: 108857766
     Architecture:
     - 1x1 Convolution
     - Auxiliary Classifier
@@ -56,9 +57,16 @@ Models:
     - Max Pooling
     - ReLU
     - Softmax
-    File Size: 108857766
     Tasks:
     - Image Classification
+    Training Techniques:
+    - Gradient Clipping
+    - Label Smoothing
+    - RMSProp
+    - Weight Decay
+    Training Data:
+    - ImageNet
+    Training Resources: 50x NVIDIA Kepler GPUs
     ID: inception_v3
     LR: 0.045
     Dropout: 0.2
@@ -67,12 +75,11 @@ Models:
     Image Size: '299'
     Interpolation: bicubic
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/inception_v3.py#L442
-  In Collection: Inception v3
-Collections:
-- Name: Inception v3
-  Paper:
-    title: Rethinking the Inception Architecture for Computer Vision
-    url: https://paperswithcode.com//paper/rethinking-the-inception-architecture-for
-  type: model-index
-Type: model-index
+  Weights: https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth
+  Results:
+  - Task: Image Classification
+    Dataset: ImageNet
+    Metrics:
+      Top 1 Accuracy: 77.46%
+      Top 5 Accuracy: 93.48%
 -->
