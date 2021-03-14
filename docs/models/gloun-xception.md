@@ -1,4 +1,4 @@
-# Summary
+# (Gluon) Xception
 
 **Xception** is a convolutional neural network architecture that relies solely on [depthwise separable convolution](https://paperswithcode.com/method/depthwise-separable-convolution) layers.
 

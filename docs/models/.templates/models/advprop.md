@@ -1,6 +1,8 @@
-# AdvProp
+# AdvProp (EfficientNet)
 
 **AdvProp** is an adversarial training scheme which treats adversarial examples as additional examples, to prevent overfitting. Key to the method is the usage of a separate auxiliary batch norm for adversarial examples, as they have different underlying distributions to normal examples.
+
+The weights from this model were ported from [Tensorflow/TPU](https://github.com/tensorflow/tpu).
 
 {% include 'code_snippets.md' %}
 

@@ -1,4 +1,4 @@
-# SK ResNet
+# SK-ResNet
 
 **SK ResNet** is a variant of a [ResNet](https://www.paperswithcode.com/method/resnet) that employs a [Selective Kernel](https://paperswithcode.com/method/selective-kernel) unit. In general, all the large kernel convolutions in the original bottleneck blocks in ResNet are replaced by the proposed [SK convolutions](https://paperswithcode.com/method/selective-kernel-convolution), enabling the network to choose appropriate receptive field sizes in an adaptive manner.
 

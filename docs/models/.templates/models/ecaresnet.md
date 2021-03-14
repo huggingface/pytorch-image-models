@@ -1,4 +1,4 @@
-# ECA ResNet
+# ECA-ResNet
 
 An **ECA ResNet** is a variant on a [ResNet](https://paperswithcode.com/method/resnet) that utilises an [Efficient Channel Attention module](https://paperswithcode.com/method/efficient-channel-attention). Efficient Channel Attention is an architectural unit based on [squeeze-and-excitation blocks](https://paperswithcode.com/method/squeeze-and-excitation-block) that reduces model complexity without dimensionality reduction. 
 

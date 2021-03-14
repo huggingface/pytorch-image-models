@@ -1,4 +1,4 @@
-# ESE VoVNet
+# ESE-VoVNet
 
 **VoVNet** is a convolutional neural network that seeks to make [DenseNet](https://paperswithcode.com/method/densenet) more efficient by concatenating all features only once in the last feature map, which makes input size constant and enables enlarging new output channel. 
 

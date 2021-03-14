@@ -1,4 +1,4 @@
-# Summary
+# (Gluon) SENet
 
 A **SENet** is a convolutional neural network architecture that employs [squeeze-and-excitation blocks](https://paperswithcode.com/method/squeeze-and-excitation-block) to enable the network to perform dynamic channel-wise feature recalibration.
 
