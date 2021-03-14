@@ -5,13 +5,13 @@ repo_url: 'https://github.com/rwightman/pytorch-image-models'
 nav:
   - index.md
   - models.md
+  - ... | models/*.md
   - results.md
   - scripts.md
   - training_hparam_examples.md
   - feature_extraction.md
   - changes.md
   - archived_changes.md
-  - ... | models/*.md
 theme:
   name: 'material'
   feature:

@@ -1,4 +1,4 @@
-# Model Architectures
+# Model Summaries
 
 The model architectures included come from a wide variety of sources. Sources, including papers, original impl ("reference code") that I rewrote / adapted, and PyTorch impl that I leveraged directly ("code") are listed below.
 
