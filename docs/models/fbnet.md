@@ -62,7 +62,7 @@ To extract image features with this model, follow the [timm feature extraction e
 ## How do I finetune this model?
 You can finetune any of the pre-trained models just by changing the classifier (the last layer).
 ```python
-model = timm.create_model('fbnetc_100', pretrained=True).reset_classifier(NUM_FINETUNE_CLASSES)
+model = timm.create_model('fbnetc_100', pretrained=True, num_classes=NUM_FINETUNE_CLASSES)
 ```
 To finetune on your own dataset, you have to write a training loop or adapt [timm's training
 script](https://github.com/rwightman/pytorch-image-models/blob/master/train.py) to use your dataset.
