@@ -117,7 +117,14 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_em_ra2-66250f76.pth',
         input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
     'efficientnet_el': _cfg(
-        url='', input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
+        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_el.pth', 
+        input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
+
+    'efficientnet_es_pruned': _cfg(
+        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_es_pruned75.pth'),
+    'efficientnet_el_pruned': _cfg(
+        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_el_pruned70.pth', 
+        input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
 
     'efficientnet_cc_b0_4e': _cfg(url=''),
     'efficientnet_cc_b0_8e': _cfg(url=''),
@@ -1115,6 +1122,12 @@ def efficientnet_es(pretrained=False, **kwargs):
         'efficientnet_es', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
     return model
 
+@register_model
+def efficientnet_es_pruned(pretrained=False, **kwargs):
+    """ EfficientNet-Edge Small Pruned. For more info: https://github.com/DeGirum/pruned-models/releases/tag/efficientnet_v1.0"""
+    model = _gen_efficientnet_edge(
+        'efficientnet_es_pruned', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
+    return model
 
 @register_model
 def efficientnet_em(pretrained=False, **kwargs):
@@ -1131,6 +1144,12 @@ def efficientnet_el(pretrained=False, **kwargs):
         'efficientnet_el', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
     return model
 
+@register_model
+def efficientnet_el_pruned(pretrained=False, **kwargs):
+    """ EfficientNet-Edge-Large pruned. For more info: https://github.com/DeGirum/pruned-models/releases/tag/efficientnet_v1.0"""
+    model = _gen_efficientnet_edge(
+        'efficientnet_el_pruned', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
+    return model
 
 @register_model
 def efficientnet_cc_b0_4e(pretrained=False, **kwargs):
