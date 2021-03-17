@@ -170,7 +170,7 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
         _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
     if hf_hub_id and has_hf_hub(necessary=not pretrained_url):
-        _logger.info(f'Loading pretrained weights from huggingface hub ({hf_hub_id})')
+        _logger.info(f'Loading pretrained weights from Hugging Face hub ({hf_hub_id})')
         state_dict = load_state_dict_from_hf(hf_hub_id)
     else:
         _logger.info(f'Loading pretrained weights from url ({pretrained_url})')

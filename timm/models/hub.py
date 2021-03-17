@@ -56,13 +56,13 @@ def has_hf_hub(necessary=False):
     if hf_hub_url is None and necessary:
         # if no HF Hub module installed and it is necessary to continue, raise error
         raise RuntimeError(
-            'HuggignFace Hub model specified but package not installed. Run `pip install huggingface_hub`.')
+            'Hugging Face hub model specified but package not installed. Run `pip install huggingface_hub`.')
     return hf_hub_url is not None
 
 
 def hf_split(hf_id):
     rev_split = hf_id.split('#')
-    assert 0 < len(rev_split) <= 2, 'HuggingFace HUB identifier should only contain on # character to identify revision.'
+    assert 0 < len(rev_split) <= 2, 'hf_hub id should only contain one # character to identify revision.'
     hf_model_id = rev_split[0]
     hf_revision = rev_split[-1] if len(rev_split) > 1 else None
     return hf_model_id, hf_revision
