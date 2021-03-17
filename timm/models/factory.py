@@ -1,7 +1,7 @@
 from .registry import is_model, is_model_in_modules, model_entrypoint
 from .helpers import load_checkpoint
 from .layers import set_layer_config
-from .hub import load_config_from_hf
+from .hub import load_model_config_from_hf
 
 
 def split_model_name(model_name):
@@ -67,11 +67,9 @@ def create_model(
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
     if source_name == 'hf_hub':
-        # Load model weights + default_cfg from Hugging Face hub.
-        # For model names specified in the form `hf_hub:path/architecture_name#revision`
-        hf_default_cfg = load_config_from_hf(model_name)
-        hf_default_cfg['hf_hub'] = model_name  # insert hf_hub id for pretrained weight load during creation
-        model_name = hf_default_cfg.get('architecture')
+        # For model names specified in the form `hf_hub:path/architecture_name#revision`,
+        # load model weights + default_cfg from Hugging Face hub.
+        hf_default_cfg, model_name = load_model_config_from_hf(model_name)
         kwargs['external_default_cfg'] = hf_default_cfg  # FIXME revamp default_cfg interface someday
 
     if is_model(model_name):

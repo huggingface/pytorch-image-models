@@ -23,7 +23,7 @@ except ImportError:
 _logger = logging.getLogger(__name__)
 
 
-def get_cache_dir(child=''):
+def get_cache_dir(child_dir=''):
     """
     Returns the location of the directory where models are cached (and creates it if necessary).
     """
@@ -32,8 +32,8 @@ def get_cache_dir(child=''):
         _logger.warning('TORCH_MODEL_ZOO is deprecated, please use env TORCH_HOME instead')
 
     hub_dir = get_dir()
-    children = () if not child else child,
-    model_dir = os.path.join(hub_dir, 'checkpoints', *children)
+    child_dir = () if not child_dir else (child_dir,)
+    model_dir = os.path.join(hub_dir, 'checkpoints', *child_dir)
     os.makedirs(model_dir, exist_ok=True)
     return model_dir
 
@@ -80,10 +80,13 @@ def _download_from_hf(model_id: str, filename: str):
     return cached_download(url, cache_dir=get_cache_dir('hf'))
 
 
-def load_config_from_hf(model_id: str):
+def load_model_config_from_hf(model_id: str):
     assert has_hf_hub(True)
     cached_file = _download_from_hf(model_id, 'config.json')
-    return load_cfg_from_json(cached_file)
+    default_cfg = load_cfg_from_json(cached_file)
+    default_cfg['hf_hub'] = model_id  # insert hf_hub id for pretrained weight load during model creation
+    model_name = default_cfg.get('architecture')
+    return default_cfg, model_name
 
 
 def load_state_dict_from_hf(model_id: str):

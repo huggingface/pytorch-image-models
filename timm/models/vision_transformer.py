@@ -21,6 +21,7 @@ import math
 import logging
 from functools import partial
 from collections import OrderedDict
+from copy import deepcopy
 
 import torch
 import torch.nn as nn
@@ -462,9 +463,10 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_vision_transformer(variant, pretrained=False, distilled=False, **kwargs):
-    default_cfg = overlay_external_default_cfg(kwargs, default_cfgs[variant])
+    default_cfg = deepcopy(default_cfgs[variant])
+    overlay_external_default_cfg(default_cfg, kwargs)
     default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-1]
+    default_img_size = default_cfg['input_size'][-2:]
 
     num_classes = kwargs.pop('num_classes', default_num_classes)
     img_size = kwargs.pop('img_size', default_img_size)
