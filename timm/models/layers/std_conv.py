@@ -76,13 +76,13 @@ class ScaledStdConv2d(nn.Conv2d):
 
     def __init__(
             self, in_channels, out_channels, kernel_size, stride=1, padding=None, dilation=1, groups=1,
-            bias=True, gamma=1.0, eps=1e-5, use_layernorm=False):
+            bias=True, gamma=1.0, eps=1e-5, gain_init=1.0, use_layernorm=False):
         if padding is None:
             padding = get_padding(kernel_size, stride, dilation)
         super().__init__(
             in_channels, out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation,
             groups=groups, bias=bias)
-        self.gain = nn.Parameter(torch.ones(self.out_channels, 1, 1, 1))
+        self.gain = nn.Parameter(torch.full((self.out_channels, 1, 1, 1), gain_init))
         self.scale = gamma * self.weight[0].numel() ** -0.5  # gamma * 1 / sqrt(fan-in)
         self.eps = eps ** 2 if use_layernorm else eps
         self.use_layernorm = use_layernorm  # experimental, slightly faster/less GPU memory to hijack LN kernel
@@ -110,12 +110,12 @@ class ScaledStdConv2dSame(nn.Conv2d):
 
     def __init__(
             self, in_channels, out_channels, kernel_size, stride=1, padding='SAME', dilation=1, groups=1,
-            bias=True, gamma=1.0, eps=1e-5, use_layernorm=False):
+            bias=True, gamma=1.0, eps=1e-5, gain_init=1.0, use_layernorm=False):
         padding, is_dynamic = get_padding_value(padding, kernel_size, stride=stride, dilation=dilation)
         super().__init__(
             in_channels, out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation,
             groups=groups, bias=bias)
-        self.gain = nn.Parameter(torch.ones(self.out_channels, 1, 1, 1))
+        self.gain = nn.Parameter(torch.full((self.out_channels, 1, 1, 1), gain_init))
         self.scale = gamma * self.weight[0].numel() ** -0.5
         self.same_pad = is_dynamic
         self.eps = eps ** 2 if use_layernorm else eps

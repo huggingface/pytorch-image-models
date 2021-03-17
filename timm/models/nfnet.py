@@ -104,8 +104,8 @@ default_cfgs = dict(
         url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288)),
     nfnet_l0b=_dcfg(
         url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288)),
-    nfnet_l0c=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nfnet_l0c-ad1045c2.pth',
+    eca_nfnet_l0=_dcfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l0_ra2-e3e9ac50.pth',
         pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
 
     nf_regnet_b0=_dcfg(
@@ -238,7 +238,7 @@ model_cfgs = dict(
     nfnet_l0b=_nfnet_cfg(
         depths=(1, 2, 6, 3), channels=(256, 512, 1536, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
         attn_kwargs=dict(reduction_ratio=0.25, divisor=8), act_layer='silu'),
-    nfnet_l0c=_nfnet_cfg(
+    eca_nfnet_l0=_nfnet_cfg(
         depths=(1, 2, 6, 3), channels=(256, 512, 1536, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
         attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
 
@@ -343,7 +343,7 @@ class NormFreeBlock(nn.Module):
         else:
             self.attn = None
         self.act3 = act_layer()
-        self.conv3 = conv_layer(mid_chs, out_chs, 1)
+        self.conv3 = conv_layer(mid_chs, out_chs, 1, gain_init=1. if skipinit else 0.)
         if not reg and attn_layer is not None:
             self.attn_last = attn_layer(out_chs)  # ResNet blocks apply attn after conv3
         else:
@@ -804,11 +804,11 @@ def nfnet_l0b(pretrained=False, **kwargs):
 
 
 @register_model
-def nfnet_l0c(pretrained=False, **kwargs):
-    """ NFNet-L0c w/ SiLU
+def eca_nfnet_l0(pretrained=False, **kwargs):
+    """ ECA-NFNet-L0 w/ SiLU
     My experimental 'light' model w/ 1.5x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
     """
-    return _create_normfreenet('nfnet_l0c', pretrained=pretrained, **kwargs)
+    return _create_normfreenet('eca_nfnet_l0', pretrained=pretrained, **kwargs)
 
 
 @register_model

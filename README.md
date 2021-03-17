@@ -23,6 +23,15 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### March 17, 2021
+* Add new ECA-NFNet-L0 (rename `nfnet_l0c`->`eca_nfnet_l0`) weights trained by myself.
+  * 82.6 top-1 @ 288x288, 82.8 @ 320x320, trained at 224x224
+  * Uses SiLU activation, approx 2x faster than `dm_nfnet_f0` and 50% faster than `nfnet_f0s` w/ 1/3 param count
+* Integrate [Hugging Face model hub](https://huggingface.co/models) into timm create_model and default_cfg handling for pretrained weight and config sharing (more on this soon!)
+* Merge HardCoRe NAS models contributed by https://github.com/yoniaflalo
+* Merge PyTorch trained EfficientNet-EL and pruned ES/EL variants contributed by [DeGirum](https://github.com/DeGirum)
+
+
 ### March 7, 2021
 * First 0.4.x PyPi release w/ NFNets (& related), ByoB (GPU-Efficient, RepVGG, etc).
 * Change feature extraction for pre-activation nets (NFNets, ResNetV2) to return features before activation.
@@ -171,6 +180,7 @@ A full version of the list below with source links can be found in the [document
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
+* HardCoRe-NAS - https://arxiv.org/abs/2102.11646
 * HRNet - https://arxiv.org/abs/1908.07919
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
