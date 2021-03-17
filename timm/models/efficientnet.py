@@ -452,18 +452,20 @@ class EfficientNetFeatures(nn.Module):
             return list(out.values())
 
 
-def _create_effnet(model_kwargs, variant, pretrained=False):
+def _create_effnet(variant, pretrained=False, **kwargs):
     features_only = False
     model_cls = EfficientNet
-    if model_kwargs.pop('features_only', False):
+    kwargs_filter = None
+    if kwargs.pop('features_only', False):
         features_only = True
-        model_kwargs.pop('num_classes', 0)
-        model_kwargs.pop('num_features', 0)
-        model_kwargs.pop('head_conv', None)
+        kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
         model_cls = EfficientNetFeatures
     model = build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=not features_only, **model_kwargs)
+        model_cls, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        pretrained_strict=not features_only,
+        kwargs_filter=kwargs_filter,
+        **kwargs)
     if features_only:
         model.default_cfg = default_cfg_for_features(model.default_cfg)
     return model
@@ -501,7 +503,7 @@ def _gen_mnasnet_a1(variant, channel_multiplier=1.0, pretrained=False, **kwargs)
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -537,7 +539,7 @@ def _gen_mnasnet_b1(variant, channel_multiplier=1.0, pretrained=False, **kwargs)
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -566,7 +568,7 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs,variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -595,7 +597,7 @@ def _gen_mobilenet_v2(
         act_layer=resolve_act_layer(kwargs, 'relu6'),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -625,7 +627,7 @@ def _gen_fbnetc(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -660,7 +662,7 @@ def _gen_spnasnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -706,7 +708,7 @@ def _gen_efficientnet(variant, channel_multiplier=1.0, depth_multiplier=1.0, pre
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs,
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -735,7 +737,7 @@ def _gen_efficientnet_edge(variant, channel_multiplier=1.0, depth_multiplier=1.0
         act_layer=resolve_act_layer(kwargs, 'relu'),
         **kwargs,
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -765,7 +767,7 @@ def _gen_efficientnet_condconv(
         act_layer=resolve_act_layer(kwargs, 'swish'),
         **kwargs,
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -806,7 +808,7 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs,
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -839,7 +841,7 @@ def _gen_mixnet_s(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -872,7 +874,7 @@ def _gen_mixnet_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrai
         norm_kwargs=resolve_bn_args(kwargs),
         **kwargs
     )
-    model = _create_effnet(model_kwargs, variant, pretrained)
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 

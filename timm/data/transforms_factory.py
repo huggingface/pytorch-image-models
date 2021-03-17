@@ -78,7 +78,7 @@ def transforms_imagenet_train(
     secondary_tfl = []
     if auto_augment:
         assert isinstance(auto_augment, str)
-        if isinstance(img_size, tuple):
+        if isinstance(img_size, (tuple, list)):
             img_size_min = min(img_size)
         else:
             img_size_min = img_size
@@ -136,7 +136,7 @@ def transforms_imagenet_eval(
         std=IMAGENET_DEFAULT_STD):
     crop_pct = crop_pct or DEFAULT_CROP_PCT
 
-    if isinstance(img_size, tuple):
+    if isinstance(img_size, (tuple, list)):
         assert len(img_size) == 2
         if img_size[-1] == img_size[-2]:
             # fall-back to older behaviour so Resize scales to shortest edge if target is square
@@ -186,7 +186,7 @@ def create_transform(
         tf_preprocessing=False,
         separate=False):
 
-    if isinstance(input_size, tuple):
+    if isinstance(input_size, (tuple, list)):
         img_size = input_size[-2:]
     else:
         img_size = input_size

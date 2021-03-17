@@ -31,7 +31,7 @@ from .xception import *
 from .xception_aligned import *
 from .hardcorenas import *
 
-from .factory import create_model
+from .factory import create_model, split_model_name, safe_model_name
 from .helpers import load_checkpoint, resume_checkpoint, model_parameters
 from .layers import TestTimePoolHead, apply_test_time_pool
 from .layers import convert_splitbn_model

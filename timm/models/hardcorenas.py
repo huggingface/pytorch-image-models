@@ -35,7 +35,6 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
 
     """
     num_features = 1280
-    act_layer = resolve_act_layer(kwargs, 'hard_swish')
 
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
@@ -43,23 +42,24 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
         stem_size=32,
         channel_multiplier=1,
         norm_kwargs=resolve_bn_args(kwargs),
-        act_layer=act_layer,
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
         se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
         **kwargs,
     )
 
     features_only = False
     model_cls = MobileNetV3
+    kwargs_filter = None
     if model_kwargs.pop('features_only', False):
         features_only = True
-        model_kwargs.pop('num_classes', 0)
-        model_kwargs.pop('num_features', 0)
-        model_kwargs.pop('head_conv', None)
-        model_kwargs.pop('head_bias', None)
+        kwargs_filter = ('num_classes', 'num_features', 'global_pool', 'head_conv', 'head_bias', 'global_pool')
         model_cls = MobileNetV3Features
     model = build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=not features_only, **model_kwargs)
+        model_cls, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        pretrained_strict=not features_only,
+        kwargs_filter=kwargs_filter,
+        **model_kwargs)
     if features_only:
         model.default_cfg = default_cfg_for_features(model.default_cfg)
     return model

@@ -774,13 +774,18 @@ class HighResolutionNetFeatures(HighResolutionNet):
 def _create_hrnet(variant, pretrained, **model_kwargs):
     model_cls = HighResolutionNet
     features_only = False
+    kwargs_filter = None
     if model_kwargs.pop('features_only', False):
         model_cls = HighResolutionNetFeatures
-        model_kwargs['num_classes'] = 0
+        kwargs_filter = ('num_classes', 'global_pool')
         features_only = True
     model = build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        model_cfg=cfg_cls[variant], pretrained_strict=not features_only, **model_kwargs)
+        model_cls, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        model_cfg=cfg_cls[variant],
+        pretrained_strict=not features_only,
+        kwargs_filter=kwargs_filter,
+        **model_kwargs)
     if features_only:
         model.default_cfg = default_cfg_for_features(model.default_cfg)
     return model

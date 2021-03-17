@@ -29,7 +29,8 @@ import torchvision.utils
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
-from timm.models import create_model, resume_checkpoint, load_checkpoint, convert_splitbn_model, model_parameters
+from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint,\
+    convert_splitbn_model, model_parameters
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
 from timm.optim import create_optimizer
@@ -345,8 +346,8 @@ def main():
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
 
     if args.local_rank == 0:
-        _logger.info('Model %s created, param count: %d' %
-                     (args.model, sum([m.numel() for m in model.parameters()])))
+        _logger.info(
+            f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
 
     data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
 
@@ -543,7 +544,7 @@ def main():
         output_base = args.output if args.output else './output'
         exp_name = '-'.join([
             datetime.now().strftime("%Y%m%d-%H%M%S"),
-            args.model,
+            safe_model_name(args.model),
             str(data_config['input_size'][-1])
         ])
         output_dir = get_outdir(output_base, 'train', exp_name)

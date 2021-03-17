@@ -336,7 +336,9 @@ class InceptionResnetV2(nn.Module):
 
 def _create_inception_resnet_v2(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        InceptionResnetV2, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
+        InceptionResnetV2, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        **kwargs)
 
 
 @register_model
