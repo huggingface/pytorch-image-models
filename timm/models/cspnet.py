@@ -409,8 +409,10 @@ class CspNet(nn.Module):
 def _create_cspnet(variant, pretrained=False, **kwargs):
     cfg_variant = variant.split('_')[0]
     return build_model_with_cfg(
-        CspNet, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(flatten_sequential=True), model_cfg=model_cfgs[cfg_variant], **kwargs)
+        CspNet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), model_cfg=model_cfgs[cfg_variant],
+        **kwargs)
 
 
 @register_model

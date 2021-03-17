@@ -434,8 +434,10 @@ def _create_inception_v3(variant, pretrained=False, **kwargs):
         model_cls = InceptionV3
         load_strict = not default_cfg['has_aux']
     return build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=load_strict, **kwargs)
+        model_cls, variant, pretrained,
+        default_cfg=default_cfg,
+        pretrained_strict=load_strict,
+        **kwargs)
 
 
 @register_model

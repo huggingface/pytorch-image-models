@@ -253,8 +253,10 @@ class TResNet(nn.Module):
 
 def _create_tresnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        TResNet, variant, default_cfg=default_cfgs[variant], pretrained=pretrained,
-        feature_cfg=dict(out_indices=(1, 2, 3, 4), flatten_sequential=True), **kwargs)
+        TResNet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=dict(out_indices=(1, 2, 3, 4), flatten_sequential=True),
+        **kwargs)
 
 
 @register_model

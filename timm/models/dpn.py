@@ -262,8 +262,10 @@ class DPN(nn.Module):
 
 def _create_dpn(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        DPN, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(feature_concat=True, flatten_sequential=True), **kwargs)
+        DPN, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=dict(feature_concat=True, flatten_sequential=True),
+        **kwargs)
 
 
 @register_model

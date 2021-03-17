@@ -509,7 +509,7 @@ for m in model_list:
     model.eval()
     with torch.no_grad():
         # warmup
-        input = torch.randn((batch_size,) + data_config['input_size']).cuda()
+        input = torch.randn((batch_size,) + tuple(data_config['input_size'])).cuda()
         model(input)
 
         bar = tqdm(desc="Evaluation", mininterval=5, total=50000)

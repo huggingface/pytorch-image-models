@@ -21,13 +21,14 @@ import math
 import logging
 from functools import partial
 from collections import OrderedDict
+from copy import deepcopy
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained
+from .helpers import build_model_with_cfg, overlay_external_default_cfg
 from .layers import StdConv2dSame, DropPath, to_2tuple, trunc_normal_
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2
@@ -94,7 +95,7 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth',
         num_classes=21843, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
     'vit_huge_patch14_224_in21k': _cfg(
-        url='',  # FIXME I have weights for this but > 2GB limit for github release binaries
+        hf_hub='timm/vit_huge_patch14_224_in21k',
         num_classes=21843, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
 
     # hybrid models (weights ported from official Google JAX impl)
@@ -462,9 +463,10 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_vision_transformer(variant, pretrained=False, distilled=False, **kwargs):
-    default_cfg = default_cfgs[variant]
+    default_cfg = deepcopy(default_cfgs[variant])
+    overlay_external_default_cfg(default_cfg, kwargs)
     default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-1]
+    default_img_size = default_cfg['input_size'][-2:]
 
     num_classes = kwargs.pop('num_classes', default_num_classes)
     img_size = kwargs.pop('img_size', default_img_size)
@@ -475,14 +477,19 @@ def _create_vision_transformer(variant, pretrained=False, distilled=False, **kwa
         _logger.warning("Removing representation layer for fine-tuning.")
         repr_size = None
 
-    model_cls = DistilledVisionTransformer if distilled else VisionTransformer
-    model = model_cls(img_size=img_size, num_classes=num_classes, representation_size=repr_size, **kwargs)
-    model.default_cfg = default_cfg
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    if pretrained:
-        load_pretrained(
-            model, num_classes=num_classes, in_chans=kwargs.get('in_chans', 3),
-            filter_fn=partial(checkpoint_filter_fn, model=model))
+    model_cls = DistilledVisionTransformer if distilled else VisionTransformer
+    model = build_model_with_cfg(
+        model_cls, variant, pretrained,
+        default_cfg=default_cfg,
+        img_size=img_size,
+        num_classes=num_classes,
+        representation_size=repr_size,
+        pretrained_filter_fn=checkpoint_filter_fn,
+        **kwargs)
+
     return model
 
 

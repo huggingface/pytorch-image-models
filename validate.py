@@ -211,7 +211,7 @@ def validate(args):
     model.eval()
     with torch.no_grad():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
-        input = torch.randn((args.batch_size,) + data_config['input_size']).cuda()
+        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).cuda()
         if args.channels_last:
             input = input.contiguous(memory_format=torch.channels_last)
         model(input)

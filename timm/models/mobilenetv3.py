@@ -200,19 +200,20 @@ class MobileNetV3Features(nn.Module):
             return list(out.values())
 
 
-def _create_mnv3(model_kwargs, variant, pretrained=False):
+def _create_mnv3(variant, pretrained=False, **kwargs):
     features_only = False
     model_cls = MobileNetV3
-    if model_kwargs.pop('features_only', False):
+    kwargs_filter = None
+    if kwargs.pop('features_only', False):
         features_only = True
-        model_kwargs.pop('num_classes', 0)
-        model_kwargs.pop('num_features', 0)
-        model_kwargs.pop('head_conv', None)
-        model_kwargs.pop('head_bias', None)
+        kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'head_bias', 'global_pool')
         model_cls = MobileNetV3Features
     model = build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=not features_only, **model_kwargs)
+        model_cls, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        pretrained_strict=not features_only,
+        kwargs_filter=kwargs_filter,
+        **kwargs)
     if features_only:
         model.default_cfg = default_cfg_for_features(model.default_cfg)
     return model
@@ -252,7 +253,7 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
         **kwargs,
     )
-    model = _create_mnv3(model_kwargs, variant, pretrained)
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -348,7 +349,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
         **kwargs,
     )
-    model = _create_mnv3(model_kwargs, variant, pretrained)
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
     return model
 
 
