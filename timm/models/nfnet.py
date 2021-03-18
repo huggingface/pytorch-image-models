@@ -106,6 +106,7 @@ default_cfgs = dict(
         url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288)),
     eca_nfnet_l0=_dcfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l0_ra2-e3e9ac50.pth',
+        hf_hub='timm/eca_nfnet_l0',
         pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
 
     nf_regnet_b0=_dcfg(

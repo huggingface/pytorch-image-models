@@ -61,8 +61,8 @@ def has_hf_hub(necessary=False):
 
 
 def hf_split(hf_id):
-    rev_split = hf_id.split('#')
-    assert 0 < len(rev_split) <= 2, 'hf_hub id should only contain one # character to identify revision.'
+    rev_split = hf_id.split('@')
+    assert 0 < len(rev_split) <= 2, 'hf_hub id should only contain one @ character to identify revision.'
     hf_model_id = rev_split[0]
     hf_revision = rev_split[-1] if len(rev_split) > 1 else None
     return hf_model_id, hf_revision
