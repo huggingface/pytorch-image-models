@@ -195,7 +195,7 @@ class RegStage(nn.Module):
     """Stage (sequence of blocks w/ the same output shape)."""
 
     def __init__(self, in_chs, out_chs, stride, dilation, depth, bottle_ratio, group_width,
-                 block_fn=Bottleneck, se_ratio=0., drop_path_rate=None, drop_block=None):
+                 block_fn=Bottleneck, se_ratio=0., drop_path_rates=None, drop_block=None):
         super(RegStage, self).__init__()
         block_kwargs = {}  # FIXME setup to pass various aa, norm, act layer common args
         first_dilation = 1 if dilation in (1, 2) else 2
@@ -203,7 +203,10 @@ class RegStage(nn.Module):
             block_stride = stride if i == 0 else 1
             block_in_chs = in_chs if i == 0 else out_chs
             block_dilation = first_dilation if i == 0 else dilation
-            drop_path = DropPath(drop_path_rate[i]) if drop_path_rate is not None else None
+            if drop_path_rates is not None and drop_path_rates[i] > 0.:
+                drop_path = DropPath(drop_path_rates[i])
+            else:
+                drop_path = None
             if (block_in_chs != out_chs) or (block_stride != 1):
                 proj_block = downsample_conv(block_in_chs, out_chs, 1, block_stride, block_dilation)
             else:
@@ -301,7 +304,7 @@ class RegNet(nn.Module):
 
         # Adjust the compatibility of ws and gws
         stage_widths, stage_groups = adjust_widths_groups_comp(stage_widths, stage_bottle_ratios, stage_groups)
-        param_names = ['out_chs', 'stride', 'dilation', 'depth', 'bottle_ratio', 'group_width', 'drop_path_rate']
+        param_names = ['out_chs', 'stride', 'dilation', 'depth', 'bottle_ratio', 'group_width', 'drop_path_rates']
         stage_params = [
             dict(zip(param_names, params)) for params in
             zip(stage_widths, stage_strides, stage_dilations, stage_depths, stage_bottle_ratios, stage_groups,
@@ -327,7 +330,10 @@ class RegNet(nn.Module):
 
 def _create_regnet(variant, pretrained, **kwargs):
     return build_model_with_cfg(
-        RegNet, variant, pretrained, default_cfg=default_cfgs[variant], model_cfg=model_cfgs[variant], **kwargs)
+        RegNet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        model_cfg=model_cfgs[variant],
+        **kwargs)
 
 
 @register_model

@@ -17,18 +17,20 @@ default_cfgs = {
     # ported from http://download.tensorflow.org/models/inception_resnet_v2_2016_08_30.tar.gz
     'inception_resnet_v2': {
         'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/inception_resnet_v2-940b1cd6.pth',
-        'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
+        'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
         'crop_pct': 0.8975, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'conv2d_1a.conv', 'classifier': 'classif',
+        'label_offset': 1,  # 1001 classes in pretrained weights
     },
     # ported from http://download.tensorflow.org/models/ens_adv_inception_resnet_v2_2017_08_18.tar.gz
     'ens_adv_inception_resnet_v2': {
         'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ens_adv_inception_resnet_v2-2592a550.pth',
-        'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
+        'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
         'crop_pct': 0.8975, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'conv2d_1a.conv', 'classifier': 'classif',
+        'label_offset': 1,  # 1001 classes in pretrained weights
     }
 }
 
@@ -222,7 +224,7 @@ class Block8(nn.Module):
 
 
 class InceptionResnetV2(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, drop_rate=0., output_stride=32, global_pool='avg'):
+    def __init__(self, num_classes=1000, in_chans=3, drop_rate=0., output_stride=32, global_pool='avg'):
         super(InceptionResnetV2, self).__init__()
         self.drop_rate = drop_rate
         self.num_classes = num_classes
@@ -334,7 +336,9 @@ class InceptionResnetV2(nn.Module):
 
 def _create_inception_resnet_v2(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        InceptionResnetV2, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
+        InceptionResnetV2, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        **kwargs)
 
 
 @register_model

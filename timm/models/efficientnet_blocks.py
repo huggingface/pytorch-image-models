@@ -106,20 +106,18 @@ class SqueezeExcite(nn.Module):
     def __init__(self, in_chs, se_ratio=0.25, reduced_base_chs=None,
                  act_layer=nn.ReLU, gate_fn=sigmoid, divisor=1, **_):
         super(SqueezeExcite, self).__init__()
-        self.gate_fn = gate_fn
         reduced_chs = make_divisible((reduced_base_chs or in_chs) * se_ratio, divisor)
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv_reduce = nn.Conv2d(in_chs, reduced_chs, 1, bias=True)
         self.act1 = act_layer(inplace=True)
         self.conv_expand = nn.Conv2d(reduced_chs, in_chs, 1, bias=True)
+        self.gate_fn = gate_fn
 
     def forward(self, x):
-        x_se = self.avg_pool(x)
+        x_se = x.mean((2, 3), keepdim=True)
         x_se = self.conv_reduce(x_se)
         x_se = self.act1(x_se)
         x_se = self.conv_expand(x_se)
-        x = x * self.gate_fn(x_se)
-        return x
+        return x * self.gate_fn(x_se)
 
 
 class ConvBnAct(nn.Module):
@@ -352,7 +350,8 @@ class EdgeResidual(nn.Module):
         self.drop_path_rate = drop_path_rate
 
         # Expansion convolution
-        self.conv_exp = create_conv2d(in_chs, mid_chs, exp_kernel_size, padding=pad_type)
+        self.conv_exp = create_conv2d(
+            in_chs, mid_chs, exp_kernel_size, stride=stride, dilation=dilation, padding=pad_type)
         self.bn1 = norm_layer(mid_chs, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
@@ -364,8 +363,7 @@ class EdgeResidual(nn.Module):
             self.se = None
 
         # Point-wise linear projection
-        self.conv_pwl = create_conv2d(
-            mid_chs, out_chs, pw_kernel_size, stride=stride, dilation=dilation, padding=pad_type)
+        self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type)
         self.bn2 = norm_layer(out_chs, **norm_kwargs)
 
     def feature_info(self, location):

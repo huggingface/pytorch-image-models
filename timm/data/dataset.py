@@ -2,163 +2,107 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import torch.utils.data as data
-
 import os
-import re
 import torch
-import tarfile
+import logging
+
 from PIL import Image
 
+from .parsers import create_parser
 
-IMG_EXTENSIONS = ['.png', '.jpg', '.jpeg']
-
-
-def natural_key(string_):
-    """See http://www.codinghorror.com/blog/archives/001018.html"""
-    return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_.lower())]
+_logger = logging.getLogger(__name__)
 
 
-def find_images_and_targets(folder, types=IMG_EXTENSIONS, class_to_idx=None, leaf_name_only=True, sort=True):
-    labels = []
-    filenames = []
-    for root, subdirs, files in os.walk(folder, topdown=False):
-        rel_path = os.path.relpath(root, folder) if (root != folder) else ''
-        label = os.path.basename(rel_path) if leaf_name_only else rel_path.replace(os.path.sep, '_')
-        for f in files:
-            base, ext = os.path.splitext(f)
-            if ext.lower() in types:
-                filenames.append(os.path.join(root, f))
-                labels.append(label)
-    if class_to_idx is None:
-        # building class index
-        unique_labels = set(labels)
-        sorted_labels = list(sorted(unique_labels, key=natural_key))
-        class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    images_and_targets = [(f, class_to_idx[l]) for f, l in zip(filenames, labels) if l in class_to_idx]
-    if sort:
-        images_and_targets = sorted(images_and_targets, key=lambda k: natural_key(k[0]))
-    return images_and_targets, class_to_idx
+_ERROR_RETRY = 50
 
 
-def load_class_map(filename, root=''):
-    class_map_path = filename
-    if not os.path.exists(class_map_path):
-        class_map_path = os.path.join(root, filename)
-        assert os.path.exists(class_map_path), 'Cannot locate specified class map file (%s)' % filename
-    class_map_ext = os.path.splitext(filename)[-1].lower()
-    if class_map_ext == '.txt':
-        with open(class_map_path) as f:
-            class_to_idx = {v.strip(): k for k, v in enumerate(f)}
-    else:
-        assert False, 'Unsupported class map extension'
-    return class_to_idx
-
-
-class Dataset(data.Dataset):
+class ImageDataset(data.Dataset):
 
     def __init__(
             self,
             root,
+            parser=None,
+            class_map='',
             load_bytes=False,
             transform=None,
-            class_map=''):
-
-        class_to_idx = None
-        if class_map:
-            class_to_idx = load_class_map(class_map, root)
-        images, class_to_idx = find_images_and_targets(root, class_to_idx=class_to_idx)
-        if len(images) == 0:
-            raise RuntimeError(f'Found 0 images in subfolders of {root}. '
-                               f'Supported image extensions are {", ".join(IMG_EXTENSIONS)}')
-        self.root = root
-        self.samples = images
-        self.imgs = self.samples  # torchvision ImageFolder compat
-        self.class_to_idx = class_to_idx
+    ):
+        if parser is None or isinstance(parser, str):
+            parser = create_parser(parser or '', root=root, class_map=class_map)
+        self.parser = parser
         self.load_bytes = load_bytes
         self.transform = transform
+        self._consecutive_errors = 0
 
     def __getitem__(self, index):
-        path, target = self.samples[index]
-        img = open(path, 'rb').read() if self.load_bytes else Image.open(path).convert('RGB')
+        img, target = self.parser[index]
+        try:
+            img = img.read() if self.load_bytes else Image.open(img).convert('RGB')
+        except Exception as e:
+            _logger.warning(f'Skipped sample (index {index}, file {self.parser.filename(index)}). {str(e)}')
+            self._consecutive_errors += 1
+            if self._consecutive_errors < _ERROR_RETRY:
+                return self.__getitem__((index + 1) % len(self.parser))
+            else:
+                raise e
+        self._consecutive_errors = 0
         if self.transform is not None:
             img = self.transform(img)
         if target is None:
-            target = torch.zeros(1).long()
+            target = torch.tensor(-1, dtype=torch.long)
         return img, target
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.parser)
 
-    def filenames(self, indices=[], basename=False):
-        if indices:
-            if basename:
-                return [os.path.basename(self.samples[i][0]) for i in indices]
-            else:
-                return [self.samples[i][0] for i in indices]
+    def filename(self, index, basename=False, absolute=False):
+        return self.parser.filename(index, basename, absolute)
+
+    def filenames(self, basename=False, absolute=False):
+        return self.parser.filenames(basename, absolute)
+
+
+class IterableImageDataset(data.IterableDataset):
+
+    def __init__(
+            self,
+            root,
+            parser=None,
+            split='train',
+            is_training=False,
+            batch_size=None,
+            class_map='',
+            load_bytes=False,
+            transform=None,
+    ):
+        assert parser is not None
+        if isinstance(parser, str):
+            self.parser = create_parser(
+                parser, root=root, split=split, is_training=is_training, batch_size=batch_size)
         else:
-            if basename:
-                return [os.path.basename(x[0]) for x in self.samples]
-            else:
-                return [x[0] for x in self.samples]
-
-
-def _extract_tar_info(tarfile, class_to_idx=None, sort=True):
-    files = []
-    labels = []
-    for ti in tarfile.getmembers():
-        if not ti.isfile():
-            continue
-        dirname, basename = os.path.split(ti.path)
-        label = os.path.basename(dirname)
-        ext = os.path.splitext(basename)[1]
-        if ext.lower() in IMG_EXTENSIONS:
-            files.append(ti)
-            labels.append(label)
-    if class_to_idx is None:
-        unique_labels = set(labels)
-        sorted_labels = list(sorted(unique_labels, key=natural_key))
-        class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    tarinfo_and_targets = [(f, class_to_idx[l]) for f, l in zip(files, labels) if l in class_to_idx]
-    if sort:
-        tarinfo_and_targets = sorted(tarinfo_and_targets, key=lambda k: natural_key(k[0].path))
-    return tarinfo_and_targets, class_to_idx
-
-
-class DatasetTar(data.Dataset):
-
-    def __init__(self, root, load_bytes=False, transform=None, class_map=''):
-
-        class_to_idx = None
-        if class_map:
-            class_to_idx = load_class_map(class_map, root)
-        assert os.path.isfile(root)
-        self.root = root
-        with tarfile.open(root) as tf:  # cannot keep this open across processes, reopen later
-            self.samples, self.class_to_idx = _extract_tar_info(tf, class_to_idx)
-        self.imgs = self.samples
-        self.tarfile = None  # lazy init in __getitem__
-        self.load_bytes = load_bytes
+            self.parser = parser
         self.transform = transform
+        self._consecutive_errors = 0
 
-    def __getitem__(self, index):
-        if self.tarfile is None:
-            self.tarfile = tarfile.open(self.root)
-        tarinfo, target = self.samples[index]
-        iob = self.tarfile.extractfile(tarinfo)
-        img = iob.read() if self.load_bytes else Image.open(iob).convert('RGB')
-        if self.transform is not None:
-            img = self.transform(img)
-        if target is None:
-            target = torch.zeros(1).long()
-        return img, target
+    def __iter__(self):
+        for img, target in self.parser:
+            if self.transform is not None:
+                img = self.transform(img)
+            if target is None:
+                target = torch.tensor(-1, dtype=torch.long)
+            yield img, target
 
     def __len__(self):
-        return len(self.samples)
+        if hasattr(self.parser, '__len__'):
+            return len(self.parser)
+        else:
+            return 0
+
+    def filename(self, index, basename=False, absolute=False):
+        assert False, 'Filename lookup by index not supported, use filenames().'
+
+    def filenames(self, basename=False, absolute=False):
+        return self.parser.filenames(basename, absolute)
 
 
 class AugMixDataset(torch.utils.data.Dataset):

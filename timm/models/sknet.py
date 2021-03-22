@@ -141,7 +141,9 @@ class SelectiveKernelBottleneck(nn.Module):
 
 def _create_skresnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        ResNet, variant, default_cfg=default_cfgs[variant], pretrained=pretrained, **kwargs)
+        ResNet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        **kwargs)
 
 
 @register_model

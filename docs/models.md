@@ -1,4 +1,4 @@
-# Model Architectures
+# Model Summaries
 
 The model architectures included come from a wide variety of sources. Sources, including papers, original impl ("reference code") that I rewrote / adapted, and PyTorch impl that I leveraged directly ("code") are listed below.
 
@@ -8,7 +8,13 @@ Most included models have pretrained weights. The weights are either:
 2. ported by myself from their original impl in a different framework (e.g. Tensorflow models)
 3. trained from scratch using the included training script
 
-The validation results for the pretrained weights can be found [here](results.md)
+The validation results for the pretrained weights are [here](results.md)
+
+A more exciting view (with pretty pictures) of the models within `timm` can be found at [paperswithcode](https://paperswithcode.com/lib/timm).
+
+## Big Transfer ResNetV2 (BiT) [[resnetv2.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnetv2.py)]
+* Paper: `Big Transfer (BiT): General Visual Representation Learning` - https://arxiv.org/abs/1912.11370
+* Reference code: https://github.com/google-research/big_transfer
 
 ## Cross-Stage Partial Networks [[cspnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/cspnet.py)]
 * Paper: `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
@@ -26,6 +32,10 @@ The validation results for the pretrained weights can be found [here](results.md
 * Paper: `Dual Path Networks` - https://arxiv.org/abs/1707.01629
 * My PyTorch code: https://github.com/rwightman/pytorch-dpn-pretrained
 * Reference code: https://github.com/cypw/DPNs
+
+## GPU-Efficient Networks [[byobnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/byobnet.py)]
+* Paper: `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+* Reference code: https://github.com/idstcv/GPU-Efficient-Networks
 
 ## HRNet [[hrnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/hrnet.py)]
 * Paper: `Deep High-Resolution Representation Learning for Visual Recognition` - https://arxiv.org/abs/1908.07919
@@ -77,6 +87,10 @@ The validation results for the pretrained weights can be found [here](results.md
 ## RegNet [[regnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/regnet.py)]
 * Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
 * Reference code: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
+
+## RepVGG [[byobnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/byobnet.py)]
+* Paper: `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+* Reference code: https://github.com/DingXiaoH/RepVGG
 
 ## ResNet, ResNeXt [[resnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/resnet.py)]
 
@@ -131,6 +145,14 @@ NOTE: I am deprecating this version of the networks, the new ones are part of `r
 ## TResNet [[tresnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/tresnet.py)]
 * Paper: `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
 * Code: https://github.com/mrT23/TResNet
+
+## VGG [[vgg.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vgg.py)]
+* Paper: `Very Deep Convolutional Networks For Large-Scale Image Recognition` - https://arxiv.org/pdf/1409.1556.pdf
+* Reference code: https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
+
+## Vision Transformer [[vision_transformer.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py)]
+* Paper: `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale` - https://arxiv.org/abs/2010.11929
+* Reference code and pretrained weights: https://github.com/google-research/vision_transformer
 
 ## VovNet V2 and V1 [[vovnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vovnet.py)]
 * Paper: `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Checkpoint Averaging Script
 
 This script averages all model weights for checkpoints in specified path that match
@@ -103,7 +103,11 @@ def main():
         v = v.clamp(float32_info.min, float32_info.max)
         final_state_dict[k] = v.to(dtype=torch.float32)
 
-    torch.save(final_state_dict, args.output)
+    try:
+        torch.save(final_state_dict, args.output, _use_new_zipfile_serialization=False)
+    except:
+        torch.save(final_state_dict, args.output)
+
     with open(args.output, 'rb') as f:
         sha_hash = hashlib.sha256(f.read()).hexdigest()
     print("=> Saved state_dict to '{}, SHA256: {}'".format(args.output, sha_hash))

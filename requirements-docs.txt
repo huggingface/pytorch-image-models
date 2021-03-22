@@ -1,3 +1,4 @@
-mkdocs==1.1.2
-mkdocs-material==5.4.0
+mkdocs
+mkdocs-material
 mdx_truly_sane_lists
+mkdocs-awesome-pages-plugin

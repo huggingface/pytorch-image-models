@@ -16,10 +16,11 @@ __all__ = ['InceptionV4']
 default_cfgs = {
     'inception_v4': {
         'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/inceptionv4-8e4777a0.pth',
-        'num_classes': 1001, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
+        'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'features.0.conv', 'classifier': 'last_linear',
+        'label_offset': 1,  # 1001 classes in pretrained weights
     }
 }
 
@@ -241,7 +242,7 @@ class InceptionC(nn.Module):
 
 
 class InceptionV4(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg'):
+    def __init__(self, num_classes=1000, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg'):
         super(InceptionV4, self).__init__()
         assert output_stride == 32
         self.drop_rate = drop_rate
@@ -304,8 +305,10 @@ class InceptionV4(nn.Module):
 
 def _create_inception_v4(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        InceptionV4, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(flatten_sequential=True), **kwargs)
+        InceptionV4, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True),
+        **kwargs)
 
 
 @register_model

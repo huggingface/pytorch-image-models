@@ -15,8 +15,9 @@ from math import ceil
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import ClassifierHead, create_act_layer, ConvBnAct
+from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath, make_divisible
 from .registry import register_model
+from .efficientnet_builder import efficientnet_init_weights
 
 
 def _cfg(url=''):
@@ -48,29 +49,20 @@ default_cfgs = dict(
 )
 
 
-def make_divisible(v, divisor=8, min_value=None):
-    min_value = min_value or divisor
-    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
-    return new_v
-
-
 class SEWithNorm(nn.Module):
 
-    def __init__(self, channels, reduction=16, act_layer=nn.ReLU, divisor=1, reduction_channels=None,
+    def __init__(self, channels, se_ratio=1 / 12., act_layer=nn.ReLU, divisor=1, reduction_channels=None,
                  gate_layer='sigmoid'):
         super(SEWithNorm, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        reduction_channels = reduction_channels or make_divisible(channels // reduction, divisor=divisor)
-        self.fc1 = nn.Conv2d(
-            channels, reduction_channels, kernel_size=1, padding=0, bias=True)
+        reduction_channels = reduction_channels or make_divisible(int(channels * se_ratio), divisor=divisor)
+        self.fc1 = nn.Conv2d(channels, reduction_channels, kernel_size=1, bias=True)
         self.bn = nn.BatchNorm2d(reduction_channels)
         self.act = act_layer(inplace=True)
-        self.fc2 = nn.Conv2d(
-            reduction_channels, channels, kernel_size=1, padding=0, bias=True)
+        self.fc2 = nn.Conv2d(reduction_channels, channels, kernel_size=1, bias=True)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
-        x_se = self.avg_pool(x)
+        x_se = x.mean((2, 3), keepdim=True)
         x_se = self.fc1(x_se)
         x_se = self.bn(x_se)
         x_se = self.act(x_se)
@@ -79,7 +71,8 @@ class SEWithNorm(nn.Module):
 
 
 class LinearBottleneck(nn.Module):
-    def __init__(self, in_chs, out_chs, stride, exp_ratio=1.0, use_se=True, se_rd=12, ch_div=1):
+    def __init__(self, in_chs, out_chs, stride, exp_ratio=1.0, se_ratio=0., ch_div=1,
+                 act_layer='swish', dw_act_layer='relu6', drop_path=None):
         super(LinearBottleneck, self).__init__()
         self.use_shortcut = stride == 1 and in_chs <= out_chs
         self.in_channels = in_chs
@@ -87,16 +80,17 @@ class LinearBottleneck(nn.Module):
 
         if exp_ratio != 1.:
             dw_chs = make_divisible(round(in_chs * exp_ratio), divisor=ch_div)
-            self.conv_exp = ConvBnAct(in_chs, dw_chs, act_layer="swish")
+            self.conv_exp = ConvBnAct(in_chs, dw_chs, act_layer=act_layer)
         else:
             dw_chs = in_chs
             self.conv_exp = None
 
         self.conv_dw = ConvBnAct(dw_chs, dw_chs, 3, stride=stride, groups=dw_chs, apply_act=False)
-        self.se = SEWithNorm(dw_chs, reduction=se_rd, divisor=ch_div) if use_se else None
-        self.act_dw = nn.ReLU6()
+        self.se = SEWithNorm(dw_chs, se_ratio=se_ratio, divisor=ch_div) if se_ratio > 0. else None
+        self.act_dw = create_act_layer(dw_act_layer)
 
         self.conv_pwl = ConvBnAct(dw_chs, out_chs, 1, apply_act=False)
+        self.drop_path = drop_path
 
     def feat_channels(self, exp=False):
         return self.conv_dw.out_channels if exp else self.out_channels
@@ -110,12 +104,14 @@ class LinearBottleneck(nn.Module):
             x = self.se(x)
         x = self.act_dw(x)
         x = self.conv_pwl(x)
+        if self.drop_path is not None:
+            x = self.drop_path(x)
         if self.use_shortcut:
             x[:, 0:self.in_channels] += shortcut
         return x
 
 
-def _block_cfg(width_mult=1.0, depth_mult=1.0, initial_chs=16, final_chs=180, use_se=True, ch_div=1):
+def _block_cfg(width_mult=1.0, depth_mult=1.0, initial_chs=16, final_chs=180, se_ratio=0., ch_div=1):
     layers = [1, 2, 2, 3, 3, 5]
     strides = [1, 2, 2, 2, 1, 2]
     layers = [ceil(element * depth_mult) for element in layers]
@@ -130,60 +126,58 @@ def _block_cfg(width_mult=1.0, depth_mult=1.0, initial_chs=16, final_chs=180, us
         out_chs_list.append(make_divisible(round(base_chs * width_mult), divisor=ch_div))
         base_chs += final_chs / (depth // 3 * 1.0)
 
-    if use_se:
-        use_ses = [False] * (layers[0] + layers[1]) + [True] * sum(layers[2:])
-    else:
-        use_ses = [False] * sum(layers[:])
+    se_ratios = [0.] * (layers[0] + layers[1]) + [se_ratio] * sum(layers[2:])
 
-    return zip(out_chs_list, exp_ratios, strides, use_ses)
+    return list(zip(out_chs_list, exp_ratios, strides, se_ratios))
 
 
-def _build_blocks(block_cfg, prev_chs, width_mult, se_rd=12, ch_div=1, feature_location='bottleneck'):
-    feat_exp = feature_location == 'expansion'
+def _build_blocks(
+        block_cfg, prev_chs, width_mult, ch_div=1, act_layer='swish', dw_act_layer='relu6', drop_path_rate=0.):
     feat_chs = [prev_chs]
     feature_info = []
     curr_stride = 2
     features = []
-    for block_idx, (chs, exp_ratio, stride, se) in enumerate(block_cfg):
+    num_blocks = len(block_cfg)
+    for block_idx, (chs, exp_ratio, stride, se_ratio) in enumerate(block_cfg):
         if stride > 1:
             fname = 'stem' if block_idx == 0 else f'features.{block_idx - 1}'
-            if block_idx > 0 and feat_exp:
-                fname += '.act_dw'
             feature_info += [dict(num_chs=feat_chs[-1], reduction=curr_stride, module=fname)]
             curr_stride *= stride
+        block_dpr = drop_path_rate * block_idx / (num_blocks - 1)  # stochastic depth linear decay rule
+        drop_path = DropPath(block_dpr) if block_dpr > 0. else None
         features.append(LinearBottleneck(
-            in_chs=prev_chs, out_chs=chs, exp_ratio=exp_ratio, stride=stride, use_se=se, se_rd=se_rd, ch_div=ch_div))
+            in_chs=prev_chs, out_chs=chs, exp_ratio=exp_ratio, stride=stride, se_ratio=se_ratio,
+            ch_div=ch_div, act_layer=act_layer, dw_act_layer=dw_act_layer, drop_path=drop_path))
         prev_chs = chs
-        feat_chs += [features[-1].feat_channels(feat_exp)]
+        feat_chs += [features[-1].feat_channels()]
     pen_chs = make_divisible(1280 * width_mult, divisor=ch_div)
-    feature_info += [dict(
-        num_chs=pen_chs if feat_exp else feat_chs[-1], reduction=curr_stride,
-        module=f'features.{len(features) - int(not feat_exp)}')]
-    features.append(ConvBnAct(prev_chs, pen_chs, act_layer="swish"))
+    feature_info += [dict(num_chs=feat_chs[-1], reduction=curr_stride, module=f'features.{len(features) - 1}')]
+    features.append(ConvBnAct(prev_chs, pen_chs, act_layer=act_layer))
     return features, feature_info
 
 
 class ReXNetV1(nn.Module):
     def __init__(self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32,
-                 initial_chs=16, final_chs=180, width_mult=1.0, depth_mult=1.0, use_se=True,
-                 se_rd=12, ch_div=1, drop_rate=0.2, feature_location='bottleneck'):
+                 initial_chs=16, final_chs=180, width_mult=1.0, depth_mult=1.0, se_ratio=1/12.,
+                 ch_div=1, act_layer='swish', dw_act_layer='relu6', drop_rate=0.2, drop_path_rate=0.):
         super(ReXNetV1, self).__init__()
         self.drop_rate = drop_rate
+        self.num_classes = num_classes
 
         assert output_stride == 32  # FIXME support dilation
         stem_base_chs = 32 / width_mult if width_mult < 1.0 else 32
         stem_chs = make_divisible(round(stem_base_chs * width_mult), divisor=ch_div)
-        self.stem = ConvBnAct(in_chans, stem_chs, 3, stride=2, act_layer='swish')
+        self.stem = ConvBnAct(in_chans, stem_chs, 3, stride=2, act_layer=act_layer)
 
-        block_cfg = _block_cfg(width_mult, depth_mult, initial_chs, final_chs, use_se, ch_div)
+        block_cfg = _block_cfg(width_mult, depth_mult, initial_chs, final_chs, se_ratio, ch_div)
         features, self.feature_info = _build_blocks(
-            block_cfg, stem_chs, width_mult, se_rd, ch_div, feature_location)
+            block_cfg, stem_chs, width_mult, ch_div, act_layer, dw_act_layer, drop_path_rate)
         self.num_features = features[-1].out_channels
         self.features = nn.Sequential(*features)
 
         self.head = ClassifierHead(self.num_features, num_classes, global_pool, drop_rate)
 
-        # FIXME weight init, the original appears to use PyTorch defaults
+        efficientnet_init_weights(self)
 
     def get_classifier(self):
         return self.head.fc
@@ -204,10 +198,11 @@ class ReXNetV1(nn.Module):
 
 def _create_rexnet(variant, pretrained, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
-    if kwargs.get('feature_location', '') == 'expansion':
-        feature_cfg['feature_cls'] = 'hook'
     return build_model_with_cfg(
-        ReXNetV1, variant, pretrained, default_cfg=default_cfgs[variant], feature_cfg=feature_cfg, **kwargs)
+        ReXNetV1, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=feature_cfg,
+        **kwargs)
 
 
 @register_model

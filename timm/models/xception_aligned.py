@@ -5,7 +5,7 @@ https://github.com/tensorflow/models/blob/master/research/deeplab/g3doc/model_zo
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-from collections import OrderedDict
+from functools import partial
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg
 from .layers import ClassifierHead, ConvBnAct, create_conv2d
-from .layers.helpers import tup_triple
+from .layers.helpers import to_3tuple
 from .registry import register_model
 
 __all__ = ['XceptionAligned']
@@ -43,9 +43,8 @@ default_cfgs = dict(
 class SeparableConv2d(nn.Module):
     def __init__(
             self, inplanes, planes, kernel_size=3, stride=1, dilation=1, padding='',
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, norm_kwargs=None):
+            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
         super(SeparableConv2d, self).__init__()
-        norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
         self.kernel_size = kernel_size
         self.dilation = dilation
 
@@ -53,7 +52,7 @@ class SeparableConv2d(nn.Module):
         self.conv_dw = create_conv2d(
             inplanes, inplanes, kernel_size, stride=stride,
             padding=padding, dilation=dilation, depthwise=True)
-        self.bn_dw = norm_layer(inplanes, **norm_kwargs)
+        self.bn_dw = norm_layer(inplanes)
         if act_layer is not None:
             self.act_dw = act_layer(inplace=True)
         else:
@@ -61,7 +60,7 @@ class SeparableConv2d(nn.Module):
 
         # pointwise convolution
         self.conv_pw = create_conv2d(inplanes, planes, kernel_size=1)
-        self.bn_pw = norm_layer(planes, **norm_kwargs)
+        self.bn_pw = norm_layer(planes)
         if act_layer is not None:
             self.act_pw = act_layer(inplace=True)
         else:
@@ -82,17 +81,15 @@ class SeparableConv2d(nn.Module):
 class XceptionModule(nn.Module):
     def __init__(
             self, in_chs, out_chs, stride=1, dilation=1, pad_type='',
-            start_with_relu=True, no_skip=False, act_layer=nn.ReLU, norm_layer=None, norm_kwargs=None):
+            start_with_relu=True, no_skip=False, act_layer=nn.ReLU, norm_layer=None):
         super(XceptionModule, self).__init__()
-        norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
-        out_chs = tup_triple(out_chs)
+        out_chs = to_3tuple(out_chs)
         self.in_channels = in_chs
         self.out_channels = out_chs[-1]
         self.no_skip = no_skip
         if not no_skip and (self.out_channels != self.in_channels or stride != 1):
             self.shortcut = ConvBnAct(
-                in_chs, self.out_channels, 1, stride=stride,
-                norm_layer=norm_layer, norm_kwargs=norm_kwargs, act_layer=None)
+                in_chs, self.out_channels, 1, stride=stride, norm_layer=norm_layer, act_layer=None)
         else:
             self.shortcut = None
 
@@ -103,7 +100,7 @@ class XceptionModule(nn.Module):
                 self.stack.add_module(f'act{i + 1}', nn.ReLU(inplace=i > 0))
             self.stack.add_module(f'conv{i + 1}', SeparableConv2d(
                 in_chs, out_chs[i], 3, stride=stride if i == 2 else 1, dilation=dilation, padding=pad_type,
-                act_layer=separable_act_layer, norm_layer=norm_layer, norm_kwargs=norm_kwargs))
+                act_layer=separable_act_layer, norm_layer=norm_layer))
             in_chs = out_chs[i]
 
     def forward(self, x):
@@ -121,14 +118,13 @@ class XceptionAligned(nn.Module):
     """
 
     def __init__(self, block_cfg, num_classes=1000, in_chans=3, output_stride=32,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_rate=0., global_pool='avg'):
+                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, drop_rate=0., global_pool='avg'):
         super(XceptionAligned, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert output_stride in (8, 16, 32)
-        norm_kwargs = norm_kwargs if norm_kwargs is not None else {}
 
-        layer_args = dict(act_layer=act_layer, norm_layer=norm_layer, norm_kwargs=norm_kwargs)
+        layer_args = dict(act_layer=act_layer, norm_layer=norm_layer)
         self.stem = nn.Sequential(*[
             ConvBnAct(in_chans, 32, kernel_size=3, stride=2, **layer_args),
             ConvBnAct(32, 64, kernel_size=3, stride=1, **layer_args)
@@ -142,7 +138,7 @@ class XceptionAligned(nn.Module):
             b['dilation'] = curr_dilation
             if b['stride'] > 1:
                 self.feature_info += [dict(
-                    num_chs=tup_triple(b['out_chs'])[-2], reduction=curr_stride, module=f'blocks.{i}.stack.act3')]
+                    num_chs=to_3tuple(b['out_chs'])[-2], reduction=curr_stride, module=f'blocks.{i}.stack.act3')]
                 next_stride = curr_stride * b['stride']
                 if next_stride > output_stride:
                     curr_dilation *= b['stride']
@@ -177,8 +173,10 @@ class XceptionAligned(nn.Module):
 
 def _xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        XceptionAligned, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(flatten_sequential=True, feature_cls='hook'), **kwargs)
+        XceptionAligned, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True, feature_cls='hook'),
+        **kwargs)
 
 
 @register_model
@@ -196,7 +194,7 @@ def xception41(pretrained=False, **kwargs):
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True, start_with_relu=False),
     ]
-    model_args = dict(block_cfg=block_cfg, norm_kwargs=dict(eps=.001, momentum=.1), **kwargs)
+    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
     return _xception('xception41', pretrained=pretrained, **model_args)
 
 
@@ -215,7 +213,7 @@ def xception65(pretrained=False, **kwargs):
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True, start_with_relu=False),
     ]
-    model_args = dict(block_cfg=block_cfg, norm_kwargs=dict(eps=.001, momentum=.1), **kwargs)
+    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
     return _xception('xception65', pretrained=pretrained, **model_args)
 
 
@@ -236,5 +234,5 @@ def xception71(pretrained=False, **kwargs):
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True, start_with_relu=False),
     ]
-    model_args = dict(block_cfg=block_cfg, norm_kwargs=dict(eps=.001, momentum=.1), **kwargs)
+    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
     return _xception('xception71', pretrained=pretrained, **model_args)

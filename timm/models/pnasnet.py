@@ -6,6 +6,7 @@
 
 """
 from collections import OrderedDict
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -26,9 +27,10 @@ default_cfgs = {
         'interpolation': 'bicubic',
         'mean': (0.5, 0.5, 0.5),
         'std': (0.5, 0.5, 0.5),
-        'num_classes': 1001,
+        'num_classes': 1000,
         'first_conv': 'conv_0.conv',
         'classifier': 'last_linear',
+        'label_offset': 1,  # 1001 classes in pretrained weights
     },
 }
 
@@ -234,7 +236,7 @@ class Cell(CellBase):
 
 
 class PNASNet5Large(nn.Module):
-    def __init__(self, num_classes=1001, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg', pad_type=''):
+    def __init__(self, num_classes=1000, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg', pad_type=''):
         super(PNASNet5Large, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -243,7 +245,7 @@ class PNASNet5Large(nn.Module):
 
         self.conv_0 = ConvBnAct(
             in_chans, 96, kernel_size=3, stride=2, padding=0,
-            norm_kwargs=dict(eps=0.001, momentum=0.1), act_layer=None)
+            norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
 
         self.cell_stem_0 = CellStem0(
             in_chs_left=96, out_chs_left=54, in_chs_right=96, out_chs_right=54, pad_type=pad_type)
@@ -332,7 +334,8 @@ class PNASNet5Large(nn.Module):
 
 def _create_pnasnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        PNASNet5Large, variant, pretrained, default_cfg=default_cfgs[variant],
+        PNASNet5Large, variant, pretrained,
+        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_cls='hook', no_rewrite=True),  # not possible to re-write this model
         **kwargs)
 

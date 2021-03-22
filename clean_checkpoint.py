@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ Checkpoint Cleaning Script
 
 Takes training checkpoints with GPU tensors, optimizer state, extra dict keys, etc.
@@ -57,7 +57,11 @@ def main():
             new_state_dict[name] = v
         print("=> Loaded state_dict from '{}'".format(args.checkpoint))
 
-        torch.save(new_state_dict, _TEMP_NAME)
+        try:
+            torch.save(new_state_dict, _TEMP_NAME, _use_new_zipfile_serialization=False)
+        except:
+            torch.save(new_state_dict, _TEMP_NAME)
+
         with open(_TEMP_NAME, 'rb') as f:
             sha_hash = hashlib.sha256(f.read()).hexdigest()
 

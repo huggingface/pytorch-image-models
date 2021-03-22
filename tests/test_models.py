@@ -13,18 +13,25 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_executor(True)
     torch._C._jit_set_profiling_mode(False)
 
+# transformer models don't support many of the spatial / feature based model functionalities
+NON_STD_FILTERS = ['vit_*']
+
+# exclude models that cause specific test failures
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d']
+    EXCLUDE_FILTERS = [
+        '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm',
+        '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*'] + NON_STD_FILTERS
 else:
-    EXCLUDE_FILTERS = []
+    EXCLUDE_FILTERS = NON_STD_FILTERS
+
 MAX_FWD_SIZE = 384
 MAX_BWD_SIZE = 128
 MAX_FWD_FEAT_SIZE = 448
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS[:-1]))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -68,7 +75,7 @@ def test_model_backward(model_name, batch_size):
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models())
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -78,7 +85,6 @@ def test_model_default_cfgs(model_name, batch_size):
     cfg = model.default_cfg
 
     classifier = cfg['classifier']
-    first_conv = cfg['first_conv']
     pool_size = cfg['pool_size']
     input_size = model.default_cfg['input_size']
 
@@ -106,9 +112,16 @@ def test_model_default_cfgs(model_name, batch_size):
             # FIXME mobilenetv3 forward_features vs removed pooling differ
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
-    # check classifier and first convolution names match those in default_cfg
+    # check classifier name matches default_cfg
     assert classifier + ".weight" in state_dict.keys(), f'{classifier} not in model params'
-    assert first_conv + ".weight" in state_dict.keys(), f'{first_conv} not in model params'
+
+    # check first conv(s) names match default_cfg
+    first_conv = cfg['first_conv']
+    if isinstance(first_conv, str):
+        first_conv = (first_conv,)
+    assert isinstance(first_conv, (tuple, list))
+    for fc in first_conv:
+        assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
 
 if 'GITHUB_ACTIONS' not in os.environ:
@@ -120,6 +133,12 @@ if 'GITHUB_ACTIONS' not in os.environ:
         in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
         create_model(model_name, pretrained=True, in_chans=in_chans)
 
+    @pytest.mark.timeout(120)
+    @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
+    @pytest.mark.parametrize('batch_size', [1])
+    def test_model_features_pretrained(model_name, batch_size):
+        """Create that pretrained weights load when features_only==True."""
+        create_model(model_name, pretrained=True, features_only=True)
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
