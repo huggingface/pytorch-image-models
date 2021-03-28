@@ -4,7 +4,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from .model_ema import ModelEma
 import torch 
-
+import fnmatch
 
 def unwrap_model(model):
     if isinstance(model, ModelEma):
@@ -24,31 +24,36 @@ def avg_sq_ch_mean(model, input, output):
 
 def avg_ch_var(model, input, output): 
     "calculate average channel variance of output activations"
+    return torch.mean(output.var(axis=[0,2,3])).item()\
+
+
+def avg_ch_var_residual(model, input, output): 
+    "calculate average channel variance of output activations"
     return torch.mean(output.var(axis=[0,2,3])).item()
 
 
 class ActivationStatsHook:
-    """Iterates through each of `model`'s modules and if module's class name 
-    is present in `layer_names` then registers `hook_fns` inside that module
-    and stores activation stats inside `self.stats`.
+    """Iterates through each of `model`'s modules and matches modules using unix pattern 
+    matching based on `layer_name` and `layer_type`. If there is match, this class adds 
+    creates a hook using `hook_fn` and adds it to the module.
 
     Arguments:
         model (nn.Module): model from which we will extract the activation stats
-        layer_names (List[str]): The layer name to look for to register forward 
-            hook. Example, `BasicBlock`, `Bottleneck`
+        layer_names (str): The layer name to look for to register forward 
+            hook. Example, 'stem', 'stages'
         hook_fns (List[Callable]): List of hook functions to be registered at every
             module in `layer_names`.
     
     Inspiration from https://docs.fast.ai/callback.hook.html.
     """
 
-    def __init__(self, model, layer_names, hook_fns=[avg_sq_ch_mean, avg_ch_var]):
+    def __init__(self, model, hook_fn_locs, hook_fns):
         self.model = model
-        self.layer_names = layer_names 
+        self.hook_fn_locs = hook_fn_locs
         self.hook_fns = hook_fns
         self.stats = dict((hook_fn.__name__, []) for hook_fn in hook_fns)
-        for hook_fn in hook_fns: 
-            self.register_hook(layer_names, hook_fn)
+        for hook_fn_loc, hook_fn in zip(hook_fn_locs, hook_fns): 
+            self.register_hook(hook_fn_loc, hook_fn)
 
     def _create_hook(self, hook_fn):
         def append_activation_stats(module, input, output):
@@ -56,17 +61,16 @@ class ActivationStatsHook:
             self.stats[hook_fn.__name__].append(out)
         return append_activation_stats
         
-    def register_hook(self, layer_names, hook_fn):
-        for layer in self.model.modules():
-            layer_name = layer.__class__.__name__
-            if layer_name not in layer_names: 
+    def register_hook(self, hook_fn_loc, hook_fn):
+        for name, module in self.model.named_modules():
+            if not fnmatch.fnmatch(name, hook_fn_loc):
                 continue
-            layer.register_forward_hook(self._create_hook(hook_fn))
+            module.register_forward_hook(self._create_hook(hook_fn))
 
 
 def extract_spp_stats(model, 
-                      layer_names, 
-                      hook_fns=[avg_sq_ch_mean, avg_ch_var], 
+                      hook_fn_locs,
+                      hook_fns, 
                       input_shape=[8, 3, 224, 224]):
     """Extract average square channel mean and variance of activations during 
     forward pass to plot Signal Propogation Plots (SPP).
@@ -74,7 +78,7 @@ def extract_spp_stats(model,
     Paper: https://arxiv.org/abs/2101.08692
     """ 
     x = torch.normal(0., 1., input_shape)
-    hook = ActivationStatsHook(model, layer_names, hook_fns)
+    hook = ActivationStatsHook(model, hook_fn_locs=hook_fn_locs, hook_fns=hook_fns)
     _ = model(x)
     return hook.stats
     
