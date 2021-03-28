@@ -34,13 +34,13 @@ def avg_ch_var_residual(model, input, output):
 
 class ActivationStatsHook:
     """Iterates through each of `model`'s modules and matches modules using unix pattern 
-    matching based on `layer_name` and `layer_type`. If there is match, this class adds 
-    creates a hook using `hook_fn` and adds it to the module.
+    matching based on `hook_fn_locs` and registers `hook_fn` to the module if there is 
+    a match. 
 
     Arguments:
         model (nn.Module): model from which we will extract the activation stats
-        layer_names (str): The layer name to look for to register forward 
-            hook. Example, 'stem', 'stages'
+        hook_fn_locs (List[str]): List of `hook_fn` locations based on Unix type string 
+            matching with the name of model's modules. 
         hook_fns (List[Callable]): List of hook functions to be registered at every
             module in `layer_names`.
     
@@ -51,6 +51,9 @@ class ActivationStatsHook:
         self.model = model
         self.hook_fn_locs = hook_fn_locs
         self.hook_fns = hook_fns
+        if len(hook_fn_locs) != len(hook_fns):
+            raise ValueError("Please provide `hook_fns` for each `hook_fn_locs`, \
+                their lengths are different.")
         self.stats = dict((hook_fn.__name__, []) for hook_fn in hook_fns)
         for hook_fn_loc, hook_fn in zip(hook_fn_locs, hook_fns): 
             self.register_hook(hook_fn_loc, hook_fn)
