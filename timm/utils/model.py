@@ -45,6 +45,9 @@ class ActivationStatsHook:
             module in `layer_names`.
     
     Inspiration from https://docs.fast.ai/callback.hook.html.
+
+    Refer to https://gist.github.com/amaarora/6e56942fcb46e67ba203f3009b30d950 for an example 
+    on how to plot Signal Propogation Plots using `ActivationStatsHook`.
     """
 
     def __init__(self, model, hook_fn_locs, hook_fns):
@@ -79,6 +82,8 @@ def extract_spp_stats(model,
     forward pass to plot Signal Propogation Plots (SPP).
     
     Paper: https://arxiv.org/abs/2101.08692
+
+    Example Usage: https://gist.github.com/amaarora/6e56942fcb46e67ba203f3009b30d950
     """ 
     x = torch.normal(0., 1., input_shape)
     hook = ActivationStatsHook(model, hook_fn_locs=hook_fn_locs, hook_fns=hook_fns)
