@@ -14,7 +14,8 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_mode(False)
 
 # transformer models don't support many of the spatial / feature based model functionalities
-NON_STD_FILTERS = ['vit_*']
+NON_STD_FILTERS = ['vit_*', 'tnt_*']
+NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
@@ -31,7 +32,7 @@ MAX_FWD_FEAT_SIZE = 448
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS[:-1]))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS[:-NUM_NON_STD]))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
     """Run a single forward pass with each model"""

@@ -6,6 +6,7 @@ from .dpn import *
 from .efficientnet import *
 from .gluon_resnet import *
 from .gluon_xception import *
+from .hardcorenas import *
 from .hrnet import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
@@ -23,13 +24,13 @@ from .rexnet import *
 from .selecsls import *
 from .senet import *
 from .sknet import *
+from .tnt import *
 from .tresnet import *
 from .vgg import *
 from .vision_transformer import *
 from .vovnet import *
 from .xception import *
 from .xception_aligned import *
-from .hardcorenas import *
 
 from .factory import create_model, split_model_name, safe_model_name
 from .helpers import load_checkpoint, resume_checkpoint, model_parameters
