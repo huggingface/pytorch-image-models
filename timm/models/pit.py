@@ -49,14 +49,17 @@ default_cfgs = {
     'pit_b_224': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_b_820.pth'),
     'pit_ti_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_ti_distill_746.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_ti_distill_746.pth',
+        classifier=('head', 'head_dist')),
     'pit_xs_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_xs_distill_791.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_xs_distill_791.pth',
+        classifier=('head', 'head_dist')),
     'pit_s_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_s_distill_819.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_s_distill_819.pth',
+        classifier=('head', 'head_dist')),
     'pit_b_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_b_distill_840.pth'),
-
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_b_distill_840.pth',
+        classifier=('head', 'head_dist')),
 }
 
 

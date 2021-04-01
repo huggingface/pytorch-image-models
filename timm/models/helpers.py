@@ -198,20 +198,24 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
                 _logger.warning(
                     f'Unable to convert pretrained {input_conv_name} weights, using random init for this layer.')
 
-    classifier_name = default_cfg.get('classifier', None)
+    classifiers = default_cfg.get('classifier', None)
     label_offset = default_cfg.get('label_offset', 0)
-    if classifier_name is not None:
+    if classifiers is not None:
+        if isinstance(classifiers, str):
+            classifiers = (classifiers,)
         if num_classes != default_cfg['num_classes']:
-            # completely discard fully connected if model num_classes doesn't match pretrained weights
-            del state_dict[classifier_name + '.weight']
-            del state_dict[classifier_name + '.bias']
+            for classifier_name in classifiers:
+                # completely discard fully connected if model num_classes doesn't match pretrained weights
+                del state_dict[classifier_name + '.weight']
+                del state_dict[classifier_name + '.bias']
             strict = False
         elif label_offset > 0:
-            # special case for pretrained weights with an extra background class in pretrained weights
-            classifier_weight = state_dict[classifier_name + '.weight']
-            state_dict[classifier_name + '.weight'] = classifier_weight[label_offset:]
-            classifier_bias = state_dict[classifier_name + '.bias']
-            state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
+            for classifier_name in classifiers:
+                # special case for pretrained weights with an extra background class in pretrained weights
+                classifier_weight = state_dict[classifier_name + '.weight']
+                state_dict[classifier_name + '.weight'] = classifier_weight[label_offset:]
+                classifier_bias = state_dict[classifier_name + '.bias']
+                state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
 
     model.load_state_dict(state_dict, strict=strict)
 
