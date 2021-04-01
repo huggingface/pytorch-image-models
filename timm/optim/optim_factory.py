@@ -55,7 +55,21 @@ def optimizer_kwargs(cfg):
     return kwargs
 
 
-def create_optimizer(
+def create_optimizer(args, model, filter_bias_and_bn=True):
+    """ Legacy optimizer factory for backwards compatibility.
+    NOTE: Use create_optimizer_v2 for new code.
+    """
+    opt_args = dict(lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+    if hasattr(args, 'opt_eps') and args.opt_eps is not None:
+        opt_args['eps'] = args.opt_eps
+    if hasattr(args, 'opt_betas') and args.opt_betas is not None:
+        opt_args['betas'] = args.opt_betas
+    if hasattr(args, 'opt_args') and args.opt_args is not None:
+        opt_args.update(args.opt_args)
+    return create_optimizer_v2(model, opt_name=args.opt, filter_bias_and_bn=filter_bias_and_bn, **opt_args)
+
+
+def create_optimizer_v2(
         model: nn.Module,
         opt_name: str = 'sgd',
         lr: Optional[float] = None,

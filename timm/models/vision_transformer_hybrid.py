@@ -146,6 +146,12 @@ def vit_base_r50_s16_224_in21k(pretrained=False, **kwargs):
 
 
 @register_model
+def vit_base_resnet50_224_in21k(pretrained=False, **kwargs):
+    # NOTE this is forwarding to model def above for backwards compatibility
+    return vit_base_r50_s16_224_in21k(pretrained=pretrained, **kwargs)
+
+
+@register_model
 def vit_base_r50_s16_384(pretrained=False, **kwargs):
     """ R50+ViT-B/16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
@@ -155,6 +161,12 @@ def vit_base_r50_s16_384(pretrained=False, **kwargs):
     model = _create_vision_transformer_hybrid(
         'vit_base_r50_s16_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
     return model
+
+
+@register_model
+def vit_base_resnet50_384(pretrained=False, **kwargs):
+    # NOTE this is forwarding to model def above for backwards compatibility
+    return vit_base_r50_s16_384(pretrained=pretrained, **kwargs)
 
 
 @register_model
