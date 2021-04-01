@@ -29,9 +29,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import StdConv2dSame, DropPath, to_2tuple, trunc_normal_
-from .resnet import resnet26d, resnet50d
-from .resnetv2 import ResNetV2
+from .layers import DropPath, to_2tuple, trunc_normal_, lecun_normal_
 from .registry import register_model
 
 _logger = logging.getLogger(__name__)
@@ -98,25 +96,21 @@ default_cfgs = {
         hf_hub='timm/vit_huge_patch14_224_in21k',
         num_classes=21843, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
 
-    # hybrid models (weights ported from official Google JAX impl)
-    'vit_base_resnet50_224_in21k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_224_in21k-6f7c7740.pth',
-        num_classes=21843, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.9, first_conv='patch_embed.backbone.stem.conv'),
-    'vit_base_resnet50_384': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_384-9fd3c705.pth',
-        input_size=(3, 384, 384), mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=1.0, first_conv='patch_embed.backbone.stem.conv'),
-
-    # hybrid models (my experiments)
-    'vit_small_resnet26d_224': _cfg(),
-    'vit_small_resnet50d_s3_224': _cfg(),
-    'vit_base_resnet26d_224': _cfg(),
-    'vit_base_resnet50d_224': _cfg(),
-
     # deit models (FB weights)
     'vit_deit_tiny_patch16_224': _cfg(
         url='https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth'),
+    'vit_deit_tiny_patch16_224_in21k': _cfg(num_classes=21843),
+    'vit_deit_tiny_patch16_384': _cfg(input_size=(3, 384, 384)),
+
     'vit_deit_small_patch16_224': _cfg(
         url='https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth'),
+    'vit_deit_small_patch16_224_in21k': _cfg(num_classes=21843),
+    'vit_deit_small_patch16_384': _cfg(input_size=(3, 384, 384)),
+
+    'vit_deit_small_patch32_224': _cfg(),
+    'vit_deit_small_patch32_224_in21k': _cfg(num_classes=21843),
+    'vit_deit_small_patch32_384': _cfg(input_size=(3, 384, 384)),
+
     'vit_deit_base_patch16_224': _cfg(
         url='https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth',),
     'vit_deit_base_patch16_384': _cfg(
@@ -161,7 +155,6 @@ class Attention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
@@ -231,17 +224,17 @@ class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
     Extract feature map from CNN, flatten, project to embedding dim.
     """
-    def __init__(self, backbone, img_size=224, feature_size=None, in_chans=3, embed_dim=768):
+    def __init__(self, backbone, img_size=224, patch_size=1, feature_size=None, in_chans=3, embed_dim=768):
         super().__init__()
         assert isinstance(backbone, nn.Module)
         img_size = to_2tuple(img_size)
+        patch_size = to_2tuple(patch_size)
         self.img_size = img_size
+        self.patch_size = patch_size
         self.backbone = backbone
         if feature_size is None:
             with torch.no_grad():
-                # FIXME this is hacky, but most reliable way of determining the exact dim of the output feature
-                # map for all networks, the feature metadata has reliable channel and stride info, but using
-                # stride to calc feature dim requires info about padding of each stage that isn't captured.
+                # NOTE Most reliable way of determining output dims is to run forward pass
                 training = backbone.training
                 if training:
                     backbone.eval()
@@ -257,8 +250,9 @@ class HybridEmbed(nn.Module):
                 feature_dim = self.backbone.feature_info.channels()[-1]
             else:
                 feature_dim = self.backbone.num_features
-        self.num_patches = feature_size[0] * feature_size[1]
-        self.proj = nn.Conv2d(feature_dim, embed_dim, 1)
+        assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
+        self.num_patches = feature_size[0] // patch_size[0] * feature_size[1] // patch_size[1]
+        self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
         x = self.backbone(x)
@@ -277,10 +271,11 @@ class VisionTransformer(nn.Module):
     Includes distillation token & head support for `DeiT: Data-efficient Image Transformers`
         - https://arxiv.org/abs/2012.12877
     """
+
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=True, qk_scale=None, representation_size=None, distilled=False,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0., hybrid_backbone=None, norm_layer=None,
-                 weight_init=''):
+                 act_layer=None, weight_init=''):
         """
         Args:
             img_size (int, tuple): input image size
@@ -307,10 +302,12 @@ class VisionTransformer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_tokens = 2 if distilled else 1
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
+        act_layer = act_layer or nn.GELU
+        patch_size = patch_size or (1 if hybrid_backbone is not None else 16)
 
         if hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
-                hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
+                hybrid_backbone, img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         else:
             self.patch_embed = PatchEmbed(
                 img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
@@ -325,7 +322,7 @@ class VisionTransformer(nn.Module):
         self.blocks = nn.Sequential(*[
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer)
             for i in range(depth)])
         self.norm = norm_layer(embed_dim)
 
@@ -344,20 +341,44 @@ class VisionTransformer(nn.Module):
         self.head_dist = nn.Linear(self.embed_dim, self.num_classes) \
             if num_classes > 0 and distilled else nn.Identity()
 
+        # Weight init
+        assert weight_init in ('jax', 'jax_nlhb', 'nlhb', '')
+        head_bias = -math.log(self.num_classes) if 'nlhb' in weight_init else 0.
         trunc_normal_(self.pos_embed, std=.02)
-        trunc_normal_(self.cls_token, std=.02)
-        if self.dist_token is not None:
-            trunc_normal_(self.dist_token, std=.02)
-        self.apply(self._init_weights)
+        if weight_init.startswith('jax'):
+            # leave cls token as zeros to match jax impl
+            for n, m in self.named_modules():
+                _init_weights_jax(m, n, head_bias=head_bias)
+        else:
+            trunc_normal_(self.cls_token, std=.02)
+            if self.dist_token is not None:
+                trunc_normal_(self.dist_token, std=.02)
+            for n, m in self.named_modules():
+                self._init_weights(m, n, head_bias=head_bias)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m, n: str = '', head_bias: float = 0., init_conv=False):
+        # This impl does not exactly match the official JAX version.
+        # When called w/o n, head_bias, init_conv args it will behave exactly the same
+        # as my original init for compatibility with downstream use cases (ie DeiT).
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+            if n.startswith('head'):
+                nn.init.zeros_(m.weight)
+                nn.init.constant_(m.bias, head_bias)
+            elif n.startswith('pre_logits'):
+                lecun_normal_(m.weight)
+                nn.init.zeros_(m.bias)
+            else:
+                trunc_normal_(m.weight, std=.02)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif init_conv and isinstance(m, nn.Conv2d):
+            # NOTE conv was left to pytorch default init originally
+            lecun_normal_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
+            nn.init.zeros_(m.bias)
+            nn.init.ones_(m.weight)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -404,6 +425,32 @@ class VisionTransformer(nn.Module):
         return x
 
 
+def _init_weights_jax(m: nn.Module, n: str, head_bias: float = 0.):
+    # A weight init scheme closer to the official JAX impl than my original init
+    # NOTE: requires module name so cannot be used via module.apply()
+    if isinstance(m, nn.Linear):
+        if n.startswith('head'):
+            nn.init.zeros_(m.weight)
+            nn.init.constant_(m.bias, head_bias)
+        elif n.startswith('pre_logits'):
+            lecun_normal_(m.weight)
+            nn.init.zeros_(m.bias)
+        else:
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                if 'mlp' in n:
+                    nn.init.normal_(m.bias, 0, 1e-6)
+                else:
+                    nn.init.zeros_(m.bias)
+    elif isinstance(m, nn.Conv2d):
+        lecun_normal_(m.weight)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+    elif isinstance(m, nn.LayerNorm):
+        nn.init.zeros_(m.bias)
+        nn.init.ones_(m.weight)
+
+
 def resize_pos_embed(posemb, posemb_new, num_tokens=1):
     # Rescale the grid of position embeddings when loading from state_dict. Adapted from
     # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
@@ -411,7 +458,7 @@ def resize_pos_embed(posemb, posemb_new, num_tokens=1):
     ntok_new = posemb_new.shape[1]
     if num_tokens:
         posemb_tok, posemb_grid = posemb[:, :num_tokens], posemb[0, num_tokens:]
-        ntok_new -= 1
+        ntok_new -= num_tokens
     else:
         posemb_tok, posemb_grid = posemb[:, :0], posemb[0]
     gs_old = int(math.sqrt(len(posemb_grid)))
@@ -474,7 +521,11 @@ def _create_vision_transformer(variant, pretrained=False, **kwargs):
 
 @register_model
 def vit_small_patch16_224(pretrained=False, **kwargs):
-    """ My custom 'small' ViT model. Depth=8, heads=8= mlp_ratio=3."""
+    """ My custom 'small' ViT model. embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.
+    NOTE:
+        * this differs from the DeiT based 'small' definitions with embed_dim=384, depth=12, num_heads=6
+        * this model does not have a bias for QKV (unlike the official ViT and DeiT models)
+    """
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
         qkv_bias=False, norm_layer=nn.LayerNorm, **kwargs)
@@ -620,76 +671,6 @@ def vit_huge_patch14_224_in21k(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_resnet50_224_in21k(pretrained=False, **kwargs):
-    """ R50+ViT-B/16 hybrid model from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    """
-    # create a ResNetV2 w/o pre-activation, that uses StdConv and GroupNorm and has 3 stages, no head
-    backbone = ResNetV2(
-        layers=(3, 4, 9), num_classes=0, global_pool='', in_chans=kwargs.get('in_chans', 3),
-        preact=False, stem_type='same', conv_layer=StdConv2dSame)
-    model_kwargs = dict(
-        embed_dim=768, depth=12, num_heads=12, hybrid_backbone=backbone,
-        representation_size=768, **kwargs)
-    model = _create_vision_transformer('vit_base_resnet50_224_in21k', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_base_resnet50_384(pretrained=False, **kwargs):
-    """ R50+ViT-B/16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
-    """
-    # create a ResNetV2 w/o pre-activation, that uses StdConv and GroupNorm and has 3 stages, no head
-    backbone = ResNetV2(
-        layers=(3, 4, 9), num_classes=0, global_pool='', in_chans=kwargs.get('in_chans', 3),
-        preact=False, stem_type='same', conv_layer=StdConv2dSame)
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, hybrid_backbone=backbone, **kwargs)
-    model = _create_vision_transformer('vit_base_resnet50_384', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_small_resnet26d_224(pretrained=False, **kwargs):
-    """ Custom ViT small hybrid w/ ResNet26D stride 32. No pretrained weights.
-    """
-    backbone = resnet26d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
-    model_kwargs = dict(embed_dim=768, depth=8, num_heads=8, mlp_ratio=3, hybrid_backbone=backbone, **kwargs)
-    model = _create_vision_transformer('vit_small_resnet26d_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_small_resnet50d_s3_224(pretrained=False, **kwargs):
-    """ Custom ViT small hybrid w/ ResNet50D 3-stages, stride 16. No pretrained weights.
-    """
-    backbone = resnet50d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[3])
-    model_kwargs = dict(embed_dim=768, depth=8, num_heads=8, mlp_ratio=3, hybrid_backbone=backbone, **kwargs)
-    model = _create_vision_transformer('vit_small_resnet50d_s3_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_base_resnet26d_224(pretrained=False, **kwargs):
-    """ Custom ViT base hybrid w/ ResNet26D stride 32. No pretrained weights.
-    """
-    backbone = resnet26d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, hybrid_backbone=backbone, **kwargs)
-    model = _create_vision_transformer('vit_base_resnet26d_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_base_resnet50d_224(pretrained=False, **kwargs):
-    """ Custom ViT base hybrid w/ ResNet50D stride 32. No pretrained weights.
-    """
-    backbone = resnet50d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, hybrid_backbone=backbone, **kwargs)
-    model = _create_vision_transformer('vit_base_resnet50d_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
 def vit_deit_tiny_patch16_224(pretrained=False, **kwargs):
     """ DeiT-tiny model @ 224x224 from paper (https://arxiv.org/abs/2012.12877).
     ImageNet-1k weights from https://github.com/facebookresearch/deit.
@@ -700,12 +681,70 @@ def vit_deit_tiny_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
+def vit_deit_tiny_patch16_224_in21k(pretrained=False, **kwargs):
+    """ DeiT-tiny model"""
+    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3, representation_size=192, **kwargs)
+    model = _create_vision_transformer('vit_deit_tiny_patch16_224_in21k', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_deit_tiny_patch16_384(pretrained=False, **kwargs):
+    """ DeiT-tiny model"""
+    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3, **kwargs)
+    model = _create_vision_transformer('vit_deit_tiny_patch16_384', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
 def vit_deit_small_patch16_224(pretrained=False, **kwargs):
     """ DeiT-small model @ 224x224 from paper (https://arxiv.org/abs/2012.12877).
     ImageNet-1k weights from https://github.com/facebookresearch/deit.
     """
     model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
     model = _create_vision_transformer('vit_deit_small_patch16_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_deit_small_patch16_224_in21k(pretrained=False, **kwargs):
+    """ DeiT-small """
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, representation_size=384, **kwargs)
+    model = _create_vision_transformer('vit_deit_small_patch16_224_in21k', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_deit_small_patch16_384(pretrained=False, **kwargs):
+    """ DeiT-small """
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model = _create_vision_transformer('vit_deit_small_patch16_384', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_deit_small_patch32_224(pretrained=False, **kwargs):
+    """ DeiT-small model @ 224x224 from paper (https://arxiv.org/abs/2012.12877).
+    ImageNet-1k weights from https://github.com/facebookresearch/deit.
+    """
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model = _create_vision_transformer('vit_deit_small_patch32_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_deit_small_patch32_224_in21k(pretrained=False, **kwargs):
+    """ DeiT-small """
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, representation_size=384, **kwargs)
+    model = _create_vision_transformer('vit_deit_small_patch32_224_in21k', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_deit_small_patch32_384(pretrained=False, **kwargs):
+    """ DeiT-small """
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model = _create_vision_transformer('vit_deit_small_patch32_384', pretrained=pretrained, **model_kwargs)
     return model
 
 
