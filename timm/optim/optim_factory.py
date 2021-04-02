@@ -44,14 +44,17 @@ def optimizer_kwargs(cfg):
     """ cfg/argparse to kwargs helper
     Convert optimizer args in argparse args or cfg like object to keyword args for updated create fn.
     """
-    kwargs = dict(opt_name=cfg.opt, lr=cfg.lr, weight_decay=cfg.weight_decay)
+    kwargs = dict(
+        optimizer_name=cfg.opt,
+        learning_rate=cfg.lr,
+        weight_decay=cfg.weight_decay,
+        momentum=cfg.momentum)
     if getattr(cfg, 'opt_eps', None) is not None:
         kwargs['eps'] = cfg.opt_eps
     if getattr(cfg, 'opt_betas', None) is not None:
         kwargs['betas'] = cfg.opt_betas
     if getattr(cfg, 'opt_args', None) is not None:
         kwargs.update(cfg.opt_args)
-    kwargs['momentum'] = cfg.momentum
     return kwargs
 
 
@@ -59,20 +62,17 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
     """ Legacy optimizer factory for backwards compatibility.
     NOTE: Use create_optimizer_v2 for new code.
     """
-    opt_args = dict(lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-    if hasattr(args, 'opt_eps') and args.opt_eps is not None:
-        opt_args['eps'] = args.opt_eps
-    if hasattr(args, 'opt_betas') and args.opt_betas is not None:
-        opt_args['betas'] = args.opt_betas
-    if hasattr(args, 'opt_args') and args.opt_args is not None:
-        opt_args.update(args.opt_args)
-    return create_optimizer_v2(model, opt_name=args.opt, filter_bias_and_bn=filter_bias_and_bn, **opt_args)
+    return create_optimizer_v2(
+        model,
+        **optimizer_kwargs(cfg=args),
+        filter_bias_and_bn=filter_bias_and_bn,
+    )
 
 
 def create_optimizer_v2(
         model: nn.Module,
-        opt_name: str = 'sgd',
-        lr: Optional[float] = None,
+        optimizer_name: str = 'sgd',
+        learning_rate: Optional[float] = None,
         weight_decay: float = 0.,
         momentum: float = 0.9,
         filter_bias_and_bn: bool = True,
@@ -86,8 +86,8 @@ def create_optimizer_v2(
 
     Args:
         model (nn.Module): model containing parameters to optimize
-        opt_name: name of optimizer to create
-        lr: initial learning rate
+        optimizer_name: name of optimizer to create
+        learning_rate: initial learning rate
         weight_decay: weight decay to apply in optimizer
         momentum:  momentum for momentum based optimizers (others may use betas via kwargs)
         filter_bias_and_bn:  filter out bias, bn and other 1d params from weight decay
@@ -96,7 +96,7 @@ def create_optimizer_v2(
     Returns:
         Optimizer
     """
-    opt_lower = opt_name.lower()
+    opt_lower = optimizer_name.lower()
     if weight_decay and filter_bias_and_bn:
         skip = {}
         if hasattr(model, 'no_weight_decay'):
@@ -108,7 +108,7 @@ def create_optimizer_v2(
     if 'fused' in opt_lower:
         assert has_apex and torch.cuda.is_available(), 'APEX and CUDA required for fused optimizers'
 
-    opt_args = dict(lr=lr, weight_decay=weight_decay, **kwargs)
+    opt_args = dict(lr=learning_rate, weight_decay=weight_decay, **kwargs)
     opt_split = opt_lower.split('_')
     opt_lower = opt_split[-1]
     if opt_lower == 'sgd' or opt_lower == 'nesterov':
@@ -132,7 +132,7 @@ def create_optimizer_v2(
     elif opt_lower == 'adadelta':
         optimizer = optim.Adadelta(parameters, **opt_args)
     elif opt_lower == 'adafactor':
-        if not lr:
+        if not learning_rate:
             opt_args['lr'] = None
         optimizer = Adafactor(parameters, **opt_args)
     elif opt_lower == 'adahessian':

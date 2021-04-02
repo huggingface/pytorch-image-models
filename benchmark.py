@@ -217,17 +217,18 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
                 delta_fwd = _step()
                 total_step += delta_fwd
                 num_samples += self.batch_size
-                if (i + 1) % self.log_freq == 0:
+                num_steps = i + 1
+                if num_steps % self.log_freq == 0:
                     _logger.info(
-                        f"Infer [{i + 1}/{self.num_bench_iter}]."
+                        f"Infer [{num_steps}/{self.num_bench_iter}]."
                         f" {num_samples / total_step:0.2f} samples/sec."
-                        f" {1000 * total_step / num_samples:0.3f} ms/sample.")
+                        f" {1000 * total_step / num_steps:0.3f} ms/step.")
             t_run_end = self.time_fn(True)
             t_run_elapsed = t_run_end - t_run_start
 
         results = dict(
             samples_per_sec=round(num_samples / t_run_elapsed, 2),
-            step_time=round(1000 * total_step / num_samples, 3),
+            step_time=round(1000 * total_step / self.num_bench_iter, 3),
             batch_size=self.batch_size,
             img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
@@ -235,7 +236,7 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "
-            f"{results['samples_per_sec']:.2f} samples/sec, {results['step_time']:.2f} ms/sample")
+            f"{results['samples_per_sec']:.2f} samples/sec, {results['step_time']:.2f} ms/step")
 
         return results
 
@@ -254,8 +255,8 @@ class TrainBenchmarkRunner(BenchmarkRunner):
 
         self.optimizer = create_optimizer_v2(
             self.model,
-            opt_name=kwargs.pop('opt', 'sgd'),
-            lr=kwargs.pop('lr', 1e-4))
+            optimizer_name=kwargs.pop('opt', 'sgd'),
+            learning_rate=kwargs.pop('lr', 1e-4))
 
     def _gen_target(self, batch_size):
         return torch.empty(
@@ -309,23 +310,24 @@ class TrainBenchmarkRunner(BenchmarkRunner):
                 total_fwd += delta_fwd
                 total_bwd += delta_bwd
                 total_opt += delta_opt
-                if (i + 1) % self.log_freq == 0:
+                num_steps = (i + 1)
+                if num_steps % self.log_freq == 0:
                     total_step = total_fwd + total_bwd + total_opt
                     _logger.info(
-                        f"Train [{i + 1}/{self.num_bench_iter}]."
+                        f"Train [{num_steps}/{self.num_bench_iter}]."
                         f" {num_samples / total_step:0.2f} samples/sec."
-                        f" {1000 * total_fwd / num_samples:0.3f} ms/sample fwd,"
-                        f" {1000 * total_bwd / num_samples:0.3f} ms/sample bwd,"
-                        f" {1000 * total_opt / num_samples:0.3f} ms/sample opt."
+                        f" {1000 * total_fwd / num_steps:0.3f} ms/step fwd,"
+                        f" {1000 * total_bwd / num_steps:0.3f} ms/step bwd,"
+                        f" {1000 * total_opt / num_steps:0.3f} ms/step opt."
                     )
             total_step = total_fwd + total_bwd + total_opt
             t_run_elapsed = self.time_fn() - t_run_start
             results = dict(
                 samples_per_sec=round(num_samples / t_run_elapsed, 2),
-                step_time=round(1000 * total_step / num_samples, 3),
-                fwd_time=round(1000 * total_fwd / num_samples, 3),
-                bwd_time=round(1000 * total_bwd / num_samples, 3),
-                opt_time=round(1000 * total_opt / num_samples, 3),
+                step_time=round(1000 * total_step / self.num_bench_iter, 3),
+                fwd_time=round(1000 * total_fwd / self.num_bench_iter, 3),
+                bwd_time=round(1000 * total_bwd / self.num_bench_iter, 3),
+                opt_time=round(1000 * total_opt / self.num_bench_iter, 3),
                 batch_size=self.batch_size,
                 img_size=self.input_size[-1],
                 param_count=round(self.param_count / 1e6, 2),
@@ -337,15 +339,16 @@ class TrainBenchmarkRunner(BenchmarkRunner):
                 delta_step = _step(False)
                 num_samples += self.batch_size
                 total_step += delta_step
-                if (i + 1) % self.log_freq == 0:
+                num_steps = (i + 1)
+                if num_steps % self.log_freq == 0:
                     _logger.info(
-                        f"Train [{i + 1}/{self.num_bench_iter}]."
+                        f"Train [{num_steps}/{self.num_bench_iter}]."
                         f" {num_samples / total_step:0.2f} samples/sec."
-                        f" {1000 * total_step / num_samples:0.3f} ms/sample.")
+                        f" {1000 * total_step / num_steps:0.3f} ms/step.")
             t_run_elapsed = self.time_fn() - t_run_start
             results = dict(
                 samples_per_sec=round(num_samples / t_run_elapsed, 2),
-                step_time=round(1000 * total_step / num_samples, 3),
+                step_time=round(1000 * total_step / self.num_bench_iter, 3),
                 batch_size=self.batch_size,
                 img_size=self.input_size[-1],
                 param_count=round(self.param_count / 1e6, 2),
