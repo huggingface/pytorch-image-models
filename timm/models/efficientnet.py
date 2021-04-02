@@ -154,6 +154,9 @@ default_cfgs = {
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45403/outputs/effnetb3_pruned_5abcc29f.pth',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904, mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 
+    'efficientnet_v2s': _cfg(
+        url='', input_size=(3, 224, 224), test_size=(3, 300, 300), pool_size=(7, 7)),  # FIXME WIP
+
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_aa-827b6e33.pth',
         input_size=(3, 224, 224)),
@@ -819,6 +822,37 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
     return model
 
 
+def _gen_efficientnet_v2s(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Creates an EfficientNet-V2s model
+
+    NOTE: this is a preliminary definition based on paper, awaiting official code release for details
+    and weights
+
+    Ref impl:
+    Paper: https://arxiv.org/abs/2104.00298
+    """
+
+    arch_def = [
+        ['er_r2_k3_s1_e1_c24_noskip'],
+        ['er_r4_k3_s2_e4_c48'],
+        ['er_r4_k3_s2_e4_c64'],
+        ['ir_r6_k3_s2_e4_c128_se0.25'],
+        ['ir_r9_k3_s1_e6_c160_se0.25'],
+        ['ir_r15_k3_s2_e6_c272_se0.25'],
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=round_channels(1792, channel_multiplier, 8, None),
+        stem_size=24,
+        channel_multiplier=channel_multiplier,
+        norm_kwargs=resolve_bn_args(kwargs),
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _gen_mixnet_s(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """Creates a MixNet Small model.
 
@@ -1256,6 +1290,15 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
         'efficientnet_b3_pruned', channel_multiplier=1.2, depth_multiplier=1.4, pruned=True,
         pretrained=pretrained, **kwargs)
     return model
+
+
+@register_model
+def efficientnet_v2s(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Small. """
+    model = _gen_efficientnet_v2s(
+        'efficientnet_v2s', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
+    return model
+
 
 
 @register_model
