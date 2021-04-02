@@ -31,4 +31,4 @@ from .split_attn import SplitAttnConv2d
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
-from .weight_init import trunc_normal_
+from .weight_init import trunc_normal_, variance_scaling_, lecun_normal_

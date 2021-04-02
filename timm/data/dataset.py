@@ -73,12 +73,13 @@ class IterableImageDataset(data.IterableDataset):
             batch_size=None,
             class_map='',
             load_bytes=False,
+            repeats=0,
             transform=None,
     ):
         assert parser is not None
         if isinstance(parser, str):
             self.parser = create_parser(
-                parser, root=root, split=split, is_training=is_training, batch_size=batch_size)
+                parser, root=root, split=split, is_training=is_training, batch_size=batch_size, repeats=repeats)
         else:
             self.parser = parser
         self.transform = transform

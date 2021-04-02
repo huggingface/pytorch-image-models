@@ -14,6 +14,7 @@ from .inception_v4 import *
 from .mobilenetv3 import *
 from .nasnet import *
 from .nfnet import *
+from .pit import *
 from .pnasnet import *
 from .regnet import *
 from .res2net import *
@@ -28,6 +29,7 @@ from .tnt import *
 from .tresnet import *
 from .vgg import *
 from .vision_transformer import *
+from .vision_transformer_hybrid import *
 from .vovnet import *
 from .xception import *
 from .xception_aligned import *

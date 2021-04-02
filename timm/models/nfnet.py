@@ -100,14 +100,16 @@ default_cfgs = dict(
     nfnet_f7s=_dcfg(
         url='', pool_size=(15, 15), input_size=(3, 480, 480), test_input_size=(3, 608, 608)),
 
-    nfnet_l0a=_dcfg(
-        url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288)),
-    nfnet_l0b=_dcfg(
-        url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288)),
+    nfnet_l0=_dcfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nfnet_l0_ra2-45c6688d.pth',
+        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
     eca_nfnet_l0=_dcfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l0_ra2-e3e9ac50.pth',
         hf_hub='timm/eca_nfnet_l0',
         pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
+    eca_nfnet_l1=_dcfg(
+        url='',
+        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 320, 320), crop_pct=1.0),
 
     nf_regnet_b0=_dcfg(
         url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv'),
@@ -232,15 +234,15 @@ model_cfgs = dict(
     nfnet_f6s=_nfnet_cfg(depths=(7, 14, 42, 21), act_layer='silu'),
     nfnet_f7s=_nfnet_cfg(depths=(8, 16, 48, 24), act_layer='silu'),
 
-    # Experimental 'light' versions of nfnet-f that are little leaner
-    nfnet_l0a=_nfnet_cfg(
-        depths=(1, 2, 6, 3), channels=(256, 512, 1280, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
-        attn_kwargs=dict(reduction_ratio=0.25, divisor=8), act_layer='silu'),
-    nfnet_l0b=_nfnet_cfg(
-        depths=(1, 2, 6, 3), channels=(256, 512, 1536, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+    # Experimental 'light' versions of NFNet-F that are little leaner
+    nfnet_l0=_nfnet_cfg(
+        depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
         attn_kwargs=dict(reduction_ratio=0.25, divisor=8), act_layer='silu'),
     eca_nfnet_l0=_nfnet_cfg(
-        depths=(1, 2, 6, 3), channels=(256, 512, 1536, 1536), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+    eca_nfnet_l1=_nfnet_cfg(
+        depths=(2, 4, 12, 6), feat_mult=2, group_size=64, bottle_ratio=0.25,
         attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
 
     # EffNet influenced RegNet defs.
@@ -789,27 +791,27 @@ def nfnet_f7s(pretrained=False, **kwargs):
 
 
 @register_model
-def nfnet_l0a(pretrained=False, **kwargs):
-    """ NFNet-L0a w/ SiLU
-    My experimental 'light' model w/ 1280 width stage 3, 1.5x final_conv mult, 64 group_size, .25 bottleneck & SE ratio
-    """
-    return _create_normfreenet('nfnet_l0a', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_l0b(pretrained=False, **kwargs):
+def nfnet_l0(pretrained=False, **kwargs):
     """ NFNet-L0b w/ SiLU
-    My experimental 'light' model w/ 1.5x final_conv mult, 64 group_size, .25 bottleneck & SE ratio
+    My experimental 'light' model w/ F0 repeats, 1.5x final_conv mult, 64 group_size, .25 bottleneck & SE ratio
     """
-    return _create_normfreenet('nfnet_l0b', pretrained=pretrained, **kwargs)
+    return _create_normfreenet('nfnet_l0', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def eca_nfnet_l0(pretrained=False, **kwargs):
     """ ECA-NFNet-L0 w/ SiLU
-    My experimental 'light' model w/ 1.5x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
+    My experimental 'light' model w/ F0 repeats, 1.5x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
     """
     return _create_normfreenet('eca_nfnet_l0', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_nfnet_l1(pretrained=False, **kwargs):
+    """ ECA-NFNet-L1 w/ SiLU
+    My experimental 'light' model w/ F1 repeats, 2.0x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
+    """
+    return _create_normfreenet('eca_nfnet_l1', pretrained=pretrained, **kwargs)
 
 
 @register_model

@@ -14,7 +14,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_mode(False)
 
 # transformer models don't support many of the spatial / feature based model functionalities
-NON_STD_FILTERS = ['vit_*', 'tnt_*']
+NON_STD_FILTERS = ['vit_*', 'tnt_*', 'pit_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
