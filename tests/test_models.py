@@ -132,7 +132,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
     def test_model_load_pretrained(model_name, batch_size):
         """Create that pretrained weights load, verify support for in_chans != 3 while doing so."""
         in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
-        create_model(model_name, pretrained=True, in_chans=in_chans)
+        create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=5)
 
     @pytest.mark.timeout(120)
     @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
