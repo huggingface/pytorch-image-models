@@ -205,7 +205,14 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class InvertedResidual(nn.Module):
-    """ Inverted residual block w/ optional SE and CondConv routing"""
+    """ Inverted residual block w/ optional SE
+
+    Originally used in MobileNet-V2 - https://arxiv.org/abs/1801.04381v4, this layer is often
+    referred to as 'MBConv' for (Mobile inverted bottleneck conv) and is also used in
+      * MNasNet - https://arxiv.org/abs/1807.11626
+      * EfficientNet - https://arxiv.org/abs/1905.11946
+      * MobileNet-V3 - https://arxiv.org/abs/1905.02244
+    """
 
     def __init__(self, in_chs, out_chs, dw_kernel_size=3,
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False,
@@ -333,7 +340,16 @@ class CondConvResidual(InvertedResidual):
 
 
 class EdgeResidual(nn.Module):
-    """ Residual block with expansion convolution followed by pointwise-linear w/ stride"""
+    """ Residual block with expansion convolution followed by pointwise-linear w/ stride
+
+    Originally introduced in `EfficientNet-EdgeTPU: Creating Accelerator-Optimized Neural Networks with AutoML`
+        - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
+
+    This layer is also called FusedMBConv in the MobileDet, EfficientNet-X, and EfficientNet-V2 papers
+      * MobileDet - https://arxiv.org/abs/2004.14525
+      * EfficientNet-X - https://arxiv.org/abs/2102.05610
+      * EfficientNet-V2 - https://arxiv.org/abs/2104.00298
+    """
 
     def __init__(self, in_chs, out_chs, exp_kernel_size=3, exp_ratio=1.0, fake_in_chs=0,
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False, pw_kernel_size=1,
