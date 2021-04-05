@@ -17,6 +17,7 @@ from .nvnovograd import NvNovoGrad
 from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
+from .adabelief import AdaBelief
 
 try:
     from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
@@ -118,7 +119,9 @@ def create_optimizer_v2(
         opt_args.pop('eps', None)
         optimizer = optim.SGD(parameters, momentum=momentum, nesterov=False, **opt_args)
     elif opt_lower == 'adam':
-        optimizer = optim.Adam(parameters, **opt_args)
+        optimizer = optim.Adam(parameters, **opt_args) 
+    elif opt_lower == 'adabelief':
+        optimizer = AdaBelief(parameters, rectify = False, print_change_log = False,**opt_args)
     elif opt_lower == 'adamw':
         optimizer = optim.AdamW(parameters, **opt_args)
     elif opt_lower == 'nadam':
