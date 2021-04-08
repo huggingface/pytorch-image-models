@@ -592,10 +592,6 @@ def main():
 
             eval_metrics = validate(model, loader_eval, validate_loss_fn, args, amp_autocast=amp_autocast)
 
-            if args.use_wandb: 
-                wandb.log(train_metrics)
-                wandb.log(eval_metrics)
-
             if model_ema is not None and not args.model_ema_force_cpu:
                 if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                     distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
@@ -609,7 +605,7 @@ def main():
 
             update_summary(
                 epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
-                write_header=best_metric is None)
+                write_header=best_metric is None, log_wandb=args.use_wandb)
 
             if saver is not None:
                 # save proper checkpoint with eval metric
