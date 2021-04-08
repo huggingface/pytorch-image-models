@@ -302,8 +302,8 @@ def main():
     
     if args.use_wandb:
         if not args.wandb_project_name: 
-            args.wandb_project_name = args.model
-            _logger.warning(f"Wandb project name not provided, defaulting to {args.model}")
+            args.wandb_project_name = f'timm_{args.model}'
+            _logger.warning(f"Wandb project name not provided, defaulting to timm_{args.model}")
         wandb.init(project=args.wandb_project_name, config=args)
     
     args.prefetcher = not args.no_prefetcher
