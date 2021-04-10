@@ -55,7 +55,7 @@ except AttributeError:
 try:
     import wandb
     has_wandb = True
-except ModuleNotFoundError: 
+except ImportError: 
     has_wandb = False
 
 torch.backends.cudnn.benchmark = True
