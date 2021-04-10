@@ -273,10 +273,8 @@ parser.add_argument('--use-multi-epochs-loader', action='store_true', default=Fa
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
-parser.add_argument('--use-wandb', action='store_true', default=False,
+parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='use wandb for training and validation logs')
-parser.add_argument('--wandb-project-name', type=str, default=None,
-                    help='wandb project name to be used')
 
 
 def _parse_args():
@@ -300,8 +298,8 @@ def main():
     setup_default_logging()
     args, args_text = _parse_args()
     
-    if args.use_wandb:
-        wandb.init(project=args.wandb_project_name, config=args)
+    if args.log_wandb:
+        wandb.init(project=args.experiment, config=args)
     
     args.prefetcher = not args.no_prefetcher
     args.distributed = False
@@ -602,7 +600,7 @@ def main():
 
             update_summary(
                 epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
-                write_header=best_metric is None, log_wandb=args.use_wandb)
+                write_header=best_metric is None, log_wandb=args.log_wandb)
 
             if saver is not None:
                 # save proper checkpoint with eval metric
