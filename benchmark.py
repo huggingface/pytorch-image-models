@@ -48,7 +48,7 @@ parser = argparse.ArgumentParser(description='PyTorch Benchmark')
 parser.add_argument('--model-list', metavar='NAME', default='',
                     help='txt file based list of model names to benchmark')
 parser.add_argument('--bench', default='both', type=str,
-                    help="Benchmark mode. One of 'inference', 'train', 'both'. Defaults to 'inference'")
+                    help="Benchmark mode. One of 'inference', 'train', 'both'. Defaults to 'both'")
 parser.add_argument('--detail', action='store_true', default=False,
                     help='Provide train fwd/bwd/opt breakdown detail if True. Defaults to False')
 parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
