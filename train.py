@@ -329,7 +329,7 @@ def main():
         _logger.warning("Neither APEX or native Torch AMP is available, using float32. "
                         "Install NVIDA apex or upgrade to PyTorch 1.6")
 
-    torch.manual_seed(args.seed + args.rank)
+    random_seed(args.seed, args.rank)
 
     model = create_model(
         args.model,
