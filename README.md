@@ -23,6 +23,15 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### April 12, 2021
+* Add ECA-NFNet-L1 (slimmed down F1 w/ SiLU, 41M params) trained with this code. 84% top-1 @ 320x320. Trained at 256x256.
+* Add EfficientNet-V2S model (unverified model definition) weights. 83.3 top-1 @ 288x288. Only trained single res 224. Working on progressive training.
+* Add ByoaNet model definition (Bring-your-own-attention) w/ SelfAttention block and corresponding SA/SA-like modules and model defs
+  * Lambda Networks - https://arxiv.org/abs/2102.08602
+  * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
+  * Halo Nets - https://arxiv.org/abs/2103.12731
+* Adabelief optimizer contributed by Juntang Zhuang
+
 ### April 1, 2021
 * Add snazzy `benchmark.py` script for bulk `timm` model benchmarking of train and/or inference
 * Add Pooling-based Vision Transformer (PiT) models (from https://github.com/naver-ai/pit)
