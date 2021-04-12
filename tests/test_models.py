@@ -172,7 +172,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
 
 
 @pytest.mark.timeout(210)
-@pytest.mark.parametrize('model_name', ['resnetv2_101x1_bitm'])
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
