@@ -31,48 +31,48 @@ MAX_BWD_SIZE = 128
 MAX_FWD_FEAT_SIZE = 448
 
 
-# @pytest.mark.timeout(120)
-# @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS[:-NUM_NON_STD]))
-# @pytest.mark.parametrize('batch_size', [1])
-# def test_model_forward(model_name, batch_size):
-#     """Run a single forward pass with each model"""
-#     model = create_model(model_name, pretrained=False)
-#     model.eval()
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS[:-NUM_NON_STD]))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward(model_name, batch_size):
+    """Run a single forward pass with each model"""
+    model = create_model(model_name, pretrained=False)
+    model.eval()
 
-#     input_size = model.default_cfg['input_size']
-#     if any([x > MAX_FWD_SIZE for x in input_size]):
-#         # cap forward test at max res 448 * 448 to keep resource down
-#         input_size = tuple([min(x, MAX_FWD_SIZE) for x in input_size])
-#     inputs = torch.randn((batch_size, *input_size))
-#     outputs = model(inputs)
+    input_size = model.default_cfg['input_size']
+    if any([x > MAX_FWD_SIZE for x in input_size]):
+        # cap forward test at max res 448 * 448 to keep resource down
+        input_size = tuple([min(x, MAX_FWD_SIZE) for x in input_size])
+    inputs = torch.randn((batch_size, *input_size))
+    outputs = model(inputs)
 
-#     assert outputs.shape[0] == batch_size
-#     assert not torch.isnan(outputs).any(), 'Output included NaNs'
+    assert outputs.shape[0] == batch_size
+    assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
-# @pytest.mark.timeout(120)
-# @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
-# @pytest.mark.parametrize('batch_size', [2])
-# def test_model_backward(model_name, batch_size):
-#     """Run a single forward pass with each model"""
-#     model = create_model(model_name, pretrained=False, num_classes=42)
-#     num_params = sum([x.numel() for x in model.parameters()])
-#     model.eval()
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('batch_size', [2])
+def test_model_backward(model_name, batch_size):
+    """Run a single forward pass with each model"""
+    model = create_model(model_name, pretrained=False, num_classes=42)
+    num_params = sum([x.numel() for x in model.parameters()])
+    model.eval()
 
-#     input_size = model.default_cfg['input_size']
-#     if any([x > MAX_BWD_SIZE for x in input_size]):
-#         # cap backward test at 128 * 128 to keep resource usage down
-#         input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
-#     inputs = torch.randn((batch_size, *input_size))
-#     outputs = model(inputs)
-#     outputs.mean().backward()
-#     for n, x in model.named_parameters():
-#         assert x.grad is not None, f'No gradient for {n}'
-#     num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
+    input_size = model.default_cfg['input_size']
+    if any([x > MAX_BWD_SIZE for x in input_size]):
+        # cap backward test at 128 * 128 to keep resource usage down
+        input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
+    inputs = torch.randn((batch_size, *input_size))
+    outputs = model(inputs)
+    outputs.mean().backward()
+    for n, x in model.named_parameters():
+        assert x.grad is not None, f'No gradient for {n}'
+    num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
 
-#     assert outputs.shape[-1] == 42
-#     assert num_params == num_grad, 'Some parameters are missing gradients'
-#     assert not torch.isnan(outputs).any(), 'Output included NaNs'
+    assert outputs.shape[-1] == 42
+    assert num_params == num_grad, 'Some parameters are missing gradients'
+    assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
 # @pytest.mark.timeout(120)
