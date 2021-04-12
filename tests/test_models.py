@@ -5,7 +5,8 @@ import os
 import fnmatch
 
 import timm
-from timm import list_models, create_model, set_scriptable
+from timm import list_models, create_model, set_scriptable, has_model_default_key, is_model_default_key, \
+    get_model_default_value
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests
@@ -60,9 +61,15 @@ def test_model_backward(model_name, batch_size):
     model.eval()
 
     input_size = model.default_cfg['input_size']
-    if any([x > MAX_BWD_SIZE for x in input_size]):
-        # cap backward test at 128 * 128 to keep resource usage down
-        input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
+    if not is_model_default_key(model_name, 'fixed_input_size'):
+        min_input_size = get_model_default_value(model_name, 'min_input_size')
+        if min_input_size is not None:
+            input_size = min_input_size
+        else:
+            if any([x > MAX_BWD_SIZE for x in input_size]):
+                # cap backward test at 128 * 128 to keep resource usage down
+                input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
+
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)
     outputs.mean().backward()
@@ -155,7 +162,14 @@ def test_model_forward_torchscript(model_name, batch_size):
     with set_scriptable(True):
         model = create_model(model_name, pretrained=False)
     model.eval()
-    input_size = (3, 128, 128)  # jit compile is already a bit slow and we've tested normal res already...
+
+    if has_model_default_key(model_name, 'fixed_input_size'):
+        input_size = get_model_default_value(model_name, 'input_size')
+    elif has_model_default_key(model_name, 'min_input_size'):
+        input_size = get_model_default_value(model_name, 'min_input_size')
+    else:
+        input_size = (3, 128, 128)  # jit compile is already a bit slow and we've tested normal res already...
+
     model = torch.jit.script(model)
     outputs = model(torch.randn((batch_size, *input_size)))
 
@@ -180,7 +194,14 @@ def test_model_forward_features(model_name, batch_size):
     model.eval()
     expected_channels = model.feature_info.channels()
     assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
-    input_size = (3, 96, 96)  # jit compile is already a bit slow and we've tested normal res already...
+
+    if has_model_default_key(model_name, 'fixed_input_size'):
+        input_size = get_model_default_value(model_name, 'input_size')
+    elif has_model_default_key(model_name, 'min_input_size'):
+        input_size = get_model_default_value(model_name, 'min_input_size')
+    else:
+        input_size = (3, 96, 96)  # jit compile is already a bit slow and we've tested normal res already...
+
     outputs = model(torch.randn((batch_size, *input_size)))
     assert len(expected_channels) == len(outputs)
     for e, o in zip(expected_channels, outputs):

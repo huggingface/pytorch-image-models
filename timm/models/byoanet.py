@@ -37,23 +37,24 @@ def _cfg(url='', **kwargs):
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv', 'classifier': 'head.fc',
+        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
+        'fixed_input_size': False, 'min_input_size': (3, 224, 224),
         **kwargs
     }
 
 
 default_cfgs = {
     # GPU-Efficient (ResNet) weights
-    'botnet50t_224': _cfg(url=''),
-    'botnet50t_c4c5_224': _cfg(url=''),
+    'botnet50t_224': _cfg(url='', fixed_input_size=True),
+    'botnet50t_c4c5_224': _cfg(url='', fixed_input_size=True),
 
-    'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
-    'halonet_h1_c4c5': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'halonet_h1_c4c5': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet26t': _cfg(url=''),
     'halonet50t': _cfg(url=''),
 
-    'lambda_resnet26t': _cfg(url=''),
-    'lambda_resnet50t': _cfg(url=''),
+    'lambda_resnet26t': _cfg(url='', min_input_size=(3, 128, 128)),
+    'lambda_resnet50t': _cfg(url='', min_input_size=(3, 128, 128)),
 }
 
 
