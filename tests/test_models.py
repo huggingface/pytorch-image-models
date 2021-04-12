@@ -171,7 +171,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
 
 
-@pytest.mark.timeout(150)
+@pytest.mark.timeout(210)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_features(model_name, batch_size):
