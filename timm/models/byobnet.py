@@ -546,7 +546,7 @@ class Stem(nn.Sequential):
             layer_fn = layers.conv_norm_act if na else create_conv2d
             conv_name = f'conv{i + 1}'
             if i > 0 and s > 1:
-                self.feature_info.append(dict(num_chs=ch, reduction=curr_stride, module=prev_feat))
+                self.feature_info.append(dict(num_chs=prev_chs, reduction=curr_stride, module=prev_feat))
             self.add_module(conv_name, layer_fn(prev_chs, ch, kernel_size=kernel_size, stride=s))
             prev_chs = ch
             curr_stride *= s

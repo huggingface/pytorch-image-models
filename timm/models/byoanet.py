@@ -8,7 +8,7 @@ Currently used to implement experimential variants of:
   * Lambda ResNets
   * HaloNets
 
-Consider all of the models here a WIP and likely to change.
+Consider all of the models definitions here as experimental WIP and likely to change.
 
 Hacked together by / copyright Ross Wightman, 2021.
 """
@@ -372,7 +372,7 @@ def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
 
 @register_model
 def botnet50t_224(pretrained=False, **kwargs):
-    """
+    """ Bottleneck Transformer w/ ResNet50-T backbone. Bottleneck attn in final stage.
     """
     kwargs.setdefault('img_size', 224)
     return _create_byoanet('botnet50t_224', 'botnet50t', pretrained=pretrained, **kwargs)
@@ -380,7 +380,7 @@ def botnet50t_224(pretrained=False, **kwargs):
 
 @register_model
 def botnet50t_c4c5_224(pretrained=False, **kwargs):
-    """
+    """ Bottleneck Transformer w/ ResNet50-T backbone. Bottleneck attn in last two stages.
     """
     kwargs.setdefault('img_size', 224)
     return _create_byoanet('botnet50t_c4c5_224', 'botnet50t_c4c5', pretrained=pretrained, **kwargs)
@@ -388,41 +388,43 @@ def botnet50t_c4c5_224(pretrained=False, **kwargs):
 
 @register_model
 def halonet_h1(pretrained=False, **kwargs):
-    """
+    """ HaloNet-H1. Halo attention in all stages as per the paper.
+
+    This runs very slowly, param count lower than paper --> something is wrong.
     """
     return _create_byoanet('halonet_h1', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def halonet_h1_c4c5(pretrained=False, **kwargs):
-    """
+    """ HaloNet-H1 config w/ attention in last two stages.
     """
     return _create_byoanet('halonet_h1_c4c5', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def halonet26t(pretrained=False, **kwargs):
-    """
+    """ HaloNet w/ a ResNet26-t backbone, Hallo attention in final stage
     """
     return _create_byoanet('halonet26t', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def halonet50t(pretrained=False, **kwargs):
-    """
+    """ HaloNet w/ a ResNet50-t backbone, Hallo attention in final stage
     """
     return _create_byoanet('halonet50t', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def lambda_resnet26t(pretrained=False, **kwargs):
-    """
+    """ Lambda-ResNet-26T. Lambda layers in one C4 stage and all C5.
     """
     return _create_byoanet('lambda_resnet26t', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def lambda_resnet50t(pretrained=False, **kwargs):
-    """
+    """ Lambda-ResNet-50T. Lambda layers in one C4 stage and all C5.
     """
     return _create_byoanet('lambda_resnet50t', pretrained=pretrained, **kwargs)
