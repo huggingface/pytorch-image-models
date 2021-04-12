@@ -492,7 +492,7 @@ class ResNet(nn.Module):
     This ResNet impl supports a number of stem and downsample options based on the v1c, v1d, v1e, and v1s
     variants included in the MXNet Gluon ResNetV1b model. The C and D variants are also discussed in the
     'Bag of Tricks' paper: https://arxiv.org/pdf/1812.01187. The B variant is equivalent to torchvision default.
-    
+
     ResNet variants (the same modifications can be used in SE/ResNeXt models as well):
       * normal, b - 7x7 stem, stem_width = 64, same as torchvision ResNet, NVIDIA ResNet 'v1.5', Gluon v1b
       * c - 3 layer deep 3x3 stem, stem_width = 32 (32, 32, 64)
@@ -501,18 +501,18 @@ class ResNet(nn.Module):
       * s - 3 layer deep 3x3 stem, stem_width = 64 (64, 64, 128)
       * t - 3 layer deep 3x3 stem, stem width = 32 (24, 48, 64), average pool in downsample
       * tn - 3 layer deep 3x3 stem, stem width = 32 (24, 32, 64), average pool in downsample
-    
+
     ResNeXt
       * normal - 7x7 stem, stem_width = 64, standard cardinality and base widths
       * same c,d, e, s variants as ResNet can be enabled
-    
+
     SE-ResNeXt
       * normal - 7x7 stem, stem_width = 64
       * same c, d, e, s variants as ResNet can be enabled
-    
+
     SENet-154 - 3 layer deep 3x3 stem (same as v1c-v1s), stem_width = 64, cardinality=64,
         reduction by 2 on width of first bottleneck convolution, 3x3 downsample convs after first block
-    
+
     Parameters
     ----------
     block : Block
