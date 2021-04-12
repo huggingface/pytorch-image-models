@@ -237,19 +237,19 @@ default_cfgs = {
 
     # ResNet-RS models
     'resnetrs50': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs101': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs152': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs200': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs270': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs350': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs420': _cfg(
-        interpolation='bicubic'),
+        interpolation='bicubic', first_conv='conv1.0'),
 }
 
 
