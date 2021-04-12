@@ -169,7 +169,7 @@ EXCLUDE_FEAT_FILTERS = [
 ]
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d', 'resnetv2_101x1_bitm']
+    EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
 
 
 @pytest.mark.timeout(120)
