@@ -22,7 +22,7 @@ NUM_NON_STD = len(NON_STD_FILTERS)
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FILTERS = [
-        '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm',
+        '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm'
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*'] + NON_STD_FILTERS
 else:
     EXCLUDE_FILTERS = NON_STD_FILTERS

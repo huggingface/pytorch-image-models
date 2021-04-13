@@ -1,5 +1,33 @@
 # Recent Changes
 
+### April 13, 2021
+* Add Swin Transformer models and weights from https://github.com/microsoft/Swin-Transformer
+
+### April 12, 2021
+* Add ECA-NFNet-L1 (slimmed down F1 w/ SiLU, 41M params) trained with this code. 84% top-1 @ 320x320. Trained at 256x256.
+* Add EfficientNet-V2S model (unverified model definition) weights. 83.3 top-1 @ 288x288. Only trained single res 224. Working on progressive training.
+* Add ByoaNet model definition (Bring-your-own-attention) w/ SelfAttention block and corresponding SA/SA-like modules and model defs
+  * Lambda Networks - https://arxiv.org/abs/2102.08602
+  * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
+  * Halo Nets - https://arxiv.org/abs/2103.12731
+* Adabelief optimizer contributed by Juntang Zhuang
+
+### April 1, 2021
+* Add snazzy `benchmark.py` script for bulk `timm` model benchmarking of train and/or inference
+* Add Pooling-based Vision Transformer (PiT) models (from https://github.com/naver-ai/pit)
+  * Merged distilled variant into main for torchscript compatibility
+  * Some `timm` cleanup/style tweaks and weights have hub download support
+* Cleanup Vision Transformer (ViT) models
+  * Merge distilled (DeiT) model into main so that torchscript can work
+  * Support updated weight init (defaults to old still) that closer matches original JAX impl (possibly better training from scratch)
+  * Separate hybrid model defs into different file and add several new model defs to fiddle with, support patch_size != 1 for hybrids
+  * Fix fine-tuning num_class changes (PiT and ViT) and pos_embed resizing (Vit) with distilled variants
+  * nn.Sequential for block stack (does not break downstream compat)
+* TnT (Transformer-in-Transformer) models contributed by author (from https://gitee.com/mindspore/mindspore/tree/master/model_zoo/research/cv/TNT)
+* Add RegNetY-160 weights from DeiT teacher model
+* Add new NFNet-L0 w/ SE attn (rename `nfnet_l0b`->`nfnet_l0`) weights 82.75 top-1 @ 288x288
+* Some fixes/improvements for TFDS dataset wrapper
+
 ### March 7, 2021
 * First 0.4.x PyPi release w/ NFNets (& related), ByoB (GPU-Efficient, RepVGG, etc).
 * Change feature extraction for pre-activation nets (NFNets, ResNetV2) to return features before activation.
