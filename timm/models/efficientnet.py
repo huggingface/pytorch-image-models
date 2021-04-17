@@ -156,7 +156,7 @@ default_cfgs = {
 
     'efficientnet_v2s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_v2s_ra2-b265c1ba.pth',
-        input_size=(3, 224, 224), test_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),  # FIXME WIP
+        input_size=(3, 224, 224), test_input_size=(3, 320, 320), pool_size=(7, 7), crop_pct=1.0),  # FIXME WIP
 
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_aa-827b6e33.pth',
