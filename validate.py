@@ -289,7 +289,7 @@ def main():
         if args.model == 'all':
             # validate all models in a list of names with pretrained checkpoints
             args.pretrained = True
-            model_names = list_models(pretrained=True, exclude_filters=['*in21k'])
+            model_names = list_models(pretrained=True, exclude_filters=['*_in21k', '*_in22k'])
             model_cfgs = [(n, '') for n in model_names]
         elif not is_model(args.model):
             # model name doesn't exist, try as wildcard filter
