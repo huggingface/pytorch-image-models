@@ -426,7 +426,6 @@ def main():
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
-        distributed=dev_env.is_distributed,
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
         use_multi_epochs_loader=args.use_multi_epochs_loader
@@ -441,7 +440,6 @@ def main():
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
-        distributed=dev_env.is_distributed,
         crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
     )
@@ -519,7 +517,7 @@ def main():
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
 
             if logger is not None:
-                logger.write_summary(index=epoch, results=dict(train=train_metrics, eval=eval_metric))
+                logger.write_summary(index=epoch, results=dict(train=train_metrics, eval=eval_metrics))
 
             if saver is not None:
                 # save proper checkpoint with eval metric
@@ -655,6 +653,10 @@ def evaluate(
     top1, top5 = accuracy_m.compute().values()
     results = OrderedDict([('loss', losses_m.compute().item()), ('top1', top1.item()), ('top5', top5.item())])
     return results
+
+
+def _mp_entry(*args):
+    main()
 
 
 if __name__ == '__main__':

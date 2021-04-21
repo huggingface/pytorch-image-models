@@ -61,8 +61,8 @@ def summary_row_dict(results, index=None, index_name='epoch'):
         return row_dict
     if isinstance(next(iter(results.values())), dict):
         # each key in results is a per-phase results dict, flatten by prefixing with phase name
-        for p, pr in results.keys():
-            assert isinstance(dict, pr)
+        for p, pr in results.items():
+            assert isinstance(pr, dict)
             row_dict.update([('_'.join([p, k]), v) for k, v in pr.items()])
     else:
         row_dict.update(results)
@@ -81,7 +81,7 @@ class SummaryCsv:
             if self.needs_header:  # first iteration (epoch == 1 can't be used)
                 dw.writeheader()
                 self.needs_header = False
-        dw.writerow(row_dict)
+            dw.writerow(row_dict)
 
 
 def _add_kwargs(text_update, name_map=None, **kwargs):
@@ -212,7 +212,6 @@ class Logger:
             index: value for row index (typically epoch #)
             index_name:  name for row index header (typically 'epoch')
         """
-
         row_dict = summary_row_dict(index=index, index_name=index_name, results=results)
         if self.csv_writer:
             self.csv_writer.update(row_dict)

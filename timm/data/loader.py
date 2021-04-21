@@ -40,11 +40,9 @@ def create_loader(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         num_workers=1,
-        distributed=False,
         crop_pct=None,
         collate_fn=None,
         pin_memory=False,
-        fp16=False,
         tf_preprocessing=False,
         use_multi_epochs_loader=False,
         persistent_workers=True,
@@ -80,13 +78,14 @@ def create_loader(
         dev_env = get_device()
 
     sampler = None
-    if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
+    if dev_env.is_distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
         if is_training:
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset, num_replicas=dev_env.world_size, rank=dev_env.global_rank)
         else:
             # This will add extra duplicate entries to result in equal num
             # of samples per-process, will slightly alter validation results
-            sampler = OrderedDistributedSampler(dataset)
+            sampler = OrderedDistributedSampler(dataset, num_replicas=dev_env.world_size, rank=dev_env.global_rank)
 
     if collate_fn is None:
         collate_fn = fast_collate

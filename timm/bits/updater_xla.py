@@ -4,11 +4,16 @@ import torch
 
 try:
     import torch_xla.core.xla_model as xm
-    import torch_xla.amp as xa
     _HAS_XLA = True
 except ImportError as e:
     xm = None
     _HAS_XLA = False
+
+try:
+    # only the very latest XLA builds have AMP
+    import torch_xla.amp as xa
+except ImportError as e:
+    xa = None
 
 from .updater import Updater
 
@@ -26,6 +31,7 @@ class UpdaterXla(Updater):
         super().__init__(optimizer=optimizer, clip_value=clip_value, clip_mode=clip_mode)
         self.after_step_closure = True
         if use_scaler:
+            assert xa is not None, 'XLA AMP not present in this build'
             self.scaler = xa.GradScaler(**scaler_kwargs)
 
     def apply(self, loss: torch.Tensor, accumulate: bool = False):

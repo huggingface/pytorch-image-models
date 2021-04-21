@@ -83,8 +83,10 @@ class DeviceEnvCuda(DeviceEnv):
         return self._autocast
 
     def wrap_distributed(self, *modules, **kwargs):
-        return [DistributedDataParallel(m, device_ids=[self._local_rank], **kwargs) for m in modules]
+        wrapped = [DistributedDataParallel(m, device_ids=[self._local_rank], **kwargs) for m in modules]
+        return wrapped[0] if len(wrapped) == 1 else wrapped
 
     def to_device(self, *modules: torch.nn.Module):
         # FIXME handling dtype / memformat... disable flags, enable flags, diff fn?
-        return [m.to(device=self._device, memory_format=self._memory_format) for m in modules]
+        moved = [m.to(device=self._device, memory_format=self._memory_format) for m in modules]
+        return moved[0] if len(moved) == 1 else moved

@@ -8,6 +8,7 @@ class TensorAvg:
         self.sum = None
         self.count = None
         self.reset()
+        # FIXME handle distributed operation
 
     def reset(self):
         self.sum = None
@@ -32,6 +33,7 @@ class TensorEma:
         self.init_zero = init_zero
         self.val = None
         self.reset()
+        # FIXME handle distributed operation
 
     def reset(self):
         self.val = None

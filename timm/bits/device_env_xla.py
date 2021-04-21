@@ -10,6 +10,12 @@ except ImportError as e:
     xm = None
     _HAS_XLA = False
 
+try:
+    # only the very latest XLA builds have AMP
+    import torch_xla.amp as xa
+except ImportError as e:
+    xa = None
+
 from .device_env import DeviceEnv
 
 
@@ -25,7 +31,6 @@ class DeviceEnvXla(DeviceEnv):
 
     def __init__(self, xla_device_type=None, device_idx=None, local_rank=0, amp=False):
         self._device = xm.xla_device(n=device_idx, devkind=xla_device_type)
-        print(self._device)
         self._local_rank = xm.get_local_ordinal(local_rank)
         self._world_size = xm.xrt_world_size()
         self._distributed = self._world_size > 1
@@ -33,6 +38,7 @@ class DeviceEnvXla(DeviceEnv):
         if self._distributed:
             self._global_rank = xm.get_ordinal()
         if amp:
+            assert xa is not None, 'XLA AMP is not present on this build'
             self._autocast = xa.autocast
         else:
             self._autocast = suppress
@@ -76,10 +82,12 @@ class DeviceEnvXla(DeviceEnv):
 
     def wrap_distributed(self, *modules):
         # NO-OP
-        return tuple([m for m in modules])
+        wrapped = [m for m in modules]
+        return wrapped[0] if len(wrapped) == 1 else wrapped
 
     def to_device(self, *modules: torch.nn.Module):
-        return [m.to(device=self._device, memory_format=self._memory_format) for m in modules]
+        moved = [m.to(device=self._device, memory_format=self._memory_format) for m in modules]
+        return moved[0] if len(moved) == 1 else moved
 
     def mark_step(self):
         xm.mark_step()

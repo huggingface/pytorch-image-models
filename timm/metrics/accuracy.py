@@ -36,6 +36,7 @@ class AccuracyTopK(torch.nn.Module):
         self.device = device
         self.topk = topk
         self.maxk = max(topk)
+        # FIXME handle distributed operation
 
         # statistics / counts
         self.reset()
@@ -63,6 +64,7 @@ class AccuracyTopK(torch.nn.Module):
         pass
 
     def compute(self) -> Dict[str, torch.Tensor]:
+        # FIXME handle distributed reduction
         return {f'top{k}': 100 * getattr(self, f'_correct_top{k}') / self._total_sum for k in self.topk}
 
 
