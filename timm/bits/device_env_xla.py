@@ -4,7 +4,6 @@ import torch
 
 try:
     import torch_xla.core.xla_model as xm
-    import torch_xla.amp as xa
     _HAS_XLA = True
 except ImportError as e:
     xm = None
