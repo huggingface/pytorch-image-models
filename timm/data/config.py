@@ -70,6 +70,14 @@ def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, v
     elif 'crop_pct' in default_cfg:
         new_config['crop_pct'] = default_cfg['crop_pct']
 
+    if getattr(args, 'mixup', 0) > 0 \
+            or getattr(args, 'cutmix', 0) > 0. \
+            or getattr(args, 'cutmix_minmax', None) is not None:
+        new_config['mixup'] = dict(
+        mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+        prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
+        label_smoothing=args.smoothing, num_classes=args.num_classes)
+
     if verbose:
         _logger.info('Data processing configuration for current model + dataset:')
         for n, v in new_config.items():

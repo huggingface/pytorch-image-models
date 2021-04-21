@@ -22,7 +22,10 @@ Hacked together by / Copyright 2020 Ross Wightman
 # limitations under the License.
 # ==============================================================================
 """ImageNet preprocessing for MnasNet."""
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+tf.compat.v1.disable_eager_execution()
+
 import numpy as np
 
 IMAGE_SIZE = 224
@@ -131,6 +134,39 @@ def _decode_and_center_crop(image_bytes, image_size, resize_method):
     return image
 
 
+def crop(image_bytes, crop_window):
+    """Helper function to crop a jpeg or a decoded image."""
+    if image_bytes.dtype == tf.dtypes.string:
+        image = tf.image.decode_and_crop_jpeg(image_bytes,
+                                              tf.stack(crop_window),
+                                              channels=3)
+    else:
+        image = tf.image.crop_to_bounding_box(image_bytes, *crop_window)
+    return image
+
+
+def _decode_and_resize_then_crop(
+        image_bytes: tf.Tensor,
+        image_size,
+        crop_pct: float = 32,
+) -> tf.Tensor:
+    """Rescales an image to image_size / crop_pct, then center crops."""
+    image = tf.image.decode_jpeg(image_bytes, channels=3)
+    # Scale image to "scaled size" before taking a center crop
+    if crop_pct > 1.0:  # If crop_pct is >1, treat it as num pad pixels (like VGG)
+        scale_size = tuple([int(x + crop_pct) for x in image_size])
+    else:
+        scale_size = tuple([int(float(x) / crop_pct) for x in image_size])
+    image = tf.image.resize(image, scale_size, tf.image.ResizeMethod.BICUBIC)
+    crop_height = tf.cast(image_size[0], tf.int32)
+    crop_width = tf.cast(image_size[1], tf.int32)
+    offset_height = ((scale_size[0] - crop_height) + 1) // 2
+    offset_width = ((scale_size[1] - crop_width) + 1) // 2
+    crop_window = [offset_height, offset_width, crop_height, crop_width]
+    image = crop(image, crop_window)
+    return image
+
+
 def _flip(image):
     """Random horizontal image flip."""
     image = tf.image.random_flip_left_right(image)
@@ -172,6 +208,7 @@ def preprocess_for_eval(image_bytes, use_bfloat16, image_size=IMAGE_SIZE, interp
     """
     resize_method = tf.image.ResizeMethod.BICUBIC if interpolation == 'bicubic' else tf.image.ResizeMethod.BILINEAR
     image = _decode_and_center_crop(image_bytes, image_size, resize_method)
+    #image = _decode_and_resize_then_crop(image_bytes, (image_size, image_size), resize_method)
     image = tf.reshape(image, [image_size, image_size, 3])
     image = tf.image.convert_image_dtype(
         image, dtype=tf.bfloat16 if use_bfloat16 else tf.float32)

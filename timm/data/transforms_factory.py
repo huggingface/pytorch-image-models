@@ -167,7 +167,7 @@ def transforms_imagenet_eval(
 def create_transform(
         input_size,
         is_training=False,
-        use_prefetcher=False,
+        use_fetcher=False,
         no_aug=False,
         scale=None,
         ratio=None,
@@ -191,7 +191,7 @@ def create_transform(
     else:
         img_size = input_size
 
-    if tf_preprocessing and use_prefetcher:
+    if tf_preprocessing and use_fetcher:
         assert not separate, "Separate transforms not supported for TF preprocessing"
         from timm.data.tf_preprocessing import TfPreprocessTransform
         transform = TfPreprocessTransform(
@@ -202,7 +202,7 @@ def create_transform(
             transform = transforms_noaug_train(
                 img_size,
                 interpolation=interpolation,
-                use_prefetcher=use_prefetcher,
+                use_prefetcher=use_fetcher,
                 mean=mean,
                 std=std)
         elif is_training:
@@ -215,7 +215,7 @@ def create_transform(
                 color_jitter=color_jitter,
                 auto_augment=auto_augment,
                 interpolation=interpolation,
-                use_prefetcher=use_prefetcher,
+                use_prefetcher=use_fetcher,
                 mean=mean,
                 std=std,
                 re_prob=re_prob,
@@ -228,7 +228,7 @@ def create_transform(
             transform = transforms_imagenet_eval(
                 img_size,
                 interpolation=interpolation,
-                use_prefetcher=use_prefetcher,
+                use_prefetcher=use_fetcher,
                 mean=mean,
                 std=std,
                 crop_pct=crop_pct)
