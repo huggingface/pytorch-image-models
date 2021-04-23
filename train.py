@@ -279,7 +279,8 @@ parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
 parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
-
+parser.add_argument('--gpu-load', nargs="*", type=float, default=None, # None equals 1.0 1.0 1.0 1.0 for a 4 GPU system
+                    help='Distribute workload unevenly to GPUs with different performance levels. E.g. --gpu-speed 1.2 1.2 0.8 0.8 for a 4 GPU system (2xA6000 + 2x2080ti)')
 
 def _parse_args():
     # Do we have a config file to parse?
@@ -524,7 +525,8 @@ def main():
         distributed=args.distributed,
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
-        use_multi_epochs_loader=args.use_multi_epochs_loader
+        use_multi_epochs_loader=args.use_multi_epochs_loader,
+        gpu_load=args.gpu_load
     )
 
     loader_eval = create_loader(
@@ -540,6 +542,7 @@ def main():
         distributed=args.distributed,
         crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
+        gpu_load=args.gpu_load
     )
 
     # setup loss function
