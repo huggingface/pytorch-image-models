@@ -280,7 +280,7 @@ parser.add_argument('--torchscript', dest='torchscript', action='store_true',
 parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
 parser.add_argument('--gpu-load', nargs="*", type=float, default=None, # None equals 1.0 1.0 1.0 1.0 for a 4 GPU system
-                    help='Distribute workload unevenly to GPUs with different performance levels. E.g. --gpu-speed 1.2 1.2 0.8 0.8 for a 4 GPU system (2xA6000 + 2x2080ti)')
+                    help='Distribute workload unevenly to GPUs with different performance levels. E.g. --gpu-load 1.2 1.2 0.8 0.8 for a 4 GPU system (2xA6000 + 2x2080ti)')
 
 def _parse_args():
     # Do we have a config file to parse?
