@@ -9,6 +9,7 @@ from .ghostnet import *
 from .gluon_resnet import *
 from .gluon_xception import *
 from .hardcorenas import *
+from .coat import *
 from .hrnet import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
