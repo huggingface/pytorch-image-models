@@ -153,7 +153,8 @@ def create_loader(
         pin_memory=False,
         fp16=False,
         tf_preprocessing=False,
-        use_multi_epochs_loader=False
+        use_multi_epochs_loader=False,
+        persistent_workers=True,
 ):
     re_num_splits = 0
     if re_split:
@@ -183,7 +184,7 @@ def create_loader(
     )
 
     sampler = None
-    if distributed:
+    if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
         if is_training:
             sampler = torch.utils.data.distributed.DistributedSampler(dataset)
         else:
@@ -199,16 +200,20 @@ def create_loader(
     if use_multi_epochs_loader:
         loader_class = MultiEpochsDataLoader
 
-    loader = loader_class(
-        dataset,
+    loader_args = dict(
         batch_size=batch_size,
-        shuffle=sampler is None and is_training,
+        shuffle=not isinstance(dataset, torch.utils.data.IterableDataset) and sampler is None and is_training,
         num_workers=num_workers,
         sampler=sampler,
         collate_fn=collate_fn,
         pin_memory=pin_memory,
         drop_last=is_training,
-    )
+        persistent_workers=persistent_workers)
+    try:
+        loader = loader_class(dataset, **loader_args)
+    except TypeError as e:
+        loader_args.pop('persistent_workers')  # only in Pytorch 1.7+
+        loader = loader_class(dataset, **loader_args)
     if use_prefetcher:
         prefetch_re_prob = re_prob if is_training and not no_aug else 0.
         loader = PrefetchLoader(

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """PyTorch Inference Script
 
 An example inference script that outputs top-k class ids for images in a folder into a csv.
@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from timm.models import create_model, apply_test_time_pool
-from timm.data import Dataset, create_loader, resolve_data_config
+from timm.data import ImageDataset, create_loader, resolve_data_config
 from timm.utils import AverageMeter, setup_default_logging
 
 torch.backends.cudnn.benchmark = True
@@ -33,6 +33,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension')
+parser.add_argument('--input-size', default=None, nargs=3, type=int,
+                    metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
@@ -81,7 +83,7 @@ def main():
         model = model.cuda()
 
     loader = create_loader(
-        Dataset(args.data),
+        ImageDataset(args.data),
         input_size=config['input_size'],
         batch_size=args.batch_size,
         use_prefetcher=True,

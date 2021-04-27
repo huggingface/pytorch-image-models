@@ -17,8 +17,8 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCE
 from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg
-from .layers import SelectAdaptivePool2d, create_conv2d, get_act_fn, hard_sigmoid
+from .helpers import build_model_with_cfg, default_cfg_for_features
+from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
 __all__ = ['MobileNetV3']
@@ -105,7 +105,7 @@ class MobileNetV3(nn.Module):
         num_pooled_chs = head_chs * self.global_pool.feat_mult()
         self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
         self.act2 = act_layer(inplace=True)
-        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
 
@@ -123,7 +123,7 @@ class MobileNetV3(nn.Module):
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.classifier = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -200,20 +200,23 @@ class MobileNetV3Features(nn.Module):
             return list(out.values())
 
 
-def _create_mnv3(model_kwargs, variant, pretrained=False):
-    if model_kwargs.pop('features_only', False):
-        load_strict = False
-        model_kwargs.pop('num_classes', 0)
-        model_kwargs.pop('num_features', 0)
-        model_kwargs.pop('head_conv', None)
-        model_kwargs.pop('head_bias', None)
+def _create_mnv3(variant, pretrained=False, **kwargs):
+    features_only = False
+    model_cls = MobileNetV3
+    kwargs_filter = None
+    if kwargs.pop('features_only', False):
+        features_only = True
+        kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'head_bias', 'global_pool')
         model_cls = MobileNetV3Features
-    else:
-        load_strict = True
-        model_cls = MobileNetV3
-    return build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=load_strict, **model_kwargs)
+    model = build_model_with_cfg(
+        model_cls, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        pretrained_strict=not features_only,
+        kwargs_filter=kwargs_filter,
+        **kwargs)
+    if features_only:
+        model.default_cfg = default_cfg_for_features(model.default_cfg)
+    return model
 
 
 def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
@@ -250,7 +253,7 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
         **kwargs,
     )
-    model = _create_mnv3(model_kwargs, variant, pretrained)
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -346,7 +349,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
         **kwargs,
     )
-    model = _create_mnv3(model_kwargs, variant, pretrained)
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
     return model
 
 

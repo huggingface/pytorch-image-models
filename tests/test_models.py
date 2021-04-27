@@ -5,7 +5,8 @@ import os
 import fnmatch
 
 import timm
-from timm import list_models, create_model, set_scriptable
+from timm import list_models, create_model, set_scriptable, has_model_default_key, is_model_default_key, \
+    get_model_default_value
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests
@@ -13,18 +14,26 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_executor(True)
     torch._C._jit_set_profiling_mode(False)
 
+# transformer models don't support many of the spatial / feature based model functionalities
+NON_STD_FILTERS = ['vit_*', 'tnt_*', 'pit_*', 'swin_*']
+NUM_NON_STD = len(NON_STD_FILTERS)
+
+# exclude models that cause specific test failures
 if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FILTERS = ['*efficientnet_l2*', '*resnext101_32x48d', 'vit_*']
+    EXCLUDE_FILTERS = [
+        '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm',
+        '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*'] + NON_STD_FILTERS
 else:
-    EXCLUDE_FILTERS = ['vit_*']
+    EXCLUDE_FILTERS = NON_STD_FILTERS
+
 MAX_FWD_SIZE = 384
 MAX_BWD_SIZE = 128
 MAX_FWD_FEAT_SIZE = 448
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS[:-NUM_NON_STD]))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -52,9 +61,15 @@ def test_model_backward(model_name, batch_size):
     model.eval()
 
     input_size = model.default_cfg['input_size']
-    if any([x > MAX_BWD_SIZE for x in input_size]):
-        # cap backward test at 128 * 128 to keep resource usage down
-        input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
+    if not is_model_default_key(model_name, 'fixed_input_size'):
+        min_input_size = get_model_default_value(model_name, 'min_input_size')
+        if min_input_size is not None:
+            input_size = min_input_size
+        else:
+            if any([x > MAX_BWD_SIZE for x in input_size]):
+                # cap backward test at 128 * 128 to keep resource usage down
+                input_size = tuple([min(x, MAX_BWD_SIZE) for x in input_size])
+
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)
     outputs.mean().backward()
@@ -68,7 +83,7 @@ def test_model_backward(model_name, batch_size):
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=['vit_*']))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -78,7 +93,6 @@ def test_model_default_cfgs(model_name, batch_size):
     cfg = model.default_cfg
 
     classifier = cfg['classifier']
-    first_conv = cfg['first_conv']
     pool_size = cfg['pool_size']
     input_size = model.default_cfg['input_size']
 
@@ -102,13 +116,20 @@ def test_model_default_cfgs(model_name, batch_size):
         model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 4
-        if not isinstance(model, timm.models.MobileNetV3):
-            # FIXME mobilenetv3 forward_features vs removed pooling differ
+        if not isinstance(model, timm.models.MobileNetV3) and not isinstance(model, timm.models.GhostNet):
+            # FIXME mobilenetv3/ghostnet forward_features vs removed pooling differ
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
-    # check classifier and first convolution names match those in default_cfg
+    # check classifier name matches default_cfg
     assert classifier + ".weight" in state_dict.keys(), f'{classifier} not in model params'
-    assert first_conv + ".weight" in state_dict.keys(), f'{first_conv} not in model params'
+
+    # check first conv(s) names match default_cfg
+    first_conv = cfg['first_conv']
+    if isinstance(first_conv, str):
+        first_conv = (first_conv,)
+    assert isinstance(first_conv, (tuple, list))
+    for fc in first_conv:
+        assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
 
 if 'GITHUB_ACTIONS' not in os.environ:
@@ -118,10 +139,10 @@ if 'GITHUB_ACTIONS' not in os.environ:
     def test_model_load_pretrained(model_name, batch_size):
         """Create that pretrained weights load, verify support for in_chans != 3 while doing so."""
         in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
-        create_model(model_name, pretrained=True, in_chans=in_chans)
+        create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=5)
 
     @pytest.mark.timeout(120)
-    @pytest.mark.parametrize('model_name', list_models(pretrained=True))
+    @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""
@@ -129,7 +150,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*',  # hopefully fix at some point
+    'dla*', 'hrnet*', 'ghostnet*', # hopefully fix at some point
 ]
 
 
@@ -141,7 +162,14 @@ def test_model_forward_torchscript(model_name, batch_size):
     with set_scriptable(True):
         model = create_model(model_name, pretrained=False)
     model.eval()
-    input_size = (3, 128, 128)  # jit compile is already a bit slow and we've tested normal res already...
+
+    if has_model_default_key(model_name, 'fixed_input_size'):
+        input_size = get_model_default_value(model_name, 'input_size')
+    elif has_model_default_key(model_name, 'min_input_size'):
+        input_size = get_model_default_value(model_name, 'min_input_size')
+    else:
+        input_size = (3, 128, 128)  # jit compile is already a bit slow and we've tested normal res already...
+
     model = torch.jit.script(model)
     outputs = model(torch.randn((batch_size, *input_size)))
 
@@ -166,7 +194,14 @@ def test_model_forward_features(model_name, batch_size):
     model.eval()
     expected_channels = model.feature_info.channels()
     assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
-    input_size = (3, 96, 96)  # jit compile is already a bit slow and we've tested normal res already...
+
+    if has_model_default_key(model_name, 'fixed_input_size'):
+        input_size = get_model_default_value(model_name, 'input_size')
+    elif has_model_default_key(model_name, 'min_input_size'):
+        input_size = get_model_default_value(model_name, 'min_input_size')
+    else:
+        input_size = (3, 96, 96)  # jit compile is already a bit slow and we've tested normal res already...
+
     outputs = model(torch.randn((batch_size, *input_size)))
     assert len(expected_channels) == len(outputs)
     for e, o in zip(expected_channels, outputs):

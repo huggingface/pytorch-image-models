@@ -122,8 +122,6 @@ model_list = [
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep stem, and avg-pool in downsample layers.'),
     _entry('seresnext26t_32x4d', 'SE-ResNeXt-26-T 32x4d', '1812.01187',
            model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered stem, and avg-pool in downsample layers.'),
-    _entry('seresnext26tn_32x4d', 'SE-ResNeXt-26-TN 32x4d', '1812.01187',
-           model_desc='Block cfg of SE-ResNeXt-34 w/ Bottleneck, deep tiered narrow stem, and avg-pool in downsample layers.'),
     _entry('seresnext50_32x4d', 'SE-ResNeXt-50 32x4d', '1709.01507'),
 
     _entry('skresnet18', 'SK-ResNet-18', '1903.06586'),
@@ -458,6 +456,9 @@ model_list = [
     _entry('rexnet_130', 'ReXNet-1.3x', '2007.00992'),
     _entry('rexnet_150', 'ReXNet-1.5x', '2007.00992'),
     _entry('rexnet_200', 'ReXNet-2.0x', '2007.00992'),
+
+    _entry('vit_small_patch16_224', 'ViT-S/16', None),
+    _entry('vit_base_patch16_224', 'ViT-B/16', None),
 ]
 
 if is_server():
@@ -508,7 +509,7 @@ for m in model_list:
     model.eval()
     with torch.no_grad():
         # warmup
-        input = torch.randn((batch_size,) + data_config['input_size']).cuda()
+        input = torch.randn((batch_size,) + tuple(data_config['input_size'])).cuda()
         model(input)
 
         bar = tqdm(desc="Evaluation", mininterval=5, total=50000)

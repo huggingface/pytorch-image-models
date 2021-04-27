@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg
 from .registry import register_model
-from .layers import trunc_normal_, create_classifier
+from .layers import trunc_normal_, create_classifier, Linear
 
 
 def _cfg(url='', **kwargs):
@@ -32,12 +32,12 @@ default_cfgs = {
     # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
     'tf_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_inception_v3-e0069de4.pth',
-        num_classes=1001, has_aux=False),
+        num_classes=1000, has_aux=False, label_offset=1),
     # my port of Tensorflow adversarially trained Inception V3 from
     # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
     'adv_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/adv_inception_v3-9e27bd63.pth',
-        num_classes=1001, has_aux=False),
+        num_classes=1000, has_aux=False, label_offset=1),
     # from gluon pretrained models, best performing in terms of accuracy/loss metrics
     # https://gluon-cv.mxnet.io/model_zoo/classification.html
     'gluon_inception_v3': _cfg(
@@ -250,7 +250,7 @@ class InceptionAux(nn.Module):
         self.conv0 = conv_block(in_channels, 128, kernel_size=1)
         self.conv1 = conv_block(128, 768, kernel_size=5)
         self.conv1.stddev = 0.01
-        self.fc = nn.Linear(768, num_classes)
+        self.fc = Linear(768, num_classes)
         self.fc.stddev = 0.001
 
     def forward(self, x):
@@ -434,8 +434,10 @@ def _create_inception_v3(variant, pretrained=False, **kwargs):
         model_cls = InceptionV3
         load_strict = not default_cfg['has_aux']
     return build_model_with_cfg(
-        model_cls, variant, pretrained, default_cfg=default_cfgs[variant],
-        pretrained_strict=load_strict, **kwargs)
+        model_cls, variant, pretrained,
+        default_cfg=default_cfg,
+        pretrained_strict=load_strict,
+        **kwargs)
 
 
 @register_model

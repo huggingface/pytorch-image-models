@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ ImageNet Validation Script
 
 This is intended to be a lean and easily modifiable ImageNet validation script for evaluating pretrained
@@ -20,7 +20,7 @@ from collections import OrderedDict
 from contextlib import suppress
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
-from timm.data import Dataset, DatasetTar, create_loader, resolve_data_config, RealLabelsImagenet
+from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_legacy
 
 has_apex = False
@@ -44,7 +44,11 @@ _logger = logging.getLogger('validate')
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
-parser.add_argument('--model', '-m', metavar='MODEL', default='dpn92',
+parser.add_argument('--dataset', '-d', metavar='NAME', default='',
+                    help='dataset type (default: ImageFolder/ImageTar if empty)')
+parser.add_argument('--split', metavar='NAME', default='validation',
+                    help='dataset split (default: validation)')
+parser.add_argument('--model', '-m', metavar='NAME', default='dpn92',
                     help='model architecture (default: dpn92)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
@@ -52,6 +56,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
+parser.add_argument('--input-size', default=None, nargs=3, type=int,
+                    metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 parser.add_argument('--crop-pct', default=None, type=float,
                     metavar='N', help='Input image center crop pct')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
@@ -60,7 +66,7 @@ parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD'
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('--num-classes', type=int, default=1000,
+parser.add_argument('--num-classes', type=int, default=None,
                     help='Number classes in dataset')
 parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
                     help='path to class to idx mapping file (default: "")')
@@ -110,15 +116,20 @@ def validate(args):
     args.prefetcher = not args.no_prefetcher
     amp_autocast = suppress  # do nothing
     if args.amp:
-        if has_apex:
-            args.apex_amp = True
-        elif has_native_amp:
+        if has_native_amp:
             args.native_amp = True
+        elif has_apex:
+            args.apex_amp = True
         else:
-            _logger.warning("Neither APEX or Native Torch AMP is available, using FP32.")
+            _logger.warning("Neither APEX or Native Torch AMP is available.")
     assert not args.apex_amp or not args.native_amp, "Only one AMP mode should be set."
     if args.native_amp:
         amp_autocast = torch.cuda.amp.autocast
+        _logger.info('Validating in mixed precision with native PyTorch AMP.')
+    elif args.apex_amp:
+        _logger.info('Validating in mixed precision with NVIDIA APEX AMP.')
+    else:
+        _logger.info('Validating in float32. AMP not enabled.')
 
     if args.legacy_jit:
         set_jit_legacy()
@@ -131,6 +142,9 @@ def validate(args):
         in_chans=3,
         global_pool=args.gp,
         scriptable=args.torchscript)
+    if args.num_classes is None:
+        assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
+        args.num_classes = model.num_classes
 
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)
@@ -138,8 +152,10 @@ def validate(args):
     param_count = sum([m.numel() for m in model.parameters()])
     _logger.info('Model %s created, param count: %d' % (args.model, param_count))
 
-    data_config = resolve_data_config(vars(args), model=model)
-    model, test_time_pool = (model, False) if args.no_test_pool else apply_test_time_pool(model, data_config)
+    data_config = resolve_data_config(vars(args), model=model, use_test_size=True, verbose=True)
+    test_time_pool = False
+    if not args.no_test_pool:
+        model, test_time_pool = apply_test_time_pool(model, data_config, use_test_size=True)
 
     if args.torchscript:
         torch.jit.optimized_execution(True)
@@ -157,10 +173,9 @@ def validate(args):
 
     criterion = nn.CrossEntropyLoss().cuda()
 
-    if os.path.splitext(args.data)[1] == '.tar' and os.path.isfile(args.data):
-        dataset = DatasetTar(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
-    else:
-        dataset = Dataset(args.data, load_bytes=args.tf_preprocessing, class_map=args.class_map)
+    dataset = create_dataset(
+        root=args.data, name=args.dataset, split=args.split,
+        load_bytes=args.tf_preprocessing, class_map=args.class_map)
 
     if args.valid_labels:
         with open(args.valid_labels, 'r') as f:
@@ -196,7 +211,7 @@ def validate(args):
     model.eval()
     with torch.no_grad():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
-        input = torch.randn((args.batch_size,) + data_config['input_size']).cuda()
+        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).cuda()
         if args.channels_last:
             input = input.contiguous(memory_format=torch.channels_last)
         model(input)
@@ -274,7 +289,7 @@ def main():
         if args.model == 'all':
             # validate all models in a list of names with pretrained checkpoints
             args.pretrained = True
-            model_names = list_models(pretrained=True)
+            model_names = list_models(pretrained=True, exclude_filters=['*_in21k', '*_in22k'])
             model_cfgs = [(n, '') for n in model_names]
         elif not is_model(args.model):
             # model name doesn't exist, try as wildcard filter

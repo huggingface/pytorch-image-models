@@ -1,13 +1,27 @@
 from torch import nn as nn
+import torch.nn.functional as F
+
 from .create_act import create_act_layer
+from .helpers import make_divisible
 
 
 class SEModule(nn.Module):
-
-    def __init__(self, channels, reduction=16, act_layer=nn.ReLU, min_channels=8, reduction_channels=None,
-                 gate_layer='sigmoid'):
+    """ SE Module as defined in original SE-Nets with a few additions
+    Additions include:
+        * min_channels can be specified to keep reduced channel count at a minimum (default: 8)
+        * divisor can be specified to keep channels rounded to specified values (default: 1)
+        * reduction channels can be specified directly by arg (if reduction_channels is set)
+        * reduction channels can be specified by float ratio (if reduction_ratio is set)
+    """
+    def __init__(self, channels, reduction=16, act_layer=nn.ReLU, gate_layer='sigmoid',
+                 reduction_ratio=None, reduction_channels=None, min_channels=8, divisor=1):
         super(SEModule, self).__init__()
-        reduction_channels = reduction_channels or max(channels // reduction, min_channels)
+        if reduction_channels is not None:
+            reduction_channels = reduction_channels  # direct specification highest priority, no rounding/min done
+        elif reduction_ratio is not None:
+            reduction_channels = make_divisible(channels * reduction_ratio, divisor, min_channels)
+        else:
+            reduction_channels = make_divisible(channels // reduction, divisor, min_channels)
         self.fc1 = nn.Conv2d(channels, reduction_channels, kernel_size=1, bias=True)
         self.act = act_layer(inplace=True)
         self.fc2 = nn.Conv2d(reduction_channels, channels, kernel_size=1, bias=True)

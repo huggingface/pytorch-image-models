@@ -8,7 +8,9 @@ from .eca import EcaModule, CecaModule
 from .cbam import CbamModule, LightCbamModule
 
 
-def create_attn(attn_type, channels, **kwargs):
+def get_attn(attn_type):
+    if isinstance(attn_type, torch.nn.Module):
+        return attn_type
     module_cls = None
     if attn_type is not None:
         if isinstance(attn_type, str):
@@ -32,6 +34,12 @@ def create_attn(attn_type, channels, **kwargs):
                 module_cls = SEModule
         else:
             module_cls = attn_type
+    return module_cls
+
+
+def create_attn(attn_type, channels, **kwargs):
+    module_cls = get_attn(attn_type)
     if module_cls is not None:
+        # NOTE: it's expected the first (positional) argument of all attention layers is the # input channels
         return module_cls(channels, **kwargs)
     return None

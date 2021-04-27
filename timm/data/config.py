@@ -5,7 +5,7 @@ from .constants import *
 _logger = logging.getLogger(__name__)
 
 
-def resolve_data_config(args, default_cfg={}, model=None, verbose=True):
+def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, verbose=False):
     new_config = {}
     default_cfg = default_cfg
     if not default_cfg and model is not None and hasattr(model, 'default_cfg'):
@@ -25,8 +25,11 @@ def resolve_data_config(args, default_cfg={}, model=None, verbose=True):
     elif 'img_size' in args and args['img_size'] is not None:
         assert isinstance(args['img_size'], int)
         input_size = (in_chans, args['img_size'], args['img_size'])
-    elif 'input_size' in default_cfg:
-        input_size = default_cfg['input_size']
+    else:
+        if use_test_size and 'test_input_size' in default_cfg:
+            input_size = default_cfg['test_input_size']
+        elif 'input_size' in default_cfg:
+            input_size = default_cfg['input_size']
     new_config['input_size'] = input_size
 
     # resolve interpolation method

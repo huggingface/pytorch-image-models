@@ -264,9 +264,11 @@ class CrossStage(nn.Module):
         if self.conv_down is not None:
             x = self.conv_down(x)
         x = self.conv_exp(x)
-        xs, xb = x.chunk(2, dim=1)
+        split = x.shape[1] // 2
+        xs, xb = x[:, :split], x[:, split:]
         xb = self.blocks(xb)
-        out = self.conv_transition(torch.cat([xs, self.conv_transition_b(xb)], dim=1))
+        xb = self.conv_transition_b(xb).contiguous()
+        out = self.conv_transition(torch.cat([xs, xb], dim=1))
         return out
 
 
@@ -407,8 +409,10 @@ class CspNet(nn.Module):
 def _create_cspnet(variant, pretrained=False, **kwargs):
     cfg_variant = variant.split('_')[0]
     return build_model_with_cfg(
-        CspNet, variant, pretrained, default_cfg=default_cfgs[variant],
-        feature_cfg=dict(flatten_sequential=True), model_cfg=model_cfgs[cfg_variant], **kwargs)
+        CspNet, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        feature_cfg=dict(flatten_sequential=True), model_cfg=model_cfgs[cfg_variant],
+        **kwargs)
 
 
 @register_model

@@ -196,7 +196,7 @@ class SelecSLS(nn.Module):
         return x
 
 
-def _create_selecsls(variant, pretrained, model_kwargs):
+def _create_selecsls(variant, pretrained, **kwargs):
     cfg = {}
     feature_info = [dict(num_chs=32, reduction=2, module='stem.2')]
     if variant.startswith('selecsls42'):
@@ -320,40 +320,43 @@ def _create_selecsls(variant, pretrained, model_kwargs):
 
     # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
     return build_model_with_cfg(
-        SelecSLS, variant, pretrained, default_cfg=default_cfgs[variant], model_cfg=cfg,
-        feature_cfg=dict(out_indices=(0, 1, 2, 3, 4), flatten_sequential=True), **model_kwargs)
+        SelecSLS, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        model_cfg=cfg,
+        feature_cfg=dict(out_indices=(0, 1, 2, 3, 4), flatten_sequential=True),
+        **kwargs)
 
 
 @register_model
 def selecsls42(pretrained=False, **kwargs):
     """Constructs a SelecSLS42 model.
     """
-    return _create_selecsls('selecsls42', pretrained, kwargs)
+    return _create_selecsls('selecsls42', pretrained, **kwargs)
 
 
 @register_model
 def selecsls42b(pretrained=False, **kwargs):
     """Constructs a SelecSLS42_B model.
     """
-    return _create_selecsls('selecsls42b', pretrained, kwargs)
+    return _create_selecsls('selecsls42b', pretrained, **kwargs)
 
 
 @register_model
 def selecsls60(pretrained=False, **kwargs):
     """Constructs a SelecSLS60 model.
     """
-    return _create_selecsls('selecsls60', pretrained, kwargs)
+    return _create_selecsls('selecsls60', pretrained, **kwargs)
 
 
 @register_model
 def selecsls60b(pretrained=False, **kwargs):
     """Constructs a SelecSLS60_B model.
     """
-    return _create_selecsls('selecsls60b', pretrained, kwargs)
+    return _create_selecsls('selecsls60b', pretrained, **kwargs)
 
 
 @register_model
 def selecsls84(pretrained=False, **kwargs):
     """Constructs a SelecSLS84 model.
     """
-    return _create_selecsls('selecsls84', pretrained, kwargs)
+    return _create_selecsls('selecsls84', pretrained, **kwargs)

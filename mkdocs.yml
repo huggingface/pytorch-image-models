@@ -5,6 +5,7 @@ repo_url: 'https://github.com/rwightman/pytorch-image-models'
 nav:
   - index.md
   - models.md
+  - ... | models/*.md
   - results.md
   - scripts.md
   - training_hparam_examples.md
@@ -40,3 +41,6 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
   - mdx_truly_sane_lists
+plugins:
+  - search
+  - awesome-pages
