@@ -120,11 +120,11 @@ default_cfgs = {
         input_size=(3, 384, 384), crop_pct=1.0, classifier=('head', 'head_dist')),
 
     # ViT ImageNet-21K-P pretraining
-    'vit_base_patch16_224_in21k_miil': _cfg(
+    'vit_base_patch16_224_miil_in21k': _cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/vit_base_patch16_224_in21k_miil.pth',
         mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
     ),
-    'vit_base_patch16_224_1k_miil': _cfg(
+    'vit_base_patch16_224_miil': _cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm'
             '/vit_base_patch16_224_1k_miil_84_4.pth',
         mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear',
@@ -699,20 +699,22 @@ def vit_deit_base_distilled_patch16_384(pretrained=False, **kwargs):
         'vit_deit_base_distilled_patch16_384', pretrained=pretrained, distilled=True, **model_kwargs)
     return model
 
-@register_model
-def vit_base_patch16_224_in21k_miil(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-    Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
-    """
-    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_224_in21k_miil', pretrained=pretrained, **model_kwargs)
-    return model
 
 @register_model
-def vit_base_patch16_224_1k_miil(pretrained=False, **kwargs):
+def vit_base_patch16_224_miil_in21k(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
     model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_224_1k_miil', pretrained=pretrained, **model_kwargs)
+    model = _create_vision_transformer('vit_base_patch16_224_miil_in21k', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_base_patch16_224_miil(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
+    Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
+    """
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, **kwargs)
+    model = _create_vision_transformer('vit_base_patch16_224_miil', pretrained=pretrained, **model_kwargs)
     return model

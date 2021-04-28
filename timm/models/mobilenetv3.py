@@ -39,10 +39,10 @@ default_cfgs = {
     'mobilenetv3_large_100': _cfg(
         interpolation='bicubic',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
-    'mobilenetv3_large_100_1k_miil_78_0': _cfg(
+    'mobilenetv3_large_100_miil': _cfg(
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_1k_miil_78_0.pth'),
-    'mobilenetv3_large_100_in21k_miil': _cfg(
+    'mobilenetv3_large_100_miil_in21k': _cfg(
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
     'mobilenetv3_small_075': _cfg(url=''),
@@ -374,20 +374,20 @@ def mobilenetv3_large_100(pretrained=False, **kwargs):
 
 
 @register_model
-def mobilenetv3_large_100_1k_miil(pretrained=False, **kwargs):
+def mobilenetv3_large_100_miil(pretrained=False, **kwargs):
     """ MobileNet V3
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model = _gen_mobilenet_v3('mobilenetv3_large_100_1k_miil_78_0', 1.0, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v3('mobilenetv3_large_100_miil', 1.0, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
-def mobilenetv3_large_100_in21k_miil(pretrained=False, **kwargs):
+def mobilenetv3_large_100_miil_in21k(pretrained=False, **kwargs):
     """ MobileNet V3, 21k pretraining
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model = _gen_mobilenet_v3('mobilenetv3_large_100_in21k_miil', 1.0, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v3('mobilenetv3_large_100_miil_in21k', 1.0, pretrained=pretrained, **kwargs)
     return model
 
 
