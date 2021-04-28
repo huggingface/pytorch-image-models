@@ -33,8 +33,8 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     'tresnet_m': _cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/tresnet_m_1k_miil_83_1.pth'),
-    'tresnet_m_21k_miil': _cfg(
-        url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/tresnet_m_miil_21k.pth', num_classes=11221),
+    'tresnet_m_in21k_miil': _cfg(
+        url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/tresnet_m_miil_in21k.pth', num_classes=11221),
     'tresnet_l': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_81_5-235b486c.pth'),
     'tresnet_xl': _cfg(
@@ -267,9 +267,9 @@ def tresnet_m(pretrained=False, **kwargs):
     return _create_tresnet('tresnet_m', pretrained=pretrained, **model_kwargs)
 
 @register_model
-def tresnet_m_21k_miil(pretrained=False, **kwargs):
+def tresnet_m_in21k_miil(pretrained=False, **kwargs):
     model_kwargs = dict(layers=[3, 4, 11, 3], **kwargs)
-    return _create_tresnet('tresnet_m_21k_miil', pretrained=pretrained, **model_kwargs)
+    return _create_tresnet('tresnet_m_in21k_miil', pretrained=pretrained, **model_kwargs)
 
 @register_model
 def tresnet_l(pretrained=False, **kwargs):
