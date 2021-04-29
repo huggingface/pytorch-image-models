@@ -36,7 +36,7 @@ def _cfg_coat(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
         'crop_pct': .9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'first_conv': 'patch_embed1.proj', 'classifier': 'head',
         **kwargs
     }
 
@@ -654,7 +654,7 @@ def coat_lite_tiny(pretrained=False, **kwargs):
         patch_size=4, embed_dims=[64, 128, 256, 320], serial_depths=[2, 2, 2, 2], parallel_depth=0,
         num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
     # FIXME use builder
-    model.default_cfg = default_cfgs['coat_lite_mini']
+    model.default_cfg = default_cfgs['coat_lite_tiny']
     if pretrained:
         load_pretrained(model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
