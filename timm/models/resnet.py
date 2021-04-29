@@ -54,6 +54,9 @@ default_cfgs = {
     'resnet50d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
         interpolation='bicubic', first_conv='conv1.0'),
+    'resnet50t': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnet101': _cfg(url='', interpolation='bicubic'),
     'resnet101d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth',
@@ -704,6 +707,15 @@ def resnet50d(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     return _create_resnet('resnet50d', pretrained, **model_args)
+
+
+@register_model
+def resnet50t(pretrained=False, **kwargs):
+    """Constructs a ResNet-50-T model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep_tiered', avg_down=True, **kwargs)
+    return _create_resnet('resnet50t', pretrained, **model_args)
 
 
 @register_model

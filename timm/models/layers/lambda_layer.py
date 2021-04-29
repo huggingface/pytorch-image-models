@@ -34,7 +34,7 @@ class LambdaLayer(nn.Module):
     """
     def __init__(
             self,
-            dim, dim_out=None, stride=1, num_heads=4, dim_head=16, r=5, qkv_bias=False):
+            dim, dim_out=None, stride=1, num_heads=4, dim_head=16, r=7, qkv_bias=False):
         super().__init__()
         self.dim_out = dim_out or dim
         self.dim_k = dim_head  # query depth 'k'
