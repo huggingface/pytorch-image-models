@@ -35,7 +35,7 @@ __all__ = ['ByoaNet']
 def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
         'fixed_input_size': False, 'min_input_size': (3, 224, 224),
@@ -45,17 +45,19 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     # GPU-Efficient (ResNet) weights
-    'botnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256)),
+    'botnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'botnet50t_224': _cfg(url='', fixed_input_size=True),
     'botnet50t_c4c5_224': _cfg(url='', fixed_input_size=True),
 
     'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet_h1_c4c5': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
-    'halonet26t': _cfg(url='', input_size=(3, 256, 256)),
-    'halonet50t': _cfg(url=''),
+    'halonet26t': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'halonet50t': _cfg(url='', min_input_size=(3, 224, 224)),
 
-    'lambda_resnet26t': _cfg(url='', min_input_size=(3, 128, 128), input_size=(3, 256, 256)),
+    'lambda_resnet26t': _cfg(url='', min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
     'lambda_resnet50t': _cfg(url='', min_input_size=(3, 128, 128)),
+
+    'swinnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 
@@ -95,10 +97,10 @@ model_cfgs = dict(
 
     botnet26t=ByoaCfg(
         blocks=(
-            ByoaBlocksCfg(type='bottle', d=3, c=256, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
             ByoaBlocksCfg(type='bottle', d=4, c=512, s=2, gs=0, br=0.25),
             interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=0, br=0.25),
-            ByoaBlocksCfg(type='self_attn', d=3, c=2048, s=1, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=3, c=2048, s=2, gs=0, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
@@ -229,6 +231,22 @@ model_cfgs = dict(
         num_features=0,
         self_attn_layer='lambda',
         self_attn_kwargs=dict()
+    ),
+
+    swinnet26t=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
+            ByoaBlocksCfg(type='bottle', d=4, c=512, s=2, gs=0, br=0.25),
+            interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=3, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        self_attn_layer='swin',
+        self_attn_fixed_size=True,
+        self_attn_kwargs=dict(win_size=8)
     ),
 )
 
@@ -452,3 +470,11 @@ def lambda_resnet50t(pretrained=False, **kwargs):
     """ Lambda-ResNet-50T. Lambda layers in one C4 stage and all C5.
     """
     return _create_byoanet('lambda_resnet50t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def swinnet26t_256(pretrained=False, **kwargs):
+    """
+    """
+    kwargs.setdefault('img_size', 256)
+    return _create_byoanet('swinnet26t_256', 'swinnet26t', pretrained=pretrained, **kwargs)
