@@ -235,15 +235,6 @@ def validate(args):
             if real_labels is not None:
                 real_labels.add_result(output)
 
-            print(input.shape)
-            print(target.shape)
-            print(output.shape)
-            import numpy as np
-            max_idx = np.argmax(output[0].cpu().detach().numpy())
-            
-            print('Output: ', max_idx, output[0][max_idx], ' should be ', target[0])
-            print(output[0])
-            exit()
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output.detach(), target, topk=(1, 5))
             losses.update(loss.item(), input.size(0))
