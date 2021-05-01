@@ -336,7 +336,8 @@ class EfficientNet(nn.Module):
     def __init__(self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32,
                  channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  output_stride=32, pad_type='', fix_stem=False, act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0.,
-                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
+                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):                 
+#                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
         super(EfficientNet, self).__init__()
         norm_kwargs = norm_kwargs or {}
 
@@ -362,6 +363,7 @@ class EfficientNet(nn.Module):
         # Head + Pooling
         self.conv_head = create_conv2d(head_chs, self.num_features, 1, padding=pad_type)
         self.bn2 = norm_layer(self.num_features, **norm_kwargs)
+        #self.bn2 = nn.LayerNorm([self.num_features, 7, 7], **norm_kwargs)
         self.act2 = act_layer(inplace=True)
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)

@@ -18,10 +18,18 @@ import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 from contextlib import suppress
+import torchextractor as tx
+import torchvision.transforms as T
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_legacy
+from timm.data.transforms import _pil_interp
+
+from PIL import Image
+import json
+import numpy as np
+import cv2
 
 has_apex = False
 try:
@@ -108,6 +116,11 @@ parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
                     help='Real labels JSON file for imagenet evaluation')
 parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
                     help='Valid label indices txt file for validation of partial label space')
+parser.add_argument('--hook', dest='hook', action='store_true',
+                    help='hook activations')
+parser.add_argument('--prune', dest='prune', type=float, default=0.0,
+                    help='prune linear layers')
+parser.add_argument('--file', default='', type=str, help='Image file')
 
 
 def validate(args):
@@ -156,7 +169,59 @@ def validate(args):
     test_time_pool = False
     if not args.no_test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config, use_test_size=True)
+    
+    # standard PyTorch mean-std input image normalization
+    transform = T.Compose([
+        T.Resize((data_config["input_size"][1], data_config["input_size"][2]), _pil_interp("bicubic")),
+        T.CenterCrop(data_config["input_size"][1]),
+        T.ToTensor(),
+        T.Normalize(mean=torch.tensor(data_config["mean"]), std=torch.tensor(data_config["std"]))
+    ])
 
+    if (args.hook):
+        from torchsummary import summary        
+        
+        layer_names   = []
+        sparse_layers = 0
+        layer_nr = 0
+        
+        summary(model.cuda(), (3, 224, 224))
+        
+        for name, module in model.named_modules():
+            layer_names.append(name)
+            #if (isinstance(module, torch.nn.Linear)):
+            #    print('Linear ', layer_nr, ' : ', name, ' shape: ', module.weight.shape)
+                
+            if (hasattr(module, 'weight') and isinstance(module, torch.nn.Linear)):
+                weights = module.weight.detach()
+                zeros = weights.numel() - weights.nonzero().size(0)
+                sparsity = zeros / weights.numel() * 100.0
+                average = torch.mean(abs(weights))
+                small_val = torch.sum((abs(weights) < 0.05).int()).item() / weights.numel() * 100.0
+                #small_pos = torch.sum((weights < 0.05).int()).item() / weights.numel() * 100.0
+                #small_neg = torch.sum((weights < -0.05).int()).item() / weights.numel() * 100.0
+                if (small_val > 70):
+                    #print("layer: ", name, module, ",  sparsity: ", sparsity, " small=", int(small_val), ", < 0.05: ", int(small_pos), " neg: ", int(small_neg))
+                    print("layer: ", name, module,  " small=", int(small_val), ' sparse=', sparsity)
+                    sparse_layers += 1
+                else:
+                    print("layer: ", name, module,  " mean=", average)
+                    
+                
+#            if (name == "model.backbone.conv_stem"):
+#                print(module.weight.shape, module.weight.detach().numpy())
+            layer_nr += 1
+
+        exit()        
+        print(layer_names)
+            
+        #model = tx.Extractor(model, layer_names)
+
+    if (args.prune != 0.0):
+        # prune all linear layer weights with value < args.prune
+        for name, module in model.named_modules():
+            args.prune = 0
+        
     if args.torchscript:
         torch.jit.optimized_execution(True)
         model = torch.jit.script(model)
@@ -171,117 +236,33 @@ def validate(args):
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
 
-    criterion = nn.CrossEntropyLoss().cuda()
-
-    dataset = create_dataset(
-        root=args.data, name=args.dataset, split=args.split,
-        load_bytes=args.tf_preprocessing, class_map=args.class_map)
-
-    if args.valid_labels:
-        with open(args.valid_labels, 'r') as f:
-            valid_labels = {int(line.rstrip()) for line in f}
-            valid_labels = [i in valid_labels for i in range(args.num_classes)]
-    else:
-        valid_labels = None
-
-    if args.real_labels:
-        real_labels = RealLabelsImagenet(dataset.filenames(basename=True), real_json=args.real_labels)
-    else:
-        real_labels = None
-
-    crop_pct = 1.0 if test_time_pool else data_config['crop_pct']
-    loader = create_loader(
-        dataset,
-        input_size=data_config['input_size'],
-        batch_size=args.batch_size,
-        use_prefetcher=args.prefetcher,
-        interpolation=data_config['interpolation'],
-        mean=data_config['mean'],
-        std=data_config['std'],
-        num_workers=args.workers,
-        crop_pct=crop_pct,
-        pin_memory=args.pin_mem,
-        tf_preprocessing=args.tf_preprocessing)
-
-    batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
+    with open(args.data + '/imagenet_class_index.json') as f:
+        imagenet_dict = json.load(f)
 
     model.eval()
-    with torch.no_grad():
-        # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
-        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).cuda()
-        if args.channels_last:
-            input = input.contiguous(memory_format=torch.channels_last)
-        model(input)
-        end = time.time()
         
-        for batch_idx, (input, target) in enumerate(loader):
-            if args.no_prefetcher:
-                target = target.cuda()
-                input = input.cuda()
-            if args.channels_last:
-                input = input.contiguous(memory_format=torch.channels_last)
+    if (args.file):
+        im = Image.open(args.file)
 
-            # compute output
-            with amp_autocast():
-                output = model(input)
+        print('Image ', args.file, ' size=', im.size)
+        img = transform(im).unsqueeze(0)
+        img = img.cuda()
 
-            if valid_labels is not None:
-                output = output[:, valid_labels]
-            loss = criterion(output, target)
+        with torch.no_grad():
+            x_class = model(img)
+            max_idx = np.argmax(x_class.cpu().detach().numpy())
+            print(x_class[0][max_idx], max_idx)
+            #for i in range(1000):
+            #    if (x_class[0][i] > 0.5):
+            #        print('Index: ', i, ' ', x_class[0][i], ' ', imagenet_dict[str(i)][1]) 
+            #class_name = imagenet_dict[]
 
-            if real_labels is not None:
-                real_labels.add_result(output)
+        frame = cv2.cvtColor(np.uint8(im), cv2.COLOR_RGB2BGR)
+        cv2.imshow('CLASS: ' + str(max_idx) + ' ' + imagenet_dict[str(max_idx)][1], np.uint8(frame))
+        
+        ch = cv2.waitKey()
 
-            print(input.shape)
-            print(target.shape)
-            print(output.shape)
-            import numpy as np
-            max_idx = np.argmax(output[0].cpu().detach().numpy())
-            
-            print('Output: ', max_idx, output[0][max_idx], ' should be ', target[0])
-            print(output[0])
-            exit()
-            # measure accuracy and record loss
-            acc1, acc5 = accuracy(output.detach(), target, topk=(1, 5))
-            losses.update(loss.item(), input.size(0))
-            top1.update(acc1.item(), input.size(0))
-            top5.update(acc5.item(), input.size(0))
 
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            if batch_idx % args.log_freq == 0:
-                _logger.info(
-                    'Test: [{0:>4d}/{1}]  '
-                    'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
-                    'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
-                    'Acc@1: {top1.val:>7.3f} ({top1.avg:>7.3f})  '
-                    'Acc@5: {top5.val:>7.3f} ({top5.avg:>7.3f})'.format(
-                        batch_idx, len(loader), batch_time=batch_time,
-                        rate_avg=input.size(0) / batch_time.avg,
-                        loss=losses, top1=top1, top5=top5))
-
-    if real_labels is not None:
-        # real labels mode replaces topk values at the end
-        top1a, top5a = real_labels.get_accuracy(k=1), real_labels.get_accuracy(k=5)
-    else:
-        top1a, top5a = top1.avg, top5.avg
-    results = OrderedDict(
-        top1=round(top1a, 4), top1_err=round(100 - top1a, 4),
-        top5=round(top5a, 4), top5_err=round(100 - top5a, 4),
-        param_count=round(param_count / 1e6, 2),
-        img_size=data_config['input_size'][-1],
-        cropt_pct=crop_pct,
-        interpolation=data_config['interpolation'])
-
-    _logger.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
-       results['top1'], results['top1_err'], results['top5'], results['top5_err']))
-
-    return results
 
 
 def main():
@@ -307,16 +288,13 @@ def main():
             model_cfgs = [(n, '') for n in model_names]
 
     if len(model_cfgs):
-        results_file = args.results_file or './results-all.csv'
         _logger.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
-        results = []
         try:
             start_batch_size = args.batch_size
             for m, c in model_cfgs:
                 batch_size = start_batch_size
                 args.model = m
                 args.checkpoint = c
-                result = OrderedDict(model=args.model)
                 r = {}
                 while not r and batch_size >= args.num_gpu:
                     torch.cuda.empty_cache()
@@ -330,27 +308,15 @@ def main():
                             raise e
                         batch_size = max(batch_size // 2, args.num_gpu)
                         print("Validation failed, reducing batch size by 50%")
-                result.update(r)
-                if args.checkpoint:
-                    result['checkpoint'] = args.checkpoint
-                results.append(result)
+                        
         except KeyboardInterrupt as e:
             pass
-        results = sorted(results, key=lambda x: x['top1'], reverse=True)
-        if len(results):
-            write_results(results_file, results)
     else:
         validate(args)
 
 
-def write_results(results_file, results):
-    with open(results_file, mode='w') as cf:
-        dw = csv.DictWriter(cf, fieldnames=results[0].keys())
-        dw.writeheader()
-        for r in results:
-            dw.writerow(r)
-        cf.flush()
 
 
 if __name__ == '__main__':
     main()
+
