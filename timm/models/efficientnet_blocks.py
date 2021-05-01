@@ -218,12 +218,13 @@ class InvertedResidual(nn.Module):
                  stride=1, dilation=1, pad_type='', act_layer=nn.ReLU, noskip=False,
                  exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1,
                  se_ratio=0., se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 conv_kwargs=None, drop_path_rate=0.):
+                 conv_kwargs=None, drop_path_rate=0., aa_layer=None):
         super(InvertedResidual, self).__init__()
         norm_kwargs = norm_kwargs or {}
         conv_kwargs = conv_kwargs or {}
         mid_chs = make_divisible(in_chs * exp_ratio)
         has_se = se_ratio is not None and se_ratio > 0.
+        use_aa = aa_layer is not None and stride == 2
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
         self.drop_path_rate = drop_path_rate
 
@@ -234,10 +235,11 @@ class InvertedResidual(nn.Module):
 
         # Depth-wise convolution
         self.conv_dw = create_conv2d(
-            mid_chs, mid_chs, dw_kernel_size, stride=stride, dilation=dilation,
+            mid_chs, mid_chs, dw_kernel_size, stride=1 if use_aa else stride, dilation=dilation,
             padding=pad_type, depthwise=True, **conv_kwargs)
         self.bn2 = norm_layer(mid_chs, **norm_kwargs)
         self.act2 = act_layer(inplace=True)
+        self.aa = aa_layer(mid_chs, stride=stride) if use_aa else None
 
         # Squeeze-and-excitation
         if has_se:
@@ -269,6 +271,8 @@ class InvertedResidual(nn.Module):
         x = self.conv_dw(x)
         x = self.bn2(x)
         x = self.act2(x)
+        if self.aa is not None:
+            x = self.aa(x)
 
         # Squeeze-and-excitation
         if self.se is not None:
