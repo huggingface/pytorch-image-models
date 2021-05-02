@@ -601,8 +601,8 @@ class ResNet(nn.Module):
         else:
             self.maxpool = nn.Sequential(*[
                 nn.Conv2d(inplanes, inplanes, 3, stride=2, padding=1), 
-                nn.BatchNorm2d(inplanes), 
-                nn.ReLU()
+                norm_layer(inplanes), 
+                act_layer(inplace=True)
             ])
 
         # Feature Blocks
