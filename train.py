@@ -52,6 +52,12 @@ try:
 except AttributeError:
     pass
 
+try:
+    import wandb
+    has_wandb = True
+except ImportError: 
+    has_wandb = False
+
 torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('train')
 
@@ -271,6 +277,8 @@ parser.add_argument('--use-multi-epochs-loader', action='store_true', default=Fa
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
+parser.add_argument('--log-wandb', action='store_true', default=False,
+                    help='log training and validation metrics to wandb')
 
 
 def _parse_args():
@@ -293,7 +301,14 @@ def _parse_args():
 def main():
     setup_default_logging()
     args, args_text = _parse_args()
-
+    
+    if args.log_wandb:
+        if has_wandb:
+            wandb.init(project=args.experiment, config=args)
+        else: 
+            _logger.warning("You've requested to log metrics to wandb but package not found. "
+                            "Metrics not being logged to wandb, try `pip install wandb`")
+             
     args.prefetcher = not args.no_prefetcher
     args.distributed = False
     if 'WORLD_SIZE' in os.environ:
@@ -329,7 +344,7 @@ def main():
         _logger.warning("Neither APEX or native Torch AMP is available, using float32. "
                         "Install NVIDA apex or upgrade to PyTorch 1.6")
 
-    torch.manual_seed(args.seed + args.rank)
+    random_seed(args.seed, args.rank)
 
     model = create_model(
         args.model,
@@ -545,7 +560,7 @@ def main():
     best_metric = None
     best_epoch = None
     saver = None
-    output_dir = ''
+    output_dir = None
     if args.local_rank == 0:
         if args.experiment:
             exp_name = args.experiment
@@ -591,9 +606,10 @@ def main():
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
 
-            update_summary(
-                epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
-                write_header=best_metric is None)
+            if output_dir is not None:
+                update_summary(
+                    epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
+                    write_header=best_metric is None, log_wandb=args.log_wandb and has_wandb)
 
             if saver is not None:
                 # save proper checkpoint with eval metric
@@ -608,7 +624,7 @@ def main():
 
 def train_one_epoch(
         epoch, model, loader, optimizer, loss_fn, args,
-        lr_scheduler=None, saver=None, output_dir='', amp_autocast=suppress,
+        lr_scheduler=None, saver=None, output_dir=None, amp_autocast=suppress,
         loss_scaler=None, model_ema=None, mixup_fn=None):
 
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
