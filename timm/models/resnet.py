@@ -600,7 +600,7 @@ class ResNet(nn.Module):
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         else:
             self.maxpool = nn.Sequential(*[
-                nn.Conv2d(inplanes, inplanes, 3, stride=2, padding=1), 
+                nn.Conv2d(inplanes, inplanes, 3, stride=2, padding=1, bias=False), 
                 norm_layer(inplanes), 
                 act_layer(inplace=True)
             ])
