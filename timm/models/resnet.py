@@ -334,7 +334,7 @@ class Bottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
                  reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-                 attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+                 attn_layer=None, aa_layer=None, drop_block=None, drop_path=None, **kwargs):
         super(Bottleneck, self).__init__()
 
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
@@ -357,7 +357,7 @@ class Bottleneck(nn.Module):
         self.conv3 = nn.Conv2d(width, outplanes, kernel_size=1, bias=False)
         self.bn3 = norm_layer(outplanes)
 
-        self.se = create_attn(attn_layer, outplanes)
+        self.se = create_attn(attn_layer, outplanes, **kwargs)
 
         self.act3 = act_layer(inplace=True)
         self.downsample = downsample
@@ -1093,7 +1093,7 @@ def ecaresnet50d(pretrained=False, **kwargs):
 def resnetrs50(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs50', pretrained, **model_args)
 
 
@@ -1101,7 +1101,7 @@ def resnetrs50(pretrained=False, **kwargs):
 def resnetrs101(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs101', pretrained, **model_args)
 
 
@@ -1109,7 +1109,7 @@ def resnetrs101(pretrained=False, **kwargs):
 def resnetrs152(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs152', pretrained, **model_args)
 
 
@@ -1117,7 +1117,7 @@ def resnetrs152(pretrained=False, **kwargs):
 def resnetrs200(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs200', pretrained, **model_args)
 
 
@@ -1125,7 +1125,7 @@ def resnetrs200(pretrained=False, **kwargs):
 def resnetrs270(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[4, 29, 53, 4], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs270', pretrained, **model_args)
 
 
@@ -1134,7 +1134,7 @@ def resnetrs270(pretrained=False, **kwargs):
 def resnetrs350(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[4, 36, 72, 4], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs350', pretrained, **model_args)
 
 
@@ -1142,7 +1142,7 @@ def resnetrs350(pretrained=False, **kwargs):
 def resnetrs420(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[4, 44, 87, 4], stem_width=32, stem_type='deep', replace_stem_max_pool=True,
-        avg_down=True,  block_args=dict(attn_layer='se'), **kwargs)
+        avg_down=True,  block_args=dict(attn_layer='se', reduction_ratio=0.25), **kwargs)
     return _create_resnet('resnetrs420', pretrained, **model_args)
 
 
