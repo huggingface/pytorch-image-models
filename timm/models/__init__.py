@@ -1,5 +1,6 @@
 from .byoanet import *
 from .byobnet import *
+from .cait import *
 from .coat import *
 from .cspnet import *
 from .densenet import *
