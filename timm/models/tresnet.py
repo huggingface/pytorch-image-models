@@ -5,16 +5,13 @@ https://arxiv.org/pdf/2003.13630.pdf
 Original model: https://github.com/mrT23/TResNet
 
 """
-import copy
 from collections import OrderedDict
-from functools import partial
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import SpaceToDepthModule, AntiAliasDownsampleLayer, InplaceAbn, ClassifierHead, SEModule
+from .layers import SpaceToDepthModule, BlurPool2d, InplaceAbn, ClassifierHead, SEModule
 from .registry import register_model
 
 __all__ = ['tresnet_m', 'tresnet_l', 'tresnet_xl']
@@ -156,15 +153,12 @@ class Bottleneck(nn.Module):
 
 
 class TResNet(nn.Module):
-    def __init__(self, layers, in_chans=3, num_classes=1000, width_factor=1.0, no_aa_jit=False,
-                 global_pool='fast', drop_rate=0.):
+    def __init__(self, layers, in_chans=3, num_classes=1000, width_factor=1.0, global_pool='fast', drop_rate=0.):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         super(TResNet, self).__init__()
 
-        # JIT layers
-        space_to_depth = SpaceToDepthModule()
-        aa_layer = partial(AntiAliasDownsampleLayer, no_jit=no_aa_jit)
+        aa_layer = BlurPool2d
 
         # TResnet stages
         self.inplanes = int(64 * width_factor)
@@ -181,7 +175,7 @@ class TResNet(nn.Module):
 
         # body
         self.body = nn.Sequential(OrderedDict([
-            ('SpaceToDepth', space_to_depth),
+            ('SpaceToDepth', SpaceToDepthModule()),
             ('conv1', conv1),
             ('layer1', layer1),
             ('layer2', layer2),
