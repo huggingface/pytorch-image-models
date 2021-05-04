@@ -242,7 +242,7 @@ default_cfgs = {
     # ResNet-RS models
     'resnetrs50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs50-7c9728e2.pth',
-        input_size=(3, 160, 160), pool_size=(4, 4), crop_pct=0.91, test_input_size=(3, 224, 224),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.91, test_input_size=(3, 224, 224),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs101': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs101-3e4bb55c.pth',
