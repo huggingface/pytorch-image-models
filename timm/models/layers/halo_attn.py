@@ -25,6 +25,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from .weight_init import trunc_normal_
+
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     """ Compute relative logits along one dimension
@@ -123,6 +125,13 @@ class HaloAttn(nn.Module):
 
         self.pos_embed = PosEmbedRel(
             block_size=block_size // self.stride, win_size=self.win_size, dim_head=self.dim_head, scale=self.scale)
+
+    def reset_parameters(self):
+        std = self.q.weight.shape[1] ** -0.5  # fan-in
+        trunc_normal_(self.q.weight, std=std)
+        trunc_normal_(self.kv.weight, std=std)
+        trunc_normal_(self.pos_embed.height_rel, std=self.scale)
+        trunc_normal_(self.pos_embed.width_rel, std=self.scale)
 
     def forward(self, x):
         B, C, H, W = x.shape
