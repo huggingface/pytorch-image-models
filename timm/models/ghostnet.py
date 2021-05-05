@@ -112,7 +112,7 @@ class GhostBottleneck(nn.Module):
 
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         # 1st ghost bottleneck
         x = self.ghost1(x)
@@ -129,7 +129,7 @@ class GhostBottleneck(nn.Module):
         # 2nd ghost bottleneck
         x = self.ghost2(x)
         
-        x += self.shortcut(residual)
+        x += self.shortcut(shortcut)
         return x
 
 

@@ -89,9 +89,9 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         if self.downsample is not None:
-            residual = self.downsample(x)
+            shortcut = self.downsample(x)
         else:
-            residual = x
+            shortcut = x
 
         out = self.conv1(x)
         out = self.conv2(out)
@@ -99,7 +99,7 @@ class BasicBlock(nn.Module):
         if self.se is not None:
             out = self.se(out)
 
-        out += residual
+        out += shortcut
         out = self.relu(out)
         return out
 
@@ -136,9 +136,9 @@ class Bottleneck(nn.Module):
 
     def forward(self, x):
         if self.downsample is not None:
-            residual = self.downsample(x)
+            shortcut = self.downsample(x)
         else:
-            residual = x
+            shortcut = x
 
         out = self.conv1(x)
         out = self.conv2(out)
@@ -146,7 +146,7 @@ class Bottleneck(nn.Module):
             out = self.se(out)
 
         out = self.conv3(out)
-        out = out + residual  # no inplace
+        out = out + shortcut  # no inplace
         out = self.relu(out)
 
         return out

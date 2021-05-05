@@ -315,7 +315,7 @@ class BasicBlock(nn.Module):
         nn.init.zeros_(self.bn2.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -337,8 +337,8 @@ class BasicBlock(nn.Module):
             x = self.drop_path(x)
 
         if self.downsample is not None:
-            residual = self.downsample(residual)
-        x += residual
+            shortcut = self.downsample(shortcut)
+        x += shortcut
         x = self.act2(x)
 
         return x
@@ -385,7 +385,7 @@ class Bottleneck(nn.Module):
         nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -413,8 +413,8 @@ class Bottleneck(nn.Module):
             x = self.drop_path(x)
 
         if self.downsample is not None:
-            residual = self.downsample(residual)
-        x += residual
+            shortcut = self.downsample(shortcut)
+        x += shortcut
         x = self.act3(x)
 
         return x
