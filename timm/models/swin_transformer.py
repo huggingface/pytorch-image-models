@@ -467,7 +467,7 @@ class SwinTransformer(nn.Module):
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
             norm_layer=norm_layer if self.patch_norm else None)
         num_patches = self.patch_embed.num_patches
-        self.patch_grid = self.patch_embed.out_size
+        self.patch_grid = self.patch_embed.grid_size
 
         # absolute position embedding
         if self.ape:

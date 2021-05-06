@@ -21,8 +21,8 @@ class PatchEmbed(nn.Module):
         patch_size = to_2tuple(patch_size)
         self.img_size = img_size
         self.patch_size = patch_size
-        self.out_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
-        self.num_patches = self.out_size[0] * self.out_size[1]
+        self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
+        self.num_patches = self.grid_size[0] * self.grid_size[1]
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
