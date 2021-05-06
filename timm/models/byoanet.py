@@ -294,6 +294,8 @@ class SelfAttnBlock(nn.Module):
     def init_weights(self, zero_init_last_bn=False):
         if zero_init_last_bn:
             nn.init.zeros_(self.conv3_1x1.bn.weight)
+        if hasattr(self.self_attn, 'reset_parameters'):
+            self.self_attn.reset_parameters()
 
     def forward(self, x):
         shortcut = self.shortcut(x)

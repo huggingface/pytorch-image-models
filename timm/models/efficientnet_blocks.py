@@ -184,7 +184,7 @@ class DepthwiseSeparableConv(nn.Module):
         return info
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         x = self.conv_dw(x)
         x = self.bn1(x)
@@ -200,7 +200,7 @@ class DepthwiseSeparableConv(nn.Module):
         if self.has_residual:
             if self.drop_path_rate > 0.:
                 x = drop_path(x, self.drop_path_rate, self.training)
-            x += residual
+            x += shortcut
         return x
 
 
@@ -258,7 +258,7 @@ class InvertedResidual(nn.Module):
         return info
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         # Point-wise expansion
         x = self.conv_pw(x)
@@ -281,7 +281,7 @@ class InvertedResidual(nn.Module):
         if self.has_residual:
             if self.drop_path_rate > 0.:
                 x = drop_path(x, self.drop_path_rate, self.training)
-            x += residual
+            x += shortcut
 
         return x
 
@@ -308,7 +308,7 @@ class CondConvResidual(InvertedResidual):
         self.routing_fn = nn.Linear(in_chs, self.num_experts)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         # CondConv routing
         pooled_inputs = F.adaptive_avg_pool2d(x, 1).flatten(1)
@@ -335,7 +335,7 @@ class CondConvResidual(InvertedResidual):
         if self.has_residual:
             if self.drop_path_rate > 0.:
                 x = drop_path(x, self.drop_path_rate, self.training)
-            x += residual
+            x += shortcut
         return x
 
 
@@ -390,7 +390,7 @@ class EdgeResidual(nn.Module):
         return info
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         # Expansion convolution
         x = self.conv_exp(x)
@@ -408,6 +408,6 @@ class EdgeResidual(nn.Module):
         if self.has_residual:
             if self.drop_path_rate > 0.:
                 x = drop_path(x, self.drop_path_rate, self.training)
-            x += residual
+            x += shortcut
 
         return x

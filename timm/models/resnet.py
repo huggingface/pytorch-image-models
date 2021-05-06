@@ -241,31 +241,31 @@ default_cfgs = {
 
     # ResNet-RS models
     'resnetrs50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs50-7c9728e2.pth',
-        input_size=(3, 160, 160), pool_size=(4, 4), crop_pct=0.91, test_input_size=(3, 224, 224),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs50_ema-6b53758b.pth',
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.91, test_input_size=(3, 224, 224),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs101': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs101-3e4bb55c.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs101_i192_ema-1509bbf6.pth',
         input_size=(3, 192, 192), pool_size=(6, 6), crop_pct=0.94, test_input_size=(3, 288, 288),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs152': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs152-b1efe56d.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs152_i256_ema-a9aff7f9.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs200': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs200-b455b791.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs200_ema-623d2f59.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs270': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs270-cafcfbc7.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs270_ema-b40e674c.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 352, 352),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs350': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs350-06d9bfac.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs350_i256_ema-5a1aa8f1.pth',
         input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0, test_input_size=(3, 384, 384),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs420': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs420-d26764a5.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs420_ema-972dee69.pth',
         input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, test_input_size=(3, 416, 416),
         interpolation='bicubic', first_conv='conv1.0'),
 }
@@ -315,7 +315,7 @@ class BasicBlock(nn.Module):
         nn.init.zeros_(self.bn2.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -337,8 +337,8 @@ class BasicBlock(nn.Module):
             x = self.drop_path(x)
 
         if self.downsample is not None:
-            residual = self.downsample(residual)
-        x += residual
+            shortcut = self.downsample(shortcut)
+        x += shortcut
         x = self.act2(x)
 
         return x
@@ -385,7 +385,7 @@ class Bottleneck(nn.Module):
         nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -413,8 +413,8 @@ class Bottleneck(nn.Module):
             x = self.drop_path(x)
 
         if self.downsample is not None:
-            residual = self.downsample(residual)
-        x += residual
+            shortcut = self.downsample(shortcut)
+        x += shortcut
         x = self.act3(x)
 
         return x

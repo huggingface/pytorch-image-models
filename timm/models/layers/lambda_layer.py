@@ -24,6 +24,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from .weight_init import trunc_normal_
 
 
 class LambdaLayer(nn.Module):
@@ -36,6 +37,7 @@ class LambdaLayer(nn.Module):
             self,
             dim, dim_out=None, stride=1, num_heads=4, dim_head=16, r=7, qkv_bias=False):
         super().__init__()
+        self.dim = dim
         self.dim_out = dim_out or dim
         self.dim_k = dim_head  # query depth 'k'
         self.num_heads = num_heads
@@ -54,6 +56,10 @@ class LambdaLayer(nn.Module):
         self.conv_lambda = nn.Conv3d(1, dim_head, (r, r, 1), padding=(r // 2, r // 2, 0))
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
+
+    def reset_parameters(self):
+        trunc_normal_(self.qkv.weight, std=self.dim ** -0.5)
+        trunc_normal_(self.conv_lambda.weight, std=self.dim_k ** -0.5)
 
     def forward(self, x):
         B, C, H, W = x.shape

@@ -76,7 +76,7 @@ class SelectiveKernelBasic(nn.Module):
         nn.init.zeros_(self.conv2.bn.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
         x = self.conv1(x)
         x = self.conv2(x)
         if self.se is not None:
@@ -84,8 +84,8 @@ class SelectiveKernelBasic(nn.Module):
         if self.drop_path is not None:
             x = self.drop_path(x)
         if self.downsample is not None:
-            residual = self.downsample(residual)
-        x += residual
+            shortcut = self.downsample(shortcut)
+        x += shortcut
         x = self.act(x)
         return x
 
@@ -124,7 +124,7 @@ class SelectiveKernelBottleneck(nn.Module):
         nn.init.zeros_(self.conv3.bn.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -133,8 +133,8 @@ class SelectiveKernelBottleneck(nn.Module):
         if self.drop_path is not None:
             x = self.drop_path(x)
         if self.downsample is not None:
-            residual = self.downsample(residual)
-        x += residual
+            shortcut = self.downsample(shortcut)
+        x += shortcut
         x = self.act(x)
         return x
 
