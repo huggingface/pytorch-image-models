@@ -15,7 +15,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_mode(False)
 
 # transformer models don't support many of the spatial / feature based model functionalities
-NON_STD_FILTERS = ['vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'mixer_*']
+NON_STD_FILTERS = ['vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', 'mixer_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -43,7 +43,9 @@ def test_model_forward(model_name, batch_size):
 
     input_size = model.default_cfg['input_size']
     if any([x > MAX_FWD_SIZE for x in input_size]):
-        # cap forward test at max res 448 * 448 to keep resource down
+        if is_model_default_key(model_name, 'fixed_input_size'):
+            pytest.skip("Fixed input size model > limit.")
+        # cap forward test at max res 384 * 384 to keep resource down
         input_size = tuple([min(x, MAX_FWD_SIZE) for x in input_size])
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)
