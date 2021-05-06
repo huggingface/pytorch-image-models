@@ -23,6 +23,20 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### May 5, 2021
+* Add MLP-Mixer models and port pretrained weights from [Google JAX impl](https://github.com/google-research/vision_transformer/tree/linen)
+* Add CaiT models and pretrained weights from [FB](https://github.com/facebookresearch/deit)
+* Add ResNet-RS models and weights from [TF](https://github.com/tensorflow/tpu/tree/master/models/official/resnet/resnet_rs). Thanks [Aman Arora](https://github.com/amaarora)
+* Add CoaT models and weights. Thanks [Mohammed Rizin](https://github.com/morizin)
+* Add new ImageNet-21k weights & finetuned weights for TResNet, MobileNet-V3, ViT models. Thanks [mrT](https://github.com/mrT23)
+* Add GhostNet models and weights. Thanks [Kai Han](https://github.com/iamhankai)
+* Update ByoaNet attention modles
+   * Improve SA module inits
+   * Hack together experimental stand-alone Swin based attn module and `swinnet`
+   * Consistent '26t' model defs for experiments.
+* Add improved Efficientnet-V2S (prelim model def) weights. 83.8 top-1.
+* WandB logging support
+
 ### April 13, 2021
 * Add Swin Transformer models and weights from https://github.com/microsoft/Swin-Transformer
 
@@ -182,6 +196,8 @@ A full version of the list below with source links can be found in the [document
 
 * Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
+* CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
+* CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT (Vision Transformer) - https://arxiv.org/abs/2012.12877
 * DenseNet - https://arxiv.org/abs/1608.06993
@@ -192,11 +208,13 @@ A full version of the list below with source links can be found in the [document
     * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
     * EfficientNet (B0-B7) - https://arxiv.org/abs/1905.11946
     * EfficientNet-EdgeTPU (S, M, L) - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
+    * EfficientNet V2 - https://arxiv.org/abs/2104.00298
     * FBNet-C - https://arxiv.org/abs/1812.03443
     * MixNet - https://arxiv.org/abs/1907.09595
     * MNASNet B1, A1 (Squeeze-Excite), and Small - https://arxiv.org/abs/1807.11626
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
+* GhostNet - https://arxiv.org/abs/1911.11907
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
 * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
@@ -204,6 +222,7 @@ A full version of the list below with source links can be found in the [document
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
+* MLP-Mixer - https://arxiv.org/abs/2105.01601
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
 * NASNet-A - https://arxiv.org/abs/1707.07012
 * NFNet-F - https://arxiv.org/abs/2102.06171
@@ -220,6 +239,7 @@ A full version of the list below with source links can be found in the [document
     * Semi-supervised (SSL) / Semi-weakly Supervised (SWSL) ResNet/ResNeXts - https://arxiv.org/abs/1905.00546
     * ECA-Net (ECAResNet) - https://arxiv.org/abs/1910.03151v4
     * Squeeze-and-Excitation Networks (SEResNet) - https://arxiv.org/abs/1709.01507
+    * ResNet-RS - https://arxiv.org/abs/2103.07579
 * Res2Net - https://arxiv.org/abs/1904.01169
 * ResNeSt - https://arxiv.org/abs/2004.08955
 * ReXNet - https://arxiv.org/abs/2007.00992
