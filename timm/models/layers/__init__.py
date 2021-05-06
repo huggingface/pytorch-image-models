@@ -20,9 +20,11 @@ from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
+from .mlp import Mlp, GluMlp
 from .norm import GroupNorm
 from .norm_act import BatchNormAct2d, GroupNormAct
 from .padding import get_padding, get_same_padding, pad_same
+from .patch_embed import PatchEmbed
 from .pool2d_same import AvgPool2dSame, create_pool2d
 from .se import SEModule
 from .selective_kernel import SelectiveKernelConv

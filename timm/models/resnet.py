@@ -49,6 +49,9 @@ default_cfgs = {
     'resnet26d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26d-69e92c46.pth',
         interpolation='bicubic', first_conv='conv1.0'),
+    'resnet26t': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8)),
     'resnet50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth',
         interpolation='bicubic'),
@@ -721,6 +724,15 @@ def resnet26(pretrained=False, **kwargs):
     """
     model_args = dict(block=Bottleneck, layers=[2, 2, 2, 2], **kwargs)
     return _create_resnet('resnet26', pretrained, **model_args)
+
+
+@register_model
+def resnet26t(pretrained=False, **kwargs):
+    """Constructs a ResNet-26-T model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[2, 2, 2, 2], stem_width=32, stem_type='deep_tiered', avg_down=True, **kwargs)
+    return _create_resnet('resnet26t', pretrained, **model_args)
 
 
 @register_model

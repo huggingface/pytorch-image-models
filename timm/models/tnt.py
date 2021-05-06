@@ -13,8 +13,7 @@ from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import load_pretrained
-from timm.models.layers import DropPath, trunc_normal_
-from timm.models.vision_transformer import Mlp
+from timm.models.layers import Mlp, DropPath, trunc_normal_
 from timm.models.registry import register_model
 
 

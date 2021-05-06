@@ -15,8 +15,7 @@ from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import trunc_normal_, DropPath
-from .vision_transformer import Mlp, PatchEmbed
+from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
 from .registry import register_model
 
 

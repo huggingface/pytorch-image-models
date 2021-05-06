@@ -25,7 +25,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import DropPath, to_2tuple, lecun_normal_
+from .layers import PatchEmbed, Mlp, GluMlp, DropPath, lecun_normal_
 from .registry import register_model
 
 
@@ -43,6 +43,7 @@ def _cfg(url='', **kwargs):
 default_cfgs = dict(
     mixer_s32_224=_cfg(),
     mixer_s16_224=_cfg(),
+    mixer_s16_glu_224=_cfg(),
     mixer_b32_224=_cfg(),
     mixer_b16_224=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_mixer_b16_224-76587d61.pth',
@@ -62,65 +63,17 @@ default_cfgs = dict(
 )
 
 
-class Mlp(nn.Module):
-    """ MLP Block
-    NOTE: same impl as ViT, move to common location
-    """
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-        self.drop = nn.Dropout(drop)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.drop(x)
-        return x
-
-
-class PatchEmbed(nn.Module):
-    """ Image to Patch Embedding
-    NOTE: same impl as ViT, move to common location
-    """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.patch_grid = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
-        self.num_patches = self.patch_grid[0] * self.patch_grid[1]
-
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
-
-    def forward(self, x):
-        B, C, H, W = x.shape
-        # FIXME look at relaxing size constraints
-        assert H == self.img_size[0] and W == self.img_size[1], \
-            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x).flatten(2).transpose(1, 2)
-        x = self.norm(x)
-        return x
-
-
 class MixerBlock(nn.Module):
 
     def __init__(
             self, dim, seq_len, tokens_dim, channels_dim,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6), act_layer=nn.GELU, drop=0., drop_path=0.):
+            mlp_layer=Mlp, norm_layer=partial(nn.LayerNorm, eps=1e-6), act_layer=nn.GELU, drop=0., drop_path=0.):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.mlp_tokens = Mlp(seq_len, tokens_dim, act_layer=act_layer, drop=drop)
+        self.mlp_tokens = mlp_layer(seq_len, tokens_dim, act_layer=act_layer, drop=drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
-        self.mlp_channels = Mlp(dim, channels_dim, act_layer=act_layer, drop=drop)
+        self.mlp_channels = mlp_layer(dim, channels_dim, act_layer=act_layer, drop=drop)
 
     def forward(self, x):
         x = x + self.drop_path(self.mlp_tokens(self.norm1(x).transpose(1, 2)).transpose(1, 2))
@@ -140,6 +93,7 @@ class MlpMixer(nn.Module):
             hidden_dim=512,
             tokens_dim=256,
             channels_dim=2048,
+            mlp_layer=Mlp,
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
             act_layer=nn.GELU,
             drop=0.,
@@ -154,7 +108,7 @@ class MlpMixer(nn.Module):
         self.blocks = nn.Sequential(*[
             MixerBlock(
                 hidden_dim, self.stem.num_patches, tokens_dim, channels_dim,
-                norm_layer=norm_layer, act_layer=act_layer, drop=drop, drop_path=drop_path)
+                mlp_layer=mlp_layer, norm_layer=norm_layer, act_layer=act_layer, drop=drop, drop_path=drop_path)
             for _ in range(num_blocks)])
         self.norm = norm_layer(hidden_dim)
         self.head = nn.Linear(hidden_dim, self.num_classes)  # zero init
@@ -235,6 +189,17 @@ def mixer_s16_224(pretrained=False, **kwargs):
     """
     model_args = dict(patch_size=16, num_blocks=8, hidden_dim=512, tokens_dim=256, channels_dim=2048, **kwargs)
     model = _create_mixer('mixer_s16_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def mixer_s16_glu_224(pretrained=False, **kwargs):
+    """ Mixer-S/16 224x224
+    """
+    model_args = dict(
+        patch_size=16, num_blocks=8, hidden_dim=512, tokens_dim=256, channels_dim=1536,
+        mlp_layer=GluMlp, act_layer=nn.SiLU, **kwargs)
+    model = _create_mixer('mixer_s16_glu_224', pretrained=pretrained, **model_args)
     return model
 
 

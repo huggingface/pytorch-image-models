@@ -22,9 +22,9 @@ import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import DropPath, to_2tuple, trunc_normal_
+from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
 from .registry import register_model
-from .vision_transformer import checkpoint_filter_fn, Mlp, PatchEmbed, _init_vit_weights
+from .vision_transformer import checkpoint_filter_fn, _init_vit_weights
 
 _logger = logging.getLogger(__name__)
 
@@ -467,7 +467,7 @@ class SwinTransformer(nn.Module):
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
             norm_layer=norm_layer if self.patch_norm else None)
         num_patches = self.patch_embed.num_patches
-        self.patch_grid = self.patch_embed.patch_grid
+        self.patch_grid = self.patch_embed.out_size
 
         # absolute position embedding
         if self.ape:

@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import load_pretrained
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from timm.models.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
 from timm.models.registry import register_model
 
 from functools import partial
@@ -52,26 +52,6 @@ default_cfgs = {
     ),
     'coat_lite_small': _cfg_coat(),
 }
-
-
-class Mlp(nn.Module):
-    """ Feed-forward network (FFN, a.k.a. MLP) class. """
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-        self.drop = nn.Dropout(drop)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.drop(x)
-        return x
 
 
 class ConvRelPosEnc(nn.Module):
@@ -348,34 +328,6 @@ class ParallelBlock(nn.Module):
         return x1, x2, x3, x4
 
 
-class PatchEmbed(nn.Module):
-    """ Image to Patch Embedding """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-
-        self.img_size = img_size
-        self.patch_size = patch_size
-        assert img_size[0] % patch_size[0] == 0 and img_size[1] % patch_size[1] == 0, \
-            f"img_size {img_size} should be divided by patch_size {patch_size}."
-        # Note: self.H, self.W and self.num_patches are not used
-        # since the image size may change on the fly.
-        self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
-        self.num_patches = self.H * self.W
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        self.norm = nn.LayerNorm(embed_dim)
-
-    def forward(self, x):
-        _, _, H, W = x.shape
-        out_H, out_W = H // self.patch_size[0], W // self.patch_size[1]
-
-        x = self.proj(x).flatten(2).transpose(1, 2)
-        out = self.norm(x)
-        
-        return out, (out_H, out_W)
-
-
 class CoaT(nn.Module):
     """ CoaT class. """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=[0, 0, 0, 0], 
@@ -391,13 +343,17 @@ class CoaT(nn.Module):
 
         # Patch embeddings.
         self.patch_embed1 = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dims[0])
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans,
+            embed_dim=embed_dims[0], norm_layer=nn.LayerNorm)
         self.patch_embed2 = PatchEmbed(
-            img_size=img_size // 4, patch_size=2, in_chans=embed_dims[0], embed_dim=embed_dims[1])
+            img_size=img_size // 4, patch_size=2, in_chans=embed_dims[0],
+            embed_dim=embed_dims[1], norm_layer=nn.LayerNorm)
         self.patch_embed3 = PatchEmbed(
-            img_size=img_size // 8, patch_size=2, in_chans=embed_dims[1], embed_dim=embed_dims[2])
+            img_size=img_size // 8, patch_size=2, in_chans=embed_dims[1],
+            embed_dim=embed_dims[2], norm_layer=nn.LayerNorm)
         self.patch_embed4 = PatchEmbed(
-            img_size=img_size // 16, patch_size=2, in_chans=embed_dims[2], embed_dim=embed_dims[3])
+            img_size=img_size // 16, patch_size=2, in_chans=embed_dims[2],
+            embed_dim=embed_dims[3], norm_layer=nn.LayerNorm)
 
         # Class tokens.
         self.cls_token1 = nn.Parameter(torch.zeros(1, 1, embed_dims[0]))
@@ -533,7 +489,8 @@ class CoaT(nn.Module):
         B = x0.shape[0]
 
         # Serial blocks 1.
-        x1, (H1, W1) = self.patch_embed1(x0)
+        x1 = self.patch_embed1(x0)
+        H1, W1 = self.patch_embed1.out_size
         x1 = self.insert_cls(x1, self.cls_token1)
         for blk in self.serial_blocks1:
             x1 = blk(x1, size=(H1, W1))
@@ -541,7 +498,8 @@ class CoaT(nn.Module):
         x1_nocls = x1_nocls.reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
         
         # Serial blocks 2.
-        x2, (H2, W2) = self.patch_embed2(x1_nocls)
+        x2 = self.patch_embed2(x1_nocls)
+        H2, W2 = self.patch_embed2.out_size
         x2 = self.insert_cls(x2, self.cls_token2)
         for blk in self.serial_blocks2:
             x2 = blk(x2, size=(H2, W2))
@@ -549,7 +507,8 @@ class CoaT(nn.Module):
         x2_nocls = x2_nocls.reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
 
         # Serial blocks 3.
-        x3, (H3, W3) = self.patch_embed3(x2_nocls)
+        x3 = self.patch_embed3(x2_nocls)
+        H3, W3 = self.patch_embed3.out_size
         x3 = self.insert_cls(x3, self.cls_token3)
         for blk in self.serial_blocks3:
             x3 = blk(x3, size=(H3, W3))
@@ -557,7 +516,8 @@ class CoaT(nn.Module):
         x3_nocls = x3_nocls.reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
 
         # Serial blocks 4.
-        x4, (H4, W4) = self.patch_embed4(x3_nocls)
+        x4 = self.patch_embed4(x3_nocls)
+        H4, W4 = self.patch_embed4.out_size
         x4 = self.insert_cls(x4, self.cls_token4)
         for blk in self.serial_blocks4:
             x4 = blk(x4, size=(H4, W4))
