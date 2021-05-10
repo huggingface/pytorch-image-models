@@ -40,7 +40,7 @@ default_cfgs = {
         interpolation='bicubic',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
     'mobilenetv3_large_075_aa': _cfg(url=''),
-    'mobilenetv3_large_100_aa': _cfg(url=''),
+    'mobilenetv3_large_100_aa': _cfg(url='https://storage.googleapis.com/cinemanet-models/pretrained/mobilenetv3_large_100_aa_224x224_ema.pth'),
     'mobilenetv3_large_100_miil': _cfg(
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_1k_miil_78_0.pth'),
