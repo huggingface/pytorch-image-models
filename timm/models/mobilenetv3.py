@@ -18,7 +18,7 @@ from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_la
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
 from .features import FeatureInfo, FeatureHooks
 from .helpers import build_model_with_cfg, default_cfg_for_features
-from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
+from .layers import SelectAdaptivePool2d, Linear, BlurPool2d, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
 __all__ = ['MobileNetV3']
@@ -39,6 +39,9 @@ default_cfgs = {
     'mobilenetv3_large_100': _cfg(
         interpolation='bicubic',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
+    'mobilenetv3_large_075_aa': _cfg(url=''),
+    'mobilenetv3_large_100_aa': _cfg(url='https://storage.googleapis.com/cinemanet-models/pretrained/mobilenetv3_large_100_aa_224x224_ema.pth'),
+    'mobilenetv3_large_100_aa_stem': _cfg(url=''),
     'mobilenetv3_large_100_miil': _cfg(
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_1k_miil_78_0.pth'),
@@ -85,7 +88,7 @@ class MobileNetV3(nn.Module):
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
                  channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0.,
-                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
+                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg', aa_layer=None, aa_stem=None):
         super(MobileNetV3, self).__init__()
 
         self.num_classes = num_classes
@@ -95,13 +98,14 @@ class MobileNetV3(nn.Module):
         # Stem
         stem_size = round_channels(stem_size, channel_multiplier)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem_aa = aa_stem(in_chans) if aa_stem else None
         self.bn1 = norm_layer(stem_size, **norm_kwargs)
         self.act1 = act_layer(inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, 32, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_path_rate, verbose=_DEBUG)
+            norm_layer, norm_kwargs, drop_path_rate, aa_layer, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
         head_chs = builder.in_chs
@@ -133,6 +137,8 @@ class MobileNetV3(nn.Module):
 
     def forward_features(self, x):
         x = self.conv_stem(x)
+        if self.conv_stem_aa is not None:
+            x = self.conv_stem_aa(x)
         x = self.bn1(x)
         x = self.act1(x)
         x = self.blocks(x)
@@ -160,7 +166,7 @@ class MobileNetV3Features(nn.Module):
     def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck',
                  in_chans=3, stem_size=16, channel_multiplier=1.0, output_stride=32, pad_type='',
                  act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0., se_kwargs=None,
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None):
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, aa_layer=None,):
         super(MobileNetV3Features, self).__init__()
         norm_kwargs = norm_kwargs or {}
         self.drop_rate = drop_rate
@@ -174,7 +180,7 @@ class MobileNetV3Features(nn.Module):
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
             channel_multiplier, 8, None, output_stride, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
+            norm_layer, norm_kwargs, drop_path_rate, aa_layer, feature_location=feature_location, verbose=_DEBUG)
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)
         self._stage_out_idx = {v['stage']: i for i, v in enumerate(self.feature_info) if i in out_indices}
@@ -402,6 +408,27 @@ def mobilenetv3_small_075(pretrained=False, **kwargs):
 def mobilenetv3_small_100(pretrained=False, **kwargs):
     """ MobileNet V3 """
     model = _gen_mobilenet_v3('mobilenetv3_small_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_large_075_aa(pretrained=False, aa_layer=BlurPool2d, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_large_075', 1.0, pretrained=pretrained, aa_layer=aa_layer, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_large_100_aa(pretrained=False, aa_layer=BlurPool2d, **kwargs):
+    """ MobileNet V3 w/ Blur Pooling of IR Blocks """
+    model = _gen_mobilenet_v3('mobilenetv3_large_100_aa', 1.0, pretrained=pretrained, aa_layer=aa_layer, **kwargs)
+    return model
+
+@register_model
+def mobilenetv3_large_100_aa_stem(pretrained=False, aa_layer=BlurPool2d, aa_stem=BlurPool2d, **kwargs):
+    """ MobileNet V3 w/ Blur Pooling of IR Blocks & Conv Stem """
+    model = _gen_mobilenet_v3('mobilenetv3_large_100_aa_stem', 1.0, pretrained=pretrained,
+                              aa_layer=aa_layer, aa_stem=aa_stem, **kwargs)
     return model
 
 

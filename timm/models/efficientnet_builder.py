@@ -221,7 +221,7 @@ class EfficientNetBuilder:
     """
     def __init__(self, channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  output_stride=32, pad_type='', act_layer=None, se_kwargs=None,
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0., feature_location='',
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, drop_path_rate=0., aa_layer=None, feature_location='',
                  verbose=False):
         self.channel_multiplier = channel_multiplier
         self.channel_divisor = channel_divisor
@@ -233,6 +233,7 @@ class EfficientNetBuilder:
         self.norm_layer = norm_layer
         self.norm_kwargs = norm_kwargs
         self.drop_path_rate = drop_path_rate
+        self.aa_layer = aa_layer
         if feature_location == 'depthwise':
             # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
             _logger.warning("feature_location=='depthwise' is deprecated, using 'expansion'")
@@ -269,6 +270,8 @@ class EfficientNetBuilder:
             if ba.get('num_experts', 0) > 0:
                 block = CondConvResidual(**ba)
             else:
+                # FIXME: `aa_layer` only impl for `InvertedResidual`. Add `CondConvResidual`?
+                ba['aa_layer'] = self.aa_layer
                 block = InvertedResidual(**ba)
         elif bt == 'ds' or bt == 'dsa':
             ba['drop_path_rate'] = drop_path_rate
