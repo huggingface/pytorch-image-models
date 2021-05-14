@@ -58,6 +58,9 @@ default_cfgs = {
 
     'swinnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'swinnet50ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+
+    'rednet26t': _cfg(url='', fixed_input_size=False, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'rednet50ts': _cfg(url='', fixed_input_size=False, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 
@@ -244,6 +247,38 @@ model_cfgs = dict(
         self_attn_layer='swin',
         self_attn_fixed_size=True,
         self_attn_kwargs=dict(win_size=8)
+    ),
+
+    rednet26t=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='self_attn', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=512, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',  # FIXME RedNet uses involution in middle of stem
+        stem_pool='maxpool',
+        num_features=0,
+        self_attn_layer='involution',
+        self_attn_fixed_size=False,
+        self_attn_kwargs=dict()
+    ),
+    rednet50ts=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='self_attn', d=3, c=256, s=1, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=4, c=512, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=3, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        self_attn_layer='involution',
+        self_attn_fixed_size=False,
+        self_attn_kwargs=dict()
     ),
 )
 
@@ -477,3 +512,17 @@ def swinnet50ts_256(pretrained=False, **kwargs):
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('swinnet50ts_256', 'swinnet50ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def rednet26t(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byoanet('rednet26t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def rednet50ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byoanet('rednet50ts', pretrained=pretrained, **kwargs)
