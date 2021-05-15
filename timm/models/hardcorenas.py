@@ -1,10 +1,14 @@
+from functools import partial
+
 import torch.nn as nn
-from .efficientnet_builder import decode_arch_def, resolve_bn_args
-from .mobilenetv3 import MobileNetV3, MobileNetV3Features, build_model_with_cfg, default_cfg_for_features
-from .layers import hard_sigmoid
-from .efficientnet_blocks import resolve_act_layer
-from .registry import register_model
+
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .efficientnet_blocks import SqueezeExcite
+from .efficientnet_builder import decode_arch_def, resolve_act_layer, resolve_bn_args
+from .helpers import build_model_with_cfg, default_cfg_for_features
+from .layers import get_act_fn
+from .mobilenetv3 import MobileNetV3, MobileNetV3Features
+from .registry import register_model
 
 
 def _cfg(url='', **kwargs):
@@ -35,15 +39,15 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
 
     """
     num_features = 1280
-
+    se_layer = partial(
+        SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), force_act_layer=nn.ReLU, reduce_from_block=False, divisor=8)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         num_features=num_features,
         stem_size=32,
-        channel_multiplier=1,
-        norm_kwargs=resolve_bn_args(kwargs),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'hard_swish'),
-        se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
+        se_layer=se_layer,
         **kwargs,
     )
 

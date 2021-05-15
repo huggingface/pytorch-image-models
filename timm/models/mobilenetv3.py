@@ -5,23 +5,25 @@ A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
 
 Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
-Hacked together by / Copyright 2020 Ross Wightman
+Hacked together by / Copyright 2021 Ross Wightman
 """
+from functools import partial
+from typing import List
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from typing import List
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .efficientnet_blocks import round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
-from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights
+from .efficientnet_blocks import SqueezeExcite
+from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
+    round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
 from .helpers import build_model_with_cfg, default_cfg_for_features
 from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
 from .registry import register_model
 
-__all__ = ['MobileNetV3']
+__all__ = ['MobileNetV3', 'MobileNetV3Features']
 
 
 def _cfg(url='', **kwargs):
@@ -47,9 +49,11 @@ default_cfgs = {
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
     'mobilenetv3_small_075': _cfg(url=''),
     'mobilenetv3_small_100': _cfg(url=''),
+
     'mobilenetv3_rw': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
         interpolation='bicubic'),
+
     'tf_mobilenetv3_large_075': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_large_075-150ee8b0.pth',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
@@ -70,8 +74,6 @@ default_cfgs = {
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 }
 
-_DEBUG = False
-
 
 class MobileNetV3(nn.Module):
     """ MobiletNet-V3
@@ -84,24 +86,26 @@ class MobileNetV3(nn.Module):
     """
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
-                 channel_multiplier=1.0, pad_type='', act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0.,
-                 se_kwargs=None, norm_layer=nn.BatchNorm2d, norm_kwargs=None, global_pool='avg'):
+                 pad_type='', act_layer=None, norm_layer=None, se_layer=None,
+                 round_chs_fn=round_channels, drop_rate=0., drop_path_rate=0., global_pool='avg'):
         super(MobileNetV3, self).__init__()
-
+        act_layer = act_layer or nn.ReLU
+        norm_layer = norm_layer or nn.BatchNorm2d
+        se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
 
         # Stem
-        stem_size = round_channels(stem_size, channel_multiplier)
+        stem_size = round_chs_fn(stem_size)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
-        self.bn1 = norm_layer(stem_size, **norm_kwargs)
+        self.bn1 = norm_layer(stem_size)
         self.act1 = act_layer(inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
-            channel_multiplier, 8, None, 32, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_path_rate, verbose=_DEBUG)
+            output_stride=32, pad_type=pad_type, round_chs_fn=round_chs_fn,
+            act_layer=act_layer, norm_layer=norm_layer, se_layer=se_layer, drop_path_rate=drop_path_rate)
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
         head_chs = builder.in_chs
@@ -158,23 +162,25 @@ class MobileNetV3Features(nn.Module):
     """
 
     def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck',
-                 in_chans=3, stem_size=16, channel_multiplier=1.0, output_stride=32, pad_type='',
-                 act_layer=nn.ReLU, drop_rate=0., drop_path_rate=0., se_kwargs=None,
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None):
+                 in_chans=3, stem_size=16, output_stride=32, pad_type='', round_chs_fn=round_channels,
+                 act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
         super(MobileNetV3Features, self).__init__()
-        norm_kwargs = norm_kwargs or {}
+        act_layer = act_layer or nn.ReLU
+        norm_layer = norm_layer or nn.BatchNorm2d
+        se_layer = se_layer or SqueezeExcite
         self.drop_rate = drop_rate
 
         # Stem
-        stem_size = round_channels(stem_size, channel_multiplier)
+        stem_size = round_chs_fn(stem_size)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
-        self.bn1 = norm_layer(stem_size, **norm_kwargs)
+        self.bn1 = norm_layer(stem_size)
         self.act1 = act_layer(inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
-            channel_multiplier, 8, None, output_stride, pad_type, act_layer, se_kwargs,
-            norm_layer, norm_kwargs, drop_path_rate, feature_location=feature_location, verbose=_DEBUG)
+            output_stride=output_stride, pad_type=pad_type, round_chs_fn=round_chs_fn,
+            act_layer=act_layer, norm_layer=norm_layer, se_layer=se_layer,
+            drop_path_rate=drop_path_rate, feature_location=feature_location)
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)
         self._stage_out_idx = {v['stage']: i for i, v in enumerate(self.feature_info) if i in out_indices}
@@ -253,10 +259,10 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         head_bias=False,
-        channel_multiplier=channel_multiplier,
-        norm_kwargs=resolve_bn_args(kwargs),
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'hard_swish'),
-        se_kwargs=dict(gate_fn=get_act_fn('hard_sigmoid'), reduce_mid=True, divisor=1),
+        se_layer=partial(SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), reduce_from_block=False),
         **kwargs,
     )
     model = _create_mnv3(variant, pretrained, **model_kwargs)
@@ -344,15 +350,16 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
                 # stage 6, 7x7 in
                 ['cn_r1_k1_s1_c960'],  # hard-swish
             ]
-
+    se_layer = partial(
+        SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), force_act_layer=nn.ReLU, reduce_from_block=False, divisor=8)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         num_features=num_features,
         stem_size=16,
-        channel_multiplier=channel_multiplier,
-        norm_kwargs=resolve_bn_args(kwargs),
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=act_layer,
-        se_kwargs=dict(act_layer=nn.ReLU, gate_fn=hard_sigmoid, reduce_mid=True, divisor=8),
+        se_layer=se_layer,
         **kwargs,
     )
     model = _create_mnv3(variant, pretrained, **model_kwargs)

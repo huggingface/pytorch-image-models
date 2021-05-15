@@ -23,6 +23,15 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### May 14, 2021
+* Add EfficientNet-V2 official model defs w/ ported weights from official [Tensorflow/Keras](https://github.com/google/automl/tree/master/efficientnetv2) impl.
+  * 1k trained variants: `tf_efficientnetv2_s/m/l`
+  * 21k trained variants: `tf_efficientnetv2_s/m/l_21k`
+  * 21k pretrained -> 1k fine-tuned: `tf_efficientnetv2_s/m/l_21ft1k`
+  * v2 models w/ v1 scaling: `tf_efficientnet_v2_b0` through `b3`
+  * Rename my prev V2 guess `efficientnet_v2s` -> `efficientnetv2_rw_s`
+  * Some blank `efficientnetv2_*` models in-place for future native PyTorch training
+
 ### May 5, 2021
 * Add MLP-Mixer models and port pretrained weights from [Google JAX impl](https://github.com/google-research/vision_transformer/tree/linen)
 * Add CaiT models and pretrained weights from [FB](https://github.com/facebookresearch/deit)
