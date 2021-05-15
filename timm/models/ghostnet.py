@@ -13,8 +13,8 @@ import torch.nn.functional as F
 
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .layers import SelectAdaptivePool2d, Linear, hard_sigmoid
-from .efficientnet_blocks import SqueezeExcite, ConvBnAct, make_divisible
+from .layers import SelectAdaptivePool2d, Linear, hard_sigmoid, make_divisible
+from .efficientnet_blocks import SqueezeExcite, ConvBnAct
 from .helpers import build_model_with_cfg
 from .registry import register_model
 
@@ -109,7 +109,6 @@ class GhostBottleneck(nn.Module):
                 nn.Conv2d(in_chs, out_chs, 1, stride=1, padding=0, bias=False),
                 nn.BatchNorm2d(out_chs),
             )
-
 
     def forward(self, x):
         shortcut = x
