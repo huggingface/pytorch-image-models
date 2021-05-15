@@ -15,6 +15,8 @@ from .hrnet import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
 from .inception_v4 import *
+from .levitc import *
+from .levit import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
 from .nasnet import *
@@ -34,6 +36,7 @@ from .swin_transformer import *
 from .tnt import *
 from .tresnet import *
 from .vgg import *
+from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
 from .vovnet import *
