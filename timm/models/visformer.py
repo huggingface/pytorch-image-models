@@ -306,6 +306,7 @@ def visformer_tiny(pretrained=False, **kwargs):
         img_size=224, init_channels=16, embed_dim=192, depth=(7, 4, 4), num_heads=3, mlp_ratio=4., group=8,
         attn_stage='011', spatial_conv='100', norm_layer=nn.BatchNorm2d, conv_init=True,
         embed_norm=nn.BatchNorm2d, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -315,6 +316,7 @@ def visformer_small(pretrained=False, **kwargs):
         img_size=224, init_channels=32, embed_dim=384, depth=(7, 4, 4), num_heads=6, mlp_ratio=4., group=8,
         attn_stage='011', spatial_conv='100', norm_layer=nn.BatchNorm2d, conv_init=True,
         embed_norm=nn.BatchNorm2d, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -323,6 +325,7 @@ def visformer_net1(pretrained=False, **kwargs):
     model = Visformer(
         init_channels=None, embed_dim=384, depth=(0, 12, 0), num_heads=6, mlp_ratio=4., attn_stage='111',
         spatial_conv='000', vit_stem=True, conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -331,6 +334,7 @@ def visformer_net2(pretrained=False, **kwargs):
     model = Visformer(
         init_channels=32, embed_dim=384, depth=(0, 12, 0), num_heads=6, mlp_ratio=4., attn_stage='111',
         spatial_conv='000', vit_stem=False, conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -339,13 +343,16 @@ def visformer_net3(pretrained=False, **kwargs):
     model = Visformer(
         init_channels=32, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4., attn_stage='111',
         spatial_conv='000', vit_stem=False, conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
 @register_model
 def visformer_net4(pretrained=False, **kwargs):
-    model = Visformer(init_channels=32, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4., attn_stage='111',
-                      spatial_conv='000', vit_stem=False, conv_init=True, **kwargs)
+    model = Visformer(
+        init_channels=32, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4., attn_stage='111',
+        spatial_conv='000', vit_stem=False, conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -354,6 +361,7 @@ def visformer_net5(pretrained=False, **kwargs):
     model = Visformer(
         init_channels=32, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4., group=1, attn_stage='111',
         spatial_conv='111', vit_stem=False, conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -362,6 +370,7 @@ def visformer_net6(pretrained=False, **kwargs):
     model = Visformer(
         init_channels=32, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4., group=1, attn_stage='111',
         pos_embed=False, spatial_conv='111', conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
@@ -370,6 +379,7 @@ def visformer_net7(pretrained=False, **kwargs):
     model = Visformer(
         init_channels=32, embed_dim=384, depth=(6, 7, 7), num_heads=6, group=1, attn_stage='000',
         pos_embed=False, spatial_conv='111', conv_init=True, **kwargs)
+    model.default_cfg = _cfg()
     return model
 
 
