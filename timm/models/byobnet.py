@@ -98,7 +98,7 @@ class BlocksCfg:
     s: int = 2  # stride of stage (first block)
     gs: Optional[Union[int, Callable]] = None  # group-size of blocks in stage, conv is depthwise if gs == 1
     br: float = 1.  # bottleneck-ratio of blocks in stage
-    no_attn: bool = True  # disable channel attn (ie SE) when layer is set for model
+    no_attn: bool = False  # disable channel attn (ie SE) when layer is set for model
 
 
 @dataclass
