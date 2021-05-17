@@ -1,5 +1,7 @@
 from .byoanet import *
 from .byobnet import *
+from .cait import *
+from .coat import *
 from .cspnet import *
 from .densenet import *
 from .dla import *
@@ -13,6 +15,7 @@ from .hrnet import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
 from .inception_v4 import *
+from .mlp_mixer import *
 from .mobilenetv3 import *
 from .nasnet import *
 from .nfnet import *

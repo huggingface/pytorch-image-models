@@ -13,8 +13,8 @@ import torch.nn.functional as F
 
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .layers import SelectAdaptivePool2d, Linear, hard_sigmoid
-from .efficientnet_blocks import SqueezeExcite, ConvBnAct, make_divisible
+from .layers import SelectAdaptivePool2d, Linear, hard_sigmoid, make_divisible
+from .efficientnet_blocks import SqueezeExcite, ConvBnAct
 from .helpers import build_model_with_cfg
 from .registry import register_model
 
@@ -110,9 +110,8 @@ class GhostBottleneck(nn.Module):
                 nn.BatchNorm2d(out_chs),
             )
 
-
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         # 1st ghost bottleneck
         x = self.ghost1(x)
@@ -129,7 +128,7 @@ class GhostBottleneck(nn.Module):
         # 2nd ghost bottleneck
         x = self.ghost2(x)
         
-        x += self.shortcut(residual)
+        x += self.shortcut(shortcut)
         return x
 
 

@@ -21,6 +21,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import to_2tuple
+from .weight_init import trunc_normal_
 
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
@@ -100,6 +101,11 @@ class BottleneckAttn(nn.Module):
         self.pos_embed = PosEmbedRel(feat_size, dim_head=self.dim_head, scale=self.scale)
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
+
+    def reset_parameters(self):
+        trunc_normal_(self.qkv.weight, std=self.qkv.weight.shape[1] ** -0.5)
+        trunc_normal_(self.pos_embed.height_rel, std=self.scale)
+        trunc_normal_(self.pos_embed.width_rel, std=self.scale)
 
     def forward(self, x):
         B, C, H, W = x.shape

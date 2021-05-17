@@ -105,7 +105,7 @@ class ResNestBottleneck(nn.Module):
         nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -132,9 +132,9 @@ class ResNestBottleneck(nn.Module):
             out = self.drop_block(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            shortcut = self.downsample(x)
 
-        out += residual
+        out += shortcut
         out = self.act3(out)
         return out
 

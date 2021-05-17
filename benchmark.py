@@ -48,7 +48,7 @@ parser = argparse.ArgumentParser(description='PyTorch Benchmark')
 parser.add_argument('--model-list', metavar='NAME', default='',
                     help='txt file based list of model names to benchmark')
 parser.add_argument('--bench', default='both', type=str,
-                    help="Benchmark mode. One of 'inference', 'train', 'both'. Defaults to 'inference'")
+                    help="Benchmark mode. One of 'inference', 'train', 'both'. Defaults to 'both'")
 parser.add_argument('--detail', action='store_true', default=False,
                     help='Provide train fwd/bwd/opt breakdown detail if True. Defaults to False')
 parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
@@ -374,14 +374,14 @@ def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
     batch_size = initial_batch_size
     results = dict()
     while batch_size >= 1:
+        torch.cuda.empty_cache()
         try:
             bench = bench_fn(model_name=model_name, batch_size=batch_size, **bench_kwargs)
             results = bench.run()
             return results
         except RuntimeError as e:
-            torch.cuda.empty_cache()
-            batch_size = decay_batch_exp(batch_size)
             print(f'Error: {str(e)} while running benchmark. Reducing batch size to {batch_size} for retry.')
+        batch_size = decay_batch_exp(batch_size)
     return results
 
 

@@ -15,7 +15,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_mode(False)
 
 # transformer models don't support many of the spatial / feature based model functionalities
-NON_STD_FILTERS = ['vit_*', 'tnt_*', 'pit_*', 'swin_*']
+NON_STD_FILTERS = ['vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', 'mixer_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -23,7 +23,8 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm',
-        '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*'] + NON_STD_FILTERS
+        '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', 
+        '*resnetrs350*', '*resnetrs420*'] + NON_STD_FILTERS
 else:
     EXCLUDE_FILTERS = NON_STD_FILTERS
 
@@ -42,7 +43,9 @@ def test_model_forward(model_name, batch_size):
 
     input_size = model.default_cfg['input_size']
     if any([x > MAX_FWD_SIZE for x in input_size]):
-        # cap forward test at max res 448 * 448 to keep resource down
+        if is_model_default_key(model_name, 'fixed_input_size'):
+            pytest.skip("Fixed input size model > limit.")
+        # cap forward test at max res 384 * 384 to keep resource down
         input_size = tuple([min(x, MAX_FWD_SIZE) for x in input_size])
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)

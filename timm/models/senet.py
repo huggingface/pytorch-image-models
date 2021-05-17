@@ -92,7 +92,7 @@ class Bottleneck(nn.Module):
     """
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -106,9 +106,9 @@ class Bottleneck(nn.Module):
         out = self.bn3(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            shortcut = self.downsample(x)
 
-        out = self.se_module(out) + residual
+        out = self.se_module(out) + shortcut
         out = self.relu(out)
 
         return out
@@ -204,7 +204,7 @@ class SEResNetBlock(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        residual = x
+        shortcut = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -215,9 +215,9 @@ class SEResNetBlock(nn.Module):
         out = self.relu(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            shortcut = self.downsample(x)
 
-        out = self.se_module(out) + residual
+        out = self.se_module(out) + shortcut
         out = self.relu(out)
 
         return out

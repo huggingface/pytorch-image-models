@@ -25,6 +25,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from .weight_init import trunc_normal_
+
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     """ Compute relative logits along one dimension
@@ -115,7 +117,7 @@ class HaloAttn(nn.Module):
         self.win_size = block_size + halo_size * 2  # neighbourhood window size
         self.scale = self.dim_head ** -0.5
 
-        # FIXME not clear if this stride behaviour is what the paper intended, not really clear
+        # FIXME not clear if this stride behaviour is what the paper intended
         # Also, the paper mentions using a 3D conv for dealing with the blocking/gather, and leaving
         # data in unfolded block form. I haven't wrapped my head around how that'd look.
         self.q = nn.Conv2d(dim, self.dim_qk, 1, stride=self.stride, bias=qkv_bias)
@@ -123,6 +125,13 @@ class HaloAttn(nn.Module):
 
         self.pos_embed = PosEmbedRel(
             block_size=block_size // self.stride, win_size=self.win_size, dim_head=self.dim_head, scale=self.scale)
+
+    def reset_parameters(self):
+        std = self.q.weight.shape[1] ** -0.5  # fan-in
+        trunc_normal_(self.q.weight, std=std)
+        trunc_normal_(self.kv.weight, std=std)
+        trunc_normal_(self.pos_embed.height_rel, std=self.scale)
+        trunc_normal_(self.pos_embed.width_rel, std=self.scale)
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -139,10 +148,10 @@ class HaloAttn(nn.Module):
 
         kv = self.kv(x)
         # FIXME I 'think' this unfold does what I want it to, but I should investigate
-        k = F.unfold(kv, kernel_size=self.win_size, stride=self.block_size, padding=self.halo_size)
-        k = k.reshape(
+        kv = F.unfold(kv, kernel_size=self.win_size, stride=self.block_size, padding=self.halo_size)
+        kv = kv.reshape(
             B * self.num_heads, self.dim_head + (self.dim_v // self.num_heads), -1, num_blocks).transpose(1, 3)
-        k, v = torch.split(k, [self.dim_head, self.dim_v // self.num_heads], dim=-1)
+        k, v = torch.split(kv, [self.dim_head, self.dim_v // self.num_heads], dim=-1)
 
         attn_logits = (q @ k.transpose(-1, -2)) * self.scale  # FIXME should usual attn scale be applied?
         attn_logits = attn_logits + self.pos_embed(q)  # B * num_heads, block_size ** 2, win_size ** 2
