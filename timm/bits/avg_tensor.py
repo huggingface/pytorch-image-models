@@ -1,7 +1,7 @@
 import torch
 
 
-class TensorAvg:
+class AvgTensor:
 
     """Computes and stores the average and current value"""
     def __init__(self):

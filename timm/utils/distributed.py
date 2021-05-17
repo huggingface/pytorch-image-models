@@ -21,8 +21,8 @@ def distribute_bn(model, world_size, reduce=False):
         if ('running_mean' in bn_name) or ('running_var' in bn_name):
             if reduce:
                 # average bn stats across whole group
-                torch.distributed.all_reduce(bn_buf, op=dist.ReduceOp.SUM)
+                torch.distributed.all_reduce_recursive(bn_buf, op=dist.ReduceOp.SUM)
                 bn_buf /= float(world_size)
             else:
                 # broadcast bn stats from rank 0 to whole group
-                torch.distributed.broadcast(bn_buf, 0)
+                torch.distributed.broadcast_recursive(bn_buf, 0)

@@ -16,21 +16,11 @@ def get_clip_grad_fn(mode: str = 'norm', norm_type: float = 2.0):
         assert False, f"Unknown clip mode ({mode})."
 
 
-def get_clip_parameters(model):
+def get_clip_parameters(model, skip_last=0):
     if hasattr(model, 'get_clip_parameters'):
         return model.get_clip_parameters()
     else:
-        return model.parameters()
-
-
-class GradClipper:
-
-    def __init__(self, model, clip_value, clip_mode='norm'):
-        self.model = model
-        self.clip_fn = get_clip_grad_fn(clip_mode)
-        self.clip_value = clip_value
-        self.enabled = True
-
-    def __call__(self):
-        if self.enabled:
-            self.clip_fn(get_clip_parameters(self.model), self.clip_value)
+        if skip_last:
+            return list(model.parameters())[::-skip_last]
+        else:
+            return model.parameters()

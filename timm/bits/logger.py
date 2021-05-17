@@ -21,6 +21,8 @@ except ImportError:
     HAS_WANDB = False
 
 
+from .device_env_factory import get_device
+
 # FIXME old formatting for reference, to remove
 #
 # def log_eval(batch_idx, last_idx, batch_time, loss, top1, top5, log_suffix=''):
@@ -84,10 +86,16 @@ class SummaryCsv:
             dw.writerow(row_dict)
 
 
+_sci_keys = {'lr'}
+
+
 def _add_kwargs(text_update, name_map=None, **kwargs):
     def _to_str(key, val):
         if isinstance(val, float):
-            return f'{key}: {val:.4f}'
+            if key.lower() in _sci_keys:
+                return f'{key}: {val:.3e} '
+            else:
+                return f'{key}: {val:.4f}'
         else:
             return f'{key}: {val}'
 
@@ -120,12 +128,13 @@ class Logger:
             self,
             experiment_name=None,
             output_dir=None,
-            logger=None,
+            python_logger=None,
+            hparams=None,
             log_wandb=False,
-            hparams=None):
-
-        self.output_dir = output_dir  # for tensorboard, csv, console logging to file?
-        self.logger = logger or logging.getLogger('log')
+            output_enabled=True,
+    ):
+        self.output_dir = output_dir  # for tensorboard, csv, text file (TODO) logging
+        self.logger = python_logger or logging.getLogger('log')
         hparams = hparams or {}
 
         # Setup CSV writer(s)
@@ -146,28 +155,32 @@ class Logger:
                 _logger.warning("You've requested to log metrics to wandb but package not found. "
                                 "Metrics not being logged to wandb, try `pip install wandb`")
 
+        self.output_enabled = output_enabled
         # FIXME image save
 
     def log_step(
             self,
             phase: str,
             step: int,
-            end_step: Optional[int] = None,
+            step_end: Optional[int] = None,
+            epoch: Optional[int] = None,
             loss: Optional[float] = None,
             rate: Optional[float] = None,
-            epoch: Optional[int] = None,
             phase_suffix: str = '',
             **kwargs,
     ):
         """ log train/eval step
         """
-        phase_title = f'{phase.capitalize()} ({phase_suffix})' if phase_suffix else f'{phase.capitalize()}'
-        progress = 100. * step / end_step if end_step else 0.
+        if not self.output_enabled:
+            return
+
+        phase_title = f'{phase.capitalize()} ({phase_suffix})' if phase_suffix else f'{phase.capitalize()}:'
+        progress = 100. * step / step_end if step_end else 0.
         text_update = [
             phase_title,
-            f'Epoch: {epoch}' if epoch is not None else None,
-            f'Step: {step}' if end_step is None else None,
-            f'Step: [{step}/{end_step} ({progress:>3.0f}%)]' if end_step is not None else None,
+            f'{epoch}' if epoch is not None else None,
+            f'[{step}]' if step_end is None else None,
+            f'[{step}/{step_end} ({progress:>3.0f}%)]' if step_end is not None else None,
             f'Rate: {rate:.2f}/s' if rate is not None else None,
             f'Loss: {loss:.5f}' if loss is not None else None,
         ]
@@ -187,6 +200,9 @@ class Logger:
     ):
         """log completion of evaluation or training phase
         """
+        if not self.output_enabled:
+            return
+
         title = [
             f'{phase.capitalize()}',
             f'epoch: {epoch}' if epoch is not None else None,
@@ -212,6 +228,9 @@ class Logger:
             index: value for row index (typically epoch #)
             index_name:  name for row index header (typically 'epoch')
         """
+        if not self.output_enabled:
+            return
+
         row_dict = summary_row_dict(index=index, index_name=index_name, results=results)
         if self.csv_writer:
             self.csv_writer.update(row_dict)

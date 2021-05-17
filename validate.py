@@ -18,8 +18,7 @@ import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 
-from timm.bits import initialize_device, Tracker, Logger
-from timm.metrics import AccuracyTopK, TensorAvg
+from timm.bits import initialize_device, Tracker, Logger, AccuracyTopK, AvgTensor
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.utils import natural_key, setup_default_logging
@@ -155,10 +154,10 @@ def validate(args):
         pin_memory=args.pin_mem,
         tf_preprocessing=args.tf_preprocessing)
 
-    logger = Logger(logger=_logger)
+    logger = Logger(python_logger=_logger)
     tracker = Tracker()
-    losses = TensorAvg()
-    accuracy = AccuracyTopK().to(dev_env.device)
+    losses = AvgTensor()
+    accuracy = AccuracyTopK(dev_env=dev_env)
 
     model.eval()
     num_steps = len(loader)
@@ -175,10 +174,8 @@ def validate(args):
                 output = output[:, valid_labels]
             loss = criterion(output, target)
 
-            if dev_env.type == 'cuda':
+            if dev_env.type_cuda:
                 torch.cuda.synchronize()
-            #elif dev_env.type == 'xla':
-            #    dev_env.mark_step()
             tracker.mark_iter_step_end()
 
             losses.update(loss.detach(), sample.size(0))
@@ -186,7 +183,7 @@ def validate(args):
                 real_labels.add_result(output)
             accuracy.update(output.detach(), target)
 
-            if dev_env.type == 'xla':
+            if dev_env.type_xla:
                 dev_env.mark_step()
 
             tracker.mark_iter()

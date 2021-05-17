@@ -1,6 +1,10 @@
 import os
 from contextlib import suppress
+from dataclasses import dataclass, field, InitVar
+from typing import Optional
+
 import torch
+from torch.distributed import ReduceOp
 
 try:
     import torch_xla.core.xla_model as xm
@@ -15,78 +19,102 @@ try:
 except ImportError as e:
     xa = None
 
-from .device_env import DeviceEnv
+from .device_env import DeviceEnv, DeviceEnvType, TensorList
+
+
+_PT_TO_XM_OP = {
+    ReduceOp.SUM: 'sum',
+    ReduceOp.PRODUCT: 'prod',
+    ReduceOp.MIN: 'min',
+    ReduceOp.MAX: 'max',
+    ReduceOp.BAND: 'and',
+    ReduceOp.BOR: 'or',
+}
 
 
 def is_xla_available(xla_device_type=None):
     if not _HAS_XLA:
         return False
     supported_devs = xm.get_xla_supported_devices(devkind=xla_device_type)
-    print(supported_devs)
     return len(supported_devs) >= 1
 
 
+@dataclass
 class DeviceEnvXla(DeviceEnv):
 
-    def __init__(self, xla_device_type=None, device_idx=None, local_rank=0, amp=False):
-        self._device = xm.xla_device(n=device_idx, devkind=xla_device_type)
-        self._local_rank = xm.get_local_ordinal(local_rank)
-        self._world_size = xm.xrt_world_size()
-        self._distributed = self._world_size > 1
-        self._global_rank = 0
-        if self._distributed:
-            self._global_rank = xm.get_ordinal()
-        if amp:
-            assert xa is not None, 'XLA AMP is not present on this build'
-            self._autocast = xa.autocast
+    def __post_init__(self, device_type: Optional[str], device_idx: Optional[int]):
+        if device_type is not None:
+            device_type = device_type.upper()
+            assert device_type in ('TPU', 'GPU', 'CPU'), "XLA device type must be one of ('TPU', 'GPU', 'CPU')"
+        self.device = xm.xla_device(n=device_idx, devkind=device_type)
+        self.world_size = xm.xrt_world_size()
+        if self.distributed:
+            assert device_idx is None, "device_index is based on local rank for distributed XLA mode"
+            self.local_rank = xm.get_local_ordinal()
+            self.global_rank = xm.get_ordinal()
         else:
-            self._autocast = suppress
-        self._memory_format = None
+            self.local_rank = 0
+            self.global_rank = 0
+        if self.amp:
+            assert xa is not None, 'XLA AMP is not present on this build'
+        if self.autocast is None:
+            self.autocast = xa.autocast if self.amp else suppress
 
     @property
-    def device(self):
-        return self._device
-
-    @property
-    def local_rank(self):
-        return self._local_rank
-
-    @property
-    def global_rank(self):
-        return self._global_rank
-
-    @property
-    def is_distributed(self):
-        return self._distributed
-
-    @property
-    def world_size(self):
-        return self._world_size
-
-    @property
-    def is_master(self):
-        return self._global_rank == 0
-
-    @property
-    def type(self) -> str:
-        return 'xla'
-
-    @property
-    def amp(self) -> bool:
-        return False
-
-    @property
-    def autocast(self):
-        return self._autocast
+    def type(self) -> DeviceEnvType:
+        return DeviceEnvType.XLA
 
     def wrap_distributed(self, *modules):
-        # NO-OP
-        wrapped = [m for m in modules]
+        wrapped = [m for m in modules]  # NO-OP
         return wrapped[0] if len(wrapped) == 1 else wrapped
 
-    def to_device(self, *modules: torch.nn.Module):
-        moved = [m.to(device=self._device, memory_format=self._memory_format) for m in modules]
-        return moved[0] if len(moved) == 1 else moved
+    def wrap_parallel(self, *modules):
+        assert False, "Not implemented"
 
     def mark_step(self):
         xm.mark_step()
+
+    def all_reduce(self, tensor: torch.Tensor, op=ReduceOp.SUM, average=False):
+        assert isinstance(tensor, torch.Tensor)  # unlike in-place variant, lists/tuples not allowed
+        op = _PT_TO_XM_OP[op]
+        scale = 1.0
+        if average:
+            scale /= self.world_size
+        return xm.all_reduce(op, tensor, scale=scale)
+
+    def all_reduce_(self, tensor: TensorList, op=ReduceOp.SUM, average=False):
+        op = _PT_TO_XM_OP[op]
+        scale = 1.0
+        wrapped = False
+        if isinstance(tensor, torch.Tensor):
+            tensor = [tensor]  # bare tensors are not operated on in-place
+            wrapped = True
+        if average:
+            scale /= self.world_size
+        xm.all_reduce(op, tensor, scale=scale)
+        if wrapped:
+            tensor = tensor[0]
+        return tensor
+
+    def all_gather(self, tensor: torch.Tensor, cat_dim=0):
+        output = xm.all_gather(tensor, cat_dim)
+        return output
+
+    def all_to_all(self, tensor, num_splits, split_dim, cat_dim=0):
+        output = xm.all_to_all(tensor, split_dim, cat_dim, num_splits)
+        return output
+
+    def broadcast(self, tensor: torch.Tensor, src_rank=0):
+        if self.global_rank != src_rank:
+            reduce_tensor = torch.zeros_like(tensor)
+            xm.all_reduce('sum', reduce_tensor)
+        else:
+            xm.all_reduce('sum', tensor)
+        return tensor
+
+    def broadcast_(self, tensor: torch.Tensor, src_rank=0):
+        out_tensor = self.broadcast(tensor, src_rank)
+        return tensor.copy_(out_tensor)
+
+    def barrier(self):
+        xm.rendezvous('timm.bits.dist_barrier')

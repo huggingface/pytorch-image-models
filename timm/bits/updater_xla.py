@@ -1,6 +1,8 @@
-from typing import Callable, Optional, Union, Any
+from dataclasses import dataclass, field, InitVar
+from typing import Any, Dict
 
 import torch
+import torch.nn as nn
 
 try:
     import torch_xla.core.xla_model as xm
@@ -18,41 +20,49 @@ except ImportError as e:
 from .updater import Updater
 
 
+@dataclass
 class UpdaterXla(Updater):
 
-    def __init__(
-            self,
-            optimizer: torch.optim.Optimizer,
-            clip_value: Optional[Union[Callable, float]] = None,
-            clip_mode: str = 'norm',
-            use_scaler: bool = False,
-            scaler_kwargs: Any = None,
-    ):
-        super().__init__(optimizer=optimizer, clip_value=clip_value, clip_mode=clip_mode)
+    def __post_init__(self):
+        super().__post_init__()
         self.after_step_closure = True
-        if use_scaler:
-            assert xa is not None, 'XLA AMP not present in this build'
-            self.scaler = xa.GradScaler(**scaler_kwargs)
 
     def apply(self, loss: torch.Tensor, accumulate: bool = False):
-        if self.scaler is None:
-            loss.backward(create_graph=self.create_graph)
-            gradients = xm._fetch_gradients(self.optimizer)
-            xm.all_reduce('sum', gradients, scale=1.0 / xm.xrt_world_size())
-            if self.clipper is not None:
-                self.clipper()
-            if not accumulate:
-                xm.optimizer_step(self.optimizer)
-        else:
-            self.scaler.scale(loss).backward(create_graph=self.create_graph)
-            if self.clipper is not None:
-                self.scaler.unscale_(self.optimizer)  # unscale the gradients of optimizer's assigned params in-place
-                self.clipper()
-            if not accumulate:
-                self.scaler.step(self.optimizer)
-                self.reset()
-            self.scaler.update()
+        loss.backward(create_graph=self.create_graph)
+        if accumulate:
+            return
+        xm.reduce_gradients(self.optimizer)
+        if self.clip_fn is not None:
+            self.clip_fn(self.clip_params_fn(), self.clip_value)
+        self.optimizer.step()
+        xm.mark_step()
+        self.reset()
 
     def after_step(self, after_step_fn, *args):
-        xm.add_step_closure(after_step_fn, *args)
+        xm.add_step_closure(after_step_fn, args)
 
+
+@dataclass
+class UpdaterXlaWithScaler(UpdaterXla):
+
+    scaler_kwargs: InitVar[Dict[str, Any]] = None
+
+    def __post_init__(self, scaler_kwargs: Dict[str, Any]):
+        super().__post_init__()
+        scaler_kwargs = scaler_kwargs or {}
+        assert xa is not None, 'XLA AMP not present in this build'
+        self.scaler = xa.GradScaler(**scaler_kwargs)
+
+    def apply(self, loss: torch.Tensor, accumulate: bool = False):
+        self.scaler.scale(loss).backward(create_graph=self.create_graph)
+        if accumulate:
+            # unscale first?
+            return
+        xm.reduce_gradients(self.optimizer)
+        if self.clip_fn is not None:
+            self.scaler.unscale_(self.optimizer)  # unscale the gradients of optimizer's assigned params in-place
+            self.clip_fn(self.clip_params_fn(), self.clip_value)
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
+        xm.mark_step()
+        self.reset()

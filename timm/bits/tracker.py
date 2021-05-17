@@ -1,16 +1,16 @@
 import time
 from typing import Optional
 
-from timm.metrics import ScalarAvgMinMax
+from .avg_scalar import AvgMinMaxScalar
 
 
 class Tracker:
 
     def __init__(self):
-        self.data_time = ScalarAvgMinMax()  # time for data loader to produce batch of samples
-        self.step_time = ScalarAvgMinMax()  # time for model step
-        self.iter_time = ScalarAvgMinMax()  # full iteration time incl. data, step, and book-keeping
-        self.epoch_time = ScalarAvgMinMax()
+        self.data_time = AvgMinMaxScalar()  # time for data loader to produce batch of samples
+        self.step_time = AvgMinMaxScalar()  # time for model step
+        self.iter_time = AvgMinMaxScalar()  # full iteration time incl. data, step, and book-keeping
+        self.epoch_time = AvgMinMaxScalar()
 
         self.iter_timestamp: Optional[float] = None
         self.prev_timestamp: Optional[float] = None
@@ -48,3 +48,12 @@ class Tracker:
             self.epoch_time.update(epoch_time)
         self.epoch_timestamp = timestamp
 
+    def get_avg_iter_rate(self, num_per_iter: int):
+        if num_per_iter == 0 or self.iter_time.avg == 0:
+            return 0
+        return num_per_iter / self.iter_time.avg
+
+    def get_last_iter_rate(self, num_per_iter: int):
+        if num_per_iter == 0 or self.iter_time.val == 0:
+            return 0
+        return num_per_iter / self.iter_time.val

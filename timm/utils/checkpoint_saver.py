@@ -108,7 +108,8 @@ class CheckpointSaver:
             save_state['arch'] = self.args.model
             save_state['args'] = self.args
         if self.amp_scaler is not None:
-            save_state[self.amp_scaler.state_dict_key] = self.amp_scaler.state_dict()
+            amp_key = getattr(self.amp_scaler, 'state_dict_key', 'amp_scaler')
+            save_state[amp_key] = self.amp_scaler.state_dict()
         if self.model_ema is not None:
             save_state['state_dict_ema'] = get_state_dict(self.model_ema, self.unwrap_fn)
         if metric is not None:

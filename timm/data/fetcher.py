@@ -23,24 +23,20 @@ class Fetcher:
                  re_count=1,
                  re_num_splits=0):
         self.loader = loader
-        self.mean = torch.tensor([x * 255 for x in mean]).view(1, 3, 1, 1)
-        self.std = torch.tensor([x * 255 for x in std]).view(1, 3, 1, 1)
         self.device = torch.device(device)
         self.dtype = dtype or torch.float32
-        if device:
-            self.mean.to(device=device, dtype=self.dtype)
-            self.std.to(device=device, dtype=self.dtype)
+        self.mean = torch.tensor([x * 255 for x in mean], dtype=self.dtype, device=self.device).view(1, 3, 1, 1)
+        self.std = torch.tensor([x * 255 for x in std], dtype=self.dtype, device=self.device).view(1, 3, 1, 1)
         if re_prob > 0.:
             self.random_erasing = RandomErasing(
-                probability=re_prob, mode=re_mode, max_count=re_count, num_splits=re_num_splits)
+                probability=re_prob, mode=re_mode, max_count=re_count, num_splits=re_num_splits, device=device)
         else:
             self.random_erasing = None
 
     def __iter__(self):
         for sample, target in self.loader:
-            sample = sample.to(device=self.device)
+            sample = sample.to(device=self.device, dtype=self.dtype).sub_(self.mean).div_(self.std)
             target = target.to(device=self.device)
-            sample = sample.to(dtype=self.dtype).sub_(self.mean).div_(self.std)
             if self.random_erasing is not None:
                 sample = self.random_erasing(sample)
             yield sample, target

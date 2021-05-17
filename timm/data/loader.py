@@ -8,7 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 
 import torch.utils.data
 
-from timm.bits import get_device
+from timm.bits import get_device, DeviceEnvType
 
 from .fetcher import Fetcher
 from .prefetcher_cuda import PrefetcherCuda
@@ -78,7 +78,7 @@ def create_loader(
         dev_env = get_device()
 
     sampler = None
-    if dev_env.is_distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
+    if dev_env.distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
         if is_training:
             sampler = torch.utils.data.distributed.DistributedSampler(
                 dataset, num_replicas=dev_env.world_size, rank=dev_env.global_rank)
@@ -117,7 +117,7 @@ def create_loader(
         re_count=re_count,
         re_num_splits=re_num_splits
     )
-    if dev_env.type == 'cuda':
+    if dev_env.type_cuda:
         loader = PrefetcherCuda(loader, **fetcher_kwargs)
     else:
         loader = Fetcher(loader, device=dev_env.device, **fetcher_kwargs)

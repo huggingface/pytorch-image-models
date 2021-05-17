@@ -21,13 +21,15 @@ import os
 import logging
 from collections import OrderedDict
 from datetime import datetime
+from dataclasses import replace
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torchvision.utils
 
-from timm.bits import initialize_device, DeviceEnv, create_updater, Updater, Logger, Tracker
-from timm.metrics import TensorAvg, AccuracyTopK
+from timm.bits import initialize_device, setup_model_and_optimizer, DeviceEnv, Logger, Tracker,\
+    TrainState, TrainServices, TrainCfg, AccuracyTopK, AvgTensor
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint,\
     convert_splitbn_model, model_parameters
@@ -276,13 +278,118 @@ def main():
     args, args_text = _parse_args()
 
     dev_env = initialize_device(amp=args.amp)
-    if dev_env.is_distributed:
+    if dev_env.distributed:
         _logger.info('Training in distributed mode with multiple processes, 1 device per process. Process %d, total %d.'
                      % (dev_env.global_rank, dev_env.world_size))
     else:
         _logger.info('Training with a single process on 1 device.')
 
     random_seed(args.seed, dev_env.global_rank)
+
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+
+    train_state, train_cfg = setup_train_task(args, dev_env, mixup_active)
+
+    data_config, loader_eval, loader_train = setup_data(args, dev_env, mixup_active)
+
+    # setup checkpoint saver
+    eval_metric = args.eval_metric
+    best_metric = None
+    best_epoch = None
+    saver = None
+    output_dir = None
+    if dev_env.primary:
+        if args.experiment:
+            exp_name = args.experiment
+        else:
+            exp_name = '-'.join([
+                datetime.now().strftime("%Y%m%d-%H%M%S"),
+                safe_model_name(args.model),
+                str(data_config['input_size'][-1])
+            ])
+        output_dir = get_outdir(args.output if args.output else './output/train', exp_name)
+        decreasing = True if eval_metric == 'loss' else False
+        saver = CheckpointSaver(  # TODO CheckpointSaverV2
+            model=train_state.model,
+            optimizer=train_state.updater.optimizer,
+            args=args,
+            model_ema=train_state.model_ema,
+            amp_scaler=train_state.updater.grad_scaler,
+            checkpoint_dir=output_dir,
+            recovery_dir=output_dir,
+            decreasing=decreasing,
+            max_history=args.checkpoint_hist)
+        with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
+            f.write(args_text)
+
+    services = TrainServices(
+        logger=Logger(
+            output_dir=output_dir, python_logger=_logger, hparams=vars(args), output_enabled=dev_env.primary),
+        saver=saver,
+    )
+
+    try:
+        for epoch in range(train_state.epoch, train_cfg.num_epochs):
+            if dev_env.distributed and hasattr(loader_train.sampler, 'set_epoch'):
+                loader_train.sampler.set_epoch(epoch)
+            if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
+                if loader_train.mixup_enabled:
+                    loader_train.mixup_enabled = False
+
+            train_metrics = train_one_epoch(
+                dev_env=dev_env,
+                state=train_state,
+                services=services,
+                cfg=train_cfg,
+                loader=loader_train
+            )
+
+            if dev_env.distributed and args.dist_bn in ('broadcast', 'reduce'):
+                if dev_env.primary:
+                    _logger.info("Distributing BatchNorm running means and vars")
+                distribute_bn(model, dev_env.world_size, args.dist_bn == 'reduce')
+
+            eval_metrics = evaluate(
+                train_state.model,
+                train_state.eval_loss,
+                loader_eval,
+                dev_env,
+                logger=services.logger)
+
+            if train_state.model_ema is not None and not args.model_ema_force_cpu:
+                if dev_env.distributed and args.dist_bn in ('broadcast', 'reduce'):
+                    distribute_bn(train_state.model_ema, dev_env.world_size, args.dist_bn == 'reduce')
+
+                ema_eval_metrics = evaluate(
+                    train_state.model_ema.module,
+                    train_state.eval_loss,
+                    loader_eval,
+                    dev_env,
+                    logger=services.logger,
+                    phase_suffix='EMA')
+                eval_metrics = ema_eval_metrics
+
+            if train_state.lr_scheduler is not None:
+                # step LR for next epoch
+                train_state.lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
+
+            if services.logger is not None:
+                services.logger.write_summary(index=epoch, results=dict(train=train_metrics, eval=eval_metrics))
+
+            if saver is not None:
+                # save proper checkpoint with eval metric
+                save_metric = eval_metrics[eval_metric]
+                best_metric, best_epoch = saver.save_checkpoint(epoch, metric=save_metric)
+
+            train_state = replace(train_state, epoch=epoch + 1)
+
+    except KeyboardInterrupt:
+        pass
+    if best_metric is not None:
+        _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
+
+
+def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
 
     model = create_model(
         args.model,
@@ -302,81 +409,68 @@ def main():
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
 
-    if dev_env.is_master:
+    if dev_env.primary:
         _logger.info(
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
 
-    data_config = resolve_data_config(vars(args), model=model, verbose=dev_env.is_master)
-
     # setup augmentation batch splits for contrastive loss or split bn
-    num_aug_splits = 0
-    if args.aug_splits > 0:
-        assert args.aug_splits > 1, 'A split of 1 makes no sense'
-        num_aug_splits = args.aug_splits
-
+    assert args.aug_splits == 0 or args.aug_splits > 1, 'A split of 1 makes no sense'
     # enable split bn (separate bn stats per batch-portion)
     if args.split_bn:
-        assert num_aug_splits > 1 or args.resplit
-        model = convert_splitbn_model(model, max(num_aug_splits, 2))
+        assert args.aug_splits > 1 or args.resplit
+        model = convert_splitbn_model(model, max(args.aug_splits, 2))
 
-    # move model to GPU, enable channels last layout if set
-    dev_env.to_device(model)
-
-    # setup synchronized BatchNorm for distributed training
-    if dev_env.is_distributed and args.sync_bn:
-        assert not args.split_bn
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        if dev_env.is_master:
-            _logger.info(
-                'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
-                'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
-
-    if args.torchscript:
-        assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
-        model = torch.jit.script(model)
-
-    updater = create_updater(
-        create_optimizer_v2(model, **optimizer_kwargs(cfg=args)),
-        clip_value=args.clip_grad, clip_mode=args.clip_mode)
-
-    # optionally resume from a checkpoint
-    resume_epoch = None
-    if args.resume:
-        resume_epoch = resume_checkpoint(
-            model, args.resume,
-            optimizer=None if args.no_resume_opt else updater.optimizer,
-            loss_scaler=None if args.no_resume_opt else updater.scaler,
-            log_info=dev_env.is_master)
-
-    # setup exponential moving average of model weights, SWA could be used here too
-    model_ema = None
-    if args.model_ema:
-        # Important to create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
-        model_ema = ModelEmaV2(
-            model, decay=args.model_ema_decay, device='cpu' if args.model_ema_force_cpu else None)
-        if args.resume:
-            load_checkpoint(model_ema.module, args.resume, use_ema=True)
-
-    # setup distributed training
-    if dev_env.is_distributed:
-        if dev_env.is_master:
-            _logger.info("Distributing model.")
-        model = dev_env.wrap_distributed(model)
-    # NOTE: EMA model does not need to be wrapped by DDP
+    train_state = setup_model_and_optimizer(
+        dev_env=dev_env,
+        model=model,
+        optimizer=args.opt,
+        optimizer_cfg=optimizer_kwargs(cfg=args),
+        clip_fn=args.clip_mode if args.clip_grad is not None else None,
+        clip_value=args.clip_grad,
+        model_ema=args.model_ema,
+        model_ema_decay=args.model_ema_decay,
+        use_syncbn=args.sync_bn,
+    )
 
     # setup learning rate schedule and starting epoch
-    lr_scheduler, num_epochs = create_scheduler(args, updater.optimizer)
-    start_epoch = 0
-    if args.start_epoch is not None:
-        # a specified start_epoch will always override the resume epoch
-        start_epoch = args.start_epoch
-    elif resume_epoch is not None:
-        start_epoch = resume_epoch
-    if lr_scheduler is not None and start_epoch > 0:
-        lr_scheduler.step(start_epoch)
+    # FIXME move into updater?
+    lr_scheduler, num_epochs = create_scheduler(args, train_state.updater.optimizer)
+    if lr_scheduler is not None and train_state.epoch > 0:
+        lr_scheduler.step(train_state.epoch)
 
-    if dev_env.is_master:
+    # setup loss function
+    if args.jsd:
+        assert args.aug_splits > 1  # JSD only valid with aug splits set
+        train_loss_fn = JsdCrossEntropy(num_splits=args.aug_splits, smoothing=args.smoothing)
+    elif mixup_active:
+        # smoothing is handled with mixup target transform
+        train_loss_fn = SoftTargetCrossEntropy()
+    elif args.smoothing:
+        train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    else:
+        train_loss_fn = nn.CrossEntropyLoss()
+    eval_loss_fn = nn.CrossEntropyLoss()
+    dev_env.to_device(train_loss_fn, eval_loss_fn)
+
+    if dev_env.primary:
         _logger.info('Scheduled epochs: {}'.format(num_epochs))
+
+    train_state = replace(
+        train_state,
+        lr_scheduler=lr_scheduler,
+        train_loss=train_loss_fn,
+        eval_loss=eval_loss_fn)
+
+    train_cfg = TrainCfg(
+        num_epochs=num_epochs,
+        log_interval=args.log_interval,
+        recovery_interval=args.recovery_interval)
+
+    return train_state, train_cfg
+
+
+def setup_data(args, dev_env, mixup_active):
+    data_config = resolve_data_config(vars(args), model=model, verbose=dev_env.primary)
 
     # create the train and eval datasets
     dataset_train = create_dataset(
@@ -388,18 +482,17 @@ def main():
 
     # setup mixup / cutmix
     collate_fn = None
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
         mixup_args = dict(
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.num_classes)
-        assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
+        assert not args.aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
         collate_fn = FastCollateMixup(**mixup_args)
 
     # wrap dataset in AugMix helper
-    if num_aug_splits > 1:
-        dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
+    if args.aug_splits > 1:
+        dataset_train = AugMixDataset(dataset_train, num_splits=args.aug_splits)
 
     # create data loaders w/ augmentation pipeiine
     train_interpolation = args.train_interpolation
@@ -421,7 +514,7 @@ def main():
         vflip=args.vflip,
         color_jitter=args.color_jitter,
         auto_augment=args.aa,
-        num_aug_splits=num_aug_splits,
+        num_aug_splits=args.aug_splits,
         interpolation=train_interpolation,
         mean=data_config['mean'],
         std=data_config['std'],
@@ -443,169 +536,107 @@ def main():
         crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
     )
-
-    # setup loss function
-    if args.jsd:
-        assert num_aug_splits > 1  # JSD only valid with aug splits set
-        train_loss_fn = JsdCrossEntropy(num_splits=num_aug_splits, smoothing=args.smoothing)
-    elif mixup_active:
-        # smoothing is handled with mixup target transform
-        train_loss_fn = SoftTargetCrossEntropy()
-    elif args.smoothing:
-        train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-    else:
-        train_loss_fn = nn.CrossEntropyLoss()
-    validate_loss_fn = nn.CrossEntropyLoss()
-    dev_env.to_device(train_loss_fn, validate_loss_fn)
-
-    # setup checkpoint saver and eval metric tracking
-    eval_metric = args.eval_metric
-    best_metric = None
-    best_epoch = None
-    saver = None
-    output_dir = None
-    if dev_env.is_master:
-        if args.experiment:
-            exp_name = args.experiment
-        else:
-            exp_name = '-'.join([
-                datetime.now().strftime("%Y%m%d-%H%M%S"),
-                safe_model_name(args.model),
-                str(data_config['input_size'][-1])
-            ])
-        output_dir = get_outdir(args.output if args.output else './output/train', exp_name)
-        decreasing = True if eval_metric == 'loss' else False
-        saver = CheckpointSaver(
-            model=model, optimizer=updater.optimizer, args=args, model_ema=model_ema, amp_scaler=updater.scaler,
-            checkpoint_dir=output_dir, recovery_dir=output_dir, decreasing=decreasing, max_history=args.checkpoint_hist)
-        with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
-            f.write(args_text)
-
-    logger = Logger(output_dir=output_dir, logger=_logger, hparams=vars(args))
-
-    try:
-        for epoch in range(start_epoch, num_epochs):
-            if dev_env.is_distributed and hasattr(loader_train.sampler, 'set_epoch'):
-                loader_train.sampler.set_epoch(epoch)
-            if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
-                if loader_train.mixup_enabled:
-                    loader_train.mixup_enabled = False
-
-            train_metrics = train_one_epoch(
-                epoch, model, loader_train, updater, train_loss_fn, dev_env,
-                lr_scheduler=lr_scheduler, saver=saver, logger=logger, model_ema=model_ema,
-                log_interval=args.log_interval, recovery_interval=args.recovery_interval)
-
-            if dev_env.is_distributed and args.dist_bn in ('broadcast', 'reduce'):
-                if dev_env.is_master:
-                    _logger.info("Distributing BatchNorm running means and vars")
-                distribute_bn(model, dev_env.world_size, args.dist_bn == 'reduce')
-
-            eval_metrics = evaluate(model, loader_eval, validate_loss_fn, dev_env, logger=logger)
-
-            if model_ema is not None and not args.model_ema_force_cpu:
-                if dev_env.is_distributed and args.dist_bn in ('broadcast', 'reduce'):
-                    distribute_bn(model_ema, dev_env.world_size, args.dist_bn == 'reduce')
-
-                ema_eval_metrics = evaluate(
-                    model_ema.module, loader_eval, validate_loss_fn, dev_env,
-                    logger=logger, phase_suffix='EMA')
-                eval_metrics = ema_eval_metrics
-
-            if lr_scheduler is not None:
-                # step LR for next epoch
-                lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
-
-            if logger is not None:
-                logger.write_summary(index=epoch, results=dict(train=train_metrics, eval=eval_metrics))
-
-            if saver is not None:
-                # save proper checkpoint with eval metric
-                save_metric = eval_metrics[eval_metric]
-                best_metric, best_epoch = saver.save_checkpoint(epoch, metric=save_metric)
-
-    except KeyboardInterrupt:
-        pass
-    if best_metric is not None:
-        _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
+    return data_config, loader_eval, loader_train
 
 
 def train_one_epoch(
-        epoch: int,
-        model: nn.Module,
-        loader,
-        updater: Updater,
-        loss_fn: nn.Module,
         dev_env: DeviceEnv,
-        lr_scheduler=None,
-        saver: CheckpointSaver = None,
-        logger: Logger = None,
-        model_ema: nn.Module = None,
-        log_interval: int = 50,
-        recovery_interval: int = 0,
+        state: TrainState,
+        cfg: TrainCfg,
+        services: TrainServices,
+        loader,
 ):
     tracker = Tracker()
-    losses_m = TensorAvg()
+    loss_meter = AvgTensor()
 
-    model.train()
+    state.model.train()
+    state.updater.reset()  # zero-grad
 
-    end_idx = len(loader) - 1
-    num_updates = epoch * len(loader)
-    batch_size = 0
+    step_end_idx = len(loader) - 1
     tracker.mark_iter()
     for step_idx, (sample, target) in enumerate(loader):
         tracker.mark_iter_data_end()
-        last_step = step_idx == end_idx
-        batch_size = max(batch_size, sample.shape[0])
 
+        # FIXME move forward + loss into model 'task' wrapper
         with dev_env.autocast():
-            output = model(sample)
-            loss = loss_fn(output, target)
+            output = state.model(sample)
+            loss = state.train_loss(output, target)
 
-        updater.reset()
-        updater.apply(loss)
+        state.updater.apply(loss)
 
-        dev_env.mark_step() # FIXME
         tracker.mark_iter_step_end()
-        losses_m.update(loss, sample.size(0))
-        if model_ema is not None:
-            model_ema.update(model)
 
-        num_updates += 1
-        if last_step or (step_idx + 1) % log_interval == 0:
-            lrl = [param_group['lr'] for param_group in updater.optimizer.param_groups]
-            lr = sum(lrl) / len(lrl)
-
-            if dev_env.is_master and logger is not None:
-                loss_avg = losses_m.compute()
-                logger.log_step(
-                    'Train',
-                    step=step_idx,
-                    end_step=end_idx,
-                    loss=loss_avg.item(),
-                    rate=(dev_env.world_size * batch_size) / tracker.iter_time.avg,
-                    lr=lr,
-                )
-
-        if saver is not None and recovery_interval and (last_step or (step_idx + 1) % recovery_interval == 0):
-            saver.save_recovery(epoch, batch_idx=step_idx)
-
-        if lr_scheduler is not None:
-            lr_scheduler.step_update(num_updates=num_updates)
+        state.updater.after_step(
+            after_train_step,
+            dev_env,
+            state,
+            services,
+            cfg,
+            step_idx,
+            step_end_idx,
+            tracker,
+            loss_meter,
+            (output, target, loss),
+        )
 
         tracker.mark_iter()
         # end for
 
-    if hasattr(updater.optimizer, 'sync_lookahead'):
-        updater.optimizer.sync_lookahead()
+    if hasattr(state.updater.optimizer, 'sync_lookahead'):
+        state.updater.optimizer.sync_lookahead()
 
-    return OrderedDict([('loss', losses_m.compute().item())])
+    return OrderedDict([('loss', loss_meter.compute().item())])
+
+
+def after_train_step(
+        dev_env: DeviceEnv,
+        state: TrainState,
+        services: TrainServices,
+        cfg: TrainCfg,
+        step_idx: int,
+        step_end_idx: int,
+        tracker: Tracker,
+        loss_meter: AvgTensor,
+        tensors: Tuple[torch.Tensor, ...],
+):
+    end_step = step_idx == step_end_idx
+
+    with torch.no_grad():
+        output, target, loss = tensors
+        loss_meter.update(loss, output.shape[0])
+
+        if state.model_ema is not None:
+            state.model_ema.update(model)
+
+        state = replace(state, step_count_global=state.step_count_global + 1)
+
+        if services.logger is not None and end_step or (step_idx + 1) % cfg.log_interval == 0:
+            global_batch_size = dev_env.world_size * output.shape[0]
+            loss_avg = loss_meter.compute()
+            if services.logger is not None:
+                lr_avg = state.updater.get_average_lr()
+                services.logger.log_step(
+                    'Train',
+                    step=step_idx,
+                    step_end=step_end_idx,
+                    epoch=state.epoch,
+                    loss=loss_avg.item(),
+                    rate=tracker.get_avg_iter_rate(global_batch_size),
+                    lr=lr_avg,
+                )
+
+        if services.saver is not None and cfg.recovery_interval and (
+                end_step or (step_idx + 1) % cfg.recovery_interval == 0):
+            services.saver.save_recovery(state.epoch, batch_idx=step_idx)
+
+        if state.lr_scheduler is not None:
+            state.lr_scheduler.step_update(num_updates=state.step_count_global)
 
 
 def evaluate(
         model: nn.Module,
-        loader,
         loss_fn: nn.Module,
+        loader,
         dev_env: DeviceEnv,
         logger: Logger,
         phase_suffix: str = '',
@@ -613,7 +644,7 @@ def evaluate(
 ):
 
     tracker = Tracker()
-    losses_m = TensorAvg()
+    losses_m = AvgTensor()
     accuracy_m = AccuracyTopK()
 
     model.eval()
@@ -636,13 +667,13 @@ def evaluate(
             losses_m.update(loss, output.size(0))
             accuracy_m.update(output, target)
 
-            if dev_env.is_master and (last_step or step_idx % log_interval == 0):
+            if last_step or step_idx % log_interval == 0:
                 top1, top5 = accuracy_m.compute().values()
                 loss_avg = losses_m.compute()
                 logger.log_step(
                     'Eval',
                     step=step_idx,
-                    num_steps=end_idx,
+                    step_end=end_idx,
                     loss=loss_avg.item(),
                     top1=top1.item(),
                     top5=top5.item(),

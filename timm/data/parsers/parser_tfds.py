@@ -82,7 +82,7 @@ class ParserTfds(Parser):
         self.dist_num_replicas = 1
         dev_env = get_device()
         # FIXME allow to work without devenv usage?
-        if dev_env.is_distributed and dev_env.world_size > 1:
+        if dev_env.distributed and dev_env.world_size > 1:
             self.dist_rank = dev_env.global_rank
             self.dist_num_replicas = dev_env.world_size
         # if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
@@ -150,8 +150,10 @@ class ParserTfds(Parser):
         ds = self.builder.as_dataset(
             split=self.subsplit or self.split, shuffle_files=self.shuffle, read_config=read_config)
         # avoid overloading threading w/ combo fo TF ds threads + PyTorch workers
-        ds.options().experimental_threading.private_threadpool_size = max(1, MAX_TP_SIZE // num_workers)
-        ds.options().experimental_threading.max_intra_op_parallelism = 1
+        options = tf.data.Options()
+        options.experimental_threading.private_threadpool_size = max(1, MAX_TP_SIZE // num_workers)
+        options.experimental_threading.max_intra_op_parallelism = 1
+        ds = ds.with_options(options)
         if self.is_training or self.repeats > 1:
             # to prevent excessive drop_last batch behaviour w/ IterableDatasets
             # see warnings at https://pytorch.org/docs/stable/data.html#multi-process-data-loading

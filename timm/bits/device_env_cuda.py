@@ -1,92 +1,58 @@
 import os
 from contextlib import suppress
+from dataclasses import dataclass, field, InitVar
+from typing import Optional
 
 import torch
-from torch.nn.parallel import DistributedDataParallel
+from torch.nn.parallel import DistributedDataParallel, DataParallel
 
-from .device_env import DeviceEnv
+from .device_env import DeviceEnv, DeviceEnvType
 
 
 def is_cuda_available():
     return torch.cuda.is_available()
 
 
+@dataclass
 class DeviceEnvCuda(DeviceEnv):
 
-    def __init__(self, device_idx=None, local_rank=None, amp=False, memory_format=None):
+    def __post_init__(self, device_type: str, device_index: Optional[int]):
         assert torch.cuda.device_count()
         torch.backends.cudnn.benchmark = True
-        self._local_rank = 0
-        self._distributed = False
-        self._world_size = 1
-        self._global_rank = 0
-        if 'WORLD_SIZE' in os.environ:
-            self._distributed = int(os.environ['WORLD_SIZE']) > 1
-        if self._distributed:
-            if local_rank is None:
+        setup_world_size = self.world_size or int(os.environ.get('WORLD_SIZE', 1))
+        assert setup_world_size
+        if setup_world_size > 1:
+            # setup distributed
+            assert device_index is None
+            if self.local_rank is None:
                 lr = os.environ.get('LOCAL_RANK', None)
                 if lr is None:
                     raise RuntimeError(
                         'At least one of LOCAL_RANK env variable or local_rank arg must be set to valid integer.')
-                self._local_rank = lr
-            else:
-                self._local_rank = int(local_rank)
-            self._device = torch.device('cuda:%d' % self._local_rank)
-            torch.cuda.set_device(self._local_rank)
+                self.local_rank = int(lr)
+            self.device = torch.device('cuda:%d' % self.local_rank)
+            torch.cuda.set_device(self.local_rank)
             torch.distributed.init_process_group(backend='nccl', init_method='env://')
-            self._world_size = torch.distributed.get_world_size()
-            self._global_rank = torch.distributed.get_rank()
+            self.world_size = torch.distributed.get_world_size()
+            assert self.world_size == setup_world_size
+            self.global_rank = torch.distributed.get_rank()
         else:
-            self._device = torch.device('cuda' if device_idx is None else f'cuda:{device_idx}')
-        self._memory_format = memory_format
-        if amp:
-            self._amp = amp
-            self._autocast = torch.cuda.amp.autocast
-        else:
-            self._amp = amp
-            self._autocast = suppress
+            self.device = torch.device('cuda' if device_index is None else f'cuda:{device_index}')
+            self.local_rank = 0
+            self.world_size = 1
+            self.global_rank = 0
+        if self.autocast is None:
+            self.autocast = torch.cuda.amp.autocast if self.amp else suppress
 
     @property
-    def device(self):
-        return self._device
-
-    @property
-    def local_rank(self):
-        return self._local_rank
-
-    @property
-    def global_rank(self):
-        return self._global_rank
-
-    @property
-    def is_distributed(self):
-        return self._distributed
-
-    @property
-    def world_size(self):
-        return self._world_size
-
-    @property
-    def is_master(self):
-        return self._local_rank == 0
-
-    @property
-    def type(self) -> str:
-        return 'cuda'
-
-    @property
-    def amp(self) -> bool:
-        return self._amp
-
-    @property
-    def autocast(self):
-        return self._autocast
+    def type(self) -> DeviceEnvType:
+        return DeviceEnvType.CUDA
 
     def wrap_distributed(self, *modules, **kwargs):
-        wrapped = [DistributedDataParallel(m, device_ids=[self._local_rank], **kwargs) for m in modules]
+        wrapped = [DistributedDataParallel(m, device_ids=[self.local_rank], **kwargs) for m in modules]
         return wrapped[0] if len(wrapped) == 1 else wrapped
 
-    def to_device(self, *modules: torch.nn.Module):
-        # FIXME handling dtype / memformat... disable flags, enable flags, diff fn?
-        moved = [m.to(device=self._device, memory_format=self._memory_format) for m in modules]
-        return moved[0] if len(moved) == 1 else moved
+    def wrap_parallel(self, *modules, **kwargs):
+        assert not self.distributed
+        wrapped = [DataParallel(m, **kwargs) for m in modules]
+        return wrapped[0] if len(wrapped) == 1 else wrapped

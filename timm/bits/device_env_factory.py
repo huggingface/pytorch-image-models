@@ -1,10 +1,11 @@
+from .device_env import DeviceEnv
 from .device_env_cuda import DeviceEnvCuda, is_cuda_available
 from .device_env_xla import DeviceEnvXla, is_xla_available
 
 _device_env = None
 
 
-def initialize_device(force_cpu: bool = False, xla_device_type=None, **kwargs):
+def initialize_device(force_cpu: bool = False, **kwargs) -> DeviceEnv:
     global _device_env
     if _device_env is not None:
         # warning
@@ -12,21 +13,22 @@ def initialize_device(force_cpu: bool = False, xla_device_type=None, **kwargs):
 
     denv = None
     if not force_cpu:
+        xla_device_type = kwargs.get('xla_device_type', None)
         if is_xla_available(xla_device_type):
-            # XLA supports more than just TPU, but by default will only look at TPU
-            denv = DeviceEnvXla(**kwargs, xla_device_type=xla_device_type)
+            # XLA supports more than just TPU, will search in order TPU, GPU, CPU
+            denv = DeviceEnvXla(**kwargs)
         elif is_cuda_available():
             denv = DeviceEnvCuda(**kwargs)
 
     if denv is None:
-        # FIXME implement CPU support
-        raise NotImplementedError()
+        denv = DeviceEnv()
 
+    print(denv)  # FIXME DEBUG
     _device_env = denv
     return denv
 
 
-def get_device():
+def get_device() -> DeviceEnv:
     if _device_env is None:
         raise RuntimeError('Please initialize device environment by calling initialize_device first.')
     return _device_env
