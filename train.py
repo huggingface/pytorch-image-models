@@ -283,11 +283,15 @@ def main():
     else:
         _logger.info('Training with a single process on 1 device.')
 
-    random_seed(args.seed, dev_env.global_rank)
-
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
 
+    random_seed(args.seed, 0)  # Set all random seeds the same for model/state init (mandatory for XLA)
+
     train_state, train_cfg = setup_train_task(args, dev_env, mixup_active)
+
+    # Set random seeds across ranks differently for train
+    # FIXME perhaps keep the same and just set diff seeds for dataloader worker process? what about TFDS?
+    random_seed(args.seed, dev_env.global_rank)
 
     data_config, loader_eval, loader_train = setup_data(args, train_state.model.default_cfg, dev_env, mixup_active)
 

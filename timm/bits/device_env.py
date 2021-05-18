@@ -90,8 +90,6 @@ class DeviceEnv:
         pass  # NO-OP for non-XLA devices
 
     def all_reduce_(self, tensor: TensorList, op=dist.ReduceOp.SUM, average=False):
-        print(len(tensor), type(tensor))
-        print(tensor.shape)
         dist.all_reduce(tensor, op=op)
         if average:
             tensor.div_(self.world_size)

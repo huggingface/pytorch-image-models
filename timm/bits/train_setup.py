@@ -89,6 +89,7 @@ def setup_model_and_optimizer(
     train_state = TrainState(model=model, updater=updater, model_ema=model_ema)
 
     if resume_path:
+        # FIXME this is not implemented yet, do a hack job before proper TrainState serialization?
         resume_train_checkpoint(
             train_state,
             resume_path,
