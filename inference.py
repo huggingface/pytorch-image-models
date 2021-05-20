@@ -114,13 +114,13 @@ def main():
                 _logger.info('Predict: [{0}/{1}] Time {batch_time.val:.3f} ({batch_time.avg:.3f})'.format(
                     batch_idx, len(loader), batch_time=batch_time))
 
-    topk_ids = np.concatenate(topk_ids, axis=0).squeeze()
+    topk_ids = np.concatenate(topk_ids, axis=0)
 
     with open(os.path.join(args.output_dir, './topk_ids.csv'), 'w') as out_file:
         filenames = loader.dataset.filenames(basename=True)
         for filename, label in zip(filenames, topk_ids):
-            out_file.write('{0},{1},{2},{3},{4},{5}\n'.format(
-                filename, label[0], label[1], label[2], label[3], label[4]))
+            out_file.write('{0},{1}\n'.format(
+                filename, ','.join([ str(v) for v in label])))
 
 
 if __name__ == '__main__':
