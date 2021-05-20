@@ -9,13 +9,11 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from timm.models.helpers import load_pretrained
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from timm.models.registry import register_model
 
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
 
 
 def _cfg(url='', **kwargs):
