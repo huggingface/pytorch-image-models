@@ -40,22 +40,22 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     'twins_pcpvt_small': _cfg(
-        url='https://s3plus.meituan.net/v1/mss_9240d97c6bf34ab1b78859c3c2a2a3e4/automl-model-zoo/models/twins/pcpvt_small.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_small-e70e7e7a.pth',
         ),
     'twins_pcpvt_base': _cfg(
-        url='https://s3plus.meituan.net/v1/mss_9240d97c6bf34ab1b78859c3c2a2a3e4/automl-model-zoo/models/twins/pcpvt_base.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_base-e5ecb09b.pth',
         ),
     'twins_pcpvt_large': _cfg(
-        url='https://s3plus.meituan.net/v1/mss_9240d97c6bf34ab1b78859c3c2a2a3e4/automl-model-zoo/models/twins/pcpvt_large.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_large-d273f802.pth',
         ),
     'twins_svt_small': _cfg(
-        url='https://s3plus.meituan.net/v1/mss_9240d97c6bf34ab1b78859c3c2a2a3e4/automl-model-zoo/models/twins/alt_gvt_small.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_small-42e5f78c.pth',
         ),
     'twins_svt_base': _cfg(
-        url='https://s3plus.meituan.net/v1/mss_9240d97c6bf34ab1b78859c3c2a2a3e4/automl-model-zoo/models/twins/alt_gvt_base.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_base-c2265010.pth',
         ),
     'twins_svt_large': _cfg(
-        url='https://s3plus.meituan.net/v1/mss_9240d97c6bf34ab1b78859c3c2a2a3e4/automl-model-zoo/models/twins/alt_gvt_large.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_large-90f6aaa9.pth',
         ),
 }
 
@@ -266,7 +266,10 @@ class PatchEmbed(nn.Module):
 
 
 class Twins(nn.Module):
-    # Adapted from PVT https://github.com/whai362/PVT.git
+    """ Twins Vision Transfomer (Revisiting Spatial Attention)
+
+    Adapted from PVT (PyramidVisionTransformer) class at https://github.com/whai362/PVT.git
+    """
     def __init__(
             self, img_size=224, patch_size=4, in_chans=3, num_classes=1000, embed_dims=(64, 128, 256, 512),
             num_heads=(1, 2, 4, 8), mlp_ratios=(4, 4, 4, 4), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
