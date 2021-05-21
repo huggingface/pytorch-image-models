@@ -24,7 +24,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', 
-        '*resnetrs350*', '*resnetrs420*'] + NON_STD_FILTERS
+        '*resnetrs350*', '*resnetrs420*', 'convit_base'] + NON_STD_FILTERS
 else:
     EXCLUDE_FILTERS = NON_STD_FILTERS
 
