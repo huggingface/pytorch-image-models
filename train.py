@@ -340,11 +340,11 @@ def main():
                     loader_train.mixup_enabled = False
 
             train_metrics = train_one_epoch(
-                dev_env=dev_env,
                 state=train_state,
-                services=services,
                 cfg=train_cfg,
-                loader=loader_train
+                services=services,
+                loader=loader_train,
+                dev_env=dev_env,
             )
 
             if dev_env.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -356,8 +356,8 @@ def main():
                 train_state.model,
                 train_state.eval_loss,
                 loader_eval,
-                dev_env,
-                logger=services.logger)
+                services.logger,
+                dev_env)
 
             if train_state.model_ema is not None and not args.model_ema_force_cpu:
                 if dev_env.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -367,8 +367,8 @@ def main():
                     train_state.model_ema.module,
                     train_state.eval_loss,
                     loader_eval,
+                    services.logger,
                     dev_env,
-                    logger=services.logger,
                     phase_suffix='EMA')
                 eval_metrics = ema_eval_metrics
 
@@ -432,6 +432,7 @@ def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
         clip_value=args.clip_grad,
         model_ema=args.model_ema,
         model_ema_decay=args.model_ema_decay,
+        resume_path=args.resume,
         use_syncbn=args.sync_bn,
     )
 
@@ -543,11 +544,11 @@ def setup_data(args, default_cfg, dev_env, mixup_active):
 
 
 def train_one_epoch(
-        dev_env: DeviceEnv,
         state: TrainState,
         cfg: TrainCfg,
         services: TrainServices,
         loader,
+        dev_env: DeviceEnv,
 ):
     tracker = Tracker()
     loss_meter = AvgTensor()
@@ -571,10 +572,10 @@ def train_one_epoch(
 
         state.updater.after_step(
             after_train_step,
-            dev_env,
             state,
-            services,
             cfg,
+            services,
+            dev_env,
             step_idx,
             step_end_idx,
             tracker,
@@ -592,10 +593,10 @@ def train_one_epoch(
 
 
 def after_train_step(
-        dev_env: DeviceEnv,
         state: TrainState,
-        services: TrainServices,
         cfg: TrainCfg,
+        services: TrainServices,
+        dev_env: DeviceEnv,
         step_idx: int,
         step_end_idx: int,
         tracker: Tracker,
@@ -640,8 +641,8 @@ def evaluate(
         model: nn.Module,
         loss_fn: nn.Module,
         loader,
-        dev_env: DeviceEnv,
         logger: Logger,
+        dev_env: DeviceEnv,
         phase_suffix: str = '',
         log_interval: int = 10,
 ):
