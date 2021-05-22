@@ -162,6 +162,9 @@ default_cfgs = {
     'efficientnetv2_rw_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_v2s_ra2_288-a6477665.pth',
         input_size=(3, 288, 288), test_input_size=(3, 384, 384), pool_size=(9, 9), crop_pct=1.0),
+    'efficientnetv2_rw_m': _cfg(
+        url='',
+        input_size=(3, 320, 320), test_input_size=(3, 416, 416), pool_size=(10, 10), crop_pct=1.0),
 
     'efficientnetv2_s': _cfg(
         url='',
@@ -172,7 +175,6 @@ default_cfgs = {
     'efficientnetv2_l': _cfg(
         url='',
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
-
 
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_aa-827b6e33.pth',
@@ -1461,11 +1463,21 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
 
 @register_model
 def efficientnetv2_rw_s(pretrained=False, **kwargs):
-    """ EfficientNet-V2 Small.
+    """ EfficientNet-V2 Small RW variant.
     NOTE: This is my initial (pre official code release) w/ some differences.
     See efficientnetv2_s and tf_efficientnetv2_s for versions that match the official w/ PyTorch vs TF padding
     """
     model = _gen_efficientnetv2_s('efficientnetv2_rw_s', rw=True, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnetv2_rw_m(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Medium RW variant.
+    """
+    model = _gen_efficientnetv2_s(
+        'efficientnetv2_rw_m', channel_multiplier=1.2, depth_multiplier=(1.2,) * 4 + (1.6,) * 2, rw=True,
+        pretrained=pretrained, **kwargs)
     return model
 
 
