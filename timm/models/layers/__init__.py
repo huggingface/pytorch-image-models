@@ -21,7 +21,7 @@ from .inplace_abn import InplaceAbn
 from .involution import Involution
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
-from .mlp import Mlp, GluMlp
+from .mlp import Mlp, GluMlp, GatedMlp
 from .norm import GroupNorm
 from .norm_act import BatchNormAct2d, GroupNormAct
 from .padding import get_padding, get_same_padding, pad_same
