@@ -110,6 +110,12 @@ default_cfgs = dict(
     eca_nfnet_l1=_dcfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l1_ra2-7dce93cd.pth',
         pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 320, 320), crop_pct=1.0),
+    eca_nfnet_l2=_dcfg(
+        url='',
+        pool_size=(9, 9), input_size=(3, 288, 288), test_input_size=(3, 352, 352), crop_pct=1.0),
+    eca_nfnet_l3=_dcfg(
+        url='',
+        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), crop_pct=1.0),
 
     nf_regnet_b0=_dcfg(
         url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv'),
@@ -243,6 +249,12 @@ model_cfgs = dict(
         attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
     eca_nfnet_l1=_nfnet_cfg(
         depths=(2, 4, 12, 6), feat_mult=2, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+    eca_nfnet_l2=_nfnet_cfg(
+        depths=(3, 6, 18, 9), feat_mult=2, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+    eca_nfnet_l3=_nfnet_cfg(
+        depths=(4, 8, 24, 12), feat_mult=2, group_size=64, bottle_ratio=0.25,
         attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
 
     # EffNet influenced RegNet defs.
@@ -812,6 +824,22 @@ def eca_nfnet_l1(pretrained=False, **kwargs):
     My experimental 'light' model w/ F1 repeats, 2.0x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
     """
     return _create_normfreenet('eca_nfnet_l1', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_nfnet_l2(pretrained=False, **kwargs):
+    """ ECA-NFNet-L2 w/ SiLU
+    My experimental 'light' model w/ F2 repeats, 2.0x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
+    """
+    return _create_normfreenet('eca_nfnet_l2', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_nfnet_l3(pretrained=False, **kwargs):
+    """ ECA-NFNet-L3 w/ SiLU
+    My experimental 'light' model w/ F3 repeats, 2.0x final_conv mult, 64 group_size, .25 bottleneck & ECA attn
+    """
+    return _create_normfreenet('eca_nfnet_l3', pretrained=pretrained, **kwargs)
 
 
 @register_model
