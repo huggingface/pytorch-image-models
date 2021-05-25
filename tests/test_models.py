@@ -40,14 +40,25 @@ TARGET_FFEAT_SIZE = 96
 MAX_FFEAT_SIZE = 256
 
 
-def _get_input_size(model, target=None):
-    default_cfg = model.default_cfg
-    input_size = default_cfg['input_size']
-    if 'fixed_input_size' in default_cfg and default_cfg['fixed_input_size']:
+def _get_input_size(model=None, model_name='', target=None):
+    if model is None:
+        assert model_name, "One of model or model_name must be provided"
+        input_size = get_model_default_value(model_name, 'input_size')
+        fixed_input_size = get_model_default_value(model_name, 'fixed_input_size')
+        min_input_size = get_model_default_value(model_name, 'min_input_size')
+    else:
+        default_cfg = model.default_cfg
+        input_size = default_cfg['input_size']
+        fixed_input_size = default_cfg.get('fixed_input_size', None)
+        min_input_size = default_cfg.get('min_input_size', None)
+    assert input_size is not None
+
+    if fixed_input_size:
         return input_size
-    if 'min_input_size' in default_cfg:
+
+    if min_input_size:
         if target and max(input_size) > target:
-            input_size = default_cfg['min_input_size']
+            input_size = min_input_size
     else:
         if target and max(input_size) > target:
             input_size = tuple([min(x, target) for x in input_size])
@@ -73,17 +84,17 @@ def test_model_forward(model_name, batch_size):
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
 def test_model_backward(model_name, batch_size):
     """Run a single forward pass with each model"""
+    input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_SIZE)
+    if max(input_size) > MAX_BWD_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
     model = create_model(model_name, pretrained=False, num_classes=42)
     num_params = sum([x.numel() for x in model.parameters()])
     model.train()
-
-    input_size = _get_input_size(model, TARGET_BWD_SIZE)
-    if max(input_size) > MAX_BWD_SIZE:
-        pytest.skip("Fixed input size model > limit.")
 
     inputs = torch.randn((batch_size, *input_size))
     outputs = model(inputs)
@@ -172,17 +183,18 @@ EXCLUDE_JIT_FILTERS = [
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS))
+@pytest.mark.parametrize(
+    'model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_torchscript(model_name, batch_size):
     """Run a single forward pass with each model"""
+    input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
+    if max(input_size) > MAX_JIT_SIZE:  # NOTE using MAX_FWD_SIZE as the final limit is intentional
+        pytest.skip("Fixed input size model > limit.")
+
     with set_scriptable(True):
         model = create_model(model_name, pretrained=False)
     model.eval()
-
-    input_size = _get_input_size(model, TARGET_JIT_SIZE)
-    if max(input_size) > MAX_JIT_SIZE:  # NOTE using MAX_FWD_SIZE as the final limit is intentional
-        pytest.skip("Fixed input size model > limit.")
 
     model = torch.jit.script(model)
     outputs = model(torch.randn((batch_size, *input_size)))
