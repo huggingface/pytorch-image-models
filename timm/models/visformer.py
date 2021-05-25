@@ -33,7 +33,9 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = dict(
     visformer_tiny=_cfg(),
-    visformer_small=_cfg(),
+    visformer_small=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/visformer_small-839e1f5b.pth'
+    ),
 )
 
 
