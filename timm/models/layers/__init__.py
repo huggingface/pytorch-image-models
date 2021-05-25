@@ -18,6 +18,7 @@ from .eca import EcaModule, CecaModule
 from .evo_norm import EvoNormBatch2d, EvoNormSample2d
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible
 from .inplace_abn import InplaceAbn
+from .involution import Involution
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
 from .mlp import Mlp, GluMlp, GatedMlp

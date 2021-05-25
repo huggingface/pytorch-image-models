@@ -39,7 +39,7 @@ def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
         **kwargs
     }
@@ -317,6 +317,9 @@ class ConViT(nn.Module):
 
 
 def _create_convit(variant, pretrained=False, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+
     return build_model_with_cfg(
         ConViT, variant, pretrained,
         default_cfg=default_cfgs[variant],

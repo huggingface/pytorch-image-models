@@ -1,5 +1,33 @@
 # Recent Changes
 
+### May 25, 2021
+* Add LeViT, Visformer, Convit (PR by Aman Arora), Twins (PR by paper authors) transformer models
+* Cleanup input_size/img_size override handling and testing for all vision transformer models
+* Add `efficientnetv2_rw_m` model and weights (started training before official code). 84.8 top-1, 53M params.
+
+### May 14, 2021
+* Add EfficientNet-V2 official model defs w/ ported weights from official [Tensorflow/Keras](https://github.com/google/automl/tree/master/efficientnetv2) impl.
+  * 1k trained variants: `tf_efficientnetv2_s/m/l`
+  * 21k trained variants: `tf_efficientnetv2_s/m/l_in21k`
+  * 21k pretrained -> 1k fine-tuned: `tf_efficientnetv2_s/m/l_in21ft1k`
+  * v2 models w/ v1 scaling: `tf_efficientnetv2_b0` through `b3`
+  * Rename my prev V2 guess `efficientnet_v2s` -> `efficientnetv2_rw_s`
+  * Some blank `efficientnetv2_*` models in-place for future native PyTorch training
+
+### May 5, 2021
+* Add MLP-Mixer models and port pretrained weights from [Google JAX impl](https://github.com/google-research/vision_transformer/tree/linen)
+* Add CaiT models and pretrained weights from [FB](https://github.com/facebookresearch/deit)
+* Add ResNet-RS models and weights from [TF](https://github.com/tensorflow/tpu/tree/master/models/official/resnet/resnet_rs). Thanks [Aman Arora](https://github.com/amaarora)
+* Add CoaT models and weights. Thanks [Mohammed Rizin](https://github.com/morizin)
+* Add new ImageNet-21k weights & finetuned weights for TResNet, MobileNet-V3, ViT models. Thanks [mrT](https://github.com/mrT23)
+* Add GhostNet models and weights. Thanks [Kai Han](https://github.com/iamhankai)
+* Update ByoaNet attention modles
+   * Improve SA module inits
+   * Hack together experimental stand-alone Swin based attn module and `swinnet`
+   * Consistent '26t' model defs for experiments.
+* Add improved Efficientnet-V2S (prelim model def) weights. 83.8 top-1.
+* WandB logging support
+
 ### April 13, 2021
 * Add Swin Transformer models and weights from https://github.com/microsoft/Swin-Transformer
 

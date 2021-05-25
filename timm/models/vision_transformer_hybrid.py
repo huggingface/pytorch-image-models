@@ -27,7 +27,7 @@ def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic',
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5),
         'first_conv': 'patch_embed.backbone.stem.conv', 'classifier': 'head',
         **kwargs
@@ -107,11 +107,10 @@ class HybridEmbed(nn.Module):
 
 
 def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwargs):
-    default_cfg = deepcopy(default_cfgs[variant])
     embed_layer = partial(HybridEmbed, backbone=backbone)
     kwargs.setdefault('patch_size', 1)  # default patch size for hybrid models if not set
     return _create_vision_transformer(
-        variant, pretrained=pretrained, default_cfg=default_cfg, embed_layer=embed_layer, **kwargs)
+        variant, pretrained=pretrained, embed_layer=embed_layer, default_cfg=default_cfgs[variant], **kwargs)
 
 
 def _resnetv2(layers=(3, 4, 9), **kwargs):

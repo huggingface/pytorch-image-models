@@ -273,25 +273,14 @@ def _init_weights(m, n: str, head_bias: float = 0.):
         nn.init.ones_(m.weight)
 
 
-def _create_mixer(variant, pretrained=False, default_cfg=None, **kwargs):
-    if default_cfg is None:
-        default_cfg = deepcopy(default_cfgs[variant])
-    overlay_external_default_cfg(default_cfg, kwargs)
-    default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-2:]
-    num_classes = kwargs.pop('num_classes', default_num_classes)
-    img_size = kwargs.pop('img_size', default_img_size)
-
+def _create_mixer(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for MLP-Mixer models.')
 
     model = build_model_with_cfg(
         MlpMixer, variant, pretrained,
-        default_cfg=default_cfg,
-        img_size=img_size,
-        num_classes=num_classes,
+        default_cfg=default_cfgs[variant],
         **kwargs)
-
     return model
 
 

@@ -50,7 +50,7 @@ def _natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_.lower())]
 
 
-def list_models(filter='', module='', pretrained=False, exclude_filters=''):
+def list_models(filter='', module='', pretrained=False, exclude_filters='', name_matches_cfg=False):
     """ Return list of available model names, sorted alphabetically
 
     Args:
@@ -58,6 +58,7 @@ def list_models(filter='', module='', pretrained=False, exclude_filters=''):
         module (str) - Limit model selection to a specific sub-module (ie 'gen_efficientnet')
         pretrained (bool) - Include only models with pretrained weights if True
         exclude_filters (str or list[str]) - Wildcard filters to exclude models after including them with filter
+        name_matches_cfg (bool) - Include only models w/ model_name matching default_cfg name (excludes some aliases)
 
     Example:
         model_list('gluon_resnet*') -- returns all models starting with 'gluon_resnet'
@@ -70,7 +71,7 @@ def list_models(filter='', module='', pretrained=False, exclude_filters=''):
     if filter:
         models = fnmatch.filter(models, filter)  # include these models
     if exclude_filters:
-        if not isinstance(exclude_filters, list):
+        if not isinstance(exclude_filters, (tuple, list)):
             exclude_filters = [exclude_filters]
         for xf in exclude_filters:
             exclude_models = fnmatch.filter(models, xf)  # exclude these models
@@ -78,6 +79,8 @@ def list_models(filter='', module='', pretrained=False, exclude_filters=''):
                 models = set(models).difference(exclude_models)
     if pretrained:
         models = _model_has_pretrained.intersection(models)
+    if name_matches_cfg:
+        models = set(_model_default_cfgs).intersection(models)
     return list(sorted(models, key=_natural_key))
 
 

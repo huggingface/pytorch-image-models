@@ -251,24 +251,14 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_pit(variant, pretrained=False, **kwargs):
-    default_cfg = deepcopy(default_cfgs[variant])
-    overlay_external_default_cfg(default_cfg, kwargs)
-    default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-2:]
-    img_size = kwargs.pop('img_size', default_img_size)
-    num_classes = kwargs.pop('num_classes', default_num_classes)
-
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
     model = build_model_with_cfg(
         PoolingVisionTransformer, variant, pretrained,
-        default_cfg=default_cfg,
-        img_size=img_size,
-        num_classes=num_classes,
+        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
-
     return model
 
 
