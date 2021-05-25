@@ -73,7 +73,7 @@ def test_model_forward(model_name, batch_size):
     model = create_model(model_name, pretrained=False)
     model.eval()
 
-    input_size = _get_input_size(model, TARGET_FWD_SIZE)
+    input_size = _get_input_size(model=model, target=TARGET_FWD_SIZE)
     if max(input_size) > MAX_FWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
     inputs = torch.randn((batch_size, *input_size))
@@ -221,7 +221,7 @@ def test_model_forward_features(model_name, batch_size):
     expected_channels = model.feature_info.channels()
     assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
 
-    input_size = _get_input_size(model, TARGET_FFEAT_SIZE)
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
     if max(input_size) > MAX_FFEAT_SIZE:
         pytest.skip("Fixed input size model > limit.")
 
