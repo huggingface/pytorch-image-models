@@ -23,6 +23,14 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### May 25, 2021
+* Add LeViT, Visformer, ConViT (PR by Aman Arora), Twins (PR by paper authors) transformer models
+* Add ResMLP and gMLP MLP vision models to the existing MLP Mixer impl
+* Fix a number of torchscript issues with various vision transformer models
+* Cleanup input_size/img_size override handling and improve testing / test coverage for all vision transformer and MLP models
+* More flexible pos embedding resize (non-square) for ViT and TnT. Thanks [Alexander Soare](https://github.com/alexander-soare)
+* Add `efficientnetv2_rw_m` model and weights (started training before official code). 84.8 top-1, 53M params.
+
 ### May 14, 2021
 * Add EfficientNet-V2 official model defs w/ ported weights from official [Tensorflow/Keras](https://github.com/google/automl/tree/master/efficientnetv2) impl.
   * 1k trained variants: `tf_efficientnetv2_s/m/l`
@@ -166,30 +174,6 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 * Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
 * PyPi release @ 0.3.2 (needed by EfficientDet)
 
-### Oct 30, 2020
-* Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.
-* Convert newly added 224x224 Vision Transformer weights from official JAX repo. 81.8 top-1 for B/16, 83.1 L/16.
-* Support PyTorch 1.7 optimized, native SiLU (aka Swish) activation. Add mapping to 'silu' name, custom swish will eventually be deprecated.
-* Fix regression for loading pretrained classifier via direct model entrypoint functions. Didn't impact create_model() factory usage.
-* PyPi release @ 0.3.0 version!
-
-### Oct 26, 2020
-* Update Vision Transformer models to be compatible with official code release at https://github.com/google-research/vision_transformer
-* Add Vision Transformer weights (ImageNet-21k pretrain) for 384x384 base and large models converted from official jax impl
-  * ViT-B/16 - 84.2
-  * ViT-B/32 - 81.7
-  * ViT-L/16 - 85.2
-  * ViT-L/32 - 81.5
-
-### Oct 21, 2020
-* Weights added for Vision Transformer (ViT) models. 77.86 top-1 for 'small' and 79.35 for 'base'. Thanks to [Christof](https://www.kaggle.com/christofhenkel) for training the base model w/ lots of GPUs.
-
-### Oct 13, 2020
-* Initial impl of Vision Transformer models. Both patch and hybrid (CNN backbone) variants. Currently trying to train...
-* Adafactor and AdaHessian (FP32 only, no AMP) optimizers
-* EdgeTPU-M (`efficientnet_em`) model trained in PyTorch, 79.3 top-1
-* Pip release, doc updates pending a few more changes...
-
 
 ## Introduction
 
@@ -207,6 +191,7 @@ A full version of the list below with source links can be found in the [document
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
+* ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT (Vision Transformer) - https://arxiv.org/abs/2012.12877
 * DenseNet - https://arxiv.org/abs/1608.06993
@@ -224,6 +209,7 @@ A full version of the list below with source links can be found in the [document
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
 * GhostNet - https://arxiv.org/abs/1911.11907
+* gMLP - https://arxiv.org/abs/2105.08050
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
 * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
@@ -231,6 +217,7 @@ A full version of the list below with source links can be found in the [document
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
+* LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
 * NASNet-A - https://arxiv.org/abs/1707.07012
@@ -240,6 +227,7 @@ A full version of the list below with source links can be found in the [document
 * Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
 * RegNet - https://arxiv.org/abs/2003.13678
 * RepVGG - https://arxiv.org/abs/2101.03697
+* ResMLP - https://arxiv.org/abs/2105.03404
 * ResNet/ResNeXt
     * ResNet (v1b/v1.5) - https://arxiv.org/abs/1512.03385
     * ResNeXt - https://arxiv.org/abs/1611.05431
@@ -257,6 +245,7 @@ A full version of the list below with source links can be found in the [document
 * Swin Transformer - https://arxiv.org/abs/2103.14030
 * Transformer-iN-Transformer (TNT) - https://arxiv.org/abs/2103.00112
 * TResNet - https://arxiv.org/abs/2003.13630
+* Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
 * Vision Transformer - https://arxiv.org/abs/2010.11929
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
