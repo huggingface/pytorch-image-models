@@ -12,7 +12,7 @@ import torch.nn as nn
 from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models.helpers import load_pretrained
+from timm.models.helpers import build_model_with_cfg
 from timm.models.layers import Mlp, DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
 from timm.models.registry import register_model
@@ -238,24 +238,31 @@ def checkpoint_filter_fn(state_dict, model):
     return state_dict
 
 
+def _create_tnt(variant, pretrained=False, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+
+    model = build_model_with_cfg(
+        TNT, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        pretrained_filter_fn=checkpoint_filter_fn,
+        **kwargs)
+    return model
+
+
 @register_model
 def tnt_s_patch16_224(pretrained=False, **kwargs):
-    model = TNT(patch_size=16, embed_dim=384, in_dim=24, depth=12, num_heads=6, in_num_head=4,
+    model_cfg = dict(
+        patch_size=16, embed_dim=384, in_dim=24, depth=12, num_heads=6, in_num_head=4,
         qkv_bias=False, **kwargs)
-    model.default_cfg = default_cfgs['tnt_s_patch16_224']
-    if pretrained:
-        load_pretrained(
-            model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3),
-                filter_fn=checkpoint_filter_fn)
+    model = _create_tnt('tnt_s_patch16_224', pretrained=pretrained, **model_cfg)
     return model
 
 
 @register_model
 def tnt_b_patch16_224(pretrained=False, **kwargs):
-    model = TNT(patch_size=16, embed_dim=640, in_dim=40, depth=12, num_heads=10, in_num_head=4,
+    model_cfg = dict(
+        patch_size=16, embed_dim=640, in_dim=40, depth=12, num_heads=10, in_num_head=4,
         qkv_bias=False, **kwargs)
-    model.default_cfg = default_cfgs['tnt_b_patch16_224']
-    if pretrained:
-        load_pretrained(
-            model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
+    model = _create_tnt('tnt_b_patch16_224', pretrained=pretrained, **model_cfg)
     return model
