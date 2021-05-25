@@ -190,7 +190,7 @@ EXCLUDE_JIT_FILTERS = [
 def test_model_forward_torchscript(model_name, batch_size):
     """Run a single forward pass with each model"""
     input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
-    if max(input_size) > MAX_JIT_SIZE:  # NOTE using MAX_FWD_SIZE as the final limit is intentional
+    if max(input_size) > MAX_JIT_SIZE:
         pytest.skip("Fixed input size model > limit.")
 
     with set_scriptable(True):
