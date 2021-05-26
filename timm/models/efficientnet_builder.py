@@ -50,10 +50,7 @@ def resolve_bn_args(kwargs):
 
 
 def resolve_act_layer(kwargs, default='relu'):
-    act_layer = kwargs.pop('act_layer', default)
-    if isinstance(act_layer, str):
-        act_layer = get_act_layer(act_layer)
-    return act_layer
+    return get_act_layer(kwargs.pop('act_layer', default))
 
 
 def round_channels(channels, multiplier=1.0, divisor=8, channel_min=None, round_limit=0.9):

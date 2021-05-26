@@ -33,7 +33,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import to_ntuple
+from .layers import to_ntuple, get_act_layer
 from .vision_transformer import trunc_normal_
 from .registry import register_model
 
@@ -443,12 +443,14 @@ class Levit(nn.Module):
             mlp_ratio=2,
             hybrid_backbone=None,
             down_ops=None,
-            act_layer=nn.Hardswish,
-            attn_act_layer=nn.Hardswish,
+            act_layer='hard_swish',
+            attn_act_layer='hard_swish',
             distillation=True,
             use_conv=False,
             drop_path=0):
         super().__init__()
+        act_layer = get_act_layer(act_layer)
+        attn_act_layer = get_act_layer(attn_act_layer)
         if isinstance(img_size, tuple):
             # FIXME origin impl passes single img/res dim through whole hierarchy,
             # not sure this model will be used enough to spend time fixing it.

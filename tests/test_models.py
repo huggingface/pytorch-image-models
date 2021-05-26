@@ -110,7 +110,7 @@ def test_model_backward(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(300)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):

@@ -42,7 +42,7 @@ class EffectiveSEModule(nn.Module):
     def __init__(self, channels, gate_layer='hard_sigmoid'):
         super(EffectiveSEModule, self).__init__()
         self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0)
-        self.gate = create_act_layer(gate_layer, inplace=True)
+        self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
         x_se = x.mean((2, 3), keepdim=True)

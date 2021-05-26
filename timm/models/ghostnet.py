@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .layers import SelectAdaptivePool2d, Linear, hard_sigmoid, make_divisible
+from .layers import SelectAdaptivePool2d, Linear, make_divisible
 from .efficientnet_blocks import SqueezeExcite, ConvBnAct
 from .helpers import build_model_with_cfg
 from .registry import register_model
@@ -40,7 +40,7 @@ default_cfgs = {
 }
 
 
-_SE_LAYER = partial(SqueezeExcite, gate_fn=hard_sigmoid, divisor=4)
+_SE_LAYER = partial(SqueezeExcite, gate_fn='hard_sigmoid', divisor=4)
 
 
 class GhostModule(nn.Module):
