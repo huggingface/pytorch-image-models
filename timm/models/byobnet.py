@@ -88,9 +88,16 @@ default_cfgs = {
         first_conv=('stem.conv_kxk.conv', 'stem.conv_1x1.conv')),
 
     # experimental configs
-    'resnet52qs': _cfg(first_conv='stem.conv1.conv'),
-    'geresnet50t': _cfg(first_conv='stem.conv1.conv'),
-    'gcresnet50t': _cfg(first_conv='stem.conv1.conv'),
+    'resnet51q': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet51q_ra2-d47dcc76.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8),
+        test_input_size=(3, 288, 288), crop_pct=1.0),
+    'resnet61q': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'geresnet50t': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'gcresnet50t': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 }
 
 
@@ -241,7 +248,7 @@ model_cfgs = dict(
     ),
 
     # WARN: experimental, may vanish/change
-    resnet52q=ByoModelCfg(
+    resnet51q=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
             ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=32, br=0.25),
@@ -249,9 +256,25 @@ model_cfgs = dict(
             ByoBlockCfg(type='bottle', d=4, c=1536, s=2, gs=1, br=1.0),
         ),
         stem_chs=128,
-        stem_type='quad',
+        stem_type='quad2',
+        stem_pool=None,
         num_features=2048,
         act_layer='silu',
+    ),
+
+    resnet61q=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='edge', d=1, c=256, s=1, gs=0, br=1.0, block_kwargs=dict()),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1536, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=1536, s=2, gs=1, br=1.0),
+        ),
+        stem_chs=128,
+        stem_type='quad',
+        stem_pool=None,
+        num_features=2048,
+        act_layer='silu',
+        block_kwargs=dict(extra_conv=True),
     ),
 
     # WARN: experimental, may vanish/change
@@ -285,6 +308,122 @@ model_cfgs = dict(
         attn_layer='gc'
     ),
 )
+
+
+@register_model
+def gernet_l(pretrained=False, **kwargs):
+    """ GEResNet-Large (GENet-Large from official impl)
+    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+    """
+    return _create_byobnet('gernet_l', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gernet_m(pretrained=False, **kwargs):
+    """ GEResNet-Medium (GENet-Normal from official impl)
+    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+    """
+    return _create_byobnet('gernet_m', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gernet_s(pretrained=False, **kwargs):
+    """ EResNet-Small (GENet-Small from official impl)
+    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+    """
+    return _create_byobnet('gernet_s', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_a2(pretrained=False, **kwargs):
+    """ RepVGG-A2
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_a2', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b0(pretrained=False, **kwargs):
+    """ RepVGG-B0
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b0', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b1(pretrained=False, **kwargs):
+    """ RepVGG-B1
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b1', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b1g4(pretrained=False, **kwargs):
+    """ RepVGG-B1g4
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b1g4', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b2(pretrained=False, **kwargs):
+    """ RepVGG-B2
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b2', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b2g4(pretrained=False, **kwargs):
+    """ RepVGG-B2g4
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b2g4', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b3(pretrained=False, **kwargs):
+    """ RepVGG-B3
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b3', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_b3g4(pretrained=False, **kwargs):
+    """ RepVGG-B3g4
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_b3g4', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet51q(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('resnet51q', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet61q(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('resnet61q', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def geresnet50t(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('geresnet50t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnet50t(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
@@ -391,8 +530,8 @@ class BottleneckBlock(nn.Module):
     """
 
     def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
-                 downsample='avg', attn_last=False, linear_out=False, layers: LayerFn = None, drop_block=None,
-                 drop_path_rate=0.):
+                 downsample='avg', attn_last=False, linear_out=False, extra_conv=False, layers: LayerFn = None,
+                 drop_block=None, drop_path_rate=0.):
         super(BottleneckBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -409,6 +548,14 @@ class BottleneckBlock(nn.Module):
         self.conv2_kxk = layers.conv_norm_act(
             mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
             groups=groups, drop_block=drop_block)
+        self.conv2_kxk = layers.conv_norm_act(
+            mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
+            groups=groups, drop_block=drop_block)
+        if extra_conv:
+            self.conv2b_kxk = layers.conv_norm_act(
+                mid_chs, mid_chs, kernel_size, dilation=dilation[1], groups=groups, drop_block=drop_block)
+        else:
+            self.conv2b_kxk = nn.Identity()
         self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
         self.conv3_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False)
         self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
@@ -427,6 +574,7 @@ class BottleneckBlock(nn.Module):
 
         x = self.conv1_1x1(x)
         x = self.conv2_kxk(x)
+        x = self.conv2b_kxk(x)
         x = self.attn(x)
         x = self.conv3_1x1(x)
         x = self.attn_last(x)
@@ -714,7 +862,7 @@ class Stem(nn.Sequential):
 
 def create_byob_stem(in_chs, out_chs, stem_type='', pool_type='', feat_prefix='stem', layers: LayerFn = None):
     layers = layers or LayerFn()
-    assert stem_type in ('', 'quad', 'tiered', 'deep', 'rep', '7x7', '3x3')
+    assert stem_type in ('', 'quad', 'quad2', 'tiered', 'deep', 'rep', '7x7', '3x3')
     if 'quad' in stem_type:
         # based on NFNet stem, stack of 4 3x3 convs
         num_act = 2 if 'quad2' in stem_type else None
@@ -955,112 +1103,3 @@ def _create_byobnet(variant, pretrained=False, **kwargs):
         model_cfg=model_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
         **kwargs)
-
-
-@register_model
-def gernet_l(pretrained=False, **kwargs):
-    """ GEResNet-Large (GENet-Large from official impl)
-    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
-    """
-    return _create_byobnet('gernet_l', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def gernet_m(pretrained=False, **kwargs):
-    """ GEResNet-Medium (GENet-Normal from official impl)
-    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
-    """
-    return _create_byobnet('gernet_m', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def gernet_s(pretrained=False, **kwargs):
-    """ EResNet-Small (GENet-Small from official impl)
-    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
-    """
-    return _create_byobnet('gernet_s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_a2(pretrained=False, **kwargs):
-    """ RepVGG-A2
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_a2', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b0(pretrained=False, **kwargs):
-    """ RepVGG-B0
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b0', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b1(pretrained=False, **kwargs):
-    """ RepVGG-B1
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b1', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b1g4(pretrained=False, **kwargs):
-    """ RepVGG-B1g4
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b1g4', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b2(pretrained=False, **kwargs):
-    """ RepVGG-B2
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b2', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b2g4(pretrained=False, **kwargs):
-    """ RepVGG-B2g4
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b2g4', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b3(pretrained=False, **kwargs):
-    """ RepVGG-B3
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b3', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def repvgg_b3g4(pretrained=False, **kwargs):
-    """ RepVGG-B3g4
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
-    """
-    return _create_byobnet('repvgg_b3g4', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def resnet52q(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('geresnet50t', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def geresnet50t(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('geresnet50t', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def gcresnet50t(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
