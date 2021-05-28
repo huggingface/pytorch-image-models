@@ -65,6 +65,9 @@ class EcaModule(nn.Module):
         return x * y.expand_as(x)
 
 
+EfficientChannelAttn = EcaModule  # alias
+
+
 class CecaModule(nn.Module):
     """Constructs a circular ECA module.
 
@@ -105,3 +108,6 @@ class CecaModule(nn.Module):
         y = self.conv(y)
         y = y.view(x.shape[0], -1, 1, 1).sigmoid()
         return x * y.expand_as(x)
+
+
+CircularEfficientChannelAttn = CecaModule

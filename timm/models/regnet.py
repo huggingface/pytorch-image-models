@@ -146,7 +146,7 @@ class Bottleneck(nn.Module):
             groups=groups, **cargs)
         if se_ratio:
             se_channels = int(round(in_chs * se_ratio))
-            self.se = SEModule(bottleneck_chs, reduction_channels=se_channels)
+            self.se = SEModule(bottleneck_chs, rd_channels=se_channels)
         else:
             self.se = None
         cargs['act_layer'] = None

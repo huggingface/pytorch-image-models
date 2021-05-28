@@ -12,3 +12,12 @@ class GroupNorm(nn.GroupNorm):
 
     def forward(self, x):
         return F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+
+
+class LayerNorm2d(nn.LayerNorm):
+    """ Layernorm for channels of '2d' spatial BCHW tensors """
+    def __init__(self, num_channels):
+        super().__init__([num_channels, 1, 1])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)

@@ -3,9 +3,12 @@
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
-from .se import SEModule, EffectiveSEModule
-from .eca import EcaModule, CecaModule
+
 from .cbam import CbamModule, LightCbamModule
+from .eca import EcaModule, CecaModule
+from .gather_excite import GatherExcite
+from .global_context import GlobalContext
+from .squeeze_excite import SEModule, EffectiveSEModule
 
 
 def get_attn(attn_type):
@@ -23,6 +26,10 @@ def get_attn(attn_type):
                 module_cls = EcaModule
             elif attn_type == 'ceca':
                 module_cls = CecaModule
+            elif attn_type == 'ge':
+                module_cls = GatherExcite
+            elif attn_type == 'gc':
+                module_cls = GlobalContext
             elif attn_type == 'cbam':
                 module_cls = CbamModule
             elif attn_type == 'lcbam':

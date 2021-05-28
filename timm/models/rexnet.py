@@ -11,11 +11,12 @@ Copyright 2020 Ross Wightman
 """
 
 import torch.nn as nn
+from functools import partial
 from math import ceil
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath, make_divisible
+from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath, make_divisible, SEModule
 from .registry import register_model
 from .efficientnet_builder import efficientnet_init_weights
 
@@ -48,26 +49,7 @@ default_cfgs = dict(
         url=''),
 )
 
-
-class SEWithNorm(nn.Module):
-
-    def __init__(self, channels, se_ratio=1 / 12., act_layer=nn.ReLU, divisor=1, reduction_channels=None,
-                 gate_layer='sigmoid'):
-        super(SEWithNorm, self).__init__()
-        reduction_channels = reduction_channels or make_divisible(int(channels * se_ratio), divisor=divisor)
-        self.fc1 = nn.Conv2d(channels, reduction_channels, kernel_size=1, bias=True)
-        self.bn = nn.BatchNorm2d(reduction_channels)
-        self.act = act_layer(inplace=True)
-        self.fc2 = nn.Conv2d(reduction_channels, channels, kernel_size=1, bias=True)
-        self.gate = create_act_layer(gate_layer)
-
-    def forward(self, x):
-        x_se = x.mean((2, 3), keepdim=True)
-        x_se = self.fc1(x_se)
-        x_se = self.bn(x_se)
-        x_se = self.act(x_se)
-        x_se = self.fc2(x_se)
-        return x * self.gate(x_se)
+SEWithNorm = partial(SEModule, norm_layer=nn.BatchNorm2d)
 
 
 class LinearBottleneck(nn.Module):
@@ -86,7 +68,10 @@ class LinearBottleneck(nn.Module):
             self.conv_exp = None
 
         self.conv_dw = ConvBnAct(dw_chs, dw_chs, 3, stride=stride, groups=dw_chs, apply_act=False)
-        self.se = SEWithNorm(dw_chs, se_ratio=se_ratio, divisor=ch_div) if se_ratio > 0. else None
+        if se_ratio > 0:
+            self.se = SEWithNorm(dw_chs, rd_channels=make_divisible(int(dw_chs * se_ratio), ch_div))
+        else:
+            self.se = None
         self.act_dw = create_act_layer(dw_act_layer)
 
         self.conv_pwl = ConvBnAct(dw_chs, out_chs, 1, apply_act=False)
