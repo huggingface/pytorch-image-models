@@ -573,9 +573,8 @@ class RepVggBlock(nn.Module):
             if isinstance(m, nn.BatchNorm2d):
                 nn.init.normal_(m.weight, .1, .1)
                 nn.init.normal_(m.bias, 0, .1)
-        for attn in (self.attn, self.attn_last):
-            if hasattr(attn, 'reset_parameters'):
-                attn.reset_parameters()
+        if hasattr(self.attn, 'reset_parameters'):
+            self.attn.reset_parameters()
 
     def forward(self, x):
         if self.identity is None:
