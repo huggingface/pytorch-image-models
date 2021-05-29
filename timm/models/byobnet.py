@@ -90,7 +90,7 @@ default_cfgs = {
     # experimental configs
     'resnet51q': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet51q_ra2-d47dcc76.pth',
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8),
+        first_conv='stem.conv1', input_size=(3, 256, 256), pool_size=(8, 8),
         test_input_size=(3, 288, 288), crop_pct=1.0),
     'resnet61q': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),

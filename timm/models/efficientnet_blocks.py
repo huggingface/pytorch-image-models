@@ -22,18 +22,16 @@ class SqueezeExcite(nn.Module):
         se_ratio (float): ratio of squeeze reduction
         act_layer (nn.Module): activation layer of containing block
         gate_fn (Callable): attention gate function
-        block_in_chs (int): input channels of containing block (for calculating reduction from)
-        reduce_from_block (bool): calculate reduction from block input channels if True
         force_act_layer (nn.Module): override block's activation fn if this is set/bound
-        divisor (int): make reduction channels divisible by this
+        round_chs_fn (Callable): specify a fn to calculate rounding of reduced chs
     """
 
     def __init__(
             self, in_chs, se_ratio=0.25, act_layer=nn.ReLU, gate_fn=sigmoid,
-            block_in_chs=None, reduce_from_block=True, force_act_layer=None, divisor=1):
+            force_act_layer=None, round_chs_fn=None):
         super(SqueezeExcite, self).__init__()
-        reduced_chs = (block_in_chs or in_chs) if reduce_from_block else in_chs
-        reduced_chs = make_divisible(reduced_chs * se_ratio, divisor)
+        round_chs_fn = round_chs_fn or round
+        reduced_chs = round_chs_fn(in_chs * se_ratio)
         act_layer = force_act_layer or act_layer
         self.conv_reduce = nn.Conv2d(in_chs, reduced_chs, 1, bias=True)
         self.act1 = create_act_layer(act_layer, inplace=True)
@@ -168,8 +166,7 @@ class InvertedResidual(nn.Module):
         self.act2 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        self.se = se_layer(
-            mid_chs, se_ratio=se_ratio, act_layer=act_layer, block_in_chs=in_chs) if has_se else nn.Identity()
+        self.se = se_layer(mid_chs, se_ratio=se_ratio, act_layer=act_layer) if has_se else nn.Identity()
 
         # Point-wise linear projection
         self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
@@ -292,8 +289,7 @@ class EdgeResidual(nn.Module):
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        self.se = SqueezeExcite(
-            mid_chs, se_ratio=se_ratio, act_layer=act_layer, block_in_chs=in_chs) if has_se else nn.Identity()
+        self.se = SqueezeExcite(mid_chs, se_ratio=se_ratio, act_layer=act_layer) if has_se else nn.Identity()
 
         # Point-wise linear projection
         self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type)

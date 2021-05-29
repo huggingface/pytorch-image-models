@@ -265,11 +265,12 @@ class EfficientNetBuilder:
     https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/modeling/backbone/fbnet_builder.py
 
     """
-    def __init__(self, output_stride=32, pad_type='', round_chs_fn=round_channels,
+    def __init__(self, output_stride=32, pad_type='', round_chs_fn=round_channels, se_from_exp=False,
                  act_layer=None, norm_layer=None, se_layer=None, drop_path_rate=0., feature_location=''):
         self.output_stride = output_stride
         self.pad_type = pad_type
         self.round_chs_fn = round_chs_fn
+        self.se_from_exp = se_from_exp  # calculate se channel reduction from expanded (mid) chs
         self.act_layer = act_layer
         self.norm_layer = norm_layer
         self.se_layer = se_layer
@@ -301,6 +302,8 @@ class EfficientNetBuilder:
         ba['norm_layer'] = self.norm_layer
         if bt != 'cn':
             ba['se_layer'] = self.se_layer
+            if not self.se_from_exp and ba['se_ratio']:
+                ba['se_ratio'] /= ba.get('exp_ratio', 1.0)
             ba['drop_path_rate'] = drop_path_rate
 
         if bt == 'ir':
@@ -418,28 +421,28 @@ def _init_weight_goog(m, n='', fix_group_fanout=True):
         if fix_group_fanout:
             fan_out //= m.groups
         init_weight_fn = get_condconv_initializer(
-            lambda w: w.data.normal_(0, math.sqrt(2.0 / fan_out)), m.num_experts, m.weight_shape)
+            lambda w: nn.init.normal_(w, 0, math.sqrt(2.0 / fan_out)), m.num_experts, m.weight_shape)
         init_weight_fn(m.weight)
         if m.bias is not None:
-            m.bias.data.zero_()
+            nn.init.zeros_(m.bias)
     elif isinstance(m, nn.Conv2d):
         fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
         if fix_group_fanout:
             fan_out //= m.groups
-        m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+        nn.init.normal_(m.weight, 0, math.sqrt(2.0 / fan_out))
         if m.bias is not None:
-            m.bias.data.zero_()
+            nn.init.zeros_(m.bias)
     elif isinstance(m, nn.BatchNorm2d):
-        m.weight.data.fill_(1.0)
-        m.bias.data.zero_()
+        nn.init.ones_(m.weight)
+        nn.init.zeros_(m.bias)
     elif isinstance(m, nn.Linear):
         fan_out = m.weight.size(0)  # fan-out
         fan_in = 0
         if 'routing_fn' in n:
             fan_in = m.weight.size(1)
         init_range = 1.0 / math.sqrt(fan_in + fan_out)
-        m.weight.data.uniform_(-init_range, init_range)
-        m.bias.data.zero_()
+        nn.init.uniform_(m.weight, -init_range, init_range)
+        nn.init.zeros_(m.bias)
 
 
 def efficientnet_init_weights(model: nn.Module, init_fn=None):

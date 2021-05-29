@@ -40,7 +40,7 @@ default_cfgs = {
 }
 
 
-_SE_LAYER = partial(SqueezeExcite, gate_fn='hard_sigmoid', divisor=4)
+_SE_LAYER = partial(SqueezeExcite, gate_fn='hard_sigmoid', round_chs_fn=partial(make_divisible, divisor=4))
 
 
 class GhostModule(nn.Module):
