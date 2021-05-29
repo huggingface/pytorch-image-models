@@ -8,10 +8,10 @@ from timm.models.layers import create_act_layer, get_act_layer, set_layer_config
 
 
 class MLP(nn.Module):
-    def __init__(self, act_layer="relu"):
+    def __init__(self, act_layer="relu", inplace=True):
         super(MLP, self).__init__()
         self.fc1 = nn.Linear(1000, 100)
-        self.act = create_act_layer(act_layer, inplace=True)
+        self.act = create_act_layer(act_layer, inplace=inplace)
         self.fc2 = nn.Linear(100, 10)
 
     def forward(self, x):
@@ -21,14 +21,14 @@ class MLP(nn.Module):
         return x
 
 
-def _run_act_layer_grad(act_type):
+def _run_act_layer_grad(act_type, inplace=True):
     x = torch.rand(10, 1000) * 10
-    m = MLP(act_layer=act_type)
+    m = MLP(act_layer=act_type, inplace=inplace)
 
     def _run(x, act_layer=''):
         if act_layer:
             # replace act layer if set
-            m.act = create_act_layer(act_layer, inplace=True)
+            m.act = create_act_layer(act_layer, inplace=inplace)
         out = m(x)
         l = (out - 0).pow(2).sum()
         return l
@@ -58,7 +58,7 @@ def test_mish_grad():
 
 def test_hard_sigmoid_grad():
     for _ in range(100):
-        _run_act_layer_grad('hard_sigmoid')
+        _run_act_layer_grad('hard_sigmoid', inplace=None)
 
 
 def test_hard_swish_grad():

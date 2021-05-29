@@ -7,19 +7,19 @@ Official CoaT code at: https://github.com/mlpc-ucsd/CoaT
 
 Modified from timm/models/vision_transformer.py
 """
-from typing import Tuple, Dict, Any, Optional
+from copy import deepcopy
+from functools import partial
+from typing import Tuple, List
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models.helpers import load_pretrained
-from timm.models.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
-from timm.models.registry import register_model
+from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
+from .registry import register_model
 
-from functools import partial
-from torch import nn
 
 __all__ = [
     "coat_tiny",
@@ -34,7 +34,7 @@ def _cfg_coat(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic',
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed1.proj', 'classifier': 'head',
         **kwargs
@@ -42,15 +42,21 @@ def _cfg_coat(url='', **kwargs):
 
 
 default_cfgs = {
-    'coat_tiny': _cfg_coat(),
-    'coat_mini': _cfg_coat(),
+    'coat_tiny': _cfg_coat(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_tiny-473c2a20.pth'
+    ),
+    'coat_mini': _cfg_coat(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_mini-2c6baf49.pth'
+    ),
     'coat_lite_tiny': _cfg_coat(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_lite_tiny-461b07a7.pth'
     ),
     'coat_lite_mini': _cfg_coat(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_lite_mini-d7842000.pth'
     ),
-    'coat_lite_small': _cfg_coat(),
+    'coat_lite_small': _cfg_coat(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_lite_small-fea1d5a1.pth'
+    ),
 }
 
 
@@ -120,11 +126,11 @@ class ConvRelPosEnc(nn.Module):
 
 class FactorAtt_ConvRelPosEnc(nn.Module):
     """ Factorized attention with convolutional relative position encoding class. """
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., shared_crpe=None):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0., shared_crpe=None):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = head_dim ** -0.5
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)  # Note: attn_drop is actually not used.
@@ -190,9 +196,8 @@ class ConvPosEnc(nn.Module):
 class SerialBlock(nn.Module):
     """ Serial block class.
         Note: In this implementation, each serial block only contains a conv-attention and a FFN (MLP) module. """
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 shared_cpe=None, shared_crpe=None):
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, shared_cpe=None, shared_crpe=None):
         super().__init__()
 
         # Conv-Attention.
@@ -200,8 +205,7 @@ class SerialBlock(nn.Module):
 
         self.norm1 = norm_layer(dim)
         self.factoratt_crpe = FactorAtt_ConvRelPosEnc(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, 
-            shared_crpe=shared_crpe)
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, shared_crpe=shared_crpe)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         # MLP.
@@ -226,27 +230,24 @@ class SerialBlock(nn.Module):
 
 class ParallelBlock(nn.Module):
     """ Parallel block class. """
-    def __init__(self, dims, num_heads, mlp_ratios=[], qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 shared_cpes=None, shared_crpes=None):
+    def __init__(self, dims, num_heads, mlp_ratios=[], qkv_bias=False, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, shared_crpes=None):
         super().__init__()
 
         # Conv-Attention.
-        self.cpes = shared_cpes
-
         self.norm12 = norm_layer(dims[1])
         self.norm13 = norm_layer(dims[2])
         self.norm14 = norm_layer(dims[3])
         self.factoratt_crpe2 = FactorAtt_ConvRelPosEnc(
-            dims[1], num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, 
+            dims[1], num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, 
             shared_crpe=shared_crpes[1]
         )
         self.factoratt_crpe3 = FactorAtt_ConvRelPosEnc(
-            dims[2], num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, 
+            dims[2], num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, 
             shared_crpe=shared_crpes[2]
         )
         self.factoratt_crpe4 = FactorAtt_ConvRelPosEnc(
-            dims[3], num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, 
+            dims[3], num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, 
             shared_crpe=shared_crpes[3]
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -262,15 +263,15 @@ class ParallelBlock(nn.Module):
         self.mlp2 = self.mlp3 = self.mlp4 = Mlp(
             in_features=dims[1], hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-    def upsample(self, x, factor, size):
+    def upsample(self, x, factor: float, size: Tuple[int, int]):
         """ Feature map up-sampling. """
         return self.interpolate(x, scale_factor=factor, size=size)
 
-    def downsample(self, x, factor, size):
+    def downsample(self, x, factor: float, size: Tuple[int, int]):
         """ Feature map down-sampling. """
         return self.interpolate(x, scale_factor=1.0/factor, size=size)
 
-    def interpolate(self, x, scale_factor, size):
+    def interpolate(self, x, scale_factor: float, size: Tuple[int, int]):
         """ Feature map interpolation. """
         B, N, C = x.shape
         H, W = size
@@ -280,33 +281,28 @@ class ParallelBlock(nn.Module):
         img_tokens = x[:, 1:, :]
         
         img_tokens = img_tokens.transpose(1, 2).reshape(B, C, H, W)
-        img_tokens = F.interpolate(img_tokens, scale_factor=scale_factor, mode='bilinear')
+        img_tokens = F.interpolate(
+            img_tokens, scale_factor=scale_factor, recompute_scale_factor=False, mode='bilinear', align_corners=False)
         img_tokens = img_tokens.reshape(B, C, -1).transpose(1, 2)
         
         out = torch.cat((cls_token, img_tokens), dim=1)
 
         return out
 
-    def forward(self, x1, x2, x3, x4, sizes):
-        _, (H2, W2), (H3, W3), (H4, W4) = sizes
-        
-        # Conv-Attention.
-        x2 = self.cpes[1](x2, size=(H2, W2))  # Note: x1 is ignored.
-        x3 = self.cpes[2](x3, size=(H3, W3))
-        x4 = self.cpes[3](x4, size=(H4, W4))
-        
+    def forward(self, x1, x2, x3, x4, sizes: List[Tuple[int, int]]):
+        _, S2, S3, S4 = sizes
         cur2 = self.norm12(x2)
         cur3 = self.norm13(x3)
         cur4 = self.norm14(x4)
-        cur2 = self.factoratt_crpe2(cur2, size=(H2, W2))
-        cur3 = self.factoratt_crpe3(cur3, size=(H3, W3))
-        cur4 = self.factoratt_crpe4(cur4, size=(H4, W4))
-        upsample3_2 = self.upsample(cur3, factor=2, size=(H3, W3))
-        upsample4_3 = self.upsample(cur4, factor=2, size=(H4, W4))
-        upsample4_2 = self.upsample(cur4, factor=4, size=(H4, W4))
-        downsample2_3 = self.downsample(cur2, factor=2, size=(H2, W2))
-        downsample3_4 = self.downsample(cur3, factor=2, size=(H3, W3))
-        downsample2_4 = self.downsample(cur2, factor=4, size=(H2, W2))
+        cur2 = self.factoratt_crpe2(cur2, size=S2)
+        cur3 = self.factoratt_crpe3(cur3, size=S3)
+        cur4 = self.factoratt_crpe4(cur4, size=S4)
+        upsample3_2 = self.upsample(cur3, factor=2., size=S3)
+        upsample4_3 = self.upsample(cur4, factor=2., size=S4)
+        upsample4_2 = self.upsample(cur4, factor=4., size=S4)
+        downsample2_3 = self.downsample(cur2, factor=2., size=S2)
+        downsample3_4 = self.downsample(cur3, factor=2., size=S3)
+        downsample2_4 = self.downsample(cur2, factor=4., size=S2)
         cur2 = cur2 + upsample3_2 + upsample4_2
         cur3 = cur3 + upsample4_3 + downsample2_3
         cur4 = cur4 + downsample3_4 + downsample2_4
@@ -330,11 +326,11 @@ class ParallelBlock(nn.Module):
 
 class CoaT(nn.Module):
     """ CoaT class. """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=[0, 0, 0, 0], 
-                 serial_depths=[0, 0, 0, 0], parallel_depth=0,
-                 num_heads=0, mlp_ratios=[0, 0, 0, 0], qkv_bias=True, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
-                 return_interm_layers=False, out_features = None, crpe_window=None, **kwargs):
+    def __init__(
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=(0, 0, 0, 0), 
+            serial_depths=(0, 0, 0, 0), parallel_depth=0, num_heads=0, mlp_ratios=(0, 0, 0, 0), qkv_bias=True,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            return_interm_layers=False, out_features=None, crpe_window=None, **kwargs):
         super().__init__()
         crpe_window = crpe_window or {3: 2, 5: 3, 7: 3}
         self.return_interm_layers = return_interm_layers
@@ -342,17 +338,18 @@ class CoaT(nn.Module):
         self.num_classes = num_classes
 
         # Patch embeddings.
+        img_size = to_2tuple(img_size)
         self.patch_embed1 = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans,
             embed_dim=embed_dims[0], norm_layer=nn.LayerNorm)
         self.patch_embed2 = PatchEmbed(
-            img_size=img_size // 4, patch_size=2, in_chans=embed_dims[0],
+            img_size=[x // 4 for x in img_size], patch_size=2, in_chans=embed_dims[0],
             embed_dim=embed_dims[1], norm_layer=nn.LayerNorm)
         self.patch_embed3 = PatchEmbed(
-            img_size=img_size // 8, patch_size=2, in_chans=embed_dims[1],
+            img_size=[x // 8 for x in img_size], patch_size=2, in_chans=embed_dims[1],
             embed_dim=embed_dims[2], norm_layer=nn.LayerNorm)
         self.patch_embed4 = PatchEmbed(
-            img_size=img_size // 16, patch_size=2, in_chans=embed_dims[2],
+            img_size=[x // 16 for x in img_size], patch_size=2, in_chans=embed_dims[2],
             embed_dim=embed_dims[3], norm_layer=nn.LayerNorm)
 
         # Class tokens.
@@ -380,7 +377,7 @@ class CoaT(nn.Module):
         # Serial blocks 1.
         self.serial_blocks1 = nn.ModuleList([
             SerialBlock(
-                dim=embed_dims[0], num_heads=num_heads, mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dims[0], num_heads=num_heads, mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr, norm_layer=norm_layer, 
                 shared_cpe=self.cpe1, shared_crpe=self.crpe1
             )
@@ -390,7 +387,7 @@ class CoaT(nn.Module):
         # Serial blocks 2.
         self.serial_blocks2 = nn.ModuleList([
             SerialBlock(
-                dim=embed_dims[1], num_heads=num_heads, mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dims[1], num_heads=num_heads, mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr, norm_layer=norm_layer, 
                 shared_cpe=self.cpe2, shared_crpe=self.crpe2
             )
@@ -400,7 +397,7 @@ class CoaT(nn.Module):
         # Serial blocks 3.
         self.serial_blocks3 = nn.ModuleList([
             SerialBlock(
-                dim=embed_dims[2], num_heads=num_heads, mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dims[2], num_heads=num_heads, mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr, norm_layer=norm_layer, 
                 shared_cpe=self.cpe3, shared_crpe=self.crpe3
             )
@@ -410,7 +407,7 @@ class CoaT(nn.Module):
         # Serial blocks 4.
         self.serial_blocks4 = nn.ModuleList([
             SerialBlock(
-                dim=embed_dims[3], num_heads=num_heads, mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dims[3], num_heads=num_heads, mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr, norm_layer=norm_layer, 
                 shared_cpe=self.cpe4, shared_crpe=self.crpe4
             )
@@ -422,10 +419,9 @@ class CoaT(nn.Module):
         if self.parallel_depth > 0:
             self.parallel_blocks = nn.ModuleList([
                 ParallelBlock(
-                    dims=embed_dims, num_heads=num_heads, mlp_ratios=mlp_ratios, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                    drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr, norm_layer=norm_layer, 
-                    shared_cpes=[self.cpe1, self.cpe2, self.cpe3, self.cpe4],
-                    shared_crpes=[self.crpe1, self.crpe2, self.crpe3, self.crpe4]
+                    dims=embed_dims, num_heads=num_heads, mlp_ratios=mlp_ratios, qkv_bias=qkv_bias,
+                    drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr, norm_layer=norm_layer,
+                    shared_crpes=(self.crpe1, self.crpe2, self.crpe3, self.crpe4)
                 )
                 for _ in range(parallel_depth)]
             )
@@ -434,9 +430,11 @@ class CoaT(nn.Module):
 
         # Classification head(s).
         if not self.return_interm_layers:
-            self.norm1 = norm_layer(embed_dims[0])
-            self.norm2 = norm_layer(embed_dims[1])
-            self.norm3 = norm_layer(embed_dims[2])
+            if self.parallel_blocks is not None:
+                self.norm2 = norm_layer(embed_dims[1])
+                self.norm3 = norm_layer(embed_dims[2])
+            else:
+                self.norm2 = self.norm3 = None
             self.norm4 = norm_layer(embed_dims[3])
 
             if self.parallel_depth > 0:
@@ -546,6 +544,7 @@ class CoaT(nn.Module):
 
         # Parallel blocks.
         for blk in self.parallel_blocks:
+            x2, x3, x4 = self.cpe2(x2, (H2, W2)), self.cpe3(x3, (H3, W3)), self.cpe4(x4, (H4, W4))
             x1, x2, x3, x4 = blk(x1, x2, x3, x4, sizes=[(H1, W1), (H2, W2), (H3, W3), (H4, W4)])
 
         if not torch.jit.is_scripting() and self.return_interm_layers:
@@ -590,52 +589,70 @@ class CoaT(nn.Module):
             return x
 
 
+def checkpoint_filter_fn(state_dict, model):
+    out_dict = {}
+    for k, v in state_dict.items():
+        # original model had unused norm layers, removing them requires filtering pretrained checkpoints
+        if k.startswith('norm1') or \
+                (model.norm2 is None and k.startswith('norm2')) or \
+                (model.norm3 is None and k.startswith('norm3')):
+            continue
+        out_dict[k] = v
+    return out_dict
+
+
+def _create_coat(variant, pretrained=False, default_cfg=None, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+
+    model = build_model_with_cfg(
+        CoaT, variant, pretrained,
+        default_cfg=default_cfgs[variant],
+        pretrained_filter_fn=checkpoint_filter_fn,
+        **kwargs)
+    return model
+
+
 @register_model
 def coat_tiny(pretrained=False, **kwargs):
-    model = CoaT(
+    model_cfg = dict(
         patch_size=4, embed_dims=[152, 152, 152, 152], serial_depths=[2, 2, 2, 2], parallel_depth=6,
         num_heads=8, mlp_ratios=[4, 4, 4, 4], **kwargs)
-    model.default_cfg = default_cfgs['coat_tiny']
+    model = _create_coat('coat_tiny', pretrained=pretrained, **model_cfg)
     return model
 
 
 @register_model
 def coat_mini(pretrained=False, **kwargs):
-    model = CoaT(
+    model_cfg = dict(
         patch_size=4, embed_dims=[152, 216, 216, 216], serial_depths=[2, 2, 2, 2], parallel_depth=6,
         num_heads=8, mlp_ratios=[4, 4, 4, 4], **kwargs)
-    model.default_cfg = default_cfgs['coat_mini']
+    model = _create_coat('coat_mini', pretrained=pretrained, **model_cfg)
     return model
 
 
 @register_model
 def coat_lite_tiny(pretrained=False, **kwargs):
-    model = CoaT(
+    model_cfg = dict(
         patch_size=4, embed_dims=[64, 128, 256, 320], serial_depths=[2, 2, 2, 2], parallel_depth=0,
         num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
-    # FIXME use builder
-    model.default_cfg = default_cfgs['coat_lite_tiny']
-    if pretrained:
-        load_pretrained(model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
+    model = _create_coat('coat_lite_tiny', pretrained=pretrained, **model_cfg)
     return model
 
 
 @register_model
 def coat_lite_mini(pretrained=False, **kwargs):
-    model = CoaT(
+    model_cfg = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], serial_depths=[2, 2, 2, 2], parallel_depth=0,
         num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
-    # FIXME use builder
-    model.default_cfg = default_cfgs['coat_lite_mini']
-    if pretrained:
-        load_pretrained(model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
+    model = _create_coat('coat_lite_mini', pretrained=pretrained, **model_cfg)
     return model
 
 
 @register_model
 def coat_lite_small(pretrained=False, **kwargs):
-    model = CoaT(
+    model_cfg = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], serial_depths=[3, 4, 6, 3], parallel_depth=0,
         num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
-    model.default_cfg = default_cfgs['coat_lite_small']
+    model = _create_coat('coat_lite_small', pretrained=pretrained, **model_cfg)
     return model

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from .layers import create_conv2d, drop_path, make_divisible
+from .layers import create_conv2d, drop_path, make_divisible, get_act_fn, create_act_layer
 from .layers.activations import sigmoid
 
 __all__ = [
@@ -36,9 +36,9 @@ class SqueezeExcite(nn.Module):
         reduced_chs = make_divisible(reduced_chs * se_ratio, divisor)
         act_layer = force_act_layer or act_layer
         self.conv_reduce = nn.Conv2d(in_chs, reduced_chs, 1, bias=True)
-        self.act1 = act_layer(inplace=True)
+        self.act1 = create_act_layer(act_layer, inplace=True)
         self.conv_expand = nn.Conv2d(reduced_chs, in_chs, 1, bias=True)
-        self.gate_fn = gate_fn
+        self.gate_fn = get_act_fn(gate_fn)
 
     def forward(self, x):
         x_se = x.mean((2, 3), keepdim=True)

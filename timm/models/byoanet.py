@@ -47,17 +47,24 @@ default_cfgs = {
     # GPU-Efficient (ResNet) weights
     'botnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'botnet50ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'eca_botnext26ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 
     'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet_h1_c4c5': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet26t': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet50ts': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'eca_halonext26ts': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
 
     'lambda_resnet26t': _cfg(url='', min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
     'lambda_resnet50t': _cfg(url='', min_input_size=(3, 128, 128)),
+    'eca_lambda_resnext26ts': _cfg(url='', min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
 
     'swinnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'swinnet50ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'eca_swinnext26ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+
+    'rednet26t': _cfg(url='', fixed_input_size=False, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'rednet50ts': _cfg(url='', fixed_input_size=False, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 
@@ -126,6 +133,23 @@ model_cfgs = dict(
         self_attn_fixed_size=True,
         self_attn_kwargs=dict()
     ),
+    eca_botnext26ts=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='bottle', d=3, c=256, s=1, gs=16, br=0.25),
+            ByoaBlocksCfg(type='bottle', d=4, c=512, s=2, gs=16, br=0.25),
+            interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=16, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=3, c=2048, s=2, gs=16, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        attn_layer='eca',
+        self_attn_layer='bottleneck',
+        self_attn_fixed_size=True,
+        self_attn_kwargs=dict()
+    ),
 
     halonet_h1=ByoaCfg(
         blocks=(
@@ -184,6 +208,22 @@ model_cfgs = dict(
         self_attn_layer='halo',
         self_attn_kwargs=dict(block_size=8, halo_size=2)
     ),
+    eca_halonext26ts=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='bottle', d=2, c=256, s=1, gs=16, br=0.25),
+            ByoaBlocksCfg(type='bottle', d=2, c=512, s=2, gs=16, br=0.25),
+            interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=16, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=2048, s=2, gs=16, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        attn_layer='eca',
+        self_attn_layer='halo',
+        self_attn_kwargs=dict(block_size=8, halo_size=2)  # intended for 256x256 res
+    ),
 
     lambda_resnet26t=ByoaCfg(
         blocks=(
@@ -210,6 +250,22 @@ model_cfgs = dict(
         stem_type='tiered',
         stem_pool='maxpool',
         num_features=0,
+        self_attn_layer='lambda',
+        self_attn_kwargs=dict()
+    ),
+    eca_lambda_resnext26ts=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='bottle', d=2, c=256, s=1, gs=16, br=0.25),
+            ByoaBlocksCfg(type='bottle', d=2, c=512, s=2, gs=16, br=0.25),
+            interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=16, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=2048, s=2, gs=16, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        attn_layer='eca',
         self_attn_layer='lambda',
         self_attn_kwargs=dict()
     ),
@@ -244,6 +300,56 @@ model_cfgs = dict(
         self_attn_layer='swin',
         self_attn_fixed_size=True,
         self_attn_kwargs=dict(win_size=8)
+    ),
+    eca_swinnext26ts=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='bottle', d=2, c=256, s=1, gs=16, br=0.25),
+            interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=512, s=2, gs=16, br=0.25),
+            interleave_attn(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=16, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=2048, s=2, gs=16, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        attn_layer='eca',
+        self_attn_layer='swin',
+        self_attn_fixed_size=True,
+        self_attn_kwargs=dict(win_size=8)
+    ),
+
+
+    rednet26t=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='self_attn', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=512, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',  # FIXME RedNet uses involution in middle of stem
+        stem_pool='maxpool',
+        num_features=0,
+        self_attn_layer='involution',
+        self_attn_fixed_size=False,
+        self_attn_kwargs=dict()
+    ),
+    rednet50ts=ByoaCfg(
+        blocks=(
+            ByoaBlocksCfg(type='self_attn', d=3, c=256, s=1, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=4, c=512, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoaBlocksCfg(type='self_attn', d=3, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        self_attn_layer='involution',
+        self_attn_fixed_size=False,
+        self_attn_kwargs=dict()
     ),
 )
 
@@ -420,6 +526,14 @@ def botnet50ts_256(pretrained=False, **kwargs):
 
 
 @register_model
+def eca_botnext26ts_256(pretrained=False, **kwargs):
+    """ Bottleneck Transformer w/ ResNet26-T backbone. Bottleneck attn in final stage.
+    """
+    kwargs.setdefault('img_size', 256)
+    return _create_byoanet('eca_botnext26ts_256', 'eca_botnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def halonet_h1(pretrained=False, **kwargs):
     """ HaloNet-H1. Halo attention in all stages as per the paper.
 
@@ -450,6 +564,13 @@ def halonet50ts(pretrained=False, **kwargs):
 
 
 @register_model
+def eca_halonext26ts(pretrained=False, **kwargs):
+    """ HaloNet w/ a ResNet26-t backbone, Hallo attention in final stage
+    """
+    return _create_byoanet('eca_halonext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def lambda_resnet26t(pretrained=False, **kwargs):
     """ Lambda-ResNet-26T. Lambda layers in one C4 stage and all C5.
     """
@@ -461,6 +582,13 @@ def lambda_resnet50t(pretrained=False, **kwargs):
     """ Lambda-ResNet-50T. Lambda layers in one C4 stage and all C5.
     """
     return _create_byoanet('lambda_resnet50t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_lambda_resnext26ts(pretrained=False, **kwargs):
+    """ Lambda-ResNet-26T. Lambda layers in one C4 stage and all C5.
+    """
+    return _create_byoanet('eca_lambda_resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -477,3 +605,25 @@ def swinnet50ts_256(pretrained=False, **kwargs):
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('swinnet50ts_256', 'swinnet50ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_swinnext26ts_256(pretrained=False, **kwargs):
+    """
+    """
+    kwargs.setdefault('img_size', 256)
+    return _create_byoanet('eca_swinnext26ts_256', 'eca_swinnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def rednet26t(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byoanet('rednet26t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def rednet50ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byoanet('rednet50ts', pretrained=pretrained, **kwargs)

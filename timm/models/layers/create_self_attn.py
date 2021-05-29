@@ -1,5 +1,6 @@
 from .bottleneck_attn import BottleneckAttn
 from .halo_attn import HaloAttn
+from .involution import Involution
 from .lambda_layer import LambdaLayer
 from .swin_attn import WindowAttention
 
@@ -13,6 +14,8 @@ def get_self_attn(attn_type):
         return LambdaLayer
     elif attn_type == 'swin':
         return WindowAttention
+    elif attn_type == 'involution':
+        return Involution
     else:
         assert False, f"Unknown attn type ({attn_type})"
 

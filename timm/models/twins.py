@@ -33,7 +33,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'first_conv': 'patch_embeds.0.proj', 'classifier': 'head',
         **kwargs
     }
 
@@ -407,15 +407,7 @@ class Twins(nn.Module):
         
 
 
-def _create_twins(variant, pretrained=False, default_cfg=None, **kwargs):
-    if default_cfg is None:
-        default_cfg = deepcopy(default_cfgs[variant])
-    overlay_external_default_cfg(default_cfg, kwargs)
-    default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-2:]
-
-    num_classes = kwargs.pop('num_classes', default_num_classes)
-    img_size = kwargs.pop('img_size', default_img_size)
+def _create_twins(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
     if kwargs.get('task', 'cls') not in ['cls', 'seg']:
@@ -423,12 +415,9 @@ def _create_twins(variant, pretrained=False, default_cfg=None, **kwargs):
 
     model = build_model_with_cfg(
         Twins, variant, pretrained,
-        default_cfg=default_cfg,
-        img_size=img_size,
-        num_classes=num_classes,
         pretrained_strict=False,
+        default_cfg=default_cfgs[variant],
         **kwargs)
-
     return model
 
 
