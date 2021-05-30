@@ -310,9 +310,7 @@ class Twins(nn.Module):
                     else:
                         self.patch_embeds.append(
                             PatchEmbed(img_size // patch_size // s, strides[i-1], embed_dims[i - 1], embed_dims[i]))
-                    s = s * strides[i-1]        
-        if self.task == 'cls':
-            del self.norm_list
+                    s = s * strides[i-1]
 
         self.blocks = nn.ModuleList()
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
