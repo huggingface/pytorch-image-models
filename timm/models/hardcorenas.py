@@ -39,8 +39,7 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
 
     """
     num_features = 1280
-    se_layer = partial(
-        SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), force_act_layer=nn.ReLU, round_chs_fn=round_channels)
+    se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         num_features=num_features,

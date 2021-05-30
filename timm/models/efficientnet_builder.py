@@ -10,11 +10,12 @@ import logging
 import math
 import re
 from copy import deepcopy
+from functools import partial
 
 import torch.nn as nn
 
 from .efficientnet_blocks import *
-from .layers import CondConv2d, get_condconv_initializer, get_act_layer, make_divisible
+from .layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible
 
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights",
            'resolve_bn_args', 'resolve_act_layer', 'round_channels', 'BN_MOMENTUM_TF_DEFAULT', 'BN_EPS_TF_DEFAULT']
@@ -120,7 +121,9 @@ def _decode_block_str(block_str):
             elif v == 'hs':
                 value = get_act_layer('hard_swish')
             elif v == 'sw':
-                value = get_act_layer('swish')
+                value = get_act_layer('swish')  # aka SiLU
+            elif v == 'mi':
+                value = get_act_layer('mish')
             else:
                 continue
             options[key] = value
@@ -273,7 +276,12 @@ class EfficientNetBuilder:
         self.se_from_exp = se_from_exp  # calculate se channel reduction from expanded (mid) chs
         self.act_layer = act_layer
         self.norm_layer = norm_layer
-        self.se_layer = se_layer
+        self.se_layer = get_attn(se_layer)
+        try:
+            self.se_layer(8, rd_ratio=1.0)
+            self.se_has_ratio = True
+        except RuntimeError as e:
+            self.se_has_ratio = False
         self.drop_path_rate = drop_path_rate
         if feature_location == 'depthwise':
             # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
@@ -300,18 +308,21 @@ class EfficientNetBuilder:
         ba['act_layer'] = ba['act_layer'] if ba['act_layer'] is not None else self.act_layer
         assert ba['act_layer'] is not None
         ba['norm_layer'] = self.norm_layer
+        ba['drop_path_rate'] = drop_path_rate
         if bt != 'cn':
-            ba['se_layer'] = self.se_layer
-            if not self.se_from_exp and ba['se_ratio']:
-                ba['se_ratio'] /= ba.get('exp_ratio', 1.0)
-            ba['drop_path_rate'] = drop_path_rate
+            se_ratio = ba.pop('se_ratio')
+            if se_ratio and self.se_layer is not None:
+                if not self.se_from_exp:
+                    # adjust se_ratio by expansion ratio if calculating se channels from block input
+                    se_ratio /= ba.get('exp_ratio', 1.0)
+                if self.se_has_ratio:
+                    ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
+                else:
+                    ba['se_layer'] = self.se_layer
 
         if bt == 'ir':
             _log_info_if('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
-            if ba.get('num_experts', 0) > 0:
-                block = CondConvResidual(**ba)
-            else:
-                block = InvertedResidual(**ba)
+            block = CondConvResidual(**ba) if ba.get('num_experts', 0) else InvertedResidual(**ba)
         elif bt == 'ds' or bt == 'dsa':
             _log_info_if('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = DepthwiseSeparableConv(**ba)
