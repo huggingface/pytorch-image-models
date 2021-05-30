@@ -278,9 +278,9 @@ class EfficientNetBuilder:
         self.norm_layer = norm_layer
         self.se_layer = get_attn(se_layer)
         try:
-            self.se_layer(8, rd_ratio=1.0)
+            self.se_layer(8, rd_ratio=1.0)  # test if attn layer accepts rd_ratio arg
             self.se_has_ratio = True
-        except RuntimeError as e:
+        except TypeError:
             self.se_has_ratio = False
         self.drop_path_rate = drop_path_rate
         if feature_location == 'depthwise':
