@@ -12,26 +12,28 @@ from .create_act import create_act_layer, get_act_layer, get_act_fn
 from .create_attn import get_attn, create_attn
 from .create_conv2d import create_conv2d
 from .create_norm_act import get_norm_act_layer, create_norm_act, convert_norm_act
-from .create_self_attn import get_self_attn, create_self_attn
 from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
-from .eca import EcaModule, CecaModule
+from .eca import EcaModule, CecaModule, EfficientChannelAttn, CircularEfficientChannelAttn
 from .evo_norm import EvoNormBatch2d, EvoNormSample2d
+from .gather_excite import GatherExcite
+from .global_context import GlobalContext
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible
 from .inplace_abn import InplaceAbn
 from .involution import Involution
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
 from .mlp import Mlp, GluMlp, GatedMlp
-from .norm import GroupNorm
+from .non_local_attn import NonLocalAttn, BatNonLocalAttn
+from .norm import GroupNorm, LayerNorm2d
 from .norm_act import BatchNormAct2d, GroupNormAct
 from .padding import get_padding, get_same_padding, pad_same
 from .patch_embed import PatchEmbed
 from .pool2d_same import AvgPool2dSame, create_pool2d
-from .se import SEModule
-from .selective_kernel import SelectiveKernelConv
+from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
+from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvBnAct
 from .space_to_depth import SpaceToDepthModule
-from .split_attn import SplitAttnConv2d
+from .split_attn import SplitAttn
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool

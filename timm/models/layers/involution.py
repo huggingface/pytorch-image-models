@@ -16,7 +16,7 @@ class Involution(nn.Module):
             kernel_size=3,
             stride=1,
             group_size=16,
-            reduction_ratio=4,
+            rd_ratio=4,
             norm_layer=nn.BatchNorm2d,
             act_layer=nn.ReLU,
     ):
@@ -28,12 +28,12 @@ class Involution(nn.Module):
         self.groups = self.channels // self.group_size
         self.conv1 = ConvBnAct(
             in_channels=channels,
-            out_channels=channels // reduction_ratio,
+            out_channels=channels // rd_ratio,
             kernel_size=1,
             norm_layer=norm_layer,
             act_layer=act_layer)
         self.conv2 = self.conv = create_conv2d(
-            in_channels=channels // reduction_ratio,
+            in_channels=channels // rd_ratio,
             out_channels=kernel_size**2 * self.groups,
             kernel_size=1,
             stride=1)

@@ -91,6 +91,12 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/spnasnet_100-048bc3f4.pth',
         interpolation='bilinear'),
 
+    # NOTE experimenting with alternate attention
+    'eca_efficientnet_b0': _cfg(
+        url=''),
+    'gc_efficientnet_b0': _cfg(
+        url=''),
+
     'efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth'),
     'efficientnet_b1': _cfg(
@@ -1220,6 +1226,26 @@ def efficientnet_b0(pretrained=False, **kwargs):
     # NOTE for train, drop_rate should be 0.2, drop_path_rate should be 0.2
     model = _gen_efficientnet(
         'efficientnet_b0', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def eca_efficientnet_b0(pretrained=False, **kwargs):
+    """ EfficientNet-B0 w/ ECA attn """
+    # NOTE experimental config
+    model = _gen_efficientnet(
+        'eca_efficientnet_b0', se_layer='ecam', channel_multiplier=1.0, depth_multiplier=1.0,
+        pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def gc_efficientnet_b0(pretrained=False, **kwargs):
+    """ EfficientNet-B0 w/ GlobalContext """
+    # NOTE experminetal config
+    model = _gen_efficientnet(
+        'gc_efficientnet_b0', se_layer='gc', channel_multiplier=1.0, depth_multiplier=1.0,
+        pretrained=pretrained, **kwargs)
     return model
 
 

@@ -84,8 +84,8 @@ class BasicBlock(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
-        reduction_chs = max(planes * self.expansion // 4, 64)
-        self.se = SEModule(planes * self.expansion, reduction_channels=reduction_chs) if use_se else None
+        rd_chs = max(planes * self.expansion // 4, 64)
+        self.se = SEModule(planes * self.expansion, rd_channels=rd_chs) if use_se else None
 
     def forward(self, x):
         if self.downsample is not None:
@@ -125,7 +125,7 @@ class Bottleneck(nn.Module):
                     aa_layer(channels=planes, filt_size=3, stride=2))
 
         reduction_chs = max(planes * self.expansion // 8, 64)
-        self.se = SEModule(planes, reduction_channels=reduction_chs) if use_se else None
+        self.se = SEModule(planes, rd_channels=reduction_chs) if use_se else None
 
         self.conv3 = conv2d_iabn(
             planes, planes * self.expansion, kernel_size=1, stride=1, act_layer="identity")

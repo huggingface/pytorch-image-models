@@ -295,10 +295,24 @@ Several (less common) features that I often utilize in my projects are included.
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
 * DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382) 
 * DropBlock (https://arxiv.org/abs/1810.12890)
-* Efficient Channel Attention - ECA (https://arxiv.org/abs/1910.03151)
 * Blur Pooling (https://arxiv.org/abs/1904.11486)
 * Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
 * Adaptive Gradient Clipping (https://arxiv.org/abs/2102.06171, https://github.com/deepmind/deepmind-research/tree/master/nfnets)
+* An extensive selection of channel and/or spatial attention modules:
+    * Bottleneck Transformer - https://arxiv.org/abs/2101.11605
+    * CBAM - https://arxiv.org/abs/1807.06521
+    * Effective Squeeze-Excitation (ESE) - https://arxiv.org/abs/1911.06667
+    * Efficient Channel Attention (ECA) - https://arxiv.org/abs/1910.03151
+    * Gather-Excite (GE) - https://arxiv.org/abs/1810.12348
+    * Global Context (GC) - https://arxiv.org/abs/1904.11492
+    * Halo - https://arxiv.org/abs/2103.12731
+    * Involution - https://arxiv.org/abs/2103.06255
+    * Lambda Layer - https://arxiv.org/abs/2102.08602
+    * Non-Local (NL) -  https://arxiv.org/abs/1711.07971
+    * Squeeze-and-Excitation (SE) - https://arxiv.org/abs/1709.01507
+    * Selective Kernel (SK) - (https://arxiv.org/abs/1903.06586
+    * Split (SPLAT) - https://arxiv.org/abs/2004.08955
+    * Shifted Window (SWIN) - https://arxiv.org/abs/2103.14030
 
 ## Results
 

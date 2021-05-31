@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed
+from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d
 from .registry import register_model
 
 
@@ -37,15 +37,6 @@ default_cfgs = dict(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/visformer_small-839e1f5b.pth'
     ),
 )
-
-
-class LayerNormBHWC(nn.LayerNorm):
-    def __init__(self, dim):
-        super().__init__(dim)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.layer_norm(
-            x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
 
 
 class SpatialMlp(nn.Module):
@@ -119,7 +110,7 @@ class Attention(nn.Module):
 
 class Block(nn.Module):
     def __init__(self, dim, num_heads, head_dim_ratio=1., mlp_ratio=4.,
-                 drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=LayerNormBHWC,
+                 drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=LayerNorm2d,
                  group=8, attn_disabled=False, spatial_conv=False):
         super().__init__()
         self.spatial_conv = spatial_conv
@@ -148,7 +139,7 @@ class Block(nn.Module):
 class Visformer(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, init_channels=32, embed_dim=384,
                  depth=12, num_heads=6, mlp_ratio=4., drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-                 norm_layer=LayerNormBHWC, attn_stage='111', pos_embed=True, spatial_conv='111',
+                 norm_layer=LayerNorm2d, attn_stage='111', pos_embed=True, spatial_conv='111',
                  vit_stem=False, group=8, pool=True, conv_init=False, embed_norm=None):
         super().__init__()
         self.num_classes = num_classes

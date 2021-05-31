@@ -40,7 +40,7 @@ default_cfgs = {
 }
 
 
-_SE_LAYER = partial(SqueezeExcite, gate_fn='hard_sigmoid', divisor=4)
+_SE_LAYER = partial(SqueezeExcite, gate_layer='hard_sigmoid', rd_round_fn=partial(make_divisible, divisor=4))
 
 
 class GhostModule(nn.Module):
@@ -92,7 +92,7 @@ class GhostBottleneck(nn.Module):
             self.bn_dw = None
 
         # Squeeze-and-excitation
-        self.se = _SE_LAYER(mid_chs, se_ratio=se_ratio) if has_se else None
+        self.se = _SE_LAYER(mid_chs, rd_ratio=se_ratio) if has_se else None
 
         # Point-wise linear projection
         self.ghost2 = GhostModule(mid_chs, out_chs, relu=False)

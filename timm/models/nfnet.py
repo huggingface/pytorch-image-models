@@ -182,7 +182,7 @@ def _nfres_cfg(
 
 def _nfreg_cfg(depths, channels=(48, 104, 208, 440)):
     num_features = 1280 * channels[-1] // 440
-    attn_kwargs = dict(reduction_ratio=0.5, divisor=8)
+    attn_kwargs = dict(rd_ratio=0.5)
     cfg = NfCfg(
         depths=depths, channels=channels, stem_type='3x3', group_size=8, width_factor=0.75, bottle_ratio=2.25,
         num_features=num_features, reg=True, attn_layer='se', attn_kwargs=attn_kwargs)
@@ -193,7 +193,7 @@ def _nfnet_cfg(
         depths, channels=(256, 512, 1536, 1536), group_size=128, bottle_ratio=0.5, feat_mult=2.,
         act_layer='gelu', attn_layer='se', attn_kwargs=None):
     num_features = int(channels[-1] * feat_mult)
-    attn_kwargs = attn_kwargs if attn_kwargs is not None else dict(reduction_ratio=0.5, divisor=8)
+    attn_kwargs = attn_kwargs if attn_kwargs is not None else dict(rd_ratio=0.5)
     cfg = NfCfg(
         depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=group_size,
         bottle_ratio=bottle_ratio, extra_conv=True, num_features=num_features, act_layer=act_layer,
@@ -202,11 +202,10 @@ def _nfnet_cfg(
 
 
 def _dm_nfnet_cfg(depths, channels=(256, 512, 1536, 1536), act_layer='gelu', skipinit=True):
-    attn_kwargs = dict(reduction_ratio=0.5, divisor=8)
     cfg = NfCfg(
         depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=128,
         bottle_ratio=0.5, extra_conv=True, gamma_in_act=True, same_padding=True, skipinit=skipinit,
-        num_features=int(channels[-1] * 2.0), act_layer=act_layer, attn_layer='se', attn_kwargs=attn_kwargs)
+        num_features=int(channels[-1] * 2.0), act_layer=act_layer, attn_layer='se', attn_kwargs=dict(rd_ratio=0.5))
     return cfg
 
 
@@ -243,7 +242,7 @@ model_cfgs = dict(
     # Experimental 'light' versions of NFNet-F that are little leaner
     nfnet_l0=_nfnet_cfg(
         depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
-        attn_kwargs=dict(reduction_ratio=0.25, divisor=8), act_layer='silu'),
+        attn_kwargs=dict(rd_ratio=0.25, rd_divisor=8), act_layer='silu'),
     eca_nfnet_l0=_nfnet_cfg(
         depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
         attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
@@ -272,9 +271,9 @@ model_cfgs = dict(
     nf_resnet50=_nfres_cfg(depths=(3, 4, 6, 3)),
     nf_resnet101=_nfres_cfg(depths=(3, 4, 23, 3)),
 
-    nf_seresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='se', attn_kwargs=dict(reduction_ratio=1/16)),
-    nf_seresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='se', attn_kwargs=dict(reduction_ratio=1/16)),
-    nf_seresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='se', attn_kwargs=dict(reduction_ratio=1/16)),
+    nf_seresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
+    nf_seresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
+    nf_seresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
 
     nf_ecaresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='eca', attn_kwargs=dict()),
     nf_ecaresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='eca', attn_kwargs=dict()),
