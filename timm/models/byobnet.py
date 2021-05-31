@@ -35,7 +35,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
 from .layers import ClassifierHead, ConvBnAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
-    create_conv2d, get_act_layer, convert_norm_act, get_attn, get_self_attn, make_divisible, to_2tuple
+    create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple
 from .registry import register_model
 
 __all__ = ['ByobNet', 'ByoModelCfg', 'ByoBlockCfg', 'create_byob_stem', 'create_block']
@@ -935,7 +935,7 @@ def update_block_kwargs(block_kwargs: Dict[str, Any], block_cfg: ByoBlockCfg, mo
         else:
             self_attn_kwargs = override_kwargs(block_cfg.self_attn_kwargs, model_cfg.self_attn_kwargs)
             self_attn_layer = block_cfg.self_attn_layer or model_cfg.self_attn_layer
-            self_attn_layer = partial(get_self_attn(self_attn_layer), *self_attn_kwargs) \
+            self_attn_layer = partial(get_attn(self_attn_layer), *self_attn_kwargs) \
                 if self_attn_layer is not None else None
         layer_fns = replace(layer_fns, self_attn=self_attn_layer)
 
@@ -1010,7 +1010,7 @@ def get_layer_fns(cfg: ByoModelCfg):
     norm_act = convert_norm_act(norm_layer=cfg.norm_layer, act_layer=act)
     conv_norm_act = partial(ConvBnAct, norm_layer=cfg.norm_layer, act_layer=act)
     attn = partial(get_attn(cfg.attn_layer), **cfg.attn_kwargs) if cfg.attn_layer else None
-    self_attn = partial(get_self_attn(cfg.self_attn_layer), **cfg.self_attn_kwargs) if cfg.self_attn_layer else None
+    self_attn = partial(get_attn(cfg.self_attn_layer), **cfg.self_attn_kwargs) if cfg.self_attn_layer else None
     layer_fn = LayerFn(conv_norm_act=conv_norm_act, norm_act=norm_act, act=act, attn=attn, self_attn=self_attn)
     return layer_fn
 

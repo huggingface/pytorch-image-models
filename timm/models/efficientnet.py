@@ -1234,7 +1234,8 @@ def eca_efficientnet_b0(pretrained=False, **kwargs):
     """ EfficientNet-B0 w/ ECA attn """
     # NOTE experimental config
     model = _gen_efficientnet(
-        'eca_efficientnet_b0', se_layer='eca', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
+        'eca_efficientnet_b0', se_layer='ecam', channel_multiplier=1.0, depth_multiplier=1.0,
+        pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1243,7 +1244,8 @@ def gc_efficientnet_b0(pretrained=False, **kwargs):
     """ EfficientNet-B0 w/ GlobalContext """
     # NOTE experminetal config
     model = _gen_efficientnet(
-        'gc_efficientnet_b0', se_layer='gc', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
+        'gc_efficientnet_b0', se_layer='gc', channel_multiplier=1.0, depth_multiplier=1.0,
+        pretrained=pretrained, **kwargs)
     return model
 
 

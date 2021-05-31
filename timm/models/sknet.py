@@ -14,7 +14,7 @@ from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectiveKernelConv, ConvBnAct, create_attn
+from .layers import SelectiveKernel, ConvBnAct, create_attn
 from .registry import register_model
 from .resnet import ResNet
 
@@ -59,7 +59,7 @@ class SelectiveKernelBasic(nn.Module):
         outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
-        self.conv1 = SelectiveKernelConv(
+        self.conv1 = SelectiveKernel(
             inplanes, first_planes, stride=stride, dilation=first_dilation, **conv_kwargs, **sk_kwargs)
         conv_kwargs['act_layer'] = None
         self.conv2 = ConvBnAct(
@@ -107,7 +107,7 @@ class SelectiveKernelBottleneck(nn.Module):
         first_dilation = first_dilation or dilation
 
         self.conv1 = ConvBnAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
-        self.conv2 = SelectiveKernelConv(
+        self.conv2 = SelectiveKernel(
             first_planes, width, stride=stride, dilation=first_dilation, groups=cardinality,
             **conv_kwargs, **sk_kwargs)
         conv_kwargs['act_layer'] = None
@@ -153,10 +153,7 @@ def skresnet18(pretrained=False, **kwargs):
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    sk_kwargs = dict(
-        min_attn_channels=16,
-        attn_reduction=8,
-        split_input=True)
+    sk_kwargs = dict(min_rd_channels=16, rd_ratio=1/8, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[2, 2, 2, 2], block_args=dict(sk_kwargs=sk_kwargs),
         zero_init_last_bn=False, **kwargs)
@@ -170,10 +167,7 @@ def skresnet34(pretrained=False, **kwargs):
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    sk_kwargs = dict(
-        min_attn_channels=16,
-        attn_reduction=8,
-        split_input=True)
+    sk_kwargs = dict(min_rd_channels=16, rd_ratio=1/8, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
         zero_init_last_bn=False, **kwargs)

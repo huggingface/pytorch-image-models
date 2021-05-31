@@ -56,7 +56,7 @@ class EffectiveSEModule(nn.Module):
     """ 'Effective Squeeze-Excitation
     From `CenterMask : Real-Time Anchor-Free Instance Segmentation` - https://arxiv.org/abs/1911.06667
     """
-    def __init__(self, channels, add_maxpool=False, gate_layer='hard_sigmoid'):
+    def __init__(self, channels, add_maxpool=False, gate_layer='hard_sigmoid', **_):
         super(EffectiveSEModule, self).__init__()
         self.add_maxpool = add_maxpool
         self.fc = nn.Conv2d(channels, channels, kernel_size=1, padding=0)
