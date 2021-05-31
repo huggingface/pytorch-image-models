@@ -153,7 +153,7 @@ def skresnet18(pretrained=False, **kwargs):
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    sk_kwargs = dict(min_rd_channels=16, rd_ratio=1/8, split_input=True)
+    sk_kwargs = dict(rd_ratio=1 / 8, rd_divisor=16, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[2, 2, 2, 2], block_args=dict(sk_kwargs=sk_kwargs),
         zero_init_last_bn=False, **kwargs)
@@ -167,7 +167,7 @@ def skresnet34(pretrained=False, **kwargs):
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
     variation splits the input channels to the selective convolutions to keep param count down.
     """
-    sk_kwargs = dict(min_rd_channels=16, rd_ratio=1/8, split_input=True)
+    sk_kwargs = dict(rd_ratio=1 / 8, rd_divisor=16, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
         zero_init_last_bn=False, **kwargs)
@@ -207,7 +207,7 @@ def skresnext50_32x4d(pretrained=False, **kwargs):
     """Constructs a Select Kernel ResNeXt50-32x4d model. This should be equivalent to
     the SKNet-50 model in the Select Kernel Paper
     """
-    sk_kwargs = dict(min_rd_channels=32, rd_ratio=1/16, split_input=False)
+    sk_kwargs = dict(rd_ratio=1/16, rd_divisor=32, split_input=False)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], cardinality=32, base_width=4,
         block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
