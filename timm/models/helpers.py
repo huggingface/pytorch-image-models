@@ -378,7 +378,11 @@ def update_default_cfg_and_kwargs(default_cfg, kwargs, kwargs_filter):
     # Overlay default cfg values from `external_default_cfg` if it exists in kwargs
     overlay_external_default_cfg(default_cfg, kwargs)
     # Set model __init__ args that can be determined by default_cfg (if not already passed as kwargs)
-    set_default_kwargs(kwargs, names=('num_classes', 'global_pool', 'in_chans'), default_cfg=default_cfg)
+    default_kwarg_names = ('num_classes', 'global_pool', 'in_chans')
+    if default_cfg.get('fixed_input_size', False):
+        # if fixed_input_size exists and is True, model takes an img_size arg that fixes its input size
+        default_kwarg_names += ('img_size',)
+    set_default_kwargs(kwargs, names=default_kwarg_names, default_cfg=default_cfg)
     # Filter keyword args for task specific model variants (some 'features only' models, etc.)
     filter_kwargs(kwargs, names=kwargs_filter)
 

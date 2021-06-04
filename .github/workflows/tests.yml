@@ -17,8 +17,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
         python: ['3.8']
-        torch: ['1.8.0']
-        torchvision: ['0.9.0']
+        torch: ['1.8.1']
+        torchvision: ['0.9.1']
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -36,11 +36,16 @@ jobs:
       run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
     - name: Install torch on ubuntu
       if: startsWith(matrix.os, 'ubuntu')
-      run: pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      run: |
+        pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+        sudo apt update
+        sudo apt install -y google-perftools
     - name: Install requirements
       run: |
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git@v1.0.12
     - name: Run tests
+      env:
+        LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
       run: |
         pytest -vv --durations=0 ./tests

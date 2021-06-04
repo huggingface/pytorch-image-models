@@ -23,6 +23,14 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### May 25, 2021
+* Add LeViT, Visformer, ConViT (PR by Aman Arora), Twins (PR by paper authors) transformer models
+* Add ResMLP and gMLP MLP vision models to the existing MLP Mixer impl
+* Fix a number of torchscript issues with various vision transformer models
+* Cleanup input_size/img_size override handling and improve testing / test coverage for all vision transformer and MLP models
+* More flexible pos embedding resize (non-square) for ViT and TnT. Thanks [Alexander Soare](https://github.com/alexander-soare)
+* Add `efficientnetv2_rw_m` model and weights (started training before official code). 84.8 top-1, 53M params.
+
 ### May 14, 2021
 * Add EfficientNet-V2 official model defs w/ ported weights from official [Tensorflow/Keras](https://github.com/google/automl/tree/master/efficientnetv2) impl.
   * 1k trained variants: `tf_efficientnetv2_s/m/l`
@@ -39,7 +47,7 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 * Add CoaT models and weights. Thanks [Mohammed Rizin](https://github.com/morizin)
 * Add new ImageNet-21k weights & finetuned weights for TResNet, MobileNet-V3, ViT models. Thanks [mrT](https://github.com/mrT23)
 * Add GhostNet models and weights. Thanks [Kai Han](https://github.com/iamhankai)
-* Update ByoaNet attention modles
+* Update ByoaNet attention modules
    * Improve SA module inits
    * Hack together experimental stand-alone Swin based attn module and `swinnet`
    * Consistent '26t' model defs for experiments.
@@ -166,30 +174,6 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 * Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
 * PyPi release @ 0.3.2 (needed by EfficientDet)
 
-### Oct 30, 2020
-* Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.
-* Convert newly added 224x224 Vision Transformer weights from official JAX repo. 81.8 top-1 for B/16, 83.1 L/16.
-* Support PyTorch 1.7 optimized, native SiLU (aka Swish) activation. Add mapping to 'silu' name, custom swish will eventually be deprecated.
-* Fix regression for loading pretrained classifier via direct model entrypoint functions. Didn't impact create_model() factory usage.
-* PyPi release @ 0.3.0 version!
-
-### Oct 26, 2020
-* Update Vision Transformer models to be compatible with official code release at https://github.com/google-research/vision_transformer
-* Add Vision Transformer weights (ImageNet-21k pretrain) for 384x384 base and large models converted from official jax impl
-  * ViT-B/16 - 84.2
-  * ViT-B/32 - 81.7
-  * ViT-L/16 - 85.2
-  * ViT-L/32 - 81.5
-
-### Oct 21, 2020
-* Weights added for Vision Transformer (ViT) models. 77.86 top-1 for 'small' and 79.35 for 'base'. Thanks to [Christof](https://www.kaggle.com/christofhenkel) for training the base model w/ lots of GPUs.
-
-### Oct 13, 2020
-* Initial impl of Vision Transformer models. Both patch and hybrid (CNN backbone) variants. Currently trying to train...
-* Adafactor and AdaHessian (FP32 only, no AMP) optimizers
-* EdgeTPU-M (`efficientnet_em`) model trained in PyTorch, 79.3 top-1
-* Pip release, doc updates pending a few more changes...
-
 
 ## Introduction
 
@@ -207,6 +191,7 @@ A full version of the list below with source links can be found in the [document
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
+* ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT (Vision Transformer) - https://arxiv.org/abs/2012.12877
 * DenseNet - https://arxiv.org/abs/1608.06993
@@ -224,6 +209,7 @@ A full version of the list below with source links can be found in the [document
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
 * GhostNet - https://arxiv.org/abs/1911.11907
+* gMLP - https://arxiv.org/abs/2105.08050
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
 * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
@@ -231,6 +217,7 @@ A full version of the list below with source links can be found in the [document
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
+* LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
 * NASNet-A - https://arxiv.org/abs/1707.07012
@@ -240,6 +227,7 @@ A full version of the list below with source links can be found in the [document
 * Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
 * RegNet - https://arxiv.org/abs/2003.13678
 * RepVGG - https://arxiv.org/abs/2101.03697
+* ResMLP - https://arxiv.org/abs/2105.03404
 * ResNet/ResNeXt
     * ResNet (v1b/v1.5) - https://arxiv.org/abs/1512.03385
     * ResNeXt - https://arxiv.org/abs/1611.05431
@@ -257,6 +245,7 @@ A full version of the list below with source links can be found in the [document
 * Swin Transformer - https://arxiv.org/abs/2103.14030
 * Transformer-iN-Transformer (TNT) - https://arxiv.org/abs/2103.00112
 * TResNet - https://arxiv.org/abs/2003.13630
+* Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
 * Vision Transformer - https://arxiv.org/abs/2010.11929
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
@@ -282,7 +271,7 @@ Several (less common) features that I often utilize in my projects are included.
     * PyTorch DistributedDataParallel w/ multi-gpu, single process (AMP disabled as it crashes when enabled)
     * PyTorch w/ single GPU single process (AMP optional)
 * A dynamic global pool implementation that allows selecting from average pooling, max pooling, average + max, or concat([average, max]) at model creation. All global pooling is adaptive average by default and compatible with pretrained weights.
-* A 'Test Time Pool' wrapper that can wrap any of the included models and usually provide improved performance doing inference with input images larger than the training size. Idea adapted from original DPN implementation when I ported (https://github.com/cypw/DPNs)
+* A 'Test Time Pool' wrapper that can wrap any of the included models and usually provides improved performance doing inference with input images larger than the training size. Idea adapted from original DPN implementation when I ported (https://github.com/cypw/DPNs)
 * Learning rate schedulers
   * Ideas adopted from
      * [AllenNLP schedulers](https://github.com/allenai/allennlp/tree/master/allennlp/training/learning_rate_schedulers)
@@ -306,10 +295,24 @@ Several (less common) features that I often utilize in my projects are included.
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
 * DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382) 
 * DropBlock (https://arxiv.org/abs/1810.12890)
-* Efficient Channel Attention - ECA (https://arxiv.org/abs/1910.03151)
 * Blur Pooling (https://arxiv.org/abs/1904.11486)
 * Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
 * Adaptive Gradient Clipping (https://arxiv.org/abs/2102.06171, https://github.com/deepmind/deepmind-research/tree/master/nfnets)
+* An extensive selection of channel and/or spatial attention modules:
+    * Bottleneck Transformer - https://arxiv.org/abs/2101.11605
+    * CBAM - https://arxiv.org/abs/1807.06521
+    * Effective Squeeze-Excitation (ESE) - https://arxiv.org/abs/1911.06667
+    * Efficient Channel Attention (ECA) - https://arxiv.org/abs/1910.03151
+    * Gather-Excite (GE) - https://arxiv.org/abs/1810.12348
+    * Global Context (GC) - https://arxiv.org/abs/1904.11492
+    * Halo - https://arxiv.org/abs/2103.12731
+    * Involution - https://arxiv.org/abs/2103.06255
+    * Lambda Layer - https://arxiv.org/abs/2102.08602
+    * Non-Local (NL) -  https://arxiv.org/abs/1711.07971
+    * Squeeze-and-Excitation (SE) - https://arxiv.org/abs/1709.01507
+    * Selective Kernel (SK) - (https://arxiv.org/abs/1903.06586
+    * Split (SPLAT) - https://arxiv.org/abs/2004.08955
+    * Shifted Window (SWIN) - https://arxiv.org/abs/2103.14030
 
 ## Results
 
@@ -329,7 +332,7 @@ The root folder of the repository contains reference train, validation, and infe
 
 ## Awesome PyTorch Resources
 
-One of the greatest assets of PyTorch is the community and their contributions. A few of my favourite resources that pair well with the models and componenets here are listed below.
+One of the greatest assets of PyTorch is the community and their contributions. A few of my favourite resources that pair well with the models and components here are listed below.
 
 ### Object Detection, Instance and Semantic Segmentation
 * Detectron2 - https://github.com/facebookresearch/detectron2
@@ -353,7 +356,7 @@ One of the greatest assets of PyTorch is the community and their contributions. 
 ## Licenses
 
 ### Code
-The code here is licensed Apache 2.0. I've taken care to make sure any third party code included or adapted has compatible (permissive) licenses such as MIT, BSD, etc. I've made an effort to avoid any GPL / LGPL conflicts. That said, it is your responsibility to ensure you comply with license here and conditions of any dependent licenses. Where applicable, I've linked the sources/references for various components in docstrings. If you think I've missed anything please create an issue.
+The code here is licensed Apache 2.0. I've taken care to make sure any third party code included or adapted has compatible (permissive) licenses such as MIT, BSD, etc. I've made an effort to avoid any GPL / LGPL conflicts. That said, it is your responsibility to ensure you comply with licenses here and conditions of any dependent licenses. Where applicable, I've linked the sources/references for various components in docstrings. If you think I've missed anything please create an issue.
 
 ### Pretrained Weights
 So far all of the pretrained weights available here are pretrained on ImageNet with a select few that have some additional pretraining (see extra note below). ImageNet was released for non-commercial research purposes only (http://www.image-net.org/download-faq). It's not clear what the implications of that are for the use of pretrained weights from that dataset. Any models I have trained with ImageNet are done for research purposes and one should assume that the original dataset license applies to the weights. It's best to seek legal advice if you intend to use the pretrained weights in a commercial product.

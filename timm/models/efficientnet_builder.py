@@ -10,11 +10,12 @@ import logging
 import math
 import re
 from copy import deepcopy
+from functools import partial
 
 import torch.nn as nn
 
 from .efficientnet_blocks import *
-from .layers import CondConv2d, get_condconv_initializer, get_act_layer, make_divisible
+from .layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible
 
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights",
            'resolve_bn_args', 'resolve_act_layer', 'round_channels', 'BN_MOMENTUM_TF_DEFAULT', 'BN_EPS_TF_DEFAULT']
@@ -50,10 +51,7 @@ def resolve_bn_args(kwargs):
 
 
 def resolve_act_layer(kwargs, default='relu'):
-    act_layer = kwargs.pop('act_layer', default)
-    if isinstance(act_layer, str):
-        act_layer = get_act_layer(act_layer)
-    return act_layer
+    return get_act_layer(kwargs.pop('act_layer', default))
 
 
 def round_channels(channels, multiplier=1.0, divisor=8, channel_min=None, round_limit=0.9):
@@ -123,7 +121,9 @@ def _decode_block_str(block_str):
             elif v == 'hs':
                 value = get_act_layer('hard_swish')
             elif v == 'sw':
-                value = get_act_layer('swish')
+                value = get_act_layer('swish')  # aka SiLU
+            elif v == 'mi':
+                value = get_act_layer('mish')
             else:
                 continue
             options[key] = value
@@ -237,7 +237,11 @@ def _scale_stage_depth(stack_args, repeats, depth_multiplier=1.0, depth_trunc='c
 
 def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_multiplier=1, fix_first_last=False):
     arch_args = []
-    for stack_idx, block_strings in enumerate(arch_def):
+    if isinstance(depth_multiplier, tuple):
+        assert len(depth_multiplier) == len(arch_def)
+    else:
+        depth_multiplier = (depth_multiplier,) * len(arch_def)
+    for stack_idx, (block_strings, multiplier) in enumerate(zip(arch_def, depth_multiplier)):
         assert isinstance(block_strings, list)
         stack_args = []
         repeats = []
@@ -251,7 +255,7 @@ def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_
         if fix_first_last and (stack_idx == 0 or stack_idx == len(arch_def) - 1):
             arch_args.append(_scale_stage_depth(stack_args, repeats, 1.0, depth_trunc))
         else:
-            arch_args.append(_scale_stage_depth(stack_args, repeats, depth_multiplier, depth_trunc))
+            arch_args.append(_scale_stage_depth(stack_args, repeats, multiplier, depth_trunc))
     return arch_args
 
 
@@ -264,14 +268,20 @@ class EfficientNetBuilder:
     https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/modeling/backbone/fbnet_builder.py
 
     """
-    def __init__(self, output_stride=32, pad_type='', round_chs_fn=round_channels,
+    def __init__(self, output_stride=32, pad_type='', round_chs_fn=round_channels, se_from_exp=False,
                  act_layer=None, norm_layer=None, se_layer=None, drop_path_rate=0., feature_location=''):
         self.output_stride = output_stride
         self.pad_type = pad_type
         self.round_chs_fn = round_chs_fn
+        self.se_from_exp = se_from_exp  # calculate se channel reduction from expanded (mid) chs
         self.act_layer = act_layer
         self.norm_layer = norm_layer
-        self.se_layer = se_layer
+        self.se_layer = get_attn(se_layer)
+        try:
+            self.se_layer(8, rd_ratio=1.0)  # test if attn layer accepts rd_ratio arg
+            self.se_has_ratio = True
+        except TypeError:
+            self.se_has_ratio = False
         self.drop_path_rate = drop_path_rate
         if feature_location == 'depthwise':
             # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
@@ -298,16 +308,21 @@ class EfficientNetBuilder:
         ba['act_layer'] = ba['act_layer'] if ba['act_layer'] is not None else self.act_layer
         assert ba['act_layer'] is not None
         ba['norm_layer'] = self.norm_layer
+        ba['drop_path_rate'] = drop_path_rate
         if bt != 'cn':
-            ba['se_layer'] = self.se_layer
-            ba['drop_path_rate'] = drop_path_rate
+            se_ratio = ba.pop('se_ratio')
+            if se_ratio and self.se_layer is not None:
+                if not self.se_from_exp:
+                    # adjust se_ratio by expansion ratio if calculating se channels from block input
+                    se_ratio /= ba.get('exp_ratio', 1.0)
+                if self.se_has_ratio:
+                    ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
+                else:
+                    ba['se_layer'] = self.se_layer
 
         if bt == 'ir':
             _log_info_if('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
-            if ba.get('num_experts', 0) > 0:
-                block = CondConvResidual(**ba)
-            else:
-                block = InvertedResidual(**ba)
+            block = CondConvResidual(**ba) if ba.get('num_experts', 0) else InvertedResidual(**ba)
         elif bt == 'ds' or bt == 'dsa':
             _log_info_if('  DepthwiseSeparable {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = DepthwiseSeparableConv(**ba)
@@ -417,28 +432,28 @@ def _init_weight_goog(m, n='', fix_group_fanout=True):
         if fix_group_fanout:
             fan_out //= m.groups
         init_weight_fn = get_condconv_initializer(
-            lambda w: w.data.normal_(0, math.sqrt(2.0 / fan_out)), m.num_experts, m.weight_shape)
+            lambda w: nn.init.normal_(w, 0, math.sqrt(2.0 / fan_out)), m.num_experts, m.weight_shape)
         init_weight_fn(m.weight)
         if m.bias is not None:
-            m.bias.data.zero_()
+            nn.init.zeros_(m.bias)
     elif isinstance(m, nn.Conv2d):
         fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
         if fix_group_fanout:
             fan_out //= m.groups
-        m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+        nn.init.normal_(m.weight, 0, math.sqrt(2.0 / fan_out))
         if m.bias is not None:
-            m.bias.data.zero_()
+            nn.init.zeros_(m.bias)
     elif isinstance(m, nn.BatchNorm2d):
-        m.weight.data.fill_(1.0)
-        m.bias.data.zero_()
+        nn.init.ones_(m.weight)
+        nn.init.zeros_(m.bias)
     elif isinstance(m, nn.Linear):
         fan_out = m.weight.size(0)  # fan-out
         fan_in = 0
         if 'routing_fn' in n:
             fan_in = m.weight.size(1)
         init_range = 1.0 / math.sqrt(fan_in + fan_out)
-        m.weight.data.uniform_(-init_range, init_range)
-        m.bias.data.zero_()
+        nn.init.uniform_(m.weight, -init_range, init_range)
+        nn.init.zeros_(m.bias)
 
 
 def efficientnet_init_weights(model: nn.Module, init_fn=None):

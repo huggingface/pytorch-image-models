@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .efficientnet_blocks import SqueezeExcite
-from .efficientnet_builder import decode_arch_def, resolve_act_layer, resolve_bn_args
+from .efficientnet_builder import decode_arch_def, resolve_act_layer, resolve_bn_args, round_channels
 from .helpers import build_model_with_cfg, default_cfg_for_features
 from .layers import get_act_fn
 from .mobilenetv3 import MobileNetV3, MobileNetV3Features
@@ -39,8 +39,7 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
 
     """
     num_features = 1280
-    se_layer = partial(
-        SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), force_act_layer=nn.ReLU, reduce_from_block=False, divisor=8)
+    se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         num_features=num_features,

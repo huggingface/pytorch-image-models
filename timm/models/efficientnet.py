@@ -91,6 +91,12 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/spnasnet_100-048bc3f4.pth',
         interpolation='bilinear'),
 
+    # NOTE experimenting with alternate attention
+    'eca_efficientnet_b0': _cfg(
+        url=''),
+    'gc_efficientnet_b0': _cfg(
+        url=''),
+
     'efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth'),
     'efficientnet_b1': _cfg(
@@ -162,6 +168,9 @@ default_cfgs = {
     'efficientnetv2_rw_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_v2s_ra2_288-a6477665.pth',
         input_size=(3, 288, 288), test_input_size=(3, 384, 384), pool_size=(9, 9), crop_pct=1.0),
+    'efficientnetv2_rw_m': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnetv2_rw_m_agc-3d90cb1e.pth',
+        input_size=(3, 320, 320), test_input_size=(3, 416, 416), pool_size=(10, 10), crop_pct=1.0),
 
     'efficientnetv2_s': _cfg(
         url='',
@@ -172,7 +181,6 @@ default_cfgs = {
     'efficientnetv2_l': _cfg(
         url='',
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
-
 
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_aa-827b6e33.pth',
@@ -1222,6 +1230,26 @@ def efficientnet_b0(pretrained=False, **kwargs):
 
 
 @register_model
+def eca_efficientnet_b0(pretrained=False, **kwargs):
+    """ EfficientNet-B0 w/ ECA attn """
+    # NOTE experimental config
+    model = _gen_efficientnet(
+        'eca_efficientnet_b0', se_layer='ecam', channel_multiplier=1.0, depth_multiplier=1.0,
+        pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def gc_efficientnet_b0(pretrained=False, **kwargs):
+    """ EfficientNet-B0 w/ GlobalContext """
+    # NOTE experminetal config
+    model = _gen_efficientnet(
+        'gc_efficientnet_b0', se_layer='gc', channel_multiplier=1.0, depth_multiplier=1.0,
+        pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def efficientnet_b1(pretrained=False, **kwargs):
     """ EfficientNet-B1 """
     # NOTE for train, drop_rate should be 0.2, drop_path_rate should be 0.2
@@ -1461,11 +1489,21 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
 
 @register_model
 def efficientnetv2_rw_s(pretrained=False, **kwargs):
-    """ EfficientNet-V2 Small.
+    """ EfficientNet-V2 Small RW variant.
     NOTE: This is my initial (pre official code release) w/ some differences.
     See efficientnetv2_s and tf_efficientnetv2_s for versions that match the official w/ PyTorch vs TF padding
     """
     model = _gen_efficientnetv2_s('efficientnetv2_rw_s', rw=True, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnetv2_rw_m(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Medium RW variant.
+    """
+    model = _gen_efficientnetv2_s(
+        'efficientnetv2_rw_m', channel_multiplier=1.2, depth_multiplier=(1.2,) * 4 + (1.6,) * 2, rw=True,
+        pretrained=pretrained, **kwargs)
     return model
 
 

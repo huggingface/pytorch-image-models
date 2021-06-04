@@ -352,7 +352,7 @@ def _init_vit_weights(m, n: str = '', head_bias: float = 0., jax_impl: bool = Fa
         nn.init.ones_(m.weight)
 
 
-def resize_pos_embed(posemb, posemb_new, num_tokens=1):
+def resize_pos_embed(posemb, posemb_new, num_tokens=1, gs_new=()):
     # Rescale the grid of position embeddings when loading from state_dict. Adapted from
     # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
     _logger.info('Resized position embedding: %s to %s', posemb.shape, posemb_new.shape)
@@ -363,11 +363,13 @@ def resize_pos_embed(posemb, posemb_new, num_tokens=1):
     else:
         posemb_tok, posemb_grid = posemb[:, :0], posemb[0]
     gs_old = int(math.sqrt(len(posemb_grid)))
-    gs_new = int(math.sqrt(ntok_new))
-    _logger.info('Position embedding grid-size from %s to %s', gs_old, gs_new)
+    if not len(gs_new):  # backwards compatibility
+        gs_new = [int(math.sqrt(ntok_new))] * 2
+    assert len(gs_new) >= 2
+    _logger.info('Position embedding grid-size from %s to %s', [gs_old, gs_old], gs_new)
     posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
-    posemb_grid = F.interpolate(posemb_grid, size=(gs_new, gs_new), mode='bilinear')
-    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_new * gs_new, -1)
+    posemb_grid = F.interpolate(posemb_grid, size=gs_new, mode='bilinear')
+    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_new[0] * gs_new[1], -1)
     posemb = torch.cat([posemb_tok, posemb_grid], dim=1)
     return posemb
 
@@ -385,20 +387,20 @@ def checkpoint_filter_fn(state_dict, model):
             v = v.reshape(O, -1, H, W)
         elif k == 'pos_embed' and v.shape != model.pos_embed.shape:
             # To resize pos embedding when using model at different size from pretrained weights
-            v = resize_pos_embed(v, model.pos_embed, getattr(model, 'num_tokens', 1))
+            v = resize_pos_embed(
+                v, model.pos_embed, getattr(model, 'num_tokens', 1), model.patch_embed.grid_size)
         out_dict[k] = v
     return out_dict
 
 
 def _create_vision_transformer(variant, pretrained=False, default_cfg=None, **kwargs):
-    if default_cfg is None:
-        default_cfg = deepcopy(default_cfgs[variant])
-    overlay_external_default_cfg(default_cfg, kwargs)
-    default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-2:]
+    default_cfg = default_cfg or default_cfgs[variant]
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    num_classes = kwargs.pop('num_classes', default_num_classes)
-    img_size = kwargs.pop('img_size', default_img_size)
+    # NOTE this extra code to support handling of repr size for in21k pretrained models
+    default_num_classes = default_cfg['num_classes']
+    num_classes = kwargs.get('num_classes', default_num_classes)
     repr_size = kwargs.pop('representation_size', None)
     if repr_size is not None and num_classes != default_num_classes:
         # Remove representation layer if fine-tuning. This may not always be the desired action,
@@ -406,18 +408,12 @@ def _create_vision_transformer(variant, pretrained=False, default_cfg=None, **kw
         _logger.warning("Removing representation layer for fine-tuning.")
         repr_size = None
 
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
-
     model = build_model_with_cfg(
         VisionTransformer, variant, pretrained,
         default_cfg=default_cfg,
-        img_size=img_size,
-        num_classes=num_classes,
         representation_size=repr_size,
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
-
     return model
 
 

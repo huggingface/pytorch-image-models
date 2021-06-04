@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from .layers import create_conv2d, drop_path, make_divisible
+from .layers import create_conv2d, drop_path, make_divisible, create_act_layer
 from .layers.activations import sigmoid
 
 __all__ = [
@@ -19,33 +19,32 @@ class SqueezeExcite(nn.Module):
 
     Args:
         in_chs (int): input channels to layer
-        se_ratio (float): ratio of squeeze reduction
+        rd_ratio (float): ratio of squeeze reduction
         act_layer (nn.Module): activation layer of containing block
-        gate_fn (Callable): attention gate function
-        block_in_chs (int): input channels of containing block (for calculating reduction from)
-        reduce_from_block (bool): calculate reduction from block input channels if True
+        gate_layer (Callable): attention gate function
         force_act_layer (nn.Module): override block's activation fn if this is set/bound
-        divisor (int): make reduction channels divisible by this
+        rd_round_fn (Callable): specify a fn to calculate rounding of reduced chs
     """
 
     def __init__(
-            self, in_chs, se_ratio=0.25, act_layer=nn.ReLU, gate_fn=sigmoid,
-            block_in_chs=None, reduce_from_block=True, force_act_layer=None, divisor=1):
+            self, in_chs, rd_ratio=0.25, rd_channels=None, act_layer=nn.ReLU,
+            gate_layer=nn.Sigmoid, force_act_layer=None, rd_round_fn=None):
         super(SqueezeExcite, self).__init__()
-        reduced_chs = (block_in_chs or in_chs) if reduce_from_block else in_chs
-        reduced_chs = make_divisible(reduced_chs * se_ratio, divisor)
+        if rd_channels is None:
+            rd_round_fn = rd_round_fn or round
+            rd_channels = rd_round_fn(in_chs * rd_ratio)
         act_layer = force_act_layer or act_layer
-        self.conv_reduce = nn.Conv2d(in_chs, reduced_chs, 1, bias=True)
-        self.act1 = act_layer(inplace=True)
-        self.conv_expand = nn.Conv2d(reduced_chs, in_chs, 1, bias=True)
-        self.gate_fn = gate_fn
+        self.conv_reduce = nn.Conv2d(in_chs, rd_channels, 1, bias=True)
+        self.act1 = create_act_layer(act_layer, inplace=True)
+        self.conv_expand = nn.Conv2d(rd_channels, in_chs, 1, bias=True)
+        self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
         x_se = x.mean((2, 3), keepdim=True)
         x_se = self.conv_reduce(x_se)
         x_se = self.act1(x_se)
         x_se = self.conv_expand(x_se)
-        return x * self.gate_fn(x_se)
+        return x * self.gate(x_se)
 
 
 class ConvBnAct(nn.Module):
@@ -87,10 +86,9 @@ class DepthwiseSeparableConv(nn.Module):
     """
     def __init__(
             self, in_chs, out_chs, dw_kernel_size=3, stride=1, dilation=1, pad_type='',
-            noskip=False, pw_kernel_size=1, pw_act=False, se_ratio=0.,
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, se_layer=None, drop_path_rate=0.):
+            noskip=False, pw_kernel_size=1, pw_act=False, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
+            se_layer=None, drop_path_rate=0.):
         super(DepthwiseSeparableConv, self).__init__()
-        has_se = se_layer is not None and se_ratio > 0.
         self.has_residual = (stride == 1 and in_chs == out_chs) and not noskip
         self.has_pw_act = pw_act  # activation after point-wise conv
         self.drop_path_rate = drop_path_rate
@@ -101,7 +99,7 @@ class DepthwiseSeparableConv(nn.Module):
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        self.se = se_layer(in_chs, se_ratio=se_ratio, act_layer=act_layer) if has_se else nn.Identity()
+        self.se = se_layer(in_chs, act_layer=act_layer) if se_layer else nn.Identity()
 
         self.conv_pw = create_conv2d(in_chs, out_chs, pw_kernel_size, padding=pad_type)
         self.bn2 = norm_layer(out_chs)
@@ -146,12 +144,11 @@ class InvertedResidual(nn.Module):
 
     def __init__(
             self, in_chs, out_chs, dw_kernel_size=3, stride=1, dilation=1, pad_type='',
-            noskip=False, exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1, se_ratio=0.,
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, se_layer=None, conv_kwargs=None, drop_path_rate=0.):
+            noskip=False, exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1, act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d, se_layer=None, conv_kwargs=None, drop_path_rate=0.):
         super(InvertedResidual, self).__init__()
         conv_kwargs = conv_kwargs or {}
         mid_chs = make_divisible(in_chs * exp_ratio)
-        has_se = se_layer is not None and se_ratio > 0.
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
         self.drop_path_rate = drop_path_rate
 
@@ -168,8 +165,7 @@ class InvertedResidual(nn.Module):
         self.act2 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        self.se = se_layer(
-            mid_chs, se_ratio=se_ratio, act_layer=act_layer, block_in_chs=in_chs) if has_se else nn.Identity()
+        self.se = se_layer(mid_chs, act_layer=act_layer) if se_layer else nn.Identity()
 
         # Point-wise linear projection
         self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type, **conv_kwargs)
@@ -215,8 +211,8 @@ class CondConvResidual(InvertedResidual):
 
     def __init__(
             self, in_chs, out_chs, dw_kernel_size=3, stride=1, dilation=1, pad_type='',
-            noskip=False, exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1, se_ratio=0.,
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, se_layer=None, num_experts=0, drop_path_rate=0.):
+            noskip=False, exp_ratio=1.0, exp_kernel_size=1, pw_kernel_size=1, act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d, se_layer=None, num_experts=0, drop_path_rate=0.):
 
         self.num_experts = num_experts
         conv_kwargs = dict(num_experts=self.num_experts)
@@ -224,8 +220,8 @@ class CondConvResidual(InvertedResidual):
         super(CondConvResidual, self).__init__(
             in_chs, out_chs, dw_kernel_size=dw_kernel_size, stride=stride, dilation=dilation, pad_type=pad_type,
             act_layer=act_layer, noskip=noskip, exp_ratio=exp_ratio, exp_kernel_size=exp_kernel_size,
-            pw_kernel_size=pw_kernel_size, se_ratio=se_ratio, se_layer=se_layer,
-            norm_layer=norm_layer, conv_kwargs=conv_kwargs, drop_path_rate=drop_path_rate)
+            pw_kernel_size=pw_kernel_size, se_layer=se_layer, norm_layer=norm_layer, conv_kwargs=conv_kwargs,
+            drop_path_rate=drop_path_rate)
 
         self.routing_fn = nn.Linear(in_chs, self.num_experts)
 
@@ -274,8 +270,8 @@ class EdgeResidual(nn.Module):
 
     def __init__(
             self, in_chs, out_chs, exp_kernel_size=3, stride=1, dilation=1, pad_type='',
-            force_in_chs=0, noskip=False, exp_ratio=1.0, pw_kernel_size=1, se_ratio=0.,
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, se_layer=None, drop_path_rate=0.):
+            force_in_chs=0, noskip=False, exp_ratio=1.0, pw_kernel_size=1, act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d, se_layer=None, drop_path_rate=0.):
         super(EdgeResidual, self).__init__()
         if force_in_chs > 0:
             mid_chs = make_divisible(force_in_chs * exp_ratio)
@@ -292,8 +288,7 @@ class EdgeResidual(nn.Module):
         self.act1 = act_layer(inplace=True)
 
         # Squeeze-and-excitation
-        self.se = SqueezeExcite(
-            mid_chs, se_ratio=se_ratio, act_layer=act_layer, block_in_chs=in_chs) if has_se else nn.Identity()
+        self.se = se_layer(mid_chs, act_layer=act_layer) if se_layer else nn.Identity()
 
         # Point-wise linear projection
         self.conv_pwl = create_conv2d(mid_chs, out_chs, pw_kernel_size, padding=pad_type)

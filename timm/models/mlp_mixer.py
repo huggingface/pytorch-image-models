@@ -80,6 +80,15 @@ default_cfgs = dict(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_mixer_l16_224_in21k-846aa33c.pth',
         num_classes=21843
     ),
+    # Mixer ImageNet-21K-P pretraining
+    mixer_b16_224_miil_in21k=_cfg(
+    url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil_in21k.pth',
+    mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
+    ),
+    mixer_b16_224_miil=_cfg(
+    url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil.pth',
+    mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear',
+    ),
 
     gmixer_12_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     gmixer_24_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
@@ -264,25 +273,14 @@ def _init_weights(m, n: str, head_bias: float = 0.):
         nn.init.ones_(m.weight)
 
 
-def _create_mixer(variant, pretrained=False, default_cfg=None, **kwargs):
-    if default_cfg is None:
-        default_cfg = deepcopy(default_cfgs[variant])
-    overlay_external_default_cfg(default_cfg, kwargs)
-    default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-2:]
-    num_classes = kwargs.pop('num_classes', default_num_classes)
-    img_size = kwargs.pop('img_size', default_img_size)
-
+def _create_mixer(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for MLP-Mixer models.')
 
     model = build_model_with_cfg(
         MlpMixer, variant, pretrained,
-        default_cfg=default_cfg,
-        img_size=img_size,
-        num_classes=num_classes,
+        default_cfg=default_cfgs[variant],
         **kwargs)
-
     return model
 
 
@@ -365,6 +363,23 @@ def mixer_l16_224_in21k(pretrained=False, **kwargs):
     model = _create_mixer('mixer_l16_224_in21k', pretrained=pretrained, **model_args)
     return model
 
+@register_model
+def mixer_b16_224_miil(pretrained=False, **kwargs):
+    """ Mixer-B/16 224x224. ImageNet-21k pretrained weights.
+    Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
+    """
+    model_args = dict(patch_size=16, num_blocks=12, hidden_dim=768, **kwargs)
+    model = _create_mixer('mixer_b16_224_miil', pretrained=pretrained, **model_args)
+    return model
+
+@register_model
+def mixer_b16_224_miil_in21k(pretrained=False, **kwargs):
+    """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
+    Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
+    """
+    model_args = dict(patch_size=16, num_blocks=12, hidden_dim=768, **kwargs)
+    model = _create_mixer('mixer_b16_224_miil_in21k', pretrained=pretrained, **model_args)
+    return model
 
 @register_model
 def gmixer_12_224(pretrained=False, **kwargs):

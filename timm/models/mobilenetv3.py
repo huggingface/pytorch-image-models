@@ -72,6 +72,10 @@ default_cfgs = {
     'tf_mobilenetv3_small_minimal_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_small_minimal_100-922a7843.pth',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
+
+    'fbnetv3_b': _cfg(),
+    'fbnetv3_d': _cfg(),
+    'fbnetv3_g': _cfg(),
 }
 
 
@@ -86,7 +90,7 @@ class MobileNetV3(nn.Module):
     """
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
-                 pad_type='', act_layer=None, norm_layer=None, se_layer=None,
+                 pad_type='', act_layer=None, norm_layer=None, se_layer=None, se_from_exp=True,
                  round_chs_fn=round_channels, drop_rate=0., drop_path_rate=0., global_pool='avg'):
         super(MobileNetV3, self).__init__()
         act_layer = act_layer or nn.ReLU
@@ -104,7 +108,7 @@ class MobileNetV3(nn.Module):
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
-            output_stride=32, pad_type=pad_type, round_chs_fn=round_chs_fn,
+            output_stride=32, pad_type=pad_type, round_chs_fn=round_chs_fn, se_from_exp=se_from_exp,
             act_layer=act_layer, norm_layer=norm_layer, se_layer=se_layer, drop_path_rate=drop_path_rate)
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
@@ -161,8 +165,8 @@ class MobileNetV3Features(nn.Module):
     and object detection models.
     """
 
-    def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck',
-                 in_chans=3, stem_size=16, output_stride=32, pad_type='', round_chs_fn=round_channels,
+    def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
+                 stem_size=16, output_stride=32, pad_type='', round_chs_fn=round_channels, se_from_exp=True,
                  act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
         super(MobileNetV3Features, self).__init__()
         act_layer = act_layer or nn.ReLU
@@ -178,7 +182,7 @@ class MobileNetV3Features(nn.Module):
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
-            output_stride=output_stride, pad_type=pad_type, round_chs_fn=round_chs_fn,
+            output_stride=output_stride, pad_type=pad_type, round_chs_fn=round_chs_fn, se_from_exp=se_from_exp,
             act_layer=act_layer, norm_layer=norm_layer, se_layer=se_layer,
             drop_path_rate=drop_path_rate, feature_location=feature_location)
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
@@ -262,7 +266,7 @@ def _gen_mobilenet_v3_rw(variant, channel_multiplier=1.0, pretrained=False, **kw
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'hard_swish'),
-        se_layer=partial(SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), reduce_from_block=False),
+        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid'),
         **kwargs,
     )
     model = _create_mnv3(variant, pretrained, **model_kwargs)
@@ -350,13 +354,73 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
                 # stage 6, 7x7 in
                 ['cn_r1_k1_s1_c960'],  # hard-swish
             ]
-    se_layer = partial(
-        SqueezeExcite, gate_fn=get_act_fn('hard_sigmoid'), force_act_layer=nn.ReLU, reduce_from_block=False, divisor=8)
+    se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         num_features=num_features,
         stem_size=16,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=act_layer,
+        se_layer=se_layer,
+        **kwargs,
+    )
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_fbnetv3(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ FBNetV3
+    Paper: `FBNetV3: Joint Architecture-Recipe Search using Predictor Pretraining`
+        - https://arxiv.org/abs/2006.02049
+    FIXME untested, this is a preliminary impl of some FBNet-V3 variants.
+    """
+    vl = variant.split('_')[-1]
+    if vl in ('a', 'b'):
+        stem_size = 16
+        arch_def = [
+            ['ds_r2_k3_s1_e1_c16'],
+            ['ir_r1_k5_s2_e4_c24', 'ir_r3_k5_s1_e2_c24'],
+            ['ir_r1_k5_s2_e5_c40_se0.25', 'ir_r4_k5_s1_e3_c40_se0.25'],
+            ['ir_r1_k5_s2_e5_c72', 'ir_r4_k3_s1_e3_c72'],
+            ['ir_r1_k3_s1_e5_c120_se0.25', 'ir_r5_k5_s1_e3_c120_se0.25'],
+            ['ir_r1_k3_s2_e6_c184_se0.25', 'ir_r5_k5_s1_e4_c184_se0.25', 'ir_r1_k5_s1_e6_c224_se0.25'],
+            ['cn_r1_k1_s1_c1344'],
+        ]
+    elif vl == 'd':
+        stem_size = 24
+        arch_def = [
+            ['ds_r2_k3_s1_e1_c16'],
+            ['ir_r1_k3_s2_e5_c24', 'ir_r5_k3_s1_e2_c24'],
+            ['ir_r1_k5_s2_e4_c40_se0.25', 'ir_r4_k3_s1_e3_c40_se0.25'],
+            ['ir_r1_k3_s2_e5_c72', 'ir_r4_k3_s1_e3_c72'],
+            ['ir_r1_k3_s1_e5_c128_se0.25', 'ir_r6_k5_s1_e3_c128_se0.25'],
+            ['ir_r1_k3_s2_e6_c208_se0.25', 'ir_r5_k5_s1_e5_c208_se0.25', 'ir_r1_k5_s1_e6_c240_se0.25'],
+            ['cn_r1_k1_s1_c1440'],
+        ]
+    elif vl == 'g':
+        stem_size = 32
+        arch_def = [
+            ['ds_r3_k3_s1_e1_c24'],
+            ['ir_r1_k5_s2_e4_c40', 'ir_r4_k5_s1_e2_c40'],
+            ['ir_r1_k5_s2_e4_c56_se0.25', 'ir_r4_k5_s1_e3_c56_se0.25'],
+            ['ir_r1_k5_s2_e5_c104', 'ir_r4_k3_s1_e3_c104'],
+            ['ir_r1_k3_s1_e5_c160_se0.25', 'ir_r8_k5_s1_e3_c160_se0.25'],
+            ['ir_r1_k3_s2_e6_c264_se0.25', 'ir_r6_k5_s1_e5_c264_se0.25', 'ir_r2_k5_s1_e6_c288_se0.25'],
+            ['cn_r1_k1_s1_c1728'],
+        ]
+    else:
+        raise NotImplemented
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.95)
+    se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', rd_round_fn=round_chs_fn)
+    act_layer = resolve_act_layer(kwargs, 'hard_swish')
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        num_features=1984,
+        head_bias=False,
+        stem_size=stem_size,
+        round_chs_fn=round_chs_fn,
+        se_from_exp=False,
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=act_layer,
         se_layer=se_layer,
@@ -473,4 +537,25 @@ def tf_mobilenetv3_small_minimal_100(pretrained=False, **kwargs):
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_mobilenet_v3('tf_mobilenetv3_small_minimal_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def fbnetv3_b(pretrained=False, **kwargs):
+    """ FBNetV3-B """
+    model = _gen_fbnetv3('fbnetv3_b', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def fbnetv3_d(pretrained=False, **kwargs):
+    """ FBNetV3-D """
+    model = _gen_fbnetv3('fbnetv3_d', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def fbnetv3_g(pretrained=False, **kwargs):
+    """ FBNetV3-G """
+    model = _gen_fbnetv3('fbnetv3_g', pretrained=pretrained, **kwargs)
     return model
