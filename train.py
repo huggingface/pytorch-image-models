@@ -536,6 +536,10 @@ def setup_data(args, default_cfg, dev_env, mixup_active):
         use_multi_epochs_loader=args.use_multi_epochs_loader
     )
 
+    eval_workers = args.workers
+    if 'tfds' in args.dataset:
+        # FIXME reduce validation issues when using TFDS w/ workers and distributed training
+        eval_workers = min(2, args.workers)
     loader_eval = create_loader(
         dataset_eval,
         input_size=data_config['input_size'],
@@ -544,7 +548,7 @@ def setup_data(args, default_cfg, dev_env, mixup_active):
         interpolation=data_config['interpolation'],
         mean=data_config['mean'],
         std=data_config['std'],
-        num_workers=args.workers,
+        num_workers=eval_workers,
         crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
     )
