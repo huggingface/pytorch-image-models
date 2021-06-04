@@ -29,7 +29,7 @@ How is this different than other options?
 * I'm very much trying to avoid a monolithic trainer / learner / model wrapping type class with billions of hooks (avoiding granular inversion of control!). 
 * The goal is to provide reusable modules that can (hopefully) be mixed and matched w/ other code.
 * Many of the components are based on Python dataclasses to reduce boilerplate.
-* The train loop components are (will be) functional with easy to follow flow control, and are intended to be replaced when something different is needed, not augmented with extremely granular hooks.  
+* The train loop components are (will be) functional with easy to follow flow control, and are intended to be replaced when something different is needed, not augmented with hooks via callbacks or inheritence at every conceivable touch point.
 
 
 ## Quick Start
@@ -44,7 +44,7 @@ This setup assumes you've SSH'd into your TPU-VM after setting it up (https://cl
 
 The TPU-VM instances I've been using have a usable version of PyTorch XLA 1.8.1 installed in the python3 environment, we will be using that.
 
-I've found that leveraging TFDS w/ datasets in TFRecord format, streamed from Google Storage buckets is the most practical / cost-effective solution. I've written a PyTorch IterabeDataset wrapper around TFDS so we will install Tensorflow datasets and use that.
+I've found that leveraging TFDS w/ datasets in TFRecord format, streamed from Google Storage buckets is the most practical / cost-effective solution. I've written a PyTorch IterabeDataset wrapper around TFDS so we will install Tensorflow datasets and use that. Note that traditionaly PyTorch datasets on local disks do work both on TPU-VM, GPU cloud instances, or you local machine. Setting up persistent disks wasn't the easiest thing to do on TPU-VM for awhile so TFDS was my default.
 
 One thing to watch, be very careful that you don't use a GS based dataset in a different continent from you TPU-VM instances. I burned through a few thousand USD leaving some wires crossed for 1 day. Otherwise the cost of training w/ buckets in same region are quite low.
 
