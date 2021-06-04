@@ -14,7 +14,7 @@ The current train.py and validate.py scripts are evolving to use the timm.bits c
 `timm` models will always be useable in pure PyTorch w/o `bits` or anything besides the utils / helpers for pretrained models, feature extraction, default data config. I may breakout bits into a diff project if there is any interest besides my own use for timm image and video model training.
 
 The layers:
-* Device - DeviceEnv dataclass abstraction deals with PyTorch CPU, GPU and XLA device differences, incl distributed helpers, wrappers, etc. There is more than a passing similarity to HuggingFace Accelerate, but developed in parallel and with some difference in the detail.
+* DeviceEnv - DeviceEnv dataclass abstraction deals with PyTorch CPU, GPU and XLA device differences, incl distributed helpers, wrappers, etc. There is more than a passing similarity to HuggingFace Accelerate, but developed in parallel and with some difference in the detail.
 * Updater - Dataclass that combines the backward pass, optimizer step, grad scaling, grad accumulation is a possibly device specific abstraction.
   * Currently basic single optimizer, single forward/backward Updaters are included for GPU, XLA.
   * Deepseed will need its own Updater(s) since its Engine is a monolith of epic proportions that breaks all separations of concern in PyTorch (UGH!). NOTE Deepspeed not working yet nor is it a priority.
