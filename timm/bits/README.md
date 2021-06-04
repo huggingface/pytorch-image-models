@@ -104,8 +104,13 @@ NOTE: build my TFDS dataset at ver 5.0.0 and it defaults to a newer version now.
 * There are a number of models using ops that aren't lowered to XLA, this will REALLY slow things down to the point of being unusable. There are flags you can set to debug this, see PyTorch XLA troubleshooting page (https://github.com/pytorch/xla/blob/master/TROUBLESHOOTING.md)
   * For NFNet models, force the ScaledStdConv `use_layernorm` arg to True, it is lowered, `std_mean` op is not
 * This code doesn't currently work when float16 is forced via `XLA_USE_BF16=1` env arg, it will mess up metrics tensors that overflow in bfloat16. Better controlling model activation vs weight precision vs other tensors is a TODO.
+* I haven't tested this code with pre TPU-VM (2-VM) setups, but it should work w/ correct config. I intend to make it work with Colab and Kaggle TPU notebooks soon.
 * Your first batch, and generally first epoch will be slow with Pytorch XLA, after that things pick up and move along quickly. Be patient.
 
 # Bugs and Discussion
 
-If you find bugs, there are likely many. Feel free to file an issue with `[BITS]` as the prefix. Open a discussion if you have design ideas, again use `[BITS]` in the title.
+If you find bugs (there are likely many), feel free to file an issue with `[BITS]` as the title prefix. Open a discussion if you have design ideas, again use `[BITS]` in the title.
+
+# Acknowledgements
+
+The TPU-VMs I've used for creating and testing this code, and that I hope to use for many future `timm` models were made available by the TPU Research Cloud (https://sites.research.google/trc/).
