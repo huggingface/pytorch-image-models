@@ -1,14 +1,15 @@
 from .avg_scalar import AvgMinMaxScalar
 from .avg_tensor import AvgTensor
-from .device_env import DeviceEnv, DeviceEnvType
+from .checkpoint_manager import CheckpointManager
+from .device_env import DeviceEnv, DeviceEnvType, get_global_device, set_global_device, is_global_device
 from .device_env_cuda import DeviceEnvCuda
-from .device_env_factory import initialize_device, get_device
+from .device_env_factory import initialize_device
 from .device_env_xla import DeviceEnvXla
 from .distributed import distribute_bn, all_gather_recursive, all_reduce_recursive, broadcast_recursive,\
     all_reduce_sequence, all_gather_sequence
 # from .evaluate import evaluate, eval_step
-from .logger import Logger
-from .metric import Metric, MetricValue
+from .monitor import Monitor
+from .metric import Metric, MetricValueT
 from .metric_accuracy import AccuracyTopK
 from .tracker import Tracker
 # from .task_metrics import TaskMetrics, TaskMetricsClassify

@@ -3,7 +3,6 @@ from typing import Callable, Optional, Union, Any
 import torch
 
 from .device_env import DeviceEnv, DeviceEnvType
-from .device_env_factory import get_device
 from .updater import Updater
 from .updater_cuda import UpdaterCudaWithScaler
 from .updater_deepspeed import UpdaterDeepSpeed
@@ -21,7 +20,7 @@ def create_updater(
 ) -> Updater:
 
     if not dev_env:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
 
     updater_kwargs = dict(model=model, optimizer=optimizer, clip_fn=clip_fn, clip_value=clip_value)
     use_scaler = dev_env.amp

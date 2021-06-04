@@ -6,14 +6,13 @@ import torch
 from torch.distributed import ReduceOp
 
 from .device_env import DeviceEnv
-from .device_env_factory import get_device
 from .distributed import all_gather_sequence, all_reduce_sequence
 
-MetricValue = Union[float, torch.Tensor, List[float], List[torch.Tensor]]
+MetricValueT = Union[float, torch.Tensor, List[float], List[torch.Tensor]]
 
 @dataclass
 class ValueInfo:
-    initial: Optional[MetricValue] = 0.
+    initial: Optional[MetricValueT] = 0.
     dtype: torch.dtype = torch.float32
     dist_reduce: str = 'sum'
     dist_average: bool = False
@@ -23,10 +22,10 @@ class Metric(abc.ABC):
 
     def __init__(self, dev_env: DeviceEnv = None):
         self._infos: Dict[str, ValueInfo] = {}
-        self._values: Dict[str, Optional[MetricValue]] = {}
-        self._values_dist: Dict[str, Optional[MetricValue]] = {}
+        self._values: Dict[str, Optional[MetricValueT]] = {}
+        self._values_dist: Dict[str, Optional[MetricValueT]] = {}
         if dev_env is None:
-            dev_env = get_device()
+            dev_env = DeviceEnv.instance()
         self._dev_env = dev_env
 
     def _register_value(self, name: str, info: Optional[ValueInfo] = None):
@@ -117,7 +116,7 @@ class Metric(abc.ABC):
                 names.append(name)
                 values.append(value)
                 reductions.append(_args(info.dist_reduce))
-        same_dsr = False
+
         if same_dsr:
             do_gather, reduce_kwargs = reductions[0]
             if do_gather:

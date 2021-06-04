@@ -16,7 +16,12 @@ def is_cuda_available():
 @dataclass
 class DeviceEnvCuda(DeviceEnv):
 
-    def __post_init__(self, device_type: str, device_index: Optional[int]):
+    def __post_init__(
+            self,
+            device_type: Optional[str],
+            device_index: Optional[int],
+            channels_last: bool,
+    ):
         assert torch.cuda.device_count()
         torch.backends.cudnn.benchmark = True
         setup_world_size = self.world_size or int(os.environ.get('WORLD_SIZE', 1))
@@ -43,6 +48,8 @@ class DeviceEnvCuda(DeviceEnv):
             self.global_rank = 0
         if self.autocast is None:
             self.autocast = torch.cuda.amp.autocast if self.amp else suppress
+        if channels_last:
+            self.memory_format = torch.channels_last
 
     @property
     def type(self) -> DeviceEnvType:

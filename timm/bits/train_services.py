@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 
-from .logger import Logger
-from timm.utils.checkpoint_saver import CheckpointSaver
+from .monitor import Monitor
+from .checkpoint_manager import CheckpointManager
 
 
 @dataclass
 class TrainServices:
     """ Train Loop Services
     """
-    logger: Logger = None
-    saver: CheckpointSaver = None
+    logger: Monitor = None
+    checkpoint_manager: CheckpointManager = None
 

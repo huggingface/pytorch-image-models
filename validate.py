@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 
-from timm.bits import initialize_device, Tracker, Logger, AccuracyTopK, AvgTensor
+from timm.bits import initialize_device, Tracker, Monitor, AccuracyTopK, AvgTensor
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
 from timm.utils import natural_key, setup_default_logging
@@ -154,7 +154,7 @@ def validate(args):
         pin_memory=args.pin_mem,
         tf_preprocessing=args.tf_preprocessing)
 
-    logger = Logger(python_logger=_logger)
+    logger = Monitor(logger=_logger)
     tracker = Tracker()
     losses = AvgTensor()
     accuracy = AccuracyTopK(dev_env=dev_env)

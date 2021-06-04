@@ -24,3 +24,7 @@ class UpdaterDeepSpeed(Updater):
         self.model.backward(loss)
         self.model.step()
         self.reset()
+
+    @property
+    def deepspeed(self):
+        return True

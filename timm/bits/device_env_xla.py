@@ -1,7 +1,7 @@
 import os
 from contextlib import suppress
 from dataclasses import dataclass, field, InitVar
-from typing import Optional
+from typing import Optional, Dict
 
 import torch
 from torch.distributed import ReduceOp
@@ -42,7 +42,12 @@ def is_xla_available(xla_device_type=None):
 @dataclass
 class DeviceEnvXla(DeviceEnv):
 
-    def __post_init__(self, device_type: Optional[str], device_idx: Optional[int]):
+    def __post_init__(
+            self,
+            device_type: Optional[str],
+            device_idx: Optional[int],
+            channels_last: bool,
+    ):
         if device_type is not None:
             device_type = device_type.upper()
             assert device_type in ('TPU', 'GPU', 'CPU'), "XLA device type must be one of ('TPU', 'GPU', 'CPU')"
@@ -59,6 +64,8 @@ class DeviceEnvXla(DeviceEnv):
             assert xa is not None, 'XLA AMP is not present on this build'
         if self.autocast is None:
             self.autocast = xa.autocast if self.amp else suppress
+        if channels_last:
+            self.memory_format = torch.channels_last
 
     @property
     def type(self) -> DeviceEnvType:
@@ -114,3 +121,11 @@ class DeviceEnvXla(DeviceEnv):
 
     def barrier(self):
         xm.rendezvous('timm.bits.dist_barrier')
+
+    def state_dict_to_cpu(self, state: Dict[str, torch.Tensor]):
+        cpu_state = xm._maybe_convert_to_cpu(state, convert=True)
+        return cpu_state
+
+    def state_dict_to_device(self, state: Dict[str, torch.Tensor]):
+        device_state = xm.send_cpu_data_to_device(state, device=self.device)
+        return device_state

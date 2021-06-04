@@ -21,8 +21,6 @@ except ImportError:
     HAS_WANDB = False
 
 
-from .device_env_factory import get_device
-
 # FIXME old formatting for reference, to remove
 #
 # def log_eval(batch_idx, last_idx, batch_time, loss, top1, top5, log_suffix=''):
@@ -122,19 +120,19 @@ def _add_kwargs(text_update, name_map=None, **kwargs):
             text_update += [_to_str(name, v)]
 
 
-class Logger:
+class Monitor:
 
     def __init__(
             self,
             experiment_name=None,
             output_dir=None,
-            python_logger=None,
+            logger=None,
             hparams=None,
             log_wandb=False,
             output_enabled=True,
     ):
         self.output_dir = output_dir  # for tensorboard, csv, text file (TODO) logging
-        self.logger = python_logger or logging.getLogger('log')
+        self.logger = logger or logging.getLogger('log')
         hparams = hparams or {}
 
         # Setup CSV writer(s)

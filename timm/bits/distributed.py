@@ -5,8 +5,7 @@ from torch.distributed import ReduceOp
 
 from timm.utils import unwrap_model
 
-from .device_env import DeviceEnv, DeviceEnvType
-from .device_env_factory import get_device
+from .device_env import DeviceEnv
 
 
 TensorSeq = Union[torch.Tensor, Tuple[torch.Tensor, ...], List[torch.Tensor], Dict[Any, torch.Tensor]]
@@ -22,7 +21,7 @@ def _validate_type(tensor: TensorSeq):
 
 def distribute_bn(model: torch.nn.Module, reduce: bool = False, dev_env: DeviceEnv = None):
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
     # ensure every node has the same running bn stats
     for bn_name, bn_buf in unwrap_model(model).named_buffers(recurse=True):
         if ('running_mean' in bn_name) or ('running_var' in bn_name):
@@ -40,7 +39,7 @@ def all_gather_recursive(tensor: TensorSeq, cat_dim=0, dev_env: DeviceEnv = None
     """
     _validate_type(tensor)
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
     if isinstance(tensor, torch.Tensor):
         return dev_env.all_gather(tensor, cat_dim=cat_dim)
     elif isinstance(tensor, dict):
@@ -55,7 +54,7 @@ def all_reduce_recursive(tensor: TensorSeq, op=ReduceOp.SUM, average=False, dev_
     """
     _validate_type(tensor)
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
     if isinstance(tensor, torch.Tensor):
         return dev_env.all_reduce_(tensor, op=op, average=average)
     elif isinstance(tensor, dict):
@@ -70,7 +69,7 @@ def broadcast_recursive(tensor: TensorSeq, src_rank: int, dev_env: DeviceEnv = N
     """
     _validate_type(tensor)
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
     if isinstance(tensor, torch.Tensor):
         return dev_env.broadcast_(tensor, src_rank=src_rank)
     elif isinstance(tensor, dict):
@@ -85,7 +84,7 @@ def all_gather_sequence(tensor: TensorSeq, cat_dim: int = 0, dev_env: DeviceEnv 
     """
     _validate_type(tensor)
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
 
     with torch.no_grad():
         names = None
@@ -124,7 +123,7 @@ def all_reduce_sequence(tensor: TensorSeq, op=ReduceOp.SUM, average=False, dev_e
     """
     _validate_type(tensor)
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
 
     with torch.no_grad():
         names = None

@@ -8,7 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 
 import torch.utils.data
 
-from timm.bits import get_device, DeviceEnvType
+from timm.bits import DeviceEnv
 
 from .fetcher import Fetcher
 from .prefetcher_cuda import PrefetcherCuda
@@ -75,7 +75,7 @@ def create_loader(
     )
 
     if dev_env is None:
-        dev_env = get_device()
+        dev_env = DeviceEnv.instance()
 
     sampler = None
     if dev_env.distributed and not isinstance(dataset, torch.utils.data.IterableDataset):

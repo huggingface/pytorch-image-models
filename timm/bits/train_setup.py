@@ -13,7 +13,7 @@ try:
 except ImportError:
     ds = None
 
-from .checkpoint import resume_train_checkpoint
+from .checkpoint import load_train_state
 from .device_env import DeviceEnv
 from .train_cfg import TrainCfg
 from .train_state import TrainState
@@ -90,10 +90,10 @@ def setup_model_and_optimizer(
 
     if resume_path:
         # FIXME this is not implemented yet, do a hack job before proper TrainState serialization?
-        resume_train_checkpoint(
+        load_train_state(
             train_state,
             resume_path,
-            resume_opt=resume_opt,
+            load_opt=resume_opt,
             log_info=dev_env.primary)
 
     if dev_env.distributed:
@@ -141,10 +141,10 @@ def setup_model_and_optimizer_deepspeed(
 
     if resume_path:
         # FIXME deepspeed resumes differently
-        resume_train_checkpoint(
+        load_legacy_checkpoint(
             train_state,
             resume_path,
-            resume_opt=resume_opt,
+            load_opt=resume_opt,
             log_info=dev_env.primary)
 
     if dev_env.distributed:

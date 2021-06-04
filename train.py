@@ -28,14 +28,14 @@ import torch
 import torch.nn as nn
 import torchvision.utils
 
-from timm.bits import initialize_device, setup_model_and_optimizer, DeviceEnv, Logger, Tracker,\
-    TrainState, TrainServices, TrainCfg, AccuracyTopK, AvgTensor, distribute_bn
+from timm.bits import initialize_device, setup_model_and_optimizer, DeviceEnv, Monitor, Tracker,\
+    TrainState, TrainServices, TrainCfg, CheckpointManager, AccuracyTopK, AvgTensor, distribute_bn
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.models import create_model, safe_model_name, convert_splitbn_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
-from timm.optim import create_optimizer_v2, optimizer_kwargs
+from timm.optim import optimizer_kwargs
 from timm.scheduler import create_scheduler
-from timm.utils import setup_default_logging, random_seed, get_outdir, CheckpointSaver
+from timm.utils import setup_default_logging, random_seed, get_outdir, unwrap_model
 
 
 _logger = logging.getLogger('train')
@@ -276,7 +276,7 @@ def main():
     setup_default_logging()
     args, args_text = _parse_args()
 
-    dev_env = initialize_device(amp=args.amp)
+    dev_env = initialize_device(amp=args.amp, channels_last=args.channels_last)
     if dev_env.distributed:
         _logger.info('Training in distributed mode with multiple processes, 1 device per process. Process %d, total %d.'
                      % (dev_env.global_rank, dev_env.world_size))
@@ -293,13 +293,17 @@ def main():
     # FIXME perhaps keep the same and just set diff seeds for dataloader worker process? what about TFDS?
     random_seed(args.seed, dev_env.global_rank)
 
-    data_config, loader_eval, loader_train = setup_data(args, train_state.model.default_cfg, dev_env, mixup_active)
+    data_config, loader_eval, loader_train = setup_data(
+        args,
+        unwrap_model(train_state.model).default_cfg,
+        dev_env,
+        mixup_active)
 
-    # setup checkpoint saver
+    # setup checkpoint manager
     eval_metric = args.eval_metric
     best_metric = None
     best_epoch = None
-    saver = None
+    checkpoint_manager = None
     output_dir = None
     if dev_env.primary:
         if args.experiment:
@@ -311,24 +315,20 @@ def main():
                 str(data_config['input_size'][-1])
             ])
         output_dir = get_outdir(args.output if args.output else './output/train', exp_name)
-        decreasing = True if eval_metric == 'loss' else False
-        saver = CheckpointSaver(  # TODO CheckpointSaverV2
-            model=train_state.model,
-            optimizer=train_state.updater.optimizer,
-            args=args,
-            model_ema=train_state.model_ema,
-            amp_scaler=train_state.updater.grad_scaler,
+        checkpoint_manager = CheckpointManager(
+            hparams=vars(args),
             checkpoint_dir=output_dir,
             recovery_dir=output_dir,
-            decreasing=decreasing,
+            metric_name=eval_metric,
+            metric_decreasing=True if eval_metric == 'loss' else False,
             max_history=args.checkpoint_hist)
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
     services = TrainServices(
-        logger=Logger(
-            output_dir=output_dir, python_logger=_logger, hparams=vars(args), output_enabled=dev_env.primary),
-        saver=saver,
+        logger=Monitor(
+            output_dir=output_dir, logger=_logger, hparams=vars(args), output_enabled=dev_env.primary),
+        checkpoint_manager=checkpoint_manager,
     )
 
     try:
@@ -379,10 +379,10 @@ def main():
             if services.logger is not None:
                 services.logger.write_summary(index=epoch, results=dict(train=train_metrics, eval=eval_metrics))
 
-            if saver is not None:
+            if checkpoint_manager is not None:
                 # save proper checkpoint with eval metric
-                save_metric = eval_metrics[eval_metric]
-                best_metric, best_epoch = saver.save_checkpoint(epoch, metric=save_metric)
+                best_checkpoint = checkpoint_manager.save_checkpoint(train_state, eval_metrics)
+                best_metric, best_epoch = best_checkpoint.sort_key, best_checkpoint.epoch
 
             train_state = replace(train_state, epoch=epoch + 1)
 
@@ -629,9 +629,9 @@ def after_train_step(
                     lr=lr_avg,
                 )
 
-        if services.saver is not None and cfg.recovery_interval and (
+        if services.checkpoint_manager is not None and cfg.recovery_interval and (
                 end_step or (step_idx + 1) % cfg.recovery_interval == 0):
-            services.saver.save_recovery(state.epoch, batch_idx=step_idx)
+            services.checkpoint_manager.save_recovery(state.epoch, batch_idx=step_idx)
 
         if state.lr_scheduler is not None:
             state.lr_scheduler.step_update(num_updates=state.step_count_global)
@@ -641,7 +641,7 @@ def evaluate(
         model: nn.Module,
         loss_fn: nn.Module,
         loader,
-        logger: Logger,
+        logger: Monitor,
         dev_env: DeviceEnv,
         phase_suffix: str = '',
         log_interval: int = 10,

@@ -56,6 +56,7 @@ class Updater:
         state_dict = dict(optimizer=self.optimizer.state_dict())
         if self.grad_scaler is not None:
             state_dict['grad_scaler'] = self.grad_scaler.state_dict()
+        return state_dict
 
     def load_state_dict(self, state_dict):
         if 'optimizer' in state_dict:
@@ -66,3 +67,6 @@ class Updater:
     def after_step(self, after_step_fn, *args):
         after_step_fn(*args)
 
+    @property
+    def deepspeed(self):
+        return False

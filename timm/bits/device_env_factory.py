@@ -1,15 +1,15 @@
-from .device_env import DeviceEnv
+import logging
+
+from .device_env import DeviceEnv, is_global_device, get_global_device, set_global_device
 from .device_env_cuda import DeviceEnvCuda, is_cuda_available
 from .device_env_xla import DeviceEnvXla, is_xla_available
 
-_device_env = None
+_logger = logging.getLogger(__name__)
 
 
 def initialize_device(force_cpu: bool = False, **kwargs) -> DeviceEnv:
-    global _device_env
-    if _device_env is not None:
-        # warning
-        return _device_env
+    if is_global_device():
+        return get_global_device()
 
     denv = None
     if not force_cpu:
@@ -23,14 +23,10 @@ def initialize_device(force_cpu: bool = False, **kwargs) -> DeviceEnv:
     if denv is None:
         denv = DeviceEnv()
 
-    print(denv)  # FIXME DEBUG
-    _device_env = denv
+    _logger.info(f'Initialized device {denv.device}. '
+                 f'Rank: {denv.global_rank} ({denv.local_rank}) of {denv.world_size}.')
+    print(denv)  # FIXME temporary print for debugging
+
+    set_global_device(denv)
     return denv
-
-
-def get_device() -> DeviceEnv:
-    if _device_env is None:
-        raise RuntimeError('Please initialize device environment by calling initialize_device first.')
-    return _device_env
-
 

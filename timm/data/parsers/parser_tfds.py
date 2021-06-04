@@ -23,7 +23,7 @@ except ImportError as e:
     exit(1)
 from .parser import Parser
 
-from timm.bits import get_device
+from timm.bits import get_global_device
 
 MAX_TP_SIZE = 8  # maximum TF threadpool size, only doing jpeg decodes and queuing activities
 SHUFFLE_SIZE = 16834  # samples to shuffle in DS queue
@@ -80,7 +80,7 @@ class ParserTfds(Parser):
         self.worker_info = None
         self.dist_rank = 0
         self.dist_num_replicas = 1
-        dev_env = get_device()
+        dev_env = get_global_device()
         # FIXME allow to work without devenv usage?
         if dev_env.distributed and dev_env.world_size > 1:
             self.dist_rank = dev_env.global_rank
