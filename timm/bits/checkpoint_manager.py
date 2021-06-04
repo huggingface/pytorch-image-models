@@ -86,7 +86,7 @@ class CheckpointManager:
             try:
                 if os.path.exists(dst):
                     os.unlink(dst)  # required for Windows support.
-            except Exception as e:
+            except (OSError, NotImplementedError) as e:
                 self.can_hardlink = False
         os.replace(src, dst)
 
@@ -98,7 +98,7 @@ class CheckpointManager:
                     os.unlink(dst)
                 os.link(src, dst)
                 return
-            except Exception as e:
+            except (OSError, NotImplementedError) as e:
                 self.can_hardlink = False
         shutil.copy2(src, dst)
 
@@ -153,8 +153,8 @@ class CheckpointManager:
         for d in to_delete:
             try:
                 _logger.debug("Cleaning checkpoint: {}".format(d))
-                os.remove(d[0])
-            except Exception as e:
+                os.remove(d.path)
+            except OSError as e:
                 _logger.error("Exception '{}' while deleting checkpoint".format(e))
         self.checkpoint_files = self.checkpoint_files[:delete_index]
 

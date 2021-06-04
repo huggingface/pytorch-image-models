@@ -8,6 +8,6 @@ from .checkpoint_manager import CheckpointManager
 class TrainServices:
     """ Train Loop Services
     """
-    logger: Monitor = None
-    checkpoint_manager: CheckpointManager = None
+    monitor: Monitor = None
+    checkpoint: CheckpointManager = None
 

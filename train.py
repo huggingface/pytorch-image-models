@@ -287,7 +287,8 @@ def main():
 
     random_seed(args.seed, 0)  # Set all random seeds the same for model/state init (mandatory for XLA)
 
-    train_state, train_cfg = setup_train_task(args, dev_env, mixup_active)
+    train_state = setup_train_task(args, dev_env, mixup_active)
+    train_cfg = train_state.train_cfg
 
     # Set random seeds across ranks differently for train
     # FIXME perhaps keep the same and just set diff seeds for dataloader worker process? what about TFDS?
@@ -326,9 +327,12 @@ def main():
             f.write(args_text)
 
     services = TrainServices(
-        logger=Monitor(
-            output_dir=output_dir, logger=_logger, hparams=vars(args), output_enabled=dev_env.primary),
-        checkpoint_manager=checkpoint_manager,
+        monitor=Monitor(
+            output_dir=output_dir,
+            logger=_logger,
+            hparams=vars(args),
+            output_enabled=dev_env.primary),
+        checkpoint=checkpoint_manager,
     )
 
     try:
@@ -341,7 +345,6 @@ def main():
 
             train_metrics = train_one_epoch(
                 state=train_state,
-                cfg=train_cfg,
                 services=services,
                 loader=loader_train,
                 dev_env=dev_env,
@@ -356,7 +359,7 @@ def main():
                 train_state.model,
                 train_state.eval_loss,
                 loader_eval,
-                services.logger,
+                services.monitor,
                 dev_env)
 
             if train_state.model_ema is not None and not args.model_ema_force_cpu:
@@ -367,7 +370,7 @@ def main():
                     train_state.model_ema.module,
                     train_state.eval_loss,
                     loader_eval,
-                    services.logger,
+                    services.monitor,
                     dev_env,
                     phase_suffix='EMA')
                 eval_metrics = ema_eval_metrics
@@ -376,8 +379,10 @@ def main():
                 # step LR for next epoch
                 train_state.lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
 
-            if services.logger is not None:
-                services.logger.write_summary(index=epoch, results=dict(train=train_metrics, eval=eval_metrics))
+            if services.monitor is not None:
+                services.monitor.write_summary(
+                    index=epoch,
+                    results=dict(train=train_metrics, eval=eval_metrics))
 
             if checkpoint_manager is not None:
                 # save proper checkpoint with eval metric
@@ -459,18 +464,21 @@ def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
     if dev_env.primary:
         _logger.info('Scheduled epochs: {}'.format(num_epochs))
 
+    train_cfg = TrainCfg(
+        num_epochs=num_epochs,
+        log_interval=args.log_interval,
+        recovery_interval=args.recovery_interval,
+    )
+
     train_state = replace(
         train_state,
         lr_scheduler=lr_scheduler,
         train_loss=train_loss_fn,
-        eval_loss=eval_loss_fn)
+        eval_loss=eval_loss_fn,
+        train_cfg=train_cfg,
+    )
 
-    train_cfg = TrainCfg(
-        num_epochs=num_epochs,
-        log_interval=args.log_interval,
-        recovery_interval=args.recovery_interval)
-
-    return train_state, train_cfg
+    return train_state
 
 
 def setup_data(args, default_cfg, dev_env, mixup_active):
@@ -545,13 +553,12 @@ def setup_data(args, default_cfg, dev_env, mixup_active):
 
 def train_one_epoch(
         state: TrainState,
-        cfg: TrainCfg,
         services: TrainServices,
         loader,
         dev_env: DeviceEnv,
 ):
     tracker = Tracker()
-    loss_meter = AvgTensor()
+    loss_meter = AvgTensor()  # FIXME move loss meter into task specific TaskMetric
 
     state.model.train()
     state.updater.reset()  # zero-grad
@@ -573,7 +580,6 @@ def train_one_epoch(
         state.updater.after_step(
             after_train_step,
             state,
-            cfg,
             services,
             dev_env,
             step_idx,
@@ -594,7 +600,6 @@ def train_one_epoch(
 
 def after_train_step(
         state: TrainState,
-        cfg: TrainCfg,
         services: TrainServices,
         dev_env: DeviceEnv,
         step_idx: int,
@@ -603,6 +608,27 @@ def after_train_step(
         loss_meter: AvgTensor,
         tensors: Tuple[torch.Tensor, ...],
 ):
+    """
+    After the core loss / backward / gradient apply step, we perform all non-gradient related
+    activities here including updating meters, metrics, performing logging, and writing checkpoints.
+
+    Many / most of these operations require tensors to be moved to CPU, they shoud not be done
+    every step and for XLA use they should be done via the optimizer step_closure. This function includes
+    everything that should be executed within the step closure.
+
+    Args:
+        state:
+        services:
+        dev_env:
+        step_idx:
+        step_end_idx:
+        tracker:
+        loss_meter:
+        tensors:
+
+    Returns:
+
+    """
     end_step = step_idx == step_end_idx
 
     with torch.no_grad():
@@ -610,16 +636,18 @@ def after_train_step(
         loss_meter.update(loss, output.shape[0])
 
         if state.model_ema is not None:
+            # FIXME should ema update be included here or in train / updater step? does it matter?
             state.model_ema.update(state.model)
 
         state = replace(state, step_count_global=state.step_count_global + 1)
+        cfg = state.train_cfg
 
-        if services.logger is not None and end_step or (step_idx + 1) % cfg.log_interval == 0:
+        if services.monitor is not None and end_step or (step_idx + 1) % cfg.log_interval == 0:
             global_batch_size = dev_env.world_size * output.shape[0]
             loss_avg = loss_meter.compute()
-            if services.logger is not None:
+            if services.monitor is not None:
                 lr_avg = state.updater.get_average_lr()
-                services.logger.log_step(
+                services.monitor.log_step(
                     'Train',
                     step=step_idx,
                     step_end=step_end_idx,
@@ -629,11 +657,12 @@ def after_train_step(
                     lr=lr_avg,
                 )
 
-        if services.checkpoint_manager is not None and cfg.recovery_interval and (
+        if services.checkpoint is not None and cfg.recovery_interval and (
                 end_step or (step_idx + 1) % cfg.recovery_interval == 0):
-            services.checkpoint_manager.save_recovery(state.epoch, batch_idx=step_idx)
+            services.checkpoint.save_recovery(state.epoch, batch_idx=step_idx)
 
         if state.lr_scheduler is not None:
+            # FIXME perform scheduler update here or via updater after_step call?
             state.lr_scheduler.step_update(num_updates=state.step_count_global)
 
 
@@ -649,7 +678,7 @@ def evaluate(
 
     tracker = Tracker()
     losses_m = AvgTensor()
-    accuracy_m = AccuracyTopK()
+    accuracy_m = AccuracyTopK()  # FIXME move loss and accuracy modules into task specific TaskMetric obj
 
     model.eval()
 
@@ -666,7 +695,9 @@ def evaluate(
                     output = output[0]
                 loss = loss_fn(output, target)
 
-            dev_env.mark_step()  # FIXME
+            # FIXME, explictly marking step for XLA use since I'm not using the parallel xm loader
+            # need to investigate whether parallel loader wrapper is helpful on tpu-vm or only usefor for 2-vm setup.
+            dev_env.mark_step()
             tracker.mark_iter_step_end()
             losses_m.update(loss, output.size(0))
             accuracy_m.update(output, target)
