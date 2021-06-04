@@ -44,7 +44,7 @@ This setup assumes you've SSH'd into your TPU-VM after setting it up (https://cl
 
 The TPU-VM instances I've been using have a usable version of PyTorch XLA 1.8.1 installed in the python3 environment, we will be using that.
 
-I've found that leveraging TFDS w/ datasets in TFRecord format, streamed from Google Storage buckets is the most practical / cost-effective solution. I've written a PyTorch IterabeDataset wrapper around TFDS so we will install Tensorflow datasets and use that. Note that traditionaly PyTorch datasets on local disks do work both on TPU-VM, GPU cloud instances, or you local machine. Setting up persistent disks wasn't the easiest thing to do on TPU-VM for awhile so TFDS was my default.
+I've found that leveraging TFDS w/ datasets in TFRecord format, streamed from Google Storage buckets is the most practical / cost-effective solution. I've written a PyTorch IterabeDataset wrapper around TFDS so we will install Tensorflow datasets and use that. Traditional PyTorch datasets on local disks do work w/ bits for all of TPU-VM, GPU cloud instances, and your local machine. Setting up persistent disks wasn't the easiest thing to do on TPU-VMs so TFDS was my default in that context.
 
 One thing to watch, be very careful that you don't use a GS based dataset in a different continent from you TPU-VM instances. I burned through a few thousand USD leaving some wires crossed for 1 day. Otherwise the cost of training w/ buckets in same region are quite low.
 
