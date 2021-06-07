@@ -92,8 +92,7 @@ class LinearBottleneck(nn.Module):
         if self.use_shortcut:
             if self.drop_path is not None:
                 x = self.drop_path(x)
-            
-	    x[:, 0:self.in_channels] += shortcut
+            x[:, 0:self.in_channels] += shortcut
         return x
 
 
