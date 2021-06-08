@@ -118,7 +118,7 @@ def _resnetv2(layers=(3, 4, 9), **kwargs):
     padding_same = kwargs.get('padding_same', True)
     if padding_same:
         stem_type = 'same'
-        conv_layer = StdConv2dSame
+        conv_layer = partial(StdConv2dSame, eps=1e-5)
     else:
         stem_type = ''
         conv_layer = StdConv2d

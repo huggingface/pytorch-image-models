@@ -19,17 +19,22 @@ class StdConv2d(nn.Conv2d):
     """
     def __init__(
             self, in_channel, out_channels, kernel_size, stride=1, padding=None, dilation=1,
-            groups=1, bias=False, eps=1e-5):
+            groups=1, bias=False, eps=1e-5, use_layernorm=True):
         if padding is None:
             padding = get_padding(kernel_size, stride, dilation)
         super().__init__(
             in_channel, out_channels, kernel_size, stride=stride,
             padding=padding, dilation=dilation, groups=groups, bias=bias)
         self.eps = eps
+        self.use_layernorm = use_layernorm
 
     def get_weight(self):
-        std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-        weight = (self.weight - mean) / (std + self.eps)
+        if self.use_layernorm:
+            # NOTE F.layer_norm is being used to compute (self.weight - mean) / (sqrt(var) + self.eps) in one op
+            weight = F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
+        else:
+            std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
+            weight = (self.weight - mean) / (std + self.eps)
         return weight
 
     def forward(self, x):
@@ -45,17 +50,22 @@ class StdConv2dSame(nn.Conv2d):
     """
     def __init__(
             self, in_channel, out_channels, kernel_size, stride=1, padding='SAME', dilation=1,
-            groups=1, bias=False, eps=1e-5):
+            groups=1, bias=False, eps=1e-5, use_layernorm=True):
         padding, is_dynamic = get_padding_value(padding, kernel_size, stride=stride, dilation=dilation)
         super().__init__(
             in_channel, out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation,
             groups=groups, bias=bias)
         self.same_pad = is_dynamic
         self.eps = eps
+        self.use_layernorm = use_layernorm
 
     def get_weight(self):
-        std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-        weight = (self.weight - mean) / (std + self.eps)
+        if self.use_layernorm:
+            # NOTE F.layer_norm is being used to compute (self.weight - mean) / (sqrt(var) + self.eps) in one op
+            weight = F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
+        else:
+            std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
+            weight = (self.weight - mean) / (std + self.eps)
         return weight
 
     def forward(self, x):
@@ -76,7 +86,7 @@ class ScaledStdConv2d(nn.Conv2d):
 
     def __init__(
             self, in_channels, out_channels, kernel_size, stride=1, padding=None, dilation=1, groups=1,
-            bias=True, gamma=1.0, eps=1e-5, gain_init=1.0, use_layernorm=False):
+            bias=True, gamma=1.0, eps=1e-5, gain_init=1.0, use_layernorm=True):
         if padding is None:
             padding = get_padding(kernel_size, stride, dilation)
         super().__init__(
@@ -84,16 +94,17 @@ class ScaledStdConv2d(nn.Conv2d):
             groups=groups, bias=bias)
         self.gain = nn.Parameter(torch.full((self.out_channels, 1, 1, 1), gain_init))
         self.scale = gamma * self.weight[0].numel() ** -0.5  # gamma * 1 / sqrt(fan-in)
-        self.eps = eps ** 2 if use_layernorm else eps
+        self.eps = eps
         self.use_layernorm = use_layernorm  # experimental, slightly faster/less GPU memory to hijack LN kernel
 
     def get_weight(self):
         if self.use_layernorm:
-            weight = self.scale * F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
+            # NOTE F.layer_norm is being used to compute (self.weight - mean) / (sqrt(var) + self.eps) in one op
+            weight = F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
         else:
             std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-            weight = self.scale * (self.weight - mean) / (std + self.eps)
-        return self.gain * weight
+            weight = (self.weight - mean) / (std + self.eps)
+        return weight.mul_(self.gain * self.scale)
 
     def forward(self, x):
         return F.conv2d(x, self.get_weight(), self.bias, self.stride, self.padding, self.dilation, self.groups)
@@ -110,7 +121,7 @@ class ScaledStdConv2dSame(nn.Conv2d):
 
     def __init__(
             self, in_channels, out_channels, kernel_size, stride=1, padding='SAME', dilation=1, groups=1,
-            bias=True, gamma=1.0, eps=1e-5, gain_init=1.0, use_layernorm=False):
+            bias=True, gamma=1.0, eps=1e-5, gain_init=1.0, use_layernorm=True):
         padding, is_dynamic = get_padding_value(padding, kernel_size, stride=stride, dilation=dilation)
         super().__init__(
             in_channels, out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation,
@@ -118,24 +129,17 @@ class ScaledStdConv2dSame(nn.Conv2d):
         self.gain = nn.Parameter(torch.full((self.out_channels, 1, 1, 1), gain_init))
         self.scale = gamma * self.weight[0].numel() ** -0.5
         self.same_pad = is_dynamic
-        self.eps = eps ** 2 if use_layernorm else eps
+        self.eps = eps
         self.use_layernorm = use_layernorm  # experimental, slightly faster/less GPU memory to hijack LN kernel
-
-    # NOTE an alternate formulation to consider, closer to DeepMind Haiku impl but doesn't seem
-    # to make much numerical difference (+/- .002 to .004) in top-1 during eval.
-    # def get_weight(self):
-    #         var, mean = torch.var_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-    #         scale = torch.rsqrt((self.weight[0].numel() * var).clamp_(self.eps)) * self.gain
-    #         weight = (self.weight - mean) * scale
-    #     return self.gain * weight
 
     def get_weight(self):
         if self.use_layernorm:
-            weight = self.scale * F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
+            # NOTE F.layer_norm is being used to compute (self.weight - mean) / (sqrt(var) + self.eps) in one op
+            weight = F.layer_norm(self.weight, self.weight.shape[1:], eps=self.eps)
         else:
             std, mean = torch.std_mean(self.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-            weight = self.scale * (self.weight - mean) / (std + self.eps)
-        return self.gain * weight
+            weight = (self.weight - mean) / (std + self.eps)
+        return weight.mul_(self.gain * self.scale)
 
     def forward(self, x):
         if self.same_pad:
