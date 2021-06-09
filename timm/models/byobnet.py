@@ -103,7 +103,7 @@ default_cfgs = {
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'bat_resnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
-        min_input_size=(3, 128, 128)),
+        min_input_size=(3, 256, 256)),
 }
 
 
