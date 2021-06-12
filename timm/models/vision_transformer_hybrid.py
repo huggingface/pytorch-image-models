@@ -116,12 +116,8 @@ def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwa
 def _resnetv2(layers=(3, 4, 9), **kwargs):
     """ ResNet-V2 backbone helper"""
     padding_same = kwargs.get('padding_same', True)
-    if padding_same:
-        stem_type = 'same'
-        conv_layer = partial(StdConv2dSame, eps=1e-5)
-    else:
-        stem_type = ''
-        conv_layer = StdConv2d
+    stem_type = 'same' if padding_same else ''
+    conv_layer = partial(StdConv2dSame, eps=1e-8) if padding_same else partial(StdConv2d, eps=1e-8)
     if len(layers):
         backbone = ResNetV2(
             layers=layers, num_classes=0, global_pool='', in_chans=kwargs.get('in_chans', 3),

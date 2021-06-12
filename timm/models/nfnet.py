@@ -167,7 +167,6 @@ class NfCfg:
     gamma_in_act: bool = False
     same_padding: bool = False
     std_conv_eps: float = 1e-5
-    std_conv_ln: bool = True  # use layer-norm impl to normalize in std-conv, works in PyTorch XLA, slightly faster
     skipinit: bool = False  # disabled by default, non-trivial performance impact
     zero_init_fc: bool = False
     act_layer: str = 'silu'
@@ -484,11 +483,10 @@ class NormFreeNet(nn.Module):
         conv_layer = ScaledStdConv2dSame if cfg.same_padding else ScaledStdConv2d
         if cfg.gamma_in_act:
             act_layer = act_with_gamma(cfg.act_layer, gamma=_nonlin_gamma[cfg.act_layer])
-            conv_layer = partial(conv_layer, eps=cfg.std_conv_eps, use_layernorm=cfg.std_conv_ln)
+            conv_layer = partial(conv_layer, eps=cfg.std_conv_eps)
         else:
             act_layer = get_act_layer(cfg.act_layer)
-            conv_layer = partial(
-                conv_layer, gamma=_nonlin_gamma[cfg.act_layer], eps=cfg.std_conv_eps, use_layernorm=cfg.std_conv_ln)
+            conv_layer = partial(conv_layer, gamma=_nonlin_gamma[cfg.act_layer], eps=cfg.std_conv_eps)
         attn_layer = partial(get_attn(cfg.attn_layer), **cfg.attn_kwargs) if cfg.attn_layer else None
 
         stem_chs = make_divisible((cfg.stem_chs or cfg.channels[0]) * cfg.width_factor, cfg.ch_div)

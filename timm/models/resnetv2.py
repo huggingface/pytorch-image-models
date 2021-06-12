@@ -276,7 +276,7 @@ class ResNetStage(nn.Module):
 
 def create_resnetv2_stem(
         in_chs, out_chs=64, stem_type='', preact=True,
-        conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32)):
+        conv_layer=partial(StdConv2d, eps=1e-8), norm_layer=partial(GroupNormAct, num_groups=32)):
     stem = OrderedDict()
     assert stem_type in ('', 'fixed', 'same', 'deep', 'deep_fixed', 'deep_same')
 
@@ -315,8 +315,8 @@ class ResNetV2(nn.Module):
     def __init__(self, layers, channels=(256, 512, 1024, 2048),
                  num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
                  width_factor=1, stem_chs=64, stem_type='', avg_down=False, preact=True,
-                 act_layer=nn.ReLU, conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32),
-                 drop_rate=0., drop_path_rate=0.):
+                 act_layer=nn.ReLU, conv_layer=partial(StdConv2d, eps=1e-8),
+                 norm_layer=partial(GroupNormAct, num_groups=32), drop_rate=0., drop_path_rate=0.):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
