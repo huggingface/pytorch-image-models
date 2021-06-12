@@ -84,63 +84,33 @@ __all__ = ['Levit']
 
 
 @register_model
-def levit_128s(pretrained=False, fuse=False,distillation=True, use_conv=False, **kwargs):
+def levit_128s(pretrained=False, use_conv=False, **kwargs):
     return create_levit(
-        'levit_128s', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
+        'levit_128s', pretrained=pretrained, use_conv=use_conv, **kwargs)
 
 
 @register_model
-def levit_128(pretrained=False, fuse=False, distillation=True, use_conv=False, **kwargs):
+def levit_128(pretrained=False, use_conv=False, **kwargs):
     return create_levit(
-        'levit_128', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
+        'levit_128', pretrained=pretrained, use_conv=use_conv, **kwargs)
 
 
 @register_model
-def levit_192(pretrained=False, fuse=False, distillation=True, use_conv=False, **kwargs):
+def levit_192(pretrained=False, use_conv=False, **kwargs):
     return create_levit(
-        'levit_192', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
+        'levit_192', pretrained=pretrained, use_conv=use_conv, **kwargs)
 
 
 @register_model
-def levit_256(pretrained=False, fuse=False, distillation=True, use_conv=False, **kwargs):
+def levit_256(pretrained=False, use_conv=False, **kwargs):
     return create_levit(
-        'levit_256', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
+        'levit_256', pretrained=pretrained, use_conv=use_conv, **kwargs)
 
 
 @register_model
-def levit_384(pretrained=False, fuse=False, distillation=True, use_conv=False, **kwargs):
+def levit_384(pretrained=False, use_conv=False, **kwargs):
     return create_levit(
-        'levit_384', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
-
-
-@register_model
-def levit_c_128s(pretrained=False, fuse=False, distillation=True, use_conv=True,**kwargs):
-    return create_levit(
-        'levit_128s', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
-
-
-@register_model
-def levit_c_128(pretrained=False, fuse=False,distillation=True, use_conv=True,  **kwargs):
-    return create_levit(
-        'levit_128', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
-
-
-@register_model
-def levit_c_192(pretrained=False, fuse=False, distillation=True, use_conv=True, **kwargs):
-    return create_levit(
-        'levit_192', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
-
-
-@register_model
-def levit_c_256(pretrained=False, fuse=False, distillation=True, use_conv=True, **kwargs):
-    return create_levit(
-        'levit_256', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
-
-
-@register_model
-def levit_c_384(pretrained=False, fuse=False, distillation=True, use_conv=True, **kwargs):
-    return create_levit(
-        'levit_384', pretrained=pretrained, fuse=fuse,  distillation=distillation, use_conv=use_conv, **kwargs)
+        'levit_384', pretrained=pretrained, use_conv=use_conv, **kwargs)
 
 
 class ConvNorm(nn.Sequential):
@@ -427,6 +397,9 @@ class AttentionSubsample(nn.Module):
 
 class Levit(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
+
+    NOTE: distillation is defaulted to True since pretrained weights use it, will cause problems
+    w/ train scripts that don't take tuple outputs,
     """
 
     def __init__(
@@ -447,7 +420,8 @@ class Levit(nn.Module):
             attn_act_layer='hard_swish',
             distillation=True,
             use_conv=False,
-            drop_path=0):
+            drop_rate=0.,
+            drop_path_rate=0.):
         super().__init__()
         act_layer = get_act_layer(act_layer)
         attn_act_layer = get_act_layer(attn_act_layer)
@@ -486,7 +460,7 @@ class Levit(nn.Module):
                         Attention(
                             ed, kd, nh, attn_ratio=ar, act_layer=attn_act_layer,
                             resolution=resolution, use_conv=use_conv),
-                        drop_path))
+                        drop_path_rate))
                 if mr > 0:
                     h = int(ed * mr)
                     self.blocks.append(
@@ -494,7 +468,7 @@ class Levit(nn.Module):
                             ln_layer(ed, h, resolution=resolution),
                             act_layer(),
                             ln_layer(h, ed, bn_weight_init=0, resolution=resolution),
-                        ), drop_path))
+                        ), drop_path_rate))
             if do[0] == 'Subsample':
                 # ('Subsample',key_dim, num_heads, attn_ratio, mlp_ratio, stride)
                 resolution_ = (resolution - 1) // do[5] + 1
@@ -511,26 +485,45 @@ class Levit(nn.Module):
                             ln_layer(embed_dim[i + 1], h, resolution=resolution),
                             act_layer(),
                             ln_layer(h, embed_dim[i + 1], bn_weight_init=0, resolution=resolution),
-                        ), drop_path))
+                        ), drop_path_rate))
         self.blocks = nn.Sequential(*self.blocks)
 
         # Classifier head
         self.head = NormLinear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head_dist = None
         if distillation:
             self.head_dist = NormLinear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
-        else:
-            self.head_dist = None
 
     @torch.jit.ignore
     def no_weight_decay(self):
         return {x for x in self.state_dict().keys() if 'attention_biases' in x}
 
-    def forward(self, x):
+    def get_classifier(self):
+        if self.head_dist is None:
+            return self.head
+        else:
+            return self.head, self.head_dist
+
+    def reset_classifier(self, num_classes, global_pool='', distillation=None):
+        self.num_classes = num_classes
+        self.head = NormLinear(self.embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
+        if distillation is not None:
+            self.distillation = distillation
+        if self.distillation:
+            self.head_dist = NormLinear(self.embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
+        else:
+            self.head_dist = None
+
+    def forward_features(self, x):
         x = self.patch_embed(x)
         if not self.use_conv:
             x = x.flatten(2).transpose(1, 2)
         x = self.blocks(x)
         x = x.mean((-2, -1)) if self.use_conv else x.mean(1)
+        return x
+
+    def forward(self, x):
+        x = self.forward_features(x)
         if self.head_dist is not None:
             x, x_dist = self.head(x), self.head_dist(x)
             if self.training and not torch.jit.is_scripting():

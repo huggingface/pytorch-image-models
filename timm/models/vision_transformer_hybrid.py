@@ -46,8 +46,8 @@ default_cfgs = {
         input_size=(3, 384, 384), crop_pct=1.0),
 
     # hybrid in-1k models (mostly untrained, experimental configs w/ resnetv2 stdconv backbones)
-    'vit_tiny_r_s16_p8_224': _cfg(),
-    'vit_small_r_s16_p8_224': _cfg(),
+    'vit_tiny_r_s16_p8_224': _cfg(first_conv='patch_embed.backbone.conv'),
+    'vit_small_r_s16_p8_224': _cfg(first_conv='patch_embed.backbone.conv'),
     'vit_small_r20_s16_p2_224': _cfg(),
     'vit_small_r20_s16_224': _cfg(),
     'vit_small_r26_s32_224': _cfg(),
@@ -57,10 +57,14 @@ default_cfgs = {
     'vit_large_r50_s32_224': _cfg(),
 
     # hybrid models (using timm resnet backbones)
-    'vit_small_resnet26d_224': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'vit_small_resnet50d_s16_224': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'vit_base_resnet26d_224': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'vit_base_resnet50d_224': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    'vit_small_resnet26d_224': _cfg(
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
+    'vit_small_resnet50d_s16_224': _cfg(
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
+    'vit_base_resnet26d_224': _cfg(
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
+    'vit_base_resnet50d_224': _cfg(
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
 }
 
 
@@ -141,12 +145,6 @@ def vit_base_r50_s16_224_in21k(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_resnet50_224_in21k(pretrained=False, **kwargs):
-    # NOTE this is forwarding to model def above for backwards compatibility
-    return vit_base_r50_s16_224_in21k(pretrained=pretrained, **kwargs)
-
-
-@register_model
 def vit_base_r50_s16_384(pretrained=False, **kwargs):
     """ R50+ViT-B/16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
@@ -156,12 +154,6 @@ def vit_base_r50_s16_384(pretrained=False, **kwargs):
     model = _create_vision_transformer_hybrid(
         'vit_base_r50_s16_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
     return model
-
-
-@register_model
-def vit_base_resnet50_384(pretrained=False, **kwargs):
-    # NOTE this is forwarding to model def above for backwards compatibility
-    return vit_base_r50_s16_384(pretrained=pretrained, **kwargs)
 
 
 @register_model

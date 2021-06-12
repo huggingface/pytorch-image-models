@@ -237,6 +237,7 @@ class DPN(nn.Module):
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
     def get_classifier(self):
         return self.classifier
@@ -245,6 +246,7 @@ class DPN(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
     def forward_features(self, x):
         return self.features(x)
@@ -255,8 +257,7 @@ class DPN(nn.Module):
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.classifier(x)
-        if not self.global_pool.is_identity():
-            x = x.flatten(1)  # conv classifier, flatten if pooling isn't pass-through (disabled)
+        x = self.flatten(x)
         return x
 
 
