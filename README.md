@@ -23,6 +23,12 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### June 8, 2021
+* Add first ResMLP weights, trained in PyTorch XLA on TPU-VM w/ my XLA branch. 24 block variant, 79.2 top-1.
+* Add ResNet51-Q model w/ pretrained weights at 82.36 top-1.
+  * NFNet inspired block layout with quad layer stem and no maxpool
+  * Same param count (35.7M) and throughput as ResNetRS-50 but +1.5 top-1 @ 224x224 and +2.5 top-1 at 288x288
+
 ### May 25, 2021
 * Add LeViT, Visformer, ConViT (PR by Aman Arora), Twins (PR by paper authors) transformer models
 * Add ResMLP and gMLP MLP vision models to the existing MLP Mixer impl
@@ -162,17 +168,6 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
   * 256x256 val, 0.94 crop top-1 - 83.75
   * 320x320 val, 1.0 crop - 84.36
 * Update [results files](results/)
-
-### Dec 18, 2020
-* Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256
-  * 256x256 val, 0.94 crop (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)
-  * 288x288 val, 1.0 crop - 101D (82.64), 152D (83.48), 200D (83.76)
-  * 320x320 val, 1.0 crop - 101D (83.00), 152D (83.66), 200D (84.01)
-
-### Dec 7, 2020
-* Simplify EMA module (ModelEmaV2), compatible with fully torchscripted models
-* Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
-* PyPi release @ 0.3.2 (needed by EfficientDet)
 
 
 ## Introduction

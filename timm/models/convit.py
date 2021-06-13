@@ -73,7 +73,6 @@ class GPSA(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.pos_proj = nn.Linear(3, num_heads)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.locality_strength = locality_strength
         self.gating_param = nn.Parameter(torch.ones(self.num_heads))
         self.rel_indices: torch.Tensor = torch.zeros(1, 1, 1, 3)  # silly torchscript hack, won't work with None
 
