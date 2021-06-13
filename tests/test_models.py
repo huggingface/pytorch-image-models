@@ -174,7 +174,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     cfg = model.default_cfg
 
     input_size = _get_input_size(model_name=model_name, target=TARGET_FWD_SIZE)
-    if max(input_size) > MAX_FWD_SIZE:
+    if max(input_size) > 320:  # FIXME const
         pytest.skip("Fixed input size model > limit.")
 
     input_tensor = torch.randn((batch_size, *input_size))
