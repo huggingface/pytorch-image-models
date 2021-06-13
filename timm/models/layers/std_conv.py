@@ -1,14 +1,26 @@
+""" Convolution with Weight Standardization (StdConv and ScaledStdConv)
+
+StdConv:
+@article{weightstandardization,
+  author    = {Siyuan Qiao and Huiyu Wang and Chenxi Liu and Wei Shen and Alan Yuille},
+  title     = {Weight Standardization},
+  journal   = {arXiv preprint arXiv:1903.10520},
+  year      = {2019},
+}
+Code: https://github.com/joe-siyuan-qiao/WeightStandardization
+
+ScaledStdConv:
+Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
+    - https://arxiv.org/abs/2101.08692
+Official Deepmind JAX code: https://github.com/deepmind/deepmind-research/tree/master/nfnets
+
+Hacked together by / copyright Ross Wightman, 2021.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .padding import get_padding, get_padding_value, pad_same
-
-
-def get_weight(module):
-    std, mean = torch.std_mean(module.weight, dim=[1, 2, 3], keepdim=True, unbiased=False)
-    weight = (module.weight - mean) / (std + module.eps)
-    return weight
 
 
 class StdConv2d(nn.Conv2d):
@@ -30,7 +42,7 @@ class StdConv2d(nn.Conv2d):
     def forward(self, x):
         weight = F.batch_norm(
             self.weight.view(1, self.out_channels, -1), None, None,
-            eps=self.eps, training=True, momentum=0.).reshape_as(self.weight)
+            training=True, momentum=0., eps=self.eps).reshape_as(self.weight)
         x = F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
         return x
 
@@ -56,7 +68,7 @@ class StdConv2dSame(nn.Conv2d):
             x = pad_same(x, self.kernel_size, self.stride, self.dilation)
         weight = F.batch_norm(
             self.weight.view(1, self.out_channels, -1), None, None,
-            eps=self.eps, training=True, momentum=0.).reshape_as(self.weight)
+            training=True, momentum=0., eps=self.eps).reshape_as(self.weight)
         x = F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
         return x
 
@@ -86,7 +98,7 @@ class ScaledStdConv2d(nn.Conv2d):
         weight = F.batch_norm(
             self.weight.view(1, self.out_channels, -1), None, None,
             weight=(self.gain * self.scale).view(-1),
-            eps=self.eps, training=True, momentum=0.).reshape_as(self.weight)
+            training=True, momentum=0., eps=self.eps).reshape_as(self.weight)
         return F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
@@ -117,5 +129,5 @@ class ScaledStdConv2dSame(nn.Conv2d):
         weight = F.batch_norm(
             self.weight.view(1, self.out_channels, -1), None, None,
             weight=(self.gain * self.scale).view(-1),
-            eps=self.eps, training=True, momentum=0.).reshape_as(self.weight)
+            training=True, momentum=0., eps=self.eps).reshape_as(self.weight)
         return F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
