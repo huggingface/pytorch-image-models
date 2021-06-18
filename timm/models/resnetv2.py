@@ -44,8 +44,8 @@ from .layers import GroupNormAct, ClassifierHead, DropPath, AvgPool2dSame, creat
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 480, 480), 'pool_size': (7, 7),
-        'crop_pct': 1.0, 'interpolation': 'bilinear',
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
         **kwargs
@@ -55,17 +55,23 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     # pretrained on imagenet21k, finetuned on imagenet1k
     'resnetv2_50x1_bitm': _cfg(
-        url='https://storage.googleapis.com/bit_models/BiT-M-R50x1-ILSVRC2012.npz'),
+        url='https://storage.googleapis.com/bit_models/BiT-M-R50x1-ILSVRC2012.npz',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
     'resnetv2_50x3_bitm': _cfg(
-        url='https://storage.googleapis.com/bit_models/BiT-M-R50x3-ILSVRC2012.npz'),
+        url='https://storage.googleapis.com/bit_models/BiT-M-R50x3-ILSVRC2012.npz',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
     'resnetv2_101x1_bitm': _cfg(
-        url='https://storage.googleapis.com/bit_models/BiT-M-R101x1-ILSVRC2012.npz'),
+        url='https://storage.googleapis.com/bit_models/BiT-M-R101x1-ILSVRC2012.npz',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
     'resnetv2_101x3_bitm': _cfg(
-        url='https://storage.googleapis.com/bit_models/BiT-M-R101x3-ILSVRC2012.npz'),
+        url='https://storage.googleapis.com/bit_models/BiT-M-R101x3-ILSVRC2012.npz',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
     'resnetv2_152x2_bitm': _cfg(
-        url='https://storage.googleapis.com/bit_models/BiT-M-R152x2-ILSVRC2012.npz'),
+        url='https://storage.googleapis.com/bit_models/BiT-M-R152x2-ILSVRC2012.npz',
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
     'resnetv2_152x4_bitm': _cfg(
-        url='https://storage.googleapis.com/bit_models/BiT-M-R152x4-ILSVRC2012.npz'),
+        url='https://storage.googleapis.com/bit_models/BiT-M-R152x4-ILSVRC2012.npz',
+        input_size=(3, 480, 480), pool_size=(15, 15), crop_pct=1.0),  # only one at 480x480?
 
     # trained on imagenet-21k
     'resnetv2_50x1_bitm_in21k': _cfg(
@@ -89,18 +95,18 @@ default_cfgs = {
 
     'resnetv2_50x1_bit_distilled': _cfg(
         url='https://storage.googleapis.com/bit_models/distill/R50x1_224.npz',
-        input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic'),
+        interpolation='bicubic'),
     'resnetv2_152x2_bit_teacher': _cfg(
         url='https://storage.googleapis.com/bit_models/distill/R152x2_T_224.npz',
-        input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic'),
+        interpolation='bicubic'),
     'resnetv2_152x2_bit_teacher_384': _cfg(
         url='https://storage.googleapis.com/bit_models/distill/R152x2_T_384.npz',
-        input_size=(3, 384, 384), crop_pct=1.0, interpolation='bicubic'),
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic'),
 
     'resnetv2_50': _cfg(
-        input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic'),
+        interpolation='bicubic'),
     'resnetv2_50d': _cfg(
-        input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic', first_conv='stem.conv1'),
+        interpolation='bicubic', first_conv='stem.conv1'),
 }
 
 
