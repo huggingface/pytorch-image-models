@@ -11,6 +11,7 @@ https://github.com/google-research/vision_transformer
 Thanks to the Google team for the above two repositories and associated papers:
 * Big Transfer (BiT): General Visual Representation Learning - https://arxiv.org/abs/1912.11370
 * An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale - https://arxiv.org/abs/2010.11929
+* Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
 
 Original copyright of Google code below, modifications by Ross Wightman, Copyright 2020.
 """
@@ -85,6 +86,16 @@ default_cfgs = {
     'resnetv2_152x4_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R152x4.npz',
         num_classes=21843),
+
+    'resnetv2_50x1_bit_distilled': _cfg(
+        url='https://storage.googleapis.com/bit_models/distill/R50x1_224.npz',
+        input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic'),
+    'resnetv2_152x2_bit_teacher': _cfg(
+        url='https://storage.googleapis.com/bit_models/distill/R152x2_T_224.npz',
+        input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic'),
+    'resnetv2_152x2_bit_teacher_384': _cfg(
+        url='https://storage.googleapis.com/bit_models/distill/R152x2_T_384.npz',
+        input_size=(3, 384, 384), crop_pct=1.0, interpolation='bicubic'),
 
     'resnetv2_50': _cfg(
         input_size=(3, 224, 224), crop_pct=0.875, interpolation='bicubic'),
@@ -519,6 +530,33 @@ def resnetv2_152x4_bitm_in21k(pretrained=False, **kwargs):
     return _create_resnetv2_bit(
         'resnetv2_152x4_bitm_in21k', pretrained=pretrained, num_classes=kwargs.pop('num_classes', 21843),
         layers=[3, 8, 36, 3], width_factor=4, **kwargs)
+
+
+@register_model
+def resnetv2_50x1_bit_distilled(pretrained=False, **kwargs):
+    """ ResNetV2-50x1-BiT Distilled
+    Paper: Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
+    """
+    return _create_resnetv2_bit(
+        'resnetv2_50x1_bit_distilled', pretrained=pretrained, layers=[3, 4, 6, 3], width_factor=1, **kwargs)
+
+
+@register_model
+def resnetv2_152x2_bit_teacher(pretrained=False, **kwargs):
+    """ ResNetV2-152x2-BiT Teacher
+    Paper: Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
+    """
+    return _create_resnetv2_bit(
+        'resnetv2_152x2_bit_teacher', pretrained=pretrained, layers=[3, 8, 36, 3], width_factor=2, **kwargs)
+
+
+@register_model
+def resnetv2_152x2_bit_teacher_384(pretrained=False, **kwargs):
+    """ ResNetV2-152xx-BiT Teacher @ 384x384
+    Paper: Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
+    """
+    return _create_resnetv2_bit(
+        'resnetv2_152x2_bit_teacher_384', pretrained=pretrained, layers=[3, 8, 36, 3], width_factor=2, **kwargs)
 
 
 @register_model
