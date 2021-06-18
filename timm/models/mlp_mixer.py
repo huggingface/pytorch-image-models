@@ -93,7 +93,9 @@ default_cfgs = dict(
     ),
 
     gmixer_12_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    gmixer_24_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    gmixer_24_224=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gmixer_24_224_raa-7daf7ae6.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
 
     resmlp_12_224=_cfg(
         url='https://dl.fbaipublicfiles.com/deit/resmlp_12_no_dist.pth',
@@ -457,11 +459,11 @@ def mixer_b16_224_miil_in21k(pretrained=False, **kwargs):
 
 @register_model
 def gmixer_12_224(pretrained=False, **kwargs):
-    """ Glu-Mixer-12 224x224 (short & fat)
+    """ Glu-Mixer-12 224x224
     Experiment by Ross Wightman, adding (Si)GLU to MLP-Mixer
     """
     model_args = dict(
-        patch_size=16, num_blocks=12, embed_dim=512, mlp_ratio=(1.0, 6.0),
+        patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=(1.0, 4.0),
         mlp_layer=GluMlp, act_layer=nn.SiLU, **kwargs)
     model = _create_mixer('gmixer_12_224', pretrained=pretrained, **model_args)
     return model
@@ -469,11 +471,11 @@ def gmixer_12_224(pretrained=False, **kwargs):
 
 @register_model
 def gmixer_24_224(pretrained=False, **kwargs):
-    """ Glu-Mixer-24 224x224 (tall & slim)
+    """ Glu-Mixer-24 224x224
     Experiment by Ross Wightman, adding (Si)GLU to MLP-Mixer
     """
     model_args = dict(
-        patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=(1.0, 6.0),
+        patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=(1.0, 4.0),
         mlp_layer=GluMlp, act_layer=nn.SiLU, **kwargs)
     model = _create_mixer('gmixer_24_224', pretrained=pretrained, **model_args)
     return model
