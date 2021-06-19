@@ -69,7 +69,7 @@ default_cfgs = {
 
     # hybrid in-21k models (weights from official Google JAX impl where they exist)
     'vit_tiny_r_s16_p8_224_in21k': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/Ti_16-i1k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz',
+        url='https://storage.googleapis.com/vit_models/augreg/R_Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz',
         num_classes=21843, crop_pct=0.9, first_conv='patch_embed.backbone.conv'),
     'vit_small_r26_s32_224_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R26_S_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.03-do_0.0-sd_0.0.npz',
