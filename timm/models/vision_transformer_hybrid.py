@@ -237,6 +237,12 @@ def vit_base_r50_s16_384(pretrained=False, **kwargs):
 
 
 @register_model
+def vit_base_resnet50_384(pretrained=False, **kwargs):
+    # DEPRECATED this is forwarding to model def above for backwards compatibility
+    return vit_base_r50_s16_384(pretrained=pretrained, **kwargs)
+
+
+@register_model
 def vit_large_r50_s32_224(pretrained=False, **kwargs):
     """ R50+ViT-L/S32 hybrid.
     """
@@ -290,6 +296,12 @@ def vit_base_r50_s16_224_in21k(pretrained=False, **kwargs):
     model = _create_vision_transformer_hybrid(
         'vit_base_r50_s16_224_in21k', backbone=backbone, pretrained=pretrained, **model_kwargs)
     return model
+
+
+@register_model
+def vit_base_resnet50_224_in21k(pretrained=False, **kwargs):
+    # DEPRECATED this is forwarding to model def above for backwards compatibility
+    return vit_base_r50_s16_224_in21k(pretrained=pretrained, **kwargs)
 
 
 @register_model
