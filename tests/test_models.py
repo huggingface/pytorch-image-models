@@ -17,7 +17,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*']
+    'convit_*', 'levit*', 'visformer*', 'deit*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -120,7 +120,6 @@ def test_model_default_cfgs(model_name, batch_size):
     state_dict = model.state_dict()
     cfg = model.default_cfg
 
-    classifier = cfg['classifier']
     pool_size = cfg['pool_size']
     input_size = model.default_cfg['input_size']
 
@@ -149,7 +148,57 @@ def test_model_default_cfgs(model_name, batch_size):
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier name matches default_cfg
-    assert classifier + ".weight" in state_dict.keys(), f'{classifier} not in model params'
+    classifier = cfg['classifier']
+    if not isinstance(classifier, (tuple, list)):
+        classifier = classifier,
+    for c in classifier:
+        assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
+
+    # check first conv(s) names match default_cfg
+    first_conv = cfg['first_conv']
+    if isinstance(first_conv, str):
+        first_conv = (first_conv,)
+    assert isinstance(first_conv, (tuple, list))
+    for fc in first_conv:
+        assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
+
+
+@pytest.mark.timeout(300)
+@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_default_cfgs_non_std(model_name, batch_size):
+    """Run a single forward pass with each model"""
+    model = create_model(model_name, pretrained=False)
+    model.eval()
+    state_dict = model.state_dict()
+    cfg = model.default_cfg
+
+    input_size = _get_input_size(model=model)
+    if max(input_size) > 320:  # FIXME const
+        pytest.skip("Fixed input size model > limit.")
+
+    input_tensor = torch.randn((batch_size, *input_size))
+
+    # test forward_features (always unpooled)
+    outputs = model.forward_features(input_tensor)
+    if isinstance(outputs, tuple):
+        outputs = outputs[0]
+    assert outputs.shape[1] == model.num_features
+
+    # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
+    model.reset_classifier(0)
+    outputs = model.forward(input_tensor)
+    if isinstance(outputs, tuple):
+        outputs = outputs[0]
+    assert len(outputs.shape) == 2
+    assert outputs.shape[1] == model.num_features
+
+    # check classifier name matches default_cfg
+    classifier = cfg['classifier']
+    if not isinstance(classifier, (tuple, list)):
+        classifier = classifier,
+    for c in classifier:
+        assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
 
     # check first conv(s) names match default_cfg
     first_conv = cfg['first_conv']

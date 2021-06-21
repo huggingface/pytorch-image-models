@@ -278,6 +278,8 @@ class Twins(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.depths = depths
+        self.embed_dims = embed_dims
+        self.num_features = embed_dims[-1]
 
         img_size = to_2tuple(img_size)
         prev_chs = in_chans
@@ -303,10 +305,10 @@ class Twins(nn.Module):
 
         self.pos_block = nn.ModuleList([PosConv(embed_dim, embed_dim) for embed_dim in embed_dims])
 
-        self.norm = norm_layer(embed_dims[-1])
+        self.norm = norm_layer(self.num_features)
 
         # classification head
-        self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         # init weights
         self.apply(self._init_weights)
@@ -320,7 +322,7 @@ class Twins(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d
+from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier
 from .registry import register_model
 
 
@@ -140,14 +140,14 @@ class Visformer(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, init_channels=32, embed_dim=384,
                  depth=12, num_heads=6, mlp_ratio=4., drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
                  norm_layer=LayerNorm2d, attn_stage='111', pos_embed=True, spatial_conv='111',
-                 vit_stem=False, group=8, pool=True, conv_init=False, embed_norm=None):
+                 vit_stem=False, group=8, global_pool='avg', conv_init=False, embed_norm=None):
         super().__init__()
+        img_size = to_2tuple(img_size)
         self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim
+        self.embed_dim = embed_dim
         self.init_channels = init_channels
         self.img_size = img_size
         self.vit_stem = vit_stem
-        self.pool = pool
         self.conv_init = conv_init
         if isinstance(depth, (list, tuple)):
             self.stage_num1, self.stage_num2, self.stage_num3 = depth
@@ -164,31 +164,31 @@ class Visformer(nn.Module):
             self.patch_embed1 = PatchEmbed(
                 img_size=img_size, patch_size=patch_size, in_chans=in_chans,
                 embed_dim=embed_dim, norm_layer=embed_norm, flatten=False)
-            img_size //= 16
+            img_size = [x // 16 for x in img_size]
         else:
             if self.init_channels is None:
                 self.stem = None
                 self.patch_embed1 = PatchEmbed(
                     img_size=img_size, patch_size=patch_size // 2, in_chans=in_chans,
                     embed_dim=embed_dim // 2, norm_layer=embed_norm, flatten=False)
-                img_size //= 8
+                img_size = [x // 8 for x in img_size]
             else:
                 self.stem = nn.Sequential(
                     nn.Conv2d(in_chans, self.init_channels, 7, stride=2, padding=3, bias=False),
                     nn.BatchNorm2d(self.init_channels),
                     nn.ReLU(inplace=True)
                 )
-                img_size //= 2
+                img_size = [x // 2 for x in img_size]
                 self.patch_embed1 = PatchEmbed(
                     img_size=img_size, patch_size=patch_size // 4, in_chans=self.init_channels,
                     embed_dim=embed_dim // 2, norm_layer=embed_norm, flatten=False)
-                img_size //= 4
+                img_size = [x // 4 for x in img_size]
 
         if self.pos_embed:
             if self.vit_stem:
-                self.pos_embed1 = nn.Parameter(torch.zeros(1, embed_dim, img_size, img_size))
+                self.pos_embed1 = nn.Parameter(torch.zeros(1, embed_dim, *img_size))
             else:
-                self.pos_embed1 = nn.Parameter(torch.zeros(1, embed_dim//2, img_size, img_size))
+                self.pos_embed1 = nn.Parameter(torch.zeros(1, embed_dim//2, *img_size))
             self.pos_drop = nn.Dropout(p=drop_rate)
         self.stage1 = nn.ModuleList([
             Block(
@@ -199,14 +199,14 @@ class Visformer(nn.Module):
             for i in range(self.stage_num1)
         ])
 
-        #stage2
+        # stage2
         if not self.vit_stem:
             self.patch_embed2 = PatchEmbed(
                 img_size=img_size, patch_size=patch_size // 8, in_chans=embed_dim // 2,
                 embed_dim=embed_dim, norm_layer=embed_norm, flatten=False)
-            img_size //= 2
+            img_size = [x // 2 for x in img_size]
             if self.pos_embed:
-                self.pos_embed2 = nn.Parameter(torch.zeros(1, embed_dim, img_size, img_size))
+                self.pos_embed2 = nn.Parameter(torch.zeros(1, embed_dim, *img_size))
         self.stage2 = nn.ModuleList([
             Block(
                 dim=embed_dim, num_heads=num_heads, head_dim_ratio=1.0, mlp_ratio=mlp_ratio,
@@ -221,9 +221,9 @@ class Visformer(nn.Module):
             self.patch_embed3 = PatchEmbed(
                 img_size=img_size, patch_size=patch_size // 8, in_chans=embed_dim,
                 embed_dim=embed_dim * 2, norm_layer=embed_norm, flatten=False)
-            img_size //= 2
+            img_size = [x // 2 for x in img_size]
             if self.pos_embed:
-                self.pos_embed3 = nn.Parameter(torch.zeros(1, embed_dim*2, img_size, img_size))
+                self.pos_embed3 = nn.Parameter(torch.zeros(1, embed_dim*2, *img_size))
         self.stage3 = nn.ModuleList([
             Block(
                 dim=embed_dim*2, num_heads=num_heads, head_dim_ratio=1.0, mlp_ratio=mlp_ratio,
@@ -234,11 +234,10 @@ class Visformer(nn.Module):
         ])
 
         # head
-        if self.pool:
-            self.global_pooling = nn.AdaptiveAvgPool2d(1)
-        head_dim = embed_dim if self.vit_stem else embed_dim * 2
-        self.norm = norm_layer(head_dim)
-        self.head = nn.Linear(head_dim, num_classes)
+        self.num_features = embed_dim if self.vit_stem else embed_dim * 2
+        self.norm = norm_layer(self.num_features)
+        self.global_pool, self.head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.head = nn.Linear(self.num_features, num_classes)
 
         # weights init
         if self.pos_embed:
@@ -267,7 +266,14 @@ class Visformer(nn.Module):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0.)
 
-    def forward(self, x):
+    def get_classifier(self):
+        return self.head
+
+    def reset_classifier(self, num_classes, global_pool='avg'):
+        self.num_classes = num_classes
+        self.global_pool, self.head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+
+    def forward_features(self, x):
         if self.stem is not None:
             x = self.stem(x)
 
@@ -297,14 +303,13 @@ class Visformer(nn.Module):
         for b in self.stage3:
             x = b(x)
 
-        # head
         x = self.norm(x)
-        if self.pool:
-            x = self.global_pooling(x)
-        else:
-            x = x[:, :, 0, 0]
+        return x
 
-        x = self.head(x.view(x.size(0), -1))
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.global_pool(x)
+        x = self.head(x)
         return x
 
 
@@ -321,7 +326,7 @@ def _create_visformer(variant, pretrained=False, default_cfg=None, **kwargs):
 @register_model
 def visformer_tiny(pretrained=False, **kwargs):
     model_cfg = dict(
-        img_size=224, init_channels=16, embed_dim=192, depth=(7, 4, 4), num_heads=3, mlp_ratio=4., group=8,
+        init_channels=16, embed_dim=192, depth=(7, 4, 4), num_heads=3, mlp_ratio=4., group=8,
         attn_stage='011', spatial_conv='100', norm_layer=nn.BatchNorm2d, conv_init=True,
         embed_norm=nn.BatchNorm2d, **kwargs)
     model = _create_visformer('visformer_tiny', pretrained=pretrained, **model_cfg)
@@ -331,7 +336,7 @@ def visformer_tiny(pretrained=False, **kwargs):
 @register_model
 def visformer_small(pretrained=False, **kwargs):
     model_cfg = dict(
-        img_size=224, init_channels=32, embed_dim=384, depth=(7, 4, 4), num_heads=6, mlp_ratio=4., group=8,
+        init_channels=32, embed_dim=384, depth=(7, 4, 4), num_heads=6, mlp_ratio=4., group=8,
         attn_stage='011', spatial_conv='100', norm_layer=nn.BatchNorm2d, conv_init=True,
         embed_norm=nn.BatchNorm2d, **kwargs)
     model = _create_visformer('visformer_small', pretrained=pretrained, **model_cfg)

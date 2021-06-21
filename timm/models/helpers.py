@@ -45,6 +45,13 @@ def load_state_dict(checkpoint_path, use_ema=False):
 
 
 def load_checkpoint(model, checkpoint_path, use_ema=False, strict=True):
+    if os.path.splitext(checkpoint_path)[-1].lower() in ('.npz', '.npy'):
+        # numpy checkpoint, try to load via model specific load_pretrained fn
+        if hasattr(model, 'load_pretrained'):
+            model.load_pretrained(checkpoint_path)
+        else:
+            raise NotImplementedError('Model cannot load numpy checkpoint')
+        return
     state_dict = load_state_dict(checkpoint_path, use_ema)
     model.load_state_dict(state_dict, strict=strict)
 
@@ -477,3 +484,25 @@ def model_parameters(model, exclude_head=False):
         return [p for p in model.parameters()][:-2]
     else:
         return model.parameters()
+
+
+def named_apply(fn: Callable, module: nn.Module, name='', depth_first=True, include_root=False) -> nn.Module:
+    if not depth_first and include_root:
+        fn(module=module, name=name)
+    for child_name, child_module in module.named_children():
+        child_name = '.'.join((name, child_name)) if name else child_name
+        named_apply(fn=fn, module=child_module, name=child_name, depth_first=depth_first, include_root=True)
+    if depth_first and include_root:
+        fn(module=module, name=name)
+    return module
+
+
+def named_modules(module: nn.Module, name='', depth_first=True, include_root=False):
+    if not depth_first and include_root:
+        yield name, module
+    for child_name, child_module in module.named_children():
+        child_name = '.'.join((name, child_name)) if name else child_name
+        yield from named_modules(
+            module=child_module, name=child_name, depth_first=depth_first, include_root=True)
+    if depth_first and include_root:
+        yield name, module

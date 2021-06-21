@@ -119,6 +119,7 @@ class MobileNetV3(nn.Module):
         num_pooled_chs = head_chs * self.global_pool.feat_mult()
         self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
         self.act2 = act_layer(inplace=True)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
@@ -137,6 +138,7 @@ class MobileNetV3(nn.Module):
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
@@ -151,8 +153,7 @@ class MobileNetV3(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        if not self.global_pool.is_identity():
-            x = x.flatten(1)
+        x = self.flatten(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return self.classifier(x)

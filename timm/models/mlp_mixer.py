@@ -14,8 +14,9 @@ Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2
   year={2021}
 }
 
-Also supporting preliminary (not verified) implementations of ResMlp, gMLP, and possibly more...
+Also supporting ResMlp, and a preliminary (not verified) implementations of gMLP
 
+Code: https://github.com/facebookresearch/deit
 Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
 @misc{touvron2021resmlp,
       title={ResMLP: Feedforward networks for image classification with data-efficient training},
@@ -45,7 +46,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg, overlay_external_default_cfg, named_apply
 from .layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
 from .registry import register_model
 
@@ -92,13 +93,40 @@ default_cfgs = dict(
     ),
 
     gmixer_12_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    gmixer_24_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    gmixer_24_224=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gmixer_24_224_raa-7daf7ae6.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
 
-    resmlp_12_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_12_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_12_no_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     resmlp_24_224=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resmlp_24_224_raa-a8256759.pth',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=0.89),
-    resmlp_36_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_24_no_dist.pth',
+        #url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resmlp_24_224_raa-a8256759.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_36_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_36_no_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_big_24_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlpB_24_no_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+
+    resmlp_12_distilled_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_12_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_24_distilled_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_24_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_36_distilled_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_36_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_big_24_distilled_224=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlpB_24_dist.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+
+    resmlp_big_24_224_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlpB_24_22k.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
 
     gmlp_ti16_224=_cfg(),
     gmlp_s16_224=_cfg(),
@@ -172,6 +200,11 @@ class SpatialGatingUnit(nn.Module):
         self.norm = norm_layer(gate_dim)
         self.proj = nn.Linear(seq_len, seq_len)
 
+    def init_weights(self):
+        # special init for the projection gate, called as override by base model init
+        nn.init.normal_(self.proj.weight, std=1e-6)
+        nn.init.ones_(self.proj.bias)
+
     def forward(self, x):
         u, v = x.chunk(2, dim=-1)
         v = self.norm(v)
@@ -208,7 +241,7 @@ class MlpMixer(nn.Module):
             in_chans=3,
             patch_size=16,
             num_blocks=8,
-            hidden_dim=512,
+            embed_dim=512,
             mlp_ratio=(0.5, 4.0),
             block_layer=MixerBlock,
             mlp_layer=Mlp,
@@ -221,59 +254,95 @@ class MlpMixer(nn.Module):
     ):
         super().__init__()
         self.num_classes = num_classes
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
 
         self.stem = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=hidden_dim,
-            norm_layer=norm_layer if stem_norm else None)
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans,
+            embed_dim=embed_dim, norm_layer=norm_layer if stem_norm else None)
         # FIXME drop_path (stochastic depth scaling rule or all the same?)
         self.blocks = nn.Sequential(*[
             block_layer(
-                hidden_dim, self.stem.num_patches, mlp_ratio, mlp_layer=mlp_layer, norm_layer=norm_layer,
+                embed_dim, self.stem.num_patches, mlp_ratio, mlp_layer=mlp_layer, norm_layer=norm_layer,
                 act_layer=act_layer, drop=drop_rate, drop_path=drop_path_rate)
             for _ in range(num_blocks)])
-        self.norm = norm_layer(hidden_dim)
-        self.head = nn.Linear(hidden_dim, self.num_classes)  # zero init
+        self.norm = norm_layer(embed_dim)
+        self.head = nn.Linear(embed_dim, self.num_classes)  # zero init
 
         self.init_weights(nlhb=nlhb)
 
     def init_weights(self, nlhb=False):
         head_bias = -math.log(self.num_classes) if nlhb else 0.
-        for n, m in self.named_modules():
-            _init_weights(m, n, head_bias=head_bias)
+        named_apply(partial(_init_weights, head_bias=head_bias), module=self)  # depth-first
 
-    def forward(self, x):
+    def get_classifier(self):
+        return self.head
+
+    def reset_classifier(self, num_classes, global_pool=''):
+        self.num_classes = num_classes
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def forward_features(self, x):
         x = self.stem(x)
         x = self.blocks(x)
         x = self.norm(x)
         x = x.mean(dim=1)
+        return x
+
+    def forward(self, x):
+        x = self.forward_features(x)
         x = self.head(x)
         return x
 
 
-def _init_weights(m, n: str, head_bias: float = 0.):
+def _init_weights(module: nn.Module, name: str, head_bias: float = 0., flax=False):
     """ Mixer weight initialization (trying to match Flax defaults)
     """
-    if isinstance(m, nn.Linear):
-        if n.startswith('head'):
-            nn.init.zeros_(m.weight)
-            nn.init.constant_(m.bias, head_bias)
-        elif n.endswith('gate.proj'):
-            nn.init.normal_(m.weight, std=1e-4)
-            nn.init.ones_(m.bias)
+    if isinstance(module, nn.Linear):
+        if name.startswith('head'):
+            nn.init.zeros_(module.weight)
+            nn.init.constant_(module.bias, head_bias)
         else:
-            nn.init.xavier_uniform_(m.weight)
-            if m.bias is not None:
-                if 'mlp' in n:
-                    nn.init.normal_(m.bias, std=1e-6)
-                else:
-                    nn.init.zeros_(m.bias)
-    elif isinstance(m, nn.Conv2d):
-        lecun_normal_(m.weight)
-        if m.bias is not None:
-            nn.init.zeros_(m.bias)
-    elif isinstance(m, nn.LayerNorm):
-        nn.init.zeros_(m.bias)
-        nn.init.ones_(m.weight)
+            if flax:
+                # Flax defaults
+                lecun_normal_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+            else:
+                # like MLP init in vit (my original init)
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    if 'mlp' in name:
+                        nn.init.normal_(module.bias, std=1e-6)
+                    else:
+                        nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Conv2d):
+        lecun_normal_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif isinstance(module, (nn.LayerNorm, nn.BatchNorm2d, nn.GroupNorm)):
+        nn.init.ones_(module.weight)
+        nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        # NOTE if a parent module contains init_weights method, it can override the init of the
+        # child modules as this will be called in depth-first order.
+        module.init_weights()
+
+
+def checkpoint_filter_fn(state_dict, model):
+    """ Remap checkpoints if needed """
+    if 'patch_embed.proj.weight' in state_dict:
+        # Remap FB ResMlp models -> timm
+        out_dict = {}
+        for k, v in state_dict.items():
+            k = k.replace('patch_embed.', 'stem.')
+            k = k.replace('attn.', 'linear_tokens.')
+            k = k.replace('mlp.', 'mlp_channels.')
+            k = k.replace('gamma_', 'ls')
+            if k.endswith('.alpha') or k.endswith('.beta'):
+                v = v.reshape(1, 1, -1)
+            out_dict[k] = v
+        return out_dict
+    return state_dict
 
 
 def _create_mixer(variant, pretrained=False, **kwargs):
@@ -283,6 +352,7 @@ def _create_mixer(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
         MlpMixer, variant, pretrained,
         default_cfg=default_cfgs[variant],
+        pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model
 
@@ -292,7 +362,7 @@ def mixer_s32_224(pretrained=False, **kwargs):
     """ Mixer-S/32 224x224
     Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=32, num_blocks=8, hidden_dim=512, **kwargs)
+    model_args = dict(patch_size=32, num_blocks=8, embed_dim=512, **kwargs)
     model = _create_mixer('mixer_s32_224', pretrained=pretrained, **model_args)
     return model
 
@@ -302,7 +372,7 @@ def mixer_s16_224(pretrained=False, **kwargs):
     """ Mixer-S/16 224x224
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=16, num_blocks=8, hidden_dim=512, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=8, embed_dim=512, **kwargs)
     model = _create_mixer('mixer_s16_224', pretrained=pretrained, **model_args)
     return model
 
@@ -312,7 +382,7 @@ def mixer_b32_224(pretrained=False, **kwargs):
     """ Mixer-B/32 224x224
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=32, num_blocks=12, hidden_dim=768, **kwargs)
+    model_args = dict(patch_size=32, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b32_224', pretrained=pretrained, **model_args)
     return model
 
@@ -322,7 +392,7 @@ def mixer_b16_224(pretrained=False, **kwargs):
     """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=16, num_blocks=12, hidden_dim=768, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b16_224', pretrained=pretrained, **model_args)
     return model
 
@@ -332,7 +402,7 @@ def mixer_b16_224_in21k(pretrained=False, **kwargs):
     """ Mixer-B/16 224x224. ImageNet-21k pretrained weights.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=16, num_blocks=12, hidden_dim=768, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b16_224_in21k', pretrained=pretrained, **model_args)
     return model
 
@@ -342,7 +412,7 @@ def mixer_l32_224(pretrained=False, **kwargs):
     """ Mixer-L/32 224x224.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=32, num_blocks=24, hidden_dim=1024, **kwargs)
+    model_args = dict(patch_size=32, num_blocks=24, embed_dim=1024, **kwargs)
     model = _create_mixer('mixer_l32_224', pretrained=pretrained, **model_args)
     return model
 
@@ -352,7 +422,7 @@ def mixer_l16_224(pretrained=False, **kwargs):
     """ Mixer-L/16 224x224. ImageNet-1k pretrained weights.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=16, num_blocks=24, hidden_dim=1024, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=24, embed_dim=1024, **kwargs)
     model = _create_mixer('mixer_l16_224', pretrained=pretrained, **model_args)
     return model
 
@@ -362,35 +432,38 @@ def mixer_l16_224_in21k(pretrained=False, **kwargs):
     """ Mixer-L/16 224x224. ImageNet-21k pretrained weights.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=16, num_blocks=24, hidden_dim=1024, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=24, embed_dim=1024, **kwargs)
     model = _create_mixer('mixer_l16_224_in21k', pretrained=pretrained, **model_args)
     return model
+
 
 @register_model
 def mixer_b16_224_miil(pretrained=False, **kwargs):
     """ Mixer-B/16 224x224. ImageNet-21k pretrained weights.
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model_args = dict(patch_size=16, num_blocks=12, hidden_dim=768, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b16_224_miil', pretrained=pretrained, **model_args)
     return model
+
 
 @register_model
 def mixer_b16_224_miil_in21k(pretrained=False, **kwargs):
     """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model_args = dict(patch_size=16, num_blocks=12, hidden_dim=768, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b16_224_miil_in21k', pretrained=pretrained, **model_args)
     return model
 
+
 @register_model
 def gmixer_12_224(pretrained=False, **kwargs):
-    """ Glu-Mixer-12 224x224 (short & fat)
+    """ Glu-Mixer-12 224x224
     Experiment by Ross Wightman, adding (Si)GLU to MLP-Mixer
     """
     model_args = dict(
-        patch_size=20, num_blocks=12, hidden_dim=512, mlp_ratio=(1.0, 6.0),
+        patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=(1.0, 4.0),
         mlp_layer=GluMlp, act_layer=nn.SiLU, **kwargs)
     model = _create_mixer('gmixer_12_224', pretrained=pretrained, **model_args)
     return model
@@ -398,11 +471,11 @@ def gmixer_12_224(pretrained=False, **kwargs):
 
 @register_model
 def gmixer_24_224(pretrained=False, **kwargs):
-    """ Glu-Mixer-24 224x224 (tall & slim)
+    """ Glu-Mixer-24 224x224
     Experiment by Ross Wightman, adding (Si)GLU to MLP-Mixer
     """
     model_args = dict(
-        patch_size=20, num_blocks=24, hidden_dim=384, mlp_ratio=(1.0, 6.0),
+        patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=(1.0, 4.0),
         mlp_layer=GluMlp, act_layer=nn.SiLU, **kwargs)
     model = _create_mixer('gmixer_24_224', pretrained=pretrained, **model_args)
     return model
@@ -414,7 +487,7 @@ def resmlp_12_224(pretrained=False, **kwargs):
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
-        patch_size=16, num_blocks=12, hidden_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
+        patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
     model = _create_mixer('resmlp_12_224', pretrained=pretrained, **model_args)
     return model
 
@@ -425,7 +498,8 @@ def resmlp_24_224(pretrained=False, **kwargs):
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
-        patch_size=16, num_blocks=24, hidden_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
+        patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-5), norm_layer=Affine, **kwargs)
     model = _create_mixer('resmlp_24_224', pretrained=pretrained, **model_args)
     return model
 
@@ -436,8 +510,80 @@ def resmlp_36_224(pretrained=False, **kwargs):
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
     model_args = dict(
-        patch_size=16, num_blocks=36, hidden_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
+        patch_size=16, num_blocks=36, embed_dim=384, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-6), norm_layer=Affine, **kwargs)
     model = _create_mixer('resmlp_36_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_big_24_224(pretrained=False, **kwargs):
+    """ ResMLP-B-24
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    """
+    model_args = dict(
+        patch_size=8, num_blocks=24, embed_dim=768, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-6), norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_big_24_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_12_distilled_224(pretrained=False, **kwargs):
+    """ ResMLP-12
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    """
+    model_args = dict(
+        patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_12_distilled_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_24_distilled_224(pretrained=False, **kwargs):
+    """ ResMLP-24
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    """
+    model_args = dict(
+        patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-5), norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_24_distilled_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_36_distilled_224(pretrained=False, **kwargs):
+    """ ResMLP-36
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    """
+    model_args = dict(
+        patch_size=16, num_blocks=36, embed_dim=384, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-6), norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_36_distilled_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_big_24_distilled_224(pretrained=False, **kwargs):
+    """ ResMLP-B-24
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    """
+    model_args = dict(
+        patch_size=8, num_blocks=24, embed_dim=768, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-6), norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_big_24_distilled_224', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_big_24_224_in22ft1k(pretrained=False, **kwargs):
+    """ ResMLP-B-24
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    """
+    model_args = dict(
+        patch_size=8, num_blocks=24, embed_dim=768, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-6), norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_big_24_224_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
 
@@ -447,7 +593,7 @@ def gmlp_ti16_224(pretrained=False, **kwargs):
     Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
     model_args = dict(
-        patch_size=16, num_blocks=30, hidden_dim=128, mlp_ratio=6, block_layer=SpatialGatingBlock,
+        patch_size=16, num_blocks=30, embed_dim=128, mlp_ratio=6, block_layer=SpatialGatingBlock,
         mlp_layer=GatedMlp, **kwargs)
     model = _create_mixer('gmlp_ti16_224', pretrained=pretrained, **model_args)
     return model
@@ -459,7 +605,7 @@ def gmlp_s16_224(pretrained=False, **kwargs):
     Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
     model_args = dict(
-        patch_size=16, num_blocks=30, hidden_dim=256, mlp_ratio=6, block_layer=SpatialGatingBlock,
+        patch_size=16, num_blocks=30, embed_dim=256, mlp_ratio=6, block_layer=SpatialGatingBlock,
         mlp_layer=GatedMlp, **kwargs)
     model = _create_mixer('gmlp_s16_224', pretrained=pretrained, **model_args)
     return model
@@ -471,7 +617,7 @@ def gmlp_b16_224(pretrained=False, **kwargs):
     Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
     model_args = dict(
-        patch_size=16, num_blocks=30, hidden_dim=512, mlp_ratio=6, block_layer=SpatialGatingBlock,
+        patch_size=16, num_blocks=30, embed_dim=512, mlp_ratio=6, block_layer=SpatialGatingBlock,
         mlp_layer=GatedMlp, **kwargs)
     model = _create_mixer('gmlp_b16_224', pretrained=pretrained, **model_args)
     return model
