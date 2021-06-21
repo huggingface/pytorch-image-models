@@ -1,13 +1,17 @@
 """ Hybrid Vision Transformer (ViT) in PyTorch
 
-A PyTorch implement of the Hybrid Vision Transformers as described in
+A PyTorch implement of the Hybrid Vision Transformers as described in:
+
 'An Image Is Worth 16 x 16 Words: Transformers for Image Recognition at Scale'
     - https://arxiv.org/abs/2010.11929
 
-NOTE This relies on code in vision_transformer.py. The hybrid model definitions were moved here to
-keep file sizes sane.
+`How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers`
+    - https://arxiv.org/abs/2106.TODO
 
-Hacked together by / Copyright 2020 Ross Wightman
+NOTE These hybrid model definitions depend on code in vision_transformer.py.
+They were moved here to keep file sizes sane.
+
+Hacked together by / Copyright 2021 Ross Wightman
 """
 from copy import deepcopy
 from functools import partial
