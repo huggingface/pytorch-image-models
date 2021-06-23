@@ -237,7 +237,6 @@ class Visformer(nn.Module):
         self.num_features = embed_dim if self.vit_stem else embed_dim * 2
         self.norm = norm_layer(self.num_features)
         self.global_pool, self.head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
-        self.head = nn.Linear(self.num_features, num_classes)
 
         # weights init
         if self.pos_embed:

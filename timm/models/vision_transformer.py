@@ -448,7 +448,7 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     model.pos_embed.copy_(pos_embed_w)
     model.norm.weight.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/scale']))
     model.norm.bias.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/bias']))
-    if model.head.bias.shape[0] == w[f'{prefix}head/bias'].shape[-1]:
+    if isinstance(model.head, nn.Linear) and model.head.bias.shape[0] == w[f'{prefix}head/bias'].shape[-1]:
         model.head.weight.copy_(_n2p(w[f'{prefix}head/kernel']))
         model.head.bias.copy_(_n2p(w[f'{prefix}head/bias']))
     for i, block in enumerate(model.blocks.children()):
