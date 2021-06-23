@@ -424,7 +424,7 @@ def _load_weights(model: nn.Module, checkpoint_path: str, prefix: str = 'resnet/
     model.stem.conv.weight.copy_(stem_conv_w)
     model.norm.weight.copy_(t2p(weights[f'{prefix}group_norm/gamma']))
     model.norm.bias.copy_(t2p(weights[f'{prefix}group_norm/beta']))
-    if isinstance(model.head.fc, nn.Conv2d) and \
+    if isinstance(getattr(model.head, 'fc', None), nn.Conv2d) and \
             model.head.fc.weight.shape[0] == weights[f'{prefix}head/conv2d/kernel'].shape[-1]:
         model.head.fc.weight.copy_(t2p(weights[f'{prefix}head/conv2d/kernel']))
         model.head.fc.bias.copy_(t2p(weights[f'{prefix}head/conv2d/bias']))
