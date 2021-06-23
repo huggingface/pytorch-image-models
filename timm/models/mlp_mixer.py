@@ -129,7 +129,9 @@ default_cfgs = dict(
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
 
     gmlp_ti16_224=_cfg(),
-    gmlp_s16_224=_cfg(),
+    gmlp_s16_224=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gmlp_s16_224_raa-10536d42.pth',
+    ),
     gmlp_b16_224=_cfg(),
 )
 
