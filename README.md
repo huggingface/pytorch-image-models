@@ -23,6 +23,34 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### June 23, 2021
+* Reproduce gMLP model training, `gmlp_s16_224` trained to 79.6 top-1, matching [paper](https://arxiv.org/abs/2105.08050).
+
+### June 20, 2021
+* Release Vision Transformer 'AugReg' weights from [How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers](https://arxiv.org/abs/2106.10270)
+  * .npz weight loading support added, can load any of the 50K+ weights from the [AugReg series](https://console.cloud.google.com/storage/browser/vit_models/augreg)
+  * See [example notebook](https://colab.research.google.com/github/google-research/vision_transformer/blob/master/vit_jax_augreg.ipynb) from [official impl](https://github.com/google-research/vision_transformer/) for navigating the augreg weights
+  * Replaced all default weights w/ best AugReg variant (if possible). All AugReg 21k classifiers work.
+    * Highlights: `vit_large_patch16_384` (87.1 top-1), `vit_large_r50_s32_384` (86.2 top-1), `vit_base_patch16_384` (86.0 top-1)
+  * `vit_deit_*` renamed to just `deit_*`
+  * Remove my old small model, replace with DeiT compatible small w/ AugReg weights
+* Add 1st training of my `gmixer_24_224` MLP /w GLU, 78.1 top-1 w/ 25M params.
+* Add weights from official ResMLP release (https://github.com/facebookresearch/deit)
+* Add `eca_nfnet_l2` weights from my 'lightweight' series. 84.7 top-1 at 384x384.
+* Add distilled BiT 50x1 student and 152x2 Teacher weights from  [Knowledge distillation: A good teacher is patient and consistent](https://arxiv.org/abs/2106.05237)
+* NFNets and ResNetV2-BiT models work w/ Pytorch XLA now
+  * weight standardization uses F.batch_norm instead of std_mean (std_mean wasn't lowered)
+  * eps values adjusted, will be slight differences but should be quite close
+* Improve test coverage and classifier interface of non-conv (vision transformer and mlp) models
+* Cleanup a few classifier / flatten details for models w/ conv classifiers or early global pool
+* Please report any regressions, this PR touched quite a few models.
+
+### June 8, 2021
+* Add first ResMLP weights, trained in PyTorch XLA on TPU-VM w/ my XLA branch. 24 block variant, 79.2 top-1.
+* Add ResNet51-Q model w/ pretrained weights at 82.36 top-1.
+  * NFNet inspired block layout with quad layer stem and no maxpool
+  * Same param count (35.7M) and throughput as ResNetRS-50 but +1.5 top-1 @ 224x224 and +2.5 top-1 at 288x288
+
 ### May 25, 2021
 * Add LeViT, Visformer, ConViT (PR by Aman Arora), Twins (PR by paper authors) transformer models
 * Add ResMLP and gMLP MLP vision models to the existing MLP Mixer impl
@@ -162,17 +190,6 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
   * 256x256 val, 0.94 crop top-1 - 83.75
   * 320x320 val, 1.0 crop - 84.36
 * Update [results files](results/)
-
-### Dec 18, 2020
-* Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256
-  * 256x256 val, 0.94 crop (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)
-  * 288x288 val, 1.0 crop - 101D (82.64), 152D (83.48), 200D (83.76)
-  * 320x320 val, 1.0 crop - 101D (83.00), 152D (83.66), 200D (84.01)
-
-### Dec 7, 2020
-* Simplify EMA module (ModelEmaV2), compatible with fully torchscripted models
-* Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
-* PyPi release @ 0.3.2 (needed by EfficientDet)
 
 
 ## Introduction
