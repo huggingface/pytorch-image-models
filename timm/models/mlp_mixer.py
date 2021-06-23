@@ -129,7 +129,9 @@ default_cfgs = dict(
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
 
     gmlp_ti16_224=_cfg(),
-    gmlp_s16_224=_cfg(),
+    gmlp_s16_224=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gmlp_s16_224_raa-10536d42.pth',
+    ),
     gmlp_b16_224=_cfg(),
 )
 
@@ -266,7 +268,7 @@ class MlpMixer(nn.Module):
                 act_layer=act_layer, drop=drop_rate, drop_path=drop_path_rate)
             for _ in range(num_blocks)])
         self.norm = norm_layer(embed_dim)
-        self.head = nn.Linear(embed_dim, self.num_classes)  # zero init
+        self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
         self.init_weights(nlhb=nlhb)
 

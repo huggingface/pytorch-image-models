@@ -23,6 +23,9 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### June 23, 2021
+* Reproduce gMLP model training, `gmlp_s16_224` trained to 79.6 top-1, matching [paper](https://arxiv.org/abs/2105.08050).
+
 ### June 20, 2021
 * Release Vision Transformer 'AugReg' weights from [How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers](https://arxiv.org/abs/2106.10270)
   * .npz weight loading support added, can load any of the 50K+ weights from the [AugReg series](https://console.cloud.google.com/storage/browser/vit_models/augreg)

@@ -542,7 +542,7 @@ def checkpoint_filter_fn(state_dict, model):
         state_dict = state_dict['model']
     D = model.state_dict()
     for k in state_dict.keys():
-        if D[k].ndim == 4 and state_dict[k].ndim == 2:
+        if k in D and D[k].ndim == 4 and state_dict[k].ndim == 2:
             state_dict[k] = state_dict[k][:, :, None, None]
     return state_dict
 

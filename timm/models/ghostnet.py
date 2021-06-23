@@ -182,7 +182,7 @@ class GhostNet(nn.Module):
         self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True)
         self.act2 = nn.ReLU(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(out_chs, num_classes)
+        self.classifier = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
 
     def get_classifier(self):
         return self.classifier
