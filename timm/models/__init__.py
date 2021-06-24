@@ -20,6 +20,7 @@ from .levit import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
 from .nasnet import *
+from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
