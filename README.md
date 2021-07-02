@@ -385,7 +385,7 @@ Several weights included or references here were pretrained with proprietary dat
 
 ### BibTeX
 
-```
+```bibtex
 @misc{rw2019timm,
   author = {Ross Wightman},
   title = {PyTorch Image Models},
