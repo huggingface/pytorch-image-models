@@ -277,7 +277,6 @@ class Nest(nn.Module):
         # Patch embedding
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dims[0])
-        self.feature_info = [dict(num_chs=embed_dims[0], reduction=patch_size, module='patch_embed')]
         self.num_patches = self.patch_embed.num_patches
         self.seq_length = self.num_patches // self.num_blocks[0]
 
@@ -291,8 +290,6 @@ class Nest(nn.Module):
                 self.num_blocks[lix], self.block_size, self.seq_length, num_heads[lix], depths[lix],
                 embed_dims[lix], mlp_ratio, qkv_bias, drop_rate, attn_drop_rate, dpr, norm_layer,
                 act_layer))            
-            self.feature_info.append(
-                dict(num_chs=embed_dims[lix], reduction=self.feature_info[-1]['reduction']*2, module=f'levels.{lix}'))
             if lix < self.num_levels - 1:
                 self.block_aggs.append(BlockAggregation(
                     embed_dims[lix], embed_dims[lix+1], norm_layer, pad_type=pad_type))
@@ -302,8 +299,6 @@ class Nest(nn.Module):
 
         # Final normalization layer
         self.norm = norm_layer(embed_dims[-1])
-        self.feature_info.append(
-            dict(num_chs=embed_dims[lix], reduction=self.feature_info[-1]['reduction'], module='norm'))
 
         # Classifier
         self.global_pool, self.head = create_classifier(
@@ -319,7 +314,7 @@ class Nest(nn.Module):
         if mode.startswith('jax'):
             named_apply(partial(_init_nest_weights, head_bias=head_bias, jax_impl=True), self)
         else:
-            self.apply(_init_nest_weights)
+            named_apply(_init_nest_weights, self)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -409,16 +404,14 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_nest(variant, pretrained=False, default_cfg=None, **kwargs):
-    # if kwargs.get('features_only', None):
-    #     raise RuntimeError('features_only not implemented for Vision Transformer models.')
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
     default_cfg = default_cfg or default_cfgs[variant]
     model = build_model_with_cfg(
         Nest, variant, pretrained,
         default_cfg=default_cfg,
         pretrained_filter_fn=checkpoint_filter_fn,
-        feature_cfg=dict(
-            out_indices=tuple(range(kwargs.get('num_levels', 3) + 2)), feature_cls='hook', flatten_sequential=True),
         **kwargs)
 
     return model
@@ -488,10 +481,3 @@ def jx_nest_tiny(pretrained=False, **kwargs):
         embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 8), drop_path_rate=0.2, **kwargs)
     model = _create_nest('jx_nest_tiny', pretrained=pretrained, **model_kwargs)
     return model
-
-
-if __name__ == '__main__':
-    model = jx_nest_base()
-    model = torch.jit.script(model)
-    inp = torch.zeros(8, 3, 224, 224)
-    print(model.forward_features(inp).shape)
