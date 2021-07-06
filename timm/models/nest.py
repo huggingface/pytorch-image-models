@@ -329,7 +329,6 @@ class Nest(nn.Module):
     def forward_features(self, x):
         """ x shape (B, C, H, W)
         """
-        B, _, H, W = x.shape
         x = self.patch_embed(x)
         x = self.levels(x)
         # Layer norm done over channel dim only (to NHWC and back)
