@@ -79,18 +79,18 @@ def convert_nest(checkpoint_path, arch):
                 state_dict[f'levels.{level}.transformer_encoder.{layer}.mlp.fc{i+1}.bias'] = torch.tensor(
                     flax_dict[f'EncoderNDBlock_{global_layer_ix}']['MlpBlock_0'][f'Dense_{i}']['bias'])
 
-    # Block aggregations
-    for level in range(len(depths)-1):
+    # Block aggregations (ConvPool)
+    for level in range(1, len(depths)):
         # Convs
-        state_dict[f'block_aggs.{level}.conv.weight'] = torch.tensor(
-            flax_dict[f'ConvPool_{level}']['Conv_0']['kernel']).permute(3, 2, 0, 1)
-        state_dict[f'block_aggs.{level}.conv.bias'] = torch.tensor(
-            flax_dict[f'ConvPool_{level}']['Conv_0']['bias'])
+        state_dict[f'levels.{level}.pool.conv.weight'] = torch.tensor(
+            flax_dict[f'ConvPool_{level-1}']['Conv_0']['kernel']).permute(3, 2, 0, 1)
+        state_dict[f'levels.{level}.pool.conv.bias'] = torch.tensor(
+            flax_dict[f'ConvPool_{level-1}']['Conv_0']['bias'])
         # Norms
-        state_dict[f'block_aggs.{level}.norm.weight'] = torch.tensor(
-                    flax_dict[f'ConvPool_{level}']['LayerNorm_0']['scale'])
-        state_dict[f'block_aggs.{level}.norm.bias'] = torch.tensor(
-                    flax_dict[f'ConvPool_{level}']['LayerNorm_0']['bias'])
+        state_dict[f'levels.{level}.pool.norm.weight'] = torch.tensor(
+                    flax_dict[f'ConvPool_{level-1}']['LayerNorm_0']['scale'])
+        state_dict[f'levels.{level}.pool.norm.bias'] = torch.tensor(
+                    flax_dict[f'ConvPool_{level-1}']['LayerNorm_0']['bias'])
 
     # Final norm
     state_dict[f'norm.weight'] = torch.tensor(flax_dict['LayerNorm_0']['scale'])
@@ -105,5 +105,5 @@ def convert_nest(checkpoint_path, arch):
 
 if __name__ == '__main__':
     variant = sys.argv[1] # base, small, or tiny
-    state_dict = convert_nest(f'../nested-transformer/checkpoints/nest-{variant[0]}_imagenet', f'nest_{variant}')
-    torch.save(state_dict, f'/home/alexander/.cache/torch/hub/checkpoints/jx_nest_{variant}.pth')
+    state_dict = convert_nest(f'./nest-{variant[0]}_imagenet', f'nest_{variant}')
+    torch.save(state_dict, f'./jx_nest_{variant}.pth')
