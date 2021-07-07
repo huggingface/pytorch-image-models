@@ -1,6 +1,6 @@
 import torch
 import torchvision.transforms.functional as F
-from PIL import Image
+from torchvision.transforms import InterpolationMode
 import warnings
 import math
 import random
@@ -31,28 +31,28 @@ class ToTensor:
 
 
 _pil_interpolation_to_str = {
-    Image.NEAREST: 'PIL.Image.NEAREST',
-    Image.BILINEAR: 'PIL.Image.BILINEAR',
-    Image.BICUBIC: 'PIL.Image.BICUBIC',
-    Image.LANCZOS: 'PIL.Image.LANCZOS',
-    Image.HAMMING: 'PIL.Image.HAMMING',
-    Image.BOX: 'PIL.Image.BOX',
+    InterpolationMode.NEAREST: 'PIL.Image.NEAREST',
+    InterpolationMode.BILINEAR: 'PIL.Image.BILINEAR',
+    InterpolationMode.BICUBIC: 'PIL.Image.BICUBIC',
+    InterpolationMode.LANCZOS: 'PIL.Image.LANCZOS',
+    InterpolationMode.HAMMING: 'PIL.Image.HAMMING',
+    InterpolationMode.BOX: 'PIL.Image.BOX',
 }
 
 
 def _pil_interp(method):
     if method == 'bicubic':
-        return Image.BICUBIC
+        return InterpolationMode.BICUBIC
     elif method == 'lanczos':
-        return Image.LANCZOS
+        return InterpolationMode.LANCZOS
     elif method == 'hamming':
-        return Image.HAMMING
+        return InterpolationMode.HAMMING
     else:
         # default bilinear, do we want to allow nearest?
-        return Image.BILINEAR
+        return InterpolationMode.BILINEAR
 
 
-_RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+_RANDOM_INTERPOLATION = (InterpolationMode.BILINEAR, InterpolationMode.BICUBIC)
 
 
 class RandomResizedCropAndInterpolation:
