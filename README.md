@@ -23,6 +23,9 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### July 8, 2021
+* Add [SAM pretrained](https://arxiv.org/abs/2106.01548) in1k weight for ViT B/16 (`vit_base_patch16_sam_224`) and B/32 (`vit_base_patch32_sam_224`)  models.
+
 ### July 5, 2021
 * Add 'Aggregating Nested Transformer' (NesT) w/ weights converted from official [Flax impl](https://github.com/google-research/nested-transformer). Contributed by [Alexander Soare](https://github.com/alexander-soare).
 
