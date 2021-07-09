@@ -165,6 +165,12 @@ default_cfgs = {
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45403/outputs/effnetb3_pruned_5abcc29f.pth',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904, mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 
+    'efficientnetv2_rw_t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnetv2_t_agc-3620981a.pth',
+        input_size=(3, 224, 224), test_input_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),
+    'gc_efficientnetv2_rw_t': _cfg(
+        url='',
+        input_size=(3, 224, 224), test_input_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),
     'efficientnetv2_rw_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_v2s_ra2_288-a6477665.pth',
         input_size=(3, 288, 288), test_input_size=(3, 384, 384), pool_size=(9, 9), crop_pct=1.0),
@@ -1488,8 +1494,25 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
 
 
 @register_model
+def efficientnetv2_rw_t(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Tiny (Custom variant, tiny not in paper). """
+    model = _gen_efficientnetv2_s(
+        'efficientnetv2_rw_t', channel_multiplier=0.8, depth_multiplier=0.9, rw=False, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def gc_efficientnetv2_rw_t(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Tiny w/ Global Context Attn (Custom variant, tiny not in paper). """
+    model = _gen_efficientnetv2_s(
+        'gc_efficientnetv2_t', channel_multiplier=0.8, depth_multiplier=0.9,
+        rw=False, se_layer='gc', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def efficientnetv2_rw_s(pretrained=False, **kwargs):
-    """ EfficientNet-V2 Small RW variant.
+    """ EfficientNet-V2 Small (RW variant).
     NOTE: This is my initial (pre official code release) w/ some differences.
     See efficientnetv2_s and tf_efficientnetv2_s for versions that match the official w/ PyTorch vs TF padding
     """
@@ -1499,7 +1522,7 @@ def efficientnetv2_rw_s(pretrained=False, **kwargs):
 
 @register_model
 def efficientnetv2_rw_m(pretrained=False, **kwargs):
-    """ EfficientNet-V2 Medium RW variant.
+    """ EfficientNet-V2 Medium (RW variant).
     """
     model = _gen_efficientnetv2_s(
         'efficientnetv2_rw_m', channel_multiplier=1.2, depth_multiplier=(1.2,) * 4 + (1.6,) * 2, rw=True,

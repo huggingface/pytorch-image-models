@@ -101,6 +101,8 @@ default_cfgs = {
 
     'gcresnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'gcresnet26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'bat_resnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
         min_input_size=(3, 256, 256)),
@@ -329,6 +331,21 @@ model_cfgs = dict(
         attn_layer='gc',
     ),
 
+    gcresnet26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='gc',
+    ),
+
     bat_resnext26ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
@@ -468,6 +485,13 @@ def gcresnext26ts(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('gcresnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnet26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnet26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
