@@ -532,7 +532,7 @@ def xcit_small_12_p16_224(pretrained=False, **kwargs):
 def xcit_small_12_p16_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=384, depth=12, num_heads=8, eta=1.0, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_small_12_p16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_small_12_p16_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -556,7 +556,7 @@ def xcit_tiny_24_p16_224(pretrained=False, **kwargs):
 def xcit_tiny_24_p16_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=192, depth=24, num_heads=4, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_tiny_24_p16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_tiny_24_p16_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -580,7 +580,7 @@ def xcit_small_24_p16_224(pretrained=False, **kwargs):
 def xcit_small_24_p16_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=384, depth=24, num_heads=8, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_small_24_p16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_small_24_p16_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -604,7 +604,7 @@ def xcit_medium_24_p16_224(pretrained=False, **kwargs):
 def xcit_medium_24_p16_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=512, depth=24, num_heads=8, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_medium_24_p16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_medium_24_p16_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -628,7 +628,7 @@ def xcit_large_24_p16_224(pretrained=False, **kwargs):
 def xcit_large_24_p16_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=24, num_heads=16, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_large_24_p16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_large_24_p16_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -653,7 +653,7 @@ def xcit_nano_12_p8_224(pretrained=False, **kwargs):
 def xcit_nano_12_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=128, depth=12, num_heads=4, eta=1.0, tokens_norm=False, **kwargs)
-    model = _create_xcit('xcit_nano_12_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_nano_12_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -677,7 +677,7 @@ def xcit_tiny_12_p8_224(pretrained=False, **kwargs):
 def xcit_tiny_12_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=192, depth=12, num_heads=4, eta=1.0, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_tiny_12_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_tiny_12_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -701,7 +701,7 @@ def xcit_small_12_p8_224(pretrained=False, **kwargs):
 def xcit_small_12_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=384, depth=12, num_heads=8, eta=1.0, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_small_12_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_small_12_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -725,7 +725,7 @@ def xcit_tiny_24_p8_224(pretrained=False, **kwargs):
 def xcit_tiny_24_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=192, depth=24, num_heads=4, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_tiny_24_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_tiny_24_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -749,7 +749,7 @@ def xcit_small_24_p8_224(pretrained=False, **kwargs):
 def xcit_small_24_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=384, depth=24, num_heads=8, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_small_24_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_small_24_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -773,7 +773,7 @@ def xcit_medium_24_p8_224(pretrained=False, **kwargs):
 def xcit_medium_24_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=512, depth=24, num_heads=8, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_medium_24_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_medium_24_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -797,7 +797,7 @@ def xcit_large_24_p8_224(pretrained=False, **kwargs):
 def xcit_large_24_p8_224_dist(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=8, embed_dim=768, depth=24, num_heads=16, eta=1e-5, tokens_norm=True, **kwargs)
-    model = _create_xcit('xcit_large_24_p8_224', pretrained=pretrained, **model_kwargs)
+    model = _create_xcit('xcit_large_24_p8_224_dist', pretrained=pretrained, **model_kwargs)
     return model
 
 
