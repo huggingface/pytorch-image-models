@@ -1505,7 +1505,7 @@ def efficientnetv2_rw_t(pretrained=False, **kwargs):
 def gc_efficientnetv2_rw_t(pretrained=False, **kwargs):
     """ EfficientNet-V2 Tiny w/ Global Context Attn (Custom variant, tiny not in paper). """
     model = _gen_efficientnetv2_s(
-        'gc_efficientnetv2_t', channel_multiplier=0.8, depth_multiplier=0.9,
+        'gc_efficientnetv2_rw_t', channel_multiplier=0.8, depth_multiplier=0.9,
         rw=False, se_layer='gc', pretrained=pretrained, **kwargs)
     return model
 
