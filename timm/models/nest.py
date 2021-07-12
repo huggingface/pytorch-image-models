@@ -377,7 +377,7 @@ def resize_pos_embed(posemb, posemb_new):
     size_new = int(math.sqrt(num_blocks_new*seq_length_new))
     # First change to (1, C, H, W)
     posemb = deblockify(posemb, int(math.sqrt(seq_length_old))).permute(0, 3, 1, 2)
-    posemb = F.interpolate(posemb, size=[size_new, size_new], mode='bilinear')
+    posemb = F.interpolate(posemb, size=[size_new, size_new], mode='bicubic', align_corners=False)
     # Now change to new (1, T, N, C)
     posemb = blockify(posemb.permute(0, 2, 3, 1), int(math.sqrt(seq_length_new)))
     return posemb
