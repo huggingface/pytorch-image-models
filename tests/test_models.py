@@ -17,7 +17,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*']
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
