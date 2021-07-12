@@ -23,6 +23,9 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### July 12, 2021
+* Add XCiT models from [official facebook impl](https://github.com/facebookresearch/xcit). Contributed by [Alexander Soare](https://github.com/alexander-soare)
+
 ### July 5-9, 2021
 * Add `efficientnetv2_rw_t` weights, a custom 'tiny' 13.6M param variant that is a bit better than (non NoisyStudent) B3 models. Both faster and better accuracy (at same or lower res)
   * top-1 82.34 @ 288x288 and 82.54 @ 320x320
@@ -211,6 +214,7 @@ All model architecture families include variants with pretrained weights. There 
 
 A full version of the list below with source links can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
 
+* Aggregating Nested Transformers - https://arxiv.org/abs/2105.12723
 * Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
@@ -275,6 +279,7 @@ A full version of the list below with source links can be found in the [document
 * Xception - https://arxiv.org/abs/1610.02357
 * Xception (Modified Aligned, Gluon) - https://arxiv.org/abs/1802.02611
 * Xception (Modified Aligned, TF) - https://arxiv.org/abs/1802.02611
+* XCiT (Cross-Covariance Image Transformers) - https://arxiv.org/abs/2106.09681
 
 ## Features
 
