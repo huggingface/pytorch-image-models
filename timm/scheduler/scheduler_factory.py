@@ -5,6 +5,7 @@ from .cosine_lr import CosineLRScheduler
 from .tanh_lr import TanhLRScheduler
 from .step_lr import StepLRScheduler
 from .plateau_lr import PlateauLRScheduler
+from .multistep_lr import MultiStepLRScheduler
 
 
 def create_scheduler(args, optimizer):
@@ -57,6 +58,18 @@ def create_scheduler(args, optimizer):
         num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
     elif args.sched == 'step':
         lr_scheduler = StepLRScheduler(
+            optimizer,
+            decay_t=args.decay_epochs,
+            decay_rate=args.decay_rate,
+            warmup_lr_init=args.warmup_lr,
+            warmup_t=args.warmup_epochs,
+            noise_range_t=noise_range,
+            noise_pct=getattr(args, 'lr_noise_pct', 0.67),
+            noise_std=getattr(args, 'lr_noise_std', 1.),
+            noise_seed=getattr(args, 'seed', 42),
+        )
+    elif args.sched == 'multistep':
+        lr_scheduler = MultiStepLRScheduler(
             optimizer,
             decay_t=args.decay_epochs,
             decay_rate=args.decay_rate,
