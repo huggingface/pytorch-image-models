@@ -17,7 +17,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*']
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'perceiver*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -26,7 +26,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', 
-        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*']
+        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'perceiver*']
 else:
     EXCLUDE_FILTERS = []
 
@@ -218,11 +218,12 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     # check first conv(s) names match default_cfg
     first_conv = cfg['first_conv']
-    if isinstance(first_conv, str):
-        first_conv = (first_conv,)
-    assert isinstance(first_conv, (tuple, list))
-    for fc in first_conv:
-        assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
+    if first_conv is not None:
+        if isinstance(first_conv, str):
+            first_conv = (first_conv,)
+        assert isinstance(first_conv, (tuple, list))
+        for fc in first_conv:
+            assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
 
 if 'GITHUB_ACTIONS' not in os.environ:

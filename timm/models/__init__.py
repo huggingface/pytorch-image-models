@@ -22,6 +22,7 @@ from .mobilenetv3 import *
 from .nasnet import *
 from .nest import *
 from .nfnet import *
+from .perceiver import *
 from .pit import *
 from .pnasnet import *
 from .regnet import *
@@ -36,6 +37,7 @@ from .sknet import *
 from .swin_transformer import *
 from .tnt import *
 from .tresnet import *
+from .twins import *
 from .vgg import *
 from .visformer import *
 from .vision_transformer import *
@@ -44,7 +46,6 @@ from .vovnet import *
 from .xception import *
 from .xception_aligned import *
 from .xcit import *
-from .twins import *
 
 from .factory import create_model, split_model_name, safe_model_name
 from .helpers import load_checkpoint, resume_checkpoint, model_parameters
