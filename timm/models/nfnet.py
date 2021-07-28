@@ -8,12 +8,6 @@ Paper: `High-Performance Large-Scale Image Recognition Without Normalization`
 
 Official Deepmind JAX code: https://github.com/deepmind/deepmind-research/tree/master/nfnets
 
-Status:
-* These models are a work in progress, experiments ongoing.
-* Pretrained weights for two models so far, more to come.
-* Model details updated to closer match official JAX code now that it's released
-* NF-ResNet, NF-RegNet-B, and NFNet-F models supported
-
 Hacked together by / copyright Ross Wightman, 2021.
 """
 import math
