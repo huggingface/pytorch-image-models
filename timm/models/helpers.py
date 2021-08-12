@@ -14,6 +14,7 @@ import torch.nn as nn
 
 
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
+from .fx_features import FeatureGraphNet
 from .hub import has_hf_hub, download_cached_file, load_state_dict_from_hf, load_state_dict_from_url
 from .layers import Conv2dSame, Linear
 
@@ -477,6 +478,8 @@ def build_model_with_cfg(
                 feature_cls = feature_cls.lower()
                 if 'hook' in feature_cls:
                     feature_cls = FeatureHookNet
+                elif feature_cls == 'fx':
+                    feature_cls = FeatureGraphNet
                 else:
                     assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)
