@@ -24,7 +24,6 @@ import torch.nn.functional as F
 
 from .helpers import make_divisible
 from .weight_init import trunc_normal_
-from timm.models.fx_helpers import 
 
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):

@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import build_model_with_cfg
+from timm.models.fx_helpers import fx_and
 from timm.models.layers import Mlp, DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
 from timm.models.registry import register_model

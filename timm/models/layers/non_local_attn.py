@@ -10,6 +10,7 @@ from torch.nn import functional as F
 
 from .conv_bn_act import ConvBnAct
 from .helpers import make_divisible
+from timm.models.fx_helpers import fx_and
 
 
 class NonLocalAttn(nn.Module):
