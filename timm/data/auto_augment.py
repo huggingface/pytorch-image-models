@@ -29,9 +29,7 @@ _PIL_VER = tuple([int(x) for x in PIL.__version__.split('.')[:2]])
 
 _FILL = (128, 128, 128)
 
-# This signifies the max integer that the controller RNN could predict for the
-# augmentation scheme.
-_MAX_LEVEL = 10.
+_LEVEL_DENOM = 10.  # denominator for conversion from 'Mx' magnitude scale to fractional aug level for op arguments
 
 _HPARAMS_DEFAULT = dict(
     translate_const=250,
@@ -179,34 +177,34 @@ def _randomly_negate(v):
 
 def _rotate_level_to_arg(level, _hparams):
     # range [-30, 30]
-    level = (level / _MAX_LEVEL) * 30.
+    level = (level / _LEVEL_DENOM) * 30.
     level = _randomly_negate(level)
     return level,
 
 
 def _enhance_level_to_arg(level, _hparams):
     # range [0.1, 1.9]
-    return (level / _MAX_LEVEL) * 1.8 + 0.1,
+    return (level / _LEVEL_DENOM) * 1.8 + 0.1,
 
 
 def _enhance_increasing_level_to_arg(level, _hparams):
     # the 'no change' level is 1.0, moving away from that towards 0. or 2.0 increases the enhancement blend
-    # range [0.1, 1.9]
-    level = (level / _MAX_LEVEL) * .9
-    level = 1.0 + _randomly_negate(level)
+    # range [0.1, 1.9] if level <= _LEVEL_DENOM
+    level = (level / _LEVEL_DENOM) * .9
+    level = max(0.1, 1.0 + _randomly_negate(level))  # keep it >= 0.1
     return level,
 
 
 def _shear_level_to_arg(level, _hparams):
     # range [-0.3, 0.3]
-    level = (level / _MAX_LEVEL) * 0.3
+    level = (level / _LEVEL_DENOM) * 0.3
     level = _randomly_negate(level)
     return level,
 
 
 def _translate_abs_level_to_arg(level, hparams):
     translate_const = hparams['translate_const']
-    level = (level / _MAX_LEVEL) * float(translate_const)
+    level = (level / _LEVEL_DENOM) * float(translate_const)
     level = _randomly_negate(level)
     return level,
 
@@ -214,7 +212,7 @@ def _translate_abs_level_to_arg(level, hparams):
 def _translate_rel_level_to_arg(level, hparams):
     # default range [-0.45, 0.45]
     translate_pct = hparams.get('translate_pct', 0.45)
-    level = (level / _MAX_LEVEL) * translate_pct
+    level = (level / _LEVEL_DENOM) * translate_pct
     level = _randomly_negate(level)
     return level,
 
@@ -223,7 +221,7 @@ def _posterize_level_to_arg(level, _hparams):
     # As per Tensorflow TPU EfficientNet impl
     # range [0, 4], 'keep 0 up to 4 MSB of original image'
     # intensity/severity of augmentation decreases with level
-    return int((level / _MAX_LEVEL) * 4),
+    return int((level / _LEVEL_DENOM) * 4),
 
 
 def _posterize_increasing_level_to_arg(level, hparams):
@@ -237,13 +235,13 @@ def _posterize_original_level_to_arg(level, _hparams):
     # As per original AutoAugment paper description
     # range [4, 8], 'keep 4 up to 8 MSB of image'
     # intensity/severity of augmentation decreases with level
-    return int((level / _MAX_LEVEL) * 4) + 4,
+    return int((level / _LEVEL_DENOM) * 4) + 4,
 
 
 def _solarize_level_to_arg(level, _hparams):
     # range [0, 256]
     # intensity/severity of augmentation decreases with level
-    return int((level / _MAX_LEVEL) * 256),
+    return int((level / _LEVEL_DENOM) * 256),
 
 
 def _solarize_increasing_level_to_arg(level, _hparams):
@@ -254,7 +252,7 @@ def _solarize_increasing_level_to_arg(level, _hparams):
 
 def _solarize_add_level_to_arg(level, _hparams):
     # range [0, 110]
-    return int((level / _MAX_LEVEL) * 110),
+    return int((level / _LEVEL_DENOM) * 110),
 
 
 LEVEL_TO_ARG = {
@@ -334,17 +332,22 @@ class AugmentOp:
         # NOTE This is my own hack, being tested, not in papers or reference impls.
         # If magnitude_std is inf, we sample magnitude from a uniform distribution
         self.magnitude_std = self.hparams.get('magnitude_std', 0)
+        self.magnitude_max = self.hparams.get('magnitude_max', None)
 
     def __call__(self, img):
         if self.prob < 1.0 and random.random() > self.prob:
             return img
         magnitude = self.magnitude
-        if self.magnitude_std:
+        if self.magnitude_std > 0:
+            # magnitude randomization enabled
             if self.magnitude_std == float('inf'):
                 magnitude = random.uniform(0, magnitude)
             elif self.magnitude_std > 0:
                 magnitude = random.gauss(magnitude, self.magnitude_std)
-        magnitude = min(_MAX_LEVEL, max(0, magnitude))  # clip to valid range
+        # default upper_bound for the timm RA impl is _LEVEL_DENOM (10)
+        # setting magnitude_max overrides this to allow M > 10 (behaviour closer to Google TF RA impl)
+        upper_bound = self.magnitude_max or _LEVEL_DENOM
+        magnitude = max(0., min(magnitude, upper_bound))
         level_args = self.level_fn(magnitude, self.hparams) if self.level_fn is not None else tuple()
         return self.aug_fn(img, *level_args, **self.kwargs)
 
@@ -642,7 +645,8 @@ def rand_augment_transform(config_str, hparams):
         'm' - integer magnitude of rand augment
         'n' - integer num layers (number of transform ops selected per image)
         'w' - integer probabiliy weight index (index of a set of weights to influence choice of op)
-        'mstd' -  float std deviation of magnitude noise applied
+        'mstd' -  float std deviation of magnitude noise applied, or uniform sampling if infinity (or > 100)
+        'mmax' - set upper bound for magnitude to something other than default of  _LEVEL_DENOM (10)
         'inc' - integer (bool), use augmentations that increase in severity with magnitude (default: 0)
     Ex 'rand-m9-n3-mstd0.5' results in RandAugment with magnitude 9, num_layers 3, magnitude_std 0.5
     'rand-mstd1-w0' results in magnitude_std 1.0, weights 0, default magnitude of 10 and num_layers 2
@@ -651,7 +655,7 @@ def rand_augment_transform(config_str, hparams):
 
     :return: A PyTorch compatible Transform
     """
-    magnitude = _MAX_LEVEL  # default to _MAX_LEVEL for magnitude (currently 10)
+    magnitude = _LEVEL_DENOM  # default to _LEVEL_DENOM for magnitude (currently 10)
     num_layers = 2  # default to 2 ops per image
     weight_idx = None  # default to no probability weights for op choice
     transforms = _RAND_TRANSFORMS
@@ -664,8 +668,15 @@ def rand_augment_transform(config_str, hparams):
             continue
         key, val = cs[:2]
         if key == 'mstd':
-            # noise param injected via hparams for now
-            hparams.setdefault('magnitude_std', float(val))
+            # noise param / randomization of magnitude values
+            mstd = float(val)
+            if mstd > 100:
+                # use uniform sampling in 0 to magnitude if mstd is > 100
+                mstd = float('inf')
+            hparams.setdefault('magnitude_std', mstd)
+        elif key == 'mmax':
+            # clip magnitude between [0, mmax] instead of default [0, _LEVEL_DENOM]
+            hparams.setdefault('magnitude_max', int(val))
         elif key == 'inc':
             if bool(val):
                 transforms = _RAND_INCREASING_TRANSFORMS
@@ -794,7 +805,6 @@ def augment_and_mix_transform(config_str, hparams):
     depth = -1
     alpha = 1.
     blended = False
-    hparams['magnitude_std'] = float('inf')
     config = config_str.split('-')
     assert config[0] == 'augmix'
     config = config[1:]
@@ -818,5 +828,6 @@ def augment_and_mix_transform(config_str, hparams):
             blended = bool(val)
         else:
             assert False, 'Unknown AugMix config section'
+    hparams.setdefault('magnitude_std', float('inf'))  # default to uniform sampling (if not set via mstd arg)
     ops = augmix_ops(magnitude=magnitude, hparams=hparams)
     return AugMixAugment(ops, alpha=alpha, width=width, depth=depth, blended=blended)
