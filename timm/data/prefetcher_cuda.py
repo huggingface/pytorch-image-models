@@ -16,10 +16,10 @@ class PrefetcherCuda:
             normalize_shape=(1, 3, 1, 1),
             mean=IMAGENET_DEFAULT_MEAN,
             std=IMAGENET_DEFAULT_STD,
-            num_aug_splits=0,
             re_prob=0.,
             re_mode='const',
-            re_count=1
+            re_count=1,
+            num_aug_splits=0,
     ):
         self.loader = loader
         self.device = device

@@ -51,7 +51,6 @@ class Fetcher:
             self._loader = pl.MpDeviceLoader(loader, device)
         else:
             self._loader = loader
-        print('re', self.random_erasing, self.mean, self.std)
 
     def __iter__(self):
         for sample, target in self._loader:
