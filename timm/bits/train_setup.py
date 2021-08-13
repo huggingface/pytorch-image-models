@@ -89,7 +89,6 @@ def setup_model_and_optimizer(
     train_state = TrainState(model=model, updater=updater, model_ema=model_ema)
 
     if resume_path:
-        # FIXME this is not implemented yet, do a hack job before proper TrainState serialization?
         load_train_state(
             train_state,
             resume_path,
@@ -141,11 +140,7 @@ def setup_model_and_optimizer_deepspeed(
 
     if resume_path:
         # FIXME deepspeed resumes differently
-        load_legacy_checkpoint(
-            train_state,
-            resume_path,
-            load_opt=resume_opt,
-            log_info=dev_env.primary)
+        assert False
 
     if dev_env.distributed:
          train_state = dataclasses.replace(

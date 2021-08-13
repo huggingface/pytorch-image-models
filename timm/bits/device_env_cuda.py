@@ -6,7 +6,7 @@ from typing import Optional
 import torch
 from torch.nn.parallel import DistributedDataParallel, DataParallel
 
-from .device_env import DeviceEnv, DeviceEnvType
+from .device_env import DeviceEnv, DeviceEnvType, TensorList
 
 
 def is_cuda_available():
@@ -63,3 +63,6 @@ class DeviceEnvCuda(DeviceEnv):
         assert not self.distributed
         wrapped = [DataParallel(m, **kwargs) for m in modules]
         return wrapped[0] if len(wrapped) == 1 else wrapped
+
+    def synchronize(self, tensors: Optional[TensorList] = None):
+        torch.cuda.synchronize(self.device)

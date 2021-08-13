@@ -6,74 +6,52 @@ https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#d
 Hacked together by / Copyright 2020 Ross Wightman
 """
 
+from typing import Tuple, Optional, Union, Callable
+
 import torch.utils.data
 
 from timm.bits import DeviceEnv
-
-from .fetcher import Fetcher
-from .prefetcher_cuda import PrefetcherCuda
 from .collate import fast_collate
-from .transforms_factory import create_transform
-from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .config import PreprocessCfg, AugCfg, MixupCfg
 from .distributed_sampler import OrderedDistributedSampler
+from .fetcher import Fetcher
+from .mixup import FastCollateMixup
+from .prefetcher_cuda import PrefetcherCuda
 
 
-def create_loader(
-        dataset,
-        input_size,
-        batch_size,
-        is_training=False,
-        dev_env=None,
-        no_aug=False,
-        re_prob=0.,
-        re_mode='const',
-        re_count=1,
-        re_split=False,
-        scale=None,
-        ratio=None,
-        hflip=0.5,
-        vflip=0.,
-        color_jitter=0.4,
-        auto_augment=None,
-        num_aug_splits=0,
-        interpolation='bilinear',
-        mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD,
-        num_workers=1,
-        crop_pct=None,
-        collate_fn=None,
-        pin_memory=False,
-        tf_preprocessing=False,
-        use_multi_epochs_loader=False,
-        persistent_workers=True,
+def create_loader_v2(
+        dataset: torch.utils.data.Dataset,
+        batch_size: int,
+        is_training: bool = False,
+        dev_env: Optional[DeviceEnv] = None,
+        normalize=True,
+        pp_cfg: PreprocessCfg = PreprocessCfg(),
+        mix_cfg: MixupCfg = None,
+        num_workers: int = 1,
+        collate_fn: Optional[Callable] = None,
+        pin_memory: bool = False,
+        use_multi_epochs_loader: bool = False,
+        persistent_workers: bool = True,
 ):
-    re_num_splits = 0
-    if re_split:
-        # apply RE to second half of batch if no aug split otherwise line up with aug split
-        re_num_splits = num_aug_splits or 2
-    dataset.transform = create_transform(
-        input_size,
-        is_training=is_training,
-        use_fetcher=True,
-        no_aug=no_aug,
-        scale=scale,
-        ratio=ratio,
-        hflip=hflip,
-        vflip=vflip,
-        color_jitter=color_jitter,
-        auto_augment=auto_augment,
-        interpolation=interpolation,
-        mean=mean,
-        std=std,
-        crop_pct=crop_pct,
-        tf_preprocessing=tf_preprocessing,
-        re_prob=re_prob,
-        re_mode=re_mode,
-        re_count=re_count,
-        re_num_splits=re_num_splits,
-        separate=num_aug_splits > 0,
-    )
+    """
+    
+    Args:
+        dataset: 
+        batch_size: 
+        is_training: 
+        dev_env: 
+        normalize: 
+        pp_cfg: 
+        mix_cfg: 
+        num_workers: 
+        collate_fn: 
+        pin_memory: 
+        use_multi_epochs_loader: 
+        persistent_workers: 
 
+    Returns:
+
+    """
     if dev_env is None:
         dev_env = DeviceEnv.instance()
 
@@ -85,10 +63,24 @@ def create_loader(
         else:
             # This will add extra duplicate entries to result in equal num
             # of samples per-process, will slightly alter validation results
-            sampler = OrderedDistributedSampler(dataset, num_replicas=dev_env.world_size, rank=dev_env.global_rank)
+            sampler = OrderedDistributedSampler(
+                dataset, num_replicas=dev_env.world_size, rank=dev_env.global_rank)
 
     if collate_fn is None:
-        collate_fn = fast_collate
+        if mix_cfg is not None and mix_cfg.prob > 0:
+            collate_fn = FastCollateMixup(
+                mixup_alpha=mix_cfg.mixup_alpha,
+                cutmix_alpha=mix_cfg.cutmix_alpha,
+                cutmix_minmax=mix_cfg.cutmix_minmax,
+                prob=mix_cfg.prob,
+                switch_prob=mix_cfg.switch_prob,
+                mode=mix_cfg.mode,
+                correct_lam=mix_cfg.correct_lam,
+                label_smoothing=mix_cfg.label_smoothing,
+                num_classes=mix_cfg.num_classes,
+            )
+        else:
+            collate_fn = fast_collate
 
     loader_class = torch.utils.data.DataLoader
     if use_multi_epochs_loader:
@@ -110,13 +102,18 @@ def create_loader(
         loader = loader_class(dataset, **loader_args)
 
     fetcher_kwargs = dict(
-        mean=mean,
-        std=std,
-        re_prob=re_prob if is_training and not no_aug else 0.,
-        re_mode=re_mode,
-        re_count=re_count,
-        re_num_splits=re_num_splits
+        normalize=normalize,
+        mean=pp_cfg.mean,
+        std=pp_cfg.std,
     )
+    if normalize and is_training and pp_cfg.aug is not None:
+        fetcher_kwargs.update(dict(
+            re_prob=pp_cfg.aug.re_prob,
+            re_mode=pp_cfg.aug.re_mode,
+            re_count=pp_cfg.aug.re_count,
+            num_aug_splits=pp_cfg.aug.num_aug_splits,
+        ))
+
     if dev_env.type_cuda:
         loader = PrefetcherCuda(loader, **fetcher_kwargs)
     else:

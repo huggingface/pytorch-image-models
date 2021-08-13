@@ -1,5 +1,7 @@
 import torch
 import torchvision.transforms.functional as F
+from torchvision.transforms import InterpolationMode
+
 from PIL import Image
 import warnings
 import math
@@ -30,29 +32,40 @@ class ToTensor:
         return torch.from_numpy(np_img).to(dtype=self.dtype)
 
 
-_pil_interpolation_to_str = {
-    Image.NEAREST: 'PIL.Image.NEAREST',
-    Image.BILINEAR: 'PIL.Image.BILINEAR',
-    Image.BICUBIC: 'PIL.Image.BICUBIC',
-    Image.LANCZOS: 'PIL.Image.LANCZOS',
-    Image.HAMMING: 'PIL.Image.HAMMING',
-    Image.BOX: 'PIL.Image.BOX',
-}
+class ToTensorNormalize:
+
+    def __init__(self, mean, std, dtype=torch.float32, device=torch.device('cpu')):
+        self.dtype = dtype
+        mean = torch.as_tensor(mean, dtype=dtype, device=device)
+        std = torch.as_tensor(std, dtype=dtype, device=device)
+        if (std == 0).any():
+            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(dtype))
+        if mean.ndim == 1:
+            mean = mean.view(-1, 1, 1)
+        if std.ndim == 1:
+            std = std.view(-1, 1, 1)
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, pil_img):
+        mode_to_nptype = {'I': np.int32, 'I;16': np.int16, 'F': np.float32}
+        img = torch.from_numpy(
+            np.array(pil_img, mode_to_nptype.get(pil_img.mode, np.uint8))
+        )
+        if pil_img.mode == '1':
+            img = 255 * img
+        img = img.view(pil_img.size[1], pil_img.size[0], len(pil_img.getbands()))
+        img = img.permute((2, 0, 1))
+        if isinstance(img, torch.ByteTensor):
+            img = img.to(self.dtype)
+            img.sub_(self.mean * 255.).div_(self.std * 255.)
+        else:
+            img = img.to(self.dtype)
+            img.sub_(self.mean).div_(self.std)
+        return img
 
 
-def _pil_interp(method):
-    if method == 'bicubic':
-        return Image.BICUBIC
-    elif method == 'lanczos':
-        return Image.LANCZOS
-    elif method == 'hamming':
-        return Image.HAMMING
-    else:
-        # default bilinear, do we want to allow nearest?
-        return Image.BILINEAR
-
-
-_RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+_RANDOM_INTERPOLATION = (InterpolationMode.BILINEAR, InterpolationMode.BICUBIC)
 
 
 class RandomResizedCropAndInterpolation:
@@ -82,7 +95,7 @@ class RandomResizedCropAndInterpolation:
         if interpolation == 'random':
             self.interpolation = _RANDOM_INTERPOLATION
         else:
-            self.interpolation = _pil_interp(interpolation)
+            self.interpolation = InterpolationMode(interpolation)
         self.scale = scale
         self.ratio = ratio
 
@@ -146,9 +159,9 @@ class RandomResizedCropAndInterpolation:
 
     def __repr__(self):
         if isinstance(self.interpolation, (tuple, list)):
-            interpolate_str = ' '.join([_pil_interpolation_to_str[x] for x in self.interpolation])
+            interpolate_str = ' '.join([x.value for x in self.interpolation])
         else:
-            interpolate_str = _pil_interpolation_to_str[self.interpolation]
+            interpolate_str = self.interpolation.value
         format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
         format_string += ', scale={0}'.format(tuple(round(s, 4) for s in self.scale))
         format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))

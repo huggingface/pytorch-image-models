@@ -41,6 +41,22 @@ _HPARAMS_DEFAULT = dict(
 _RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
 
 
+def _pil_interp(method):
+    def _convert(m):
+        if method == 'bicubic':
+            return Image.BICUBIC
+        elif method == 'lanczos':
+            return Image.LANCZOS
+        elif method == 'hamming':
+            return Image.HAMMING
+        else:
+            return Image.BILINEAR
+    if isinstance(method, (list, tuple)):
+        return [_convert(m) if isinstance(m, str) else m for m in method]
+    else:
+        return _convert(method) if isinstance(method, str) else method
+
+
 def _interpolation(kwargs):
     interpolation = kwargs.pop('resample', Image.BILINEAR)
     if isinstance(interpolation, (list, tuple)):
@@ -325,7 +341,7 @@ class AugmentOp:
         self.hparams = hparams.copy()
         self.kwargs = dict(
             fillcolor=hparams['img_mean'] if 'img_mean' in hparams else _FILL,
-            resample=hparams['interpolation'] if 'interpolation' in hparams else _RANDOM_INTERPOLATION,
+            resample=_pil_interp(hparams['interpolation']) if 'interpolation' in hparams else _RANDOM_INTERPOLATION,
         )
 
         # If magnitude_std is > 0, we introduce some randomness

@@ -128,6 +128,9 @@ class DeviceEnv:
     def mark_step(self):
         pass  # NO-OP for non-XLA devices
 
+    def synchronize(self, tensors: Optional[TensorList] = None):
+        pass
+
     def all_reduce_(self, tensor: TensorList, op=dist.ReduceOp.SUM, average=False):
         dist.all_reduce(tensor, op=op)
         if average:

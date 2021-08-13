@@ -20,7 +20,8 @@ from collections import OrderedDict
 
 from timm.bits import initialize_device, Tracker, Monitor, AccuracyTopK, AvgTensor
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
-from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
+from timm.data import create_dataset, create_transform_v2, create_loader_v2, resolve_data_config, RealLabelsImagenet, \
+    PreprocessCfg
 from timm.utils import natural_key, setup_default_logging
 
 
@@ -141,18 +142,22 @@ def validate(args):
     else:
         real_labels = None
 
-    crop_pct = 1.0 if test_time_pool else data_config['crop_pct']
-    loader = create_loader(
-        dataset,
+    eval_pp_cfg = PreprocessCfg(
         input_size=data_config['input_size'],
-        batch_size=args.batch_size,
         interpolation=data_config['interpolation'],
+        crop_pct=1.0 if test_time_pool else data_config['crop_pct'],
         mean=data_config['mean'],
         std=data_config['std'],
+    )
+
+    dataset.transform = create_transform_v2(cfg=eval_pp_cfg, is_training=False)
+
+    loader = create_loader_v2(
+        dataset,
+        batch_size=args.batch_size,
+        pp_cfg=eval_pp_cfg,
         num_workers=args.workers,
-        crop_pct=crop_pct,
-        pin_memory=args.pin_mem,
-        tf_preprocessing=args.tf_preprocessing)
+        pin_memory=args.pin_mem)
 
     logger = Monitor(logger=_logger)
     tracker = Tracker()
@@ -175,16 +180,17 @@ def validate(args):
             loss = criterion(output, target)
 
             if dev_env.type_cuda:
-                torch.cuda.synchronize()
+                dev_env.synchronize()
             tracker.mark_iter_step_end()
-
-            losses.update(loss.detach(), sample.size(0))
-            if real_labels is not None:
-                real_labels.add_result(output)
-            accuracy.update(output.detach(), target)
 
             if dev_env.type_xla:
                 dev_env.mark_step()
+
+            if real_labels is not None:
+                real_labels.add_result(output)
+
+            losses.update(loss.detach(), sample.size(0))
+            accuracy.update(output.detach(), target)
 
             tracker.mark_iter()
             if step_idx % args.log_freq == 0:
@@ -212,7 +218,7 @@ def validate(args):
         top5=round(top5a, 4), top5_err=round(100 - top5a, 4),
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
-        cropt_pct=crop_pct,
+        cropt_pct=eval_pp_cfg.crop_pct,
         interpolation=data_config['interpolation'])
     logger.log_phase(phase='eval', name_map={'top1': 'Acc@1', 'top5': 'Acc@5'}, **results)
 

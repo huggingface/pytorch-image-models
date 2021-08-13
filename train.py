@@ -30,7 +30,8 @@ import torchvision.utils
 
 from timm.bits import initialize_device, setup_model_and_optimizer, DeviceEnv, Monitor, Tracker,\
     TrainState, TrainServices, TrainCfg, CheckpointManager, AccuracyTopK, AvgTensor, distribute_bn
-from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
+from timm.data import create_dataset, create_transform_v2, create_loader_v2, resolve_data_config,\
+    PreprocessCfg, AugCfg, MixupCfg, AugMixDataset
 from timm.models import create_model, safe_model_name, convert_splitbn_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
 from timm.optim import optimizer_kwargs
@@ -283,9 +284,10 @@ def main():
     else:
         _logger.info('Training with a single process on 1 device.')
 
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-
     random_seed(args.seed, 0)  # Set all random seeds the same for model/state init (mandatory for XLA)
+
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    assert args.aug_splits == 0 or args.aug_splits > 1, 'A split of 1 makes no sense'
 
     train_state = setup_train_task(args, dev_env, mixup_active)
     train_cfg = train_state.train_cfg
@@ -421,11 +423,9 @@ def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
         _logger.info(
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
 
-    # setup augmentation batch splits for contrastive loss or split bn
-    assert args.aug_splits == 0 or args.aug_splits > 1, 'A split of 1 makes no sense'
     # enable split bn (separate bn stats per batch-portion)
     if args.split_bn:
-        assert args.aug_splits > 1 or args.resplit
+        assert args.aug_splits > 1
         model = convert_splitbn_model(model, max(args.aug_splits, 2))
 
     train_state = setup_model_and_optimizer(
@@ -481,7 +481,7 @@ def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
     return train_state
 
 
-def setup_data(args, default_cfg, dev_env, mixup_active):
+def setup_data(args, default_cfg, dev_env: DeviceEnv, mixup_active: bool):
     data_config = resolve_data_config(vars(args), default_cfg=default_cfg, verbose=dev_env.primary)
 
     # create the train and eval datasets
@@ -489,18 +489,18 @@ def setup_data(args, default_cfg, dev_env, mixup_active):
         args.dataset,
         root=args.data_dir, split=args.train_split, is_training=True,
         batch_size=args.batch_size, repeats=args.epoch_repeats)
+
     dataset_eval = create_dataset(
-        args.dataset, root=args.data_dir, split=args.val_split, is_training=False, batch_size=args.batch_size)
+        args.dataset,
+        root=args.data_dir, split=args.val_split, is_training=False, batch_size=args.batch_size)
 
     # setup mixup / cutmix
-    collate_fn = None
+    mixup_cfg = None
     if mixup_active:
-        mixup_args = dict(
-            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+        mixup_cfg = MixupCfg(
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
+            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             label_smoothing=args.smoothing, num_classes=args.num_classes)
-        assert not args.aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
-        collate_fn = FastCollateMixup(**mixup_args)
 
     # wrap dataset in AugMix helper
     if args.aug_splits > 1:
@@ -510,46 +510,72 @@ def setup_data(args, default_cfg, dev_env, mixup_active):
     train_interpolation = args.train_interpolation
     if args.no_aug or not train_interpolation:
         train_interpolation = data_config['interpolation']
-    loader_train = create_loader(
-        dataset_train,
+
+    if args.no_aug:
+        train_aug_cfg = None
+    else:
+        train_aug_cfg = AugCfg(
+            re_prob=args.reprob,
+            re_mode=args.remode,
+            re_count=args.recount,
+            ratio_range=args.ratio,
+            scale_range=args.scale,
+            hflip_prob=args.hflip,
+            vflip_prob=args.vflip,
+            color_jitter=args.color_jitter,
+            auto_augment=args.aa,
+            num_aug_splits=args.aug_splits,
+        )
+
+    train_pp_cfg = PreprocessCfg(
         input_size=data_config['input_size'],
-        batch_size=args.batch_size,
-        is_training=True,
-        no_aug=args.no_aug,
-        re_prob=args.reprob,
-        re_mode=args.remode,
-        re_count=args.recount,
-        re_split=args.resplit,
-        scale=args.scale,
-        ratio=args.ratio,
-        hflip=args.hflip,
-        vflip=args.vflip,
-        color_jitter=args.color_jitter,
-        auto_augment=args.aa,
-        num_aug_splits=args.aug_splits,
         interpolation=train_interpolation,
+        crop_pct=data_config['crop_pct'],
         mean=data_config['mean'],
         std=data_config['std'],
+        aug=train_aug_cfg,
+    )
+
+    # if using PyTorch XLA and RandomErasing is enabled, we must normalize and do RE in transforms on CPU
+    normalize_in_transform = dev_env.type_xla and args.reprob > 0
+
+    dataset_train.transform = create_transform_v2(
+        cfg=train_pp_cfg, is_training=True, normalize=normalize_in_transform)
+
+    loader_train = create_loader_v2(
+        dataset_train,
+        batch_size=args.batch_size,
+        is_training=True,
+        normalize=not normalize_in_transform,
+        pp_cfg=train_pp_cfg,
+        mix_cfg=mixup_cfg,
         num_workers=args.workers,
-        collate_fn=collate_fn,
         pin_memory=args.pin_mem,
         use_multi_epochs_loader=args.use_multi_epochs_loader
     )
+
+    eval_pp_cfg = PreprocessCfg(
+        input_size=data_config['input_size'],
+        interpolation=data_config['interpolation'],
+        crop_pct=data_config['crop_pct'],
+        mean=data_config['mean'],
+        std=data_config['std'],
+    )
+
+    dataset_eval.transform = create_transform_v2(
+        cfg=eval_pp_cfg, is_training=False, normalize=normalize_in_transform)
 
     eval_workers = args.workers
     if 'tfds' in args.dataset:
         # FIXME reduce validation issues when using TFDS w/ workers and distributed training
         eval_workers = min(2, args.workers)
-    loader_eval = create_loader(
+    loader_eval = create_loader_v2(
         dataset_eval,
-        input_size=data_config['input_size'],
         batch_size=args.validation_batch_size_multiplier * args.batch_size,
         is_training=False,
-        interpolation=data_config['interpolation'],
-        mean=data_config['mean'],
-        std=data_config['std'],
+        normalize=not normalize_in_transform,
+        pp_cfg=eval_pp_cfg,
         num_workers=eval_workers,
-        crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
     )
     return data_config, loader_eval, loader_train
@@ -700,8 +726,12 @@ def evaluate(
                 loss = loss_fn(output, target)
 
             # FIXME, explictly marking step for XLA use since I'm not using the parallel xm loader
-            # need to investigate whether parallel loader wrapper is helpful on tpu-vm or only usefor for 2-vm setup.
-            dev_env.mark_step()
+            # need to investigate whether parallel loader wrapper is helpful on tpu-vm or only use for 2-vm setup.
+            if dev_env.type_xla:
+                dev_env.mark_step()
+            elif dev_env.type_cuda:
+                dev_env.synchronize()
+
             tracker.mark_iter_step_end()
             losses_m.update(loss, output.size(0))
             accuracy_m.update(output, target)

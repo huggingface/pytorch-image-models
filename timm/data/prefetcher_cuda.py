@@ -7,25 +7,34 @@ from .random_erasing import RandomErasing
 
 class PrefetcherCuda:
 
-    def __init__(self,
-                 loader,
-                 mean=IMAGENET_DEFAULT_MEAN,
-                 std=IMAGENET_DEFAULT_STD,
-                 fp16=False,
-                 re_prob=0.,
-                 re_mode='const',
-                 re_count=1,
-                 re_num_splits=0):
+    def __init__(
+            self,
+            loader,
+            device: torch.device = torch.device('cuda'),
+            dtype=torch.float32,
+            normalize=True,
+            normalize_shape=(1, 3, 1, 1),
+            mean=IMAGENET_DEFAULT_MEAN,
+            std=IMAGENET_DEFAULT_STD,
+            num_aug_splits=0,
+            re_prob=0.,
+            re_mode='const',
+            re_count=1
+    ):
         self.loader = loader
-        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
-        self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
-        self.fp16 = fp16
-        if fp16:
-            self.mean = self.mean.half()
-            self.std = self.std.half()
+        self.device = device
+        self.dtype = dtype
+        if normalize:
+            self.mean = torch.tensor(
+                [x * 255 for x in mean], dtype=self.dtype, device=self.device).view(normalize_shape)
+            self.std = torch.tensor(
+                [x * 255 for x in std], dtype=self.dtype, device=self.device).view(normalize_shape)
+        else:
+            self.mean = None
+            self.std = None
         if re_prob > 0.:
             self.random_erasing = RandomErasing(
-                probability=re_prob, mode=re_mode, max_count=re_count, num_splits=re_num_splits)
+                probability=re_prob, mode=re_mode, count=re_count, num_splits=num_aug_splits, device=device)
         else:
             self.random_erasing = None
 
@@ -35,12 +44,11 @@ class PrefetcherCuda:
 
         for next_input, next_target in self.loader:
             with torch.cuda.stream(stream):
-                next_input = next_input.cuda(non_blocking=True)
-                next_target = next_target.cuda(non_blocking=True)
-                if self.fp16:
-                    next_input = next_input.half().sub_(self.mean).div_(self.std)
-                else:
-                    next_input = next_input.float().sub_(self.mean).div_(self.std)
+                next_input = next_input.to(device=self.device, non_blocking=True)
+                next_input = next_input.to(dtype=self.dtype)
+                if self.mean is not None:
+                    next_input.sub_(self.mean).div_(self.std)
+                next_target = next_target.to(device=self.device, non_blocking=True)
                 if self.random_erasing is not None:
                     next_input = self.random_erasing(next_input)
 

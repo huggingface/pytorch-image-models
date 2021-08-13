@@ -102,7 +102,7 @@ class Mixup:
         num_classes (int): number of classes for target
     """
     def __init__(self, mixup_alpha=1., cutmix_alpha=0., cutmix_minmax=None, prob=1.0, switch_prob=0.5,
-                 mode='batch', correct_lam=True, label_smoothing=0.1, num_classes=1000):
+                 mode='batch', correct_lam=True, label_smoothing=0., num_classes=0):
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
         self.cutmix_minmax = cutmix_minmax
@@ -113,6 +113,8 @@ class Mixup:
         self.mix_prob = prob
         self.switch_prob = switch_prob
         self.label_smoothing = label_smoothing
+        if label_smoothing > 0.:
+            assert num_classes > 0
         self.num_classes = num_classes
         self.mode = mode
         self.correct_lam = correct_lam  # correct lambda based on clipped area for cutmix
@@ -218,17 +220,30 @@ class Mixup:
         return x, target
 
 
+def blend(a, b, lam, is_tensor=False, round_output=True):
+    if is_tensor:
+        blend = a.to(dtype=torch.float32) * lam + b.to(dtype=torch.float32) * (1 - lam)
+        if round_output:
+            torch.round(blend, out=blend)
+    else:
+        blend = a.astype(np.float32) * lam + b.astype(np.float32) * (1 - lam)
+        if round_output:
+            np.rint(blend, out=blend)
+    return blend
+
+
 class FastCollateMixup(Mixup):
     """ Fast Collate w/ Mixup/Cutmix that applies different params to each element or whole batch
 
     A Mixup impl that's performed while collating the batches.
     """
 
-    def _mix_elem_collate(self, output, batch, half=False):
+    def _mix_elem_collate(self, output, batch, half=False, is_tensor=False):
         batch_size = len(batch)
         num_elem = batch_size // 2 if half else batch_size
         assert len(output) == num_elem
         lam_batch, use_cutmix = self._params_per_elem(num_elem)
+        round_output = output.dtype == torch.uint8
         for i in range(num_elem):
             j = batch_size - i - 1
             lam = lam_batch[i]
@@ -236,22 +251,23 @@ class FastCollateMixup(Mixup):
             if lam != 1.:
                 if use_cutmix[i]:
                     if not half:
-                        mixed = mixed.copy()
+                        mixed = mixed.clone() if is_tensor else mixed.copy()  # don't want to modify while iterating
                     (yl, yh, xl, xh), lam = cutmix_bbox_and_lam(
                         output.shape, lam, ratio_minmax=self.cutmix_minmax, correct_lam=self.correct_lam)
                     mixed[:, yl:yh, xl:xh] = batch[j][0][:, yl:yh, xl:xh]
                     lam_batch[i] = lam
                 else:
-                    mixed = mixed.astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
-                    np.rint(mixed, out=mixed)
-            output[i] += torch.from_numpy(mixed.astype(np.uint8))
+                    mixed = blend(mixed, batch[j][0], lam, is_tensor, round_output)
+            mixed = mixed.to(dtype=output.dtype) if is_tensor else torch.from_numpy(mixed.astype(np.uint8))
+            output[i].copy_(mixed)
         if half:
             lam_batch = np.concatenate((lam_batch, np.ones(num_elem)))
         return torch.tensor(lam_batch).unsqueeze(1)
 
-    def _mix_pair_collate(self, output, batch):
+    def _mix_pair_collate(self, output, batch, is_tensor=False):
         batch_size = len(batch)
         lam_batch, use_cutmix = self._params_per_elem(batch_size // 2)
+        round_output = output.dtype == torch.uint8
         for i in range(batch_size // 2):
             j = batch_size - i - 1
             lam = lam_batch[i]
@@ -262,24 +278,30 @@ class FastCollateMixup(Mixup):
                 if use_cutmix[i]:
                     (yl, yh, xl, xh), lam = cutmix_bbox_and_lam(
                         output.shape, lam, ratio_minmax=self.cutmix_minmax, correct_lam=self.correct_lam)
-                    patch_i = mixed_i[:, yl:yh, xl:xh].copy()
+                    patch_i = mixed_i[:, yl:yh, xl:xh]
+                    patch_i = patch_i.clone() if is_tensor else patch_i.copy()  # don't want to modify while iterating
                     mixed_i[:, yl:yh, xl:xh] = mixed_j[:, yl:yh, xl:xh]
                     mixed_j[:, yl:yh, xl:xh] = patch_i
                     lam_batch[i] = lam
                 else:
-                    mixed_temp = mixed_i.astype(np.float32) * lam + mixed_j.astype(np.float32) * (1 - lam)
-                    mixed_j = mixed_j.astype(np.float32) * lam + mixed_i.astype(np.float32) * (1 - lam)
+                    mixed_temp = blend(mixed_i, mixed_j, lam, is_tensor, round_output)
+                    mixed_j = blend(mixed_j, mixed_i, lam, is_tensor, round_output)
                     mixed_i = mixed_temp
-                    np.rint(mixed_j, out=mixed_j)
-                    np.rint(mixed_i, out=mixed_i)
-            output[i] += torch.from_numpy(mixed_i.astype(np.uint8))
-            output[j] += torch.from_numpy(mixed_j.astype(np.uint8))
+            if is_tensor:
+                mixed_i = mixed_i.to(dtype=output.dtype)
+                mixed_j = mixed_j.to(dtype=output.dtype)
+            else:
+                mixed_i = torch.from_numpy(mixed_i.astype(np.uint8))
+                mixed_j = torch.from_numpy(mixed_j.astype(np.uint8))
+            output[i].copy_(mixed_i)
+            output[j].copy_(mixed_j)
         lam_batch = np.concatenate((lam_batch, lam_batch[::-1]))
         return torch.tensor(lam_batch).unsqueeze(1)
 
-    def _mix_batch_collate(self, output, batch):
+    def _mix_batch_collate(self, output, batch, is_tensor=False):
         batch_size = len(batch)
         lam, use_cutmix = self._params_per_batch()
+        round_output = output.dtype == torch.uint8
         if use_cutmix:
             (yl, yh, xl, xh), lam = cutmix_bbox_and_lam(
                 output.shape, lam, ratio_minmax=self.cutmix_minmax, correct_lam=self.correct_lam)
@@ -288,12 +310,12 @@ class FastCollateMixup(Mixup):
             mixed = batch[i][0]
             if lam != 1.:
                 if use_cutmix:
-                    mixed = mixed.copy()  # don't want to modify the original while iterating
+                    mixed = mixed.clone() if is_tensor else mixed.copy()  # don't want to modify while iterating
                     mixed[:, yl:yh, xl:xh] = batch[j][0][:, yl:yh, xl:xh]
                 else:
-                    mixed = mixed.astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
-                    np.rint(mixed, out=mixed)
-            output[i] += torch.from_numpy(mixed.astype(np.uint8))
+                    mixed = blend(mixed, batch[j][0], lam, is_tensor, round_output)
+            mixed = mixed.to(dtype=output.dtype) if is_tensor else torch.from_numpy(mixed.astype(np.uint8))
+            output[i].copy_(mixed)
         return lam
 
     def __call__(self, batch, _=None):
@@ -302,13 +324,15 @@ class FastCollateMixup(Mixup):
         half = 'half' in self.mode
         if half:
             batch_size //= 2
-        output = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
+        is_tensor = isinstance(batch[0][0], torch.Tensor)
+        output_dtype = batch[0][0].dtype if is_tensor else torch.uint8  # always uint8 if numpy src
+        output = torch.zeros((batch_size, *batch[0][0].shape), dtype=output_dtype)
         if self.mode == 'elem' or self.mode == 'half':
-            lam = self._mix_elem_collate(output, batch, half=half)
+            lam = self._mix_elem_collate(output, batch, half=half, is_tensor=is_tensor)
         elif self.mode == 'pair':
-            lam = self._mix_pair_collate(output, batch)
+            lam = self._mix_pair_collate(output, batch, is_tensor=is_tensor)
         else:
-            lam = self._mix_batch_collate(output, batch)
+            lam = self._mix_batch_collate(output, batch, is_tensor=is_tensor)
         target = torch.tensor([b[1] for b in batch], dtype=torch.int64)
         target = mixup_target(target, self.num_classes, lam, self.label_smoothing, device='cpu')
         target = target[:batch_size]

@@ -8,9 +8,11 @@ from torch.distributed import ReduceOp
 
 try:
     import torch_xla.core.xla_model as xm
+    import torch_xla
     _HAS_XLA = True
 except ImportError as e:
     xm = None
+    torch_xla = None
     _HAS_XLA = False
 
 try:
@@ -80,6 +82,9 @@ class DeviceEnvXla(DeviceEnv):
 
     def mark_step(self):
         xm.mark_step()
+
+    def synchronize(self, tensors: Optional[TensorList] = None):
+        torch_xla._XLAC._xla_sync_multi(tensors, devices=[], wait=True, sync_xla_data=True)
 
     def all_reduce(self, tensor: torch.Tensor, op=ReduceOp.SUM, average=False):
         assert isinstance(tensor, torch.Tensor)  # unlike in-place variant, lists/tuples not allowed
