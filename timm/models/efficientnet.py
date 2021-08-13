@@ -92,11 +92,6 @@ default_cfgs = {
         interpolation='bilinear'),
 
     # NOTE experimenting with alternate attention
-    'eca_efficientnet_b0': _cfg(
-        url=''),
-    'gc_efficientnet_b0': _cfg(
-        url=''),
-
     'efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth'),
     'efficientnet_b1': _cfg(
@@ -165,6 +160,12 @@ default_cfgs = {
         url='https://imvl-automl-sh.oss-cn-shanghai.aliyuncs.com/darts/hyperml/hyperml/job_45403/outputs/effnetb3_pruned_5abcc29f.pth',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904, mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 
+    'efficientnetv2_rw_t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnetv2_t_agc-3620981a.pth',
+        input_size=(3, 224, 224), test_input_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),
+    'gc_efficientnetv2_rw_t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gc_efficientnetv2_rw_t_agc-927a0bde.pth',
+        input_size=(3, 224, 224), test_input_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),
     'efficientnetv2_rw_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_v2s_ra2_288-a6477665.pth',
         input_size=(3, 288, 288), test_input_size=(3, 384, 384), pool_size=(9, 9), crop_pct=1.0),
@@ -181,6 +182,9 @@ default_cfgs = {
     'efficientnetv2_l': _cfg(
         url='',
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+    'efficientnetv2_xl': _cfg(
+        url='',
+        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
 
     'tf_efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0_aa-827b6e33.pth',
@@ -352,6 +356,10 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_l_21ft1k-60127a9d.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+    'tf_efficientnetv2_xl_in21ft1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_xl_in21ft1k-06c35c48.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
 
     'tf_efficientnetv2_s_in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_s_21k-6337ad01.pth',
@@ -365,6 +373,10 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_l_21k-91a19ec9.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+    'tf_efficientnetv2_xl_in21k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_xl_in21k-fd7e8abf.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
+        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
 
     'tf_efficientnetv2_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_b0-c7cc451f.pth',
@@ -402,7 +414,7 @@ class EfficientNet(nn.Module):
     """ (Generic) EfficientNet
 
     A flexible and performant PyTorch implementation of efficient network architectures, including:
-      * EfficientNet-V2 Small, Medium, Large & B0-B3
+      * EfficientNet-V2 Small, Medium, Large, XL & B0-B3
       * EfficientNet B0-B8, L2
       * EfficientNet-EdgeTPU
       * EfficientNet-CondConv
@@ -1032,6 +1044,36 @@ def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     return model
 
 
+def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Creates an EfficientNet-V2 Xtra-Large model
+
+    Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
+    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+    """
+
+    arch_def = [
+        ['cn_r4_k3_s1_e1_c32_skip'],
+        ['er_r8_k3_s2_e4_c64'],
+        ['er_r8_k3_s2_e4_c96'],
+        ['ir_r16_k3_s2_e4_c192_se0.25'],
+        ['ir_r24_k3_s1_e6_c256_se0.25'],
+        ['ir_r32_k3_s2_e6_c512_se0.25'],
+        ['ir_r8_k3_s1_e6_c640_se0.25'],
+    ]
+
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=1280,
+        stem_size=32,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _gen_mixnet_s(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """Creates a MixNet Small model.
 
@@ -1226,26 +1268,6 @@ def efficientnet_b0(pretrained=False, **kwargs):
     # NOTE for train, drop_rate should be 0.2, drop_path_rate should be 0.2
     model = _gen_efficientnet(
         'efficientnet_b0', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def eca_efficientnet_b0(pretrained=False, **kwargs):
-    """ EfficientNet-B0 w/ ECA attn """
-    # NOTE experimental config
-    model = _gen_efficientnet(
-        'eca_efficientnet_b0', se_layer='ecam', channel_multiplier=1.0, depth_multiplier=1.0,
-        pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def gc_efficientnet_b0(pretrained=False, **kwargs):
-    """ EfficientNet-B0 w/ GlobalContext """
-    # NOTE experminetal config
-    model = _gen_efficientnet(
-        'gc_efficientnet_b0', se_layer='gc', channel_multiplier=1.0, depth_multiplier=1.0,
-        pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1488,8 +1510,25 @@ def efficientnet_b3_pruned(pretrained=False, **kwargs):
 
 
 @register_model
+def efficientnetv2_rw_t(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Tiny (Custom variant, tiny not in paper). """
+    model = _gen_efficientnetv2_s(
+        'efficientnetv2_rw_t', channel_multiplier=0.8, depth_multiplier=0.9, rw=False, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def gc_efficientnetv2_rw_t(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Tiny w/ Global Context Attn (Custom variant, tiny not in paper). """
+    model = _gen_efficientnetv2_s(
+        'gc_efficientnetv2_rw_t', channel_multiplier=0.8, depth_multiplier=0.9,
+        rw=False, se_layer='gc', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def efficientnetv2_rw_s(pretrained=False, **kwargs):
-    """ EfficientNet-V2 Small RW variant.
+    """ EfficientNet-V2 Small (RW variant).
     NOTE: This is my initial (pre official code release) w/ some differences.
     See efficientnetv2_s and tf_efficientnetv2_s for versions that match the official w/ PyTorch vs TF padding
     """
@@ -1499,7 +1538,7 @@ def efficientnetv2_rw_s(pretrained=False, **kwargs):
 
 @register_model
 def efficientnetv2_rw_m(pretrained=False, **kwargs):
-    """ EfficientNet-V2 Medium RW variant.
+    """ EfficientNet-V2 Medium (RW variant).
     """
     model = _gen_efficientnetv2_s(
         'efficientnetv2_rw_m', channel_multiplier=1.2, depth_multiplier=(1.2,) * 4 + (1.6,) * 2, rw=True,
@@ -1525,6 +1564,13 @@ def efficientnetv2_m(pretrained=False, **kwargs):
 def efficientnetv2_l(pretrained=False, **kwargs):
     """ EfficientNet-V2 Large. """
     model = _gen_efficientnetv2_l('efficientnetv2_l', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnetv2_xl(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Xtra-Large. """
+    model = _gen_efficientnetv2_xl('efficientnetv2_xl', pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1997,6 +2043,16 @@ def tf_efficientnetv2_l_in21ft1k(pretrained=False, **kwargs):
 
 
 @register_model
+def tf_efficientnetv2_xl_in21ft1k(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Xtra-Large. Pretrained on ImageNet-21k, fine-tuned on 1k. Tensorflow compatible variant
+    """
+    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
+    kwargs['pad_type'] = 'same'
+    model = _gen_efficientnetv2_xl('tf_efficientnetv2_xl_in21ft1k', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def tf_efficientnetv2_s_in21k(pretrained=False, **kwargs):
     """ EfficientNet-V2 Small w/ ImageNet-21k pretrained weights. Tensorflow compatible variant
     """
@@ -2023,6 +2079,16 @@ def tf_efficientnetv2_l_in21k(pretrained=False, **kwargs):
     kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
     kwargs['pad_type'] = 'same'
     model = _gen_efficientnetv2_l('tf_efficientnetv2_l_in21k', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def tf_efficientnetv2_xl_in21k(pretrained=False, **kwargs):
+    """ EfficientNet-V2 Xtra-Large w/ ImageNet-21k pretrained weights. Tensorflow compatible variant
+    """
+    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
+    kwargs['pad_type'] = 'same'
+    model = _gen_efficientnetv2_xl('tf_efficientnetv2_xl_in21k', pretrained=pretrained, **kwargs)
     return model
 
 

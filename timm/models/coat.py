@@ -335,6 +335,8 @@ class CoaT(nn.Module):
         crpe_window = crpe_window or {3: 2, 5: 3, 7: 3}
         self.return_interm_layers = return_interm_layers
         self.out_features = out_features
+        self.embed_dims = embed_dims
+        self.num_features = embed_dims[-1]
         self.num_classes = num_classes
 
         # Patch embeddings.
@@ -441,10 +443,10 @@ class CoaT(nn.Module):
                 # CoaT series: Aggregate features of last three scales for classification.
                 assert embed_dims[1] == embed_dims[2] == embed_dims[3]
                 self.aggregate = torch.nn.Conv1d(in_channels=3, out_channels=1, kernel_size=1)
-                self.head = nn.Linear(embed_dims[3], num_classes)
+                self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
             else:
                 # CoaT-Lite series: Use feature of last scale for classification.
-                self.head = nn.Linear(embed_dims[3], num_classes)
+                self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         # Initialize weights.
         trunc_normal_(self.cls_token1, std=.02)
@@ -471,7 +473,7 @@ class CoaT(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def insert_cls(self, x, cls_token):
         """ Insert CLS token. """

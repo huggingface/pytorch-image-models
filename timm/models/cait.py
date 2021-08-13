@@ -74,11 +74,11 @@ default_cfgs = dict(
 class ClassAttn(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
     # with slight modifications to do CA 
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = head_dim ** -0.5
 
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.k = nn.Linear(dim, dim, bias=qkv_bias)
@@ -110,13 +110,13 @@ class LayerScaleBlockClassAttn(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
     # with slight modifications to add CA and LayerScale
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
             drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, attn_block=ClassAttn,
             mlp_block=Mlp, init_values=1e-4):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = attn_block(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
@@ -134,14 +134,14 @@ class LayerScaleBlockClassAttn(nn.Module):
 class TalkingHeadAttn(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
     # with slight modifications to add Talking Heads Attention (https://arxiv.org/pdf/2003.02436v1.pdf)
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
         super().__init__()
 
         self.num_heads = num_heads
 
         head_dim = dim // num_heads
 
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = head_dim ** -0.5
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -177,13 +177,13 @@ class LayerScaleBlock(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
     # with slight modifications to add layerScale
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
             drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, attn_block=TalkingHeadAttn,
             mlp_block=Mlp, init_values=1e-4):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = attn_block(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
@@ -202,7 +202,7 @@ class Cait(nn.Module):
     # with slight modifications to adapt to our cait models
     def __init__(
             self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-            num_heads=12, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+            num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0.,
             drop_path_rate=0.,
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
             global_pool=None,
@@ -235,14 +235,14 @@ class Cait(nn.Module):
         dpr = [drop_path_rate for i in range(depth)]
         self.blocks = nn.ModuleList([
             block_layers(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
                 act_layer=act_layer, attn_block=attn_block, mlp_block=mlp_block, init_values=init_scale)
             for i in range(depth)])
 
         self.blocks_token_only = nn.ModuleList([
             block_layers_token(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio_clstk, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio_clstk, qkv_bias=qkv_bias,
                 drop=0.0, attn_drop=0.0, drop_path=0.0, norm_layer=norm_layer,
                 act_layer=act_layer, attn_block=attn_block_token_only,
                 mlp_block=mlp_block_token_only, init_values=init_scale)
@@ -270,6 +270,13 @@ class Cait(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
+    def get_classifier(self):
+        return self.head
+
+    def reset_classifier(self, num_classes, global_pool=''):
+        self.num_classes = num_classes
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
     def forward_features(self, x):
         B = x.shape[0]
         x = self.patch_embed(x)
@@ -293,7 +300,6 @@ class Cait(nn.Module):
     def forward(self, x):
         x = self.forward_features(x)
         x = self.head(x)
-
         return x
 
 

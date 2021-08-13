@@ -186,12 +186,13 @@ class PoolingVisionTransformer(nn.Module):
             ]
         self.transformers = SequentialTuple(*transformers)
         self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6)
-        self.embed_dim = base_dims[-1] * heads[-1]
+        self.num_features = self.embed_dim = base_dims[-1] * heads[-1]
 
         # Classifier head
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = nn.Linear(self.embed_dim, self.num_classes) \
-            if num_classes > 0 and distilled else nn.Identity()
+        self.head_dist = None
+        if distilled:
+            self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
@@ -207,13 +208,16 @@ class PoolingVisionTransformer(nn.Module):
         return {'pos_embed', 'cls_token'}
 
     def get_classifier(self):
-        return self.head
+        if self.head_dist is not None:
+            return self.head, self.head_dist
+        else:
+            return self.head
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = nn.Linear(self.embed_dim, self.num_classes) \
-            if num_classes > 0 and self.num_tokens == 2 else nn.Identity()
+        if self.head_dist is not None:
+            self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.patch_embed(x)
@@ -221,19 +225,21 @@ class PoolingVisionTransformer(nn.Module):
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         x, cls_tokens = self.transformers((x, cls_tokens))
         cls_tokens = self.norm(cls_tokens)
-        return cls_tokens
+        if self.head_dist is not None:
+            return cls_tokens[:, 0], cls_tokens[:, 1]
+        else:
+            return cls_tokens[:, 0]
 
     def forward(self, x):
         x = self.forward_features(x)
-        x_cls = self.head(x[:, 0])
-        if self.num_tokens > 1:
-            x_dist = self.head_dist(x[:, 1])
+        if self.head_dist is not None:
+            x, x_dist = self.head(x[0]), self.head_dist(x[1])  # x must be a tuple
             if self.training and not torch.jit.is_scripting():
-                return x_cls, x_dist
+                return x, x_dist
             else:
-                return (x_cls + x_dist) / 2
+                return (x + x_dist) / 2
         else:
-            return x_cls
+            return self.head(x)
 
 
 def checkpoint_filter_fn(state_dict, model):

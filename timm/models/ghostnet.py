@@ -133,7 +133,7 @@ class GhostBottleneck(nn.Module):
 
 
 class GhostNet(nn.Module):
-    def __init__(self, cfgs, num_classes=1000, width=1.0, dropout=0.2, in_chans=3, output_stride=32):
+    def __init__(self, cfgs, num_classes=1000, width=1.0, dropout=0.2, in_chans=3, output_stride=32, global_pool='avg'):
         super(GhostNet, self).__init__()
         # setting of inverted residual blocks
         assert output_stride == 32, 'only output_stride==32 is valid, dilation not supported'
@@ -178,10 +178,11 @@ class GhostNet(nn.Module):
 
         # building last several layers
         self.num_features = out_chs = 1280
-        self.global_pool = SelectAdaptivePool2d(pool_type='avg')
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True)
         self.act2 = nn.ReLU(inplace=True)
-        self.classifier = Linear(out_chs, num_classes)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
+        self.classifier = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
 
     def get_classifier(self):
         return self.classifier
@@ -190,6 +191,7 @@ class GhostNet(nn.Module):
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(self.pool_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
@@ -204,8 +206,7 @@ class GhostNet(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        if not self.global_pool.is_identity():
-            x = x.view(x.size(0), -1)
+        x = self.flatten(x)
         if self.dropout > 0.:
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.classifier(x)

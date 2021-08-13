@@ -7,9 +7,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from .adabelief import AdaBelief
 from .adafactor import Adafactor
 from .adahessian import Adahessian
 from .adamp import AdamP
+from .lamb import NvLamb
 from .lookahead import Lookahead
 from .nadam import Nadam
 from .novograd import NovoGrad
@@ -17,7 +19,6 @@ from .nvnovograd import NvNovoGrad
 from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
-from .adabelief import AdaBelief
 
 try:
     from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
@@ -148,6 +149,10 @@ def create_optimizer_v2(
         optimizer = NovoGrad(parameters, **opt_args)
     elif opt_lower == 'nvnovograd':
         optimizer = NvNovoGrad(parameters, **opt_args)
+    elif opt_lower == 'lamb':
+        optimizer = NvLamb(parameters, **opt_args)
+
+    # NVIDIA fused optimizers, require APEX to be installed
     elif opt_lower == 'fusedsgd':
         opt_args.pop('eps', None)
         optimizer = FusedSGD(parameters, momentum=momentum, nesterov=True, **opt_args)
@@ -163,6 +168,7 @@ def create_optimizer_v2(
     elif opt_lower == 'fusednovograd':
         opt_args.setdefault('betas', (0.95, 0.98))
         optimizer = FusedNovoGrad(parameters, **opt_args)
+
     else:
         assert False and "Invalid optimizer"
         raise ValueError

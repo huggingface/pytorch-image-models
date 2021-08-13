@@ -40,6 +40,12 @@ class GluMlp(nn.Module):
         self.fc2 = nn.Linear(hidden_features // 2, out_features)
         self.drop = nn.Dropout(drop)
 
+    def init_weights(self):
+        # override init of fc1 w/ gate portion set to weight near zero, bias=1
+        fc1_mid = self.fc1.bias.shape[0] // 2
+        nn.init.ones_(self.fc1.bias[fc1_mid:])
+        nn.init.normal_(self.fc1.weight[fc1_mid:], std=1e-6)
+
     def forward(self, x):
         x = self.fc1(x)
         x, gates = x.chunk(2, dim=-1)

@@ -65,11 +65,18 @@ def list_models(filter='', module='', pretrained=False, exclude_filters='', name
         model_list('*resnext*, 'resnet') -- returns all models with 'resnext' in 'resnet' module
     """
     if module:
-        models = list(_module_to_models[module])
+        all_models = list(_module_to_models[module])
     else:
-        models = _model_entrypoints.keys()
+        all_models = _model_entrypoints.keys()
     if filter:
-        models = fnmatch.filter(models, filter)  # include these models
+        models = []
+        include_filters = filter if isinstance(filter, (tuple, list)) else [filter]
+        for f in include_filters:
+            include_models = fnmatch.filter(all_models, f)  # include these models
+            if len(include_models):
+                models = set(models).union(include_models)
+    else:
+        models = all_models
     if exclude_filters:
         if not isinstance(exclude_filters, (tuple, list)):
             exclude_filters = [exclude_filters]

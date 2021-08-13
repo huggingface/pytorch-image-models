@@ -288,6 +288,8 @@ class DLA(nn.Module):
         self.num_features = channels[-1]
         self.global_pool, self.fc = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -314,6 +316,7 @@ class DLA(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
+        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
     def forward_features(self, x):
         x = self.base_layer(x)
@@ -331,8 +334,7 @@ class DLA(nn.Module):
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.fc(x)
-        if not self.global_pool.is_identity():
-            x = x.flatten(1)  # conv classifier, flatten if pooling isn't pass-through (disabled)
+        x = self.flatten(x)
         return x
 
 

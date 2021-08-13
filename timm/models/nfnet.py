@@ -111,11 +111,11 @@ default_cfgs = dict(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l1_ra2-7dce93cd.pth',
         pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 320, 320), crop_pct=1.0),
     eca_nfnet_l2=_dcfg(
-        url='',
-        pool_size=(9, 9), input_size=(3, 288, 288), test_input_size=(3, 352, 352), crop_pct=1.0),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l2_ra3-da781a61.pth',
+        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), crop_pct=1.0),
     eca_nfnet_l3=_dcfg(
         url='',
-        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), crop_pct=1.0),
+        pool_size=(11, 11), input_size=(3, 352, 352), test_input_size=(3, 448, 448), crop_pct=1.0),
 
     nf_regnet_b0=_dcfg(
         url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv'),
@@ -166,6 +166,7 @@ class NfCfg:
     extra_conv: bool = False  # extra 3x3 bottleneck convolution for NFNet models
     gamma_in_act: bool = False
     same_padding: bool = False
+    std_conv_eps: float = 1e-5
     skipinit: bool = False  # disabled by default, non-trivial performance impact
     zero_init_fc: bool = False
     act_layer: str = 'silu'
@@ -207,6 +208,7 @@ def _dm_nfnet_cfg(depths, channels=(256, 512, 1536, 1536), act_layer='gelu', ski
         bottle_ratio=0.5, extra_conv=True, gamma_in_act=True, same_padding=True, skipinit=skipinit,
         num_features=int(channels[-1] * 2.0), act_layer=act_layer, attn_layer='se', attn_kwargs=dict(rd_ratio=0.5))
     return cfg
+
 
 
 model_cfgs = dict(
@@ -482,10 +484,10 @@ class NormFreeNet(nn.Module):
         conv_layer = ScaledStdConv2dSame if cfg.same_padding else ScaledStdConv2d
         if cfg.gamma_in_act:
             act_layer = act_with_gamma(cfg.act_layer, gamma=_nonlin_gamma[cfg.act_layer])
-            conv_layer = partial(conv_layer, eps=1e-4)  # DM weights better with higher eps
+            conv_layer = partial(conv_layer, eps=cfg.std_conv_eps)
         else:
             act_layer = get_act_layer(cfg.act_layer)
-            conv_layer = partial(conv_layer, gamma=_nonlin_gamma[cfg.act_layer])
+            conv_layer = partial(conv_layer, gamma=_nonlin_gamma[cfg.act_layer], eps=cfg.std_conv_eps)
         attn_layer = partial(get_attn(cfg.attn_layer), **cfg.attn_kwargs) if cfg.attn_layer else None
 
         stem_chs = make_divisible((cfg.stem_chs or cfg.channels[0]) * cfg.width_factor, cfg.ch_div)

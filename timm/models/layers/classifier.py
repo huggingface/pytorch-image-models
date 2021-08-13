@@ -20,7 +20,7 @@ def _create_pool(num_features, num_classes, pool_type='avg', use_conv=False):
     return global_pool, num_pooled_features
 
 
-def _create_fc(num_features, num_classes, pool_type='avg', use_conv=False):
+def _create_fc(num_features, num_classes, use_conv=False):
     if num_classes <= 0:
         fc = nn.Identity()  # pass-through (no classifier)
     elif use_conv:
@@ -45,11 +45,12 @@ class ClassifierHead(nn.Module):
         self.drop_rate = drop_rate
         self.global_pool, num_pooled_features = _create_pool(in_chs, num_classes, pool_type, use_conv=use_conv)
         self.fc = _create_fc(num_pooled_features, num_classes, use_conv=use_conv)
-        self.flatten_after_fc = use_conv and pool_type
+        self.flatten = nn.Flatten(1) if use_conv and pool_type else nn.Identity()
 
     def forward(self, x):
         x = self.global_pool(x)
         if self.drop_rate:
             x = F.dropout(x, p=float(self.drop_rate), training=self.training)
         x = self.fc(x)
+        x = self.flatten(x)
         return x

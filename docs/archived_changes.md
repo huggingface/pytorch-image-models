@@ -1,5 +1,17 @@
 # Archived Changes
 
+### Dec 18, 2020
+* Add ResNet-101D, ResNet-152D, and ResNet-200D weights trained @ 256x256
+  * 256x256 val, 0.94 crop (top-1) - 101D (82.33), 152D (83.08), 200D (83.25)
+  * 288x288 val, 1.0 crop - 101D (82.64), 152D (83.48), 200D (83.76)
+  * 320x320 val, 1.0 crop - 101D (83.00), 152D (83.66), 200D (84.01)
+
+### Dec 7, 2020
+* Simplify EMA module (ModelEmaV2), compatible with fully torchscripted models
+* Misc fixes for SiLU ONNX export, default_cfg missing from Feature extraction models, Linear layer w/ AMP + torchscript
+* PyPi release @ 0.3.2 (needed by EfficientDet)
+
+
 ### Oct 30, 2020
 * Test with PyTorch 1.7 and fix a small top-n metric view vs reshape issue.
 * Convert newly added 224x224 Vision Transformer weights from official JAX repo. 81.8 top-1 for B/16, 83.1 L/16.
