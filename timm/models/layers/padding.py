@@ -5,6 +5,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import math
 from typing import List, Tuple
 
+import torch
 import torch.nn.functional as F
 
 
@@ -16,7 +17,7 @@ def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1, **_) -> in
 
 # Calculate asymmetric TensorFlow-like 'SAME' padding for a convolution
 def get_same_padding(x: int, k: int, s: int, d: int):
-    return max((math.ceil(x / s) - 1) * s + (k - 1) * d + 1 - x, 0)
+    return max((math.ceil(torch.true_divide(c / s)) - 1) * s + (k - 1) * d + 1 - x, 0)
 
 
 # Can SAME padding for given args be done statically?
