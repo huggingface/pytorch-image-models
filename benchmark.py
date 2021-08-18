@@ -255,8 +255,8 @@ class TrainBenchmarkRunner(BenchmarkRunner):
 
         self.optimizer = create_optimizer_v2(
             self.model,
-            optimizer_name=kwargs.pop('opt', 'sgd'),
-            learning_rate=kwargs.pop('lr', 1e-4))
+            opt=kwargs.pop('opt', 'sgd'),
+            lr=kwargs.pop('lr', 1e-4))
 
     def _gen_target(self, batch_size):
         return torch.empty(
