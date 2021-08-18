@@ -96,7 +96,7 @@ class NvNovoGrad(Optimizer):
                 if exp_avg_sq == 0:
                     exp_avg_sq.copy_(norm)
                 else:
-                    exp_avg_sq.mul_(beta2).add_(1 - beta2, norm)
+                    exp_avg_sq.mul_(beta2).add_(norm, alpha=1 - beta2)
 
                 if amsgrad:
                     # Maintains the maximum of all 2nd moment running avg. till now
@@ -108,11 +108,11 @@ class NvNovoGrad(Optimizer):
 
                 grad.div_(denom)
                 if group['weight_decay'] != 0:
-                    grad.add_(group['weight_decay'], p.data)
+                    grad.add_(p.data, alpha=group['weight_decay'])
                 if group['grad_averaging']:
                     grad.mul_(1 - beta1)
                 exp_avg.mul_(beta1).add_(grad)
 
-                p.data.add_(-group['lr'], exp_avg)
+                p.data.add_(exp_avg, alpha=-group['lr'])
 
         return loss

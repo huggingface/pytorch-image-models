@@ -6,15 +6,16 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.optimizer import required
 
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
 from .adahessian import Adahessian
 from .adamp import AdamP
-from .lamb import NvLamb
+from .lamb import Lamb
 from .lookahead import Lookahead
+from .madgrad import MADGRAD
 from .nadam import Nadam
-from .novograd import NovoGrad
 from .nvnovograd import NvNovoGrad
 from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
@@ -47,8 +48,8 @@ def optimizer_kwargs(cfg):
     Convert optimizer args in argparse args or cfg like object to keyword args for updated create fn.
     """
     kwargs = dict(
-        optimizer_name=cfg.opt,
-        learning_rate=cfg.lr,
+        opt=cfg.opt,
+        lr=cfg.lr,
         weight_decay=cfg.weight_decay,
         momentum=cfg.momentum)
     if getattr(cfg, 'opt_eps', None) is not None:
@@ -72,9 +73,9 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
 
 
 def create_optimizer_v2(
-        model: nn.Module,
-        optimizer_name: str = 'sgd',
-        learning_rate: Optional[float] = None,
+        model_or_params,
+        opt: str = 'sgd',
+        lr: Optional[float] = None,
         weight_decay: float = 0.,
         momentum: float = 0.9,
         filter_bias_and_bn: bool = True,
@@ -87,9 +88,9 @@ def create_optimizer_v2(
       * expose the parameters interface and leave it up to caller
 
     Args:
-        model (nn.Module): model containing parameters to optimize
-        optimizer_name: name of optimizer to create
-        learning_rate: initial learning rate
+        model_or_params (nn.Module): model containing parameters to optimize
+        opt: name of optimizer to create
+        lr: initial learning rate
         weight_decay: weight decay to apply in optimizer
         momentum:  momentum for momentum based optimizers (others may use betas via kwargs)
         filter_bias_and_bn:  filter out bias, bn and other 1d params from weight decay
@@ -98,59 +99,85 @@ def create_optimizer_v2(
     Returns:
         Optimizer
     """
-    opt_lower = optimizer_name.lower()
-    if weight_decay and filter_bias_and_bn:
-        skip = {}
-        if hasattr(model, 'no_weight_decay'):
-            skip = model.no_weight_decay()
-        parameters = add_weight_decay(model, weight_decay, skip)
-        weight_decay = 0.
+    if isinstance(model_or_params, nn.Module):
+        # a model was passed in, extract parameters and add weight decays to appropriate layers
+        if weight_decay and filter_bias_and_bn:
+            skip = {}
+            if hasattr(model_or_params, 'no_weight_decay'):
+                skip = model_or_params.no_weight_decay()
+            parameters = add_weight_decay(model_or_params, weight_decay, skip)
+            weight_decay = 0.
+        else:
+            parameters = model_or_params.parameters()
     else:
-        parameters = model.parameters()
+        # iterable of parameters or param groups passed in
+        parameters = model_or_params
+
+    opt_lower = opt.lower()
+    opt_split = opt_lower.split('_')
+    opt_lower = opt_split[-1]
     if 'fused' in opt_lower:
         assert has_apex and torch.cuda.is_available(), 'APEX and CUDA required for fused optimizers'
 
-    opt_args = dict(lr=learning_rate, weight_decay=weight_decay, **kwargs)
-    opt_split = opt_lower.split('_')
-    opt_lower = opt_split[-1]
+    opt_args = dict(weight_decay=weight_decay, **kwargs)
+    if lr is not None:
+        opt_args.setdefault('lr', lr)
+
+    # basic SGD & related
     if opt_lower == 'sgd' or opt_lower == 'nesterov':
+        # NOTE 'sgd' refers to SGD + nesterov momentum for legacy / backwards compat reasons
         opt_args.pop('eps', None)
         optimizer = optim.SGD(parameters, momentum=momentum, nesterov=True, **opt_args)
     elif opt_lower == 'momentum':
         opt_args.pop('eps', None)
         optimizer = optim.SGD(parameters, momentum=momentum, nesterov=False, **opt_args)
-    elif opt_lower == 'adam':
-        optimizer = optim.Adam(parameters, **opt_args) 
-    elif opt_lower == 'adabelief':
-        optimizer = AdaBelief(parameters, rectify=False, **opt_args)
-    elif opt_lower == 'adamw':
-        optimizer = optim.AdamW(parameters, **opt_args)
-    elif opt_lower == 'nadam':
-        optimizer = Nadam(parameters, **opt_args)
-    elif opt_lower == 'radam':
-        optimizer = RAdam(parameters, **opt_args)
-    elif opt_lower == 'adamp':        
-        optimizer = AdamP(parameters, wd_ratio=0.01, nesterov=True, **opt_args)
     elif opt_lower == 'sgdp':
         optimizer = SGDP(parameters, momentum=momentum, nesterov=True, **opt_args)
+
+    # adaptive
+    elif opt_lower == 'adam':
+        optimizer = optim.Adam(parameters, **opt_args) 
+    elif opt_lower == 'adamw':
+        optimizer = optim.AdamW(parameters, **opt_args)
+    elif opt_lower == 'adamp':
+        optimizer = AdamP(parameters, wd_ratio=0.01, nesterov=True, **opt_args)
+    elif opt_lower == 'nadam':
+        try:
+            # NOTE PyTorch >= 1.10 should have native NAdam
+            optimizer = optim.Nadam(parameters, **opt_args)
+        except AttributeError:
+            optimizer = Nadam(parameters, **opt_args)
+    elif opt_lower == 'radam':
+        optimizer = RAdam(parameters, **opt_args)
+    elif opt_lower == 'adamax':
+        optimizer = optim.Adamax(parameters, **opt_args)
+    elif opt_lower == 'adabelief':
+        optimizer = AdaBelief(parameters, rectify=False, **opt_args)
+    elif opt_lower == 'radabelief':
+        optimizer = AdaBelief(parameters, rectify=True, **opt_args)
     elif opt_lower == 'adadelta':
         optimizer = optim.Adadelta(parameters, **opt_args)
+    elif opt_lower == 'adagrad':
+        opt_args.setdefault('eps', 1e-8)
+        optimizer = optim.Adagrad(parameters, **opt_args)
     elif opt_lower == 'adafactor':
-        if not learning_rate:
-            opt_args['lr'] = None
         optimizer = Adafactor(parameters, **opt_args)
-    elif opt_lower == 'adahessian':
-        optimizer = Adahessian(parameters, **opt_args)
+    elif opt_lower == 'lamb':
+        optimizer = Lamb(parameters, **opt_args)
+    elif opt_lower == 'lambw':
+        optimizer = Lamb(parameters, decoupled_decay=True, **opt_args)  # FIXME experimental
+    elif opt_lower == 'madgrad':
+        optimizer = MADGRAD(parameters, momentum=momentum, **opt_args)
+    elif opt_lower == 'novograd' or opt_lower == 'nvnovograd':
+        optimizer = NvNovoGrad(parameters, **opt_args)
     elif opt_lower == 'rmsprop':
         optimizer = optim.RMSprop(parameters, alpha=0.9, momentum=momentum, **opt_args)
     elif opt_lower == 'rmsproptf':
         optimizer = RMSpropTF(parameters, alpha=0.9, momentum=momentum, **opt_args)
-    elif opt_lower == 'novograd':
-        optimizer = NovoGrad(parameters, **opt_args)
-    elif opt_lower == 'nvnovograd':
-        optimizer = NvNovoGrad(parameters, **opt_args)
-    elif opt_lower == 'lamb':
-        optimizer = NvLamb(parameters, **opt_args)
+
+    # second order
+    elif opt_lower == 'adahessian':
+        optimizer = Adahessian(parameters, **opt_args)
 
     # NVIDIA fused optimizers, require APEX to be installed
     elif opt_lower == 'fusedsgd':

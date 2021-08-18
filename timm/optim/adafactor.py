@@ -34,15 +34,13 @@ class Adafactor(torch.optim.Optimizer):
         beta1 (float): coefficient used for computing running averages of gradient (default: None)
         weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
         scale_parameter (bool): if True, learning rate is scaled by root mean square of parameter (default: True)
-        relative_step (bool): if True, time-dependent learning rate is computed
-            instead of external learning rate (default: True)
         warmup_init (bool): time-dependent learning rate computation depends on
             whether warm-up initialization is being used (default: False)
     """
 
     def __init__(self, params, lr=None, eps=1e-30, eps_scale=1e-3, clip_threshold=1.0,
                  decay_rate=-0.8, betas=None, weight_decay=0.0, scale_parameter=True, warmup_init=False):
-        relative_step = lr is None
+        relative_step = not lr
         if warmup_init and not relative_step:
             raise ValueError('warmup_init requires relative_step=True')
 
@@ -138,10 +136,8 @@ class Adafactor(torch.optim.Optimizer):
                     exp_avg_sq_row = state['exp_avg_sq_row']
                     exp_avg_sq_col = state['exp_avg_sq_col']
 
-                    exp_avg_sq_row.mul_(beta2t).add_(1.0 - beta2t, update.mean(dim=-1))
-                    exp_avg_sq_col.mul_(beta2t).add_(1.0 - beta2t, update.mean(dim=-2))
-                    #exp_avg_sq_row.mul_(beta2t).add_(update.mean(dim=-1), alpha=1.0 - beta2t)  # pytorch 1.6+
-                    #exp_avg_sq_col.mul_(beta2t).add_(update.mean(dim=-2), alpha=1.0 - beta2t)
+                    exp_avg_sq_row.mul_(beta2t).add_(update.mean(dim=-1), alpha=1.0 - beta2t)
+                    exp_avg_sq_col.mul_(beta2t).add_(update.mean(dim=-2), alpha=1.0 - beta2t)
 
                     # Approximation of exponential moving average of square of gradient
                     update = self._approx_sq_grad(exp_avg_sq_row, exp_avg_sq_col)
@@ -149,8 +145,7 @@ class Adafactor(torch.optim.Optimizer):
                 else:
                     exp_avg_sq = state['exp_avg_sq']
 
-                    exp_avg_sq.mul_(beta2t).add_(1.0 - beta2t, update)
-                    #exp_avg_sq.mul_(beta2t).add_(update, alpha=1.0 - beta2t)  # pytorch 1.6+
+                    exp_avg_sq.mul_(beta2t).add_(update, alpha=1.0 - beta2t)
                     update = exp_avg_sq.rsqrt().mul_(grad)
 
                 update.div_((self._rms(update) / group['clip_threshold']).clamp_(min=1.0))
@@ -158,13 +153,11 @@ class Adafactor(torch.optim.Optimizer):
 
                 if use_first_moment:
                     exp_avg = state['exp_avg']
-                    exp_avg.mul_(group["beta1"]).add_(1 - group["beta1"], update)
-                    #exp_avg.mul_(group['beta1']).add_(update, alpha=1 - group['beta1'])  # pytorch 1.6+
+                    exp_avg.mul_(group['beta1']).add_(update, alpha=1 - group['beta1'])
                     update = exp_avg
 
                 if group['weight_decay'] != 0:
-                    p_data_fp32.add_(-group["weight_decay"] * lr_t, p_data_fp32)
-                    #p_data_fp32.add_(p_data_fp32, alpha=-group['weight_decay'] * lr_t)  # pytorch 1.6+
+                    p_data_fp32.add_(p_data_fp32, alpha=-group['weight_decay'] * lr_t)
 
                 p_data_fp32.add_(-update)
 

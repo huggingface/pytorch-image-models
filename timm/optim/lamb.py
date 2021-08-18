@@ -47,12 +47,13 @@ Original copyrights for above sources are below.
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import math
 
 import torch
 from torch.optim import Optimizer
 
 
-class NvLamb(Optimizer):
+class Lamb(Optimizer):
     """Implements a pure pytorch variant of FuseLAMB (NvLamb variant) optimizer from apex.optimizers.FusedLAMB
     reference: https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/LanguageModeling/Transformer-XL/pytorch/lamb.py
 
@@ -82,25 +83,15 @@ class NvLamb(Optimizer):
         https://openreview.net/forum?id=ryQu7f-RZ
     """
 
-    def __init__(self, params, lr=1e-3, bias_correction=True,
-                 betas=(0.9, 0.999), eps=1e-6, weight_decay=0.01,
-                 grad_averaging=True, set_grad_none=True,
-                 max_grad_norm=1.0, use_nvlamb=False):
-        defaults = dict(lr=lr, bias_correction=bias_correction,
-                        betas=betas, eps=eps, weight_decay=weight_decay,
-                        grad_averaging=grad_averaging,
-                        max_grad_norm=max_grad_norm)
+    def __init__(
+            self, params, lr=1e-3, bias_correction=True, betas=(0.9, 0.999), eps=1e-6, weight_decay=0.01,
+            grad_averaging=True, max_grad_norm=1.0, decoupled_decay=False, use_nvlamb=False):
+        defaults = dict(
+            lr=lr, bias_correction=bias_correction,
+            betas=betas, eps=eps, weight_decay=weight_decay,
+            grad_averaging=grad_averaging, max_grad_norm=max_grad_norm,
+            decoupled_decay=decoupled_decay, use_nvlamb=use_nvlamb)
         super().__init__(params, defaults)
-        self.set_grad_none = set_grad_none
-        self.use_nvlamb = use_nvlamb
-
-    def zero_grad(self):
-        if self.set_grad_none:
-            for group in self.param_groups:
-                for p in group['params']:
-                    p.grad = None
-        else:
-            super(NvLamb, self).zero_grad()
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -109,6 +100,7 @@ class NvLamb(Optimizer):
                 and returns the loss.
         """
         device = self.param_groups[0]["params"][0].device
+        one_tensor = torch.tensor(1.0, device=device)
 
         loss = None
         if closure is not None:
@@ -124,22 +116,18 @@ class NvLamb(Optimizer):
                     raise RuntimeError('Lamb does not support sparse gradients, consider SparseAdam instad.')
                 global_grad_norm.add_(grad.pow(2).sum())
 
-        global_grad_norm_ = torch.sqrt(global_grad_norm)
+        global_grad_norm = torch.sqrt(global_grad_norm)
         max_grad_norm = self.defaults['max_grad_norm']
-
-        if global_grad_norm_ > max_grad_norm:
-            clip_global_grad_norm = global_grad_norm_ / max_grad_norm
-        else:
-            clip_global_grad_norm = 1.0
+        clip_global_grad_norm = torch.where(
+            global_grad_norm > max_grad_norm,
+            global_grad_norm / max_grad_norm,
+            one_tensor)
 
         for group in self.param_groups:
             bias_correction = 1 if group['bias_correction'] else 0
             beta1, beta2 = group['betas']
             grad_averaging = 1 if group['grad_averaging'] else 0
-            if grad_averaging:
-                beta3 = 1 - beta1
-            else:
-                beta3 = 1.0
+            beta3 = 1 - beta1 if grad_averaging else 1.0
 
             # assume same step across group now to simplify things
             # per parameter step can be easily support by making it tensor, or pass list into kernel
@@ -169,36 +157,35 @@ class NvLamb(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(p.data)
 
-                exp_avg_, exp_avg_sq_ = state['exp_avg'], state['exp_avg_sq']
+                decoupled_decay = group['decoupled_decay']
+                weight_decay = group['weight_decay']
+                if decoupled_decay and weight_decay != 0:
+                    p.data.mul_(1. - group['lr'] * weight_decay)
+
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
 
                 # Decay the first and second moment running average coefficient
-                # m_t
-                exp_avg_.mul_(beta1).add_(grad, alpha=beta3)
-                # v_t
-                exp_avg_sq_.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
-                # create clones to avoid modifying runner stats
-                exp_avg = exp_avg_.div(bias_correction1)
-                exp_avg_sq = exp_avg_sq_.div(bias_correction2)
+                exp_avg.mul_(beta1).add_(grad, alpha=beta3)  # m_t
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)  # v_t
 
-                # || w_t ||
-                weight_norm = p.data.norm(2.0)
-                # u_t
-                exp_avg_sq_sqrt = torch.sqrt(exp_avg_sq)
-                adam_step = exp_avg.div_(exp_avg_sq_sqrt.add_(group['eps']))
-                if group['weight_decay'] != 0:
-                    adam_step.add_(p.data, alpha=group['weight_decay'])
-                # || u_t ||
-                adam_norm = adam_step.norm(2.0)
-                if (group['weight_decay'] != 0 or self.use_nvlamb) and adam_norm > 0 and weight_norm > 0:
-                    trust_ratio = weight_norm / adam_norm
-                    trust_ratio = trust_ratio.item()
-                else:
-                    trust_ratio = 1
+                denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
+                update = (exp_avg / bias_correction1).div_(denom)
 
-                state['weight_norm'] = weight_norm
-                state['adam_norm'] = adam_norm
-                state['trust_ratio'] = trust_ratio
+                if not decoupled_decay and weight_decay != 0:
+                    update.add_(p.data, alpha=weight_decay)
 
-                p.data.add_(adam_step, alpha=-step_size * trust_ratio)
+                trust_ratio = one_tensor
+                if weight_decay != 0 or group['use_nvlamb']:
+                    # Layer adaptation. By default, skip layer adaptation on parameters that are
+                    # excluded from weight norm, unless use_nvlamb == True, then always enabled.
+                    w_norm = p.data.norm(2.0)
+                    g_norm = update.norm(2.0)
+                    trust_ratio = torch.where(
+                        w_norm > 0,
+                        torch.where(g_norm > 0, w_norm / g_norm, one_tensor),
+                        one_tensor,
+                    )
+                update.mul_(trust_ratio)
+                p.data.add_(update, alpha=-step_size)
 
         return loss
