@@ -169,7 +169,7 @@ class Lamb(Optimizer):
                 trust_ratio = one_tensor
                 if weight_decay != 0 or group['use_nvlamb']:
                     # Layer adaptation. By default, skip layer adaptation on parameters that are
-                    # excluded from weight norm, unless use_nvlamb == True, then always enabled.
+                    # excluded from weight decay, unless use_nvlamb == True, then always enabled.
                     w_norm = p.data.norm(2.0)
                     g_norm = update.norm(2.0)
                     trust_ratio = torch.where(
