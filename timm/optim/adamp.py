@@ -9,48 +9,43 @@ MIT license
 """
 
 import torch
-import torch.nn as nn
-from torch.optim.optimizer import Optimizer, required
+import torch.nn.functional as F
+from torch.optim.optimizer import Optimizer
 import math
+
+
+def _channel_view(x) -> torch.Tensor:
+    return x.reshape(x.size(0), -1)
+
+
+def _layer_view(x) -> torch.Tensor:
+    return x.reshape(1, -1)
+
+
+def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float):
+    wd = 1.
+    expand_size = (-1,) + (1,) * (len(p.shape) - 1)
+    for view_func in [_channel_view, _layer_view]:
+        param_view = view_func(p.data)
+        grad_view = view_func(grad)
+        cosine_sim = F.cosine_similarity(grad_view, param_view, dim=1, eps=eps).abs_()
+
+        if cosine_sim.max() < delta / math.sqrt(param_view.size(1)):
+            p_n = p.data / param_view.norm(p=2, dim=1).add_(eps).reshape(expand_size)
+            perturb -= p_n * view_func(p_n * perturb).sum(dim=1).reshape(expand_size)
+            wd = wd_ratio
+            return perturb, wd
+
+    return perturb, wd
+
 
 class AdamP(Optimizer):
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  weight_decay=0, delta=0.1, wd_ratio=0.1, nesterov=False):
-        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
-                        delta=delta, wd_ratio=wd_ratio, nesterov=nesterov)
+        defaults = dict(
+            lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
+            delta=delta, wd_ratio=wd_ratio, nesterov=nesterov)
         super(AdamP, self).__init__(params, defaults)
-
-    def _channel_view(self, x):
-        return x.view(x.size(0), -1)
-
-    def _layer_view(self, x):
-        return x.view(1, -1)
-
-    def _cosine_similarity(self, x, y, eps, view_func):
-        x = view_func(x)
-        y = view_func(y)
-
-        x_norm = x.norm(dim=1).add_(eps)
-        y_norm = y.norm(dim=1).add_(eps)
-        dot = (x * y).sum(dim=1)
-
-        return dot.abs() / x_norm / y_norm
-
-    def _projection(self, p, grad, perturb, delta, wd_ratio, eps):
-        wd = 1
-        expand_size = [-1] + [1] * (len(p.shape) - 1)
-        for view_func in [self._channel_view, self._layer_view]:
-
-            cosine_sim = self._cosine_similarity(grad, p.data, eps, view_func)
-
-            if cosine_sim.max() < delta / math.sqrt(view_func(p.data).size(1)):
-                p_n = p.data / view_func(p.data).norm(dim=1).view(expand_size).add_(eps)
-                perturb -= p_n * view_func(p_n * perturb).sum(dim=1).view(expand_size)
-                wd = wd_ratio
-
-                return perturb, wd
-
-        return perturb, wd
 
     def step(self, closure=None):
         loss = None
@@ -81,8 +76,8 @@ class AdamP(Optimizer):
                 bias_correction1 = 1 - beta1 ** state['step']
                 bias_correction2 = 1 - beta2 ** state['step']
 
-                exp_avg.mul_(beta1).add_(1 - beta1, grad)
-                exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
 
                 denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
                 step_size = group['lr'] / bias_correction1
@@ -93,15 +88,15 @@ class AdamP(Optimizer):
                     perturb = exp_avg / denom
 
                 # Projection
-                wd_ratio = 1
+                wd_ratio = 1.
                 if len(p.shape) > 1:
-                    perturb, wd_ratio = self._projection(p, grad, perturb, group['delta'], group['wd_ratio'], group['eps'])
+                    perturb, wd_ratio = projection(p, grad, perturb, group['delta'], group['wd_ratio'], group['eps'])
 
                 # Weight decay
                 if group['weight_decay'] > 0:
-                    p.data.mul_(1 - group['lr'] * group['weight_decay'] * wd_ratio)
+                    p.data.mul_(1. - group['lr'] * group['weight_decay'] * wd_ratio)
 
                 # Step
-                p.data.add_(-step_size, perturb)
+                p.data.add_(perturb, alpha=-step_size)
 
         return loss

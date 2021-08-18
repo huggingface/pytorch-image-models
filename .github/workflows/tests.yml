@@ -17,8 +17,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
         python: ['3.8']
-        torch: ['1.8.1']
-        torchvision: ['0.9.1']
+        torch: ['1.9.0']
+        torchvision: ['0.10.0']
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -43,7 +43,7 @@ jobs:
     - name: Install requirements
       run: |
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git@v1.0.12
+        pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git@v1.1.0
     - name: Run tests
       env:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
