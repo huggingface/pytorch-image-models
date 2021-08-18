@@ -163,8 +163,6 @@ def create_optimizer_v2(
         optimizer = Adafactor(parameters, **opt_args)
     elif opt_lower == 'lamb':
         optimizer = Lamb(parameters, **opt_args)
-    elif opt_lower == 'lambw':
-        optimizer = Lamb(parameters, decoupled_decay=True, **opt_args)  # FIXME experimental
     elif opt_lower == 'madgrad':
         optimizer = MADGRAD(parameters, momentum=momentum, **opt_args)
     elif opt_lower == 'novograd' or opt_lower == 'nvnovograd':

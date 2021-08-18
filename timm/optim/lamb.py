@@ -84,13 +84,11 @@ class Lamb(Optimizer):
     """
 
     def __init__(
-            self, params, lr=1e-3, bias_correction=True, betas=(0.9, 0.999), eps=1e-6, weight_decay=0.01,
-            grad_averaging=True, max_grad_norm=1.0, decoupled_decay=False, use_nvlamb=False):
+            self, params, lr=1e-3, bias_correction=True, betas=(0.9, 0.999), eps=1e-6,
+            weight_decay=0.01, grad_averaging=True, max_grad_norm=1.0, use_nvlamb=False):
         defaults = dict(
-            lr=lr, bias_correction=bias_correction,
-            betas=betas, eps=eps, weight_decay=weight_decay,
-            grad_averaging=grad_averaging, max_grad_norm=max_grad_norm,
-            decoupled_decay=decoupled_decay, use_nvlamb=use_nvlamb)
+            lr=lr, bias_correction=bias_correction, betas=betas, eps=eps, weight_decay=weight_decay,
+            grad_averaging=grad_averaging, max_grad_norm=max_grad_norm, use_nvlamb=use_nvlamb)
         super().__init__(params, defaults)
 
     def step(self, closure=None):
@@ -136,8 +134,6 @@ class Lamb(Optimizer):
             else:
                 group['step'] = 1
 
-            step_size = group['lr']
-
             if bias_correction:
                 bias_correction1 = 1 - beta1 ** group['step']
                 bias_correction2 = 1 - beta2 ** group['step']
@@ -157,11 +153,6 @@ class Lamb(Optimizer):
                     # Exponential moving average of squared gradient values
                     state['exp_avg_sq'] = torch.zeros_like(p.data)
 
-                decoupled_decay = group['decoupled_decay']
-                weight_decay = group['weight_decay']
-                if decoupled_decay and weight_decay != 0:
-                    p.data.mul_(1. - group['lr'] * weight_decay)
-
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
 
                 # Decay the first and second moment running average coefficient
@@ -171,7 +162,8 @@ class Lamb(Optimizer):
                 denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
                 update = (exp_avg / bias_correction1).div_(denom)
 
-                if not decoupled_decay and weight_decay != 0:
+                weight_decay = group['weight_decay']
+                if weight_decay != 0:
                     update.add_(p.data, alpha=weight_decay)
 
                 trust_ratio = one_tensor
@@ -186,6 +178,6 @@ class Lamb(Optimizer):
                         one_tensor,
                     )
                 update.mul_(trust_ratio)
-                p.data.add_(update, alpha=-step_size)
+                p.data.add_(update, alpha=-group['lr'])
 
         return loss

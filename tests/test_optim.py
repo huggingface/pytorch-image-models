@@ -463,7 +463,7 @@ def test_adafactor(optimizer):
     _test_model(optimizer, dict(lr=5e-2))
 
 
-@pytest.mark.parametrize('optimizer',  ['lamb', 'lambw'])
+@pytest.mark.parametrize('optimizer',  ['lamb'])
 def test_lamb(optimizer):
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3)

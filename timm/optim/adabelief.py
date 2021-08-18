@@ -18,7 +18,7 @@ class AdaBelief(Optimizer):
         amsgrad (boolean, optional): whether to use the AMSGrad variant of this
             algorithm from the paper `On the Convergence of Adam and Beyond`_
             (default: False)
-        decoupled_decay (boolean, optional): ( default: True) If set as True, then
+        decoupled_decay (boolean, optional): (default: True) If set as True, then
             the optimizer uses decoupled weight decay as in AdamW
         fixed_decay (boolean, optional): (default: False) This is used when weight_decouple
             is set as True.
@@ -194,7 +194,7 @@ class AdaBelief(Optimizer):
                         denom = exp_avg_var.sqrt().add_(group['eps'])
                         p.data.addcdiv_(exp_avg, denom, value=-step_size * group['lr'])
                     elif step_size > 0:
-                        p.data.add_( exp_avg, alpha=-step_size * group['lr'])
+                        p.data.add_(exp_avg, alpha=-step_size * group['lr'])
                 
                 if half_precision:
                     p.data = p.data.half()
