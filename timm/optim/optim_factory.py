@@ -165,6 +165,8 @@ def create_optimizer_v2(
         optimizer = Lamb(parameters, **opt_args)
     elif opt_lower == 'madgrad':
         optimizer = MADGRAD(parameters, momentum=momentum, **opt_args)
+    elif opt_lower == 'madgradw':
+        optimizer = MADGRAD(parameters, momentum=momentum, decoupled_decay=True, **opt_args)
     elif opt_lower == 'novograd' or opt_lower == 'nvnovograd':
         optimizer = NvNovoGrad(parameters, **opt_args)
     elif opt_lower == 'rmsprop':

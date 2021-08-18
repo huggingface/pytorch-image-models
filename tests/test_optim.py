@@ -490,7 +490,7 @@ def test_lamb(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
-@pytest.mark.parametrize('optimizer',  ['madgrad'])
+@pytest.mark.parametrize('optimizer',  ['madgrad', 'madgradw'])
 def test_madgrad(optimizer):
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3)
