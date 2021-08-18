@@ -1,3 +1,9 @@
+""" PyTorch MADGRAD optimizer
+
+MADGRAD: https://arxiv.org/abs/2101.11075
+
+Code from: https://github.com/facebookresearch/madgrad
+"""
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the

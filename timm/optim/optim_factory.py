@@ -1,12 +1,11 @@
 """ Optimizer Factory w/ Custom Weight Decay
-Hacked together by / Copyright 2020 Ross Wightman
+Hacked together by / Copyright 2021 Ross Wightman
 """
 from typing import Optional
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.optimizer import required
 
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
