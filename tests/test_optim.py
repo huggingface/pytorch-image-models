@@ -499,7 +499,7 @@ def test_lars(optimizer):
         lambda weight, bias: create_optimizer_v2(
             _build_params_dict(weight, bias, lr=1e-3),
             optimizer,
-            lr=1e-1)
+            lr=1e-3)
     )
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2(
