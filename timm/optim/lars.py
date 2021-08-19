@@ -87,7 +87,6 @@ class Lars(Optimizer):
         device = self.param_groups[0]['params'][0].device
         one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
 
-        # exclude scaling for params with 0 weight decay
         for group in self.param_groups:
             weight_decay = group['weight_decay']
             momentum = group['momentum']
