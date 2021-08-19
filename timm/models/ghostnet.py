@@ -153,9 +153,8 @@ class GhostNet(nn.Module):
         # building inverted residual blocks
         stages = nn.ModuleList([])
         block = GhostBottleneck
-        stage_idx = 0
         net_stride = 2
-        for cfg in self.cfgs:
+        for stage_idx, cfg in enumerate(self.cfgs):
             layers = []
             s = 1
             for k, exp_size, c, se_ratio, s in cfg:
@@ -168,11 +167,16 @@ class GhostNet(nn.Module):
                 self.feature_info.append(dict(
                     num_chs=prev_chs, reduction=net_stride, module=f'blocks.{stage_idx}'))
             stages.append(nn.Sequential(*layers))
-            stage_idx += 1
+        
+        self.feature_info.append(dict(
+            num_chs=prev_chs, reduction=net_stride, module=f'blocks.{stage_idx}'))
 
         out_chs = make_divisible(exp_size * width, 4)
         stages.append(nn.Sequential(ConvBnAct(prev_chs, out_chs, 1)))
+        stage_idx += 1
         self.pool_dim = prev_chs = out_chs
+        self.feature_info.append(dict(
+            num_chs=prev_chs, reduction=net_stride, module=f'blocks.{stage_idx}'))
         
         self.blocks = nn.Sequential(*stages)        
 
@@ -248,10 +252,11 @@ def _create_ghostnet(variant, width=1.0, pretrained=False, **kwargs):
         width=width,
         **kwargs,
     )
+    out_indices = kwargs.get('out_indices', (0, 1, 2, 3, 4, 5, 6))
     return build_model_with_cfg(
         GhostNet, variant, pretrained,
         default_cfg=default_cfgs[variant],
-        feature_cfg=dict(flatten_sequential=True),
+        feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **model_kwargs)
 
 
