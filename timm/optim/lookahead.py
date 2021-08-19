@@ -27,22 +27,24 @@ class Lookahead(Optimizer):
             for group in self._base_optimizer.param_groups:
                 group.setdefault(name, default)
 
+    @torch.no_grad()
     def update_slow(self, group):
         for fast_p in group["params"]:
             if fast_p.grad is None:
                 continue
             param_state = self._base_optimizer.state[fast_p]
             if 'lookahead_slow_buff' not in param_state:
-                param_state['lookahead_slow_buff'] = torch.empty_like(fast_p.data)
-                param_state['lookahead_slow_buff'].copy_(fast_p.data)
+                param_state['lookahead_slow_buff'] = torch.empty_like(fast_p)
+                param_state['lookahead_slow_buff'].copy_(fast_p)
             slow = param_state['lookahead_slow_buff']
-            slow.add_(fast_p.data - slow, alpha=group['lookahead_alpha'])
-            fast_p.data.copy_(slow)
+            slow.add_(fast_p - slow, alpha=group['lookahead_alpha'])
+            fast_p.copy_(slow)
 
     def sync_lookahead(self):
         for group in self._base_optimizer.param_groups:
             self.update_slow(group)
 
+    @torch.no_grad()
     def step(self, closure=None):
         loss = self._base_optimizer.step(closure)
         for group in self._base_optimizer.param_groups:

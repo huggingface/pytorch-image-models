@@ -1,3 +1,5 @@
+import math
+
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -33,6 +35,7 @@ class Nadam(Optimizer):
             lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, schedule_decay=schedule_decay)
         super(Nadam, self).__init__(params, defaults)
 
+    @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step.
 
@@ -42,21 +45,22 @@ class Nadam(Optimizer):
         """
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.data
+                grad = p.grad
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
                     state['m_schedule'] = 1.
-                    state['exp_avg'] = torch.zeros_like(p.data)
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    state['exp_avg'] = torch.zeros_like(p)
+                    state['exp_avg_sq'] = torch.zeros_like(p)
 
                 # Warming momentum schedule
                 m_schedule = state['m_schedule']
@@ -66,9 +70,10 @@ class Nadam(Optimizer):
                 eps = group['eps']
                 state['step'] += 1
                 t = state['step']
+                bias_correction2 = 1 - beta2 ** t
 
                 if group['weight_decay'] != 0:
-                    grad = grad.add(p.data, alpha=group['weight_decay'])
+                    grad = grad.add(p, alpha=group['weight_decay'])
 
                 momentum_cache_t = beta1 * (1. - 0.5 * (0.96 ** (t * schedule_decay)))
                 momentum_cache_t_1 = beta1 * (1. - 0.5 * (0.96 ** ((t + 1) * schedule_decay)))
@@ -79,10 +84,9 @@ class Nadam(Optimizer):
                 # Decay the first and second moment running average coefficient
                 exp_avg.mul_(beta1).add_(grad, alpha=1. - beta1)
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1. - beta2)
-                exp_avg_sq_prime = exp_avg_sq / (1. - beta2 ** t)
-                denom = exp_avg_sq_prime.sqrt_().add_(eps)
 
-                p.data.addcdiv_(grad, denom, value=-group['lr'] * (1. - momentum_cache_t) / (1. - m_schedule_new))
-                p.data.addcdiv_(exp_avg, denom, value=-group['lr'] * momentum_cache_t_1 / (1. - m_schedule_next))
+                denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(eps)
+                p.addcdiv_(grad, denom, value=-group['lr'] * (1. - momentum_cache_t) / (1. - m_schedule_new))
+                p.addcdiv_(exp_avg, denom, value=-group['lr'] * momentum_cache_t_1 / (1. - m_schedule_next))
 
         return loss

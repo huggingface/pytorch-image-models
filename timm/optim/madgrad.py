@@ -82,6 +82,7 @@ class MADGRAD(torch.optim.Optimizer):
     def supports_flat_params(self) -> bool:
         return True
 
+    @torch.no_grad()
     def step(self, closure: Optional[Callable[[], float]] = None) -> Optional[float]:
         """Performs a single optimization step.
 
@@ -91,13 +92,10 @@ class MADGRAD(torch.optim.Optimizer):
         """
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
-        # step counter must be stored in state to ensure correct behavior under
-        # optimizer sharding
-        if 'k' not in self.state:
-            self.state['k'] = torch.tensor([0], dtype=torch.long)
-        k = self.state['k'].item()
+        step = self.state.setdefault('step', 0)  # k
 
         for group in self.param_groups:
             eps = group["eps"]
@@ -106,19 +104,19 @@ class MADGRAD(torch.optim.Optimizer):
             momentum = group["momentum"]
 
             ck = 1 - momentum
-            lamb = lr * math.pow(k + 1, 0.5)
+            lamb = lr * math.sqrt(step + 1)
 
             for p in group["params"]:
                 if p.grad is None:
                     continue
-                grad = p.grad.data
+                grad = p.grad
                 state = self.state[p]
 
                 if "grad_sum_sq" not in state:
-                    state["grad_sum_sq"] = torch.zeros_like(p.data).detach()
-                    state["s"] = torch.zeros_like(p.data).detach()
+                    state["grad_sum_sq"] = torch.zeros_like(p)
+                    state["s"] = torch.zeros_like(p)
                     if momentum != 0:
-                        state["x0"] = torch.clone(p.data).detach()
+                        state["x0"] = torch.clone(p).detach()
 
                 if momentum != 0.0 and grad.is_sparse:
                     raise RuntimeError("momentum != 0 is not compatible with sparse gradients")
@@ -129,11 +127,11 @@ class MADGRAD(torch.optim.Optimizer):
                 # Apply weight decay
                 if weight_decay != 0:
                     if group['decoupled_decay']:
-                        p.data.mul_(1.0 - group['lr'] * weight_decay)
+                        p.mul_(1.0 - group['lr'] * weight_decay)
                     else:
                         if grad.is_sparse:
                             raise RuntimeError("weight_decay option is not compatible with sparse gradients")
-                        grad.add_(p.data, alpha=weight_decay)
+                        grad.add_(p, alpha=weight_decay)
 
                 if grad.is_sparse:
                     grad = grad.coalesce()
@@ -161,12 +159,12 @@ class MADGRAD(torch.optim.Optimizer):
                     p_kp1_masked_vals = x0_masked_vals.addcdiv(s_masked._values(), rms_masked_vals, value=-1)
                     # Copy updated masked p to dense p using an add operation
                     p_masked._values().add_(p_kp1_masked_vals, alpha=-1)
-                    p.data.add_(p_masked, alpha=-1)
+                    p.add_(p_masked, alpha=-1)
                 else:
                     if momentum == 0:
                         # Compute x_0 from other known quantities
                         rms = grad_sum_sq.pow(1 / 3).add_(eps)
-                        x0 = p.data.addcdiv(s, rms, value=1)
+                        x0 = p.addcdiv(s, rms, value=1)
                     else:
                         x0 = state["x0"]
 
@@ -175,16 +173,16 @@ class MADGRAD(torch.optim.Optimizer):
                     rms = grad_sum_sq.pow(1 / 3).add_(eps)
 
                     # Update s
-                    s.data.add_(grad, alpha=lamb)
+                    s.add_(grad, alpha=lamb)
 
                     # Step
                     if momentum == 0:
-                        p.data.copy_(x0.addcdiv(s, rms, value=-1))
+                        p.copy_(x0.addcdiv(s, rms, value=-1))
                     else:
                         z = x0.addcdiv(s, rms, value=-1)
 
                         # p is a moving average of z
-                        p.data.mul_(1 - ck).add_(z, alpha=ck)
+                        p.mul_(1 - ck).add_(z, alpha=ck)
 
-        self.state['k'] += 1
+        self.state['step'] += 1
         return loss

@@ -26,12 +26,13 @@ def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float):
     wd = 1.
     expand_size = (-1,) + (1,) * (len(p.shape) - 1)
     for view_func in [_channel_view, _layer_view]:
-        param_view = view_func(p.data)
+        param_view = view_func(p)
         grad_view = view_func(grad)
         cosine_sim = F.cosine_similarity(grad_view, param_view, dim=1, eps=eps).abs_()
 
+        # FIXME this is a problem for PyTorch XLA
         if cosine_sim.max() < delta / math.sqrt(param_view.size(1)):
-            p_n = p.data / param_view.norm(p=2, dim=1).add_(eps).reshape(expand_size)
+            p_n = p / param_view.norm(p=2, dim=1).add_(eps).reshape(expand_size)
             perturb -= p_n * view_func(p_n * perturb).sum(dim=1).reshape(expand_size)
             wd = wd_ratio
             return perturb, wd
@@ -47,17 +48,19 @@ class AdamP(Optimizer):
             delta=delta, wd_ratio=wd_ratio, nesterov=nesterov)
         super(AdamP, self).__init__(params, defaults)
 
+    @torch.no_grad()
     def step(self, closure=None):
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
 
-                grad = p.grad.data
+                grad = p.grad
                 beta1, beta2 = group['betas']
                 nesterov = group['nesterov']
 
@@ -66,8 +69,8 @@ class AdamP(Optimizer):
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
-                    state['exp_avg'] = torch.zeros_like(p.data)
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    state['exp_avg'] = torch.zeros_like(p)
+                    state['exp_avg_sq'] = torch.zeros_like(p)
 
                 # Adam
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
@@ -94,9 +97,9 @@ class AdamP(Optimizer):
 
                 # Weight decay
                 if group['weight_decay'] > 0:
-                    p.data.mul_(1. - group['lr'] * group['weight_decay'] * wd_ratio)
+                    p.mul_(1. - group['lr'] * group['weight_decay'] * wd_ratio)
 
                 # Step
-                p.data.add_(perturb, alpha=-step_size)
+                p.add_(perturb, alpha=-step_size)
 
         return loss

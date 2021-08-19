@@ -76,6 +76,7 @@ class Adafactor(torch.optim.Optimizer):
         c_factor = exp_avg_sq_col.unsqueeze(-2).rsqrt()
         return torch.mul(r_factor, c_factor)
 
+    @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step.
         Arguments:
@@ -83,22 +84,22 @@ class Adafactor(torch.optim.Optimizer):
         """
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.data
+                grad = p.grad
                 if grad.dtype in {torch.float16, torch.bfloat16}:
                     grad = grad.float()
                 if grad.is_sparse:
                     raise RuntimeError('Adafactor does not support sparse gradients.')
 
                 state = self.state[p]
-                grad_shape = grad.shape
 
-                factored, use_first_moment = self._get_options(group, grad_shape)
+                factored, use_first_moment = self._get_options(group, grad.shape)
                 # State Initialization
                 if len(state) == 0:
                     state['step'] = 0
@@ -107,8 +108,8 @@ class Adafactor(torch.optim.Optimizer):
                         # Exponential moving average of gradient values
                         state['exp_avg'] = torch.zeros_like(grad)
                     if factored:
-                        state['exp_avg_sq_row'] = torch.zeros(grad_shape[:-1]).to(grad)
-                        state['exp_avg_sq_col'] = torch.zeros(grad_shape[:-2] + grad_shape[-1:]).to(grad)
+                        state['exp_avg_sq_row'] = torch.zeros(grad.shape[:-1]).to(grad)
+                        state['exp_avg_sq_col'] = torch.zeros(grad.shape[:-2] + grad.shape[-1:]).to(grad)
                     else:
                         state['exp_avg_sq'] = torch.zeros_like(grad)
 
@@ -122,12 +123,12 @@ class Adafactor(torch.optim.Optimizer):
                     else:
                         state['exp_avg_sq'] = state['exp_avg_sq'].to(grad)
 
-                p_data_fp32 = p.data
-                if p.data.dtype in {torch.float16, torch.bfloat16}:
-                    p_data_fp32 = p_data_fp32.float()
+                p_fp32 = p
+                if p.dtype in {torch.float16, torch.bfloat16}:
+                    p_fp32 = p_fp32.float()
 
                 state['step'] += 1
-                state['RMS'] = self._rms(p_data_fp32)
+                state['RMS'] = self._rms(p_fp32)
                 lr_t = self._get_lr(group, state)
 
                 beta2t = 1.0 - math.pow(state['step'], group['decay_rate'])
@@ -157,11 +158,10 @@ class Adafactor(torch.optim.Optimizer):
                     update = exp_avg
 
                 if group['weight_decay'] != 0:
-                    p_data_fp32.add_(p_data_fp32, alpha=-group['weight_decay'] * lr_t)
+                    p_fp32.add_(p_fp32, alpha=-group['weight_decay'] * lr_t)
 
-                p_data_fp32.add_(-update)
-
-                if p.data.dtype in {torch.float16, torch.bfloat16}:
-                    p.data.copy_(p_data_fp32)
+                p_fp32.add_(-update)
+                if p.dtype in {torch.float16, torch.bfloat16}:
+                    p.copy_(p_fp32)
 
         return loss

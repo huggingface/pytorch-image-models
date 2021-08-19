@@ -68,6 +68,7 @@ class AdaBelief(Optimizer):
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
 
+    @torch.no_grad()
     def reset(self):
         for group in self.param_groups:
             for p in group['params']:
@@ -77,14 +78,15 @@ class AdaBelief(Optimizer):
                 # State initialization
                 state['step'] = 0
                 # Exponential moving average of gradient values
-                state['exp_avg'] = torch.zeros_like(p.data)
+                state['exp_avg'] = torch.zeros_like(p)
 
                 # Exponential moving average of squared gradient values
-                state['exp_avg_var'] = torch.zeros_like(p.data)
+                state['exp_avg_var'] = torch.zeros_like(p)
                 if amsgrad:
                     # Maintains max of all exp. moving avg. of sq. grad. values
-                    state['max_exp_avg_var'] = torch.zeros_like(p.data)
+                    state['max_exp_avg_var'] = torch.zeros_like(p)
 
+    @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step.
         Arguments:
@@ -93,50 +95,47 @@ class AdaBelief(Optimizer):
         """
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-                
-                # cast data type
-                half_precision = False
-                if p.data.dtype == torch.float16:
-                    half_precision = True
-                    p.data = p.data.float()
-                    p.grad = p.grad.float()
-
-                grad = p.grad.data
+                grad = p.grad
+                if grad.dtype in {torch.float16, torch.bfloat16}:
+                    grad = grad.float()
                 if grad.is_sparse:
                     raise RuntimeError(
                         'AdaBelief does not support sparse gradients, please consider SparseAdam instead')
+
+                p_fp32 = p
+                if p.dtype in {torch.float16, torch.bfloat16}:
+                    p_fp32 = p_fp32.float()
+
                 amsgrad = group['amsgrad']
-
-                state = self.state[p]
-
                 beta1, beta2 = group['betas']
-
+                state = self.state[p]
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)
+                    state['exp_avg'] = torch.zeros_like(p_fp32)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_var'] = torch.zeros_like(p.data)
+                    state['exp_avg_var'] = torch.zeros_like(p_fp32)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_var'] = torch.zeros_like(p.data)
+                        state['max_exp_avg_var'] = torch.zeros_like(p_fp32)
                 
                 # perform weight decay, check if decoupled weight decay
                 if group['decoupled_decay']:
                     if not group['fixed_decay']:
-                        p.data.mul_(1.0 - group['lr'] * group['weight_decay'])
+                        p_fp32.mul_(1.0 - group['lr'] * group['weight_decay'])
                     else:
-                        p.data.mul_(1.0 - group['weight_decay'])
+                        p_fp32.mul_(1.0 - group['weight_decay'])
                 else:
                     if group['weight_decay'] != 0:
-                        grad.add_(p.data, alpha=group['weight_decay'])
+                        grad.add_(p_fp32, alpha=group['weight_decay'])
 
                 # get current state variable
                 exp_avg, exp_avg_var = state['exp_avg'], state['exp_avg_var']
@@ -164,7 +163,7 @@ class AdaBelief(Optimizer):
                 if not group['rectify']:
                     # Default update
                     step_size = group['lr'] / bias_correction1
-                    p.data.addcdiv_(exp_avg, denom, value=-step_size)
+                    p_fp32.addcdiv_(exp_avg, denom, value=-step_size)
                 else:
                     # Rectified update, forked from RAdam
                     buffered = group['buffer'][int(state['step'] % 10)]
@@ -192,12 +191,11 @@ class AdaBelief(Optimizer):
 
                     if num_sma >= 5:
                         denom = exp_avg_var.sqrt().add_(group['eps'])
-                        p.data.addcdiv_(exp_avg, denom, value=-step_size * group['lr'])
+                        p_fp32.addcdiv_(exp_avg, denom, value=-step_size * group['lr'])
                     elif step_size > 0:
-                        p.data.add_(exp_avg, alpha=-step_size * group['lr'])
+                        p_fp32.add_(exp_avg, alpha=-step_size * group['lr'])
                 
-                if half_precision:
-                    p.data = p.data.half()
-                    p.grad = p.grad.half() 
+                if p.dtype in {torch.float16, torch.bfloat16}:
+                    p.copy_(p_fp32)
 
         return loss

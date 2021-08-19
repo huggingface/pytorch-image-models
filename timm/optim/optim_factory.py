@@ -12,6 +12,7 @@ from .adafactor import Adafactor
 from .adahessian import Adahessian
 from .adamp import AdamP
 from .lamb import Lamb
+from .lars import Lars
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
 from .nadam import Nadam
@@ -163,6 +164,14 @@ def create_optimizer_v2(
         optimizer = Adafactor(parameters, **opt_args)
     elif opt_lower == 'lamb':
         optimizer = Lamb(parameters, **opt_args)
+    elif opt_lower == 'larc':
+        optimizer = Lars(parameters, momentum=momentum, larc=True, **opt_args)
+    elif opt_lower == 'lars':
+        optimizer = Lars(parameters, momentum=momentum, **opt_args)
+    elif opt_lower == 'nlarc':
+        optimizer = Lars(parameters, momentum=momentum, larc=True, nesterov=True, **opt_args)
+    elif opt_lower == 'nlars':
+        optimizer = Lars(parameters, momentum=momentum, nesterov=True, **opt_args)
     elif opt_lower == 'madgrad':
         optimizer = MADGRAD(parameters, momentum=momentum, **opt_args)
     elif opt_lower == 'madgradw':

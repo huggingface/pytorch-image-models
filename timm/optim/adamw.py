@@ -55,6 +55,7 @@ class AdamW(Optimizer):
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
 
+    @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step.
 
@@ -64,7 +65,8 @@ class AdamW(Optimizer):
         """
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
             for p in group['params']:
@@ -75,7 +77,7 @@ class AdamW(Optimizer):
                 p.data.mul_(1 - group['lr'] * group['weight_decay'])
 
                 # Perform optimization step
-                grad = p.grad.data
+                grad = p.grad
                 if grad.is_sparse:
                     raise RuntimeError('Adam does not support sparse gradients, please consider SparseAdam instead')
                 amsgrad = group['amsgrad']
@@ -86,12 +88,12 @@ class AdamW(Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)
+                    state['exp_avg'] = torch.zeros_like(p)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    state['exp_avg_sq'] = torch.zeros_like(p)
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p.data)
+                        state['max_exp_avg_sq'] = torch.zeros_like(p)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 if amsgrad:
@@ -115,6 +117,6 @@ class AdamW(Optimizer):
 
                 step_size = group['lr'] / bias_correction1
 
-                p.data.addcdiv_(exp_avg, denom, value=-step_size)
+                p.addcdiv_(exp_avg, denom, value=-step_size)
 
         return loss

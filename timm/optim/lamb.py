@@ -5,10 +5,14 @@ This optimizer code was adapted from the following (starting with latest)
 * https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/LanguageModeling/Transformer-XL/pytorch/lamb.py
 * https://github.com/cybertronai/pytorch-lamb
 
-Use FusedLamb if you can. The reason for including this variant of Lamb is to have a version that is
-similar in behaviour to APEX FusedLamb if you aren't using NVIDIA GPUs or cannot install APEX for whatever reason.
+Use FusedLamb if you can (GPU). The reason for including this variant of Lamb is to have a version that is
+similar in behaviour to APEX FusedLamb if you aren't using NVIDIA GPUs or cannot install/use APEX.
+
+In addition to some cleanup, this Lamb impl has been modified to support PyTorch XLA and has been tested on TPU.
 
 Original copyrights for above sources are below.
+
+Modifications Copyright 2021 Ross Wightman
 """
 # Copyright (c) 2021, Habana Labs Ltd.  All rights reserved.
 
@@ -60,8 +64,7 @@ class Lamb(Optimizer):
     LAMB was proposed in `Large Batch Optimization for Deep Learning: Training BERT in 76 minutes`_.
 
     Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups.
+        params (iterable): iterable of parameters to optimize or dicts defining parameter groups.
         lr (float, optional): learning rate. (default: 1e-3)
         betas (Tuple[float, float], optional): coefficients used for computing
             running averages of gradient and its norm. (default: (0.9, 0.999))
@@ -72,8 +75,7 @@ class Lamb(Optimizer):
             calculating running averages of gradient. (default: True)
         set_grad_none (bool, optional): whether set grad to None when zero_grad()
             method is called. (default: True)
-        max_grad_norm (float, optional): value used to clip global grad norm
-            (default: 1.0)
+        max_grad_norm (float, optional): value used to clip global grad norm (default: 1.0)
         use_nvlamb (boolean, optional): Apply adaptive learning rate to 0.0
             weight decay parameter (default: False)
 
@@ -91,25 +93,26 @@ class Lamb(Optimizer):
             grad_averaging=grad_averaging, max_grad_norm=max_grad_norm, use_nvlamb=use_nvlamb)
         super().__init__(params, defaults)
 
+    @torch.no_grad()
     def step(self, closure=None):
         """Performs a single optimization step.
         Arguments:
             closure (callable, optional): A closure that reevaluates the model
                 and returns the loss.
         """
-        device = self.param_groups[0]["params"][0].device
-        one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
-
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
+        device = self.param_groups[0]["params"][0].device
+        one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
         global_grad_norm = torch.zeros(1, device=device)
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.data
+                grad = p.grad
                 if grad.is_sparse:
                     raise RuntimeError('Lamb does not support sparse gradients, consider SparseAdam instad.')
                 global_grad_norm.add_(grad.pow(2).sum())
@@ -145,15 +148,15 @@ class Lamb(Optimizer):
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.data.div_(clip_global_grad_norm)
+                grad = p.grad.div_(clip_global_grad_norm)
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p.data)
+                    # Exponential moving average of gradient valuesa
+                    state['exp_avg'] = torch.zeros_like(p)
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    state['exp_avg_sq'] = torch.zeros_like(p)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
 
@@ -166,20 +169,21 @@ class Lamb(Optimizer):
 
                 weight_decay = group['weight_decay']
                 if weight_decay != 0:
-                    update.add_(p.data, alpha=weight_decay)
+                    update.add_(p, alpha=weight_decay)
 
-                trust_ratio = one_tensor
                 if weight_decay != 0 or group['use_nvlamb']:
                     # Layer adaptation. By default, skip layer adaptation on parameters that are
                     # excluded from weight decay, unless use_nvlamb == True, then always enabled.
-                    w_norm = p.data.norm(2.0)
+                    w_norm = p.norm(2.0)
                     g_norm = update.norm(2.0)
+                    # FIXME nested where required since logical and/or not working in PT XLA
                     trust_ratio = torch.where(
                         w_norm > 0,
                         torch.where(g_norm > 0, w_norm / g_norm, one_tensor),
                         one_tensor,
                     )
-                update.mul_(trust_ratio)
-                p.data.add_(update, alpha=-group['lr'])
+                    update.mul_(trust_ratio)
+
+                p.add_(update, alpha=-group['lr'])
 
         return loss
