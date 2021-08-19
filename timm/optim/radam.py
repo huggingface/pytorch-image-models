@@ -18,31 +18,33 @@ class RAdam(Optimizer):
     def __setstate__(self, state):
         super(RAdam, self).__setstate__(state)
 
+    @torch.no_grad()
     def step(self, closure=None):
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
 
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.data.float()
+                grad = p.grad.float()
                 if grad.is_sparse:
                     raise RuntimeError('RAdam does not support sparse gradients')
 
-                p_data_fp32 = p.data.float()
+                p_fp32 = p.float()
 
                 state = self.state[p]
 
                 if len(state) == 0:
                     state['step'] = 0
-                    state['exp_avg'] = torch.zeros_like(p_data_fp32)
-                    state['exp_avg_sq'] = torch.zeros_like(p_data_fp32)
+                    state['exp_avg'] = torch.zeros_like(p_fp32)
+                    state['exp_avg_sq'] = torch.zeros_like(p_fp32)
                 else:
-                    state['exp_avg'] = state['exp_avg'].type_as(p_data_fp32)
-                    state['exp_avg_sq'] = state['exp_avg_sq'].type_as(p_data_fp32)
+                    state['exp_avg'] = state['exp_avg'].type_as(p_fp32)
+                    state['exp_avg_sq'] = state['exp_avg_sq'].type_as(p_fp32)
 
                 exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
                 beta1, beta2 = group['betas']
@@ -73,15 +75,15 @@ class RAdam(Optimizer):
                     buffered[2] = step_size
 
                 if group['weight_decay'] != 0:
-                    p_data_fp32.add_(p_data_fp32, alpha=-group['weight_decay'] * group['lr'])
+                    p_fp32.add_(p_fp32, alpha=-group['weight_decay'] * group['lr'])
 
                 # more conservative since it's an approximated value
                 if num_sma >= 5:
                     denom = exp_avg_sq.sqrt().add_(group['eps'])
-                    p_data_fp32.addcdiv_(exp_avg, denom, value=-step_size)
+                    p_fp32.addcdiv_(exp_avg, denom, value=-step_size)
                 else:
-                    p_data_fp32.add_(exp_avg, alpha=-step_size)
+                    p_fp32.add_(exp_avg, alpha=-step_size)
 
-                p.data.copy_(p_data_fp32)
+                p.copy_(p_fp32)
 
         return loss

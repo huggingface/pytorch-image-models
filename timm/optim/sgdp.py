@@ -24,10 +24,12 @@ class SGDP(Optimizer):
             nesterov=nesterov, eps=eps, delta=delta, wd_ratio=wd_ratio)
         super(SGDP, self).__init__(params, defaults)
 
+    @torch.no_grad()
     def step(self, closure=None):
         loss = None
         if closure is not None:
-            loss = closure()
+            with torch.enable_grad():
+                loss = closure()
 
         for group in self.param_groups:
             weight_decay = group['weight_decay']
@@ -38,12 +40,12 @@ class SGDP(Optimizer):
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.data
+                grad = p.grad
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    state['momentum'] = torch.zeros_like(p.data)
+                    state['momentum'] = torch.zeros_like(p)
 
                 # SGD
                 buf = state['momentum']
@@ -60,9 +62,9 @@ class SGDP(Optimizer):
 
                 # Weight decay
                 if weight_decay != 0:
-                    p.data.mul_(1. - group['lr'] * group['weight_decay'] * wd_ratio / (1-momentum))
+                    p.mul_(1. - group['lr'] * group['weight_decay'] * wd_ratio / (1-momentum))
 
                 # Step
-                p.data.add_(d_p, alpha=-group['lr'])
+                p.add_(d_p, alpha=-group['lr'])
 
         return loss

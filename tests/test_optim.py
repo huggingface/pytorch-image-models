@@ -490,6 +490,33 @@ def test_lamb(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
+@pytest.mark.parametrize('optimizer',  ['lars', 'larc', 'nlars', 'nlarc'])
+def test_lars(optimizer):
+    _test_basic_cases(
+        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3)
+    )
+    _test_basic_cases(
+        lambda weight, bias: create_optimizer_v2(
+            _build_params_dict(weight, bias, lr=1e-3),
+            optimizer,
+            lr=1e-1)
+    )
+    _test_basic_cases(
+        lambda weight, bias: create_optimizer_v2(
+            _build_params_dict_single(weight, bias, lr=1e-3),
+            optimizer,
+            lr=1e-3)
+    )
+    _test_basic_cases(
+        lambda weight, bias: create_optimizer_v2(
+            _build_params_dict_single(weight, bias, lr=1e-3), optimizer)
+    )
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
+    )
+    _test_model(optimizer, dict(lr=1e-3))
+
+
 @pytest.mark.parametrize('optimizer',  ['madgrad', 'madgradw'])
 def test_madgrad(optimizer):
     _test_basic_cases(
