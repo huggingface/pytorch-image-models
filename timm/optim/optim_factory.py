@@ -164,12 +164,14 @@ def create_optimizer_v2(
         optimizer = Adafactor(parameters, **opt_args)
     elif opt_lower == 'lamb':
         optimizer = Lamb(parameters, **opt_args)
+    elif opt_lower == 'lambc':
+        optimizer = Lamb(parameters, trust_clip=True, **opt_args)
     elif opt_lower == 'larc':
-        optimizer = Lars(parameters, momentum=momentum, larc=True, **opt_args)
+        optimizer = Lars(parameters, momentum=momentum, trust_clip=True, **opt_args)
     elif opt_lower == 'lars':
         optimizer = Lars(parameters, momentum=momentum, **opt_args)
     elif opt_lower == 'nlarc':
-        optimizer = Lars(parameters, momentum=momentum, larc=True, nesterov=True, **opt_args)
+        optimizer = Lars(parameters, momentum=momentum, trust_clip=True, nesterov=True, **opt_args)
     elif opt_lower == 'nlars':
         optimizer = Lars(parameters, momentum=momentum, nesterov=True, **opt_args)
     elif opt_lower == 'madgrad':

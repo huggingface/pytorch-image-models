@@ -463,26 +463,26 @@ def test_adafactor(optimizer):
     _test_model(optimizer, dict(lr=5e-2))
 
 
-@pytest.mark.parametrize('optimizer',  ['lamb'])
+@pytest.mark.parametrize('optimizer',  ['lamb', 'lambc'])
 def test_lamb(optimizer):
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3)
     )
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2(
-            _build_params_dict(weight, bias, lr=3e-3),
+            _build_params_dict(weight, bias, lr=1e-3),
             optimizer,
             lr=1e-3)
     )
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2(
-            _build_params_dict_single(weight, bias, lr=3e-3),
+            _build_params_dict_single(weight, bias, lr=1e-3),
             optimizer,
             lr=1e-3)
     )
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2(
-            _build_params_dict_single(weight, bias, lr=3e-3), optimizer)
+            _build_params_dict_single(weight, bias, lr=1e-3), optimizer)
     )
     _test_rosenbrock(
         lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
@@ -499,7 +499,7 @@ def test_lars(optimizer):
         lambda weight, bias: create_optimizer_v2(
             _build_params_dict(weight, bias, lr=1e-3),
             optimizer,
-            lr=1e-1)
+            lr=1e-3)
     )
     _test_basic_cases(
         lambda weight, bias: create_optimizer_v2(

@@ -73,10 +73,9 @@ class Lamb(Optimizer):
         weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
         grad_averaging (bool, optional): whether apply (1-beta2) to grad when
             calculating running averages of gradient. (default: True)
-        set_grad_none (bool, optional): whether set grad to None when zero_grad()
-            method is called. (default: True)
         max_grad_norm (float, optional): value used to clip global grad norm (default: 1.0)
-        use_nvlamb (boolean, optional): Apply adaptive learning rate to 0.0
+        trust_clip (bool): enable LAMBC trust ratio clipping (default: False)
+        always_adapt (boolean, optional): Apply adaptive learning rate to 0.0
             weight decay parameter (default: False)
 
     .. _Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:
@@ -87,10 +86,11 @@ class Lamb(Optimizer):
 
     def __init__(
             self, params, lr=1e-3, bias_correction=True, betas=(0.9, 0.999), eps=1e-6,
-            weight_decay=0.01, grad_averaging=True, max_grad_norm=1.0, use_nvlamb=False):
+            weight_decay=0.01, grad_averaging=True, max_grad_norm=1.0, trust_clip=False, always_adapt=False):
         defaults = dict(
             lr=lr, bias_correction=bias_correction, betas=betas, eps=eps, weight_decay=weight_decay,
-            grad_averaging=grad_averaging, max_grad_norm=max_grad_norm, use_nvlamb=use_nvlamb)
+            grad_averaging=grad_averaging, max_grad_norm=max_grad_norm,
+            trust_clip=trust_clip, always_adapt=always_adapt)
         super().__init__(params, defaults)
 
     @torch.no_grad()
@@ -105,7 +105,7 @@ class Lamb(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        device = self.param_groups[0]["params"][0].device
+        device = self.param_groups[0]['params'][0].device
         one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
         global_grad_norm = torch.zeros(1, device=device)
         for group in self.param_groups:
@@ -171,9 +171,9 @@ class Lamb(Optimizer):
                 if weight_decay != 0:
                     update.add_(p, alpha=weight_decay)
 
-                if weight_decay != 0 or group['use_nvlamb']:
-                    # Layer adaptation. By default, skip layer adaptation on parameters that are
-                    # excluded from weight decay, unless use_nvlamb == True, then always enabled.
+                if weight_decay != 0 or group['always_adapt']:
+                    # Layer-wise LR adaptation. By default, skip adaptation on parameters that are
+                    # excluded from weight decay, unless always_adapt == True, then always enabled.
                     w_norm = p.norm(2.0)
                     g_norm = update.norm(2.0)
                     # FIXME nested where required since logical and/or not working in PT XLA
@@ -182,6 +182,9 @@ class Lamb(Optimizer):
                         torch.where(g_norm > 0, w_norm / g_norm, one_tensor),
                         one_tensor,
                     )
+                    if group['trust_clip']:
+                        # LAMBC trust clipping, upper bound fixed at one
+                        trust_ratio = torch.minimum(trust_ratio, one_tensor)
                     update.mul_(trust_ratio)
 
                 p.add_(update, alpha=-group['lr'])
