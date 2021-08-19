@@ -11,7 +11,7 @@ Additional cleanup and modifications to properly support PyTorch XLA.
 Copyright 2021 Ross Wightman
 """
 import torch
-from torch.optim.optimizer import Optimizer, required
+from torch.optim.optimizer import Optimizer
 
 
 class Lars(Optimizer):
@@ -21,31 +21,31 @@ class Lars(Optimizer):
 
     Args:
         params (iterable): iterable of parameters to optimize or dicts defining parameter groups.
-        lr (float, optional): learning rate. (default: 1e-3)
+        lr (float, optional): learning rate (default: 1.0).
         momentum (float, optional): momentum factor (default: 0)
         weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
         dampening (float, optional): dampening for momentum (default: 0)
         nesterov (bool, optional): enables Nesterov momentum (default: False)
         trust_coeff (float): trust coefficient for computing adaptive lr / trust_ratio (default: 0.001)
         eps (float): eps for division denominator (default: 1e-8)
-        larc (bool): enable LARC clipping (default: False)
-        always_scale (bool): always apply LARS scaling, otherwise only when group weight_decay != 0 (default: False)
+        trust_clip (bool): enable LARC trust ratio clipping (default: False)
+        always_adapt (bool): always apply LARS LR adapt, otherwise only when group weight_decay != 0 (default: False)
     """
 
     def __init__(
         self,
         params,
-        lr=required,
+        lr=1.0,
         momentum=0,
         dampening=0,
         weight_decay=0,
         nesterov=False,
         trust_coeff=0.001,
         eps=1e-8,
-        larc=False,
-        always_scale=False,
+        trust_clip=False,
+        always_adapt=False,
     ):
-        if lr is not required and lr < 0.0:
+        if lr < 0.0:
             raise ValueError(f"Invalid learning rate: {lr}")
         if momentum < 0.0:
             raise ValueError(f"Invalid momentum value: {momentum}")
@@ -62,8 +62,8 @@ class Lars(Optimizer):
             nesterov=nesterov,
             trust_coeff=trust_coeff,
             eps=eps,
-            larc=larc,
-            always_scale=always_scale,
+            trust_clip=trust_clip,
+            always_adapt=always_adapt,
         )
         super().__init__(params, defaults)
 
@@ -84,7 +84,7 @@ class Lars(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        device = self.param_groups[0]["params"][0].device
+        device = self.param_groups[0]['params'][0].device
         one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
 
         # exclude scaling for params with 0 weight decay
@@ -101,9 +101,9 @@ class Lars(Optimizer):
                     continue
                 grad = p.grad
 
-                # apply LARS scaling, LARC clipping, weight decay
+                # apply LARS LR adaptation, LARC clipping, weight decay
                 # ref: https://github.com/NVIDIA/apex/blob/master/apex/parallel/LARC.py
-                if weight_decay != 0 or group['always_scale']:
+                if weight_decay != 0 or group['always_adapt']:
                     w_norm = p.norm(2.0)
                     g_norm = grad.norm(2.0)
                     trust_ratio = trust_coeff * w_norm / (g_norm + w_norm * weight_decay + eps)
@@ -113,7 +113,7 @@ class Lars(Optimizer):
                         torch.where(g_norm > 0, trust_ratio, one_tensor),
                         one_tensor,
                     )
-                    if group['larc']:
+                    if group['trust_clip']:
                         trust_ratio = torch.minimum(trust_ratio / group['lr'], one_tensor)
                     grad.add(p, alpha=weight_decay)
                     grad.mul_(trust_ratio)

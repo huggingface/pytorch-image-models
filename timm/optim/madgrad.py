@@ -87,42 +87,39 @@ class MADGRAD(torch.optim.Optimizer):
         """Performs a single optimization step.
 
         Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
+            closure (callable, optional): A closure that reevaluates the model and returns the loss.
         """
         loss = None
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
 
-        step = self.state.setdefault('step', 0)  # k
-
         for group in self.param_groups:
-            eps = group["eps"]
-            lr = group["lr"] + eps
-            weight_decay = group["weight_decay"]
-            momentum = group["momentum"]
-
+            eps = group['eps']
+            lr = group['lr'] + eps
+            weight_decay = group['weight_decay']
+            momentum = group['momentum']
             ck = 1 - momentum
-            lamb = lr * math.sqrt(step + 1)
 
             for p in group["params"]:
                 if p.grad is None:
                     continue
                 grad = p.grad
-                state = self.state[p]
-
-                if "grad_sum_sq" not in state:
-                    state["grad_sum_sq"] = torch.zeros_like(p)
-                    state["s"] = torch.zeros_like(p)
-                    if momentum != 0:
-                        state["x0"] = torch.clone(p).detach()
-
                 if momentum != 0.0 and grad.is_sparse:
                     raise RuntimeError("momentum != 0 is not compatible with sparse gradients")
 
-                grad_sum_sq = state["grad_sum_sq"]
-                s = state["s"]
+                state = self.state[p]
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['grad_sum_sq'] = torch.zeros_like(p)
+                    state['s'] = torch.zeros_like(p)
+                    if momentum != 0:
+                        state['x0'] = torch.clone(p).detach()
+
+                state['step'] += 1
+                grad_sum_sq = state['grad_sum_sq']
+                s = state['s']
+                lamb = lr * math.sqrt(state['step'])
 
                 # Apply weight decay
                 if weight_decay != 0:
@@ -166,7 +163,7 @@ class MADGRAD(torch.optim.Optimizer):
                         rms = grad_sum_sq.pow(1 / 3).add_(eps)
                         x0 = p.addcdiv(s, rms, value=1)
                     else:
-                        x0 = state["x0"]
+                        x0 = state['x0']
 
                     # Accumulate second moments
                     grad_sum_sq.addcmul_(grad, grad, value=lamb)
@@ -184,5 +181,4 @@ class MADGRAD(torch.optim.Optimizer):
                         # p is a moving average of z
                         p.mul_(1 - ck).add_(z, alpha=ck)
 
-        self.state['step'] += 1
         return loss
