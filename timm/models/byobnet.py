@@ -94,18 +94,29 @@ default_cfgs = {
         test_input_size=(3, 288, 288), crop_pct=1.0),
     'resnet61q': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'geresnet50t': _cfg(
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'gcresnet50t': _cfg(
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 
     'gcresnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'gcresnet26ts': _cfg(
+    'seresnext26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'eca_resnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'bat_resnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
         min_input_size=(3, 256, 256)),
+
+    'gcresnet26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'seresnet26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'eac_resnet26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+
+    'gcresnet50t': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+
+    'gcresnext50ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 }
 
 
@@ -298,54 +309,52 @@ model_cfgs = dict(
         stem_pool=None,
         attn_layer='ge',
         attn_kwargs=dict(extent=8, extra_params=True),
-        #attn_kwargs=dict(extent=8),
-        #block_kwargs=dict(attn_last=True)
     ),
 
-    # WARN: experimental, may vanish/change
-    gcresnet50t=ByoModelCfg(
-        blocks=(
-            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
-            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
-        ),
-        stem_chs=64,
-        stem_type='tiered',
-        stem_pool=None,
-        attn_layer='gc'
-    ),
-
+    # A series of ResNeXt-26 models w/ one of GC, SE, ECA, BAT attn, group size 32, SiLU act,
+    # and a tiered stem w/ maxpool
     gcresnext26ts=ByoModelCfg(
         blocks=(
-            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
         num_features=0,
         act_layer='silu',
-        attn_layer='gc',
+        attn_layer='gca',
     ),
-
-    gcresnet26ts=ByoModelCfg(
+    seresnext26ts=ByoModelCfg(
         blocks=(
-            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
-            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
-        stem_pool='',
-        num_features=1280,
-        act_layer='silu',
-        attn_layer='gc',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='relu',
+        attn_layer='se',
     ),
-
+    eca_resnext26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+        attn_layer='eca',
+    ),
     bat_resnext26ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
@@ -360,6 +369,79 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='bat',
         attn_kwargs=dict(block_size=8)
+    ),
+
+    # A series of ResNet-26 models w/ one of GC, SE, ECA attn, no groups, SiLU act, 1280 feat fc
+    # and a tiered stem w/ no maxpool
+    gcresnet26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='gca',
+    ),
+    seresnet26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='se',
+    ),
+    eca_resnet26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='eca',
+    ),
+
+    gcresnet50t=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool=None,
+        attn_layer='gca',
+    ),
+
+    gcresnext50ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        # stem_pool=None,
+        act_layer='silu',
+        attn_layer='gca',
     ),
 )
 
@@ -467,24 +549,31 @@ def resnet61q(pretrained=False, **kwargs):
 
 
 @register_model
-def geresnet50t(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('geresnet50t', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def gcresnet50t(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
-
-
-@register_model
 def gcresnext26ts(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('gcresnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def seresnext26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('seresnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_resnext26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('eca_resnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def bat_resnext26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('bat_resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -495,10 +584,31 @@ def gcresnet26ts(pretrained=False, **kwargs):
 
 
 @register_model
-def bat_resnext26ts(pretrained=False, **kwargs):
+def seresnet26ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('bat_resnext26ts', pretrained=pretrained, **kwargs)
+    return _create_byobnet('seresnet26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_resnet26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('eca_resnet26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnet50t(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnext50ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnext50ts', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
