@@ -95,6 +95,8 @@ default_cfgs = {
     'resnet61q': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 
+    'resnext26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'gcresnext26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'seresnext26ts': _cfg(
@@ -105,6 +107,8 @@ default_cfgs = {
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
         min_input_size=(3, 256, 256)),
 
+    'resnet26ts': _cfg(
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'gcresnet26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'seresnet26ts': _cfg(
@@ -311,8 +315,21 @@ model_cfgs = dict(
         attn_kwargs=dict(extent=8, extra_params=True),
     ),
 
-    # A series of ResNeXt-26 models w/ one of GC, SE, ECA, BAT attn, group size 32, SiLU act,
+    # A series of ResNeXt-26 models w/ one of none, GC, SE, ECA, BAT attn, group size 32, SiLU act,
     # and a tiered stem w/ maxpool
+    resnext26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        num_features=0,
+        act_layer='silu',
+    ),
     gcresnext26ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
@@ -371,8 +388,21 @@ model_cfgs = dict(
         attn_kwargs=dict(block_size=8)
     ),
 
-    # A series of ResNet-26 models w/ one of GC, SE, ECA attn, no groups, SiLU act, 1280 feat fc
+    # A series of ResNet-26 models w/ one of none, GC, SE, ECA attn, no groups, SiLU act, 1280 feat fc
     # and a tiered stem w/ no maxpool
+    resnet26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=0,
+        act_layer='silu',
+    ),
     gcresnet26ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
@@ -549,6 +579,13 @@ def resnet61q(pretrained=False, **kwargs):
 
 
 @register_model
+def resnext26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('resnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def gcresnext26ts(pretrained=False, **kwargs):
     """
     """
@@ -574,6 +611,13 @@ def bat_resnext26ts(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('bat_resnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('resnet26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
