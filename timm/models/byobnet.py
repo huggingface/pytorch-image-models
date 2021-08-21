@@ -109,7 +109,7 @@ default_cfgs = {
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'seresnet26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'eac_resnet26ts': _cfg(
+    'eca_resnet26ts': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 
     'gcresnet50t': _cfg(
