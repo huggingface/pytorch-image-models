@@ -35,8 +35,8 @@ parser.add_argument('--dataset', '-d', metavar='NAME', default='',
                     help='dataset type (default: ImageFolder/ImageTar if empty)')
 parser.add_argument('--split', metavar='NAME', default='validation',
                     help='dataset split (default: validation)')
-parser.add_argument('--model', '-m', metavar='NAME', default='dpn92',
-                    help='model architecture (default: dpn92)')
+parser.add_argument('--model', '-m', metavar='NAME', default='resnet50',
+                    help='model architecture (default: resnet50)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -87,13 +87,15 @@ parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
                     help='Real labels JSON file for imagenet evaluation')
 parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
                     help='Valid label indices txt file for validation of partial label space')
+parser.add_argument('--force-cpu', action='store_true', default=False,
+                    help='Force CPU to be used even if HW accelerator exists.')
 
 
 def validate(args):
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
 
-    dev_env = initialize_device(amp=args.amp)
+    dev_env = initialize_device(force_cpu=args.force_cpu, amp=args.amp)
 
     # create model
     model = create_model(

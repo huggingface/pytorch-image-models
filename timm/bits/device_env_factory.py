@@ -20,8 +20,12 @@ def initialize_device(force_cpu: bool = False, **kwargs) -> DeviceEnv:
         elif is_cuda_available():
             denv = DeviceEnvCuda(**kwargs)
 
+    # CPU fallback
     if denv is None:
-        denv = DeviceEnv()
+        if is_xla_available('CPU'):
+            denv = DeviceEnvXla(device_type='CPU', **kwargs)
+        else:
+            denv = DeviceEnv()
 
     _logger.info(f'Initialized device {denv.device}. '
                  f'Rank: {denv.global_rank} ({denv.local_rank}) of {denv.world_size}.')
