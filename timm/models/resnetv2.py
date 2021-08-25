@@ -1,6 +1,6 @@
 """Pre-Activation ResNet v2 with GroupNorm and Weight Standardization.
 
-A PyTorch implementation of ResNetV2 adapted from the Google Big-Transfoer (BiT) source code
+A PyTorch implementation of ResNetV2 adapted from the Google Big-Transformer (BiT) source code
 at https://github.com/google-research/big_transfer to match timm interfaces. The BiT weights have
 been included here as pretrained models from their original .NPZ checkpoints.
 
