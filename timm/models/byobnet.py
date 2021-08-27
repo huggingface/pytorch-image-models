@@ -107,13 +107,13 @@ default_cfgs = {
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
         min_input_size=(3, 256, 256)),
 
-    'resnet26ts': _cfg(
+    'resnet26tfs': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'gcresnet26ts': _cfg(
+    'gcresnet26tfs': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'seresnet26ts': _cfg(
+    'seresnet26tfs': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'eca_resnet26ts': _cfg(
+    'eca_resnet26tfs': _cfg(
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 
     'gcresnet50t': _cfg(
@@ -174,13 +174,13 @@ def _rep_vgg_bcfg(d=(4, 6, 16, 1), wf=(1., 1., 1., 1.), groups=0):
 
 
 def interleave_blocks(
-        types: Tuple[str, str], every: Union[int, List[int]], d, first: bool = False, **kwargs
+        types: Tuple[str, str], d, every: Union[int, List[int]] = 1, first: bool = False, **kwargs
 ) -> Tuple[ByoBlockCfg]:
     """ interleave 2 block types in stack
     """
     assert len(types) == 2
     if isinstance(every, int):
-        every = list(range(0 if first else every, d, every))
+        every = list(range(0 if first else every, d, every + 1))
         if not every:
             every = [d - 1]
     set(every)
@@ -300,21 +300,6 @@ model_cfgs = dict(
         block_kwargs=dict(extra_conv=True),
     ),
 
-    # WARN: experimental, may vanish/change
-    geresnet50t=ByoModelCfg(
-        blocks=(
-            ByoBlockCfg(type='edge', d=3, c=256, s=1, br=0.25),
-            ByoBlockCfg(type='edge', d=4, c=512, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
-        ),
-        stem_chs=64,
-        stem_type='tiered',
-        stem_pool=None,
-        attn_layer='ge',
-        attn_kwargs=dict(extent=8, extra_params=True),
-    ),
-
     # A series of ResNeXt-26 models w/ one of none, GC, SE, ECA, BAT attn, group size 32, SiLU act,
     # and a tiered stem w/ maxpool
     resnext26ts=ByoModelCfg(
@@ -327,7 +312,6 @@ model_cfgs = dict(
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
     ),
     gcresnext26ts=ByoModelCfg(
@@ -340,7 +324,6 @@ model_cfgs = dict(
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
         attn_layer='gca',
     ),
@@ -354,8 +337,7 @@ model_cfgs = dict(
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
-        act_layer='relu',
+        act_layer='silu',
         attn_layer='se',
     ),
     eca_resnext26ts=ByoModelCfg(
@@ -368,7 +350,6 @@ model_cfgs = dict(
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
         attn_layer='eca',
     ),
@@ -382,15 +363,14 @@ model_cfgs = dict(
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
         attn_layer='bat',
         attn_kwargs=dict(block_size=8)
     ),
 
-    # A series of ResNet-26 models w/ one of none, GC, SE, ECA attn, no groups, SiLU act, 1280 feat fc
+    # A series of ResNet-26 models w/ one of none, GC, SE, ECA attn, no groups, SiLU act, 1280 feat fc 
     # and a tiered stem w/ no maxpool
-    resnet26ts=ByoModelCfg(
+    resnet26tfs=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -403,7 +383,7 @@ model_cfgs = dict(
         num_features=0,
         act_layer='silu',
     ),
-    gcresnet26ts=ByoModelCfg(
+    gcresnet26tfs=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -417,7 +397,7 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='gca',
     ),
-    seresnet26ts=ByoModelCfg(
+    seresnet26tfs=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -431,7 +411,7 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='se',
     ),
-    eca_resnet26ts=ByoModelCfg(
+    eca_resnet26tfs=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -455,7 +435,7 @@ model_cfgs = dict(
         ),
         stem_chs=64,
         stem_type='tiered',
-        stem_pool=None,
+        stem_pool='',
         attn_layer='gca',
     ),
 
@@ -614,31 +594,31 @@ def bat_resnext26ts(pretrained=False, **kwargs):
 
 
 @register_model
-def resnet26ts(pretrained=False, **kwargs):
+def resnet26tfs(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('resnet26ts', pretrained=pretrained, **kwargs)
+    return _create_byobnet('resnet26tfs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def gcresnet26ts(pretrained=False, **kwargs):
+def gcresnet26tfs(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('gcresnet26ts', pretrained=pretrained, **kwargs)
+    return _create_byobnet('gcresnet26tfs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def seresnet26ts(pretrained=False, **kwargs):
+def seresnet26tfs(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('seresnet26ts', pretrained=pretrained, **kwargs)
+    return _create_byobnet('seresnet26tfs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def eca_resnet26ts(pretrained=False, **kwargs):
+def eca_resnet26tfs(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('eca_resnet26ts', pretrained=pretrained, **kwargs)
+    return _create_byobnet('eca_resnet26tfs', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -1144,27 +1124,29 @@ def update_block_kwargs(block_kwargs: Dict[str, Any], block_cfg: ByoBlockCfg, mo
     layer_fns = block_kwargs['layers']
 
     # override attn layer / args with block local config
-    if block_cfg.attn_kwargs is not None or block_cfg.attn_layer is not None:
+    attn_set = block_cfg.attn_layer is not None
+    if attn_set or block_cfg.attn_kwargs is not None:
         # override attn layer config
-        if not block_cfg.attn_layer:
+        if attn_set and not block_cfg.attn_layer:
             # empty string for attn_layer type will disable attn for this block
             attn_layer = None
         else:
             attn_kwargs = override_kwargs(block_cfg.attn_kwargs, model_cfg.attn_kwargs)
             attn_layer = block_cfg.attn_layer or model_cfg.attn_layer
-            attn_layer = partial(get_attn(attn_layer), *attn_kwargs) if attn_layer is not None else None
+            attn_layer = partial(get_attn(attn_layer), **attn_kwargs) if attn_layer is not None else None
         layer_fns = replace(layer_fns, attn=attn_layer)
 
     # override self-attn layer / args with block local cfg
-    if block_cfg.self_attn_kwargs is not None or block_cfg.self_attn_layer is not None:
+    self_attn_set = block_cfg.self_attn_layer is not None
+    if self_attn_set or block_cfg.self_attn_kwargs is not None:
         # override attn layer config
-        if not block_cfg.self_attn_layer:
+        if self_attn_set and not block_cfg.self_attn_layer:  # attn_layer == ''
             # empty string for self_attn_layer type will disable attn for this block
             self_attn_layer = None
         else:
             self_attn_kwargs = override_kwargs(block_cfg.self_attn_kwargs, model_cfg.self_attn_kwargs)
             self_attn_layer = block_cfg.self_attn_layer or model_cfg.self_attn_layer
-            self_attn_layer = partial(get_attn(self_attn_layer), *self_attn_kwargs) \
+            self_attn_layer = partial(get_attn(self_attn_layer), **self_attn_kwargs) \
                 if self_attn_layer is not None else None
         layer_fns = replace(layer_fns, self_attn=self_attn_layer)
 

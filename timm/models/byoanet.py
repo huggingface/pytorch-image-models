@@ -52,13 +52,12 @@ model_cfgs = dict(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
             ByoBlockCfg(type='self_attn', d=3, c=2048, s=2, gs=0, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         fixed_input_size=True,
         self_attn_layer='bottleneck',
         self_attn_kwargs=dict()
@@ -66,14 +65,13 @@ model_cfgs = dict(
     botnet50ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=2, gs=0, br=0.25),
-            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=6, c=1024, s=2, gs=0, br=0.25),
-            ByoBlockCfg(type='self_attn', d=3, c=2048, s=1, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=4, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=3, c=2048, s=1, gs=0, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='',
-        num_features=0,
         fixed_input_size=True,
         act_layer='silu',
         self_attn_layer='bottleneck',
@@ -83,13 +81,12 @@ model_cfgs = dict(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=16, br=0.25),
             ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=16, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=16, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=16, br=0.25),
             ByoBlockCfg(type='self_attn', d=3, c=2048, s=2, gs=16, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         fixed_input_size=True,
         act_layer='silu',
         attn_layer='eca',
@@ -107,7 +104,7 @@ model_cfgs = dict(
         stem_chs=64,
         stem_type='7x7',
         stem_pool='maxpool',
-        num_features=0,
+
         self_attn_layer='halo',
         self_attn_kwargs=dict(block_size=8, halo_size=3),
     ),
@@ -115,59 +112,57 @@ model_cfgs = dict(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
             ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         self_attn_layer='halo',
-        self_attn_kwargs=dict(block_size=8, halo_size=2)  # intended for 256x256 res
+        self_attn_kwargs=dict(block_size=8, halo_size=2, dim_head=16)
     ),
     halonet50ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
-            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=6, c=1024, s=2, gs=0, br=0.25),
-            ByoBlockCfg(type='self_attn', d=3, c=2048, s=2, gs=0, br=0.25),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), every=4, d=4, c=512, s=2, gs=0, br=0.25,
+                self_attn_layer='halo', self_attn_kwargs=dict(block_size=8, halo_size=3, num_heads=4)),
+            interleave_blocks(types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=3, c=2048, s=2, gs=0, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
         self_attn_layer='halo',
-        self_attn_kwargs=dict(block_size=8, halo_size=2)
+        self_attn_kwargs=dict(block_size=8, halo_size=3)
     ),
     eca_halonext26ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=16, br=0.25),
             ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=16, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=16, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=16, br=0.25),
             ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=16, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
         attn_layer='eca',
         self_attn_layer='halo',
-        self_attn_kwargs=dict(block_size=8, halo_size=2)  # intended for 256x256 res
+        self_attn_kwargs=dict(block_size=8, halo_size=2, dim_head=16)
     ),
 
     lambda_resnet26t=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), every=1, d=2, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
             ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         self_attn_layer='lambda',
         self_attn_kwargs=dict(r=9)
     ),
@@ -185,7 +180,7 @@ def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
 
 @register_model
 def botnet26t_256(pretrained=False, **kwargs):
-    """ Bottleneck Transformer w/ ResNet26-T backbone. Bottleneck attn in final stage.
+    """ Bottleneck Transformer w/ ResNet26-T backbone. Bottleneck attn in final two stages.
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('botnet26t_256', 'botnet26t', pretrained=pretrained, **kwargs)
@@ -193,7 +188,7 @@ def botnet26t_256(pretrained=False, **kwargs):
 
 @register_model
 def botnet50ts_256(pretrained=False, **kwargs):
-    """ Bottleneck Transformer w/ ResNet50-T backbone. Bottleneck attn in final stage.
+    """ Bottleneck Transformer w/ ResNet50-T backbone, silu act. Bottleneck attn in final two stages.
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('botnet50ts_256', 'botnet50ts', pretrained=pretrained, **kwargs)
@@ -201,7 +196,7 @@ def botnet50ts_256(pretrained=False, **kwargs):
 
 @register_model
 def eca_botnext26ts_256(pretrained=False, **kwargs):
-    """ Bottleneck Transformer w/ ResNet26-T backbone. Bottleneck attn in final stage.
+    """ Bottleneck Transformer w/ ResNet26-T backbone, silu act, Bottleneck attn in final two stages.
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('eca_botnext26ts_256', 'eca_botnext26ts', pretrained=pretrained, **kwargs)
@@ -210,35 +205,34 @@ def eca_botnext26ts_256(pretrained=False, **kwargs):
 @register_model
 def halonet_h1(pretrained=False, **kwargs):
     """ HaloNet-H1. Halo attention in all stages as per the paper.
-
-    This runs very slowly, param count lower than paper --> something is wrong.
+    NOTE: This runs very slowly!
     """
     return _create_byoanet('halonet_h1', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def halonet26t(pretrained=False, **kwargs):
-    """ HaloNet w/ a ResNet26-t backbone, Hallo attention in final stage
+    """ HaloNet w/ a ResNet26-t backbone. Halo attention in final two stages
     """
     return _create_byoanet('halonet26t', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def halonet50ts(pretrained=False, **kwargs):
-    """ HaloNet w/ a ResNet50-t backbone, Hallo attention in final stage
+    """ HaloNet w/ a ResNet50-t backbone, silu act. Halo attention in final two stages
     """
     return _create_byoanet('halonet50ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def eca_halonext26ts(pretrained=False, **kwargs):
-    """ HaloNet w/ a ResNet26-t backbone, Hallo attention in final stage
+    """ HaloNet w/ a ResNet26-t backbone, silu act. Halo attention in final two stages
     """
     return _create_byoanet('eca_halonext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def lambda_resnet26t(pretrained=False, **kwargs):
-    """ Lambda-ResNet-26T. Lambda layers in one C4 stage and all C5.
+    """ Lambda-ResNet-26T. Lambda layers in last two stages.
     """
     return _create_byoanet('lambda_resnet26t', pretrained=pretrained, **kwargs)
