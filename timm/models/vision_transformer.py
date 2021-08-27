@@ -683,7 +683,8 @@ def vit_large_patch16_384(pretrained=False, **kwargs):
 def vit_base_patch16_sam_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ SAM pretrained weights. Paper: https://arxiv.org/abs/2106.01548
     """
-    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, representation_size=768, **kwargs)
+    # NOTE original SAM weights releaes worked with representation_size=768
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, representation_size=0, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_sam_224', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -692,7 +693,8 @@ def vit_base_patch16_sam_224(pretrained=False, **kwargs):
 def vit_base_patch32_sam_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/32) w/ SAM pretrained weights. Paper: https://arxiv.org/abs/2106.01548
     """
-    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, representation_size=768, **kwargs)
+    # NOTE original SAM weights releaes worked with representation_size=768
+    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, representation_size=0, **kwargs)
     model = _create_vision_transformer('vit_base_patch32_sam_224', pretrained=pretrained, **model_kwargs)
     return model
 
