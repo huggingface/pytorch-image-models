@@ -1,6 +1,7 @@
 from .byoanet import *
 from .byobnet import *
 from .cait import *
+from .crossvit import *
 from .coat import *
 from .convit import *
 from .cspnet import *
