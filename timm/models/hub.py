@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from pathlib import Path
 from functools import partial
 from typing import Union, Optional
 
@@ -13,8 +14,7 @@ except ImportError:
 
 from timm import __version__
 try:
-    from huggingface_hub import hf_hub_url
-    from huggingface_hub import cached_download
+    from huggingface_hub import cached_download, hf_hub_url, HfFolder, HfApi, Repository
     cached_download = partial(cached_download, library_name="timm", library_version=__version__)
 except ImportError:
     hf_hub_url = None
@@ -94,3 +94,119 @@ def load_state_dict_from_hf(model_id: str):
     cached_file = _download_from_hf(model_id, 'pytorch_model.bin')
     state_dict = torch.load(cached_file, map_location='cpu')
     return state_dict
+
+
+def save_pretrained_for_hf(model, save_directory, **config_kwargs):
+    assert has_hf_hub(True)
+    save_directory = Path(save_directory)
+    save_directory.mkdir(exist_ok=True, parents=True)
+
+    weights_path = save_directory / 'pytorch_model.bin'
+    torch.save(model.state_dict(), weights_path)
+
+    config_path = save_directory / 'config.json'
+    config = model.default_cfg
+    config.update(config_kwargs)
+
+    with config_path.open('w') as f:
+        json.dump(config, f, indent=4)
+
+
+def push_to_hf_hub(
+    model,
+    repo_path_or_name: Optional[str] = None,
+    repo_url: Optional[str] = None,
+    commit_message: Optional[str] = "Add model",
+    organization: Optional[str] = None,
+    private: Optional[bool] = None,
+    api_endpoint: Optional[str] = None,
+    use_auth_token: Optional[Union[bool, str]] = None,
+    git_user: Optional[str] = None,
+    git_email: Optional[str] = None,
+    config: Optional[dict] = None,
+):
+    """
+    Upload model checkpoint and config to the 🤗 Model Hub while synchronizing a local clone of the repo in
+    :obj:`repo_path_or_name`.
+
+    Parameters:
+        repo_path_or_name (:obj:`str`, `optional`):
+            Can either be a repository name for your model or tokenizer in the Hub or a path to a local folder (in
+            which case the repository will have the name of that local folder). If not specified, will default to
+            the name given by :obj:`repo_url` and a local directory with that name will be created.
+        repo_url (:obj:`str`, `optional`):
+            Specify this in case you want to push to an existing repository in the hub. If unspecified, a new
+            repository will be created in your namespace (unless you specify an :obj:`organization`) with
+            :obj:`repo_name`.
+        commit_message (:obj:`str`, `optional`):
+            Message to commit while pushing. Will default to :obj:`"add config"`, :obj:`"add tokenizer"` or
+            :obj:`"add model"` depending on the type of the class.
+        organization (:obj:`str`, `optional`):
+            Organization in which you want to push your model or tokenizer (you must be a member of this
+            organization).
+        private (:obj:`bool`, `optional`):
+            Whether or not the repository created should be private (requires a paying subscription).
+        api_endpoint (:obj:`str`, `optional`):
+            The API endpoint to use when pushing the model to the hub.
+        use_auth_token (:obj:`bool` or :obj:`str`, `optional`):
+            The token to use as HTTP bearer authorization for remote files. If :obj:`True`, will use the token
+            generated when running :obj:`transformers-cli login` (stored in :obj:`~/.huggingface`). Will default to
+            :obj:`True` if :obj:`repo_url` is not specified.
+        git_user (``str``, `optional`):
+            will override the ``git config user.name`` for committing and pushing files to the hub.
+        git_email (``str``, `optional`):
+            will override the ``git config user.email`` for committing and pushing files to the hub.
+        config (:obj:`dict`, `optional`):
+            Configuration object to be saved alongside the model weights.
+
+
+    Returns:
+        The url of the commit of your model in the given repository.
+    """
+    assert has_hf_hub(True)
+    if repo_path_or_name is None and repo_url is None:
+        raise ValueError(
+            "You need to specify a `repo_path_or_name` or a `repo_url`."
+        )
+
+    if use_auth_token is None and repo_url is None:
+        token = HfFolder.get_token()
+        if token is None:
+            raise ValueError(
+                "You must login to the Hugging Face hub on this computer by typing `transformers-cli login` and "
+                "entering your credentials to use `use_auth_token=True`. Alternatively, you can pass your own "
+                "token as the `use_auth_token` argument."
+            )
+    elif isinstance(use_auth_token, str):
+        token = use_auth_token
+    else:
+        token = None
+
+    if repo_path_or_name is None:
+        repo_path_or_name = repo_url.split("/")[-1]
+
+    # If no URL is passed and there's no path to a directory containing files, create a repo
+    if repo_url is None and not os.path.exists(repo_path_or_name):
+        repo_name = Path(repo_path_or_name).name
+        repo_url = HfApi(endpoint=api_endpoint).create_repo(
+            token,
+            repo_name,
+            organization=organization,
+            private=private,
+            repo_type=None,
+            exist_ok=True,
+        )
+
+    repo = Repository(
+        repo_path_or_name,
+        clone_from=repo_url,
+        use_auth_token=use_auth_token,
+        git_user=git_user,
+        git_email=git_email,
+    )
+    repo.git_pull(rebase=True)
+
+    save_config = model.default_cfg
+    save_config.update(config or {})
+    with repo.commit(commit_message):
+        save_pretrained_for_hf(model, repo.local_dir, **save_config)
