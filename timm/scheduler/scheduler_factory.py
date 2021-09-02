@@ -1,11 +1,12 @@
 """ Scheduler Factory
-Hacked together by / Copyright 2020 Ross Wightman
+Hacked together by / Copyright 2021 Ross Wightman
 """
 from .cosine_lr import CosineLRScheduler
-from .tanh_lr import TanhLRScheduler
-from .step_lr import StepLRScheduler
-from .plateau_lr import PlateauLRScheduler
 from .multistep_lr import MultiStepLRScheduler
+from .plateau_lr import PlateauLRScheduler
+from .poly_lr import PolyLRScheduler
+from .step_lr import StepLRScheduler
+from .tanh_lr import TanhLRScheduler
 
 
 def create_scheduler(args, optimizer):
@@ -27,19 +28,22 @@ def create_scheduler(args, optimizer):
         noise_std=getattr(args, 'lr_noise_std', 1.),
         noise_seed=getattr(args, 'seed', 42),
     )
+    cycle_args = dict(
+        cycle_mul=getattr(args, 'lr_cycle_mul', 1.),
+        cycle_decay=getattr(args, 'lr_cycle_decay', 0.1),
+        cycle_limit=getattr(args, 'lr_cycle_limit', 1),
+    )
 
     lr_scheduler = None
     if args.sched == 'cosine':
         lr_scheduler = CosineLRScheduler(
             optimizer,
             t_initial=num_epochs,
-            t_mul=getattr(args, 'lr_cycle_mul', 1.),
             lr_min=args.min_lr,
-            decay_rate=args.decay_rate,
             warmup_lr_init=args.warmup_lr,
             warmup_t=args.warmup_epochs,
-            cycle_limit=getattr(args, 'lr_cycle_limit', 1),
-            t_in_epochs=True,
+            k_decay=getattr(args, 'lr_k_decay', 1.0),
+            **cycle_args,
             **noise_args,
         )
         num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
@@ -47,12 +51,11 @@ def create_scheduler(args, optimizer):
         lr_scheduler = TanhLRScheduler(
             optimizer,
             t_initial=num_epochs,
-            t_mul=getattr(args, 'lr_cycle_mul', 1.),
             lr_min=args.min_lr,
             warmup_lr_init=args.warmup_lr,
             warmup_t=args.warmup_epochs,
-            cycle_limit=getattr(args, 'lr_cycle_limit', 1),
             t_in_epochs=True,
+            **cycle_args,
             **noise_args,
         )
         num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
@@ -87,5 +90,18 @@ def create_scheduler(args, optimizer):
             cooldown_t=0,
             **noise_args,
         )
+    elif args.sched == 'poly':
+        lr_scheduler = PolyLRScheduler(
+            optimizer,
+            power=args.decay_rate,  # overloading 'decay_rate' as polynomial power
+            t_initial=num_epochs,
+            lr_min=args.min_lr,
+            warmup_lr_init=args.warmup_lr,
+            warmup_t=args.warmup_epochs,
+            k_decay=getattr(args, 'lr_k_decay', 1.0),
+            **cycle_args,
+            **noise_args,
+        )
+        num_epochs = lr_scheduler.get_cycle_length() + args.cooldown_epochs
 
     return lr_scheduler, num_epochs
