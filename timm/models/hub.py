@@ -1,20 +1,24 @@
 import json
 import logging
 import os
-from pathlib import Path
 from functools import partial
-from typing import Union, Optional
+from pathlib import Path
+from typing import Optional, Union
 
 import torch
-from torch.hub import load_state_dict_from_url, download_url_to_file, urlparse, HASH_REGEX
+from torch.hub import (HASH_REGEX, download_url_to_file,
+                       load_state_dict_from_url, urlparse)
+
 try:
     from torch.hub import get_dir
 except ImportError:
     from torch.hub import _get_torch_home as get_dir
 
 from timm import __version__
+
 try:
-    from huggingface_hub import cached_download, hf_hub_url, HfFolder, HfApi, Repository
+    from huggingface_hub import (HfApi, HfFolder, Repository, cached_download,
+                                 hf_hub_url)
     cached_download = partial(cached_download, library_name="timm", library_version=__version__)
 except ImportError:
     hf_hub_url = None
