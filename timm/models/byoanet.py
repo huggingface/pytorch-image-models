@@ -33,16 +33,26 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     # GPU-Efficient (ResNet) weights
-    'botnet26t_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'botnet26t_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_256-a0e6c3b1.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'botnet50ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-    'eca_botnext26ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'eca_botnext26ts_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_botnext26ts_256-fb3bf984.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 
     'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
-    'halonet26t': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'halonet26t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_256-9b4bf0b3.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet50ts': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
-    'eca_halonext26ts': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'eca_halonext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_256-1e55880b.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
 
-    'lambda_resnet26t': _cfg(url='', min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
+    'lambda_resnet26t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_256-b040fce6.pth',
+        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 

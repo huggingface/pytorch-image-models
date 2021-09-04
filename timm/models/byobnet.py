@@ -93,33 +93,49 @@ default_cfgs = {
         first_conv='stem.conv1', input_size=(3, 256, 256), pool_size=(8, 8),
         test_input_size=(3, 288, 288), crop_pct=1.0),
     'resnet61q': _cfg(
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet61q_ra2-6afc536c.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8),
+        test_input_size=(3, 288, 288), crop_pct=1.0, interpolation='bicubic'),
 
     'resnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/resnext26ts_256-df727fca.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'gcresnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnext26ts_256-e414378b.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'seresnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/seresnext26ts_256-6f0d74a3.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'eca_resnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_resnext26ts_256-5a1d030f.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'bat_resnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/bat_resnext26ts_256-fa6fd595.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
         min_input_size=(3, 256, 256)),
 
-    'resnet26tfs': _cfg(
+    'resnet32ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/resnet32ts_256-aacf5250.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'gcresnet26tfs': _cfg(
+    'resnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnet33ts_256-0e0cd345.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'seresnet26tfs': _cfg(
+    'gcresnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnet33ts_256-0e0cd345.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'eca_resnet26tfs': _cfg(
+    'seresnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/seresnet33ts_256-f8ad44d9.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'eca_resnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_resnet33ts_256-8f98face.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 
     'gcresnet50t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnet50t_256-96374d1c.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 
     'gcresnext50ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnext50ts_256-3e0f515e.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 }
 
@@ -270,7 +286,8 @@ model_cfgs = dict(
         stem_chs=64,
     ),
 
-    # WARN: experimental, may vanish/change
+    # 4 x conv stem w/ 2 act, no maxpool, 2,4,6,4 repeats, group size 32 in first 3 blocks
+    # DW convs in last block, 2048 pre-FC, silu act  
     resnet51q=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
@@ -285,6 +302,8 @@ model_cfgs = dict(
         act_layer='silu',
     ),
 
+    # 4 x conv stem w/ 4 act, no maxpool, 1,4,6,4 repeats, edge block first, group size 32 in next 2 blocks
+    # DW convs in last block, 4 conv for each bottle block, 2048 pre-FC, silu act  
     resnet61q=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='edge', d=1, c=256, s=1, gs=0, br=1.0, block_kwargs=dict()),
@@ -368,9 +387,8 @@ model_cfgs = dict(
         attn_kwargs=dict(block_size=8)
     ),
 
-    # A series of ResNet-26 models w/ one of none, GC, SE, ECA attn, no groups, SiLU act, 1280 feat fc 
-    # and a tiered stem w/ no maxpool
-    resnet26tfs=ByoModelCfg(
+    # ResNet-32 (2, 3, 3, 2) models w/ no attn, no groups, SiLU act, no pre-fc feat layer, tiered stem w/o maxpool
+    resnet32ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -383,7 +401,25 @@ model_cfgs = dict(
         num_features=0,
         act_layer='silu',
     ),
-    gcresnet26tfs=ByoModelCfg(
+
+    # ResNet-33 (2, 3, 3, 2) models w/ no attn, no groups, SiLU act, 1280 pre-FC feat, tiered stem w/o maxpool
+    resnet33ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+    ),
+
+    # A series of ResNet-33 (2, 3, 3, 2) models w/ one of GC, SE, ECA attn, no groups, SiLU act, 1280 pre-FC feat 
+    # and a tiered stem w/ no maxpool
+    gcresnet33ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -397,7 +433,7 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='gca',
     ),
-    seresnet26tfs=ByoModelCfg(
+    seresnet33ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -411,7 +447,7 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='se',
     ),
-    eca_resnet26tfs=ByoModelCfg(
+    eca_resnet33ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -594,31 +630,38 @@ def bat_resnext26ts(pretrained=False, **kwargs):
 
 
 @register_model
-def resnet26tfs(pretrained=False, **kwargs):
+def resnet32ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('resnet26tfs', pretrained=pretrained, **kwargs)
+    return _create_byobnet('resnet32ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def gcresnet26tfs(pretrained=False, **kwargs):
+def resnet33ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('gcresnet26tfs', pretrained=pretrained, **kwargs)
+    return _create_byobnet('resnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def seresnet26tfs(pretrained=False, **kwargs):
+def gcresnet33ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('seresnet26tfs', pretrained=pretrained, **kwargs)
+    return _create_byobnet('gcresnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def eca_resnet26tfs(pretrained=False, **kwargs):
+def seresnet33ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('eca_resnet26tfs', pretrained=pretrained, **kwargs)
+    return _create_byobnet('seresnet33ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_resnet33ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('eca_resnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
