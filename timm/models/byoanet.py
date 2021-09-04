@@ -45,6 +45,7 @@ default_cfgs = {
     'halonet26t': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_256-9b4bf0b3.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'sehalonet33ts': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet50ts': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'eca_halonext26ts': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_256-1e55880b.pth',
@@ -130,6 +131,22 @@ model_cfgs = dict(
         stem_pool='maxpool',
         self_attn_layer='halo',
         self_attn_kwargs=dict(block_size=8, halo_size=2, dim_head=16)
+    ),
+    sehalonet33ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), every=[2], d=3, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), every=[2], d=3, c=1024, s=2, gs=0, br=0.25),
+            ByoBlockCfg('self_attn', d=2, c=1536, s=2, gs=0, br=0.333),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        act_layer='silu',
+        num_features=1280,
+        attn_layer='se',
+        self_attn_layer='halo',
+        self_attn_kwargs=dict(block_size=8, halo_size=3)
     ),
     halonet50ts=ByoModelCfg(
         blocks=(
@@ -225,6 +242,13 @@ def halonet26t(pretrained=False, **kwargs):
     """ HaloNet w/ a ResNet26-t backbone. Halo attention in final two stages
     """
     return _create_byoanet('halonet26t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def sehalonet33ts(pretrained=False, **kwargs):
+    """ HaloNet w/ a ResNet26-t backbone. Halo attention in final two stages
+    """
+    return _create_byoanet('sehalonet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
