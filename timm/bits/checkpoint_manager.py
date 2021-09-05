@@ -193,7 +193,7 @@ class CheckpointManager:
                 best_save_path = os.path.join(self.checkpoint_dir, 'best' + self.extension)
                 self._duplicate(last_save_path, best_save_path)
 
-        return None if self.best_checkpoint is None else curr_checkpoint
+        return curr_checkpoint if self.best_checkpoint is None else self.best_checkpoint
 
     def save_recovery(self, train_state: TrainState):
         tmp_save_path = os.path.join(self.recovery_dir, 'recovery_tmp' + self.extension)
