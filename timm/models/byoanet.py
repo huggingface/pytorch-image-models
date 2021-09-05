@@ -246,7 +246,7 @@ def halonet26t(pretrained=False, **kwargs):
 
 @register_model
 def sehalonet33ts(pretrained=False, **kwargs):
-    """ HaloNet w/ a ResNet26-t backbone. Halo attention in final two stages
+    """ HaloNet w/ a ResNet33-t backbone, SE attn for non Halo blocks, SiLU, 1-2 Halo in stage 2,3,4.
     """
     return _create_byoanet('sehalonet33ts', pretrained=pretrained, **kwargs)
 
