@@ -34,10 +34,15 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     # GPU-Efficient (ResNet) weights
     'botnet26t_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_256-a0e6c3b1.pth',
+        url='',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-    'botnet50ts_256': _cfg(url='', fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'botnet50t_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet50t_256-a0e6c3b1.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'eca_botnext26ts_256': _cfg(
+        url='',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'eca_botnext50ts_256': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_botnext26ts_256-fb3bf984.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 
@@ -61,6 +66,20 @@ model_cfgs = dict(
 
     botnet26t=ByoModelCfg(
         blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        fixed_input_size=True,
+        self_attn_layer='bottleneck',
+        self_attn_kwargs=dict()
+    ),
+    botnet50t=ByoModelCfg(
+        blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=0, br=0.25),
             interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
@@ -73,22 +92,23 @@ model_cfgs = dict(
         self_attn_layer='bottleneck',
         self_attn_kwargs=dict()
     ),
-    botnet50ts=ByoModelCfg(
+    eca_botnext26ts=ByoModelCfg(
         blocks=(
-            ByoBlockCfg(type='bottle', d=3, c=256, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), d=4, c=512, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25),
-            interleave_blocks(types=('bottle', 'self_attn'), d=3, c=2048, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=16, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=16, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=16, br=0.25),
+            ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=16, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
-        stem_pool='',
+        stem_pool='maxpool',
         fixed_input_size=True,
         act_layer='silu',
+        attn_layer='eca',
         self_attn_layer='bottleneck',
         self_attn_kwargs=dict()
     ),
-    eca_botnext26ts=ByoModelCfg(
+    eca_botnext50ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=16, br=0.25),
             ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=16, br=0.25),
@@ -208,25 +228,35 @@ def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
 @register_model
 def botnet26t_256(pretrained=False, **kwargs):
     """ Bottleneck Transformer w/ ResNet26-T backbone. Bottleneck attn in final two stages.
+    FIXME 26t variant was mixed up with 50t arch cfg, retraining and determining why so low
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('botnet26t_256', 'botnet26t', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def botnet50ts_256(pretrained=False, **kwargs):
-    """ Bottleneck Transformer w/ ResNet50-T backbone, silu act. Bottleneck attn in final two stages.
+def botnet50t_256(pretrained=False, **kwargs):
+    """ Bottleneck Transformer w/ ResNet50-T backbone. Bottleneck attn in final two stages.
     """
     kwargs.setdefault('img_size', 256)
-    return _create_byoanet('botnet50ts_256', 'botnet50ts', pretrained=pretrained, **kwargs)
+    return _create_byoanet('botnet50t_256', 'botnet50t', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def eca_botnext26ts_256(pretrained=False, **kwargs):
     """ Bottleneck Transformer w/ ResNet26-T backbone, silu act, Bottleneck attn in final two stages.
+    FIXME 26ts variant was mixed up with 50ts arch cfg, retraining and determining why so low
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('eca_botnext26ts_256', 'eca_botnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_botnext50ts_256(pretrained=False, **kwargs):
+    """ Bottleneck Transformer w/ ResNet26-T backbone, silu act, Bottleneck attn in final two stages.
+    """
+    kwargs.setdefault('img_size', 256)
+    return _create_byoanet('eca_botnext50ts_256', 'eca_botnext50ts', pretrained=pretrained, **kwargs)
 
 
 @register_model

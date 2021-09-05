@@ -132,7 +132,8 @@ class HaloAttn(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H % self.block_size == 0 and W % self.block_size == 0
+        assert H % self.block_size == 0
+        assert W % self.block_size == 0
         num_h_blocks = H // self.block_size
         num_w_blocks = W // self.block_size
         num_blocks = num_h_blocks * num_w_blocks
