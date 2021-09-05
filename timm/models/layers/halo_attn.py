@@ -123,6 +123,8 @@ class HaloAttn(nn.Module):
         self.pos_embed = PosEmbedRel(
             block_size=block_size // self.stride, win_size=self.win_size, dim_head=self.dim_head, scale=self.scale)
 
+        self.reset_parameters()
+
     def reset_parameters(self):
         std = self.q.weight.shape[1] ** -0.5  # fan-in
         trunc_normal_(self.q.weight, std=std)

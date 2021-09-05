@@ -102,6 +102,8 @@ class BottleneckAttn(nn.Module):
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 
+        self.reset_parameters()
+
     def reset_parameters(self):
         trunc_normal_(self.qkv.weight, std=self.qkv.weight.shape[1] ** -0.5)
         trunc_normal_(self.pos_embed.height_rel, std=self.scale)
