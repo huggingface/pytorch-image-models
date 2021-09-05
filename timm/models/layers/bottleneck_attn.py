@@ -102,6 +102,8 @@ class BottleneckAttn(nn.Module):
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 
+        self.reset_parameters()
+
     def reset_parameters(self):
         trunc_normal_(self.qkv.weight, std=self.qkv.weight.shape[1] ** -0.5)
         trunc_normal_(self.pos_embed.height_rel, std=self.scale)
@@ -109,7 +111,8 @@ class BottleneckAttn(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H == self.pos_embed.height and W == self.pos_embed.width
+        assert H == self.pos_embed.height
+        assert W == self.pos_embed.width
 
         x = self.qkv(x)  # B, 3 * num_heads * dim_head, H, W
         x = x.reshape(B, -1, self.dim_head, H * W).transpose(-1, -2)
@@ -118,8 +121,8 @@ class BottleneckAttn(nn.Module):
         attn_logits = (q @ k.transpose(-1, -2)) * self.scale
         attn_logits = attn_logits + self.pos_embed(q)  # B, num_heads, H * W, H * W
 
-        attn_out = attn_logits.softmax(dim = -1)
-        attn_out = (attn_out @ v).transpose(1, 2).reshape(B, self.dim_out, H, W) # B, dim_out, H, W
+        attn_out = attn_logits.softmax(dim=-1)
+        attn_out = (attn_out @ v).transpose(1, 2).reshape(B, self.dim_out, H, W)  # B, dim_out, H, W
         attn_out = self.pool(attn_out)
         return attn_out
 
