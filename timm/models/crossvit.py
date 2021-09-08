@@ -337,11 +337,23 @@ def _create_crossvit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
+    def pretrained_filter_fn(state_dict):
+        new_state_dict = {}
+        for key in state_dict.keys():
+            if 'pos_embed' in key or 'cls_token' in key:
+                new_key = key.replace(".", "_")
+            else:
+                new_key = key
+            new_state_dict[new_key] = state_dict[key]
+        return new_state_dict
+
     return build_model_with_cfg(
         CrossViT, variant, pretrained,
         default_cfg=default_cfgs[variant],
+        pretrained_filter_fn=pretrained_filter_fn,
         **kwargs)
 
+    
 
 @register_model
 def crossvit_tiny_224(pretrained=False, **kwargs):
