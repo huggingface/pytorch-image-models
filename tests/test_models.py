@@ -188,25 +188,22 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     input_tensor = torch.randn((batch_size, *input_size))
 
-    # test forward_features (always unpooled)
-    if 'crossvit' not in model_name:
-        # FIXME remove crossvit exception
-        outputs = model.forward_features(input_tensor)
-        if isinstance(outputs, tuple):
-            outputs = outputs[0]
-        assert outputs.shape[1] == model.num_features
+    outputs = model.forward_features(input_tensor)
+    if isinstance(outputs, (tuple, list)):
+        outputs = outputs[0]
+    assert outputs.shape[1] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
     outputs = model.forward(input_tensor)
-    if isinstance(outputs, tuple):
+    if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
     assert len(outputs.shape) == 2
     assert outputs.shape[1] == model.num_features
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
-    if isinstance(outputs, tuple):
+    if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
     assert len(outputs.shape) == 2
     assert outputs.shape[1] == model.num_features
