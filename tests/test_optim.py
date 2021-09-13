@@ -319,10 +319,10 @@ def test_sgd(optimizer):
     #      lambda opt: ReduceLROnPlateau(opt)]
     # )
     _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3, momentum=1)
+        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=3e-3, momentum=1)
     )
     _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3, momentum=1, weight_decay=.1)
+        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=3e-3, momentum=1, weight_decay=.1)
     )
     _test_rosenbrock(
         lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
