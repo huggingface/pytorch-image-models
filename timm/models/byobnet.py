@@ -33,7 +33,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, named_apply
 from .layers import ClassifierHead, ConvBnAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
     create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple
 from .registry import register_model
@@ -93,19 +93,50 @@ default_cfgs = {
         first_conv='stem.conv1', input_size=(3, 256, 256), pool_size=(8, 8),
         test_input_size=(3, 288, 288), crop_pct=1.0),
     'resnet61q': _cfg(
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'geresnet50t': _cfg(
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'gcresnet50t': _cfg(
-        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet61q_ra2-6afc536c.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8),
+        test_input_size=(3, 288, 288), crop_pct=1.0, interpolation='bicubic'),
 
-    'gcresnext26ts': _cfg(
+    'resnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/resnext26ts_256_ra2-8bbd9106.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
-    'gcresnet26ts': _cfg(
+    'gcresnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnext26ts_256-e414378b.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'seresnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/seresnext26ts_256-6f0d74a3.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'eca_resnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_resnext26ts_256-5a1d030f.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'bat_resnext26ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/bat_resnext26ts_256-fa6fd595.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic',
         min_input_size=(3, 256, 256)),
+
+    'resnet32ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/resnet32ts_256-aacf5250.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'resnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/resnet33ts_256-e91b09a4.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'gcresnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnet33ts_256-0e0cd345.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'seresnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/seresnet33ts_256-f8ad44d9.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'eca_resnet33ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_resnet33ts_256-8f98face.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+
+    'gcresnet50t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnet50t_256-96374d1c.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+
+    'gcresnext50ts': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnext50ts_256-3e0f515e.pth',
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 }
 
 
@@ -135,7 +166,7 @@ class ByoModelCfg:
     stem_chs: int = 32
     width_factor: float = 1.0
     num_features: int = 0  # num out_channels for final conv, no final 1x1 conv if 0
-    zero_init_last_bn: bool = True
+    zero_init_last: bool = True  # zero init last weight (usually bn) in residual path
     fixed_input_size: bool = False  # model constrained to a fixed-input size / img_size must be provided on creation
 
     act_layer: str = 'relu'
@@ -159,13 +190,13 @@ def _rep_vgg_bcfg(d=(4, 6, 16, 1), wf=(1., 1., 1., 1.), groups=0):
 
 
 def interleave_blocks(
-        types: Tuple[str, str], every: Union[int, List[int]], d, first: bool = False, **kwargs
+        types: Tuple[str, str], d, every: Union[int, List[int]] = 1, first: bool = False, **kwargs
 ) -> Tuple[ByoBlockCfg]:
     """ interleave 2 block types in stack
     """
     assert len(types) == 2
     if isinstance(every, int):
-        every = list(range(0 if first else every, d, every))
+        every = list(range(0 if first else every, d, every + 1))
         if not every:
             every = [d - 1]
     set(every)
@@ -255,7 +286,8 @@ model_cfgs = dict(
         stem_chs=64,
     ),
 
-    # WARN: experimental, may vanish/change
+    # 4 x conv stem w/ 2 act, no maxpool, 2,4,6,4 repeats, group size 32 in first 3 blocks
+    # DW convs in last block, 2048 pre-FC, silu act  
     resnet51q=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
@@ -270,6 +302,8 @@ model_cfgs = dict(
         act_layer='silu',
     ),
 
+    # 4 x conv stem w/ 4 act, no maxpool, 1,4,6,4 repeats, edge block first, group size 32 in next 2 blocks
+    # DW convs in last block, 4 conv for each bottle block, 2048 pre-FC, silu act  
     resnet61q=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='edge', d=1, c=256, s=1, gs=0, br=1.0, block_kwargs=dict()),
@@ -285,53 +319,91 @@ model_cfgs = dict(
         block_kwargs=dict(extra_conv=True),
     ),
 
-    # WARN: experimental, may vanish/change
-    geresnet50t=ByoModelCfg(
+    # A series of ResNeXt-26 models w/ one of none, GC, SE, ECA, BAT attn, group size 32, SiLU act,
+    # and a tiered stem w/ maxpool
+    resnext26ts=ByoModelCfg(
         blocks=(
-            ByoBlockCfg(type='edge', d=3, c=256, s=1, br=0.25),
-            ByoBlockCfg(type='edge', d=4, c=512, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
-        ),
-        stem_chs=64,
-        stem_type='tiered',
-        stem_pool=None,
-        attn_layer='ge',
-        attn_kwargs=dict(extent=8, extra_params=True),
-        #attn_kwargs=dict(extent=8),
-        #block_kwargs=dict(attn_last=True)
-    ),
-
-    # WARN: experimental, may vanish/change
-    gcresnet50t=ByoModelCfg(
-        blocks=(
-            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
-            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
-        ),
-        stem_chs=64,
-        stem_type='tiered',
-        stem_pool=None,
-        attn_layer='gc'
-    ),
-
-    gcresnext26ts=ByoModelCfg(
-        blocks=(
-            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
         act_layer='silu',
-        attn_layer='gc',
+    ),
+    gcresnext26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        act_layer='silu',
+        attn_layer='gca',
+    ),
+    seresnext26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        act_layer='silu',
+        attn_layer='se',
+    ),
+    eca_resnext26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        act_layer='silu',
+        attn_layer='eca',
+    ),
+    bat_resnext26ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        act_layer='silu',
+        attn_layer='bat',
+        attn_kwargs=dict(block_size=8)
     ),
 
-    gcresnet26ts=ByoModelCfg(
+    # ResNet-32 (2, 3, 3, 2) models w/ no attn, no groups, SiLU act, no pre-fc feat layer, tiered stem w/o maxpool
+    resnet32ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=0,
+        act_layer='silu',
+    ),
+
+    # ResNet-33 (2, 3, 3, 2) models w/ no attn, no groups, SiLU act, 1280 pre-FC feat, tiered stem w/o maxpool
+    resnet33ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
@@ -343,23 +415,79 @@ model_cfgs = dict(
         stem_pool='',
         num_features=1280,
         act_layer='silu',
-        attn_layer='gc',
     ),
 
-    bat_resnext26ts=ByoModelCfg(
+    # A series of ResNet-33 (2, 3, 3, 2) models w/ one of GC, SE, ECA attn, no groups, SiLU act, 1280 pre-FC feat 
+    # and a tiered stem w/ no maxpool
+    gcresnet33ts=ByoModelCfg(
         blocks=(
-            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=2, c=1024, s=2, gs=32, br=0.25),
-            ByoBlockCfg(type='bottle', d=2, c=2048, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='gca',
+    ),
+    seresnet33ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='se',
+    ),
+    eca_resnet33ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        num_features=1280,
+        act_layer='silu',
+        attn_layer='eca',
+    ),
+
+    gcresnet50t=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        attn_layer='gca',
+    ),
+
+    gcresnext50ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, gs=32, br=0.25),
         ),
         stem_chs=64,
         stem_type='tiered',
         stem_pool='maxpool',
-        num_features=0,
+        # stem_pool=None,
         act_layer='silu',
-        attn_layer='bat',
-        attn_kwargs=dict(block_size=8)
+        attn_layer='gca',
     ),
 )
 
@@ -467,17 +595,10 @@ def resnet61q(pretrained=False, **kwargs):
 
 
 @register_model
-def geresnet50t(pretrained=False, **kwargs):
+def resnext26ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('geresnet50t', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def gcresnet50t(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
+    return _create_byobnet('resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -488,10 +609,17 @@ def gcresnext26ts(pretrained=False, **kwargs):
 
 
 @register_model
-def gcresnet26ts(pretrained=False, **kwargs):
+def seresnext26ts(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('gcresnet26ts', pretrained=pretrained, **kwargs)
+    return _create_byobnet('seresnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_resnext26ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('eca_resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -499,6 +627,55 @@ def bat_resnext26ts(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('bat_resnext26ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet32ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('resnet32ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet33ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('resnet33ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnet33ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnet33ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def seresnet33ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('seresnet33ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def eca_resnet33ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('eca_resnet33ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnet50t(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def gcresnext50ts(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('gcresnext50ts', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
@@ -580,8 +757,8 @@ class BasicBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
-    def init_weights(self, zero_init_last_bn: bool = False):
-        if zero_init_last_bn:
+    def init_weights(self, zero_init_last: bool = False):
+        if zero_init_last:
             nn.init.zeros_(self.conv2_kxk.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -637,8 +814,8 @@ class BottleneckBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
-    def init_weights(self, zero_init_last_bn: bool = False):
-        if zero_init_last_bn:
+    def init_weights(self, zero_init_last: bool = False):
+        if zero_init_last:
             nn.init.zeros_(self.conv3_1x1.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -694,8 +871,8 @@ class DarkBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
-    def init_weights(self, zero_init_last_bn: bool = False):
-        if zero_init_last_bn:
+    def init_weights(self, zero_init_last: bool = False):
+        if zero_init_last:
             nn.init.zeros_(self.conv2_kxk.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -747,8 +924,8 @@ class EdgeBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
-    def init_weights(self, zero_init_last_bn: bool = False):
-        if zero_init_last_bn:
+    def init_weights(self, zero_init_last: bool = False):
+        if zero_init_last:
             nn.init.zeros_(self.conv2_1x1.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -790,7 +967,7 @@ class RepVggBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
         self.act = layers.act(inplace=True)
 
-    def init_weights(self, zero_init_last_bn: bool = False):
+    def init_weights(self, zero_init_last: bool = False):
         # NOTE this init overrides that base model init with specific changes for the block type
         for m in self.modules():
             if isinstance(m, nn.BatchNorm2d):
@@ -847,8 +1024,8 @@ class SelfAttnBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
-    def init_weights(self, zero_init_last_bn: bool = False):
-        if zero_init_last_bn:
+    def init_weights(self, zero_init_last: bool = False):
+        if zero_init_last:
             nn.init.zeros_(self.conv3_1x1.bn.weight)
         if hasattr(self.self_attn, 'reset_parameters'):
             self.self_attn.reset_parameters()
@@ -990,27 +1167,29 @@ def update_block_kwargs(block_kwargs: Dict[str, Any], block_cfg: ByoBlockCfg, mo
     layer_fns = block_kwargs['layers']
 
     # override attn layer / args with block local config
-    if block_cfg.attn_kwargs is not None or block_cfg.attn_layer is not None:
+    attn_set = block_cfg.attn_layer is not None
+    if attn_set or block_cfg.attn_kwargs is not None:
         # override attn layer config
-        if not block_cfg.attn_layer:
+        if attn_set and not block_cfg.attn_layer:
             # empty string for attn_layer type will disable attn for this block
             attn_layer = None
         else:
             attn_kwargs = override_kwargs(block_cfg.attn_kwargs, model_cfg.attn_kwargs)
             attn_layer = block_cfg.attn_layer or model_cfg.attn_layer
-            attn_layer = partial(get_attn(attn_layer), *attn_kwargs) if attn_layer is not None else None
+            attn_layer = partial(get_attn(attn_layer), **attn_kwargs) if attn_layer is not None else None
         layer_fns = replace(layer_fns, attn=attn_layer)
 
     # override self-attn layer / args with block local cfg
-    if block_cfg.self_attn_kwargs is not None or block_cfg.self_attn_layer is not None:
+    self_attn_set = block_cfg.self_attn_layer is not None
+    if self_attn_set or block_cfg.self_attn_kwargs is not None:
         # override attn layer config
-        if not block_cfg.self_attn_layer:
+        if self_attn_set and not block_cfg.self_attn_layer:  # attn_layer == ''
             # empty string for self_attn_layer type will disable attn for this block
             self_attn_layer = None
         else:
             self_attn_kwargs = override_kwargs(block_cfg.self_attn_kwargs, model_cfg.self_attn_kwargs)
             self_attn_layer = block_cfg.self_attn_layer or model_cfg.self_attn_layer
-            self_attn_layer = partial(get_attn(self_attn_layer), *self_attn_kwargs) \
+            self_attn_layer = partial(get_attn(self_attn_layer), **self_attn_kwargs) \
                 if self_attn_layer is not None else None
         layer_fns = replace(layer_fns, self_attn=self_attn_layer)
 
@@ -1099,7 +1278,7 @@ class ByobNet(nn.Module):
     Current assumption is that both stem and blocks are in conv-bn-act order (w/ block ending in act).
     """
     def __init__(self, cfg: ByoModelCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-                 zero_init_last_bn=True, img_size=None, drop_rate=0., drop_path_rate=0.):
+                 zero_init_last=True, img_size=None, drop_rate=0., drop_path_rate=0.):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -1130,12 +1309,8 @@ class ByobNet(nn.Module):
 
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
 
-        for n, m in self.named_modules():
-            _init_weights(m, n)
-        for m in self.modules():
-            # call each block's weight init for block-specific overrides to init above
-            if hasattr(m, 'init_weights'):
-                m.init_weights(zero_init_last_bn=zero_init_last_bn)
+        # init weights
+        named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
     def get_classifier(self):
         return self.head.fc
@@ -1155,20 +1330,22 @@ class ByobNet(nn.Module):
         return x
 
 
-def _init_weights(m, n=''):
-    if isinstance(m, nn.Conv2d):
-        fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-        fan_out //= m.groups
-        m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-        if m.bias is not None:
-            m.bias.data.zero_()
-    elif isinstance(m, nn.Linear):
-        nn.init.normal_(m.weight, mean=0.0, std=0.01)
-        if m.bias is not None:
-            nn.init.zeros_(m.bias)
-    elif isinstance(m, nn.BatchNorm2d):
-        nn.init.ones_(m.weight)
-        nn.init.zeros_(m.bias)
+def _init_weights(module, name='', zero_init_last=False):
+    if isinstance(module, nn.Conv2d):
+        fan_out = module.kernel_size[0] * module.kernel_size[1] * module.out_channels
+        fan_out //= module.groups
+        module.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+        if module.bias is not None:
+            module.bias.data.zero_()
+    elif isinstance(module, nn.Linear):
+        nn.init.normal_(module.weight, mean=0.0, std=0.01)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.BatchNorm2d):
+        nn.init.ones_(module.weight)
+        nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights(zero_init_last=zero_init_last)
 
 
 def _create_byobnet(variant, pretrained=False, **kwargs):
