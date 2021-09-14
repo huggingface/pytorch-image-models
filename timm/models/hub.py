@@ -159,6 +159,13 @@ def push_to_hf_hub(
     )
 
     with repo.commit(commit_message):
+        # Save model weights and config
         save_pretrained_for_hf(model, repo.local_dir, **config_kwargs)
+
+        # Save a model card if it doesn't exist, enabling inference.
+        readme_path = Path(repo.local_dir) / 'README.md'
+        readme_txt = f'---\ntags:\n- image-classification\n- timm\nlibrary_tag: timm\n---\n# Model card for {repo_name}'
+        if not readme_path.exists():
+            readme_path.write_text(readme_txt)
 
     return repo.git_remote_url()
