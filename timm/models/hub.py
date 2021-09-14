@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Union
 
 import torch
-from torch.hub import HASH_REGEX, download_url_to_file, urlparse, load_state_dict_from_url
+from torch.hub import HASH_REGEX, download_url_to_file, urlparse
 try:
     from torch.hub import get_dir
 except ImportError:
