@@ -557,7 +557,7 @@ def main():
         vflip=args.vflip,
         color_jitter=args.color_jitter,
         auto_augment=args.aa,
-        num_aug_splits=args.num_aug_splits,
+        num_aug_splits=num_aug_splits,
         interpolation=train_interpolation,
         mean=data_config['mean'],
         std=data_config['std'],
