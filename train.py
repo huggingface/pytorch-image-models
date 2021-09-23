@@ -190,6 +190,8 @@ parser.add_argument('--jsd-loss', action='store_true', default=False,
                     help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 parser.add_argument('--bce-loss', action='store_true', default=False,
                     help='Enable BCE loss w/ Mixup/CutMix use.')
+parser.add_argument('--bce-target-thresh', type=float, default=None,
+                    help='Threshold for binarizing softened BCE targets (default: None, disabled)')
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
 parser.add_argument('--remode', type=str, default='pixel',
@@ -459,7 +461,7 @@ def main():
         else:
             if args.local_rank == 0:
                 _logger.info("Using native Torch DistributedDataParallel.")
-            model = NativeDDP(model, device_ids=[args.local_rank])  # can use device str in Torch >= 1.1
+            model = NativeDDP(model, device_ids=[args.local_rank], broadcast_buffers=not args.dist_bn)
         # NOTE: EMA model does not need to be wrapped by DDP
 
     # setup learning rate schedule and starting epoch
@@ -558,12 +560,12 @@ def main():
     elif mixup_active:
         # smoothing is handled with mixup target transform which outputs sparse, soft targets
         if args.bce_loss:
-            train_loss_fn = nn.BCEWithLogitsLoss()
+            train_loss_fn = BinaryCrossEntropy(target_threshold=args.bce_target_thresh)
         else:
             train_loss_fn = SoftTargetCrossEntropy()
     elif args.smoothing:
         if args.bce_loss:
-            train_loss_fn = DenseBinaryCrossEntropy(smoothing=args.smoothing)
+            train_loss_fn = BinaryCrossEntropy(smoothing=args.smoothing, target_threshold=args.bce_target_thresh)
         else:
             train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
