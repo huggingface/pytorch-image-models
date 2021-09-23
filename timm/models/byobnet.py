@@ -137,6 +137,17 @@ default_cfgs = {
     'gcresnext50ts': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnext50ts_256-3e0f515e.pth',
         first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+
+    # experimental models
+    'regnetz_b': _cfg(
+        url='',
+        input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'regnetz_c': _cfg(
+        url='',
+        input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+    'regnetz_d': _cfg(
+        url='',
+        input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 }
 
 
@@ -489,6 +500,51 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='gca',
     ),
+
+    # experimental models, closer to a RegNetZ than a ResNet. Similar to EfficientNets but w/ groups instead of DW
+    regnetz_b=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=192, s=2, gs=24, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=6, c=384, s=2, gs=24, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=12, c=768, s=2, gs=24, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=24, br=0.25, block_kwargs=dict(linear_out=True)),
+        ),
+        stem_chs=32,
+        stem_pool='',
+        num_features=1792,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+    ),
+    regnetz_c=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=128, s=2, gs=16, br=0.5, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=6, c=512, s=2, gs=32, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=12, c=768, s=2, gs=32, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=2, c=1536, s=2, gs=64, br=0.25, block_kwargs=dict(linear_out=True)),
+        ),
+        stem_chs=32,
+        stem_pool='',
+        num_features=1792,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+    ),
+    regnetz_d=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=64, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=6, c=512, s=2, gs=64, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=12, c=768, s=2, gs=64, br=0.25, block_kwargs=dict(linear_out=True)),
+            ByoBlockCfg(type='bottle', d=3, c=1536, s=2, gs=64, br=0.25, block_kwargs=dict(linear_out=True)),
+        ),
+        stem_chs=128,
+        stem_type='quad',
+        stem_pool='',
+        num_features=1792,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+    ),
 )
 
 
@@ -676,6 +732,27 @@ def gcresnext50ts(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('gcresnext50ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_b(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_b', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_c(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_c', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_d(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_d', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
