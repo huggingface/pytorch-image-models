@@ -344,7 +344,7 @@ class ResNetV2(nn.Module):
             num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
             width_factor=1, stem_chs=64, stem_type='', avg_down=False, preact=True,
             act_layer=nn.ReLU, conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32),
-            drop_rate=0., drop_path_rate=0., zero_init_last=True):
+            drop_rate=0., drop_path_rate=0., zero_init_last=False):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
