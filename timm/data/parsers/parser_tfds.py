@@ -159,7 +159,7 @@ class ParserTfds(Parser):
             # see warnings at https://pytorch.org/docs/stable/data.html#multi-process-data-loading
             ds = ds.repeat()  # allow wrap around and break iteration manually
         if self.shuffle:
-            ds = ds.shuffle(min(self.num_samples, SHUFFLE_SIZE) // self._num_pipelines, seed=0)
+            ds = ds.shuffle(min(self.num_samples, SHUFFLE_SIZE) // self._num_pipelines, seed=worker_info.seed)
         ds = ds.prefetch(min(self.num_samples // self._num_pipelines, PREFETCH_SIZE))
         self.ds = tfds.as_numpy(ds)
 

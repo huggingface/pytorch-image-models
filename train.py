@@ -86,10 +86,10 @@ parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
+parser.add_argument('-b', '--batch-size', type=int, default=256, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
-                    help='ratio of validation batch size to training batch size (default: 1)')
+parser.add_argument('-vb', '--validation-batch-size', type=int, default=None, metavar='N',
+                    help='validation batch size override (default: None)')
 
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -109,10 +109,10 @@ parser.add_argument('--clip-mode', type=str, default='norm',
 
 
 # Learning rate schedule parameters
-parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
-                    help='LR scheduler (default: "step"')
-parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                    help='learning rate (default: 0.01)')
+parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
+                    help='LR scheduler (default: "cosine"')
+parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                    help='learning rate (default: 0.05)')
 parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                     help='learning rate noise on/off epoch percentages')
 parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
@@ -131,15 +131,15 @@ parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
                     help='warmup learning rate (default: 0.0001)')
 parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
                     help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
-parser.add_argument('--epochs', type=int, default=200, metavar='N',
-                    help='number of epochs to train (default: 2)')
+parser.add_argument('--epochs', type=int, default=300, metavar='N',
+                    help='number of epochs to train (default: 300)')
 parser.add_argument('--epoch-repeats', type=float, default=0., metavar='N',
                     help='epoch repeat multiplier (number of times to repeat dataset epoch per train epoch).')
 parser.add_argument('--start-epoch', default=None, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
+parser.add_argument('--decay-epochs', type=float, default=100, metavar='N',
                     help='epoch interval to decay LR')
-parser.add_argument('--warmup-epochs', type=int, default=3, metavar='N',
+parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
                     help='epochs to warmup LR, if scheduler supports')
 parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N',
                     help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
@@ -169,10 +169,12 @@ parser.add_argument('--jsd-loss', action='store_true', default=False,
                     help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 parser.add_argument('--bce-loss', action='store_true', default=False,
                     help='Enable BCE loss w/ Mixup/CutMix use.')
+parser.add_argument('--bce-target-thresh', type=float, default=None,
+                    help='Threshold for binarizing softened BCE targets (default: None, disabled)')
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
-parser.add_argument('--remode', type=str, default='const',
-                    help='Random erase mode (default: "const")')
+parser.add_argument('--remode', type=str, default='pixel',
+                    help='Random erase mode (default: "pixel")')
 parser.add_argument('--recount', type=int, default=1,
                     help='Random erase count (default: 1)')
 parser.add_argument('--resplit', action='store_true', default=False,
@@ -213,7 +215,7 @@ parser.add_argument('--bn-eps', type=float, default=None,
                     help='BatchNorm epsilon override (if not None)')
 parser.add_argument('--sync-bn', action='store_true',
                     help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
-parser.add_argument('--dist-bn', type=str, default='',
+parser.add_argument('--dist-bn', type=str, default='reduce',
                     help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
 parser.add_argument('--split-bn', action='store_true',
                     help='Enable separate BN layers per augmentation split.')
@@ -460,12 +462,12 @@ def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
     elif mixup_active:
         # smoothing is handled with mixup target transform
         if args.bce_loss:
-            train_loss_fn = nn.BCEWithLogitsLoss()
+            train_loss_fn = BinaryCrossEntropy(target_threshold=args.bce_target_thresh)
         else:
             train_loss_fn = SoftTargetCrossEntropy()
     elif args.smoothing:
         if args.bce_loss:
-            train_loss_fn = DenseBinaryCrossEntropy(smoothing=args.smoothing)
+            train_loss_fn = BinaryCrossEntropy(smoothing=args.smoothing, target_threshold=args.bce_target_thresh)
         else:
             train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
@@ -583,7 +585,7 @@ def setup_data(args, default_cfg, dev_env: DeviceEnv, mixup_active: bool):
         eval_workers = min(2, args.workers)
     loader_eval = create_loader_v2(
         dataset_eval,
-        batch_size=args.validation_batch_size_multiplier * args.batch_size,
+        batch_size=args.validation_batch_size or args.batch_size,
         is_training=False,
         normalize=not normalize_in_transform,
         pp_cfg=eval_pp_cfg,

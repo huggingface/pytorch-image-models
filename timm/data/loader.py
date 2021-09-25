@@ -9,6 +9,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 from typing import Tuple, Optional, Union, Callable
 
 import torch.utils.data
+import numpy as np
 
 from timm.bits import DeviceEnv
 from .collate import fast_collate
@@ -17,6 +18,12 @@ from .distributed_sampler import OrderedDistributedSampler
 from .fetcher import Fetcher
 from .mixup import FastCollateMixup
 from .prefetcher_cuda import PrefetcherCuda
+
+
+def _worker_init(worker_id):
+    worker_info = torch.utils.data.get_worker_info()
+    assert worker_info.id == worker_id
+    np.random.seed(worker_info.seed % (2**32-1))
 
 
 def create_loader_v2(
@@ -94,6 +101,7 @@ def create_loader_v2(
         collate_fn=collate_fn,
         pin_memory=pin_memory,
         drop_last=is_training,
+        worker_init_fn=_worker_init,
         persistent_workers=persistent_workers)
     try:
         loader = loader_class(dataset, **loader_args)
