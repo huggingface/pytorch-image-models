@@ -141,13 +141,16 @@ default_cfgs = {
     # experimental models
     'regnetz_b': _cfg(
         url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'regnetz_c': _cfg(
         url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
     'regnetz_d': _cfg(
         url='',
-        input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        first_conv='stem.conv1.conv', input_size=(3, 256, 256), pool_size=(8, 8), interpolation='bicubic'),
 }
 
 
