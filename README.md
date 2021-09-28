@@ -421,5 +421,3 @@ Several weights included or references here were pretrained with proprietary dat
 ### Latest DOI
 
 [![DOI](https://zenodo.org/badge/168799526.svg)](https://zenodo.org/badge/latestdoi/168799526)
-
-Test changes
