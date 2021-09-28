@@ -252,6 +252,8 @@ parser.add_argument('--model-ema-decay', type=float, default=0.9998,
 # Misc
 parser.add_argument('--seed', type=int, default=42, metavar='S',
                     help='random seed (default: 42)')
+parser.add_argument('--worker-seeding', type=str, default='all',
+                    help='worker seed mode (default: all)')
 parser.add_argument('--log-interval', type=int, default=50, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--recovery-interval', type=int, default=0, metavar='N',
@@ -535,7 +537,8 @@ def main():
         distributed=args.distributed,
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
-        use_multi_epochs_loader=args.use_multi_epochs_loader
+        use_multi_epochs_loader=args.use_multi_epochs_loader,
+        worker_seeding=args.worker_seeding,
     )
 
     loader_eval = create_loader(
