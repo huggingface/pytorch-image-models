@@ -2,17 +2,20 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+import csv
+
 import torch.utils.data as data
 import os
 import torch
 import logging
-
+import pandas as pd
+import numpy as np
 from PIL import Image
-
+from torch.utils.data import Dataset
+from sklearn import preprocessing
 from .parsers import create_parser
 
 _logger = logging.getLogger(__name__)
-
 
 _ERROR_RETRY = 50
 
@@ -144,3 +147,32 @@ class AugMixDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.dataset)
+
+
+class COAIImageClassDataset(Dataset):
+    def __init__(self, dict, base_path='', transform=None):
+        self.transform = transform
+        self.base_path = base_path
+        self.dict = dict
+
+        df = pd.DataFrame(list(dict.items()), columns=['image', 'label'])
+        classes = df['label'].unique()
+        le = preprocessing.LabelEncoder()
+        le.fit(classes)
+        df['encoded_label'] = le.transform(df['label'])
+        self.df = df
+
+    def __len__(self):
+        index = self.df.index
+        number_of_rows = len(index)
+        return number_of_rows
+
+    def __getitem__(self, index):
+        img_path = self.df.iloc[index]['image']
+        image = Image.open(self.base_path + img_path)
+        np_img = np.array(image)
+        # print(np_img.shape) #(h=512,w=512,c=3)
+        if self.transform:
+            np_img = self.transform(np_img)
+        # print(np_img.shape) #(1,256,256)
+        return np_img, self.df.iloc[index]['encoded_label']
