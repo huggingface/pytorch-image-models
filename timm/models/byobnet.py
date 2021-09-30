@@ -800,9 +800,6 @@ class BottleneckBlock(nn.Module):
         self.conv2_kxk = layers.conv_norm_act(
             mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
             groups=groups, drop_block=drop_block)
-        self.conv2_kxk = layers.conv_norm_act(
-            mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
-            groups=groups, drop_block=drop_block)
         if extra_conv:
             self.conv2b_kxk = layers.conv_norm_act(
                 mid_chs, mid_chs, kernel_size, dilation=dilation[1], groups=groups, drop_block=drop_block)
