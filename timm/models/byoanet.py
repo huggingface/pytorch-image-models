@@ -57,8 +57,14 @@ default_cfgs = {
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
 
     'lambda_resnet26t': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_256-b040fce6.pth',
+        url='',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
+    'lambda_resnet50ts': _cfg(
+        url='',
+        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
+    'lambda_resnet26rt_256': _cfg(
+        url='',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 
@@ -198,6 +204,33 @@ model_cfgs = dict(
         self_attn_layer='lambda',
         self_attn_kwargs=dict(r=9)
     ),
+    lambda_resnet50ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), every=4, d=4, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=3, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        act_layer='silu',
+        self_attn_layer='lambda',
+        self_attn_kwargs=dict(r=9)
+    ),
+    lambda_resnet26rt_256=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        self_attn_layer='lambda',
+        self_attn_kwargs=dict(r=None)
+    ),
 )
 
 
@@ -275,6 +308,21 @@ def eca_halonext26ts(pretrained=False, **kwargs):
 
 @register_model
 def lambda_resnet26t(pretrained=False, **kwargs):
-    """ Lambda-ResNet-26T. Lambda layers in last two stages.
+    """ Lambda-ResNet-26-T. Lambda layers w/ conv pos in last two stages.
     """
     return _create_byoanet('lambda_resnet26t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def lambda_resnet50ts(pretrained=False, **kwargs):
+    """ Lambda-ResNet-50-TS. SiLU act. Lambda layers w/ conv pos in last two stages.
+    """
+    return _create_byoanet('lambda_resnet50ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def lambda_resnet26rt_256(pretrained=False, **kwargs):
+    """ Lambda-ResNet-26-R-T. Lambda layers w/ rel pos embed in last two stages.
+    """
+    kwargs.setdefault('img_size', 256)
+    return _create_byoanet('lambda_resnet26rt_256', pretrained=pretrained, **kwargs)
