@@ -62,7 +62,7 @@ default_cfgs = {
     'lambda_resnet50ts': _cfg(
         url='',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
-    'lambda_resnet26rt_256': _cfg(
+    'lambda_resnet26rpt_256': _cfg(
         url='',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
@@ -218,7 +218,7 @@ model_cfgs = dict(
         self_attn_layer='lambda',
         self_attn_kwargs=dict(r=9)
     ),
-    lambda_resnet26rt_256=ByoModelCfg(
+    lambda_resnet26rpt_256=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
             ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=0, br=0.25),
@@ -321,8 +321,8 @@ def lambda_resnet50ts(pretrained=False, **kwargs):
 
 
 @register_model
-def lambda_resnet26rt_256(pretrained=False, **kwargs):
+def lambda_resnet26rpt_256(pretrained=False, **kwargs):
     """ Lambda-ResNet-26-R-T. Lambda layers w/ rel pos embed in last two stages.
     """
     kwargs.setdefault('img_size', 256)
-    return _create_byoanet('lambda_resnet26rt_256', pretrained=pretrained, **kwargs)
+    return _create_byoanet('lambda_resnet26rpt_256', pretrained=pretrained, **kwargs)
