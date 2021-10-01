@@ -67,7 +67,7 @@ class LambdaLayer(nn.Module):
             # local lambda convolution for pos
             self.conv_lambda = nn.Conv3d(1, dim_head, (r, r, 1), padding=(r // 2, r // 2, 0))
             self.pos_emb = None
-            self.rel_pos = None
+            self.rel_pos_indices = None
         else:
             # relative pos embedding
             assert feat_size is not None
