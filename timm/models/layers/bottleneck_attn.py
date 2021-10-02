@@ -118,12 +118,12 @@ class BottleneckAttn(nn.Module):
         x = x.reshape(B, -1, self.dim_head, H * W).transpose(-1, -2)
         q, k, v = torch.split(x, self.num_heads, dim=1)
 
-        attn_logits = (q @ k.transpose(-1, -2)) * self.scale
-        attn_logits = attn_logits + self.pos_embed(q)  # B, num_heads, H * W, H * W
+        attn = (q @ k.transpose(-1, -2)) * self.scale
+        attn = attn + self.pos_embed(q)  # B, num_heads, H * W, H * W
+        attn = attn.softmax(dim=-1)
 
-        attn_out = attn_logits.softmax(dim=-1)
-        attn_out = (attn_out @ v).transpose(-1, -2).reshape(B, self.dim_out, H, W)  # B, dim_out, H, W
-        attn_out = self.pool(attn_out)
-        return attn_out
+        out = (attn @ v).transpose(-1, -2).reshape(B, self.dim_out, H, W)  # B, dim_out, H, W
+        out = self.pool(out)
+        return out
 
 

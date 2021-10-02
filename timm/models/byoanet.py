@@ -3,7 +3,7 @@
 A flexible network w/ dataclass based config for stacking NN blocks including
 self-attention (or similar) layers.
 
-Currently used to implement experimential variants of:
+Currently used to implement experimental variants of:
   * Bottleneck Transformers
   * Lambda ResNets
   * HaloNets
@@ -46,15 +46,16 @@ default_cfgs = {
     'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet26t': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_256-9b4bf0b3.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'sehalonet33ts': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sehalonet33ts_256-87e053f9.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'halonet50ts': _cfg(
-        url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_256_ra3-f07eab9f.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'eca_halonext26ts': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_256-1e55880b.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
 
     'lambda_resnet26t': _cfg(
         url='',
