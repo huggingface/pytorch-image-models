@@ -105,7 +105,8 @@ default_cfgs = {
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic'),
 
     'resnetv2_50': _cfg(
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_50_a1_h-000cdf49.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnetv2_50d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50t': _cfg(
