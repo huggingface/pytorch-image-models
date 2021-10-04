@@ -3,8 +3,11 @@
 Prefetcher and Fast Collate inspired by NVIDIA APEX example at
 https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#diff-cf86c282ff7fba81fad27a559379d5bf
 
-Hacked together by / Copyright 2020 Ross Wightman
+Hacked together by / Copyright 2021 Ross Wightman
 """
+import random
+from functools import partial
+from typing import Callable
 
 import torch.utils.data
 import numpy as np
@@ -125,6 +128,22 @@ class PrefetchLoader:
             self.loader.collate_fn.mixup_enabled = x
 
 
+def _worker_init(worker_id, worker_seeding='all'):
+    worker_info = torch.utils.data.get_worker_info()
+    assert worker_info.id == worker_id
+    if isinstance(worker_seeding, Callable):
+        seed = worker_seeding(worker_info)
+        random.seed(seed)
+        torch.manual_seed(seed)
+        np.random.seed(seed % (2 ** 32 - 1))
+    else:
+        assert worker_seeding in ('all', 'part')
+        # random / torch seed already called in dataloader iter class w/ worker_info.seed
+        # to reproduce some old results (same seed + hparam combo), partial seeding is required (skip numpy re-seed)
+        if worker_seeding == 'all':
+            np.random.seed(worker_info.seed % (2 ** 32 - 1))
+
+
 def create_loader(
         dataset,
         input_size,
@@ -156,6 +175,7 @@ def create_loader(
         tf_preprocessing=False,
         use_multi_epochs_loader=False,
         persistent_workers=True,
+        worker_seeding='all',
 ):
     re_num_splits = 0
     if re_split:
@@ -202,7 +222,6 @@ def create_loader(
         collate_fn = fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate
 
     loader_class = torch.utils.data.DataLoader
-
     if use_multi_epochs_loader:
         loader_class = MultiEpochsDataLoader
 
@@ -214,7 +233,9 @@ def create_loader(
         collate_fn=collate_fn,
         pin_memory=pin_memory,
         drop_last=is_training,
-        persistent_workers=persistent_workers)
+        worker_init_fn=partial(_worker_init, worker_seeding=worker_seeding),
+        persistent_workers=persistent_workers
+    )
     try:
         loader = loader_class(dataset, **loader_args)
     except TypeError as e:

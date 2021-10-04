@@ -3,7 +3,7 @@
 A flexible network w/ dataclass based config for stacking NN blocks including
 self-attention (or similar) layers.
 
-Currently used to implement experimential variants of:
+Currently used to implement experimental variants of:
   * Bottleneck Transformers
   * Lambda ResNets
   * HaloNets
@@ -23,7 +23,7 @@ __all__ = []
 def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'crop_pct': 0.95, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
         'fixed_input_size': False, 'min_input_size': (3, 224, 224),
@@ -34,7 +34,7 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     # GPU-Efficient (ResNet) weights
     'botnet26t_256': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_c1_256-167a0e9f.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'botnet50ts_256': _cfg(
         url='',
@@ -46,19 +46,26 @@ default_cfgs = {
     'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet26t': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_256-9b4bf0b3.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'sehalonet33ts': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sehalonet33ts_256-87e053f9.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'halonet50ts': _cfg(
-        url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_256_ra3-f07eab9f.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'eca_halonext26ts': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_256-1e55880b.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
 
     'lambda_resnet26t': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_256-b040fce6.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_a2h_256-25ded63d.pth',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
+    'lambda_resnet50ts': _cfg(
+        url='',
+        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
+    'lambda_resnet26rpt_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26rpt_a2h_256-482adad8.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 
@@ -198,6 +205,33 @@ model_cfgs = dict(
         self_attn_layer='lambda',
         self_attn_kwargs=dict(r=9)
     ),
+    lambda_resnet50ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), every=4, d=4, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=3, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        act_layer='silu',
+        self_attn_layer='lambda',
+        self_attn_kwargs=dict(r=9)
+    ),
+    lambda_resnet26rpt_256=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=256, s=1, gs=0, br=0.25),
+            ByoBlockCfg(type='bottle', d=2, c=512, s=2, gs=0, br=0.25),
+            interleave_blocks(types=('bottle', 'self_attn'), d=2, c=1024, s=2, gs=0, br=0.25),
+            ByoBlockCfg(type='self_attn', d=2, c=2048, s=2, gs=0, br=0.25),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='maxpool',
+        self_attn_layer='lambda',
+        self_attn_kwargs=dict(r=None)
+    ),
 )
 
 
@@ -275,6 +309,21 @@ def eca_halonext26ts(pretrained=False, **kwargs):
 
 @register_model
 def lambda_resnet26t(pretrained=False, **kwargs):
-    """ Lambda-ResNet-26T. Lambda layers in last two stages.
+    """ Lambda-ResNet-26-T. Lambda layers w/ conv pos in last two stages.
     """
     return _create_byoanet('lambda_resnet26t', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def lambda_resnet50ts(pretrained=False, **kwargs):
+    """ Lambda-ResNet-50-TS. SiLU act. Lambda layers w/ conv pos in last two stages.
+    """
+    return _create_byoanet('lambda_resnet50ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def lambda_resnet26rpt_256(pretrained=False, **kwargs):
+    """ Lambda-ResNet-26-R-T. Lambda layers w/ rel pos embed in last two stages.
+    """
+    kwargs.setdefault('img_size', 256)
+    return _create_byoanet('lambda_resnet26rpt_256', pretrained=pretrained, **kwargs)

@@ -105,7 +105,8 @@ default_cfgs = {
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic'),
 
     'resnetv2_50': _cfg(
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_50_a1_h-000cdf49.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnetv2_50d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50t': _cfg(
@@ -344,7 +345,7 @@ class ResNetV2(nn.Module):
             num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
             width_factor=1, stem_chs=64, stem_type='', avg_down=False, preact=True,
             act_layer=nn.ReLU, conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32),
-            drop_rate=0., drop_path_rate=0., zero_init_last=True):
+            drop_rate=0., drop_path_rate=0., zero_init_last=False):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
