@@ -23,7 +23,7 @@ __all__ = []
 def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'crop_pct': 0.95, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
         'fixed_input_size': False, 'min_input_size': (3, 224, 224),
@@ -35,7 +35,7 @@ default_cfgs = {
     # GPU-Efficient (ResNet) weights
     'botnet26t_256': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_c1_256-167a0e9f.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95),
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'botnet50ts_256': _cfg(
         url='',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
@@ -59,7 +59,7 @@ default_cfgs = {
 
     'lambda_resnet26t': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_a2h_256-25ded63d.pth',
-        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95),
+        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
     'lambda_resnet50ts': _cfg(
         url='',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
