@@ -23,6 +23,11 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### Oct 3, 2021
+* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used.
+* Attention model experiments are in as well (across byobnet.py/byoanet.py), along with weights. Details forthcoming.
+* A lot more to add here...
+
 ### Aug 18, 2021
 * Optimizer bonanza!
   * Add LAMB and LARS optimizers, incl trust ratio clipping options. Tweaked to work properly in PyTorch XLA (tested on TPUs w/ `timm bits` [branch](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/timm/bits))
