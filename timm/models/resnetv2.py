@@ -471,7 +471,7 @@ def _create_resnetv2(variant, pretrained=False, **kwargs):
         ResNetV2, variant, pretrained,
         default_cfg=default_cfgs[variant],
         feature_cfg=feature_cfg,
-        pretrained_custom_load=True,
+        pretrained_custom_load='_bit' in variant,
         **kwargs)
 
 
