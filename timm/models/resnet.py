@@ -54,10 +54,10 @@ default_cfgs = {
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8)),
     'resnet50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1_0-14fe96d1.pth',
-        interpolation='bicubic'),
+        interpolation='bicubic', crop_pct=0.95),
     'resnet50d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
-        interpolation='bicubic', first_conv='conv1.0', crop_pct=0.95),
+        interpolation='bicubic', first_conv='conv1.0'),
     'resnet50t': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
