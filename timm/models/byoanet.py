@@ -66,6 +66,13 @@ default_cfgs = {
     'lambda_resnet26rpt_256': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26rpt_a2h_256-482adad8.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+
+    'haloregnetz_b': _cfg(
+        url='',
+        input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
+    'trionet50ts_256': _cfg(
+        url='',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
 
@@ -232,6 +239,46 @@ model_cfgs = dict(
         self_attn_layer='lambda',
         self_attn_kwargs=dict(r=None)
     ),
+
+    # experimental
+    haloregnetz_b=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=48, s=2, gs=16, br=3),
+            ByoBlockCfg(type='bottle', d=6, c=96, s=2, gs=16, br=3),
+            interleave_blocks(types=('bottle', 'self_attn'), every=3, d=12, c=192, s=2, gs=16, br=3),
+            ByoBlockCfg('self_attn', d=2, c=288, s=2, gs=16, br=3),
+        ),
+        stem_chs=32,
+        stem_pool='',
+        downsample='',
+        num_features=1536,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+        self_attn_layer='halo',
+        self_attn_kwargs=dict(block_size=7, halo_size=2, qk_ratio=0.33)
+    ),
+
+    # experimental
+    trionet50ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), d=4, c=512, s=2, gs=0, br=0.25,
+                self_attn_layer='lambda', self_attn_kwargs=dict(r=13)),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25,
+                self_attn_layer='halo', self_attn_kwargs=dict(halo_size=3)),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), d=3, c=2048, s=2, gs=0, br=0.25,
+                self_attn_layer='bottleneck', self_attn_kwargs=dict()),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        act_layer='silu',
+    ),
 )
 
 
@@ -327,3 +374,17 @@ def lambda_resnet26rpt_256(pretrained=False, **kwargs):
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('lambda_resnet26rpt_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def haloregnetz_b(pretrained=False, **kwargs):
+    """ Halo + RegNetZ
+    """
+    return _create_byoanet('haloregnetz_b', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def trionet50ts_256(pretrained=False, **kwargs):
+    """ HaloNet w/ a ResNet50-t backbone, silu act. Halo attention in final two stages
+    """
+    return _create_byoanet('trionet50ts_256', 'trionet50ts', pretrained=pretrained, **kwargs)
