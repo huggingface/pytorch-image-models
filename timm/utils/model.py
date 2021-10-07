@@ -194,7 +194,7 @@ def _freeze_unfreeze(root_module, submodules=[], include_bn_running_stats=True, 
     for n, m in zip(named_modules, submodules):
         # (Un)freeze parameters
         for p in m.parameters():
-            p.requires_grad = (False if mode == 'freeze' else True)
+            p.requires_grad = False if mode == 'freeze' else True
         if include_bn_running_stats:
             # Helper to add submodule specified as a named_module
             def _add_submodule(module, name, submodule):
