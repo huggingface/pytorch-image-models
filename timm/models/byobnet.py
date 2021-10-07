@@ -137,12 +137,12 @@ default_cfgs = {
 
     # experimental models, likely to change ot be removed
     'regnetz_b': _cfgr(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_b_raa-677d9606.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 224, 224), pool_size=(7, 7), first_conv='stem.conv'),
+        input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv', crop_pct=0.95),
     'regnetz_c': _cfgr(
-        url='',
-        imean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), first_conv='stem.conv'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_c_rab_256-6bdb3c01.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), first_conv='stem.conv', crop_pct=0.95),
     'regnetz_d': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),

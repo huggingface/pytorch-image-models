@@ -69,7 +69,7 @@ default_cfgs = {
 
     'haloregnetz_b': _cfg(
         url='',
-        input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
+        first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
     'trionet50ts_256': _cfg(
         url='',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
