@@ -4,6 +4,7 @@ from .byobnet import *
 from .cait import *
 from .coat import *
 from .convit import *
+from .convmixer import *
 from .crossvit import *
 from .cspnet import *
 from .densenet import *
