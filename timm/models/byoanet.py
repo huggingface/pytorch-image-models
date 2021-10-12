@@ -294,7 +294,6 @@ def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
 @register_model
 def botnet26t_256(pretrained=False, **kwargs):
     """ Bottleneck Transformer w/ ResNet26-T backbone.
-    NOTE: this isn't performing well, may remove
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('botnet26t_256', 'botnet26t', pretrained=pretrained, **kwargs)
@@ -303,7 +302,6 @@ def botnet26t_256(pretrained=False, **kwargs):
 @register_model
 def botnet50ts_256(pretrained=False, **kwargs):
     """ Bottleneck Transformer w/ ResNet50-T backbone, silu act.
-    NOTE: this isn't performing well, may remove
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('botnet50ts_256', 'botnet50ts', pretrained=pretrained, **kwargs)
@@ -312,7 +310,6 @@ def botnet50ts_256(pretrained=False, **kwargs):
 @register_model
 def eca_botnext26ts_256(pretrained=False, **kwargs):
     """ Bottleneck Transformer w/ ResNet26-T backbone, silu act.
-    NOTE: this isn't performing well, may remove
     """
     kwargs.setdefault('img_size', 256)
     return _create_byoanet('eca_botnext26ts_256', 'eca_botnext26ts', pretrained=pretrained, **kwargs)
@@ -385,6 +382,6 @@ def haloregnetz_b(pretrained=False, **kwargs):
 
 @register_model
 def trionet50ts_256(pretrained=False, **kwargs):
-    """ HaloNet w/ a ResNet50-t backbone, silu act. Halo attention in final two stages
+    """ TrioNet
     """
     return _create_byoanet('trionet50ts_256', 'trionet50ts', pretrained=pretrained, **kwargs)
