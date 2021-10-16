@@ -19,7 +19,7 @@ In addition to the sponsors at the link above, I've received hardware and/or clo
 * Nvidia (https://www.nvidia.com/en-us/)
 * TFRC (https://www.tensorflow.org/tfrc)
 
-I'm fortunate to be able to dedicate significant time and money of my own supporting this and other open source projects. However, as the projects increase in scope, outside support is needed to continue with the current trajectory of hardware, infrastructure, and electricty costs.
+I'm fortunate to be able to dedicate significant time and money of my own supporting this and other open source projects. However, as the projects increase in scope, outside support is needed to continue with the current trajectory of hardware, infrastructure, and electricity costs.
 
 ## What's New
 
