@@ -19,14 +19,21 @@ In addition to the sponsors at the link above, I've received hardware and/or clo
 * Nvidia (https://www.nvidia.com/en-us/)
 * TFRC (https://www.tensorflow.org/tfrc)
 
-I'm fortunate to be able to dedicate significant time and money of my own supporting this and other open source projects. However, as the projects increase in scope, outside support is needed to continue with the current trajectory of hardware, infrastructure, and electricty costs.
+I'm fortunate to be able to dedicate significant time and money of my own supporting this and other open source projects. However, as the projects increase in scope, outside support is needed to continue with the current trajectory of cloud services, hardware, and electricity costs.
 
 ## What's New
 
-### Oct 3, 2021
-* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used.
-* Attention model experiments are in as well (across byobnet.py/byoanet.py), along with weights. Details forthcoming.
-* A lot more to add here...
+### Oct 19, 2021
+* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used. Model weights and some more details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-rsb-weights)
+* BCE loss and Repeated Augmentation support for RSB paper
+* 4 series of ResNet based attention model experiments being added (implemented across byobnet.py/byoanet.py). These include all sorts of attention, from channel attn like SE, ECA to 2D QKV self-attention layers such as Halo, Bottlneck, Lambda. Details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
+* Working implementations of the following 2D self-attention modules (likely to be differences from paper or eventual official impl):
+  * Halo (https://arxiv.org/abs/2103.12731)
+  * Bottleneck Transformer (https://arxiv.org/abs/2101.11605)
+  * LambdaNetworks (https://arxiv.org/abs/2102.08602)
+* A RegNetZ series of models with some attention experiments (being added to). These do not follow the paper (https://arxiv.org/abs/2103.06877) in any way other than block architecture, details of official models are not available. See more here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
+* ConvMixer (https://openreview.net/forum?id=TVHS5Y4dNvM), CrossVit (https://arxiv.org/abs/2103.14899), and BeiT (https://arxiv.org/abs/2106.08254) architectures + weights added
+* freeze/unfreeze helpers by [Alexander Soare](https://github.com/alexander-soare)
 
 ### Aug 18, 2021
 * Optimizer bonanza!
