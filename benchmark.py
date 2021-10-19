@@ -18,6 +18,11 @@ from collections import OrderedDict
 from contextlib import suppress
 from functools import partial
 
+try:
+    from deepspeed.profiling.flops_profiler import get_model_profile
+except ImportError as e:
+    get_model_profile = None
+
 from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
 from timm.data import resolve_data_config
@@ -67,6 +72,8 @@ parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
 parser.add_argument('--input-size', default=None, nargs=3, type=int,
                     metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
+parser.add_argument('--use-train-size', action='store_true', default=False,
+                    help='Run inference at train size, not test-input-size if it exists.')
 parser.add_argument('--num-classes', type=int, default=None,
                     help='Number classes in dataset')
 parser.add_argument('--gp', default=None, type=str, metavar='POOL',
@@ -79,6 +86,7 @@ parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
+
 
 
 # train optimizer parameters
@@ -139,10 +147,25 @@ def resolve_precision(precision: str):
     return use_amp, model_dtype, data_dtype
 
 
+def profile(model, input_size=(3, 224, 224)):
+    batch_size = 1
+    macs, params = get_model_profile(
+        model=model,
+        input_res=(batch_size,) + input_size,  # input shape or input to the input_constructor
+        input_constructor=None,  # if specified, a constructor taking input_res is used as input to the model
+        print_profile=False,  # prints the model graph with the measured profile attached to each module
+        detailed=False,  # print the detailed profile
+        warm_up=10,  # the number of warm-ups before measuring the time of each module
+        as_string=False,  # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
+        output_file=None,  # path to the output file. If None, the profiler prints to stdout.
+        ignore_modules=None)  # the list of modules to ignore in the profiling
+    return macs
+
+
 class BenchmarkRunner:
     def __init__(
             self, model_name, detail=False, device='cuda', torchscript=False, precision='float32',
-            num_warm_iter=10, num_bench_iter=50, **kwargs):
+            num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
         self.model_name = model_name
         self.detail = detail
         self.device = device
@@ -166,7 +189,7 @@ class BenchmarkRunner:
         if torchscript:
             self.model = torch.jit.script(self.model)
 
-        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=True)
+        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
 
@@ -233,6 +256,10 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
         )
+
+        if get_model_profile is not None:
+            macs = profile(self.model, self.input_size)
+            results['GMACs'] = round(macs / 1e9, 2)
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "
