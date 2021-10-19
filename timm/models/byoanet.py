@@ -68,7 +68,8 @@ default_cfgs = {
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
 
     'haloregnetz_b': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/haloregnetz_c_raa_256-c8ad7616.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
     'trionet50ts_256': _cfg(
         url='',
