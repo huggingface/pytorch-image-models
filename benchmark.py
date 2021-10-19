@@ -147,19 +147,19 @@ def resolve_precision(precision: str):
     return use_amp, model_dtype, data_dtype
 
 
-def profile(model, input_size=(3, 224, 224)):
+def profile(model, input_size=(3, 224, 224), detailed=False):
     batch_size = 1
     macs, params = get_model_profile(
         model=model,
         input_res=(batch_size,) + input_size,  # input shape or input to the input_constructor
         input_constructor=None,  # if specified, a constructor taking input_res is used as input to the model
-        print_profile=False,  # prints the model graph with the measured profile attached to each module
-        detailed=False,  # print the detailed profile
+        print_profile=detailed,  # prints the model graph with the measured profile attached to each module
+        detailed=detailed,  # print the detailed profile
         warm_up=10,  # the number of warm-ups before measuring the time of each module
         as_string=False,  # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
         output_file=None,  # path to the output file. If None, the profiler prints to stdout.
         ignore_modules=None)  # the list of modules to ignore in the profiling
-    return macs
+    return macs, params
 
 
 class BenchmarkRunner:
@@ -258,8 +258,8 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
         )
 
         if get_model_profile is not None:
-            macs = profile(self.model, self.input_size)
-            results['GMACs'] = round(macs / 1e9, 2)
+            macs, _ = profile(self.model, self.input_size)
+            results['gmacs'] = round(macs / 1e9, 2)
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "
@@ -388,6 +388,32 @@ class TrainBenchmarkRunner(BenchmarkRunner):
         return results
 
 
+class ProfileRunner(BenchmarkRunner):
+
+    def __init__(self, model_name, device='cuda', **kwargs):
+        super().__init__(model_name=model_name, device=device, **kwargs)
+        self.model.eval()
+
+    def run(self):
+        _logger.info(
+            f'Running profiler on {self.model_name} w/ '
+            f'input size {self.input_size} and batch size 1.')
+
+        macs, params = profile(self.model, self.input_size, detailed=True)
+
+        results = dict(
+            gmacs=round(macs / 1e9, 2),
+            img_size=self.input_size[-1],
+            param_count=round(params / 1e6, 2),
+        )
+
+        _logger.info(
+            f"Profile of {self.model_name} done. "
+            f"{results['gmacs']:.2f} GMACs, {results['param_count']:.2f} M params.")
+
+        return results
+
+
 def decay_batch_exp(batch_size, factor=0.5, divisor=16):
     out_batch_size = batch_size * factor
     if out_batch_size > divisor:
@@ -436,6 +462,9 @@ def benchmark(args):
     elif args.bench == 'train':
         bench_fns = TrainBenchmarkRunner,
         prefixes = 'train',
+    elif args.bench == 'profile':
+        assert get_model_profile is not None, "deepspeed needs to be installed for profile"
+        bench_fns = ProfileRunner,
 
     model_results = OrderedDict(model=model)
     for prefix, bench_fn in zip(prefixes, bench_fns):
@@ -483,7 +512,11 @@ def main():
                 results.append(r)
         except KeyboardInterrupt as e:
             pass
-        sort_key = 'train_samples_per_sec' if 'train' in args.bench else 'infer_samples_per_sec'
+        sort_key = 'infer_samples_per_sec'
+        if 'train' in args.bench:
+            sort_key = 'train_samples_per_sec'
+        elif 'profile' in args.bench:
+            sort_key = 'infer_gmacs'
         results = sorted(results, key=lambda x: x[sort_key], reverse=True)
         if len(results):
             write_results(results_file, results)
