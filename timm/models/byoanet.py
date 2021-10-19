@@ -40,7 +40,7 @@ default_cfgs = {
         url='',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'eca_botnext26ts_256': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_botnext26ts_c_256-95a898f6.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 
     'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
@@ -122,7 +122,7 @@ model_cfgs = dict(
         act_layer='silu',
         attn_layer='eca',
         self_attn_layer='bottleneck',
-        self_attn_kwargs=dict()
+        self_attn_kwargs=dict(dim_head=16)
     ),
 
     halonet_h1=ByoModelCfg(
