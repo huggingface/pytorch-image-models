@@ -38,6 +38,20 @@ try:
 except AttributeError:
     pass
 
+try:
+    from deepspeed.profiling.flops_profiler import get_model_profile
+    has_deepspeed_profiling = True
+except ImportError as e:
+    has_deepspeed_profiling = False
+
+try:
+    from fvcore.nn import FlopCountAnalysis, flop_count_str
+    has_fvcore_profiling = True
+except ImportError as e:
+    FlopCountAnalysis = None
+    has_fvcore_profiling = False
+
+
 torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('validate')
 
@@ -67,6 +81,8 @@ parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
 parser.add_argument('--input-size', default=None, nargs=3, type=int,
                     metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
+parser.add_argument('--use-train-size', action='store_true', default=False,
+                    help='Run inference at train size, not test-input-size if it exists.')
 parser.add_argument('--num-classes', type=int, default=None,
                     help='Number classes in dataset')
 parser.add_argument('--gp', default=None, type=str, metavar='POOL',
@@ -79,6 +95,7 @@ parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
+
 
 
 # train optimizer parameters
@@ -139,10 +156,33 @@ def resolve_precision(precision: str):
     return use_amp, model_dtype, data_dtype
 
 
+def profile_deepspeed(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
+    macs, _ = get_model_profile(
+        model=model,
+        input_res=(batch_size,) + input_size,  # input shape or input to the input_constructor
+        input_constructor=None,  # if specified, a constructor taking input_res is used as input to the model
+        print_profile=detailed,  # prints the model graph with the measured profile attached to each module
+        detailed=detailed,  # print the detailed profile
+        warm_up=10,  # the number of warm-ups before measuring the time of each module
+        as_string=False,  # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
+        output_file=None,  # path to the output file. If None, the profiler prints to stdout.
+        ignore_modules=None)  # the list of modules to ignore in the profiling
+    return macs
+
+
+def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
+    device, dtype = next(model.parameters()).device, next(model.parameters()).dtype
+    fca = FlopCountAnalysis(model, torch.ones((batch_size,) + input_size, device=device, dtype=dtype))
+    if detailed:
+        fcs = flop_count_str(fca)
+        print(fcs)
+    return fca.total()
+
+
 class BenchmarkRunner:
     def __init__(
             self, model_name, detail=False, device='cuda', torchscript=False, precision='float32',
-            num_warm_iter=10, num_bench_iter=50, **kwargs):
+            num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
         self.model_name = model_name
         self.detail = detail
         self.device = device
@@ -166,7 +206,7 @@ class BenchmarkRunner:
         if torchscript:
             self.model = torch.jit.script(self.model)
 
-        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=True)
+        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
 
@@ -233,6 +273,13 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
         )
+
+        if has_deepspeed_profiling:
+            macs = profile_deepspeed(self.model, self.input_size)
+            results['gmacs'] = round(macs / 1e9, 2)
+        elif has_fvcore_profiling:
+            macs = profile_fvcore(self.model, self.input_size)
+            results['gmacs'] = round(macs / 1e9, 2)
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "
@@ -361,6 +408,44 @@ class TrainBenchmarkRunner(BenchmarkRunner):
         return results
 
 
+class ProfileRunner(BenchmarkRunner):
+
+    def __init__(self, model_name, device='cuda', profiler='', **kwargs):
+        super().__init__(model_name=model_name, device=device, **kwargs)
+        if not profiler:
+            if has_deepspeed_profiling:
+                profiler = 'deepspeed'
+            elif has_fvcore_profiling:
+                profiler = 'fvcore'
+        assert profiler, "One of deepspeed or fvcore needs to be installed for profiling to work."
+        self.profiler = profiler
+        self.model.eval()
+
+    def run(self):
+        _logger.info(
+            f'Running profiler on {self.model_name} w/ '
+            f'input size {self.input_size} and batch size {self.batch_size}.')
+
+        macs = 0
+        if self.profiler == 'deepspeed':
+            macs = profile_deepspeed(self.model, self.input_size, batch_size=self.batch_size, detailed=True)
+        elif self.profiler == 'fvcore':
+            macs = profile_fvcore(self.model, self.input_size, batch_size=self.batch_size, detailed=True)
+
+        results = dict(
+            gmacs=round(macs / 1e9, 2),
+            batch_size=self.batch_size,
+            img_size=self.input_size[-1],
+            param_count=round(self.param_count / 1e6, 2),
+        )
+
+        _logger.info(
+            f"Profile of {self.model_name} done. "
+            f"{results['gmacs']:.2f} GMACs, {results['param_count']:.2f} M params.")
+
+        return results
+
+
 def decay_batch_exp(batch_size, factor=0.5, divisor=16):
     out_batch_size = batch_size * factor
     if out_batch_size > divisor:
@@ -409,6 +494,16 @@ def benchmark(args):
     elif args.bench == 'train':
         bench_fns = TrainBenchmarkRunner,
         prefixes = 'train',
+    elif args.bench.startswith('profile'):
+        # specific profiler used if included in bench mode string, otherwise default to deepspeed, fallback to fvcore
+        if 'deepspeed' in args.bench:
+            assert has_deepspeed_profiling, "deepspeed must be installed to use deepspeed flop counter"
+            bench_kwargs['profiler'] = 'deepspeed'
+        elif 'fvcore' in args.bench:
+            assert has_fvcore_profiling, "fvcore must be installed to use fvcore flop counter"
+            bench_kwargs['profiler'] = 'fvcore'
+        bench_fns = ProfileRunner,
+        batch_size = 1
 
     model_results = OrderedDict(model=model)
     for prefix, bench_fn in zip(prefixes, bench_fns):
@@ -456,16 +551,18 @@ def main():
                 results.append(r)
         except KeyboardInterrupt as e:
             pass
-        sort_key = 'train_samples_per_sec' if 'train' in args.bench else 'infer_samples_per_sec'
+        sort_key = 'infer_samples_per_sec'
+        if 'train' in args.bench:
+            sort_key = 'train_samples_per_sec'
+        elif 'profile' in args.bench:
+            sort_key = 'infer_gmacs'
         results = sorted(results, key=lambda x: x[sort_key], reverse=True)
         if len(results):
             write_results(results_file, results)
-
-        import json
-        json_str = json.dumps(results, indent=4)
-        print(json_str)
     else:
-        benchmark(args)
+        results = benchmark(args)
+    json_str = json.dumps(results, indent=4)
+    print(json_str)
 
 
 def write_results(results_file, results):

@@ -137,15 +137,15 @@ default_cfgs = {
 
     # experimental models, likely to change ot be removed
     'regnetz_b': _cfgr(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_b_raa-677d9606.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 224, 224), pool_size=(7, 7), first_conv='stem.conv'),
+        input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv', crop_pct=0.94),
     'regnetz_c': _cfgr(
-        url='',
-        imean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), first_conv='stem.conv'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_c_rab2_256-a54bf36a.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), first_conv='stem.conv', crop_pct=0.94),
     'regnetz_d': _cfgr(
-        url='',
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_d_rab_256-b8073a89.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
 }
 
 
@@ -1096,18 +1096,16 @@ class SelfAttnBlock(nn.Module):
             self.self_attn.reset_parameters()
 
     def forward(self, x):
-        shortcut = self.shortcut(x)
-
+        shortcut = x
         x = self.conv1_1x1(x)
         x = self.conv2_kxk(x)
         x = self.self_attn(x)
         x = self.post_attn(x)
         x = self.conv3_1x1(x)
         x = self.drop_path(x)
-
-        x = self.act(x + shortcut)
-        return x
-
+        if self.shortcut is not None:
+            x = x + self.shortcut(shortcut)
+        return self.act(x)
 
 _block_registry = dict(
     basic=BasicBlock,

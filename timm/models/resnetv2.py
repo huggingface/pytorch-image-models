@@ -105,13 +105,15 @@ default_cfgs = {
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic'),
 
     'resnetv2_50': _cfg(
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_50_a1h-000cdf49.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnetv2_50d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50t': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_101': _cfg(
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_101_a1h-5d01f016.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnetv2_101d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_152': _cfg(
@@ -470,7 +472,7 @@ def _create_resnetv2(variant, pretrained=False, **kwargs):
         ResNetV2, variant, pretrained,
         default_cfg=default_cfgs[variant],
         feature_cfg=feature_cfg,
-        pretrained_custom_load=True,
+        pretrained_custom_load='_bit' in variant,
         **kwargs)
 
 
