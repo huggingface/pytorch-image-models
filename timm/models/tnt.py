@@ -61,7 +61,7 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         qk = self.qk(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-        q, k = qk[0], qk[1]   # make torchscript happy (cannot use tensor as tuple)
+        q, k = qk.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
         v = self.v(x).reshape(B, N, self.num_heads, -1).permute(0, 2, 1, 3)
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
