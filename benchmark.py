@@ -45,7 +45,7 @@ except ImportError as e:
     has_deepspeed_profiling = False
 
 try:
-    from fvcore.nn import FlopCountAnalysis, flop_count_str
+    from fvcore.nn import FlopCountAnalysis, flop_count_str, ActivationCountAnalysis
     has_fvcore_profiling = True
 except ImportError as e:
     FlopCountAnalysis = None
@@ -167,16 +167,18 @@ def profile_deepspeed(model, input_size=(3, 224, 224), batch_size=1, detailed=Fa
         as_string=False,  # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
         output_file=None,  # path to the output file. If None, the profiler prints to stdout.
         ignore_modules=None)  # the list of modules to ignore in the profiling
-    return macs
+    return macs, 0  # no activation count in DS
 
 
 def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
     device, dtype = next(model.parameters()).device, next(model.parameters()).dtype
-    fca = FlopCountAnalysis(model, torch.ones((batch_size,) + input_size, device=device, dtype=dtype))
+    example_input = torch.ones((batch_size,) + input_size, device=device, dtype=dtype)
+    fca = FlopCountAnalysis(model, example_input)
+    aca = ActivationCountAnalysis(model, example_input)
     if detailed:
         fcs = flop_count_str(fca)
         print(fcs)
-    return fca.total()
+    return fca.total(), aca.total()
 
 
 class BenchmarkRunner:
@@ -275,11 +277,12 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
         )
 
         if has_deepspeed_profiling:
-            macs = profile_deepspeed(self.model, self.input_size)
+            macs, _ = profile_deepspeed(self.model, self.input_size)
             results['gmacs'] = round(macs / 1e9, 2)
         elif has_fvcore_profiling:
-            macs = profile_fvcore(self.model, self.input_size)
+            macs, activations = profile_fvcore(self.model, self.input_size)
             results['gmacs'] = round(macs / 1e9, 2)
+            results['macts'] = round(activations / 1e6, 2)
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "
@@ -427,13 +430,15 @@ class ProfileRunner(BenchmarkRunner):
             f'input size {self.input_size} and batch size {self.batch_size}.')
 
         macs = 0
+        activations = 0
         if self.profiler == 'deepspeed':
-            macs = profile_deepspeed(self.model, self.input_size, batch_size=self.batch_size, detailed=True)
+            macs, _ = profile_deepspeed(self.model, self.input_size, batch_size=self.batch_size, detailed=True)
         elif self.profiler == 'fvcore':
-            macs = profile_fvcore(self.model, self.input_size, batch_size=self.batch_size, detailed=True)
+            macs, activations = profile_fvcore(self.model, self.input_size, batch_size=self.batch_size, detailed=True)
 
         results = dict(
             gmacs=round(macs / 1e9, 2),
+            macts=round(activations / 1e6, 2),
             batch_size=self.batch_size,
             img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
