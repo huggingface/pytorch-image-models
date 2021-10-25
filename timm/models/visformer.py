@@ -45,6 +45,8 @@ class SpatialMlp(nn.Module):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
+        drop_probs = to_2tuple(drop)
+
         self.in_features = in_features
         self.out_features = out_features
         self.spatial_conv = spatial_conv
@@ -55,9 +57,9 @@ class SpatialMlp(nn.Module):
                 hidden_features = in_features * 2
         self.hidden_features = hidden_features
         self.group = group
-        self.drop = nn.Dropout(drop)
         self.conv1 = nn.Conv2d(in_features, hidden_features, 1, stride=1, padding=0, bias=False)
         self.act1 = act_layer()
+        self.drop1 = nn.Dropout(drop_probs[0])
         if self.spatial_conv:
             self.conv2 = nn.Conv2d(
                 hidden_features, hidden_features, 3, stride=1, padding=1, groups=self.group, bias=False)
@@ -66,16 +68,17 @@ class SpatialMlp(nn.Module):
             self.conv2 = None
             self.act2 = None
         self.conv3 = nn.Conv2d(hidden_features, out_features, 1, stride=1, padding=0, bias=False)
+        self.drop3 = nn.Dropout(drop_probs[1])
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.act1(x)
-        x = self.drop(x)
+        x = self.drop1(x)
         if self.conv2 is not None:
             x = self.conv2(x)
             x = self.act2(x)
         x = self.conv3(x)
-        x = self.drop(x)
+        x = self.drop3(x)
         return x
 
 
