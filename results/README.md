@@ -1,6 +1,6 @@
-# Validation Results
+# Validation and Benchmark Results
 
-This folder contains validation results for the models in this collection having pretrained weights. Since the focus for this repository is currently ImageNet-1k classification, all of the results are based on datasets compatible with ImageNet-1k classes.
+This folder contains validation and benchmark results for the models in this collection. Validation scores are currently only run for models with pretrained weights and ImageNet-1k heads, benchmark numbers are run for all.
 
 ## Datasets
 
@@ -45,7 +45,6 @@ For clean validation with same 200 classes, see [`results-imagenet-a-clean.csv`]
 * Source: https://github.com/hendrycks/natural-adv-examples
 * Paper: "Natural Adversarial Examples" - https://arxiv.org/abs/1907.07174
 
-
 ### ImageNet-Rendition - [`results-imagenet-r.csv`](results-imagenet-r.csv)
 
 Renditions of 200 ImageNet classes resulting in 30,000 images for testing robustness.
@@ -55,5 +54,14 @@ For clean validation with same 200 classes, see [`results-imagenet-r-clean.csv`]
 * Source: https://github.com/hendrycks/imagenet-r
 * Paper: "The Many Faces of Robustness" - https://arxiv.org/abs/2006.16241
 
-## TODO
+### TODO
 * Explore adding a reduced version of ImageNet-C (Corruptions) and ImageNet-P (Perturbations) from https://github.com/hendrycks/robustness. The originals are huge and image size specific.
+
+
+## Benchmark
+
+CSV files with a `model_benchmark` prefix include benchmark numbers for models on various accelerators with different precision. Currently only run on RTX 3090 w/ AMP for inference, I intend to add more in the future.
+
+## Metadata
+
+CSV files with `model_metadata` prefix contain extra information about the source training, currently the pretraining dataset and technique (ie distillation, SSL, WSL, etc). Eventually I'd like to have metadata about augmentation, regularization, etc. but that will be a challenge to source consistently. 
