@@ -267,7 +267,7 @@ class XCA(nn.Module):
         B, N, C = x.shape
         # Result of next line is (qkv, B, num (H)eads,  (C')hannels per head, N)
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 4, 1)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
         
         # Paper section 3.2 l2-Normalization and temperature scaling
         q = torch.nn.functional.normalize(q, dim=-1)

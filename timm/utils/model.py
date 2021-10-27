@@ -30,13 +30,13 @@ def avg_sq_ch_mean(model, input, output):
 
 
 def avg_ch_var(model, input, output):
-    """calculate average channel variance of output activations
+    """ calculate average channel variance of output activations
     """
     return torch.mean(output.var(axis=[0, 2, 3])).item()
 
 
 def avg_ch_var_residual(model, input, output):
-    """calculate average channel variance of output activations
+    """ calculate average channel variance of output activations
     """
     return torch.mean(output.var(axis=[0, 2, 3])).item()
 
@@ -193,7 +193,7 @@ def _freeze_unfreeze(root_module, submodules=[], include_bn_running_stats=True, 
     named_modules = submodules
     submodules = [root_module.get_submodule(m) for m in submodules]
 
-    if not (len(submodules)):
+    if not len(submodules):
         named_modules, submodules = list(zip(*root_module.named_children()))
 
     for n, m in zip(named_modules, submodules):

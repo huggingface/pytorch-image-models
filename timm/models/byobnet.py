@@ -146,6 +146,12 @@ default_cfgs = {
     'regnetz_d': _cfgr(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_d_rab_256-b8073a89.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
+    'regnetz_d8': _cfgr(
+        url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
+    'regnetz_e8': _cfgr(
+        url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
 }
 
 
@@ -549,6 +555,40 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
+    regnetz_d8=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=64, s=1, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=6, c=128, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=12, c=256, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=3, c=384, s=2, gs=8, br=4),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        downsample='',
+        num_features=1792,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
+    regnetz_e8=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=96, s=1, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=8, c=192, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=16, c=384, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=8, br=4),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        downsample='',
+        num_features=2048,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
 )
 
 
@@ -757,6 +797,20 @@ def regnetz_d(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('regnetz_d', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_d8(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_d8', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_e8(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_e8', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
