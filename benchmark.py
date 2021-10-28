@@ -279,18 +279,8 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
         )
-<<<<<<< Updated upstream
-        if not self.scripted:
-            if has_deepspeed_profiling:
-                macs, _ = profile_deepspeed(self.model, self.input_size)
-                results['gmacs'] = round(macs / 1e9, 2)
-            elif has_fvcore_profiling:
-                macs, activations = profile_fvcore(self.model, self.input_size)
-                results['gmacs'] = round(macs / 1e9, 2)
-                results['macts'] = round(activations / 1e6, 2)
-=======
 
-        retries = 2
+        retries = 0 if self.scripted else 2  # skip profiling if model is scripted
         while retries:
             retries -= 1
             try:
@@ -303,7 +293,6 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
                     results['macts'] = round(activations / 1e6, 2)
             except RuntimeError as e:
                 pass
->>>>>>> Stashed changes
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "

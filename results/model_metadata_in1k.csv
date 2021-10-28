@@ -150,6 +150,7 @@ gluon_seresnext50_32x4d,in1k
 gluon_xception65,in1k
 gmixer_24_224,in1k
 gmlp_s16_224,in1k
+halo2botnet50ts_256,in1k
 halonet26t,in1k
 halonet50ts,in1k
 haloregnetz_b,in1k
@@ -180,6 +181,8 @@ jx_nest_small,in1k
 jx_nest_tiny,in1k
 lambda_resnet26rpt_256,in1k
 lambda_resnet26t,in1k
+lambda_resnet50ts,in1k
+lamhalobotnet50ts_256,in1k
 legacy_senet154,in1k
 legacy_seresnet101,in1k
 legacy_seresnet152,in1k
