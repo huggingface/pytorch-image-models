@@ -316,6 +316,7 @@ class AugmentOp:
 
     def __init__(self, name, prob=0.5, magnitude=10, hparams=None):
         hparams = hparams or _HPARAMS_DEFAULT
+        self.name = name
         self.aug_fn = NAME_TO_OP[name]
         self.level_fn = LEVEL_TO_ARG[name]
         self.prob = prob
@@ -350,6 +351,14 @@ class AugmentOp:
         magnitude = max(0., min(magnitude, upper_bound))
         level_args = self.level_fn(magnitude, self.hparams) if self.level_fn is not None else tuple()
         return self.aug_fn(img, *level_args, **self.kwargs)
+
+    def __repr__(self):
+        fs = self.__class__.__name__ + f'(name={self.name}, p={self.prob}'
+        fs += f', m={self.magnitude}, mstd={self.magnitude_std}'
+        if self.magnitude_max is not None:
+            fs += f', mmax={self.magnitude_max}'
+        fs += ')'
+        return fs
 
 
 def auto_augment_policy_v0(hparams):
@@ -510,6 +519,15 @@ class AutoAugment:
             img = op(img)
         return img
 
+    def __repr__(self):
+        fs = self.__class__.__name__ + f'(policy='
+        for p in self.policy:
+            fs += '\n\t['
+            fs += ', '.join([str(op) for op in p])
+            fs += ']'
+        fs += ')'
+        return fs
+
 
 def auto_augment_transform(config_str, hparams):
     """
@@ -633,6 +651,13 @@ class RandAugment:
         for op in ops:
             img = op(img)
         return img
+
+    def __repr__(self):
+        fs = self.__class__.__name__ + f'(n={self.num_layers}, ops='
+        for op in self.ops:
+            fs += f'\n\t{op}'
+        fs += ')'
+        return fs
 
 
 def rand_augment_transform(config_str, hparams):
@@ -781,6 +806,13 @@ class AugMixAugment:
         else:
             mixed = self._apply_basic(img, mixing_weights, m)
         return mixed
+
+    def __repr__(self):
+        fs = self.__class__.__name__ + f'(alpha={self.alpha}, width={self.width}, depth={self.depth}, ops='
+        for op in self.ops:
+            fs += f'\n\t{op}'
+        fs += ')'
+        return fs
 
 
 def augment_and_mix_transform(config_str, hparams):

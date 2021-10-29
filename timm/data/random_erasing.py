@@ -54,15 +54,15 @@ class RandomErasing:
         self.min_count = min_count
         self.max_count = max_count or min_count
         self.num_splits = num_splits
-        mode = mode.lower()
+        self.mode = mode.lower()
         self.rand_color = False
         self.per_pixel = False
-        if mode == 'rand':
+        if self.mode == 'rand':
             self.rand_color = True  # per block random normal
-        elif mode == 'pixel':
+        elif self.mode == 'pixel':
             self.per_pixel = True  # per pixel random normal
         else:
-            assert not mode or mode == 'const'
+            assert not self.mode or self.mode == 'const'
         self.device = device
 
     def _erase(self, img, chan, img_h, img_w, dtype):
@@ -95,3 +95,9 @@ class RandomErasing:
             for i in range(batch_start, batch_size):
                 self._erase(input[i], chan, img_h, img_w, input.dtype)
         return input
+
+    def __repr__(self):
+        # NOTE simplified state for repr
+        fs = self.__class__.__name__ + f'(p={self.probability}, mode={self.mode}'
+        fs += f', count=({self.min_count}, {self.max_count}))'
+        return fs
