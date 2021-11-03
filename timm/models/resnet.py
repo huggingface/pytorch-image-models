@@ -61,12 +61,16 @@ default_cfgs = {
     'resnet50t': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
-    'resnet101': _cfg(url='', interpolation='bicubic'),
+    'resnet101': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet101_a1h-36d3f2aa.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnet101d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
         crop_pct=1.0, test_input_size=(3, 320, 320)),
-    'resnet152': _cfg(url='', interpolation='bicubic'),
+    'resnet152': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet152_a1h-dc400468.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnet152d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet152d_ra2-5cac0439.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
