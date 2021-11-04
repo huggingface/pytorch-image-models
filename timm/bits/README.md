@@ -118,9 +118,8 @@ Or this for imagenet in a local folder,
 * When PyTorch XLA crashes, you hit a TPU OOM etc, lots of processes get orphaned. Get in the habit of killing all python processes before starting a new train run.
   * `alias fml='pkill -f python3'`
 * For TFDS use, due to the way PyTorch IterableDatasets work at the loader level, each worker process builds batches independently -- they are not dequeued and collated across workers. For validation especially, getting all the samples evenly divided across BOTH the distributed processes AND the dataset workers is a bit annoying. For now keeping the num_workers arg (j) low is advisable, especially for very small validation sets. This can limit your throughput though.
-* Random erasing for on-device XLA tensors doesn't work. XLA isn't compatible with the array slicing approach to my RE impl, currently it's done by default after moving tensors to device. I need to fix.
+* Random erasing works with PyTorch XLA but it must be done on the images before they are moved into tensors on the XLA device. This changes the dataloader pipelien a bit and increases the size of the data being moved to device (float instead of int8) so has an impact on dataloading speed.
 * There are a number of models using ops that aren't lowered to XLA, this will REALLY slow things down to the point of being unusable. There are flags you can set to debug this, see PyTorch XLA troubleshooting page (https://github.com/pytorch/xla/blob/master/TROUBLESHOOTING.md)
-  * For NFNet models, force the ScaledStdConv `use_layernorm` arg to True, it is lowered, `std_mean` op is not
 * This code doesn't currently work when float16 is forced via `XLA_USE_BF16=1` env arg, it will mess up metrics tensors that overflow in bfloat16. Better controlling model activation vs weight precision vs other tensors is a TODO.
 * I haven't tested this code with pre TPU-VM (2-VM) setups, but it should work w/ correct config. I intend to make it work with Colab and Kaggle TPU notebooks soon.
 * Your first batch, and generally first epoch will be slow with Pytorch XLA, after that things pick up and move along quickly. Be patient.
