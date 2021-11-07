@@ -72,9 +72,9 @@ class EvoNormSample2d(nn.Module):
             nn.init.ones_(self.v)
 
     def forward(self, x):
-        assert x.dim() == 4, 'expected 4D input'
+        torch._assert(x.dim() == 4, 'expected 4D input')
         B, C, H, W = x.shape
-        assert C % self.groups == 0
+        torch._assert(C % self.groups == 0, '')
         if self.apply_act:
             n = x * (x * self.v).sigmoid()
             x = x.reshape(B, self.groups, -1)

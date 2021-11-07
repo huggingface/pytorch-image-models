@@ -116,8 +116,8 @@ class LambdaLayer(nn.Module):
         v = self.norm_v(v).reshape(B, self.dim_v, M).transpose(-1, -2)  # B, M, V
         k = F.softmax(k.reshape(B, self.dim_qk, M), dim=-1)  # B, K, M
 
-        content_lam = k @ v  # B, K, V
-        content_out = q @ content_lam.unsqueeze(1)  # B, num_heads, M, V
+        content_lam = torch.matmul(k, v)  # B, K, V
+        content_out = torch.matmul(q, content_lam.unsqueeze(1))  # B, num_heads, M, V
 
         if self.pos_emb is None:
             position_lam = self.conv_lambda(v.reshape(B, 1, H, W, self.dim_v))  # B, H, W, V, K

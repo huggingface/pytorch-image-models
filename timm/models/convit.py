@@ -30,6 +30,7 @@ from .helpers import build_model_with_cfg
 from .layers import DropPath, to_2tuple, trunc_normal_, PatchEmbed, Mlp
 from .registry import register_model
 from .vision_transformer_hybrid import HybridEmbed
+from .fx_features import register_leaf_module
 
 import torch
 import torch.nn as nn
@@ -56,6 +57,7 @@ default_cfgs = {
 }
 
 
+@register_leaf_module  # FX can't symbolically trace control flow in forward method
 class GPSA(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.,
                  locality_strength=1.):
@@ -82,7 +84,7 @@ class GPSA(nn.Module):
             self.rel_indices = self.get_rel_indices(N)
         attn = self.get_attention(x)
         v = self.v(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -93,7 +95,7 @@ class GPSA(nn.Module):
         q, k = qk[0], qk[1]
         pos_score = self.rel_indices.expand(B, -1, -1, -1)
         pos_score = self.pos_proj(pos_score).permute(0, 3, 1, 2)
-        patch_score = (q @ k.transpose(-2, -1)) * self.scale
+        patch_score = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         patch_score = patch_score.softmax(dim=-1)
         pos_score = pos_score.softmax(dim=-1)
 
@@ -178,11 +180,11 @@ class MHSA(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

@@ -100,10 +100,10 @@ class Attention(nn.Module):
         x = self.qkv(x).reshape(B, 3, self.num_heads, self.head_dim, -1).permute(1, 0, 2, 4, 3)
         q, k, v = x[0], x[1], x[2]
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        x = attn @ v
+        x = torch.matmul(attn, v)
 
         x = x.permute(0, 1, 3, 2).reshape(B, -1, H, W)
         x = self.proj(x)

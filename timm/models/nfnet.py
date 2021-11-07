@@ -27,6 +27,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
+from timm.models.fx_features import register_leaf_module
 from .registry import register_model
 from .layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame,\
     get_act_layer, get_act_fn, get_attn, make_divisible
@@ -318,6 +319,7 @@ class DownsampleAvg(nn.Module):
         return self.conv(self.pool(x))
 
 
+@register_leaf_module  # FX feature extraction was giving different valued features. Perhaps to do with control flow?
 class NormFreeBlock(nn.Module):
     """Normalization-Free pre-activation block.
     """

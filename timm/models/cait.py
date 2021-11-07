@@ -95,11 +95,11 @@ class ClassAttn(nn.Module):
         q = q * self.scale
         v = self.v(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
-        attn = (q @ k.transpose(-2, -1))
+        attn = torch.matmul(q, k.transpose(-2, -1))
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        x_cls = (attn @ v).transpose(1, 2).reshape(B, 1, C)
+        x_cls = torch.matmul(attn, v).transpose(1, 2).reshape(B, 1, C)
         x_cls = self.proj(x_cls)
         x_cls = self.proj_drop(x_cls)
 
@@ -158,7 +158,7 @@ class TalkingHeadAttn(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0] * self.scale, qkv[1], qkv[2]
 
-        attn = (q @ k.transpose(-2, -1))
+        attn = torch.matmul(q, k.transpose(-2, -1))
 
         attn = self.proj_l(attn.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
@@ -167,7 +167,7 @@ class TalkingHeadAttn(nn.Module):
         attn = self.proj_w(attn.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         attn = self.attn_drop(attn)
 
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

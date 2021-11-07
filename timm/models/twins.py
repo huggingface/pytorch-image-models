@@ -22,6 +22,7 @@ from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .layers import Mlp, DropPath, to_2tuple, trunc_normal_
+from .fx_features import register_leaf_module
 from .registry import register_model
 from .vision_transformer import Attention
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
@@ -62,6 +63,7 @@ default_cfgs = {
 Size_ = Tuple[int, int]
 
 
+@register_leaf_module  # FX can't symbolically trace control flow in forward method
 class LocallyGroupedAttn(nn.Module):
     """ LSA: self attention within a group
     """
@@ -98,10 +100,10 @@ class LocallyGroupedAttn(nn.Module):
         qkv = self.qkv(x).reshape(
             B, _h * _w, self.ws * self.ws, 3, self.num_heads, C // self.num_heads).permute(3, 0, 1, 4, 2, 5)
         q, k, v = qkv[0], qkv[1], qkv[2]
-        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        attn = (attn @ v).transpose(2, 3).reshape(B, _h, _w, self.ws, self.ws, C)
+        attn = torch.matmul(attn, v).transpose(2, 3).reshape(B, _h, _w, self.ws, self.ws, C)
         x = attn.transpose(2, 3).reshape(B, _h * self.ws, _w * self.ws, C)
         if pad_r > 0 or pad_b > 0:
             x = x[:, :H, :W, :].contiguous()
@@ -183,11 +185,11 @@ class GlobalSubSampleAttn(nn.Module):
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
 

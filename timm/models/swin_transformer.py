@@ -22,9 +22,11 @@ import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .fx_helpers import fx_float_to_int
 from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
 from .registry import register_model
 from .vision_transformer import checkpoint_filter_fn, _init_vit_weights
+
 
 _logger = logging.getLogger(__name__)
 
@@ -111,7 +113,7 @@ def window_reverse(windows, window_size: int, H: int, W: int):
     Returns:
         x: (B, H, W, C)
     """
-    B = int(windows.shape[0] / (H * W / window_size / window_size))
+    B = fx_float_to_int(windows.shape[0] / (H * W / window_size / window_size))
     x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
     return x
@@ -175,7 +177,7 @@ class WindowAttention(nn.Module):
         q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
         q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
+        attn = torch.matmul(q, k.transpose(-2, -1))
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
@@ -192,7 +194,7 @@ class WindowAttention(nn.Module):
 
         attn = self.attn_drop(attn)
 
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+        x = torch.matmul(attn, v).transpose(1, 2).reshape(B_, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -270,7 +272,7 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x):
         H, W = self.input_resolution
         B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
+        torch._assert(L == H * W, "input feature has wrong size")
 
         shortcut = x
         x = self.norm1(x)
@@ -329,8 +331,8 @@ class PatchMerging(nn.Module):
         """
         H, W = self.input_resolution
         B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
-        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
+        torch._assert(L == H * W, "input feature has wrong size")
+        torch._assert(H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even.")
 
         x = x.view(B, H, W, C)
 

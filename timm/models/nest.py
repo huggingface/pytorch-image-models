@@ -26,9 +26,11 @@ from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, named_apply
+from .fx_helpers import fx_float_to_int
 from .layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_
 from .layers import create_conv2d, create_pool2d, to_ntuple
 from .registry import register_model
+
 
 _logger = logging.getLogger(__name__)
 
@@ -83,12 +85,12 @@ class Attention(nn.Module):
         qkv = self.qkv(x).reshape(B, T, N, 3, self.num_heads, C // self.num_heads).permute(3, 0, 4, 1, 2, 5)
         q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale # (B, H, T, N, N)
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale # (B, H, T, N, N)
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         # (B, H, T, N, C'), permute -> (B, T, N, C', H)
-        x = (attn @ v).permute(0, 2, 3, 4, 1).reshape(B, T, N, C)
+        x = torch.matmul(attn, v).permute(0, 2, 3, 4, 1).reshape(B, T, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x  # (B, T, N, C)
@@ -128,8 +130,8 @@ class ConvPool(nn.Module):
         """
         x is expected to have shape (B, C, H, W)
         """
-        assert x.shape[-2] % 2 == 0, 'BlockAggregation requires even input spatial dims'
-        assert x.shape[-1] % 2 == 0, 'BlockAggregation requires even input spatial dims'
+        torch._assert(x.shape[-2] % 2 == 0, 'BlockAggregation requires even input spatial dims')
+        torch._assert(x.shape[-1] % 2 == 0, 'BlockAggregation requires even input spatial dims')
         x = self.conv(x)
         # Layer norm done over channel dim only
         x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
@@ -144,8 +146,8 @@ def blockify(x, block_size: int):
         block_size (int): edge length of a single square block in units of H, W
     """
     B, H, W, C  = x.shape
-    assert H % block_size == 0, '`block_size` must divide input height evenly'
-    assert W % block_size == 0, '`block_size` must divide input width evenly'
+    torch._assert(H % block_size == 0, '`block_size` must divide input height evenly')
+    torch._assert(W % block_size == 0, '`block_size` must divide input width evenly')
     grid_height = H // block_size
     grid_width = W // block_size
     x = x.reshape(B, grid_height, block_size, grid_width, block_size, C)
@@ -160,7 +162,7 @@ def deblockify(x, block_size: int):
         block_size (int): edge length of a single square block in units of desired H, W
     """
     B, T, _, C = x.shape
-    grid_size = int(math.sqrt(T))
+    grid_size = fx_float_to_int(math.sqrt(T))
     height = width = grid_size * block_size
     x = x.reshape(B, grid_size, grid_size, block_size, block_size, C)
     x = x.transpose(2, 3).reshape(B, height, width, C)

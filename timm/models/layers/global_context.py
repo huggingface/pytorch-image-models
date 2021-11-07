@@ -7,6 +7,7 @@ Official code consulted as reference: https://github.com/xvjiarui/GCNet
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
+import torch
 from torch import nn as nn
 import torch.nn.functional as F
 
@@ -52,7 +53,7 @@ class GlobalContext(nn.Module):
         if self.conv_attn is not None:
             attn = self.conv_attn(x).reshape(B, 1, H * W)  # (B, 1, H * W)
             attn = F.softmax(attn, dim=-1).unsqueeze(3)  # (B, 1, H * W, 1)
-            context = x.reshape(B, C, H * W).unsqueeze(1) @ attn
+            context = torch.matmul(x.reshape(B, C, H * W).unsqueeze(1), attn)
             context = context.view(B, C, 1, 1)
         else:
             context = x.mean(dim=(2, 3), keepdim=True)

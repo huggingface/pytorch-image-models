@@ -34,7 +34,7 @@ class SelectiveKernelAttn(nn.Module):
         self.fc_select = nn.Conv2d(attn_channels, channels * num_paths, kernel_size=1, bias=False)
 
     def forward(self, x):
-        assert x.shape[1] == self.num_paths
+        torch._assert(x.shape[1] == self.num_paths, '')
         x = x.sum(1).mean((2, 3), keepdim=True)
         x = self.fc_reduce(x)
         x = self.bn(x)

@@ -105,7 +105,7 @@ class ConvRelPosEnc(nn.Module):
     def forward(self, q, v, size: Tuple[int, int]):
         B, h, N, Ch = q.shape
         H, W = size
-        assert N == 1 + H * W
+        torch._assert(N == 1 + H * W, '')
 
         # Convolutional relative position encoding.
         q_img = q[:, :, 1:, :]  # [B, h, H*W, Ch]
@@ -149,8 +149,8 @@ class FactorAtt_ConvRelPosEnc(nn.Module):
 
         # Factorized attention.
         k_softmax = k.softmax(dim=2)
-        factor_att = k_softmax.transpose(-1, -2) @ v
-        factor_att = q @ factor_att
+        factor_att = torch.matmul(k_softmax.transpose(-1, -2), v)
+        factor_att = torch.matmul(q, factor_att)
 
         # Convolutional relative position encoding.
         crpe = self.crpe(q, v, size=size)  # [B, h, N, Ch]
@@ -177,7 +177,7 @@ class ConvPosEnc(nn.Module):
     def forward(self, x, size: Tuple[int, int]):
         B, N, C = x.shape
         H, W = size
-        assert N == 1 + H * W
+        torch._assert(N == 1 + H * W, '')
 
         # Extract CLS token and image tokens.
         cls_token, img_tokens = x[:, :1], x[:, 1:]  # [B, 1, C], [B, H*W, C]
@@ -275,7 +275,7 @@ class ParallelBlock(nn.Module):
         """ Feature map interpolation. """
         B, N, C = x.shape
         H, W = size
-        assert N == 1 + H * W
+        torch._assert(N == 1 + H * W, '')
 
         cls_token = x[:, :1, :]
         img_tokens = x[:, 1:, :]
