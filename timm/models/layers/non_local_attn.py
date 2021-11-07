@@ -10,7 +10,6 @@ from torch.nn import functional as F
 
 from .conv_bn_act import ConvBnAct
 from .helpers import make_divisible
-from timm.models.fx_helpers import fx_and
 
 
 class NonLocalAttn(nn.Module):
@@ -96,7 +95,8 @@ class BilinearAttnTransform(nn.Module):
         return x
 
     def forward(self, x):
-        torch._assert(fx_and(x.shape[-1] % self.block_size == 0, x.shape[-2] % self.block_size == 0), '')
+        torch._assert(x.shape[-1] % self.block_size == 0, '')
+        torch._assert(x.shape[-2] % self.block_size == 0, '')
         B, C, H, W = x.shape
         out = self.conv1(x)
         rp = F.adaptive_max_pool2d(out, (self.block_size, 1))

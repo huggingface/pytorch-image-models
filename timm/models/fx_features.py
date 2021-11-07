@@ -24,7 +24,7 @@ import torch.nn.functional as F
 from torch.fx.graph_module import _copy_attr
 
 from .features import _get_feature_info
-from .fx_helpers import fx_and, fx_float_to_int
+from .fx_helpers import fx_float_to_int
 
 # Layers we went to treat as leaf modules for FeatureGraphNet
 from .layers import Conv2dSame, ScaledStdConv2dSame, BatchNormAct2d, BlurPool2d, CondConv2d, StdConv2dSame
@@ -55,7 +55,7 @@ def register_leaf_module(module: nn.Module):
 
 
 # These functions will not be traced through
-_autowrap_functions=(fx_float_to_int, fx_and)
+_autowrap_functions=(fx_float_to_int,)
 
 
 class TimmTracer(fx.Tracer):

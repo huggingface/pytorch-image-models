@@ -9,11 +9,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 from torch import nn as nn
 
 from .helpers import to_2tuple
-<<<<<<< HEAD
 from .trace_utils import _assert
-=======
-from timm.models.fx_helpers import fx_and
->>>>>>> Make all models FX traceable
 
 
 class PatchEmbed(nn.Module):
