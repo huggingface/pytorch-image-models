@@ -266,7 +266,7 @@ def main():
                 args.checkpoint = c
                 result = OrderedDict(model=args.model)
                 r = {}
-                while not r and batch_size >= args.num_gpu:
+                while not r and batch_size >= 1:
                     try:
                         args.batch_size = batch_size
                         print('Validating with batch size: %d' % args.batch_size)
