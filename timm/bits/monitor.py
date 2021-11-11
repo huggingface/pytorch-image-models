@@ -43,13 +43,6 @@ except ImportError:
 #               f' Data: {data_time.smooth_val:.3f} ({data_time.avg:.3f})'
 #     log_str += f' Loss: {loss.smooth_val:>9.6f} ({loss.avg:>6.4f})  '
 #     log_str += f' LR: {lr:.3e}  '
-#
-#     if args.save_images and output_dir:
-#         torchvision.utils.save_image(
-#             input,
-#             os.path.join(output_dir, 'train-batch-%d.jpg' % batch_idx),
-#             padding=0,
-#             normalize=True)
 
 
 def summary_row_dict(results, index=None, index_name='epoch'):
@@ -159,8 +152,8 @@ class Monitor:
     def log_step(
             self,
             phase: str,
-            step: int,
-            step_end: Optional[int] = None,
+            step_idx: int,
+            step_end_idx: Optional[int] = None,
             epoch: Optional[int] = None,
             loss: Optional[float] = None,
             rate: Optional[float] = None,
@@ -171,14 +164,15 @@ class Monitor:
         """
         if not self.output_enabled:
             return
-
+        if 'num_steps' in kwargs:
+            step_end_idx = max(0, kwargs.pop('num_steps') - 1)
         phase_title = f'{phase.capitalize()} ({phase_suffix})' if phase_suffix else f'{phase.capitalize()}:'
-        progress = 100. * step / step_end if step_end else 0.
+        progress = 100. * step_idx / step_end_idx if step_end_idx else 0.
         text_update = [
             phase_title,
             f'{epoch}' if epoch is not None else None,
-            f'[{step}]' if step_end is None else None,
-            f'[{step}/{step_end} ({progress:>3.0f}%)]' if step_end is not None else None,
+            f'[{step_idx}]' if step_end_idx is None else None,
+            f'[{step_idx}/{step_end_idx} ({progress:>3.0f}%)]' if step_end_idx is not None else None,
             f'Rate: {rate:.2f}/s' if rate is not None else None,
             f'Loss: {loss:.5f}' if loss is not None else None,
         ]

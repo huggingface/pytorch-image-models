@@ -173,6 +173,7 @@ def validate(args):
     with torch.no_grad():
         tracker.mark_iter()
         for step_idx, (sample, target) in enumerate(loader):
+            last_step = step_idx == num_steps - 1
             tracker.mark_iter_data_end()
 
             # compute output
@@ -197,12 +198,12 @@ def validate(args):
             accuracy.update(output.detach(), target)
 
             tracker.mark_iter()
-            if step_idx % args.log_freq == 0:
+            if last_step or step_idx % args.log_freq == 0:
                 top1, top5 = accuracy.compute().values()
                 loss_avg = losses.compute()
                 logger.log_step(
                     phase='eval',
-                    step=step_idx,
+                    step_idx=step_idx,
                     num_steps=num_steps,
                     rate=args.batch_size / tracker.iter_time.avg,
                     loss=loss_avg.item(),

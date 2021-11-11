@@ -45,13 +45,13 @@ class TrainState:
             train_cfg=vars(self.train_cfg)
         )
         # FIXME include lr_scheduler state?
-        state.update(self.updater.state_dict())  # updater (optimizer, scaler,e tc) state added to state
+        state.update(self.updater.state_dict())  # updater (optimizer, scaler, etc.) state added to state
         return state
 
     def load_state_dict(self, state_dict, unwrap_fn=unwrap_model, load_opt=True):
         # restore train loop state
-        self.epoch = state_dict['epoch']
-        self.step_count = state_dict['step_count']
+        self.epoch = state_dict['epoch'] + 1
+        self.step_count = 0  # FIXME need more logic to restore part way through epoch
         self.step_count_global = state_dict['step_count_global']
 
         # restore model params / state

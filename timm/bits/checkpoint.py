@@ -62,7 +62,7 @@ def load_train_state(
             _logger.info("Loaded legacy checkpoint '{}' (epoch {})".format(checkpoint_path, train_state.epoch))
         return
 
-    train_state.load_state_dict(checkpoint, unwrap_fn=unwrap_fn)
+    train_state.load_state_dict(checkpoint, unwrap_fn=unwrap_fn, load_opt=load_opt)
     if log_info:
         _logger.info("Loaded checkpoint '{}' (epoch {})".format(checkpoint_path, train_state.epoch))
 
