@@ -23,15 +23,17 @@ class ImageDataset(data.Dataset):
             self,
             root,
             parser=None,
-            class_map='',
+            class_map=None,
             load_bytes=False,
             transform=None,
+            target_transform=None,
     ):
         if parser is None or isinstance(parser, str):
             parser = create_parser(parser or '', root=root, class_map=class_map)
         self.parser = parser
         self.load_bytes = load_bytes
         self.transform = transform
+        self.target_transform = target_transform
         self._consecutive_errors = 0
 
     def __getitem__(self, index):
@@ -49,7 +51,9 @@ class ImageDataset(data.Dataset):
         if self.transform is not None:
             img = self.transform(img)
         if target is None:
-            target = torch.tensor(-1, dtype=torch.long)
+            target = -1
+        elif self.target_transform is not None:
+            target = self.target_transform(target)
         return img, target
 
     def __len__(self):
@@ -71,26 +75,28 @@ class IterableImageDataset(data.IterableDataset):
             split='train',
             is_training=False,
             batch_size=None,
-            class_map='',
-            load_bytes=False,
             repeats=0,
+            download=False,
             transform=None,
+            target_transform=None,
     ):
         assert parser is not None
         if isinstance(parser, str):
             self.parser = create_parser(
-                parser, root=root, split=split, is_training=is_training, batch_size=batch_size, repeats=repeats)
+                parser, root=root, split=split, is_training=is_training,
+                batch_size=batch_size, repeats=repeats, download=download)
         else:
             self.parser = parser
         self.transform = transform
+        self.target_transform = target_transform
         self._consecutive_errors = 0
 
     def __iter__(self):
         for img, target in self.parser:
             if self.transform is not None:
                 img = self.transform(img)
-            if target is None:
-                target = torch.tensor(-1, dtype=torch.long)
+            if self.target_transform is not None:
+                target = self.target_transform(target)
             yield img, target
 
     def __len__(self):
