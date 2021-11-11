@@ -51,7 +51,7 @@ parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
-# Dataset / Model parameters
+# Dataset parameters
 parser.add_argument('data_dir', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--dataset', '-d', metavar='NAME', default='',
@@ -60,6 +60,12 @@ parser.add_argument('--train-split', metavar='NAME', default='train',
                     help='dataset train split (default: train)')
 parser.add_argument('--val-split', metavar='NAME', default='validation',
                     help='dataset validation split (default: validation)')
+parser.add_argument('--dataset-download', action='store_true', default=False,
+                    help='Allow download of dataset for torch/ and tfds/ datasets that support it.')
+parser.add_argument('--class-map', default='', type=str, metavar='FILENAME',
+                    help='path to class to idx mapping file (default: "")')
+
+# Model parameters
 parser.add_argument('--model', default='resnet50', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet50"')
 parser.add_argument('--pretrained', action='store_true', default=False,
@@ -500,13 +506,17 @@ def setup_data(args, default_cfg, dev_env: DeviceEnv, mixup_active: bool):
 
     # create the train and eval datasets
     dataset_train = create_dataset(
-        args.dataset,
-        root=args.data_dir, split=args.train_split, is_training=True,
-        batch_size=args.batch_size, repeats=args.epoch_repeats)
+        name=args.dataset, root=args.data_dir, split=args.train_split, is_training=True,
+        class_map=args.class_map,
+        download=args.dataset_download,
+        batch_size=args.batch_size,
+        repeats=args.epoch_repeats)
 
     dataset_eval = create_dataset(
-        args.dataset,
-        root=args.data_dir, split=args.val_split, is_training=False, batch_size=args.batch_size)
+        name=args.dataset, root=args.data_dir, split=args.val_split, is_training=False,
+        class_map=args.class_map,
+        download=args.dataset_download,
+        batch_size=args.batch_size)
 
     # setup mixup / cutmix
     mixup_cfg = None

@@ -170,7 +170,9 @@ def profile_deepspeed(model, input_size=(3, 224, 224), batch_size=1, detailed=Fa
     return macs, 0  # no activation count in DS
 
 
-def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
+def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False, force_cpu=False):
+    if force_cpu:
+        model = model.to('cpu')
     device, dtype = next(model.parameters()).device, next(model.parameters()).dtype
     example_input = torch.ones((batch_size,) + input_size, device=device, dtype=dtype)
     fca = FlopCountAnalysis(model, example_input)
@@ -277,14 +279,20 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             img_size=self.input_size[-1],
             param_count=round(self.param_count / 1e6, 2),
         )
-        if not self.scripted:
-            if has_deepspeed_profiling:
-                macs, _ = profile_deepspeed(self.model, self.input_size)
-                results['gmacs'] = round(macs / 1e9, 2)
-            elif has_fvcore_profiling:
-                macs, activations = profile_fvcore(self.model, self.input_size)
-                results['gmacs'] = round(macs / 1e9, 2)
-                results['macts'] = round(activations / 1e6, 2)
+
+        retries = 0 if self.scripted else 2  # skip profiling if model is scripted
+        while retries:
+            retries -= 1
+            try:
+                if has_deepspeed_profiling:
+                    macs, _ = profile_deepspeed(self.model, self.input_size)
+                    results['gmacs'] = round(macs / 1e9, 2)
+                elif has_fvcore_profiling:
+                    macs, activations = profile_fvcore(self.model, self.input_size, force_cpu=not retries)
+                    results['gmacs'] = round(macs / 1e9, 2)
+                    results['macts'] = round(activations / 1e6, 2)
+            except RuntimeError as e:
+                pass
 
         _logger.info(
             f"Inference benchmark of {self.model_name} done. "
@@ -472,7 +480,12 @@ def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
             results = bench.run()
             return results
         except RuntimeError as e:
-            print(f'Error: {str(e)} while running benchmark. Reducing batch size to {batch_size} for retry.')
+            e_str = str(e)
+            print(e_str)
+            if 'channels_last' in e_str:
+                print(f'Error: {model_name} not supported in channels_last, skipping.')
+                break
+            print(f'Error: "{e_str}" while running benchmark. Reducing batch size to {batch_size} for retry.')
         batch_size = decay_batch_exp(batch_size)
     return results
 
@@ -521,7 +534,7 @@ def benchmark(args):
     param_count = model_results.pop('infer_param_count', model_results.pop('train_param_count', 0))
     model_results.setdefault('param_count', param_count)
     model_results.pop('train_param_count', 0)
-    return model_results
+    return model_results if model_results['param_count'] else dict()
 
 
 def main():
@@ -555,7 +568,9 @@ def main():
                     continue
                 args.model = m
                 r = benchmark(args)
-                results.append(r)
+                if r:
+                    results.append(r)
+                time.sleep(10)
         except KeyboardInterrupt as e:
             pass
         sort_key = 'infer_samples_per_sec'

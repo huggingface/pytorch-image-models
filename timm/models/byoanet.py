@@ -51,17 +51,17 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sehalonet33ts_256-87e053f9.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'halonet50ts': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_256_ra3-f07eab9f.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_a1h_256-c6d7ff15.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'eca_halonext26ts': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_256-1e55880b.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_c_256-06906299.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
 
     'lambda_resnet26t': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_c_256-e5a5c857.pth',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
     'lambda_resnet50ts': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet50ts_a1h_256-b87370f7.pth',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
     'lambda_resnet26rpt_256': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26rpt_c_256-ab00292d.pth',
@@ -71,8 +71,12 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/haloregnetz_c_raa_256-c8ad7616.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
-    'trionet50ts_256': _cfg(
-        url='',
+
+    'lamhalobotnet50ts_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet_a1h_256-c9bc4e74.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'halo2botnet50ts_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h_256-ad9e16fb.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
@@ -262,12 +266,30 @@ model_cfgs = dict(
     ),
 
     # experimental
-    trionet50ts=ByoModelCfg(
+    lamhalobotnet50ts=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
             interleave_blocks(
                 types=('bottle', 'self_attn'), d=4, c=512, s=2, gs=0, br=0.25,
                 self_attn_layer='lambda', self_attn_kwargs=dict(r=13)),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25,
+                self_attn_layer='halo', self_attn_kwargs=dict(halo_size=3)),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), d=3, c=2048, s=2, gs=0, br=0.25,
+                self_attn_layer='bottleneck', self_attn_kwargs=dict()),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        act_layer='silu',
+    ),
+    halo2botnet50ts=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, gs=0, br=0.25),
+            interleave_blocks(
+                types=('bottle', 'self_attn'), d=4, c=512, s=2, gs=0, br=0.25,
+                self_attn_layer='halo', self_attn_kwargs=dict(halo_size=3)),
             interleave_blocks(
                 types=('bottle', 'self_attn'), d=6, c=1024, s=2, gs=0, br=0.25,
                 self_attn_layer='halo', self_attn_kwargs=dict(halo_size=3)),
@@ -382,7 +404,14 @@ def haloregnetz_b(pretrained=False, **kwargs):
 
 
 @register_model
-def trionet50ts_256(pretrained=False, **kwargs):
-    """ TrioNet
+def lamhalobotnet50ts_256(pretrained=False, **kwargs):
+    """ Combo Attention (Lambda + Halo + Bot) Network
     """
-    return _create_byoanet('trionet50ts_256', 'trionet50ts', pretrained=pretrained, **kwargs)
+    return _create_byoanet('lamhalobotnet50ts_256', 'lamhalobotnet50ts', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def halo2botnet50ts_256(pretrained=False, **kwargs):
+    """ Combo Attention (Halo + Halo + Bot) Network
+    """
+    return _create_byoanet('halo2botnet50ts_256', 'halo2botnet50ts', pretrained=pretrained, **kwargs)

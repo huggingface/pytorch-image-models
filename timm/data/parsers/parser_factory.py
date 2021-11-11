@@ -17,7 +17,7 @@ def create_parser(name, root, split='train', **kwargs):
     # explicitly select other options shortly
     if prefix == 'tfds':
         from .parser_tfds import ParserTfds  # defer tensorflow import
-        parser = ParserTfds(root, name, split=split, shuffle=kwargs.pop('shuffle', False), **kwargs)
+        parser = ParserTfds(root, name, split=split, **kwargs)
     else:
         assert os.path.exists(root)
         # default fallback path (backwards compat), use image tar if root is a .tar file, otherwise image folder
