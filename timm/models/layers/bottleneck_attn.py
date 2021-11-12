@@ -22,7 +22,7 @@ import torch.nn.functional as F
 
 from .helpers import to_2tuple, make_divisible
 from .weight_init import trunc_normal_
-from timm.models.fx_helpers import fx_and
+from .trace_utils import _assert
 
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
@@ -37,7 +37,7 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
         permute_mask: permute output dim according to this
     """
     B, H, W, dim = q.shape
-    x = torch.matmul(q, rel_k.transpose(-1, -2))
+    x = (q @ rel_k.transpose(-1, -2))
     x = x.reshape(-1, W, 2 * W -1)
 
     # pad to shift from relative to absolute indexing
@@ -134,8 +134,8 @@ class BottleneckAttn(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        torch._assert(H == self.pos_embed.height, '')
-        torch._assert(W == self.pos_embed.width, '')
+        _assert(H == self.pos_embed.height, '')
+        _assert(W == self.pos_embed.width, '')
 
         x = self.qkv(x)  # B, (2 * dim_head_qk + dim_head_v) * num_heads, H, W
 

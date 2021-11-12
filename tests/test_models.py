@@ -4,10 +4,12 @@ import platform
 import os
 import fnmatch
 
+from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names, NodePathTracer
+
 import timm
 from timm import list_models, create_model, set_scriptable, has_model_default_key, is_model_default_key, \
     get_model_default_value
-from timm.models.fx_features import NodePathTracer
+from timm.models.fx_features import _leaf_modules, _autowrap_functions    
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests
@@ -312,12 +314,14 @@ def test_model_forward_fx(model_name, batch_size):
     if max(input_size) > MAX_FWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
 
-    tracer = NodePathTracer()
-    graph = tracer.trace(model)
-    model = torch.fx.GraphModule(model, graph)
+    train_nodes, eval_nodes = get_graph_node_names(
+        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+    model = create_feature_extractor(
+        model, train_return_nodes=[train_nodes[-1]], eval_return_nodes=[eval_nodes[-1]],
+        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
 
     inputs = torch.randn((batch_size, *input_size))
-    outputs = model(inputs)
+    outputs = model(inputs)[eval_nodes[-1]]
 
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
@@ -336,12 +340,30 @@ def test_model_backward_fx(model_name, batch_size):
     model.train()
     num_params = sum([x.numel() for x in model.parameters()])
 
-    tracer = NodePathTracer()
+    input_size = _get_input_size(model=model, target=TARGET_FWD_SIZE)
+    if max(input_size) > MAX_FWD_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
+    # This block of code does a bit of juggling to handle any case where there are multiple outputs in train mode
+    # If so, we need to return all of them in order to check all grads
+    # So we trace once and look at the graph, and get the indices of the nodes that lead into the original fx output
+    # node. Then we use those indices to select from train_nodes returned by torchvision get_graph_node_names
+    tracer = NodePathTracer(leaf_modules=list(_leaf_modules), autowrap_functions=list(_autowrap_functions))
     graph = tracer.trace(model)
-    model = torch.fx.GraphModule(model, graph)
+    graph_nodes = list(reversed(graph.nodes))
+    output_node_names = [n.name for n in graph_nodes[0]._input_nodes.keys()]
+    graph_node_names = [n.name for n in graph_nodes]
+    output_node_indices = [-graph_node_names.index(node_name) for node_name in output_node_names]
+    train_nodes, eval_nodes = get_graph_node_names(
+        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+    train_return_nodes = [train_nodes[ix] for ix in output_node_indices]
+    
+    model = create_feature_extractor(
+        model, train_return_nodes=train_return_nodes, eval_return_nodes=[eval_nodes[-1]],
+        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
 
     inputs = torch.randn((batch_size, *input_size))
-    outputs = model(inputs)
+    outputs = tuple(model(inputs).values())
     if isinstance(outputs, tuple):
         outputs = torch.cat(outputs)
     outputs.mean().backward()
@@ -354,9 +376,14 @@ def test_model_backward_fx(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
+EXCLUDE_FX_JIT_FILTERS = [
+    'beit_*'  # reason: model is scripted after fx tracing, but beit has torch.jit.is_scripting() control flow
+]
+
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize(
-    'model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS, name_matches_cfg=True))
+    'model_name', list_models(
+        exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS + EXCLUDE_FX_JIT_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_fx_torchscript(model_name, batch_size):
     """Symbolically trace each model, script it, and run single forward pass"""
@@ -368,12 +395,18 @@ def test_model_forward_fx_torchscript(model_name, batch_size):
         model = create_model(model_name, pretrained=False)
     model.eval()
 
-    tracer = NodePathTracer()
-    graph = tracer.trace(model)
-    model = torch.fx.GraphModule(model, graph)
+    input_size = _get_input_size(model=model, target=TARGET_FWD_SIZE)
+    if max(input_size) > MAX_FWD_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
+    train_nodes, eval_nodes = get_graph_node_names(
+        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+    model = create_feature_extractor(
+        model, train_return_nodes=[train_nodes[-1]], eval_return_nodes=[eval_nodes[-1]],
+        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
 
     model = torch.jit.script(model)
-    outputs = model(torch.randn((batch_size, *input_size)))
+    outputs = model(torch.randn((batch_size, *input_size)))[train_nodes[-1]]
 
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'

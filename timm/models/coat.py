@@ -19,6 +19,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
 from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
 from .registry import register_model
+from .layers.trace_utils import _assert
 
 
 __all__ = [
@@ -105,7 +106,7 @@ class ConvRelPosEnc(nn.Module):
     def forward(self, q, v, size: Tuple[int, int]):
         B, h, N, Ch = q.shape
         H, W = size
-        torch._assert(N == 1 + H * W, '')
+        _assert(N == 1 + H * W, '')
 
         # Convolutional relative position encoding.
         q_img = q[:, :, 1:, :]  # [B, h, H*W, Ch]
@@ -149,8 +150,8 @@ class FactorAtt_ConvRelPosEnc(nn.Module):
 
         # Factorized attention.
         k_softmax = k.softmax(dim=2)
-        factor_att = torch.matmul(k_softmax.transpose(-1, -2), v)
-        factor_att = torch.matmul(q, factor_att)
+        factor_att = k_softmax.transpose(-1, -2) @ v
+        factor_att = q @ factor_att
 
         # Convolutional relative position encoding.
         crpe = self.crpe(q, v, size=size)  # [B, h, N, Ch]
@@ -177,7 +178,7 @@ class ConvPosEnc(nn.Module):
     def forward(self, x, size: Tuple[int, int]):
         B, N, C = x.shape
         H, W = size
-        torch._assert(N == 1 + H * W, '')
+        _assert(N == 1 + H * W, '')
 
         # Extract CLS token and image tokens.
         cls_token, img_tokens = x[:, :1], x[:, 1:]  # [B, 1, C], [B, H*W, C]
@@ -275,7 +276,7 @@ class ParallelBlock(nn.Module):
         """ Feature map interpolation. """
         B, N, C = x.shape
         H, W = size
-        torch._assert(N == 1 + H * W, '')
+        _assert(N == 1 + H * W, '')
 
         cls_token = x[:, :1, :]
         img_tokens = x[:, 1:, :]

@@ -293,10 +293,10 @@ class Attention(nn.Module):
             k = k.permute(0, 2, 1, 3)
             v = v.permute(0, 2, 1, 3)
 
-            attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale + self.get_attention_biases(x.device)
+            attn = q @ k.transpose(-2, -1) * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
-            x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, self.dh)
+            x = (attn @ v).transpose(1, 2).reshape(B, N, self.dh)
         x = self.proj(x)
         return x
 
@@ -387,10 +387,10 @@ class AttentionSubsample(nn.Module):
             v = v.permute(0, 2, 1, 3)  # BHNC
             q = self.q(x).view(B, self.resolution_2, self.num_heads, self.key_dim).permute(0, 2, 1, 3)
 
-            attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale + self.get_attention_biases(x.device)
+            attn = q @ k.transpose(-2, -1) * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
-            x = torch.matmul(attn, v).transpose(1, 2).reshape(B, -1, self.dh)
+            x = (attn @ v).transpose(1, 2).reshape(B, -1, self.dh)
         x = self.proj(x)
         return x
 

@@ -98,7 +98,7 @@ default_cfgs = {
 }
 
 
-@register_leaf_module  # FX can't symbolically trace torch.arange in forward method
+@register_leaf_module  # reason: FX can't symbolically trace torch.arange in forward method
 class PositionalEncodingFourier(nn.Module):
     """
     Positional encoding relying on a fourier kernel matching the one used in the "Attention is all of Need" paper.
@@ -274,12 +274,12 @@ class XCA(nn.Module):
         # Paper section 3.2 l2-Normalization and temperature scaling
         q = torch.nn.functional.normalize(q, dim=-1)
         k = torch.nn.functional.normalize(k, dim=-1)
-        attn = torch.matmul(q, k.transpose(-2, -1)) * self.temperature
+        attn = (q @ k.transpose(-2, -1)) * self.temperature
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         # (B, H, C', N), permute -> (B, N, H, C')
-        x = torch.matmul(attn, v).permute(0, 3, 1, 2).reshape(B, N, C)
+        x = (attn @ v).permute(0, 3, 1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

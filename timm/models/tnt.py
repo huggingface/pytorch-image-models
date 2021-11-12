@@ -12,9 +12,9 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import build_model_with_cfg
-from timm.models.fx_helpers import fx_and
 from timm.models.layers import Mlp, DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
+from timm.models.layers.trace_utils import _assert
 from timm.models.registry import register_model
 from timm.models.vision_transformer import resize_pos_embed
 
@@ -64,11 +64,11 @@ class Attention(nn.Module):
         q, k = qk.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
         v = self.v(x).reshape(B, N, self.num_heads, -1).permute(0, 2, 1, 3)
 
-        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+        attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        x = torch.matmul(attn, v).transpose(1, 2).reshape(B, N, -1)
+        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -138,9 +138,9 @@ class PixelEmbed(nn.Module):
 
     def forward(self, x, pixel_pos):
         B, C, H, W = x.shape
-        torch._assert(H == self.img_size[0],
+        _assert(H == self.img_size[0],
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}).")
-        torch._assert(W == self.img_size[1],
+        _assert(W == self.img_size[1],
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}).")
         x = self.proj(x)
         x = self.unfold(x)

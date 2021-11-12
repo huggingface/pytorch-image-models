@@ -12,6 +12,8 @@ Hacked together by / Copyright 2020 Ross Wightman
 import torch
 import torch.nn as nn
 
+from .trace_utils import _assert
+
 
 class EvoNormBatch2d(nn.Module):
     def __init__(self, num_features, apply_act=True, momentum=0.1, eps=1e-5, drop_block=None):
@@ -72,9 +74,9 @@ class EvoNormSample2d(nn.Module):
             nn.init.ones_(self.v)
 
     def forward(self, x):
-        torch._assert(x.dim() == 4, 'expected 4D input')
+        _assert(x.dim() == 4, 'expected 4D input')
         B, C, H, W = x.shape
-        torch._assert(C % self.groups == 0, '')
+        _assert(C % self.groups == 0, '')
         if self.apply_act:
             n = x * (x * self.v).sigmoid()
             x = x.reshape(B, self.groups, -1)
