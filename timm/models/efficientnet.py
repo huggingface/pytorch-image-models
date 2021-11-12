@@ -562,7 +562,7 @@ def _create_effnet(variant, pretrained=False, **kwargs):
         model_cls = EfficientNetFeatures
        
     
-#     default_cfg = default_cfgs[variant]
+    default_cfg = default_cfgs[variant]
     if kwargs.get('pth_path', None):
         # if use local weights and weights are existed
         if os.path.exists(kwargs['pth_path']):
