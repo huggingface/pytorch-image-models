@@ -8,8 +8,9 @@ from .features import _get_feature_info
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor
+    has_fx_feature_extraction = True
 except ImportError:
-    pass
+    has_fx_feature_extraction = False
 
 # Layers we went to treat as leaf modules
 from .layers import Conv2dSame, ScaledStdConv2dSame, BatchNormAct2d, BlurPool2d, CondConv2d, StdConv2dSame, DropPath
@@ -58,6 +59,7 @@ def register_autowrap_function(func: Callable):
 class FeatureGraphNet(nn.Module):
     def __init__(self, model, out_indices, out_map=None):
         super().__init__()
+        assert has_fx_feature_extraction, 'Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction'
         self.feature_info = _get_feature_info(model, out_indices)
         if out_map is not None:
             assert len(out_map) == len(out_indices)
@@ -66,7 +68,7 @@ class FeatureGraphNet(nn.Module):
         self.graph_module = create_feature_extractor(
             model, return_nodes,
             tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
-        
+
     def forward(self, x):
         return list(self.graph_module(x).values())
         
