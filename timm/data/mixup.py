@@ -103,6 +103,7 @@ class Mixup:
     """
     def __init__(self, mixup_alpha=1., cutmix_alpha=0., cutmix_minmax=None, prob=1.0, switch_prob=0.5,
                  mode='batch', correct_lam=True, label_smoothing=0., num_classes=0):
+        assert num_classes > 0, 'num_classes must be set for target generation'
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
         self.cutmix_minmax = cutmix_minmax
@@ -113,8 +114,6 @@ class Mixup:
         self.mix_prob = prob
         self.switch_prob = switch_prob
         self.label_smoothing = label_smoothing
-        if label_smoothing > 0.:
-            assert num_classes > 0
         self.num_classes = num_classes
         self.mode = mode
         self.correct_lam = correct_lam  # correct lambda based on clipped area for cutmix

@@ -22,6 +22,7 @@ def transforms_noaug_train(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         normalize=False,
+        compose=True,
 ):
     if interpolation == 'random':
         # random interpolation not supported with no-aug
@@ -38,7 +39,7 @@ def transforms_noaug_train(
     else:
         # (pre)fetcher and collate will handle tensor conversion and normalize
         tfl += [ToNumpy()]
-    return transforms.Compose(tfl)
+    return transforms.Compose(tfl) if compose else tfl
 
 
 def transforms_imagenet_train(
@@ -49,6 +50,7 @@ def transforms_imagenet_train(
         aug_cfg=AugCfg(),
         normalize=False,
         separate=False,
+        compose=True,
 ):
     """
     If separate==True, the transforms are returned as a tuple of 3 separate transforms
@@ -122,9 +124,13 @@ def transforms_imagenet_train(
 
     if separate:
         # return each transform stage separately
-        return transforms.Compose(primary_tfl), transforms.Compose(secondary_tfl), transforms.Compose(final_tfl)
+        if compose:
+            return transforms.Compose(primary_tfl), transforms.Compose(secondary_tfl), transforms.Compose(final_tfl)
+        else:
+            return primary_tfl, secondary_tfl, final_tfl
     else:
-        return transforms.Compose(primary_tfl + secondary_tfl + final_tfl)
+        tfl = primary_tfl + secondary_tfl + final_tfl
+        return transforms.Compose(tfl) if compose else tfl
 
 
 def transforms_imagenet_eval(
@@ -134,6 +140,7 @@ def transforms_imagenet_eval(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         normalize=False,
+        compose=True,
 ):
     crop_pct = crop_pct or DEFAULT_CROP_PCT
 
@@ -160,7 +167,7 @@ def transforms_imagenet_eval(
         # (pre)fetcher and collate will handle tensor conversion and normalize
         tfl += [ToNumpy()]
 
-    return transforms.Compose(tfl)
+    return transforms.Compose(tfl) if compose else tfl
 
 
 def create_transform_v2(
@@ -168,6 +175,7 @@ def create_transform_v2(
         is_training=False,
         normalize=False,
         separate=False,
+        compose=True,
         tf_preprocessing=False,
 ):
     """
@@ -175,10 +183,10 @@ def create_transform_v2(
     Args:
         cfg: Pre-processing configuration
         is_training (bool): Create transform for training pre-processing
-        tf_preprocessing (bool): Use Tensorflow pre-processing (for validation)
         normalize (bool): Enable normalization in transforms (otherwise handled by fetcher/pre-fetcher)
         separate (bool): Return transforms separated into stages (for train)
-
+        compose (bool): Wrap transforms in transform.Compose(), returns list otherwise
+        tf_preprocessing (bool): Use Tensorflow pre-processing (for validation)
     Returns:
 
     """
@@ -202,7 +210,9 @@ def create_transform_v2(
                 interpolation=cfg.interpolation,
                 normalize=normalize,
                 mean=cfg.mean,
-                std=cfg.std)
+                std=cfg.std,
+                compose=compose,
+            )
         elif is_training:
             transform = transforms_imagenet_train(
                 img_size,
@@ -211,7 +221,9 @@ def create_transform_v2(
                 std=cfg.std,
                 aug_cfg=cfg.aug,
                 normalize=normalize,
-                separate=separate)
+                separate=separate,
+                compose=compose,
+            )
         else:
             assert not separate, "Separate transforms not supported for validation preprocessing"
             transform = transforms_imagenet_eval(
@@ -221,6 +233,7 @@ def create_transform_v2(
                 mean=cfg.mean,
                 std=cfg.std,
                 normalize=normalize,
+                compose=compose,
             )
 
     return transform

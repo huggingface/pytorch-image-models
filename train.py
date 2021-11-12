@@ -563,17 +563,13 @@ def setup_data(args, default_cfg, dev_env: DeviceEnv, mixup_active: bool):
 
     # if using PyTorch XLA and RandomErasing is enabled, we must normalize and do RE in transforms on CPU
     normalize_in_transform = dev_env.type_xla and args.reprob > 0
-
-    dataset_train.transform = create_transform_v2(
-        cfg=train_pp_cfg, is_training=True, normalize=normalize_in_transform)
-
     loader_train = create_loader_v2(
         dataset_train,
         batch_size=args.batch_size,
         is_training=True,
-        normalize=not normalize_in_transform,
         pp_cfg=train_pp_cfg,
         mix_cfg=mixup_cfg,
+        normalize_in_transform=normalize_in_transform,
         num_workers=args.workers,
         pin_memory=args.pin_mem,
         use_multi_epochs_loader=args.use_multi_epochs_loader
@@ -587,19 +583,17 @@ def setup_data(args, default_cfg, dev_env: DeviceEnv, mixup_active: bool):
         std=data_config['std'],
     )
 
-    dataset_eval.transform = create_transform_v2(
-        cfg=eval_pp_cfg, is_training=False, normalize=normalize_in_transform)
-
     eval_workers = args.workers
     if 'tfds' in args.dataset:
-        # FIXME reduce validation issues when using TFDS w/ workers and distributed training
+        # FIXME reduces validation padding issues when using TFDS w/ workers and distributed training
         eval_workers = min(2, args.workers)
+
     loader_eval = create_loader_v2(
         dataset_eval,
         batch_size=args.validation_batch_size or args.batch_size,
         is_training=False,
-        normalize=not normalize_in_transform,
         pp_cfg=eval_pp_cfg,
+        normalize_in_transform=normalize_in_transform,
         num_workers=eval_workers,
         pin_memory=args.pin_mem,
     )
@@ -708,7 +702,7 @@ def after_train_step(
                     step_end_idx=step_end_idx,
                     epoch=state.epoch,
                     loss=loss_avg.item(),
-                    rate=tracker.get_avg_iter_rate(global_batch_size),
+                    rate=(tracker.get_last_iter_rate(global_batch_size), tracker.get_avg_iter_rate(global_batch_size)),
                     lr=lr_avg,
                 )
 
@@ -756,16 +750,14 @@ def evaluate(
                 dev_env.mark_step()
             elif dev_env.type_cuda:
                 dev_env.synchronize()
-
-            # FIXME uncommenting this fixes race btw model `output`/`loss` and loss_m/accuracy_m meter input
+            # FIXME uncommenting this fixes race btw model `output` / `loss` and loss_m / accuracy_m meter input
             # for PyTorch XLA GPU use.
             # This issue does not exist for normal PyTorch w/ GPU (CUDA) or PyTorch XLA w/ TPU.
             # loss.item()
-
             tracker.mark_iter_step_end()
+
             losses_m.update(loss, output.size(0))
             accuracy_m.update(output, target)
-
             if last_step or step_idx % log_interval == 0:
                 top1, top5 = accuracy_m.compute().values()
                 loss_avg = losses_m.compute()

@@ -154,11 +154,10 @@ def validate(args):
         std=data_config['std'],
     )
 
-    dataset.transform = create_transform_v2(cfg=eval_pp_cfg, is_training=False)
-
     loader = create_loader_v2(
         dataset,
         batch_size=args.batch_size,
+        is_training=False,
         pp_cfg=eval_pp_cfg,
         num_workers=args.workers,
         pin_memory=args.pin_mem)
@@ -176,24 +175,20 @@ def validate(args):
             last_step = step_idx == num_steps - 1
             tracker.mark_iter_data_end()
 
-            # compute output
             with dev_env.autocast():
                 output = model(sample)
-
             if valid_labels is not None:
                 output = output[:, valid_labels]
             loss = criterion(output, target)
 
-            if dev_env.type_cuda:
+            if dev_env.type_xla:
+                dev_env.mark_step()
+            elif dev_env.type_cuda:
                 dev_env.synchronize()
             tracker.mark_iter_step_end()
 
-            if dev_env.type_xla:
-                dev_env.mark_step()
-
             if real_labels is not None:
                 real_labels.add_result(output)
-
             losses.update(loss.detach(), sample.size(0))
             accuracy.update(output.detach(), target)
 
@@ -205,7 +200,7 @@ def validate(args):
                     phase='eval',
                     step_idx=step_idx,
                     num_steps=num_steps,
-                    rate=args.batch_size / tracker.iter_time.avg,
+                    rate=(tracker.get_last_iter_rate(output.shape[0]), tracker.get_avg_iter_rate(args.batch_size)),
                     loss=loss_avg.item(),
                     top1=top1.item(),
                     top5=top5.item(),

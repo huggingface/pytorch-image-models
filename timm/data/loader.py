@@ -6,18 +6,19 @@ https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#d
 Hacked together by / Copyright 2020 Ross Wightman
 """
 
-from typing import Tuple, Optional, Union, Callable
+from typing import Optional, Callable
 
-import torch.utils.data
 import numpy as np
+import torch.utils.data
 
 from timm.bits import DeviceEnv
 from .collate import fast_collate
-from .config import PreprocessCfg, AugCfg, MixupCfg
+from .config import PreprocessCfg, MixupCfg
 from .distributed_sampler import OrderedDistributedSampler
 from .fetcher import Fetcher
 from .mixup import FastCollateMixup
 from .prefetcher_cuda import PrefetcherCuda
+from .transforms_factory import create_transform_v2
 
 
 def _worker_init(worker_id):
@@ -31,9 +32,11 @@ def create_loader_v2(
         batch_size: int,
         is_training: bool = False,
         dev_env: Optional[DeviceEnv] = None,
-        normalize=True,
         pp_cfg: PreprocessCfg = PreprocessCfg(),
         mix_cfg: MixupCfg = None,
+        create_transform: bool = True,
+        normalize_in_transform: bool = True,
+        separate_transform: bool = False,
         num_workers: int = 1,
         collate_fn: Optional[Callable] = None,
         pin_memory: bool = False,
@@ -46,10 +49,12 @@ def create_loader_v2(
         dataset: 
         batch_size: 
         is_training: 
-        dev_env: 
-        normalize: 
+        dev_env:
         pp_cfg: 
-        mix_cfg: 
+        mix_cfg:
+        create_transform:
+        normalize_in_transform:
+        separate_transform:
         num_workers: 
         collate_fn: 
         pin_memory: 
@@ -61,6 +66,14 @@ def create_loader_v2(
     """
     if dev_env is None:
         dev_env = DeviceEnv.instance()
+
+    if create_transform:
+        dataset.transform = create_transform_v2(
+            cfg=pp_cfg,
+            is_training=is_training,
+            normalize=normalize_in_transform,
+            separate=separate_transform,
+        )
 
     sampler = None
     if dev_env.distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
@@ -110,18 +123,19 @@ def create_loader_v2(
         loader = loader_class(dataset, **loader_args)
 
     fetcher_kwargs = dict(
-        normalize=normalize,
+        normalize=not normalize_in_transform,
         mean=pp_cfg.mean,
         std=pp_cfg.std,
     )
-    if normalize and is_training and pp_cfg.aug is not None:
+    if not normalize_in_transform and is_training and pp_cfg.aug is not None:
+        # If normalization can be done in the prefetcher, random erasing is done there too
+        # NOTE RandomErasing does not work well in XLA so normalize_in_transform will be True
         fetcher_kwargs.update(dict(
             re_prob=pp_cfg.aug.re_prob,
             re_mode=pp_cfg.aug.re_mode,
             re_count=pp_cfg.aug.re_count,
             num_aug_splits=pp_cfg.aug.num_aug_splits,
         ))
-
     if dev_env.type_cuda:
         loader = PrefetcherCuda(loader, **fetcher_kwargs)
     else:

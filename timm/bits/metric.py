@@ -10,6 +10,7 @@ from .distributed import all_gather_sequence, all_reduce_sequence
 
 MetricValueT = Union[float, torch.Tensor, List[float], List[torch.Tensor]]
 
+
 @dataclass
 class ValueInfo:
     initial: Optional[MetricValueT] = 0.
@@ -20,7 +21,10 @@ class ValueInfo:
 
 class Metric(abc.ABC):
 
-    def __init__(self, dev_env: DeviceEnv = None):
+    def __init__(
+            self,
+            dev_env: DeviceEnv = None
+    ):
         self._infos: Dict[str, ValueInfo] = {}
         self._values: Dict[str, Optional[MetricValueT]] = {}
         self._values_dist: Dict[str, Optional[MetricValueT]] = {}

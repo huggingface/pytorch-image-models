@@ -156,7 +156,7 @@ class Monitor:
             step_end_idx: Optional[int] = None,
             epoch: Optional[int] = None,
             loss: Optional[float] = None,
-            rate: Optional[float] = None,
+            rate: Optional[Union[float, Tuple[float, float]]] = None,
             phase_suffix: str = '',
             **kwargs,
     ):
@@ -168,12 +168,17 @@ class Monitor:
             step_end_idx = max(0, kwargs.pop('num_steps') - 1)
         phase_title = f'{phase.capitalize()} ({phase_suffix})' if phase_suffix else f'{phase.capitalize()}:'
         progress = 100. * step_idx / step_end_idx if step_end_idx else 0.
+        rate_str = ''
+        if isinstance(rate, (tuple, list)):
+            rate_str = f'Rate: {rate[0]:.2f}/s ({rate[1]:.2f}/s)'
+        elif rate is not None:
+            rate_str = f'Rate: {rate:.2f}/s'
         text_update = [
             phase_title,
             f'{epoch}' if epoch is not None else None,
             f'[{step_idx}]' if step_end_idx is None else None,
             f'[{step_idx}/{step_end_idx} ({progress:>3.0f}%)]' if step_end_idx is not None else None,
-            f'Rate: {rate:.2f}/s' if rate is not None else None,
+            rate_str,
             f'Loss: {loss:.5f}' if loss is not None else None,
         ]
         _add_kwargs(text_update, **kwargs)
