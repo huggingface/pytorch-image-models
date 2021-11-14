@@ -91,8 +91,8 @@ default_cfgs = {
 
     # ResNeXt
     'resnext50_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50_32x4d_ra-d733960d.pth',
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnext50_32x4d_a1h-0146ab0a.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnext50d_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50d_32x4d-103e99f8.pth',
         interpolation='bicubic',
