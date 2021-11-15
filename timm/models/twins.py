@@ -22,7 +22,7 @@ from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .layers import Mlp, DropPath, to_2tuple, trunc_normal_
-from .fx_features import register_leaf_module
+from .fx_features import register_notrace_module
 from .registry import register_model
 from .vision_transformer import Attention
 from .helpers import build_model_with_cfg
@@ -63,7 +63,7 @@ default_cfgs = {
 Size_ = Tuple[int, int]
 
 
-@register_leaf_module  # reason: FX can't symbolically trace control flow in forward method
+@register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
 class LocallyGroupedAttn(nn.Module):
     """ LSA: self attention within a group
     """

@@ -25,10 +25,10 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_autowrap_function
+from .fx_features import register_notrace_function
 from .helpers import build_model_with_cfg, named_apply
 from .layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_
-from .layers.trace_utils import _assert
+from .layers import _assert
 from .layers import create_conv2d, create_pool2d, to_ntuple
 from .registry import register_model
 
@@ -155,7 +155,7 @@ def blockify(x, block_size: int):
     return x  # (B, T, N, C)
 
 
-@register_autowrap_function  # reason: int receives Proxy
+@register_notrace_function  # reason: int receives Proxy
 def deblockify(x, block_size: int):
     """blocks to image
     Args:

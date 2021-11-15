@@ -36,7 +36,7 @@ except ImportError:
     pass
 
 
-def register_leaf_module(module: nn.Module):
+def register_notrace_module(module: nn.Module):
     """
     Any module not under timm.models.layers should get this decorator if we don't want to trace through it.
     """
@@ -48,7 +48,7 @@ def register_leaf_module(module: nn.Module):
 _autowrap_functions = set()
 
 
-def register_autowrap_function(func: Callable):
+def register_notrace_function(func: Callable):
     """
     Decorator for functions which ought not to be traced through
     """

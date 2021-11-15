@@ -21,7 +21,7 @@ from .vision_transformer import _cfg, Mlp
 from .registry import register_model
 from .layers import DropPath, trunc_normal_, to_2tuple
 from .cait import ClassAttn
-from .fx_features import register_leaf_module
+from .fx_features import register_notrace_module
 
 
 def _cfg(url='', **kwargs):
@@ -98,7 +98,7 @@ default_cfgs = {
 }
 
 
-@register_leaf_module  # reason: FX can't symbolically trace torch.arange in forward method
+@register_notrace_module  # reason: FX can't symbolically trace torch.arange in forward method
 class PositionalEncodingFourier(nn.Module):
     """
     Positional encoding relying on a fourier kernel matching the one used in the "Attention is all of Need" paper.

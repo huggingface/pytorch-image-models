@@ -14,7 +14,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import build_model_with_cfg
 from timm.models.layers import Mlp, DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
-from timm.models.layers.trace_utils import _assert
+from timm.models.layers import _assert
 from timm.models.registry import register_model
 from timm.models.vision_transformer import resize_pos_embed
 

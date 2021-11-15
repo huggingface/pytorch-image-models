@@ -32,7 +32,7 @@ from functools import partial
 from typing import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_autowrap_function
+from .fx_features import register_notrace_function
 from .helpers import build_model_with_cfg
 from .layers import DropPath, to_2tuple, trunc_normal_, _assert
 from .registry import register_model
@@ -259,7 +259,7 @@ def _compute_num_patches(img_size, patches):
     return [i[0] // p * i[1] // p for i, p in zip(img_size, patches)]
 
 
-@register_autowrap_function
+@register_notrace_function
 def scale_image(x, ss: Tuple[int, int], crop_scale: bool = False):  # annotations for torchscript
     """
     Pulled out of CrossViT.forward_features to bury conditional logic in a leaf node for FX tracing.
