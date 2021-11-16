@@ -186,6 +186,7 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
         return
     if pth_file_path is not None:
         # load pretrained from local file
+        _logger.info(f'Loading pretrained weights from local file: ({pth_file_path})')
         state_dict = torch.load(pth_file_path, map_location='cpu')
     elif hf_hub_id and has_hf_hub(necessary=not pretrained_url):
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({hf_hub_id})')
