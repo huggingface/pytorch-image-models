@@ -10,6 +10,7 @@ Changes for timm, feature extraction, and rounded channel variant hacked togethe
 Copyright 2020 Ross Wightman
 """
 
+import torch
 import torch.nn as nn
 from functools import partial
 from math import ceil
@@ -92,7 +93,7 @@ class LinearBottleneck(nn.Module):
         if self.use_shortcut:
             if self.drop_path is not None:
                 x = self.drop_path(x)
-            x[:, 0:self.in_channels] += shortcut
+            x = torch.cat([x[:, 0:self.in_channels] + shortcut, x[:, self.in_channels:]], dim=1)
         return x
 
 

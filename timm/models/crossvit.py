@@ -22,6 +22,7 @@ NOTE: model names have been renamed from originals to represent actual input res
 Modifed from Timm. https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 
 """
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -31,8 +32,9 @@ from functools import partial
 from typing import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .fx_features import register_notrace_function
 from .helpers import build_model_with_cfg
-from .layers import DropPath, to_2tuple, trunc_normal_
+from .layers import DropPath, to_2tuple, trunc_normal_, _assert
 from .registry import register_model
 from .vision_transformer import Mlp, Block
 
@@ -116,8 +118,10 @@ class PatchEmbed(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         # FIXME look at relaxing size constraints
-        assert H == self.img_size[0] and W == self.img_size[1], \
-            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        _assert(H == self.img_size[0],
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}).")
+        _assert(W == self.img_size[1],
+                f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}).")
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
 
@@ -255,6 +259,27 @@ def _compute_num_patches(img_size, patches):
     return [i[0] // p * i[1] // p for i, p in zip(img_size, patches)]
 
 
+@register_notrace_function
+def scale_image(x, ss: Tuple[int, int], crop_scale: bool = False):  # annotations for torchscript
+    """
+    Pulled out of CrossViT.forward_features to bury conditional logic in a leaf node for FX tracing.
+    Args:
+        x (Tensor): input image
+        ss (tuple[int, int]): height and width to scale to
+        crop_scale (bool): whether to crop instead of interpolate to achieve the desired scale. Defaults to False
+    Returns:
+        Tensor: the "scaled" image batch tensor
+    """
+    H, W = x.shape[-2:]
+    if H != ss[0] or W != ss[1]:
+        if crop_scale and ss[0] <= H and ss[1] <= W:
+            cu, cl = int(round((H - ss[0]) / 2.)), int(round((W - ss[1]) / 2.))
+            x = x[:, :, cu:cu + ss[0], cl:cl + ss[1]]
+        else:
+            x = torch.nn.functional.interpolate(x, size=ss, mode='bicubic', align_corners=False)
+    return x
+
+
 class CrossViT(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
@@ -342,17 +367,12 @@ class CrossViT(nn.Module):
              range(self.num_branches)])
 
     def forward_features(self, x):
-        B, C, H, W = x.shape
+        B = x.shape[0]
         xs = []
         for i, patch_embed in enumerate(self.patch_embed):
             x_ = x
             ss = self.img_size_scaled[i]
-            if H != ss[0] or W != ss[1]:
-                if self.crop_scale and ss[0] <= H and ss[1] <= W:
-                    cu, cl = int(round((H - ss[0]) / 2.)), int(round((W - ss[1]) / 2.))
-                    x_ = x_[:, :, cu:cu + ss[0], cl:cl + ss[1]]
-                else:
-                    x_ = torch.nn.functional.interpolate(x_, size=ss, mode='bicubic', align_corners=False)
+            x_ = scale_image(x_, ss, self.crop_scale)
             x_ = patch_embed(x_)
             cls_tokens = self.cls_token_0 if i == 0 else self.cls_token_1  # hard-coded for torch jit script
             cls_tokens = cls_tokens.expand(B, -1, -1)
