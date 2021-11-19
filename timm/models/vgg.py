@@ -12,7 +12,8 @@ from typing import Union, List, Dict, Any, cast
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import ClassifierHead, ConvBnAct
+from .fx_features import register_notrace_module
+from .layers import ClassifierHead
 from .registry import register_model
 
 __all__ = [
@@ -52,6 +53,7 @@ cfgs: Dict[str, List[Union[str, int]]] = {
 }
 
 
+@register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
 class ConvMlp(nn.Module):
 
     def __init__(self, in_features=512, out_features=4096, kernel_size=7, mlp_ratio=1.0,

@@ -22,6 +22,7 @@ import torch.nn.functional as F
 
 from .helpers import to_2tuple, make_divisible
 from .weight_init import trunc_normal_
+from .trace_utils import _assert
 
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
@@ -133,8 +134,8 @@ class BottleneckAttn(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H == self.pos_embed.height
-        assert W == self.pos_embed.width
+        _assert(H == self.pos_embed.height, '')
+        _assert(W == self.pos_embed.width, '')
 
         x = self.qkv(x)  # B, (2 * dim_head_qk + dim_head_v) * num_heads, H, W
 
@@ -154,5 +155,3 @@ class BottleneckAttn(nn.Module):
         out = (attn @ v).transpose(-1, -2).reshape(B, self.dim_out_v, H, W)  # B, dim_out, H, W
         out = self.pool(out)
         return out
-
-

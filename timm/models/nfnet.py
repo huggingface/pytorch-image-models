@@ -26,6 +26,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .fx_features import register_notrace_module
 from .helpers import build_model_with_cfg
 from .registry import register_model
 from .layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame,\
@@ -318,6 +319,7 @@ class DownsampleAvg(nn.Module):
         return self.conv(self.pool(x))
 
 
+@register_notrace_module  # reason: mul_ causes FX to drop a relevant node. https://github.com/pytorch/pytorch/issues/68301
 class NormFreeBlock(nn.Module):
     """Normalization-Free pre-activation block.
     """

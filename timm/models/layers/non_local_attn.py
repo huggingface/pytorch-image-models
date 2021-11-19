@@ -10,6 +10,7 @@ from torch.nn import functional as F
 
 from .conv_bn_act import ConvBnAct
 from .helpers import make_divisible
+from .trace_utils import _assert
 
 
 class NonLocalAttn(nn.Module):
@@ -83,7 +84,7 @@ class BilinearAttnTransform(nn.Module):
 
     def resize_mat(self, x, t: int):
         B, C, block_size, block_size1 = x.shape
-        assert block_size == block_size1
+        _assert(block_size == block_size1, '')
         if t <= 1:
             return x
         x = x.view(B * C, -1, 1, 1)
@@ -95,7 +96,8 @@ class BilinearAttnTransform(nn.Module):
         return x
 
     def forward(self, x):
-        assert x.shape[-1] % self.block_size == 0 and x.shape[-2] % self.block_size == 0
+        _assert(x.shape[-1] % self.block_size == 0, '')
+        _assert(x.shape[-2] % self.block_size == 0, '')
         B, C, H, W = x.shape
         out = self.conv1(x)
         rp = F.adaptive_max_pool2d(out, (self.block_size, 1))
