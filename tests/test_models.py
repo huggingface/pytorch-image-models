@@ -407,7 +407,6 @@ def test_model_backward_fx(model_name, batch_size):
 
 # reason: model is scripted after fx tracing, but beit has torch.jit.is_scripting() control flow
 EXCLUDE_FX_JIT_FILTERS = [
-    'beit_*',
     'deit_*_distilled_patch16_224',
     'levit*',
     'pit_*_distilled_224',
