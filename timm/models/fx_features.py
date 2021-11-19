@@ -71,4 +71,3 @@ class FeatureGraphNet(nn.Module):
 
     def forward(self, x):
         return list(self.graph_module(x).values())
-        
