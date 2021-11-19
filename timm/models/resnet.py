@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, create_attn, get_attn, create_classifier
+from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
 from .registry import register_model
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
@@ -88,6 +88,11 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/wide_resnet50_racm-8234f177.pth',
         interpolation='bicubic'),
     'wide_resnet101_2': _cfg(url='https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth'),
+
+    # ResNets w/ alternative norm layers
+    'resnet50_gn': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_gn_a1h2-8fe6c4d0.pth',
+        crop_pct=0.94, interpolation='bicubic'),
 
     # ResNeXt
     'resnext50_32x4d': _cfg(
@@ -879,6 +884,14 @@ def wide_resnet101_2(pretrained=False, **kwargs):
     """
     model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], base_width=128, **kwargs)
     return _create_resnet('wide_resnet101_2', pretrained, **model_args)
+
+
+@register_model
+def resnet50_gn(pretrained=False, **kwargs):
+    """Constructs a ResNet-50 model w/ GroupNorm
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3],  **kwargs)
+    return _create_resnet('resnet50_gn', pretrained, norm_layer=GroupNorm, **model_args)
 
 
 @register_model
