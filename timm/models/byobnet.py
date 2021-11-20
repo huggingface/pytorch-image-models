@@ -35,7 +35,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, named_apply
 from .layers import ClassifierHead, ConvBnAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
-    create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple
+    create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple, EvoNormSample2d
 from .registry import register_model
 
 __all__ = ['ByobNet', 'ByoModelCfg', 'ByoBlockCfg', 'create_byob_stem', 'create_block']
@@ -136,20 +136,26 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/gcresnext50ts_256-3e0f515e.pth'),
 
     # experimental models, likely to change ot be removed
-    'regnetz_b': _cfgr(
+    'regnetz_b16': _cfgr(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_b_raa-677d9606.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv', crop_pct=0.94),
-    'regnetz_c': _cfgr(
+    'regnetz_c16': _cfgr(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_c_rab2_256-a54bf36a.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), first_conv='stem.conv', crop_pct=0.94),
-    'regnetz_d': _cfgr(
+    'regnetz_d32': _cfgr(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_d_rab_256-b8073a89.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
     'regnetz_d8': _cfgr(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_d8_bh-afc03c55.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=1.0),
+    'regnetz_e8': _cfgr(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_e8_bh-aace8e6e.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=1.0),
+    'regnetz_d8_evob': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
-    'regnetz_e8': _cfgr(
+    'regnetz_d8_evos': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
 }
@@ -506,7 +512,7 @@ model_cfgs = dict(
     ),
 
     # experimental models, closer to a RegNetZ than a ResNet. Similar to EfficientNets but w/ groups instead of DW
-    regnetz_b=ByoModelCfg(
+    regnetz_b16=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=48, s=2, gs=16, br=3),
             ByoBlockCfg(type='bottle', d=6, c=96, s=2, gs=16, br=3),
@@ -522,7 +528,7 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
-    regnetz_c=ByoModelCfg(
+    regnetz_c16=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=2, c=48, s=2, gs=16, br=4),
             ByoBlockCfg(type='bottle', d=6, c=96, s=2, gs=16, br=4),
@@ -538,7 +544,7 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
-    regnetz_d=ByoModelCfg(
+    regnetz_d32=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=64, s=1, gs=32, br=4),
             ByoBlockCfg(type='bottle', d=6, c=128, s=2, gs=32, br=4),
@@ -589,8 +595,45 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
-)
 
+    # experimental EvoNorm configs
+    regnetz_d8_evob=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=64, s=1, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=6, c=128, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=12, c=256, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=3, c=384, s=2, gs=8, br=4),
+        ),
+        stem_chs=64,
+        stem_type='tiered',
+        stem_pool='',
+        downsample='',
+        num_features=1792,
+        act_layer='silu',
+        norm_layer='evonormbatch',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
+    regnetz_d8_evos=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=64, s=1, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=6, c=128, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=12, c=256, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=3, c=384, s=2, gs=8, br=4),
+        ),
+        stem_chs=64,
+        stem_type='deep',
+        stem_pool='',
+        downsample='',
+        num_features=1792,
+        act_layer='silu',
+        norm_layer=partial(EvoNormSample2d, groups=32),
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
+)
 
 @register_model
 def gernet_l(pretrained=False, **kwargs):
@@ -779,24 +822,24 @@ def gcresnext50ts(pretrained=False, **kwargs):
 
 
 @register_model
-def regnetz_b(pretrained=False, **kwargs):
+def regnetz_b16(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('regnetz_b', pretrained=pretrained, **kwargs)
+    return _create_byobnet('regnetz_b16', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_c(pretrained=False, **kwargs):
+def regnetz_c16(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('regnetz_c', pretrained=pretrained, **kwargs)
+    return _create_byobnet('regnetz_c16', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_d(pretrained=False, **kwargs):
+def regnetz_d32(pretrained=False, **kwargs):
     """
     """
-    return _create_byobnet('regnetz_d', pretrained=pretrained, **kwargs)
+    return _create_byobnet('regnetz_d32', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -811,6 +854,20 @@ def regnetz_e8(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('regnetz_e8', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_d8_evob(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_d8_evob', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_d8_evos(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_d8_evos', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
