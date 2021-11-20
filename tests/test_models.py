@@ -337,7 +337,12 @@ def _create_fx_model(model, train=False):
 EXCLUDE_FX_FILTERS = []
 # not enough memory to run fx on more models than other tests
 if 'GITHUB_ACTIONS' in os.environ:
-    EXCLUDE_FX_FILTERS += ['beit_large*', 'swin_large*']
+    EXCLUDE_FX_FILTERS += [
+        'beit_large*',
+        'swin_large*',
+        '*resnext101_32x32d',
+        'resnetv2_152x2*',
+    ]
 
 
 @pytest.mark.timeout(120)
