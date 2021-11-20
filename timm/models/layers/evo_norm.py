@@ -55,7 +55,7 @@ class EvoNormBatch2d(nn.Module):
 
 
 class EvoNormSample2d(nn.Module):
-    def __init__(self, num_features, apply_act=True, groups=8, eps=1e-5, drop_block=None):
+    def __init__(self, num_features, apply_act=True, groups=32, eps=1e-5, drop_block=None):
         super(EvoNormSample2d, self).__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.groups = groups
