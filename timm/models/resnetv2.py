@@ -120,6 +120,13 @@ default_cfgs = {
         interpolation='bicubic'),
     'resnetv2_152d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
+
+    'resnetv2_50d_gn': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_evob': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_evos': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
 }
 
 
@@ -639,19 +646,27 @@ def resnetv2_152d(pretrained=False, **kwargs):
         stem_type='deep', avg_down=True, **kwargs)
 
 
-# @register_model
-# def resnetv2_50ebd(pretrained=False, **kwargs):
-#     # FIXME for testing w/ TPU + PyTorch XLA
-#     return _create_resnetv2(
-#         'resnetv2_50d', pretrained=pretrained,
-#         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormBatch2d,
-#         stem_type='deep', avg_down=True, **kwargs)
-#
-#
-# @register_model
-# def resnetv2_50esd(pretrained=False, **kwargs):
-#     # FIXME for testing w/ TPU + PyTorch XLA
-#     return _create_resnetv2(
-#         'resnetv2_50d', pretrained=pretrained,
-#         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormSample2d,
-#         stem_type='deep', avg_down=True, **kwargs)
+# Experimental configs (may change / be removed)
+
+@register_model
+def resnetv2_50d_gn(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_gn', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=GroupNormAct,
+        stem_type='deep', avg_down=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_evob(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_evob', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormBatch2d,
+        stem_type='deep', avg_down=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_evos(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_evos', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormSample2d,
+        stem_type='deep', avg_down=True, **kwargs)

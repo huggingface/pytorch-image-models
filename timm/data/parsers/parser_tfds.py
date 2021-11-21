@@ -36,7 +36,7 @@ PREFETCH_SIZE = 2048  # examples to prefetch
 
 def even_split_indices(split, n, num_examples):
     partitions = [round(i * num_examples / n) for i in range(n + 1)]
-    return [f"{split}[{partitions[i]}:{partitions[i+1]}]" for i in range(n)]
+    return [f"{split}[{partitions[i]}:{partitions[i + 1]}]" for i in range(n)]
 
 
 def get_class_labels(info):
@@ -70,6 +70,7 @@ class ParserTfds(Parser):
         components.
 
     """
+
     def __init__(
             self,
             root,
@@ -99,6 +100,7 @@ class ParserTfds(Parser):
             download: download and build TFDS dataset if set, otherwise must use tfds CLI
             repeats: iterate through (repeat) the dataset this many times per iteration (once if 0 or 1)
             seed: common seed for shard shuffle across all distributed/worker instances
+            input_name: name of Feature to return as data (input)
             input_image: image mode if input is an image (currently PIL mode string)
             target_name: name of Feature to return as target (label)
             target_image: image mode if target is an image (currently PIL mode string)
@@ -111,7 +113,7 @@ class ParserTfds(Parser):
         self.split = split
         self.is_training = is_training
         if self.is_training:
-            assert batch_size is not None,\
+            assert batch_size is not None, \
                 "Must specify batch_size in training mode for reasonable behaviour w/ TFDS wrapper"
         self.batch_size = batch_size
         self.repeats = repeats
@@ -184,7 +186,7 @@ class ParserTfds(Parser):
             InputContext will assign subset of underlying TFRecord files to each 'pipeline' if used.
             My understanding is that using split, the underling TFRecord files will shuffle (shuffle_files=True)
             between the splits each iteration, but that understanding could be wrong.
-            
+
             I am currently using a mix of InputContext shard assignment and fine-grained sub-splits for distributing
             the data across workers. For training InputContext is used to assign shards to nodes unless num_shards
             in dataset < total number of workers. Otherwise sub-split API is used for datasets without enough shards or

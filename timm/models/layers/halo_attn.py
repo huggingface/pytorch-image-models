@@ -16,7 +16,7 @@ The attention mechanism works but it's slow as implemented.
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
-from typing import Tuple, List
+from typing import List
 
 import torch
 from torch import nn
@@ -24,6 +24,7 @@ import torch.nn.functional as F
 
 from .helpers import make_divisible
 from .weight_init import trunc_normal_
+from .trace_utils import _assert
 
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
@@ -167,8 +168,8 @@ class HaloAttn(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H % self.block_size == 0
-        assert W % self.block_size == 0
+        _assert(H % self.block_size == 0, '')
+        _assert(W % self.block_size == 0, '')
         num_h_blocks = H // self.block_size
         num_w_blocks = W // self.block_size
         num_blocks = num_h_blocks * num_w_blocks

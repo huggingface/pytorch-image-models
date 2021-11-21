@@ -9,6 +9,7 @@ from torch import nn as nn
 
 from .conv_bn_act import ConvBnAct
 from .helpers import make_divisible
+from .trace_utils import _assert
 
 
 def _kernel_valid(k):
@@ -34,7 +35,7 @@ class SelectiveKernelAttn(nn.Module):
         self.fc_select = nn.Conv2d(attn_channels, channels * num_paths, kernel_size=1, bias=False)
 
     def forward(self, x):
-        assert x.shape[1] == self.num_paths
+        _assert(x.shape[1] == self.num_paths, '')
         x = x.sum(1).mean((2, 3), keepdim=True)
         x = self.fc_reduce(x)
         x = self.bn(x)
