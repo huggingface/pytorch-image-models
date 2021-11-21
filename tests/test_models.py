@@ -342,6 +342,7 @@ if 'GITHUB_ACTIONS' in os.environ:
         'swin_large*',
         '*resnext101_32x32d',
         'resnetv2_152x2*',
+        '*nfnet_f2*',
     ]
 
 
