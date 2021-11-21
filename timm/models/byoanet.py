@@ -79,7 +79,7 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet_a1h_256-c9bc4e74.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'halo2botnet50ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h_256-ad9e16fb.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h2_256-fd9c11a3.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 
