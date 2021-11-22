@@ -345,6 +345,9 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*nfnet_f2*',
         'resmlp_big*',
         'resnetrs270',
+        'vgg*',
+        'vit_large*',
+        'xcit_large*',
     ]
 
 
