@@ -339,16 +339,17 @@ EXCLUDE_FX_FILTERS = []
 if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FX_FILTERS += [
         'beit_large*',
-        'swin_large*',
+        'mixer_l*',
+        '*nfnet_f2*',
         '*resnext101_32x32d',
         'resnetv2_152x2*',
-        '*nfnet_f2*',
         'resmlp_big*',
         'resnetrs270',
+        'swin_large*',
         'vgg*',
         'vit_large*',
+        'vit_base_patch8*',
         'xcit_large*',
-        'mixer_l*',
     ]
 
 
