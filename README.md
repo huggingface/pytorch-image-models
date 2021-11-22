@@ -23,10 +23,11 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
-### Nov 19, 2021
+### Nov 22, 2021
 * A number of updated weights anew new model defs
   * `eca_halonext26ts` - 79.5 @ 256
   * `resnet50_gn` (new) - 80.1 @ 224, 81.3 @ 288
+  * `resnet50` - 80.68 @ 224, 80.9 @ 288 (trained at 176, not replacing current a1 weights as default since these don't scale as well to higher res, [weights](https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1h2_176-001a1197.pth))
   * `resnext50_32x4d` - 81.1 @ 224, 82.0 @ 288
   * `sebotnet33ts_256` (new) - 81.2 @ 224
   * `lamhalobotnet50ts_256` - 81.5 @ 256
