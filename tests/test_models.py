@@ -343,6 +343,8 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*resnext101_32x32d',
         'resnetv2_152x2*',
         '*nfnet_f2*',
+        'resmlp_big*',
+        'resnetrs270',
     ]
 
 
