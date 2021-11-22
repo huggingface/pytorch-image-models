@@ -29,6 +29,7 @@ def create_model(
         scriptable=None,
         exportable=None,
         no_jit=None,
+        use_ml_decoder_head=False,
         **kwargs):
     """Create a model
 
@@ -79,6 +80,10 @@ def create_model(
 
     with set_layer_config(scriptable=scriptable, exportable=exportable, no_jit=no_jit):
         model = create_fn(pretrained=pretrained, **kwargs)
+
+    if use_ml_decoder_head:
+        from timm.models.layers.ml_decoder import add_ml_decoder_head
+        model = add_ml_decoder_head(model)
 
     if checkpoint_path:
         load_checkpoint(model, checkpoint_path)
