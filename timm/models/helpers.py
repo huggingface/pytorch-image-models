@@ -15,7 +15,7 @@ from torch.hub import load_state_dict_from_url
 
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
 from .fx_features import FeatureGraphNet
-from .hub import has_hf_hub, download_cached_file, load_state_dict_from_hf, load_state_dict_from_url
+from .hub import has_hf_hub, download_cached_file, load_state_dict_from_hf
 from .layers import Conv2dSame, Linear
 
 
