@@ -21,10 +21,13 @@ import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .fx_features import register_notrace_function
 from .helpers import build_model_with_cfg, overlay_external_default_cfg
 from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
+from .layers import _assert
 from .registry import register_model
 from .vision_transformer import checkpoint_filter_fn, _init_vit_weights
+
 
 _logger = logging.getLogger(__name__)
 
@@ -100,6 +103,7 @@ def window_partition(x, window_size: int):
     return windows
 
 
+@register_notrace_function  # reason: int argument is a Proxy
 def window_reverse(windows, window_size: int, H: int, W: int):
     """
     Args:
@@ -172,7 +176,7 @@ class WindowAttention(nn.Module):
         """
         B_, N, C = x.shape
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
@@ -270,7 +274,7 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x):
         H, W = self.input_resolution
         B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
+        _assert(L == H * W, "input feature has wrong size")
 
         shortcut = x
         x = self.norm1(x)
@@ -329,8 +333,8 @@ class PatchMerging(nn.Module):
         """
         H, W = self.input_resolution
         B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
-        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
+        _assert(L == H * W, "input feature has wrong size")
+        _assert(H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even.")
 
         x = x.view(B, H, W, C)
 

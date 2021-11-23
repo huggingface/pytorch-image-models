@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, create_attn, get_attn, create_classifier
+from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
 from .registry import register_model
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
@@ -50,23 +50,27 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet26d-69e92c46.pth',
         interpolation='bicubic', first_conv='conv1.0'),
     'resnet26t': _cfg(
-        url='',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8)),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/resnet26t_256_ra2-6f6fa748.pth',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
     'resnet50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth',
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1_0-14fe96d1.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnet50d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
         interpolation='bicubic', first_conv='conv1.0'),
     'resnet50t': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
-    'resnet101': _cfg(url='', interpolation='bicubic'),
+    'resnet101': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet101_a1h-36d3f2aa.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnet101d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet101d_ra2-2803ffab.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
         crop_pct=1.0, test_input_size=(3, 320, 320)),
-    'resnet152': _cfg(url='', interpolation='bicubic'),
+    'resnet152': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet152_a1h-dc400468.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnet152d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet152d_ra2-5cac0439.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
@@ -85,10 +89,15 @@ default_cfgs = {
         interpolation='bicubic'),
     'wide_resnet101_2': _cfg(url='https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth'),
 
+    # ResNets w/ alternative norm layers
+    'resnet50_gn': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_gn_a1h2-8fe6c4d0.pth',
+        crop_pct=0.94, interpolation='bicubic'),
+
     # ResNeXt
     'resnext50_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50_32x4d_ra-d733960d.pth',
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnext50_32x4d_a1h-0146ab0a.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnext50d_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnext50d_32x4d-103e99f8.pth',
         interpolation='bicubic',
@@ -875,6 +884,14 @@ def wide_resnet101_2(pretrained=False, **kwargs):
     """
     model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], base_width=128, **kwargs)
     return _create_resnet('wide_resnet101_2', pretrained, **model_args)
+
+
+@register_model
+def resnet50_gn(pretrained=False, **kwargs):
+    """Constructs a ResNet-50 model w/ GroupNorm
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3],  **kwargs)
+    return _create_resnet('resnet50_gn', pretrained, norm_layer=GroupNorm, **model_args)
 
 
 @register_model

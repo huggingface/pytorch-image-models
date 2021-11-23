@@ -20,8 +20,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .helpers import to_2tuple
+from .helpers import to_2tuple, make_divisible
 from .weight_init import trunc_normal_
+from .trace_utils import _assert
 
 
 def rel_logits_1d(q, rel_k, permute_mask: List[int]):
@@ -61,15 +62,14 @@ class PosEmbedRel(nn.Module):
         super().__init__()
         self.height, self.width = to_2tuple(feat_size)
         self.dim_head = dim_head
-        self.scale = scale
-        self.height_rel = nn.Parameter(torch.randn(self.height * 2 - 1, dim_head) * self.scale)
-        self.width_rel = nn.Parameter(torch.randn(self.width * 2 - 1, dim_head) * self.scale)
+        self.height_rel = nn.Parameter(torch.randn(self.height * 2 - 1, dim_head) * scale)
+        self.width_rel = nn.Parameter(torch.randn(self.width * 2 - 1, dim_head) * scale)
 
     def forward(self, q):
-        B, num_heads, HW, _ = q.shape
+        B, HW, _ = q.shape
 
         # relative logits in width dimension.
-        q = q.reshape(B * num_heads, self.height, self.width, -1)
+        q = q.reshape(B, self.height, self.width, -1)
         rel_logits_w = rel_logits_1d(q, self.width_rel, permute_mask=(0, 1, 3, 2, 4))
 
         # relative logits in height dimension.
@@ -77,50 +77,81 @@ class PosEmbedRel(nn.Module):
         rel_logits_h = rel_logits_1d(q, self.height_rel, permute_mask=(0, 3, 1, 4, 2))
 
         rel_logits = rel_logits_h + rel_logits_w
-        rel_logits = rel_logits.reshape(B, num_heads, HW, HW)
+        rel_logits = rel_logits.reshape(B, HW, HW)
         return rel_logits
 
 
 class BottleneckAttn(nn.Module):
     """ Bottleneck Attention
     Paper: `Bottleneck Transformers for Visual Recognition` - https://arxiv.org/abs/2101.11605
+
+    The internal dimensions of the attention module are controlled by the interaction of several arguments.
+      * the output dimension of the module is specified by dim_out, which falls back to input dim if not set
+      * the value (v) dimension is set to dim_out // num_heads, the v projection determines the output dim
+      * the query and key (qk) dimensions are determined by
+        * num_heads * dim_head if dim_head is not None
+        * num_heads * (dim_out * attn_ratio // num_heads) if dim_head is None
+      * as seen above, attn_ratio determines the ratio of q and k relative to the output if dim_head not used
+
+    Args:
+        dim (int): input dimension to the module
+        dim_out (int): output dimension of the module, same as dim if not set
+        stride (int): output stride of the module, avg pool used if stride == 2 (default: 1).
+        num_heads (int): parallel attention heads (default: 4)
+        dim_head (int): dimension of query and key heads, calculated from dim_out * attn_ratio // num_heads if not set
+        qk_ratio (float): ratio of q and k dimensions to output dimension when dim_head not set. (default: 1.0)
+        qkv_bias (bool): add bias to q, k, and v projections
+        scale_pos_embed (bool): scale the position embedding as well as Q @ K
     """
-    def __init__(self, dim, dim_out=None, feat_size=None, stride=1, num_heads=4, qkv_bias=False):
+    def __init__(
+            self, dim, dim_out=None, feat_size=None, stride=1, num_heads=4, dim_head=None,
+            qk_ratio=1.0, qkv_bias=False, scale_pos_embed=False):
         super().__init__()
         assert feat_size is not None, 'A concrete feature size matching expected input (H, W) is required'
         dim_out = dim_out or dim
         assert dim_out % num_heads == 0
         self.num_heads = num_heads
-        self.dim_out = dim_out
-        self.dim_head = dim_out // num_heads
-        self.scale = self.dim_head ** -0.5
+        self.dim_head_qk = dim_head or make_divisible(dim_out * qk_ratio, divisor=8) // num_heads
+        self.dim_head_v = dim_out // self.num_heads
+        self.dim_out_qk = num_heads * self.dim_head_qk
+        self.dim_out_v = num_heads * self.dim_head_v
+        self.scale = self.dim_head_qk ** -0.5
+        self.scale_pos_embed = scale_pos_embed
 
-        self.qkv = nn.Conv2d(dim, self.dim_out * 3, 1, bias=qkv_bias)
+        self.qkv = nn.Conv2d(dim, self.dim_out_qk * 2 + self.dim_out_v, 1, bias=qkv_bias)
 
         # NOTE I'm only supporting relative pos embedding for now
-        self.pos_embed = PosEmbedRel(feat_size, dim_head=self.dim_head, scale=self.scale)
+        self.pos_embed = PosEmbedRel(feat_size, dim_head=self.dim_head_qk, scale=self.scale)
 
         self.pool = nn.AvgPool2d(2, 2) if stride == 2 else nn.Identity()
 
+        self.reset_parameters()
+
     def reset_parameters(self):
-        trunc_normal_(self.qkv.weight, std=self.qkv.weight.shape[1] ** -0.5)
+        trunc_normal_(self.qkv.weight, std=self.qkv.weight.shape[1] ** -0.5)  # fan-in
         trunc_normal_(self.pos_embed.height_rel, std=self.scale)
         trunc_normal_(self.pos_embed.width_rel, std=self.scale)
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H == self.pos_embed.height and W == self.pos_embed.width
+        _assert(H == self.pos_embed.height, '')
+        _assert(W == self.pos_embed.width, '')
 
-        x = self.qkv(x)  # B, 3 * num_heads * dim_head, H, W
-        x = x.reshape(B, -1, self.dim_head, H * W).transpose(-1, -2)
-        q, k, v = torch.split(x, self.num_heads, dim=1)
+        x = self.qkv(x)  # B, (2 * dim_head_qk + dim_head_v) * num_heads, H, W
 
-        attn_logits = (q @ k.transpose(-1, -2)) * self.scale
-        attn_logits = attn_logits + self.pos_embed(q)  # B, num_heads, H * W, H * W
+        # NOTE head vs channel split ordering in qkv projection was decided before I allowed qk to differ from v
+        # So, this is more verbose than if heads were before qkv splits, but throughput is not impacted.
+        q, k, v = torch.split(x, [self.dim_out_qk, self.dim_out_qk, self.dim_out_v], dim=1)
+        q = q.reshape(B * self.num_heads, self.dim_head_qk, -1).transpose(-1, -2)
+        k = k.reshape(B * self.num_heads, self.dim_head_qk, -1)  # no transpose, for q @ k
+        v = v.reshape(B * self.num_heads, self.dim_head_v, -1).transpose(-1, -2)
 
-        attn_out = attn_logits.softmax(dim = -1)
-        attn_out = (attn_out @ v).transpose(1, 2).reshape(B, self.dim_out, H, W) # B, dim_out, H, W
-        attn_out = self.pool(attn_out)
-        return attn_out
+        if self.scale_pos_embed:
+            attn = (q @ k + self.pos_embed(q)) * self.scale  # B * num_heads, H * W, H * W
+        else:
+            attn = (q @ k) * self.scale + self.pos_embed(q)
+        attn = attn.softmax(dim=-1)
 
-
+        out = (attn @ v).transpose(-1, -2).reshape(B, self.dim_out_v, H, W)  # B, dim_out, H, W
+        out = self.pool(out)
+        return out

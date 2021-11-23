@@ -277,7 +277,6 @@ class EdgeResidual(nn.Module):
             mid_chs = make_divisible(force_in_chs * exp_ratio)
         else:
             mid_chs = make_divisible(in_chs * exp_ratio)
-        has_se = se_layer is not None and se_ratio > 0.
         self.has_residual = (in_chs == out_chs and stride == 1) and not noskip
         self.drop_path_rate = drop_path_rate
 

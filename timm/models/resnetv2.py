@@ -105,18 +105,27 @@ default_cfgs = {
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic'),
 
     'resnetv2_50': _cfg(
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_50_a1h-000cdf49.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnetv2_50d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50t': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_101': _cfg(
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_101_a1h-5d01f016.pth',
+        interpolation='bicubic', crop_pct=0.95),
     'resnetv2_101d': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_152': _cfg(
         interpolation='bicubic'),
     'resnetv2_152d': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+
+    'resnetv2_50d_gn': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_evob': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_evos': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
 }
 
@@ -344,7 +353,7 @@ class ResNetV2(nn.Module):
             num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
             width_factor=1, stem_chs=64, stem_type='', avg_down=False, preact=True,
             act_layer=nn.ReLU, conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32),
-            drop_rate=0., drop_path_rate=0., zero_init_last=True):
+            drop_rate=0., drop_path_rate=0., zero_init_last=False):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -470,7 +479,7 @@ def _create_resnetv2(variant, pretrained=False, **kwargs):
         ResNetV2, variant, pretrained,
         default_cfg=default_cfgs[variant],
         feature_cfg=feature_cfg,
-        pretrained_custom_load=True,
+        pretrained_custom_load='_bit' in variant,
         **kwargs)
 
 
@@ -637,19 +646,27 @@ def resnetv2_152d(pretrained=False, **kwargs):
         stem_type='deep', avg_down=True, **kwargs)
 
 
-# @register_model
-# def resnetv2_50ebd(pretrained=False, **kwargs):
-#     # FIXME for testing w/ TPU + PyTorch XLA
-#     return _create_resnetv2(
-#         'resnetv2_50d', pretrained=pretrained,
-#         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormBatch2d,
-#         stem_type='deep', avg_down=True, **kwargs)
-#
-#
-# @register_model
-# def resnetv2_50esd(pretrained=False, **kwargs):
-#     # FIXME for testing w/ TPU + PyTorch XLA
-#     return _create_resnetv2(
-#         'resnetv2_50d', pretrained=pretrained,
-#         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormSample2d,
-#         stem_type='deep', avg_down=True, **kwargs)
+# Experimental configs (may change / be removed)
+
+@register_model
+def resnetv2_50d_gn(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_gn', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=GroupNormAct,
+        stem_type='deep', avg_down=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_evob(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_evob', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormBatch2d,
+        stem_type='deep', avg_down=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_evos(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_evos', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormSample2d,
+        stem_type='deep', avg_down=True, **kwargs)

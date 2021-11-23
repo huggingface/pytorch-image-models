@@ -14,7 +14,8 @@ import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
-from .hub import has_hf_hub, download_cached_file, load_state_dict_from_hf
+from .fx_features import FeatureGraphNet
+from .hub import has_hf_hub, download_cached_file, load_state_dict_from_hf, load_state_dict_from_url
 from .layers import Conv2dSame, Linear
 
 
@@ -24,13 +25,20 @@ _logger = logging.getLogger(__name__)
 def load_state_dict(checkpoint_path, use_ema=False):
     if checkpoint_path and os.path.isfile(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        state_dict_key = 'state_dict'
+        state_dict_key = ''
         if isinstance(checkpoint, dict):
-            if use_ema and 'state_dict_ema' in checkpoint:
+            if use_ema and checkpoint.get('state_dict_ema', None) is not None:
                 state_dict_key = 'state_dict_ema'
-        if state_dict_key and state_dict_key in checkpoint:
+            elif use_ema and checkpoint.get('model_ema', None) is not None:
+                state_dict_key = 'model_ema'
+            elif 'state_dict' in checkpoint:
+                state_dict_key = 'state_dict'
+            elif 'model' in checkpoint:
+                state_dict_key = 'model'
+        if state_dict_key:
+            state_dict = checkpoint[state_dict_key]
             new_state_dict = OrderedDict()
-            for k, v in checkpoint[state_dict_key].items():
+            for k, v in state_dict.items():
                 # strip `module.` prefix
                 name = k[7:] if k.startswith('module') else k
                 new_state_dict[name] = v
@@ -470,6 +478,8 @@ def build_model_with_cfg(
                 feature_cls = feature_cls.lower()
                 if 'hook' in feature_cls:
                     feature_cls = FeatureHookNet
+                elif feature_cls == 'fx':
+                    feature_cls = FeatureGraphNet
                 else:
                     assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)

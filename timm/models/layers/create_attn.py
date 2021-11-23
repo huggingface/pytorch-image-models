@@ -11,13 +11,11 @@ from .eca import EcaModule, CecaModule
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
 from .halo_attn import HaloAttn
-from .involution import Involution
 from .lambda_layer import LambdaLayer
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
 from .selective_kernel import SelectiveKernel
 from .split_attn import SplitAttn
 from .squeeze_excite import SEModule, EffectiveSEModule
-from .swin_attn import WindowAttention
 
 
 def get_attn(attn_type):
@@ -43,6 +41,8 @@ def get_attn(attn_type):
                 module_cls = GatherExcite
             elif attn_type == 'gc':
                 module_cls = GlobalContext
+            elif attn_type == 'gca':
+                module_cls = partial(GlobalContext, fuse_add=True, fuse_scale=False)
             elif attn_type == 'cbam':
                 module_cls = CbamModule
             elif attn_type == 'lcbam':
@@ -65,10 +65,6 @@ def get_attn(attn_type):
                 return BottleneckAttn
             elif attn_type == 'halo':
                 return HaloAttn
-            elif attn_type == 'swin':
-                return WindowAttention
-            elif attn_type == 'involution':
-                return Involution
             elif attn_type == 'nl':
                 module_cls = NonLocalAttn
             elif attn_type == 'bat':

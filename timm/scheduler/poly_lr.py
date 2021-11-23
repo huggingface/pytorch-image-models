@@ -1,12 +1,12 @@
-""" Cosine Scheduler
+""" Polynomial Scheduler
 
-Cosine LR schedule with warmup, cycle/restarts, noise, k-decay.
+Polynomial LR schedule with warmup, noise.
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
-import logging
 import math
-import numpy as np
+import logging
+
 import torch
 
 from .scheduler import Scheduler
@@ -15,13 +15,8 @@ from .scheduler import Scheduler
 _logger = logging.getLogger(__name__)
 
 
-class CosineLRScheduler(Scheduler):
-    """
-    Cosine decay with restarts.
-    This is described in the paper https://arxiv.org/abs/1608.03983.
-
-    Inspiration from
-    https://github.com/allenai/allennlp/blob/master/allennlp/training/learning_rate_schedulers/cosine.py
+class PolyLRScheduler(Scheduler):
+    """ Polynomial LR Scheduler w/ warmup, noise, and k-decay
 
     k-decay option based on `k-decay: A New Method For Learning Rate Schedule` - https://arxiv.org/abs/2004.05909
     """
@@ -29,6 +24,7 @@ class CosineLRScheduler(Scheduler):
     def __init__(self,
                  optimizer: torch.optim.Optimizer,
                  t_initial: int,
+                 power: float = 0.5,
                  lr_min: float = 0.,
                  cycle_mul: float = 1.,
                  cycle_decay: float = 1.,
@@ -52,8 +48,9 @@ class CosineLRScheduler(Scheduler):
         assert lr_min >= 0
         if t_initial == 1 and cycle_mul == 1 and cycle_decay == 1:
             _logger.warning("Cosine annealing scheduler will have no effect on the learning "
-                           "rate since t_initial = t_mul = eta_mul = 1.")
+                            "rate since t_initial = t_mul = eta_mul = 1.")
         self.t_initial = t_initial
+        self.power = power
         self.lr_min = lr_min
         self.cycle_mul = cycle_mul
         self.cycle_decay = cycle_decay
@@ -91,7 +88,7 @@ class CosineLRScheduler(Scheduler):
 
             if i < self.cycle_limit:
                 lrs = [
-                    self.lr_min + 0.5 * (lr_max - self.lr_min) * (1 + math.cos(math.pi * t_curr ** k / t_i ** k))
+                    self.lr_min + (lr_max - self.lr_min) * (1 - t_curr ** k / t_i ** k) ** self.power
                     for lr_max in lr_max_values
                 ]
             else:

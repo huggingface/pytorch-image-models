@@ -30,6 +30,7 @@ from .helpers import build_model_with_cfg
 from .layers import DropPath, to_2tuple, trunc_normal_, PatchEmbed, Mlp
 from .registry import register_model
 from .vision_transformer_hybrid import HybridEmbed
+from .fx_features import register_notrace_module
 
 import torch
 import torch.nn as nn
@@ -56,6 +57,7 @@ default_cfgs = {
 }
 
 
+@register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
 class GPSA(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.,
                  locality_strength=1.):

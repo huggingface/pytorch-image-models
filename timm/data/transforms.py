@@ -1,5 +1,10 @@
 import torch
 import torchvision.transforms.functional as F
+try:
+    from torchvision.transforms.functional import InterpolationMode
+    has_interpolation_mode = True
+except ImportError:
+    has_interpolation_mode = False
 from PIL import Image
 import warnings
 import math
@@ -31,28 +36,50 @@ class ToTensor:
 
 
 _pil_interpolation_to_str = {
-    Image.NEAREST: 'PIL.Image.NEAREST',
-    Image.BILINEAR: 'PIL.Image.BILINEAR',
-    Image.BICUBIC: 'PIL.Image.BICUBIC',
-    Image.LANCZOS: 'PIL.Image.LANCZOS',
-    Image.HAMMING: 'PIL.Image.HAMMING',
-    Image.BOX: 'PIL.Image.BOX',
+    Image.NEAREST: 'nearest',
+    Image.BILINEAR: 'bilinear',
+    Image.BICUBIC: 'bicubic',
+    Image.BOX: 'box',
+    Image.HAMMING: 'hamming',
+    Image.LANCZOS: 'lanczos',
 }
+_str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
 
 
-def _pil_interp(method):
-    if method == 'bicubic':
-        return Image.BICUBIC
-    elif method == 'lanczos':
-        return Image.LANCZOS
-    elif method == 'hamming':
-        return Image.HAMMING
+if has_interpolation_mode:
+    _torch_interpolation_to_str = {
+        InterpolationMode.NEAREST: 'nearest',
+        InterpolationMode.BILINEAR: 'bilinear',
+        InterpolationMode.BICUBIC: 'bicubic',
+        InterpolationMode.BOX: 'box',
+        InterpolationMode.HAMMING: 'hamming',
+        InterpolationMode.LANCZOS: 'lanczos',
+    }
+    _str_to_torch_interpolation = {b: a for a, b in _torch_interpolation_to_str.items()}
+else:
+    _pil_interpolation_to_torch = {}
+    _torch_interpolation_to_str = {}
+
+
+def str_to_pil_interp(mode_str):
+    return _str_to_pil_interpolation[mode_str]
+
+
+def str_to_interp_mode(mode_str):
+    if has_interpolation_mode:
+        return _str_to_torch_interpolation[mode_str]
     else:
-        # default bilinear, do we want to allow nearest?
-        return Image.BILINEAR
+        return _str_to_pil_interpolation[mode_str]
 
 
-_RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+def interp_mode_to_str(mode):
+    if has_interpolation_mode:
+        return _torch_interpolation_to_str[mode]
+    else:
+        return _pil_interpolation_to_str[mode]
+
+
+_RANDOM_INTERPOLATION = (str_to_interp_mode('bilinear'), str_to_interp_mode('bicubic'))
 
 
 class RandomResizedCropAndInterpolation:
@@ -82,7 +109,7 @@ class RandomResizedCropAndInterpolation:
         if interpolation == 'random':
             self.interpolation = _RANDOM_INTERPOLATION
         else:
-            self.interpolation = _pil_interp(interpolation)
+            self.interpolation = str_to_interp_mode(interpolation)
         self.scale = scale
         self.ratio = ratio
 
@@ -146,9 +173,9 @@ class RandomResizedCropAndInterpolation:
 
     def __repr__(self):
         if isinstance(self.interpolation, (tuple, list)):
-            interpolate_str = ' '.join([_pil_interpolation_to_str[x] for x in self.interpolation])
+            interpolate_str = ' '.join([interp_mode_to_str(x) for x in self.interpolation])
         else:
-            interpolate_str = _pil_interpolation_to_str[self.interpolation]
+            interpolate_str = interp_mode_to_str(self.interpolation)
         format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
         format_string += ', scale={0}'.format(tuple(round(s, 4) for s in self.scale))
         format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))

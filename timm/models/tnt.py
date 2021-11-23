@@ -9,12 +9,12 @@ https://gitee.com/mindspore/mindspore/tree/master/model_zoo/research/cv/TNT
 import math
 import torch
 import torch.nn as nn
-from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import build_model_with_cfg
 from timm.models.layers import Mlp, DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
+from timm.models.layers import _assert
 from timm.models.registry import register_model
 from timm.models.vision_transformer import resize_pos_embed
 
@@ -61,7 +61,7 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         qk = self.qk(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-        q, k = qk[0], qk[1]   # make torchscript happy (cannot use tensor as tuple)
+        q, k = qk.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
         v = self.v(x).reshape(B, N, self.num_heads, -1).permute(0, 2, 1, 3)
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -109,7 +109,9 @@ class Block(nn.Module):
         pixel_embed = pixel_embed + self.drop_path(self.mlp_in(self.norm_mlp_in(pixel_embed)))
         # outer
         B, N, C = patch_embed.size()
-        patch_embed[:, 1:] = patch_embed[:, 1:] + self.proj(self.norm1_proj(pixel_embed).reshape(B, N - 1, -1))
+        patch_embed = torch.cat(
+            [patch_embed[:, 0:1], patch_embed[:, 1:] + self.proj(self.norm1_proj(pixel_embed).reshape(B, N - 1, -1))],
+            dim=1)
         patch_embed = patch_embed + self.drop_path(self.attn_out(self.norm_out(patch_embed)))
         patch_embed = patch_embed + self.drop_path(self.mlp(self.norm_mlp(patch_embed)))
         return pixel_embed, patch_embed
@@ -136,8 +138,10 @@ class PixelEmbed(nn.Module):
 
     def forward(self, x, pixel_pos):
         B, C, H, W = x.shape
-        assert H == self.img_size[0] and W == self.img_size[1], \
-            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        _assert(H == self.img_size[0],
+            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}).")
+        _assert(W == self.img_size[1],
+            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}).")
         x = self.proj(x)
         x = self.unfold(x)
         x = x.transpose(1, 2).reshape(B * self.num_patches, self.in_dim, self.new_patch_size[0], self.new_patch_size[1])

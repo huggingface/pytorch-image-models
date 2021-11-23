@@ -10,7 +10,7 @@ from torchvision import transforms
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
-from timm.data.transforms import _pil_interp, RandomResizedCropAndInterpolation, ToNumpy, ToTensor
+from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, ToNumpy
 from timm.data.random_erasing import RandomErasing
 
 
@@ -25,7 +25,7 @@ def transforms_noaug_train(
         # random interpolation not supported with no-aug
         interpolation = 'bilinear'
     tfl = [
-        transforms.Resize(img_size, _pil_interp(interpolation)),
+        transforms.Resize(img_size, interpolation=str_to_interp_mode(interpolation)),
         transforms.CenterCrop(img_size)
     ]
     if use_prefetcher:
@@ -87,7 +87,7 @@ def transforms_imagenet_train(
             img_mean=tuple([min(255, round(255 * x)) for x in mean]),
         )
         if interpolation and interpolation != 'random':
-            aa_params['interpolation'] = _pil_interp(interpolation)
+            aa_params['interpolation'] = str_to_pil_interp(interpolation)
         if auto_augment.startswith('rand'):
             secondary_tfl += [rand_augment_transform(auto_augment, aa_params)]
         elif auto_augment.startswith('augmix'):
@@ -147,7 +147,7 @@ def transforms_imagenet_eval(
         scale_size = int(math.floor(img_size / crop_pct))
 
     tfl = [
-        transforms.Resize(scale_size, _pil_interp(interpolation)),
+        transforms.Resize(scale_size, interpolation=str_to_interp_mode(interpolation)),
         transforms.CenterCrop(img_size),
     ]
     if use_prefetcher:
