@@ -422,37 +422,37 @@ if 'GITHUB_ACTIONS' not in os.environ:
         assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
-# reason: model is scripted after fx tracing, but beit has torch.jit.is_scripting() control flow
-EXCLUDE_FX_JIT_FILTERS = [
-    'deit_*_distilled_patch16_224',
-    'levit*',
-    'pit_*_distilled_224',
-] + EXCLUDE_FX_FILTERS
+    # reason: model is scripted after fx tracing, but beit has torch.jit.is_scripting() control flow
+    EXCLUDE_FX_JIT_FILTERS = [
+        'deit_*_distilled_patch16_224',
+        'levit*',
+        'pit_*_distilled_224',
+    ] + EXCLUDE_FX_FILTERS
 
 
-@pytest.mark.timeout(120)
-@pytest.mark.parametrize(
-    'model_name', list_models(
-        exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS + EXCLUDE_FX_JIT_FILTERS, name_matches_cfg=True))
-@pytest.mark.parametrize('batch_size', [1])
-def test_model_forward_fx_torchscript(model_name, batch_size):
-    """Symbolically trace each model, script it, and run single forward pass"""
-    if not has_fx_feature_extraction:
-        pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
+    @pytest.mark.timeout(120)
+    @pytest.mark.parametrize(
+        'model_name', list_models(
+            exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS + EXCLUDE_FX_JIT_FILTERS, name_matches_cfg=True))
+    @pytest.mark.parametrize('batch_size', [1])
+    def test_model_forward_fx_torchscript(model_name, batch_size):
+        """Symbolically trace each model, script it, and run single forward pass"""
+        if not has_fx_feature_extraction:
+            pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
 
-    input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
-    if max(input_size) > MAX_JIT_SIZE:
-        pytest.skip("Fixed input size model > limit.")
+        input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
+        if max(input_size) > MAX_JIT_SIZE:
+            pytest.skip("Fixed input size model > limit.")
 
-    with set_scriptable(True):
-        model = create_model(model_name, pretrained=False)
-    model.eval()
+        with set_scriptable(True):
+            model = create_model(model_name, pretrained=False)
+        model.eval()
 
-    model = torch.jit.script(_create_fx_model(model))
-    with torch.no_grad():
-        outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
-        if isinstance(outputs, tuple):
-            outputs = torch.cat(outputs)
+        model = torch.jit.script(_create_fx_model(model))
+        with torch.no_grad():
+            outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
+            if isinstance(outputs, tuple):
+                outputs = torch.cat(outputs)
 
-    assert outputs.shape[0] == batch_size
-    assert not torch.isnan(outputs).any(), 'Output included NaNs'
+        assert outputs.shape[0] == batch_size
+        assert not torch.isnan(outputs).any(), 'Output included NaNs'
