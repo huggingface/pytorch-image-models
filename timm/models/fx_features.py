@@ -14,6 +14,7 @@ except ImportError:
 
 # Layers we went to treat as leaf modules
 from .layers import Conv2dSame, ScaledStdConv2dSame, BatchNormAct2d, BlurPool2d, CondConv2d, StdConv2dSame, DropPath
+from .layers import EvoNormBatch2d
 from .layers.non_local_attn import BilinearAttnTransform
 from .layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 
@@ -27,6 +28,7 @@ _leaf_modules = {
     Conv2dSame, MaxPool2dSame,  ScaledStdConv2dSame, StdConv2dSame, AvgPool2dSame,
     CondConv2d,  # reason: TypeError: F.conv2d received Proxy in groups=self.groups * B (because B = x.shape[0])
     DropPath,  # reason: TypeError: rand recieved Proxy in `size` argument
+    EvoNormBatch2d,  # reason: TypeError: to() gets a Proxy arg
 }
 
 try:
