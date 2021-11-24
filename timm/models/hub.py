@@ -16,9 +16,10 @@ from timm import __version__
 try:
     from huggingface_hub import HfApi, HfFolder, Repository, cached_download, hf_hub_url
     cached_download = partial(cached_download, library_name="timm", library_version=__version__)
+    _has_hf_hub = True
 except ImportError:
-    hf_hub_url = None
     cached_download = None
+    _has_hf_hub = False
 
 _logger = logging.getLogger(__name__)
 
@@ -53,11 +54,11 @@ def download_cached_file(url, check_hash=True, progress=False):
 
 
 def has_hf_hub(necessary=False):
-    if hf_hub_url is None and necessary:
+    if not _has_hf_hub and necessary:
         # if no HF Hub module installed and it is necessary to continue, raise error
         raise RuntimeError(
             'Hugging Face hub model specified but package not installed. Run `pip install huggingface_hub`.')
-    return hf_hub_url is not None
+    return _has_hf_hub
 
 
 def hf_split(hf_id):
@@ -96,8 +97,9 @@ def load_state_dict_from_hf(model_id: str):
     return state_dict
 
 
-def save_pretrained_for_hf(model, save_directory, **config_kwargs):
+def save_for_hf(model, save_directory, model_config=None):
     assert has_hf_hub(True)
+    model_config = model_config or {}
     save_directory = Path(save_directory)
     save_directory.mkdir(exist_ok=True, parents=True)
 
@@ -105,14 +107,14 @@ def save_pretrained_for_hf(model, save_directory, **config_kwargs):
     torch.save(model.state_dict(), weights_path)
 
     config_path = save_directory / 'config.json'
-    config = model.default_cfg
-    config['num_classes'] = config_kwargs.pop('num_classes', model.num_classes)
-    config['num_features'] = config_kwargs.pop('num_features', model.num_features)
-    config['labels'] = config_kwargs.pop('labels', [f"LABEL_{i}" for i in range(config['num_classes'])])
-    config.update(config_kwargs)
+    hf_config = model.default_cfg
+    hf_config['num_classes'] = model_config.pop('num_classes', model.num_classes)
+    hf_config['num_features'] = model_config.pop('num_features', model.num_features)
+    hf_config['labels'] = model_config.pop('labels', [f"LABEL_{i}" for i in range(hf_config['num_classes'])])
+    hf_config.update(model_config)
 
     with config_path.open('w') as f:
-        json.dump(config, f, indent=2)
+        json.dump(hf_config, f, indent=2)
 
 
 def push_to_hf_hub(
@@ -124,9 +126,8 @@ def push_to_hf_hub(
     git_email=None,
     git_user=None,
     revision=None,
-    **config_kwargs
+    model_config=None,
 ):
-
     if repo_namespace_or_url:
         repo_owner, repo_name = repo_namespace_or_url.rstrip('/').split('/')[-2:]
     else:
@@ -160,7 +161,7 @@ def push_to_hf_hub(
     readme_text = f'---\ntags:\n- image-classification\n- timm\nlibrary_tag: timm\n---\n# Model card for {repo_name}'
     with repo.commit(commit_message):
         # Save model weights and config.
-        save_pretrained_for_hf(model, repo.local_dir, **config_kwargs)
+        save_for_hf(model, repo.local_dir, model_config=model_config)
 
         # Save a model card if it doesn't exist.
         readme_path = Path(repo.local_dir) / 'README.md'

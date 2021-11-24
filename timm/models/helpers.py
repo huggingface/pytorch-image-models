@@ -184,12 +184,12 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
     if not pretrained_url and not hf_hub_id:
         _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
-    if hf_hub_id and has_hf_hub(necessary=not pretrained_url):
-        _logger.info(f'Loading pretrained weights from Hugging Face hub ({hf_hub_id})')
-        state_dict = load_state_dict_from_hf(hf_hub_id)
-    else:
+    if pretrained_url:
         _logger.info(f'Loading pretrained weights from url ({pretrained_url})')
         state_dict = load_state_dict_from_url(pretrained_url, progress=progress, map_location='cpu')
+    elif hf_hub_id and has_hf_hub(necessary=True):
+        _logger.info(f'Loading pretrained weights from Hugging Face hub ({hf_hub_id})')
+        state_dict = load_state_dict_from_hf(hf_hub_id)
     if filter_fn is not None:
         # for backwards compat with filter fn that take one arg, try one first, the two
         try:
