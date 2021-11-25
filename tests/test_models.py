@@ -3,6 +3,7 @@ import torch
 import platform
 import os
 import fnmatch
+import gc
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names, NodePathTracer
@@ -76,85 +77,41 @@ def _get_input_size(model=None, model_name='', target=None):
     return input_size
 
 
-def _create_fx_model(model, train=False):
-    # This block of code does a bit of juggling to handle any case where there are multiple outputs in train mode
-    # So we trace once and look at the graph, and get the indices of the nodes that lead into the original fx output
-    # node. Then we use those indices to select from train_nodes returned by torchvision get_graph_node_names
-    train_nodes, eval_nodes = get_graph_node_names(
-        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
-
-    eval_return_nodes = [eval_nodes[-1]]
-    train_return_nodes = [train_nodes[-1]]
-    if train:
-        tracer = NodePathTracer(leaf_modules=list(_leaf_modules), autowrap_functions=list(_autowrap_functions))
-        graph = tracer.trace(model)
-        graph_nodes = list(reversed(graph.nodes))
-        output_node_names = [n.name for n in graph_nodes[0]._input_nodes.keys()]
-        graph_node_names = [n.name for n in graph_nodes]
-        output_node_indices = [-graph_node_names.index(node_name) for node_name in output_node_names]
-        train_return_nodes = [train_nodes[ix] for ix in output_node_indices]
-
-    fx_model = create_feature_extractor(
-        model, train_return_nodes=train_return_nodes, eval_return_nodes=eval_return_nodes,
-        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
-    return fx_model
-
-
-
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
-def test_model_forward_fx(model_name, batch_size):
-    """
-    Symbolically trace each model and run single forward pass through the resulting GraphModule
-    Also check that the output of a forward pass through the GraphModule is the same as that from the original Module
-    """
-    if not has_fx_feature_extraction:
-        pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
-
+def test_model_forward(model_name, batch_size):
+    """Run a single forward pass with each model"""
+    gc.collect()
     model = create_model(model_name, pretrained=False)
     model.eval()
 
-    input_size = _get_input_size(model=model, target=TARGET_FWD_FX_SIZE)
-    if max(input_size) > MAX_FWD_FX_SIZE:
+    input_size = _get_input_size(model=model, target=TARGET_FWD_SIZE)
+    if max(input_size) > MAX_FWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
-    with torch.no_grad():
-        inputs = torch.randn((batch_size, *input_size))
-        outputs = model(inputs)
-        if isinstance(outputs, tuple):
-            outputs = torch.cat(outputs)
+    inputs = torch.randn((batch_size, *input_size))
+    outputs = model(inputs)
 
-        model = _create_fx_model(model)
-        fx_outputs = tuple(model(inputs).values())
-        if isinstance(fx_outputs, tuple):
-            fx_outputs = torch.cat(fx_outputs)
-
-    assert torch.all(fx_outputs == outputs)
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(
-    exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
-def test_model_backward_fx(model_name, batch_size):
-    """Symbolically trace each model and run single backward pass through the resulting GraphModule"""
-    if not has_fx_feature_extraction:
-        pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
-
-    input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_FX_SIZE)
-    if max(input_size) > MAX_BWD_FX_SIZE:
+def test_model_backward(model_name, batch_size):
+    """Run a single forward pass with each model"""
+    gc.collect()
+    input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_SIZE)
+    if max(input_size) > MAX_BWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
 
     model = create_model(model_name, pretrained=False, num_classes=42)
-    model.train()
     num_params = sum([x.numel() for x in model.parameters()])
-    if 'GITHUB_ACTIONS' in os.environ and num_params > 100e6:
-        pytest.skip("Skipping FX backward test on model with more than 100M params.")
+    model.train()
 
-    model = _create_fx_model(model, train=True)
-    outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
+    inputs = torch.randn((batch_size, *input_size))
+    outputs = model(inputs)
     if isinstance(outputs, tuple):
         outputs = torch.cat(outputs)
     outputs.mean().backward()
@@ -172,6 +129,7 @@ def test_model_backward_fx(model_name, batch_size):
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
+    gc.collect()
     model = create_model(model_name, pretrained=False)
     model.eval()
     state_dict = model.state_dict()
@@ -234,6 +192,7 @@ def test_model_default_cfgs(model_name, batch_size):
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs_non_std(model_name, batch_size):
     """Run a single forward pass with each model"""
+    gc.collect()
     model = create_model(model_name, pretrained=False)
     model.eval()
     state_dict = model.state_dict()
@@ -287,6 +246,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_load_pretrained(model_name, batch_size):
         """Create that pretrained weights load, verify support for in_chans != 3 while doing so."""
+        gc.collect()
         in_chans = 3 if 'pruned' in model_name else 1  # pruning not currently supported with in_chans change
         create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=5)
         create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=0)
@@ -296,6 +256,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""
+        gc.collect()
         create_model(model_name, pretrained=True, features_only=True)
 
 EXCLUDE_JIT_FILTERS = [
@@ -303,6 +264,151 @@ EXCLUDE_JIT_FILTERS = [
     'dla*', 'hrnet*', 'ghostnet*',  # hopefully fix at some point
     'vit_large_*', 'vit_huge_*',
 ]
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize(
+    'model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS, name_matches_cfg=True))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_torchscript(model_name, batch_size):
+    """Run a single forward pass with each model"""
+    gc.collect()
+    input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
+    if max(input_size) > MAX_JIT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
+    with set_scriptable(True):
+        model = create_model(model_name, pretrained=False)
+    model.eval()
+
+    model = torch.jit.script(model)
+    outputs = model(torch.randn((batch_size, *input_size)))
+
+    assert outputs.shape[0] == batch_size
+    assert not torch.isnan(outputs).any(), 'Output included NaNs'
+
+
+EXCLUDE_FEAT_FILTERS = [
+    '*pruned*',  # hopefully fix at some point
+] + NON_STD_FILTERS
+if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
+    # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
+    EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_features(model_name, batch_size):
+    """Run a single forward pass with each model in feature extraction mode"""
+    gc.collect()
+    model = create_model(model_name, pretrained=False, features_only=True)
+    model.eval()
+    expected_channels = model.feature_info.channels()
+    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
+
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
+    outputs = model(torch.randn((batch_size, *input_size)))
+    assert len(expected_channels) == len(outputs)
+    for e, o in zip(expected_channels, outputs):
+        assert e == o.shape[1]
+        assert o.shape[0] == batch_size
+        assert not torch.isnan(o).any()
+
+
+def _create_fx_model(model, train=False):
+    # This block of code does a bit of juggling to handle any case where there are multiple outputs in train mode
+    # So we trace once and look at the graph, and get the indices of the nodes that lead into the original fx output
+    # node. Then we use those indices to select from train_nodes returned by torchvision get_graph_node_names
+    train_nodes, eval_nodes = get_graph_node_names(
+        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+
+    eval_return_nodes = [eval_nodes[-1]]
+    train_return_nodes = [train_nodes[-1]]
+    if train:
+        tracer = NodePathTracer(leaf_modules=list(_leaf_modules), autowrap_functions=list(_autowrap_functions))
+        graph = tracer.trace(model)
+        graph_nodes = list(reversed(graph.nodes))
+        output_node_names = [n.name for n in graph_nodes[0]._input_nodes.keys()]
+        graph_node_names = [n.name for n in graph_nodes]
+        output_node_indices = [-graph_node_names.index(node_name) for node_name in output_node_names]
+        train_return_nodes = [train_nodes[ix] for ix in output_node_indices]
+
+    fx_model = create_feature_extractor(
+        model, train_return_nodes=train_return_nodes, eval_return_nodes=eval_return_nodes,
+        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+    return fx_model
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_fx(model_name, batch_size):
+    """
+    Symbolically trace each model and run single forward pass through the resulting GraphModule
+    Also check that the output of a forward pass through the GraphModule is the same as that from the original Module
+    """
+    gc.collect()
+    if not has_fx_feature_extraction:
+        pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
+
+    model = create_model(model_name, pretrained=False)
+    model.eval()
+
+    input_size = _get_input_size(model=model, target=TARGET_FWD_FX_SIZE)
+    if max(input_size) > MAX_FWD_FX_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    with torch.no_grad():
+        inputs = torch.randn((batch_size, *input_size))
+        outputs = model(inputs)
+        if isinstance(outputs, tuple):
+            outputs = torch.cat(outputs)
+
+        model = _create_fx_model(model)
+        fx_outputs = tuple(model(inputs).values())
+        if isinstance(fx_outputs, tuple):
+            fx_outputs = torch.cat(fx_outputs)
+
+    assert torch.all(fx_outputs == outputs)
+    assert outputs.shape[0] == batch_size
+    assert not torch.isnan(outputs).any(), 'Output included NaNs'
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(
+    exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
+@pytest.mark.parametrize('batch_size', [2])
+def test_model_backward_fx(model_name, batch_size):
+    """Symbolically trace each model and run single backward pass through the resulting GraphModule"""
+    gc.collect()
+    if not has_fx_feature_extraction:
+        pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
+
+    input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_FX_SIZE)
+    if max(input_size) > MAX_BWD_FX_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
+    model = create_model(model_name, pretrained=False, num_classes=42)
+    model.train()
+    num_params = sum([x.numel() for x in model.parameters()])
+    if 'GITHUB_ACTIONS' in os.environ and num_params > 100e6:
+        pytest.skip("Skipping FX backward test on model with more than 100M params.")
+
+    model = _create_fx_model(model, train=True)
+    outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
+    if isinstance(outputs, tuple):
+        outputs = torch.cat(outputs)
+    outputs.mean().backward()
+    for n, x in model.named_parameters():
+        assert x.grad is not None, f'No gradient for {n}'
+    num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
+
+    assert outputs.shape[-1] == 42
+    assert num_params == num_grad, 'Some parameters are missing gradients'
+    assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
 # reason: model is scripted after fx tracing, but beit has torch.jit.is_scripting() control flow
@@ -319,6 +425,7 @@ EXCLUDE_FX_JIT_FILTERS = [
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_fx_torchscript(model_name, batch_size):
     """Symbolically trace each model, script it, and run single forward pass"""
+    gc.collect()
     if not has_fx_feature_extraction:
         pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
 
@@ -338,100 +445,3 @@ def test_model_forward_fx_torchscript(model_name, batch_size):
 
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
-
-
-EXCLUDE_FEAT_FILTERS = [
-    '*pruned*',  # hopefully fix at some point
-] + NON_STD_FILTERS
-if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
-    # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
-    EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
-
-
-@pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
-@pytest.mark.parametrize('batch_size', [1])
-def test_model_forward_features(model_name, batch_size):
-    """Run a single forward pass with each model in feature extraction mode"""
-    model = create_model(model_name, pretrained=False, features_only=True)
-    model.eval()
-    expected_channels = model.feature_info.channels()
-    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
-
-    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
-    if max(input_size) > MAX_FFEAT_SIZE:
-        pytest.skip("Fixed input size model > limit.")
-
-    outputs = model(torch.randn((batch_size, *input_size)))
-    assert len(expected_channels) == len(outputs)
-    for e, o in zip(expected_channels, outputs):
-        assert e == o.shape[1]
-        assert o.shape[0] == batch_size
-        assert not torch.isnan(o).any()
-
-
-@pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
-@pytest.mark.parametrize('batch_size', [1])
-def test_model_forward(model_name, batch_size):
-    """Run a single forward pass with each model"""
-    model = create_model(model_name, pretrained=False)
-    model.eval()
-
-    input_size = _get_input_size(model=model, target=TARGET_FWD_SIZE)
-    if max(input_size) > MAX_FWD_SIZE:
-        pytest.skip("Fixed input size model > limit.")
-    inputs = torch.randn((batch_size, *input_size))
-    outputs = model(inputs)
-
-    assert outputs.shape[0] == batch_size
-    assert not torch.isnan(outputs).any(), 'Output included NaNs'
-
-
-@pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
-@pytest.mark.parametrize('batch_size', [2])
-def test_model_backward(model_name, batch_size):
-    """Run a single forward pass with each model"""
-    input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_SIZE)
-    if max(input_size) > MAX_BWD_SIZE:
-        pytest.skip("Fixed input size model > limit.")
-
-    model = create_model(model_name, pretrained=False, num_classes=42)
-    num_params = sum([x.numel() for x in model.parameters()])
-    model.train()
-
-    inputs = torch.randn((batch_size, *input_size))
-    outputs = model(inputs)
-    if isinstance(outputs, tuple):
-        outputs = torch.cat(outputs)
-    outputs.mean().backward()
-    for n, x in model.named_parameters():
-        assert x.grad is not None, f'No gradient for {n}'
-    num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
-
-    assert outputs.shape[-1] == 42
-    assert num_params == num_grad, 'Some parameters are missing gradients'
-    assert not torch.isnan(outputs).any(), 'Output included NaNs'
-
-
-@pytest.mark.timeout(120)
-@pytest.mark.parametrize(
-    'model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS, name_matches_cfg=True))
-@pytest.mark.parametrize('batch_size', [1])
-def test_model_forward_torchscript(model_name, batch_size):
-    """Run a single forward pass with each model"""
-    input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
-    if max(input_size) > MAX_JIT_SIZE:
-        pytest.skip("Fixed input size model > limit.")
-
-    with set_scriptable(True):
-        model = create_model(model_name, pretrained=False)
-    model.eval()
-
-    model = torch.jit.script(model)
-    outputs = model(torch.randn((batch_size, *input_size)))
-
-    assert outputs.shape[0] == batch_size
-    assert not torch.isnan(outputs).any(), 'Output included NaNs'
-
