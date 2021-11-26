@@ -48,4 +48,8 @@ jobs:
       env:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
       run: |
-        pytest -vv --durations=0 ./tests
+        pytest -vv --durations=0 ./tests/test_utils.py
+        pytest -vv --durations=0 ./tests/test_optim.py
+        pytest -vv --durations=0 ./tests/test_layers.py
+        pytest -vv --durations=0 ./tests/test_models.py
+        pytest -vv --durations=0 ./tests/test_fx.py
