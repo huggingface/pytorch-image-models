@@ -6,7 +6,7 @@ A PyTorch implement of the Hybrid Vision Transformers as described in:
     - https://arxiv.org/abs/2010.11929
 
 `How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers`
-    - https://arxiv.org/abs/2106.TODO
+    - https://arxiv.org/abs/2106.10270
 
 NOTE These hybrid model definitions depend on code in vision_transformer.py.
 They were moved here to keep file sizes sane.
