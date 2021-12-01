@@ -9,36 +9,42 @@ Hacked together by / Copyright 2020 Ross Wightman
 import types
 import functools
 
-import torch
-import torch.nn as nn
-
-from .evo_norm import EvoNormBatch2d, EvoNormSample2d
+from .evo_norm import *
+from .filter_response_norm import FilterResponseNormAct2d, FilterResponseNormTlu2d
 from .norm_act import BatchNormAct2d, GroupNormAct
 from .inplace_abn import InplaceAbn
 
-_NORM_ACT_TYPES = {BatchNormAct2d, GroupNormAct, EvoNormBatch2d, EvoNormSample2d, InplaceAbn}
-_NORM_ACT_REQUIRES_ARG = {BatchNormAct2d, GroupNormAct, InplaceAbn}  # requires act_layer arg to define act type
+_NORM_ACT_MAP = dict(
+    batchnorm=BatchNormAct2d,
+    groupnorm=GroupNormAct,
+    evonormb0=EvoNorm2dB0,
+    evonormb1=EvoNorm2dB1,
+    evonormb2=EvoNorm2dB2,
+    evonorms0=EvoNorm2dS0,
+    evonorms0a=EvoNorm2dS0a,
+    evonorms1=EvoNorm2dS1,
+    evonorms1a=EvoNorm2dS1a,
+    evonorms2=EvoNorm2dS2,
+    evonorms2a=EvoNorm2dS2a,
+    frn=FilterResponseNormAct2d,
+    frntlu=FilterResponseNormTlu2d,
+    inplaceabn=InplaceAbn,
+    iabn=InplaceAbn,
+)
+_NORM_ACT_TYPES = {m for n, m in _NORM_ACT_MAP.items()}
+# has act_layer arg to define act type
+_NORM_ACT_REQUIRES_ARG = {BatchNormAct2d, GroupNormAct, FilterResponseNormAct2d, InplaceAbn}
 
 
-def get_norm_act_layer(layer_class):
-    layer_class = layer_class.replace('_', '').lower()
-    if layer_class.startswith("batchnorm"):
-        layer = BatchNormAct2d
-    elif layer_class.startswith("groupnorm"):
-        layer = GroupNormAct
-    elif layer_class == "evonormbatch":
-        layer = EvoNormBatch2d
-    elif layer_class == "evonormsample":
-        layer = EvoNormSample2d
-    elif layer_class == "iabn" or layer_class == "inplaceabn":
-        layer = InplaceAbn
-    else:
-        assert False, "Invalid norm_act layer (%s)" % layer_class
+def get_norm_act_layer(layer_name):
+    layer_name = layer_name.replace('_', '').lower().split('-')[0]
+    layer = _NORM_ACT_MAP.get(layer_name, None)
+    assert layer is not None, "Invalid norm_act layer (%s)" % layer_name
     return layer
 
 
-def create_norm_act(layer_type, num_features, apply_act=True, jit=False, **kwargs):
-    layer_parts = layer_type.split('-')  # e.g. batchnorm-leaky_relu
+def create_norm_act(layer_name, num_features, apply_act=True, jit=False, **kwargs):
+    layer_parts = layer_name.split('-')  # e.g. batchnorm-leaky_relu
     assert len(layer_parts) in (1, 2)
     layer = get_norm_act_layer(layer_parts[0])
     #activation_class = layer_parts[1].lower() if len(layer_parts) > 1 else ''   # FIXME support string act selection?

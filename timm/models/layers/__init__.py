@@ -14,7 +14,9 @@ from .create_conv2d import create_conv2d
 from .create_norm_act import get_norm_act_layer, create_norm_act, convert_norm_act
 from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
 from .eca import EcaModule, CecaModule, EfficientChannelAttn, CircularEfficientChannelAttn
-from .evo_norm import EvoNormBatch2d, EvoNormSample2d
+from .evo_norm import EvoNorm2dB0, EvoNorm2dB1, EvoNorm2dB2,\
+    EvoNorm2dS0, EvoNorm2dS0a, EvoNorm2dS1, EvoNorm2dS1a, EvoNorm2dS2, EvoNorm2dS2a
+from .filter_response_norm import FilterResponseNormTlu2d, FilterResponseNormAct2d
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible

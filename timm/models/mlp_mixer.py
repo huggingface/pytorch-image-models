@@ -128,6 +128,13 @@ default_cfgs = dict(
         url='https://dl.fbaipublicfiles.com/deit/resmlpB_24_22k.pth',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
 
+    resmlp_12_224_dino=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_12_dino.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    resmlp_24_224_dino=_cfg(
+        url='https://dl.fbaipublicfiles.com/deit/resmlp_24_dino.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+
     gmlp_ti16_224=_cfg(),
     gmlp_s16_224=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gmlp_s16_224_raa-10536d42.pth',
@@ -586,6 +593,33 @@ def resmlp_big_24_224_in22ft1k(pretrained=False, **kwargs):
         patch_size=8, num_blocks=24, embed_dim=768, mlp_ratio=4,
         block_layer=partial(ResBlock, init_values=1e-6), norm_layer=Affine, **kwargs)
     model = _create_mixer('resmlp_big_24_224_in22ft1k', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_12_224_dino(pretrained=False, **kwargs):
+    """ ResMLP-12
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+
+    Model pretrained via DINO (self-supervised) - https://arxiv.org/abs/2104.14294
+    """
+    model_args = dict(
+        patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_12_224_dino', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def resmlp_24_224_dino(pretrained=False, **kwargs):
+    """ ResMLP-24
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+
+    Model pretrained via DINO (self-supervised) - https://arxiv.org/abs/2104.14294
+    """
+    model_args = dict(
+        patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=4,
+        block_layer=partial(ResBlock, init_values=1e-5), norm_layer=Affine, **kwargs)
+    model = _create_mixer('resmlp_24_224_dino', pretrained=pretrained, **model_args)
     return model
 
 

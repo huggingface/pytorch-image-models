@@ -76,10 +76,10 @@ default_cfgs = {
         first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
 
     'lamhalobotnet50ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet_a1h_256-c9bc4e74.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet50ts_a1h2_256-fe3d9445.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'halo2botnet50ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h_256-ad9e16fb.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h2_256-fd9c11a3.pth',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 }
 

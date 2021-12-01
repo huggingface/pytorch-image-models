@@ -14,6 +14,8 @@ except ImportError:
 
 # Layers we went to treat as leaf modules
 from .layers import Conv2dSame, ScaledStdConv2dSame, BatchNormAct2d, BlurPool2d, CondConv2d, StdConv2dSame, DropPath
+from .layers import EvoNorm2dB0, EvoNorm2dB1, EvoNorm2dB2
+from .layers import EvoNorm2dS0, EvoNorm2dS0a, EvoNorm2dS1, EvoNorm2dS1a, EvoNorm2dS2, EvoNorm2dS2a
 from .layers.non_local_attn import BilinearAttnTransform
 from .layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 
@@ -24,9 +26,12 @@ _leaf_modules = {
     BilinearAttnTransform,  # reason: flow control t <= 1
     BlurPool2d,  # reason: TypeError: F.conv2d received Proxy in groups=x.shape[1]
     # Reason: get_same_padding has a max which raises a control flow error
-    Conv2dSame, MaxPool2dSame,  ScaledStdConv2dSame, StdConv2dSame, AvgPool2dSame,
+    Conv2dSame, MaxPool2dSame, ScaledStdConv2dSame, StdConv2dSame, AvgPool2dSame,
     CondConv2d,  # reason: TypeError: F.conv2d received Proxy in groups=self.groups * B (because B = x.shape[0])
     DropPath,  # reason: TypeError: rand recieved Proxy in `size` argument
+    EvoNorm2dB0, EvoNorm2dB1, EvoNorm2dB2,  # to(dtype) use that causes tracing failure (on scripted models only?)
+    EvoNorm2dS0, EvoNorm2dS0a, EvoNorm2dS1, EvoNorm2dS1a, EvoNorm2dS2, EvoNorm2dS2a,
+
 }
 
 try:

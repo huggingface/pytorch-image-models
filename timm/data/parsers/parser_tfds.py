@@ -21,6 +21,10 @@ try:
         print("Warning: This version of tfds doesn't have the latest even_splits impl. "
               "Please update or use tfds-nightly for better fine-grained split behaviour.")
         has_buggy_even_splits = True
+    # NOTE uncomment below if having file limit issues on dataset build (or alter your OS defaults)
+    # import resource
+    # low, high = resource.getrlimit(resource.RLIMIT_NOFILE)
+    # resource.setrlimit(resource.RLIMIT_NOFILE, (high, high))
 except ImportError as e:
     print(e)
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")

@@ -35,7 +35,8 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, named_apply
 from .layers import ClassifierHead, ConvBnAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
-    create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple, EvoNormSample2d
+    create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple, EvoNorm2dS0, EvoNorm2dS0a,\
+    EvoNorm2dS1, EvoNorm2dS1a, EvoNorm2dS2, EvoNorm2dS2a, FilterResponseNormAct2d, FilterResponseNormTlu2d
 from .registry import register_model
 
 __all__ = ['ByobNet', 'ByoModelCfg', 'ByoBlockCfg', 'create_byob_stem', 'create_block']
@@ -152,6 +153,12 @@ default_cfgs = {
     'regnetz_e8': _cfgr(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/regnetz_e8_bh-aace8e6e.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=1.0),
+
+    'regnetz_b16_evos': _cfgr(
+        url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv',
+        crop_pct=0.94),
     'regnetz_d8_evob': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
@@ -597,6 +604,23 @@ model_cfgs = dict(
     ),
 
     # experimental EvoNorm configs
+    regnetz_b16_evos=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=48, s=2, gs=16, br=3),
+            ByoBlockCfg(type='bottle', d=6, c=96, s=2, gs=16, br=3),
+            ByoBlockCfg(type='bottle', d=12, c=192, s=2, gs=16, br=3),
+            ByoBlockCfg(type='bottle', d=2, c=288, s=2, gs=16, br=3),
+        ),
+        stem_chs=32,
+        stem_pool='',
+        downsample='',
+        num_features=1536,
+        act_layer='silu',
+        norm_layer=partial(EvoNorm2dS0a, group_size=16),
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
     regnetz_d8_evob=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=64, s=1, gs=8, br=4),
@@ -610,7 +634,7 @@ model_cfgs = dict(
         downsample='',
         num_features=1792,
         act_layer='silu',
-        norm_layer='evonormbatch',
+        norm_layer='evonormb0',
         attn_layer='se',
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
@@ -628,7 +652,7 @@ model_cfgs = dict(
         downsample='',
         num_features=1792,
         act_layer='silu',
-        norm_layer=partial(EvoNormSample2d, groups=32),
+        norm_layer=partial(EvoNorm2dS0a, group_size=16),
         attn_layer='se',
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
@@ -854,6 +878,13 @@ def regnetz_e8(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('regnetz_e8', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_b16_evos(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_b16_evos', pretrained=pretrained, **kwargs)
 
 
 @register_model

@@ -38,7 +38,8 @@ from functools import partial
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg, named_apply, adapt_input_conv
 from .registry import register_model
-from .layers import GroupNormAct, BatchNormAct2d, EvoNormBatch2d, EvoNormSample2d,\
+from .layers import GroupNormAct, BatchNormAct2d, EvoNorm2dB0, EvoNorm2dS0,\
+    EvoNorm2dS1, EvoNorm2dS2, FilterResponseNormTlu2d, FilterResponseNormAct2d,\
     ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d
 
 
@@ -125,7 +126,11 @@ default_cfgs = {
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50d_evob': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
-    'resnetv2_50d_evos': _cfg(
+    'resnetv2_50d_evos0': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_evos1': _cfg(
+        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_frn': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
 }
 
@@ -660,13 +665,29 @@ def resnetv2_50d_gn(pretrained=False, **kwargs):
 def resnetv2_50d_evob(pretrained=False, **kwargs):
     return _create_resnetv2(
         'resnetv2_50d_evob', pretrained=pretrained,
-        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormBatch2d,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dB0,
+        stem_type='deep', avg_down=True, zero_init_last=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_evos0(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_evos0', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dS0,
         stem_type='deep', avg_down=True, **kwargs)
 
 
 @register_model
-def resnetv2_50d_evos(pretrained=False, **kwargs):
+def resnetv2_50d_evos1(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_50d_evos', pretrained=pretrained,
-        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormSample2d,
+        'resnetv2_50d_evos1', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=partial(EvoNorm2dS1, group_size=16),
+        stem_type='deep', avg_down=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_frn(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_frn', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=FilterResponseNormTlu2d,
         stem_type='deep', avg_down=True, **kwargs)

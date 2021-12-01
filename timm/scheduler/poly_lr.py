@@ -37,7 +37,7 @@ class PolyLRScheduler(Scheduler):
                  noise_pct=0.67,
                  noise_std=1.0,
                  noise_seed=42,
-                 k_decay=.5,
+                 k_decay=1.0,
                  initialize=True) -> None:
         super().__init__(
             optimizer, param_group_field="lr",
