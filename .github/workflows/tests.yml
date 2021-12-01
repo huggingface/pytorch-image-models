@@ -30,7 +30,7 @@ jobs:
     - name: Install testing dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-timeout expecttest
+        pip install pytest pytest-timeout pytest-xdist expecttest
     - name: Install torch on mac
       if: startsWith(matrix.os, 'macOS')
       run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
@@ -49,4 +49,4 @@ jobs:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
       run: |
         export PYTHONDONTWRITEBYTECODE=1
-        pytest -vv --durations=0 ./tests
+        pytest -vv --forked --durations=0 ./tests
