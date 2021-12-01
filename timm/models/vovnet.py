@@ -395,7 +395,7 @@ def eca_vovnet39b(pretrained=False, **kwargs):
 @register_model
 def ese_vovnet39b_evos(pretrained=False, **kwargs):
     def norm_act_fn(num_features, **nkwargs):
-        return create_norm_act('EvoNormSample', num_features, jit=False, **nkwargs)
+        return create_norm_act('evonorms0', num_features, jit=False, **nkwargs)
     return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
 
 
