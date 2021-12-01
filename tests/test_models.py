@@ -350,7 +350,6 @@ if 'GITHUB_ACTIONS' in os.environ:
         'vit_large*',
         'vit_base_patch8*',
         'xcit_large*',
-        '*evob', '*evos', # remove experimental evonorm models, seem to cause issues with dtype manipulation
     ]
 
 
