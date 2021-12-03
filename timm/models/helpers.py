@@ -27,9 +27,9 @@ def load_state_dict(checkpoint_path, use_ema=False):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
         state_dict_key = ''
         if isinstance(checkpoint, dict):
-            if use_ema and 'state_dict_ema' in checkpoint:
+            if use_ema and checkpoint.get('state_dict_ema', None) is not None:
                 state_dict_key = 'state_dict_ema'
-            elif use_ema and 'model_ema' in checkpoint:
+            elif use_ema and checkpoint.get('model_ema', None) is not None:
                 state_dict_key = 'model_ema'
             elif 'state_dict' in checkpoint:
                 state_dict_key = 'state_dict'
