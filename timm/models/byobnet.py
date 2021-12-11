@@ -159,10 +159,16 @@ default_cfgs = {
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv',
         crop_pct=0.94),
+    'regnetz_c16_evos': _cfgr(
+        url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
     'regnetz_d8_evob': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
     'regnetz_d8_evos': _cfgr(
+        url='',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
+    'regnetz_e8_evos': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
 }
@@ -621,6 +627,23 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
+    regnetz_c16_evos=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=2, c=48, s=2, gs=16, br=4),
+            ByoBlockCfg(type='bottle', d=6, c=96, s=2, gs=16, br=4),
+            ByoBlockCfg(type='bottle', d=12, c=192, s=2, gs=16, br=4),
+            ByoBlockCfg(type='bottle', d=2, c=288, s=2, gs=16, br=4),
+        ),
+        stem_chs=32,
+        stem_pool='',
+        downsample='',
+        num_features=1536,
+        act_layer='silu',
+        norm_layer=partial(EvoNorm2dS0a, group_size=16),
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
     regnetz_d8_evob=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=64, s=1, gs=8, br=4),
@@ -655,6 +678,24 @@ model_cfgs = dict(
         norm_layer=partial(EvoNorm2dS0a, group_size=16),
         attn_layer='se',
         attn_kwargs=dict(rd_ratio=0.25),
+        block_kwargs=dict(bottle_in=True, linear_out=True),
+    ),
+    regnetz_e8_evos=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=96, s=1, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=8, c=192, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=16, c=384, s=2, gs=8, br=4),
+            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=8, br=4),
+        ),
+        stem_chs=64,
+        stem_type='deep',
+        stem_pool='',
+        downsample='',
+        num_features=2048,
+        act_layer='silu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
+        norm_layer=partial(EvoNorm2dS0a, group_size=16),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
 )
@@ -888,6 +929,13 @@ def regnetz_b16_evos(pretrained=False, **kwargs):
 
 
 @register_model
+def regnetz_c16_evos(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_c16_evos', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def regnetz_d8_evob(pretrained=False, **kwargs):
     """
     """
@@ -899,6 +947,13 @@ def regnetz_d8_evos(pretrained=False, **kwargs):
     """
     """
     return _create_byobnet('regnetz_d8_evos', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def regnetz_e8_evos(pretrained=False, **kwargs):
+    """
+    """
+    return _create_byobnet('regnetz_e8_evos', pretrained=pretrained, **kwargs)
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
