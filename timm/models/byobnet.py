@@ -34,8 +34,8 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, named_apply
-from .layers import ClassifierHead, ConvBnAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
-    create_conv2d, get_act_layer, convert_norm_act, get_attn, make_divisible, to_2tuple, EvoNorm2dS0, EvoNorm2dS0a,\
+from .layers import ClassifierHead, ConvNormAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
+    create_conv2d, get_act_layer, get_norm_act_layer, get_attn, make_divisible, to_2tuple, EvoNorm2dS0, EvoNorm2dS0a,\
     EvoNorm2dS1, EvoNorm2dS1a, EvoNorm2dS2, EvoNorm2dS2a, FilterResponseNormAct2d, FilterResponseNormTlu2d
 from .registry import register_model
 
@@ -921,7 +921,7 @@ def num_groups(group_size, channels):
 
 @dataclass
 class LayerFn:
-    conv_norm_act: Callable = ConvBnAct
+    conv_norm_act: Callable = ConvNormAct
     norm_act: Callable = BatchNormAct2d
     act: Callable = nn.ReLU
     attn: Optional[Callable] = None
@@ -978,7 +978,7 @@ class BasicBlock(nn.Module):
         self.conv1_kxk = layers.conv_norm_act(in_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0])
         self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
         self.conv2_kxk = layers.conv_norm_act(
-            mid_chs, out_chs, kernel_size, dilation=dilation[1], groups=groups, drop_block=drop_block, apply_act=False)
+            mid_chs, out_chs, kernel_size, dilation=dilation[1], groups=groups, drop_layer=drop_block, apply_act=False)
         self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
@@ -1019,11 +1019,9 @@ class BottleneckBlock(nn.Module):
 
         self.conv1_1x1 = layers.conv_norm_act(in_chs, mid_chs, 1)
         self.conv2_kxk = layers.conv_norm_act(
-            mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
-            groups=groups, drop_block=drop_block)
+            mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block)
         if extra_conv:
-            self.conv2b_kxk = layers.conv_norm_act(
-                mid_chs, mid_chs, kernel_size, dilation=dilation[1], groups=groups, drop_block=drop_block)
+            self.conv2b_kxk = layers.conv_norm_act(mid_chs, mid_chs, kernel_size, dilation=dilation[1], groups=groups)
         else:
             self.conv2b_kxk = nn.Identity()
         self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
@@ -1080,7 +1078,7 @@ class DarkBlock(nn.Module):
         self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
         self.conv2_kxk = layers.conv_norm_act(
             mid_chs, out_chs, kernel_size, stride=stride, dilation=dilation[0],
-            groups=groups,  drop_block=drop_block, apply_act=False)
+            groups=groups, drop_layer=drop_block, apply_act=False)
         self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
@@ -1127,8 +1125,7 @@ class EdgeBlock(nn.Module):
             apply_act=False, layers=layers)
 
         self.conv1_kxk = layers.conv_norm_act(
-            in_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
-            groups=groups,  drop_block=drop_block)
+            in_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block)
         self.attn = nn.Identity() if attn_last or layers.attn is None else layers.attn(mid_chs)
         self.conv2_1x1 = layers.conv_norm_act(mid_chs, out_chs, 1, apply_act=False)
         self.attn_last = nn.Identity() if not attn_last or layers.attn is None else layers.attn(out_chs)
@@ -1172,7 +1169,7 @@ class RepVggBlock(nn.Module):
         self.identity = layers.norm_act(out_chs, apply_act=False) if use_ident else None
         self.conv_kxk = layers.conv_norm_act(
             in_chs, out_chs, kernel_size, stride=stride, dilation=dilation[0],
-            groups=groups, drop_block=drop_block, apply_act=False)
+            groups=groups, drop_layer=drop_block, apply_act=False)
         self.conv_1x1 = layers.conv_norm_act(in_chs, out_chs, 1, stride=stride, groups=groups, apply_act=False)
         self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
@@ -1219,7 +1216,7 @@ class SelfAttnBlock(nn.Module):
         if extra_conv:
             self.conv2_kxk = layers.conv_norm_act(
                 mid_chs, mid_chs, kernel_size, stride=stride, dilation=dilation[0],
-                groups=groups, drop_block=drop_block)
+                groups=groups, drop_layer=drop_block)
             stride = 1  # striding done via conv if enabled
         else:
             self.conv2_kxk = nn.Identity()
@@ -1466,8 +1463,8 @@ def create_byob_stages(
 
 def get_layer_fns(cfg: ByoModelCfg):
     act = get_act_layer(cfg.act_layer)
-    norm_act = convert_norm_act(norm_layer=cfg.norm_layer, act_layer=act)
-    conv_norm_act = partial(ConvBnAct, norm_layer=cfg.norm_layer, act_layer=act)
+    norm_act = get_norm_act_layer(norm_layer=cfg.norm_layer, act_layer=act)
+    conv_norm_act = partial(ConvNormAct, norm_layer=cfg.norm_layer, act_layer=act)
     attn = partial(get_attn(cfg.attn_layer), **cfg.attn_kwargs) if cfg.attn_layer else None
     self_attn = partial(get_attn(cfg.self_attn_layer), **cfg.self_attn_kwargs) if cfg.self_attn_layer else None
     layer_fn = LayerFn(conv_norm_act=conv_norm_act, norm_act=norm_act, act=act, attn=attn, self_attn=self_attn)

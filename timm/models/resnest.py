@@ -75,7 +75,6 @@ class ResNestBottleneck(nn.Module):
         else:
             avd_stride = 0
         self.radix = radix
-        self.drop_block = drop_block
 
         self.conv1 = nn.Conv2d(inplanes, group_width, kernel_size=1, bias=False)
         self.bn1 = norm_layer(group_width)
@@ -85,14 +84,16 @@ class ResNestBottleneck(nn.Module):
         if self.radix >= 1:
             self.conv2 = SplitAttn(
                 group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
-                dilation=first_dilation, groups=cardinality, radix=radix, norm_layer=norm_layer, drop_block=drop_block)
+                dilation=first_dilation, groups=cardinality, radix=radix, norm_layer=norm_layer, drop_layer=drop_block)
             self.bn2 = nn.Identity()
+            self.drop_block = nn.Identity()
             self.act2 = nn.Identity()
         else:
             self.conv2 = nn.Conv2d(
                 group_width, group_width, kernel_size=3, stride=stride, padding=first_dilation,
                 dilation=first_dilation, groups=cardinality, bias=False)
             self.bn2 = norm_layer(group_width)
+            self.drop_block = drop_block() if drop_block is not None else nn.Identity()
             self.act2 = act_layer(inplace=True)
         self.avd_last = nn.AvgPool2d(3, avd_stride, padding=1) if avd_stride > 0 and not avd_first else None
 
@@ -109,8 +110,6 @@ class ResNestBottleneck(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        if self.drop_block is not None:
-            out = self.drop_block(out)
         out = self.act1(out)
 
         if self.avd_first is not None:
@@ -118,8 +117,7 @@ class ResNestBottleneck(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
-        if self.drop_block is not None:
-            out = self.drop_block(out)
+        out = self.drop_block(out)
         out = self.act2(out)
 
         if self.avd_last is not None:
@@ -127,8 +125,6 @@ class ResNestBottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
-        if self.drop_block is not None:
-            out = self.drop_block(out)
 
         if self.downsample is not None:
             shortcut = self.downsample(x)

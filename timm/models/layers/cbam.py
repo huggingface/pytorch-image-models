@@ -11,7 +11,7 @@ import torch
 from torch import nn as nn
 import torch.nn.functional as F
 
-from .conv_bn_act import ConvBnAct
+from .conv_bn_act import ConvNormAct
 from .create_act import create_act_layer, get_act_layer
 from .helpers import make_divisible
 
@@ -56,7 +56,7 @@ class SpatialAttn(nn.Module):
     """
     def __init__(self, kernel_size=7, gate_layer='sigmoid'):
         super(SpatialAttn, self).__init__()
-        self.conv = ConvBnAct(2, 1, kernel_size, act_layer=None)
+        self.conv = ConvNormAct(2, 1, kernel_size, apply_act=False)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):
@@ -70,7 +70,7 @@ class LightSpatialAttn(nn.Module):
     """
     def __init__(self, kernel_size=7, gate_layer='sigmoid'):
         super(LightSpatialAttn, self).__init__()
-        self.conv = ConvBnAct(1, 1, kernel_size, act_layer=None)
+        self.conv = ConvNormAct(1, 1, kernel_size, apply_act=False)
         self.gate = create_act_layer(gate_layer)
 
     def forward(self, x):

@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, create_conv2d, create_pool2d, create_classifier
+from .layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['NASNetALarge']
@@ -420,7 +420,7 @@ class NASNetALarge(nn.Module):
         channels = self.num_features // 24
         # 24 is default value for the architecture
 
-        self.conv0 = ConvBnAct(
+        self.conv0 = ConvNormAct(
             in_channels=in_chans, out_channels=self.stem_size, kernel_size=3, padding=0, stride=2,
             norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
 

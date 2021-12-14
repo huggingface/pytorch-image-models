@@ -20,8 +20,8 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
 from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, ClassifierHead, DropPath,\
-    create_attn, create_norm_act, get_norm_act_layer
+from .layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath,\
+    create_attn, create_norm_act_layer, get_norm_act_layer
 
 
 # model cfgs adapted from https://github.com/youngwanLEE/vovnet-detectron2 &
@@ -189,23 +189,23 @@ class OsaBlock(nn.Module):
         next_in_chs = in_chs
         if self.depthwise and next_in_chs != mid_chs:
             assert not residual
-            self.conv_reduction = ConvBnAct(next_in_chs, mid_chs, 1, **conv_kwargs)
+            self.conv_reduction = ConvNormAct(next_in_chs, mid_chs, 1, **conv_kwargs)
         else:
             self.conv_reduction = None
 
         mid_convs = []
         for i in range(layer_per_block):
             if self.depthwise:
-                conv = SeparableConvBnAct(mid_chs, mid_chs, **conv_kwargs)
+                conv = SeparableConvNormAct(mid_chs, mid_chs, **conv_kwargs)
             else:
-                conv = ConvBnAct(next_in_chs, mid_chs, 3, **conv_kwargs)
+                conv = ConvNormAct(next_in_chs, mid_chs, 3, **conv_kwargs)
             next_in_chs = mid_chs
             mid_convs.append(conv)
         self.conv_mid = SequentialAppendList(*mid_convs)
 
         # feature aggregation
         next_in_chs = in_chs + layer_per_block * mid_chs
-        self.conv_concat = ConvBnAct(next_in_chs, out_chs, **conv_kwargs)
+        self.conv_concat = ConvNormAct(next_in_chs, out_chs, **conv_kwargs)
 
         if attn:
             self.attn = create_attn(attn, out_chs)
@@ -283,9 +283,9 @@ class VovNet(nn.Module):
 
         # Stem module
         last_stem_stride = stem_stride // 2
-        conv_type = SeparableConvBnAct if cfg["depthwise"] else ConvBnAct
+        conv_type = SeparableConvNormAct if cfg["depthwise"] else ConvNormAct
         self.stem = nn.Sequential(*[
-            ConvBnAct(in_chans, stem_chs[0], 3, stride=2, **conv_kwargs),
+            ConvNormAct(in_chans, stem_chs[0], 3, stride=2, **conv_kwargs),
             conv_type(stem_chs[0], stem_chs[1], 3, stride=1, **conv_kwargs),
             conv_type(stem_chs[1], stem_chs[2], 3, stride=last_stem_stride, **conv_kwargs),
         ])
@@ -395,12 +395,12 @@ def eca_vovnet39b(pretrained=False, **kwargs):
 @register_model
 def ese_vovnet39b_evos(pretrained=False, **kwargs):
     def norm_act_fn(num_features, **nkwargs):
-        return create_norm_act('evonorms0', num_features, jit=False, **nkwargs)
+        return create_norm_act_layer('evonorms0', num_features, jit=False, **nkwargs)
     return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
 
 
 @register_model
 def ese_vovnet99b_iabn(pretrained=False, **kwargs):
-    norm_layer = get_norm_act_layer('iabn')
+    norm_layer = get_norm_act_layer('iabn', act_layer='leaky_relu')
     return _create_vovnet(
         'ese_vovnet99b_iabn', pretrained=pretrained, norm_layer=norm_layer, act_layer=nn.LeakyReLU, **kwargs)

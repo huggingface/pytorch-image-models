@@ -11,12 +11,15 @@ import functools
 
 from .evo_norm import *
 from .filter_response_norm import FilterResponseNormAct2d, FilterResponseNormTlu2d
-from .norm_act import BatchNormAct2d, GroupNormAct
+from .norm_act import BatchNormAct2d, GroupNormAct, LayerNormAct, LayerNormAct2d
 from .inplace_abn import InplaceAbn
 
 _NORM_ACT_MAP = dict(
     batchnorm=BatchNormAct2d,
+    batchnorm2d=BatchNormAct2d,
     groupnorm=GroupNormAct,
+    layernorm=LayerNormAct,
+    layernorm2d=LayerNormAct2d,
     evonormb0=EvoNorm2dB0,
     evonormb1=EvoNorm2dB1,
     evonormb2=EvoNorm2dB2,
@@ -33,28 +36,19 @@ _NORM_ACT_MAP = dict(
 )
 _NORM_ACT_TYPES = {m for n, m in _NORM_ACT_MAP.items()}
 # has act_layer arg to define act type
-_NORM_ACT_REQUIRES_ARG = {BatchNormAct2d, GroupNormAct, FilterResponseNormAct2d, InplaceAbn}
+_NORM_ACT_REQUIRES_ARG = {
+    BatchNormAct2d, GroupNormAct, LayerNormAct, LayerNormAct2d, FilterResponseNormAct2d, InplaceAbn}
 
 
-def get_norm_act_layer(layer_name):
-    layer_name = layer_name.replace('_', '').lower().split('-')[0]
-    layer = _NORM_ACT_MAP.get(layer_name, None)
-    assert layer is not None, "Invalid norm_act layer (%s)" % layer_name
-    return layer
-
-
-def create_norm_act(layer_name, num_features, apply_act=True, jit=False, **kwargs):
-    layer_parts = layer_name.split('-')  # e.g. batchnorm-leaky_relu
-    assert len(layer_parts) in (1, 2)
-    layer = get_norm_act_layer(layer_parts[0])
-    #activation_class = layer_parts[1].lower() if len(layer_parts) > 1 else ''   # FIXME support string act selection?
+def create_norm_act_layer(layer_name, num_features, act_layer=None, apply_act=True, jit=False, **kwargs):
+    layer = get_norm_act_layer(layer_name, act_layer=act_layer)
     layer_instance = layer(num_features, apply_act=apply_act, **kwargs)
     if jit:
         layer_instance = torch.jit.script(layer_instance)
     return layer_instance
 
 
-def convert_norm_act(norm_layer, act_layer):
+def get_norm_act_layer(norm_layer, act_layer=None):
     assert isinstance(norm_layer, (type, str,  types.FunctionType, functools.partial))
     assert act_layer is None or isinstance(act_layer, (type, str, types.FunctionType, functools.partial))
     norm_act_kwargs = {}
@@ -65,7 +59,8 @@ def convert_norm_act(norm_layer, act_layer):
         norm_layer = norm_layer.func
 
     if isinstance(norm_layer, str):
-        norm_act_layer = get_norm_act_layer(norm_layer)
+        layer_name = norm_layer.replace('_', '').lower().split('-')[0]
+        norm_act_layer = _NORM_ACT_MAP.get(layer_name, None)
     elif norm_layer in _NORM_ACT_TYPES:
         norm_act_layer = norm_layer
     elif isinstance(norm_layer,  types.FunctionType):
@@ -77,6 +72,10 @@ def convert_norm_act(norm_layer, act_layer):
             norm_act_layer = BatchNormAct2d
         elif type_name.startswith('groupnorm'):
             norm_act_layer = GroupNormAct
+        elif type_name.startswith('layernorm2d'):
+            norm_act_layer = LayerNormAct2d
+        elif type_name.startswith('layernorm'):
+            norm_act_layer = LayerNormAct
         else:
             assert False, f"No equivalent norm_act layer for {type_name}"
 

@@ -7,7 +7,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import torch
 from torch import nn as nn
 
-from .conv_bn_act import ConvBnAct
+from .conv_bn_act import ConvNormActAa
 from .helpers import make_divisible
 from .trace_utils import _assert
 
@@ -20,8 +20,7 @@ def _kernel_valid(k):
 
 
 class SelectiveKernelAttn(nn.Module):
-    def __init__(self, channels, num_paths=2, attn_channels=32,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+    def __init__(self, channels, num_paths=2, attn_channels=32, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
         """ Selective Kernel Attention Module
 
         Selective Kernel attention mechanism factored out into its own module.
@@ -51,7 +50,7 @@ class SelectiveKernel(nn.Module):
 
     def __init__(self, in_channels, out_channels=None, kernel_size=None, stride=1, dilation=1, groups=1,
                  rd_ratio=1./16, rd_channels=None, rd_divisor=8, keep_3x3=True, split_input=True,
-                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None):
+                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_layer=None):
         """ Selective Kernel Convolution Module
 
         As described in Selective Kernel Networks (https://arxiv.org/abs/1903.06586) with some modifications.
@@ -72,9 +71,10 @@ class SelectiveKernel(nn.Module):
             keep_3x3 (bool): keep all branch convolution kernels as 3x3, changing larger kernels for dilations
             split_input (bool): split input channels evenly across each convolution branch, keeps param count lower,
                 can be viewed as grouping by path, output expands to module out_channels count
-            drop_block (nn.Module): drop block module
             act_layer (nn.Module): activation layer to use
             norm_layer (nn.Module): batchnorm/norm layer to use
+            aa_layer (nn.Module): anti-aliasing module
+            drop_layer (nn.Module): spatial drop module in convs (drop block, etc)
         """
         super(SelectiveKernel, self).__init__()
         out_channels = out_channels or in_channels
@@ -97,15 +97,14 @@ class SelectiveKernel(nn.Module):
         groups = min(out_channels, groups)
 
         conv_kwargs = dict(
-            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer,
-            aa_layer=aa_layer)
+            stride=stride, groups=groups, act_layer=act_layer, norm_layer=norm_layer,
+            aa_layer=aa_layer, drop_layer=drop_layer)
         self.paths = nn.ModuleList([
-            ConvBnAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
+            ConvNormActAa(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
             for k, d in zip(kernel_size, dilation)])
 
         attn_channels = rd_channels or make_divisible(out_channels * rd_ratio, divisor=rd_divisor)
         self.attn = SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
-        self.drop_block = drop_block
 
     def forward(self, x):
         if self.split_input:

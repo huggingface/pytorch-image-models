@@ -16,7 +16,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import BatchNormAct2d, ConvBnAct, create_conv2d, create_classifier
+from .layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier
 from .registry import register_model
 
 __all__ = ['DPN']
@@ -180,7 +180,7 @@ class DPN(nn.Module):
         blocks = OrderedDict()
 
         # conv1
-        blocks['conv1_1'] = ConvBnAct(
+        blocks['conv1_1'] = ConvNormAct(
             in_chans, num_init_features, kernel_size=3 if small else 7, stride=2, norm_layer=norm_layer)
         blocks['conv1_pool'] = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.feature_info = [dict(num_chs=num_init_features, reduction=2, module='features.conv1_1')]

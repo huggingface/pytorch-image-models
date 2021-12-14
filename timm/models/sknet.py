@@ -14,7 +14,7 @@ from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectiveKernel, ConvBnAct, create_attn
+from .layers import SelectiveKernel, ConvNormAct, ConvNormActAa, create_attn
 from .registry import register_model
 from .resnet import ResNet
 
@@ -52,7 +52,7 @@ class SelectiveKernelBasic(nn.Module):
         super(SelectiveKernelBasic, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
-        conv_kwargs = dict(drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer)
+        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
         assert base_width == 64, 'BasicBlock doest not support changing base width'
         first_planes = planes // reduce_first
@@ -60,16 +60,13 @@ class SelectiveKernelBasic(nn.Module):
         first_dilation = first_dilation or dilation
 
         self.conv1 = SelectiveKernel(
-            inplanes, first_planes, stride=stride, dilation=first_dilation, **conv_kwargs, **sk_kwargs)
-        conv_kwargs['act_layer'] = None
-        self.conv2 = ConvBnAct(
-            first_planes, outplanes, kernel_size=3, dilation=dilation, **conv_kwargs)
+            inplanes, first_planes, stride=stride, dilation=first_dilation,
+            aa_layer=aa_layer, drop_layer=drop_block, **conv_kwargs, **sk_kwargs)
+        self.conv2 = ConvNormAct(
+            first_planes, outplanes, kernel_size=3, dilation=dilation, apply_act=False, **conv_kwargs)
         self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
-        self.stride = stride
-        self.dilation = dilation
-        self.drop_block = drop_block
         self.drop_path = drop_path
 
     def zero_init_last_bn(self):
@@ -100,24 +97,20 @@ class SelectiveKernelBottleneck(nn.Module):
         super(SelectiveKernelBottleneck, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
-        conv_kwargs = dict(drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer)
+        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
         first_planes = width // reduce_first
         outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
-        self.conv1 = ConvBnAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
+        self.conv1 = ConvNormAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
         self.conv2 = SelectiveKernel(
             first_planes, width, stride=stride, dilation=first_dilation, groups=cardinality,
-            **conv_kwargs, **sk_kwargs)
-        conv_kwargs['act_layer'] = None
-        self.conv3 = ConvBnAct(width, outplanes, kernel_size=1, **conv_kwargs)
+            aa_layer=aa_layer, drop_layer=drop_block, **conv_kwargs, **sk_kwargs)
+        self.conv3 = ConvNormAct(width, outplanes, kernel_size=1, apply_act=False, **conv_kwargs)
         self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
-        self.stride = stride
-        self.dilation = dilation
-        self.drop_block = drop_block
         self.drop_path = drop_path
 
     def zero_init_last_bn(self):

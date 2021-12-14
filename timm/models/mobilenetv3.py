@@ -20,7 +20,7 @@ from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficien
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
 from .helpers import build_model_with_cfg, default_cfg_for_features
-from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
+from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, get_norm_act_layer
 from .registry import register_model
 
 __all__ = ['MobileNetV3', 'MobileNetV3Features']
@@ -95,6 +95,7 @@ class MobileNetV3(nn.Module):
         super(MobileNetV3, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
+        norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
         self.num_features = num_features
@@ -103,8 +104,7 @@ class MobileNetV3(nn.Module):
         # Stem
         stem_size = round_chs_fn(stem_size)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
-        self.bn1 = norm_layer(stem_size)
-        self.act1 = act_layer(inplace=True)
+        self.bn1 = norm_act_layer(stem_size, inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
@@ -125,7 +125,7 @@ class MobileNetV3(nn.Module):
         efficientnet_init_weights(self)
 
     def as_sequential(self):
-        layers = [self.conv_stem, self.bn1, self.act1]
+        layers = [self.conv_stem, self.bn1]
         layers.extend(self.blocks)
         layers.extend([self.global_pool, self.conv_head, self.act2])
         layers.extend([nn.Flatten(), nn.Dropout(self.drop_rate), self.classifier])
@@ -144,7 +144,6 @@ class MobileNetV3(nn.Module):
     def forward_features(self, x):
         x = self.conv_stem(x)
         x = self.bn1(x)
-        x = self.act1(x)
         x = self.blocks(x)
         x = self.global_pool(x)
         x = self.conv_head(x)
