@@ -7,11 +7,11 @@ from .cond_conv2d import CondConv2d, get_condconv_initializer
 from .config import is_exportable, is_scriptable, is_no_jit, set_exportable, set_scriptable, set_no_jit,\
     set_layer_config
 from .conv2d_same import Conv2dSame, conv2d_same
-from .conv_bn_act import ConvBnAct
+from .conv_bn_act import ConvNormAct, ConvNormActAa, ConvBnAct
 from .create_act import create_act_layer, get_act_layer, get_act_fn
 from .create_attn import get_attn, create_attn
 from .create_conv2d import create_conv2d
-from .create_norm_act import get_norm_act_layer, create_norm_act, convert_norm_act
+from .create_norm_act import get_norm_act_layer, create_norm_act_layer, get_norm_act_layer
 from .drop import DropBlock2d, DropPath, drop_block_2d, drop_path
 from .eca import EcaModule, CecaModule, EfficientChannelAttn, CircularEfficientChannelAttn
 from .evo_norm import EvoNorm2dB0, EvoNorm2dB1, EvoNorm2dB2,\
@@ -32,7 +32,7 @@ from .patch_embed import PatchEmbed
 from .pool2d_same import AvgPool2dSame, create_pool2d
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
-from .separable_conv import SeparableConv2d, SeparableConvBnAct
+from .separable_conv import SeparableConv2d, SeparableConvNormAct
 from .space_to_depth import SpaceToDepthModule
 from .split_attn import SplitAttn
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model

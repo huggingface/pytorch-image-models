@@ -35,11 +35,10 @@ class SplitAttn(nn.Module):
     """
     def __init__(self, in_channels, out_channels=None, kernel_size=3, stride=1, padding=None,
                  dilation=1, groups=1, bias=False, radix=2, rd_ratio=0.25, rd_channels=None, rd_divisor=8,
-                 act_layer=nn.ReLU, norm_layer=None, drop_block=None, **kwargs):
+                 act_layer=nn.ReLU, norm_layer=None, drop_layer=None, **kwargs):
         super(SplitAttn, self).__init__()
         out_channels = out_channels or in_channels
         self.radix = radix
-        self.drop_block = drop_block
         mid_chs = out_channels * radix
         if rd_channels is None:
             attn_chs = make_divisible(in_channels * radix * rd_ratio, min_value=32, divisor=rd_divisor)
@@ -51,6 +50,7 @@ class SplitAttn(nn.Module):
             in_channels, mid_chs, kernel_size, stride, padding, dilation,
             groups=groups * radix, bias=bias, **kwargs)
         self.bn0 = norm_layer(mid_chs) if norm_layer else nn.Identity()
+        self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act0 = act_layer(inplace=True)
         self.fc1 = nn.Conv2d(out_channels, attn_chs, 1, groups=groups)
         self.bn1 = norm_layer(attn_chs) if norm_layer else nn.Identity()
@@ -61,8 +61,7 @@ class SplitAttn(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         x = self.bn0(x)
-        if self.drop_block is not None:
-            x = self.drop_block(x)
+        x = self.drop(x)
         x = self.act0(x)
 
         B, RC, H, W = x.shape

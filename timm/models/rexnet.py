@@ -17,7 +17,7 @@ from math import ceil
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import ClassifierHead, create_act_layer, ConvBnAct, DropPath, make_divisible, SEModule
+from .layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath, make_divisible, SEModule
 from .registry import register_model
 from .efficientnet_builder import efficientnet_init_weights
 
@@ -63,19 +63,19 @@ class LinearBottleneck(nn.Module):
 
         if exp_ratio != 1.:
             dw_chs = make_divisible(round(in_chs * exp_ratio), divisor=ch_div)
-            self.conv_exp = ConvBnAct(in_chs, dw_chs, act_layer=act_layer)
+            self.conv_exp = ConvNormAct(in_chs, dw_chs, act_layer=act_layer)
         else:
             dw_chs = in_chs
             self.conv_exp = None
 
-        self.conv_dw = ConvBnAct(dw_chs, dw_chs, 3, stride=stride, groups=dw_chs, apply_act=False)
+        self.conv_dw = ConvNormAct(dw_chs, dw_chs, 3, stride=stride, groups=dw_chs, apply_act=False)
         if se_ratio > 0:
             self.se = SEWithNorm(dw_chs, rd_channels=make_divisible(int(dw_chs * se_ratio), ch_div))
         else:
             self.se = None
         self.act_dw = create_act_layer(dw_act_layer)
 
-        self.conv_pwl = ConvBnAct(dw_chs, out_chs, 1, apply_act=False)
+        self.conv_pwl = ConvNormAct(dw_chs, out_chs, 1, apply_act=False)
         self.drop_path = drop_path
 
     def feat_channels(self, exp=False):
@@ -138,7 +138,7 @@ def _build_blocks(
         feat_chs += [features[-1].feat_channels()]
     pen_chs = make_divisible(1280 * width_mult, divisor=ch_div)
     feature_info += [dict(num_chs=feat_chs[-1], reduction=curr_stride, module=f'features.{len(features) - 1}')]
-    features.append(ConvBnAct(prev_chs, pen_chs, act_layer=act_layer))
+    features.append(ConvNormAct(prev_chs, pen_chs, act_layer=act_layer))
     return features, feature_info
 
 
@@ -153,7 +153,7 @@ class ReXNetV1(nn.Module):
         assert output_stride == 32  # FIXME support dilation
         stem_base_chs = 32 / width_mult if width_mult < 1.0 else 32
         stem_chs = make_divisible(round(stem_base_chs * width_mult), divisor=ch_div)
-        self.stem = ConvBnAct(in_chans, stem_chs, 3, stride=2, act_layer=act_layer)
+        self.stem = ConvNormAct(in_chans, stem_chs, 3, stride=2, act_layer=act_layer)
 
         block_cfg = _block_cfg(width_mult, depth_mult, initial_chs, final_chs, se_ratio, ch_div)
         features, self.feature_info = _build_blocks(

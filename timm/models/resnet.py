@@ -307,8 +307,9 @@ class BasicBlock(nn.Module):
             inplanes, first_planes, kernel_size=3, stride=1 if use_aa else stride, padding=first_dilation,
             dilation=first_dilation, bias=False)
         self.bn1 = norm_layer(first_planes)
+        self.drop_block = drop_block() if drop_block is not None else nn.Identity()
         self.act1 = act_layer(inplace=True)
-        self.aa = aa_layer(channels=first_planes, stride=stride) if use_aa else None
+        self.aa = aa_layer(channels=first_planes, stride=stride) if use_aa else nn.Identity()
 
         self.conv2 = nn.Conv2d(
             first_planes, outplanes, kernel_size=3, padding=dilation, dilation=dilation, bias=False)
@@ -320,7 +321,6 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
         self.dilation = dilation
-        self.drop_block = drop_block
         self.drop_path = drop_path
 
     def zero_init_last_bn(self):
@@ -331,16 +331,12 @@ class BasicBlock(nn.Module):
 
         x = self.conv1(x)
         x = self.bn1(x)
-        if self.drop_block is not None:
-            x = self.drop_block(x)
+        x = self.drop_block(x)
         x = self.act1(x)
-        if self.aa is not None:
-            x = self.aa(x)
+        x = self.aa(x)
 
         x = self.conv2(x)
         x = self.bn2(x)
-        if self.drop_block is not None:
-            x = self.drop_block(x)
 
         if self.se is not None:
             x = self.se(x)
@@ -378,8 +374,9 @@ class Bottleneck(nn.Module):
             first_planes, width, kernel_size=3, stride=1 if use_aa else stride,
             padding=first_dilation, dilation=first_dilation, groups=cardinality, bias=False)
         self.bn2 = norm_layer(width)
+        self.drop_block = drop_block() if drop_block is not None else nn.Identity()
         self.act2 = act_layer(inplace=True)
-        self.aa = aa_layer(channels=width, stride=stride) if use_aa else None
+        self.aa = aa_layer(channels=width, stride=stride) if use_aa else nn.Identity()
 
         self.conv3 = nn.Conv2d(width, outplanes, kernel_size=1, bias=False)
         self.bn3 = norm_layer(outplanes)
@@ -390,7 +387,6 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
         self.dilation = dilation
-        self.drop_block = drop_block
         self.drop_path = drop_path
 
     def zero_init_last_bn(self):
@@ -401,22 +397,16 @@ class Bottleneck(nn.Module):
 
         x = self.conv1(x)
         x = self.bn1(x)
-        if self.drop_block is not None:
-            x = self.drop_block(x)
         x = self.act1(x)
 
         x = self.conv2(x)
         x = self.bn2(x)
-        if self.drop_block is not None:
-            x = self.drop_block(x)
+        x = self.drop_block(x)
         x = self.act2(x)
-        if self.aa is not None:
-            x = self.aa(x)
+        x = self.aa(x)
 
         x = self.conv3(x)
         x = self.bn3(x)
-        if self.drop_block is not None:
-            x = self.drop_block(x)
 
         if self.se is not None:
             x = self.se(x)
@@ -463,11 +453,11 @@ def downsample_avg(
     ])
 
 
-def drop_blocks(drop_block_rate=0.):
+def drop_blocks(drop_prob=0.):
     return [
         None, None,
-        DropBlock2d(drop_block_rate, 5, 0.25) if drop_block_rate else None,
-        DropBlock2d(drop_block_rate, 3, 1.00) if drop_block_rate else None]
+        partial(DropBlock2d, drop_prob=drop_prob, block_size=5, gamma_scale=0.25) if drop_prob else None,
+        partial(DropBlock2d, drop_prob=drop_prob, block_size=3, gamma_scale=1.00) if drop_prob else None]
 
 
 def make_blocks(

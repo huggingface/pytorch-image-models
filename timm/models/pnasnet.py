@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, create_conv2d, create_pool2d, create_classifier
+from .layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['PNASNet5Large']
@@ -243,7 +243,7 @@ class PNASNet5Large(nn.Module):
         self.num_features = 4320
         assert output_stride == 32
 
-        self.conv_0 = ConvBnAct(
+        self.conv_0 = ConvNormAct(
             in_chans, 96, kernel_size=3, stride=2, padding=0,
             norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
 
