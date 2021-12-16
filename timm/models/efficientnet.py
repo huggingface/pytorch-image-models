@@ -120,7 +120,7 @@ default_cfgs = {
     # FIXME experimental
     'efficientnet_b0_gn': _cfg(
         url=''),
-    'efficientnet_b0_g8': _cfg(
+    'efficientnet_b0_g8_gn': _cfg(
         url=''),
     'efficientnet_b0_g16_evos': _cfg(
         url=''),
@@ -1389,10 +1389,11 @@ def efficientnet_b0_gn(pretrained=False, **kwargs):
 
 
 @register_model
-def efficientnet_b0_g8(pretrained=False, **kwargs):
-    """ EfficientNet-B0 w/ group conv + BN"""
+def efficientnet_b0_g8_gn(pretrained=False, **kwargs):
+    """ EfficientNet-B0 w/ group conv + GroupNorm"""
     model = _gen_efficientnet(
-        'efficientnet_b0_g8', group_size=8, pretrained=pretrained, **kwargs)
+        'efficientnet_b0_g8_gn', group_size=8, norm_layer=partial(GroupNormAct, group_size=8),
+        pretrained=pretrained, **kwargs)
     return model
 
 

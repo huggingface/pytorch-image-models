@@ -47,13 +47,6 @@ def create_model(
     """
     source_name, model_name = split_model_name(model_name)
 
-    # Only EfficientNet and MobileNetV3 models have support for batchnorm params or drop_connect_rate passed as args
-    is_efficientnet = is_model_in_modules(model_name, ['efficientnet', 'mobilenetv3'])
-    if not is_efficientnet:
-        kwargs.pop('bn_tf', None)
-        kwargs.pop('bn_momentum', None)
-        kwargs.pop('bn_eps', None)
-
     # handle backwards compat with drop_connect -> drop_path change
     drop_connect_rate = kwargs.pop('drop_connect_rate', None)
     if drop_connect_rate is not None and kwargs.get('drop_path_rate', None) is None:

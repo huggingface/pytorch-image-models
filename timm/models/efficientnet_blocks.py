@@ -19,11 +19,7 @@ def num_groups(group_size, channels):
         return 1  # normal conv with 1 group
     else:
         # NOTE group_size == 1 -> depthwise conv
-        #assert channels % group_size == 0
-        if channels % group_size != 0:
-            num_groups = math.floor(channels / group_size)
-            print(channels, group_size, num_groups)
-            return int(num_groups)
+        assert channels % group_size == 0
         return channels // group_size
 
 
@@ -87,7 +83,7 @@ class ConvBnAct(nn.Module):
         x = self.conv(x)
         x = self.bn1(x)
         if self.has_skip:
-            x = x + self.drop_path(shortcut)
+            x = self.drop_path(x) + shortcut
         return x
 
 
@@ -131,7 +127,7 @@ class DepthwiseSeparableConv(nn.Module):
         x = self.conv_pw(x)
         x = self.bn2(x)
         if self.has_skip:
-            x = x + self.drop_path(shortcut)
+            x = self.drop_path(x) + shortcut
         return x
 
 
@@ -190,7 +186,7 @@ class InvertedResidual(nn.Module):
         x = self.conv_pwl(x)
         x = self.bn3(x)
         if self.has_skip:
-            x = x + self.drop_path(shortcut)
+            x = self.drop_path(x) + shortcut
         return x
 
 
@@ -225,7 +221,7 @@ class CondConvResidual(InvertedResidual):
         x = self.conv_pwl(x, routing_weights)
         x = self.bn3(x)
         if self.has_skip:
-            x = x + self.drop_path(shortcut)
+            x = self.drop_path(x) + shortcut
         return x
 
 
@@ -281,5 +277,5 @@ class EdgeResidual(nn.Module):
         x = self.conv_pwl(x)
         x = self.bn2(x)
         if self.has_skip:
-            x = x + self.drop_path(shortcut)
+            x = self.drop_path(x) + shortcut
         return x
