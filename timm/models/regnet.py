@@ -143,8 +143,8 @@ default_cfgs = dict(
     regnety_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'),
 
     regnety_040s_gn=_cfg(url=''),
-    regnetv_040=_cfg(url=''),
-    regnetw_040=_cfg(url=''),
+    regnetv_040=_cfg(url='', first_conv='stem'),
+    regnetw_040=_cfg(url='', first_conv='stem', input_size=(3, 256, 256), pool_size=(8, 8)),
 
     regnetz_005=_cfg(url=''),
     regnetz_040=_cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
@@ -165,16 +165,19 @@ def adjust_widths_groups_comp(widths, bottle_ratios, groups):
     return widths, groups
 
 
-def generate_regnet(width_slope, width_initial, width_mult, depth, q=8):
+def generate_regnet(width_slope, width_initial, width_mult, depth, group_size, q=8):
     """Generates per block widths from RegNet parameters."""
     assert width_slope >= 0 and width_initial > 0 and width_mult > 1 and width_initial % q == 0
+    # TODO dWr scaling?
+    # depth = int(depth * (scale ** 0.1))
+    # width_scale = scale ** 0.4  # dWr scale, exp 0.8 / 2, applied to both group and layer widths
     widths_cont = np.arange(depth) * width_slope + width_initial
     width_exps = np.round(np.log(widths_cont / width_initial) / np.log(width_mult))
     widths = width_initial * np.power(width_mult, width_exps)
     widths = np.round(np.divide(widths, q)) * q
     num_stages, max_stage = len(np.unique(widths)), width_exps.max() + 1
-    widths, widths_cont = widths.astype(int).tolist(), widths_cont.tolist()
-    return widths, num_stages, max_stage, widths_cont
+    groups = np.array([group_size for _ in range(num_stages)])
+    return widths.astype(int).tolist(), num_stages, groups.astype(int).tolist()
 
 
 def downsample_conv(in_chs, out_chs, kernel_size=1, stride=1, dilation=1, norm_layer=None, preact=False):
@@ -395,14 +398,11 @@ class RegNet(nn.Module):
 
     def _get_stage_args(self, cfg: RegNetCfg, default_stride=2, output_stride=32, drop_path_rate=0.):
         # Generate RegNet ws per block
-        widths, num_stages, _, _ = generate_regnet(cfg.wa, cfg.w0, cfg.wm, cfg.depth)
+        widths, num_stages, stage_gs = generate_regnet(cfg.wa, cfg.w0, cfg.wm, cfg.depth, cfg.group_size)
 
         # Convert to per stage format
         stage_widths, stage_depths = np.unique(widths, return_counts=True)
-
-        # Use the same group width, bottleneck mult and stride for each stage
-        stage_groups = [cfg.group_size for _ in range(num_stages)]
-        stage_bottle_ratios = [cfg.bottle_ratio for _ in range(num_stages)]
+        stage_br = [cfg.bottle_ratio for _ in range(num_stages)]
         stage_strides = []
         stage_dilations = []
         net_stride = 2
@@ -416,15 +416,14 @@ class RegNet(nn.Module):
                 net_stride *= stride
             stage_strides.append(stride)
             stage_dilations.append(dilation)
-        stage_dpr = np.split(np.linspace(0, drop_path_rate, cfg.depth), np.cumsum(stage_depths[:-1]))
+        stage_dpr = np.split(np.linspace(0, drop_path_rate, sum(stage_depths)), np.cumsum(stage_depths[:-1]))
 
         # Adjust the compatibility of ws and gws
-        stage_widths, stage_groups = adjust_widths_groups_comp(stage_widths, stage_bottle_ratios, stage_groups)
+        stage_widths, stage_gs = adjust_widths_groups_comp(stage_widths, stage_br, stage_gs)
         arg_names = ['out_chs', 'stride', 'dilation', 'depth', 'bottle_ratio', 'group_size', 'drop_path_rates']
         per_stage_args = [
             dict(zip(arg_names, params)) for params in
-            zip(stage_widths, stage_strides, stage_dilations, stage_depths, stage_bottle_ratios, stage_groups,
-                stage_dpr)]
+            zip(stage_widths, stage_strides, stage_dilations, stage_depths, stage_br, stage_gs, stage_dpr)]
         common_args = dict(
             downsample=cfg.downsample, se_ratio=cfg.se_ratio, linear_out=cfg.linear_out,
             act_layer=cfg.act_layer, norm_layer=cfg.norm_layer)
