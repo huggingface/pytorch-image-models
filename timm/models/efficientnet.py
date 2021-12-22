@@ -413,19 +413,19 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_l-6c92e0c8.pth'),
 
     "tinynet_a": _cfg(
-        input_size=(3, 192, 192),  # int(224 * 0.86)
+        input_size=(3, 192, 192), pool_size=(6, 6),  # int(224 * 0.86)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_a.pth'),
     "tinynet_b": _cfg(
-        input_size=(3, 188, 188),  # int(224 * 0.84)
+        input_size=(3, 188, 188), pool_size=(6, 6),  # int(224 * 0.84)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_b.pth'),
     "tinynet_c": _cfg(
-        input_size=(3, 184, 184),  # int(224 * 0.825)
+        input_size=(3, 184, 184), pool_size=(6, 6),  # int(224 * 0.825)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_c.pth'),
     "tinynet_d": _cfg(
-        input_size=(3, 152, 152),  # int(224 * 0.68)
+        input_size=(3, 152, 152), pool_size=(5, 5),  # int(224 * 0.68)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_d.pth'),
     "tinynet_e": _cfg(
-        input_size=(3, 106, 106),  # int(224 * 0.475)
+        input_size=(3, 106, 106), pool_size=(4, 4),  # int(224 * 0.475)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_e.pth'),
 }
 
@@ -1172,35 +1172,16 @@ def _gen_tinynet(
         ['ir_r1_k3_s1_e6_c320_se0.25'],
     ]
     model_kwargs = dict(
-        block_args = decode_arch_def(arch_def, depth_multiplier, depth_trunc='round'),
-        num_features = max(1280, round_channels(1280, model_width, 8, None)),
-        stem_size = 32,
-        fix_stem = True,
+        block_args=decode_arch_def(arch_def, depth_multiplier, depth_trunc='round'),
+        num_features=max(1280, round_channels(1280, model_width, 8, None)),
+        stem_size=32,
+        fix_stem=True,
         round_chs_fn=partial(round_channels, multiplier=model_width),
-        act_layer = resolve_act_layer(kwargs, 'swish'),
+        act_layer=resolve_act_layer(kwargs, 'swish'),
         norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs,
     )
-
-    features_only = False
-    model_cls = EfficientNet
-    kwargs_filter = None
-
-    if kwargs.pop('features_only', False):
-        features_only = True
-        # kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
-        kwargs_filter = ('num_classes', 'num_features', 'conv_head', 'global_pool')
-        model_cls = EfficientNetFeatures
-
-    model = build_model_with_cfg(
-        model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        pretrained_strict=not features_only,
-        kwargs_filter=kwargs_filter,
-        **model_kwargs)
-    if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
-
+    model = _create_effnet(variant, pretrained, **model_kwargs)
     return model
 
 
@@ -2277,29 +2258,29 @@ def tf_mixnet_l(pretrained=False, **kwargs):
 
 @register_model
 def tinynet_a(pretrained=False, **kwargs):
-    model = _gen_tinynet('tinynet_a', 1.0, 1.2, **kwargs)
+    model = _gen_tinynet('tinynet_a', 1.0, 1.2, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def tinynet_b(pretrained=False, **kwargs):
-    model = _gen_tinynet('tinynet_b', 0.75, 1.1, pretrained, **kwargs)
+    model = _gen_tinynet('tinynet_b', 0.75, 1.1, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def tinynet_c(pretrained=False, **kwargs):
-    model = _gen_tinynet('tinynet_c', 0.54, 0.85, pretrained, **kwargs)
+    model = _gen_tinynet('tinynet_c', 0.54, 0.85, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def tinynet_d(pretrained=False, **kwargs):
-    model = _gen_tinynet('tinynet_d', 0.54, 0.695, pretrained, **kwargs)
+    model = _gen_tinynet('tinynet_d', 0.54, 0.695, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def tinynet_e(pretrained=False, **kwargs):
-    model = _gen_tinynet('tinynet_e', 0.51, 0.6, pretrained, **kwargs)
+    model = _gen_tinynet('tinynet_e', 0.51, 0.6, pretrained=pretrained, **kwargs)
     return model
