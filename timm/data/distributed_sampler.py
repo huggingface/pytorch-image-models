@@ -1,5 +1,6 @@
 import math
 import torch
+import numpy as np
 from torch.utils.data import Sampler
 import torch.distributed as dist
 
@@ -108,7 +109,7 @@ class RepeatAugSampler(Sampler):
             indices = list(range(len(self.dataset)))
 
         # produce repeats e.g. [0, 0, 0, 1, 1, 1, 2, 2, 2....]
-        indices = [x for x in indices for _ in range(self.num_repeats)]
+        indices = np.repeat(indices, repeats=self.num_repeats, axis=0)
         # add extra samples to make it evenly divisible
         padding_size = self.total_size - len(indices)
         indices += indices[:padding_size]
