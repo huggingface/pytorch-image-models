@@ -45,9 +45,9 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     x = (q @ rel_k.transpose(-1, -2))
 
     if win_size == 1:
-        out = rel_pos.reshape([-1, H, 1, W, win_size])
+        out = x.reshape([-1, H, 1, W, win_size])
     elif W == 1:
-        out = rel_pos[:, :, :, -win_size:].reshape([-1, H, 1, W, win_size])
+        out = x[:, :, :, -win_size:].reshape([-1, H, 1, W, win_size])
     else:
         full_rank_gap = win_size - W
         flat_x = x.reshape([-1, H, W * rel_size])[:, :, W - 1: -1]
