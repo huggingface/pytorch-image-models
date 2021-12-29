@@ -32,25 +32,19 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
 
     Args:
-        q: (batch, heads, height, width, dim)
+        q: (batch * heads, height, width, dim)
         rel_k: (2 * width - 1, dim)
         permute_mask: permute output dim according to this
     """
     B, H, W, dim = q.shape
+    rel_size = rel_k.shape[0]
     x = (q @ rel_k.transpose(-1, -2))
-    x = x.reshape(-1, W, 2 * W -1)
 
-    # pad to shift from relative to absolute indexing
-    x_pad = F.pad(x, [0, 1]).flatten(1)
-    x_pad = F.pad(x_pad, [0, W - 1])
+    flat_x = x.reshape([-1, H, W * rel_size])[:, :, W - 1: -1]
+    out = flat_x.reshape([-1, H, 1, W, rel_size - 1])[:, :, :, :, :W]
 
-    # reshape and slice out the padded elements
-    x_pad = x_pad.reshape(-1, W + 1, 2 * W - 1)
-    x = x_pad[:, :W, W - 1:]
-
-    # reshape and tile
-    x = x.reshape(B, H, 1, W, W).expand(-1, -1, H, -1, -1)
-    return x.permute(permute_mask)
+    # tile and permute
+    return out.expand(-1, -1, H, -1, -1).permute(permute_mask)
 
 
 class PosEmbedRel(nn.Module):

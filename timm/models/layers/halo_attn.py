@@ -34,7 +34,7 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
 
     Args:
-        q: (batch, height, width, dim)
+        q: (batch * heads, height, width, dim)
         rel_k: (2 * window - 1, dim)
         permute_mask: permute output dim according to this
     """
@@ -43,19 +43,18 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     win_size = (rel_size + 1) // 2
 
     x = (q @ rel_k.transpose(-1, -2))
-    x = x.reshape(-1, W, rel_size)
 
-    # pad to shift from relative to absolute indexing
-    x_pad = F.pad(x, [0, 1]).flatten(1)
-    x_pad = F.pad(x_pad, [0, rel_size - W])
+    if win_size == 1:
+        out = rel_pos.reshape([-1, H, 1, W, win_size])
+    elif W == 1:
+        out = rel_pos[:, :, :, -win_size:].reshape([-1, H, 1, W, win_size])
+    else:
+        full_rank_gap = win_size - W
+        flat_x = x.reshape([-1, H, W * rel_size])[:, :, W - 1: -1]
+        out = flat_x.reshape([-1, H, 1, W,  2 * (win_size - 1)])[:, :, :, :, full_rank_gap : win_size + full_rank_gap]
 
-    # reshape and slice out the padded elements
-    x_pad = x_pad.reshape(-1, W + 1, rel_size)
-    x = x_pad[:, :W, win_size - 1:]
-
-    # reshape and tile
-    x = x.reshape(B, H, 1, W, win_size).expand(-1, -1, win_size, -1, -1)
-    return x.permute(permute_mask)
+    # tile and permute
+    return out.expand(-1, -1, win_size, -1, -1).permute(permute_mask)
 
 
 class PosEmbedRel(nn.Module):
