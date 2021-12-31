@@ -1002,7 +1002,7 @@ class BottleneckBlock(nn.Module):
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
-        if zero_init_last and self.shortcut is not None and self.conv3_1x1.bn.weigh is not None:
+        if zero_init_last and self.shortcut is not None and self.conv3_1x1.bn.weight is not None:
             nn.init.zeros_(self.conv3_1x1.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
