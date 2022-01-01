@@ -105,7 +105,7 @@ class RepeatAugSampler(Sampler):
         if self.shuffle:
             indices = torch.randperm(len(self.dataset), generator=g)
         else:
-            indices = torch.range(start=0, end=len(self.dataset))
+            indices = torch.arange(start=0, end=len(self.dataset))
 
         # produce repeats e.g. [0, 0, 0, 1, 1, 1, 2, 2, 2....]
         indices = torch.repeat_interleave(indices, repeats=self.num_repeats, dim=0)
