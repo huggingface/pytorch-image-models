@@ -108,7 +108,7 @@ class RepeatAugSampler(Sampler):
             indices = torch.arange(start=0, end=len(self.dataset))
 
         # produce repeats e.g. [0, 0, 0, 1, 1, 1, 2, 2, 2....]
-        indices = torch.repeat_interleave(indices, repeats=self.num_repeats, dim=0)
+        indices = torch.repeat_interleave(indices, repeats=self.num_repeats, dim=0).tolist()
         # add extra samples to make it evenly divisible
         padding_size = self.total_size - len(indices)
         indices += indices[:padding_size]
