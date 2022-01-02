@@ -48,4 +48,5 @@ jobs:
       env:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
       run: |
+        export PYTHONDONTWRITEBYTECODE=1
         pytest -vv --durations=0 ./tests
