@@ -47,6 +47,8 @@ default_cfgs = {
     'mobilenetv3_large_100_miil_in21k': _cfg(
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
+
+    'mobilenetv3_small_050': _cfg(url=''),
     'mobilenetv3_small_075': _cfg(url=''),
     'mobilenetv3_small_100': _cfg(url=''),
 
@@ -76,6 +78,12 @@ default_cfgs = {
     'fbnetv3_b': _cfg(),
     'fbnetv3_d': _cfg(),
     'fbnetv3_g': _cfg(),
+
+    "lcnet_035": _cfg(),
+    "lcnet_050": _cfg(),
+    "lcnet_075": _cfg(),
+    "lcnet_100": _cfg(),
+    "lcnet_150": _cfg(),
 }
 
 
@@ -86,7 +94,12 @@ class MobileNetV3(nn.Module):
     'efficient head', where global pooling is done before the head convolution without a final batch-norm
     layer before the classifier.
 
-    Paper: https://arxiv.org/abs/1905.02244
+    Paper: `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
+
+    Other architectures utilizing MobileNet-V3 efficient head that are supported by this impl include:
+      * HardCoRe-NAS - https://arxiv.org/abs/2102.11646 (defn in hardcorenas.py uses this class)
+      * FBNet-V3 - https://arxiv.org/abs/2006.02049
+      * LCNet - https://arxiv.org/abs/2109.15099
     """
 
     def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
@@ -430,6 +443,44 @@ def _gen_fbnetv3(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     return model
 
 
+def _gen_lcnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ LCNet
+    Essentially a MobileNet-V3 crossed with a MobileNet-V1
+
+    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer.
+    """
+    arch_def = [
+        # stage 0, 112x112 in
+        ['dsa_r1_k3_s1_c32'],
+        # stage 1, 112x112 in
+        ['dsa_r2_k3_s2_c64'],
+        # stage 2, 56x56 in
+        ['dsa_r2_k3_s2_c128'],
+        # stage 3, 28x28 in
+        ['dsa_r1_k3_s2_c256', 'dsa_r1_k5_s1_c256'],
+        # stage 4, 14x14in
+        ['dsa_r4_k5_s1_c256'],
+        # stage 5, 14x14in
+        ['dsa_r2_k5_s2_c512_se0.25'],
+        # 7x7
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        stem_size=16,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
+        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU),
+        num_features=1280,
+        **kwargs,
+    )
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
+    return model
+
+
 @register_model
 def mobilenetv3_large_075(pretrained=False, **kwargs):
     """ MobileNet V3 """
@@ -459,6 +510,13 @@ def mobilenetv3_large_100_miil_in21k(pretrained=False, **kwargs):
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
     model = _gen_mobilenet_v3('mobilenetv3_large_100_miil_in21k', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_small_050(pretrained=False, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_small_050', 0.50, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -558,4 +616,39 @@ def fbnetv3_d(pretrained=False, **kwargs):
 def fbnetv3_g(pretrained=False, **kwargs):
     """ FBNetV3-G """
     model = _gen_fbnetv3('fbnetv3_g', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_035(pretrained=False, **kwargs):
+    """ PP-LCNet 0.35"""
+    model = _gen_lcnet('lcnet_035', 0.35, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_050(pretrained=False, **kwargs):
+    """ PP-LCNet 0.5"""
+    model = _gen_lcnet('lcnet_050', 0.5, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_075(pretrained=False, **kwargs):
+    """ PP-LCNet 1.0"""
+    model = _gen_lcnet('lcnet_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_100(pretrained=False, **kwargs):
+    """ PP-LCNet 1.0"""
+    model = _gen_lcnet('lcnet_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_150(pretrained=False, **kwargs):
+    """ PP-LCNet 1.5"""
+    model = _gen_lcnet('lcnet_150', 1.5, pretrained=pretrained, **kwargs)
     return model

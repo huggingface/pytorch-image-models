@@ -75,6 +75,12 @@ default_cfgs = {
     'semnasnet_140': _cfg(url=''),
     'mnasnet_small': _cfg(url=''),
 
+    'mobilenetv2_035': _cfg(
+        url=''),
+    'mobilenetv2_050': _cfg(
+        url=''),
+    'mobilenetv2_075': _cfg(
+        url=''),
     'mobilenetv2_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_100_ra-b33bc2c4.pth'),
     'mobilenetv2_110d': _cfg(
@@ -434,6 +440,7 @@ class EfficientNet(nn.Module):
       * EfficientNet-CondConv
       * MixNet S, M, L, XL
       * MnasNet A1, B1, and small
+      * MobileNet-V2
       * FBNet C
       * Single-Path NAS Pixel1
 
@@ -1225,6 +1232,27 @@ def semnasnet_140(pretrained=False, **kwargs):
 def mnasnet_small(pretrained=False, **kwargs):
     """ MNASNet Small,  depth multiplier of 1.0. """
     model = _gen_mnasnet_small('mnasnet_small', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_035(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 0.35 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_035', 0.35, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_050(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 0.5 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_050', 0.5, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_075(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 0.75 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_075', 0.75, pretrained=pretrained, **kwargs)
     return model
 
 
