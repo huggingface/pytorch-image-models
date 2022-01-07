@@ -82,7 +82,10 @@ default_cfgs = {
     "lcnet_035": _cfg(),
     "lcnet_050": _cfg(),
     "lcnet_075": _cfg(),
-    "lcnet_100": _cfg(),
+    "lcnet_100": _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_100-a929038c.pth',
+        interpolation='bicubic',
+    ),
     "lcnet_150": _cfg(),
 }
 

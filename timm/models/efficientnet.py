@@ -77,7 +77,8 @@ default_cfgs = {
     'semnasnet_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_a1-d9418771.pth'),
     'semnasnet_140': _cfg(url=''),
-    'mnasnet_small': _cfg(url=''),
+    'mnasnet_small': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_small-eb785140.pth'),
 
     'mobilenetv2_035': _cfg(
         url=''),

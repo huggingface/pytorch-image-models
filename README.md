@@ -23,6 +23,13 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### Jan 6, 2022
+* Tried training a few smaller models, two are good so far, more on the way...
+  * `mnasnet_small` - 65.6 top-1
+  * `lcnet_100` - 72.1 top-1
+* TinyNet models added by [rsomani95](https://github.com/rsomani95)
+* LCNet added via MobileNetV3 architecture
+
 ### Nov 22, 2021
 * A number of updated weights anew new model defs
   * `eca_halonext26ts` - 79.5 @ 256
