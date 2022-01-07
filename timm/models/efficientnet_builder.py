@@ -40,7 +40,7 @@ def get_bn_args_tf():
 
 
 def resolve_bn_args(kwargs):
-    bn_args = get_bn_args_tf() if kwargs.pop('bn_tf', False) else {}
+    bn_args = {}
     bn_momentum = kwargs.pop('bn_momentum', None)
     if bn_momentum is not None:
         bn_args['momentum'] = bn_momentum

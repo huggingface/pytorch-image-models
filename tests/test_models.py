@@ -427,6 +427,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
         'deit_*_distilled_patch16_224',
         'levit*',
         'pit_*_distilled_224',
+        '*evob', '*evos',  # until norm_norm_norm branch is merged
     ] + EXCLUDE_FX_FILTERS
 
 
