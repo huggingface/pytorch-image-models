@@ -24,9 +24,11 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 ## What's New
 
 ### Jan 6, 2022
-* Tried training a few smaller models, two are good so far, more on the way...
+* Version 0.5.2 w/ release to be pushed to pypi. It's been a while since last pypi update and riskier changes will be merged to main branch soon....
+* Tried training a few small / mobile optimized models, a few are good so far, more on the way...
   * `mnasnet_small` - 65.6 top-1
   * `lcnet_100` - 72.1 top-1
+  * `fbnetv3_b/d/g` - 79.1 / 79.7 / 82.0
 * TinyNet models added by [rsomani95](https://github.com/rsomani95)
 * LCNet added via MobileNetV3 architecture
 

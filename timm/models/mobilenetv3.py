@@ -75,9 +75,15 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_small_minimal_100-922a7843.pth',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 
-    'fbnetv3_b': _cfg(),
-    'fbnetv3_d': _cfg(),
-    'fbnetv3_g': _cfg(),
+    'fbnetv3_b': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_b_224-ead5d2a1.pth',
+        test_input_size=(3, 256, 256), crop_pct=0.95, pool_size=(8, 8)),
+    'fbnetv3_d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_d_224-c98bce42.pth',
+        test_input_size=(3, 256, 256), crop_pct=0.95, pool_size=(8, 8)),
+    'fbnetv3_g': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_g_240-0b1df83b.pth',
+        test_input_size=(3, 288, 288), crop_pct=0.95, pool_size=(9, 9)),
 
     "lcnet_035": _cfg(),
     "lcnet_050": _cfg(),
