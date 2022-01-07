@@ -77,13 +77,13 @@ default_cfgs = {
 
     'fbnetv3_b': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_b_224-ead5d2a1.pth',
-        test_input_size=(3, 256, 256), crop_pct=0.95, pool_size=(8, 8)),
+        test_input_size=(3, 256, 256), crop_pct=0.95),
     'fbnetv3_d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_d_224-c98bce42.pth',
-        test_input_size=(3, 256, 256), crop_pct=0.95, pool_size=(8, 8)),
+        test_input_size=(3, 256, 256), crop_pct=0.95),
     'fbnetv3_g': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_g_240-0b1df83b.pth',
-        test_input_size=(3, 288, 288), crop_pct=0.95, pool_size=(9, 9)),
+        input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95),
 
     "lcnet_035": _cfg(),
     "lcnet_050": _cfg(),
