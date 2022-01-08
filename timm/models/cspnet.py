@@ -408,14 +408,13 @@ class CspNet(nn.Module):
 
 def _create_cspnet(variant, pretrained=False, **kwargs):
     cfg_variant = variant.split('_')[0]
-    if 'darknet' in variant:
-        # NOTE: DarkNet is one of few models with stride==1 features w/ 6 out_indices [0..5]
-        kwargs.setdefault('out_indices', (0, 1, 2, 3, 4, 5))
+    # NOTE: DarkNet is one of few models with stride==1 features w/ 6 out_indices [0..5]
+    out_indices = kwargs.get('out_indices', (0, 1, 2, 3, 4, 5) if 'darknet' in variant else (0, 1, 2, 3, 4))
     return build_model_with_cfg(
         CspNet, variant, pretrained,
         default_cfg=default_cfgs[variant],
         model_cfg=model_cfgs[cfg_variant],
-        feature_cfg=dict(flatten_sequential=True),
+        feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs)
 
 
