@@ -33,7 +33,7 @@ The majority of the above models (EfficientNet*, MixNet, MnasNet) and original w
 by Mingxing Tan, Quoc Le, and other members of their Google Brain team. Thanks for consistently releasing
 the models and weights open source!
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
 from typing import List
@@ -718,7 +718,7 @@ def _gen_mobilenet_v2(
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
-        num_features=1280 if fix_stem_head else round_chs_fn(1280),
+        num_features=1280 if fix_stem_head else max(1280, round_chs_fn(1280)),
         stem_size=32,
         fix_stem=fix_stem_head,
         round_chs_fn=round_chs_fn,

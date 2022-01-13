@@ -9,6 +9,8 @@
 
 Paper link: https://arxiv.org/abs/2103.10697
 Original code: https://github.com/facebookresearch/convit, original copyright below
+
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.

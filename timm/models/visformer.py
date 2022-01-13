@@ -4,6 +4,7 @@ Paper: Visformer: The Vision-friendly Transformer - https://arxiv.org/abs/2104.1
 
 From original at https://github.com/danczs/Visformer
 
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 from copy import deepcopy
 

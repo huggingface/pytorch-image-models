@@ -1,3 +1,7 @@
+""" Dataset Factory
+
+Hacked together by / Copyright 2021, Ross Wightman
+"""
 import os
 
 from torchvision.datasets import CIFAR100, CIFAR10, MNIST, QMNIST, KMNIST, FashionMNIST, ImageNet, ImageFolder
