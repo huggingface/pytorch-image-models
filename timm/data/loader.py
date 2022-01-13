@@ -3,7 +3,7 @@
 Prefetcher and Fast Collate inspired by NVIDIA APEX example at
 https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#diff-cf86c282ff7fba81fad27a559379d5bf
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 import random
 from functools import partial

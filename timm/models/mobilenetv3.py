@@ -1,11 +1,10 @@
-
 """ MobileNet V3
 
 A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
 
 Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
 from typing import List

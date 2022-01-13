@@ -11,7 +11,7 @@ A PyTorch implement of the Hybrid Vision Transformers as described in:
 NOTE These hybrid model definitions depend on code in vision_transformer.py.
 They were moved here to keep file sizes sane.
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2020, Ross Wightman
 """
 from copy import deepcopy
 from functools import partial

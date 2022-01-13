@@ -20,7 +20,7 @@ for some einops/einsum fun
 * Simple transformer style inspired by Andrej Karpathy's https://github.com/karpathy/minGPT
 * Bert reference code checks against Huggingface Transformers and Tensorflow Bert
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2020, Ross Wightman
 """
 import math
 import logging
