@@ -85,8 +85,14 @@ default_cfgs = {
         input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95),
 
     "lcnet_035": _cfg(),
-    "lcnet_050": _cfg(),
-    "lcnet_075": _cfg(),
+    "lcnet_050": _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_050-f447553b.pth',
+        interpolation='bicubic',
+    ),
+    "lcnet_075": _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_075-318cad2c.pth',
+        interpolation='bicubic',
+    ),
     "lcnet_100": _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_100-a929038c.pth',
         interpolation='bicubic',
