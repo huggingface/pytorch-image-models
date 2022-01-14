@@ -73,7 +73,8 @@ default_cfgs = {
     'mnasnet_140': _cfg(url=''),
 
     'semnasnet_050': _cfg(url=''),
-    'semnasnet_075': _cfg(url=''),
+    'semnasnet_075': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/semnasnet_075-18710866.pth'),
     'semnasnet_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_a1-d9418771.pth'),
     'semnasnet_140': _cfg(url=''),
@@ -83,7 +84,9 @@ default_cfgs = {
     'mobilenetv2_035': _cfg(
         url=''),
     'mobilenetv2_050': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_050-3d30d450.pth',
+        interpolation='bicubic',
+    ),
     'mobilenetv2_075': _cfg(
         url=''),
     'mobilenetv2_100': _cfg(
