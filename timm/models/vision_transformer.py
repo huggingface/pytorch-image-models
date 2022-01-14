@@ -105,6 +105,10 @@ default_cfgs = {
             'L_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_384.npz',
         input_size=(3, 384, 384), crop_pct=1.0),
 
+    'vit_huge_patch14_224': _cfg(url=''),
+    'vit_giant_patch14_224': _cfg(url=''),
+    'vit_gigantic_patch14_224': _cfg(url=''),
+
     # patch models, imagenet21k (weights from official Google JAX impl)
     'vit_tiny_patch16_224_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz',
@@ -712,6 +716,33 @@ def vit_base_patch32_sam_224(pretrained=False, **kwargs):
     # NOTE original SAM weights release worked with representation_size=768
     model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, representation_size=0, **kwargs)
     model = _create_vision_transformer('vit_base_patch32_sam_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_huge_patch14_224(pretrained=False, **kwargs):
+    """ ViT-Huge model (ViT-H/14) from original paper (https://arxiv.org/abs/2010.11929).
+    """
+    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, **kwargs)
+    model = _create_vision_transformer('vit_huge_patch14_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_giant_patch14_224(pretrained=False, **kwargs):
+    """ ViT-Giant model (ViT-g/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    """
+    model_kwargs = dict(patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16, **kwargs)
+    model = _create_vision_transformer('vit_giant_patch14_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_gigantic_patch14_224(pretrained=False, **kwargs):
+    """ ViT-Gigantic model (ViT-G/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    """
+    model_kwargs = dict(patch_size=14, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16, **kwargs)
+    model = _create_vision_transformer('vit_gigantic_patch14_224', pretrained=pretrained, **model_kwargs)
     return model
 
 
