@@ -28,12 +28,12 @@ NON_STD_FILTERS = [
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
-if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
+if 'GITHUB_ACTIONS' in os.environ:
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
-        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*']
+        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_gi*']
 else:
     EXCLUDE_FILTERS = []
 
@@ -255,7 +255,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
     'dla*', 'hrnet*', 'ghostnet*',  # hopefully fix at some point
-    'vit_large_*', 'vit_huge_*',
+    'vit_large_*', 'vit_huge_*', 'vit_gi*',
 ]
 
 
@@ -334,7 +334,7 @@ def _create_fx_model(model, train=False):
     return fx_model
 
 
-EXCLUDE_FX_FILTERS = []
+EXCLUDE_FX_FILTERS = ['vit_gi*']
 # not enough memory to run fx on more models than other tests
 if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FX_FILTERS += [
