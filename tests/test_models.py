@@ -34,8 +34,10 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*']
+    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*']
 else:
     EXCLUDE_FILTERS = []
+    NON_STD_EXCLUDE_FILTERS = ['vit_gi*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
@@ -184,7 +186,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs_non_std(model_name, batch_size):
     """Run a single forward pass with each model"""
