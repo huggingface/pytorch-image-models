@@ -45,6 +45,23 @@ default_cfgs = dict(
 
     convnext_tiny_hnf=_cfg(url=''),
 
+    convnext_base_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_1k_224.pth'),
+    convnext_large_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_1k_224.pth'),
+    convnext_xlarge_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_1k_224_ema.pth'),
+
+    convnext_base_384_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_1k_384.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+    convnext_large_384_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_1k_384.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+    convnext_xlarge_384_in22ft1k=_cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_1k_384_ema.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+
     convnext_base_in22k=_cfg(
         url="https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_224.pth", num_classes=21841),
     convnext_large_in22k=_cfg(
@@ -339,8 +356,50 @@ def convnext_base(pretrained=False, **kwargs):
 
 @register_model
 def convnext_large(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
     model = _create_convnext('convnext_large', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_base_in22ft1k(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model = _create_convnext('convnext_base_in22ft1k', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_large_in22ft1k(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
+    model = _create_convnext('convnext_large_in22ft1k', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_xlarge_in22ft1k(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], conv_mlp=False, **kwargs)
+    model = _create_convnext('convnext_xlarge_in22ft1k', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_base_384_in22ft1k(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model = _create_convnext('convnext_base_384_in22ft1k', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_large_384_in22ft1k(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
+    model = _create_convnext('convnext_large_384_in22ft1k', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_xlarge_384_in22ft1k(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], conv_mlp=False, **kwargs)
+    model = _create_convnext('convnext_xlarge_384_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
 
@@ -353,7 +412,7 @@ def convnext_base_in22k(pretrained=False, **kwargs):
 
 @register_model
 def convnext_large_in22k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
     model = _create_convnext('convnext_large_in22k', pretrained=pretrained, **model_args)
     return model
 
