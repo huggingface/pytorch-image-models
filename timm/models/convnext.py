@@ -116,7 +116,7 @@ class ConvNeXtBlock(nn.Module):
         ls_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
 
-    def __init__(self, dim, drop_path=0., ls_init_value=1e-6, conv_mlp=True, mlp_ratio=4, norm_layer=None):
+    def __init__(self, dim, drop_path=0., ls_init_value=1e-6, conv_mlp=False, mlp_ratio=4, norm_layer=None):
         super().__init__()
         if not norm_layer:
             norm_layer = partial(LayerNorm2d, eps=1e-6) if conv_mlp else partial(nn.LayerNorm, eps=1e-6)
@@ -148,7 +148,7 @@ class ConvNeXtBlock(nn.Module):
 class ConvNeXtStage(nn.Module):
 
     def __init__(
-            self, in_chs, out_chs, stride=2, depth=2, dp_rates=None, ls_init_value=1.0, conv_mlp=True,
+            self, in_chs, out_chs, stride=2, depth=2, dp_rates=None, ls_init_value=1.0, conv_mlp=False,
             norm_layer=None, cl_norm_layer=None, cross_stage=False):
         super().__init__()
 
@@ -190,7 +190,7 @@ class ConvNeXt(nn.Module):
 
     def __init__(
             self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32, patch_size=4,
-            depths=(3, 3, 9, 3), dims=(96, 192, 384, 768),  ls_init_value=1e-6, conv_mlp=True,
+            depths=(3, 3, 9, 3), dims=(96, 192, 384, 768),  ls_init_value=1e-6, conv_mlp=False,
             head_init_scale=1., head_norm_first=False, norm_layer=None, drop_rate=0., drop_path_rate=0.,
     ):
         super().__init__()
@@ -356,7 +356,7 @@ def convnext_base(pretrained=False, **kwargs):
 
 @register_model
 def convnext_large(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     model = _create_convnext('convnext_large', pretrained=pretrained, **model_args)
     return model
 
@@ -370,14 +370,14 @@ def convnext_base_in22ft1k(pretrained=False, **kwargs):
 
 @register_model
 def convnext_large_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     model = _create_convnext('convnext_large_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_xlarge_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], **kwargs)
     model = _create_convnext('convnext_xlarge_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
@@ -391,14 +391,14 @@ def convnext_base_384_in22ft1k(pretrained=False, **kwargs):
 
 @register_model
 def convnext_large_384_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     model = _create_convnext('convnext_large_384_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_xlarge_384_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], **kwargs)
     model = _create_convnext('convnext_xlarge_384_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
@@ -412,14 +412,14 @@ def convnext_base_in22k(pretrained=False, **kwargs):
 
 @register_model
 def convnext_large_in22k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     model = _create_convnext('convnext_large_in22k', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_xlarge_in22k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], conv_mlp=False, **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], **kwargs)
     model = _create_convnext('convnext_xlarge_in22k', pretrained=pretrained, **model_args)
     return model
 
