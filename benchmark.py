@@ -21,7 +21,7 @@ from functools import partial
 from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
 from timm.data import resolve_data_config
-from timm.utils import AverageMeter, setup_default_logging
+from timm.utils import setup_default_logging, set_jit_fuser
 
 
 has_apex = False
@@ -95,7 +95,8 @@ parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
-
+parser.add_argument('--fuser', default='', type=str,
+                    help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 
 
 # train optimizer parameters
@@ -186,7 +187,7 @@ def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False
 class BenchmarkRunner:
     def __init__(
             self, model_name, detail=False, device='cuda', torchscript=False, precision='float32',
-            num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
+            fuser='', num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
         self.model_name = model_name
         self.detail = detail
         self.device = device
@@ -194,6 +195,8 @@ class BenchmarkRunner:
         self.channels_last = kwargs.pop('channels_last', False)
         self.amp_autocast = torch.cuda.amp.autocast if self.use_amp else suppress
 
+        if fuser:
+            set_jit_fuser(fuser)
         self.model = create_model(
             model_name,
             num_classes=kwargs.pop('num_classes', None),

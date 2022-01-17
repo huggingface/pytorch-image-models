@@ -3,7 +3,7 @@ from .checkpoint_saver import CheckpointSaver
 from .clip_grad import dispatch_clip_grad
 from .cuda import ApexScaler, NativeScaler
 from .distributed import distribute_bn, reduce_tensor
-from .jit import set_jit_legacy
+from .jit import set_jit_legacy, set_jit_fuser
 from .log import setup_default_logging, FormatterNoInfo
 from .metrics import AverageMeter, accuracy
 from .misc import natural_key, add_bool_arg
