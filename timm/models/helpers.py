@@ -221,8 +221,8 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
         if num_classes != default_cfg['num_classes']:
             for classifier_name in classifiers:
                 # completely discard fully connected if model num_classes doesn't match pretrained weights
-                del state_dict[classifier_name + '.weight']
-                del state_dict[classifier_name + '.bias']
+                state_dict.pop(classifier_name + '.weight', None)
+                state_dict.pop(classifier_name + '.bias', None)
             strict = False
         elif label_offset > 0:
             for classifier_name in classifiers:

@@ -170,11 +170,12 @@ def test_model_default_cfgs(model_name, batch_size):
                 assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier name matches default_cfg
-    classifier = cfg['classifier']
-    if not isinstance(classifier, (tuple, list)):
-        classifier = classifier,
-    for c in classifier:
-        assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
+    if cfg.get('num_classes', None):
+        classifier = cfg['classifier']
+        if not isinstance(classifier, (tuple, list)):
+            classifier = classifier,
+        for c in classifier:
+            assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
 
     # check first conv(s) names match default_cfg
     first_conv = cfg['first_conv']
@@ -222,11 +223,12 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     assert outputs.shape[1] == model.num_features
 
     # check classifier name matches default_cfg
-    classifier = cfg['classifier']
-    if not isinstance(classifier, (tuple, list)):
-        classifier = classifier,
-    for c in classifier:
-        assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
+    if cfg.get('num_classes', None):
+        classifier = cfg['classifier']
+        if not isinstance(classifier, (tuple, list)):
+            classifier = classifier,
+        for c in classifier:
+            assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
 
     # check first conv(s) names match default_cfg
     first_conv = cfg['first_conv']
