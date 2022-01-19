@@ -47,9 +47,15 @@ default_cfgs = {
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
 
-    'mobilenetv3_small_050': _cfg(url=''),
-    'mobilenetv3_small_075': _cfg(url=''),
-    'mobilenetv3_small_100': _cfg(url=''),
+    'mobilenetv3_small_050': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_050_lambc-4b7bbe87.pth',
+        interpolation='bicubic'),
+    'mobilenetv3_small_075': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_075_lambc-384766db.pth',
+        interpolation='bicubic'),
+    'mobilenetv3_small_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_100_lamb-266a294c.pth',
+        interpolation='bicubic'),
 
     'mobilenetv3_rw': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
