@@ -310,10 +310,7 @@ class TrainBenchmarkRunner(BenchmarkRunner):
         super().__init__(model_name=model_name, device=device, torchscript=torchscript, **kwargs)
         self.model.train()
 
-        if kwargs.pop('smoothing', 0) > 0:
-            self.loss = nn.CrossEntropyLoss().to(self.device)
-        else:
-            self.loss = nn.CrossEntropyLoss().to(self.device)
+        self.loss = nn.CrossEntropyLoss().to(self.device)
         self.target_shape = tuple()
 
         self.optimizer = create_optimizer_v2(
