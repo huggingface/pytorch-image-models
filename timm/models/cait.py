@@ -14,7 +14,7 @@ import torch.nn as nn
 from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg
 from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
 from .registry import register_model
 
@@ -318,7 +318,6 @@ def _create_cait(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(
         Cait, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

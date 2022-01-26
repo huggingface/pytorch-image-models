@@ -339,14 +339,12 @@ class Beit(nn.Module):
         return x
 
 
-def _create_beit(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
+def _create_beit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Beit models.')
 
     model = build_model_with_cfg(
         Beit, variant, pretrained,
-        default_cfg=default_cfg,
         # FIXME an updated filter fn needed to interpolate rel pos emb if fine tuning to diff model sizes
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)

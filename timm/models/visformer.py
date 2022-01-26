@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg
 from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier
 from .registry import register_model
 
@@ -318,10 +318,7 @@ class Visformer(nn.Module):
 def _create_visformer(variant, pretrained=False, default_cfg=None, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    model = build_model_with_cfg(
-        Visformer, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    model = build_model_with_cfg(Visformer, variant, pretrained, **kwargs)
     return model
 
 

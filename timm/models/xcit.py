@@ -469,9 +469,8 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_xcit(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
     model = build_model_with_cfg(
-        XCiT, variant, pretrained, default_cfg=default_cfg, pretrained_filter_fn=checkpoint_filter_fn, **kwargs)
+        XCiT, variant, pretrained, pretrained_filter_fn=checkpoint_filter_fn, **kwargs)
     return model
 
 

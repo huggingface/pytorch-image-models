@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg
 from .layers import to_ntuple, get_act_layer
 from .vision_transformer import trunc_normal_
 from .registry import register_model
@@ -554,7 +554,6 @@ def create_levit(variant, pretrained=False, default_cfg=None, fuse=False, **kwar
     model_cfg = dict(**model_cfgs[variant], **kwargs)
     model = build_model_with_cfg(
         Levit, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **model_cfg)
     #if fuse:

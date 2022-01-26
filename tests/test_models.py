@@ -11,8 +11,8 @@ except ImportError:
     has_fx_feature_extraction = False
 
 import timm
-from timm import list_models, create_model, set_scriptable, has_model_default_key, is_model_default_key, \
-    get_model_default_value
+from timm import list_models, create_model, set_scriptable, has_pretrained_cfg_key, is_pretrained_cfg_key, \
+    get_pretrained_cfg_value
 from timm.models.fx_features import _leaf_modules, _autowrap_functions    
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
@@ -54,9 +54,9 @@ MAX_BWD_FX_SIZE = 224
 def _get_input_size(model=None, model_name='', target=None):
     if model is None:
         assert model_name, "One of model or model_name must be provided"
-        input_size = get_model_default_value(model_name, 'input_size')
-        fixed_input_size = get_model_default_value(model_name, 'fixed_input_size')
-        min_input_size = get_model_default_value(model_name, 'min_input_size')
+        input_size = get_pretrained_cfg_value(model_name, 'input_size')
+        fixed_input_size = get_pretrained_cfg_value(model_name, 'fixed_input_size')
+        min_input_size = get_pretrained_cfg_value(model_name, 'min_input_size')
     else:
         default_cfg = model.default_cfg
         input_size = default_cfg['input_size']

@@ -62,6 +62,7 @@ def has_hf_hub(necessary=False):
 
 
 def hf_split(hf_id):
+    # FIXME I may change @ -> # and be parsed as fragment in a URI model name scheme
     rev_split = hf_id.split('@')
     assert 0 < len(rev_split) <= 2, 'hf_hub id should only contain one @ character to identify revision.'
     hf_model_id = rev_split[0]
@@ -84,10 +85,11 @@ def _download_from_hf(model_id: str, filename: str):
 def load_model_config_from_hf(model_id: str):
     assert has_hf_hub(True)
     cached_file = _download_from_hf(model_id, 'config.json')
-    default_cfg = load_cfg_from_json(cached_file)
-    default_cfg['hf_hub'] = model_id  # insert hf_hub id for pretrained weight load during model creation
-    model_name = default_cfg.get('architecture')
-    return default_cfg, model_name
+    pretrained_cfg = load_cfg_from_json(cached_file)
+    pretrained_cfg['hf_hub_id'] = model_id  # insert hf_hub id for pretrained weight load during model creation
+    pretrained_cfg['source'] = 'hf-hub'
+    model_name = pretrained_cfg.get('architecture')
+    return pretrained_cfg, model_name
 
 
 def load_state_dict_from_hf(model_id: str):
@@ -107,7 +109,7 @@ def save_for_hf(model, save_directory, model_config=None):
     torch.save(model.state_dict(), weights_path)
 
     config_path = save_directory / 'config.json'
-    hf_config = model.default_cfg
+    hf_config = model.pretrained_cfg
     hf_config['num_classes'] = model_config.pop('num_classes', model.num_classes)
     hf_config['num_features'] = model_config.pop('num_features', model.num_features)
     hf_config['labels'] = model_config.pop('labels', [f"LABEL_{i}" for i in range(hf_config['num_classes'])])

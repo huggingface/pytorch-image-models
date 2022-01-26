@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg
 from .layers import trunc_normal_, to_2tuple
 from .registry import register_model
 from .vision_transformer import Block
@@ -262,7 +262,6 @@ def _create_pit(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(
         PoolingVisionTransformer, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

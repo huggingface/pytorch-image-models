@@ -397,10 +397,7 @@ class SENet(nn.Module):
 
 
 def _create_senet(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(
-        SENet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(SENet, variant, pretrained, **kwargs)
 
 
 @register_model

@@ -234,8 +234,6 @@ parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
                     help='Drop block rate (default: None)')
 
 # Batch norm parameters (only works with gen_efficientnet based models currently)
-parser.add_argument('--bn-tf', action='store_true', default=False,
-                    help='Use Tensorflow BatchNorm defaults for models that support it (default: False)')
 parser.add_argument('--bn-momentum', type=float, default=None,
                     help='BatchNorm momentum override (if not None)')
 parser.add_argument('--bn-eps', type=float, default=None,
@@ -375,7 +373,6 @@ def main():
         drop_path_rate=args.drop_path,
         drop_block_rate=args.drop_block,
         global_pool=args.gp,
-        bn_tf=args.bn_tf,
         bn_momentum=args.bn_momentum,
         bn_eps=args.bn_eps,
         scriptable=args.torchscript,
@@ -442,6 +439,7 @@ def main():
     else:
         if args.local_rank == 0:
             _logger.info('AMP not enabled. Training in float32.')
+
 
     # optionally resume from a checkpoint
     resume_epoch = None

@@ -216,7 +216,9 @@ def validate(args):
         input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).cuda()
         if args.channels_last:
             input = input.contiguous(memory_format=torch.channels_last)
-        model(input)
+        with amp_autocast():
+            model(input)
+
         end = time.time()
         for batch_idx, (input, target) in enumerate(loader):
             if args.no_prefetcher:

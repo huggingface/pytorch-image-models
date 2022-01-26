@@ -680,10 +680,7 @@ class ResNet(nn.Module):
 
 
 def _create_resnet(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(
-        ResNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(ResNet, variant, pretrained, **kwargs)
 
 
 @register_model

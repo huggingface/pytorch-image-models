@@ -369,10 +369,7 @@ def _create_twins(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    model = build_model_with_cfg(
-        Twins, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    model = build_model_with_cfg(Twins, variant, pretrained, **kwargs)
     return model
 
 

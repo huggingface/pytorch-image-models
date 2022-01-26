@@ -9,13 +9,13 @@ from collections import defaultdict
 from copy import deepcopy
 
 __all__ = ['list_models', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
-           'is_model_default_key', 'has_model_default_key', 'get_model_default_value', 'is_model_pretrained']
+           'is_pretrained_cfg_key', 'has_pretrained_cfg_key', 'get_pretrained_cfg_value', 'is_model_pretrained']
 
 _module_to_models = defaultdict(set)  # dict of sets to check membership of model in module
 _model_to_module = {}  # mapping of model names to module names
 _model_entrypoints = {}  # mapping of model names to entrypoint fns
 _model_has_pretrained = set()  # set of model names that have pretrained weight url present
-_model_default_cfgs = dict()  # central repo for model default_cfgs
+_model_pretrained_cfgs = dict()  # central repo for model default_cfgs
 
 
 def register_model(fn):
@@ -35,13 +35,18 @@ def register_model(fn):
     _model_entrypoints[model_name] = fn
     _model_to_module[model_name] = module_name
     _module_to_models[module_name].add(model_name)
-    has_pretrained = False  # check if model has a pretrained url to allow filtering on this
+    has_valid_pretrained = False  # check if model has a pretrained url to allow filtering on this
     if hasattr(mod, 'default_cfgs') and model_name in mod.default_cfgs:
         # this will catch all models that have entrypoint matching cfg key, but miss any aliasing
         # entrypoints or non-matching combos
-        has_pretrained = 'url' in mod.default_cfgs[model_name] and 'http' in mod.default_cfgs[model_name]['url']
-        _model_default_cfgs[model_name] = deepcopy(mod.default_cfgs[model_name])
-    if has_pretrained:
+        cfg = mod.default_cfgs[model_name]
+        has_valid_pretrained = (
+            ('url' in cfg and 'http' in cfg['url']) or
+            ('file' in cfg and cfg['file']) or
+            ('hf_hub_id' in cfg and cfg['hf_hub_id'])
+        )
+        _model_pretrained_cfgs[model_name] = mod.default_cfgs[model_name]
+    if has_valid_pretrained:
         _model_has_pretrained.add(model_name)
     return fn
 
@@ -87,7 +92,7 @@ def list_models(filter='', module='', pretrained=False, exclude_filters='', name
     if pretrained:
         models = _model_has_pretrained.intersection(models)
     if name_matches_cfg:
-        models = set(_model_default_cfgs).intersection(models)
+        models = set(_model_pretrained_cfgs).intersection(models)
     return list(sorted(models, key=_natural_key))
 
 
@@ -120,30 +125,35 @@ def is_model_in_modules(model_name, module_names):
     return any(model_name in _module_to_models[n] for n in module_names)
 
 
-def has_model_default_key(model_name, cfg_key):
-    """ Query model default_cfgs for existence of a specific key.
-    """
-    if model_name in _model_default_cfgs and cfg_key in _model_default_cfgs[model_name]:
-        return True
-    return False
-
-
-def is_model_default_key(model_name, cfg_key):
-    """ Return truthy value for specified model default_cfg key, False if does not exist.
-    """
-    if model_name in _model_default_cfgs and _model_default_cfgs[model_name].get(cfg_key, False):
-        return True
-    return False
-
-
-def get_model_default_value(model_name, cfg_key):
-    """ Get a specific model default_cfg value by key. None if it doesn't exist.
-    """
-    if model_name in _model_default_cfgs:
-        return _model_default_cfgs[model_name].get(cfg_key, None)
-    else:
-        return None
-
-
 def is_model_pretrained(model_name):
     return model_name in _model_has_pretrained
+
+
+def get_pretrained_cfg(model_name):
+    if model_name in _model_pretrained_cfgs:
+        return deepcopy(_model_pretrained_cfgs[model_name])
+    return {}
+
+
+def has_pretrained_cfg_key(model_name, cfg_key):
+    """ Query model default_cfgs for existence of a specific key.
+    """
+    if model_name in _model_pretrained_cfgs and cfg_key in _model_pretrained_cfgs[model_name]:
+        return True
+    return False
+
+
+def is_pretrained_cfg_key(model_name, cfg_key):
+    """ Return truthy value for specified model default_cfg key, False if does not exist.
+    """
+    if model_name in _model_pretrained_cfgs and _model_pretrained_cfgs[model_name].get(cfg_key, False):
+        return True
+    return False
+
+
+def get_pretrained_cfg_value(model_name, cfg_key):
+    """ Get a specific model default_cfg value by key. None if it doesn't exist.
+    """
+    if model_name in _model_pretrained_cfgs:
+        return _model_pretrained_cfgs[model_name].get(cfg_key, None)
+    return None

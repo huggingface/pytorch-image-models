@@ -33,7 +33,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, named_apply, adapt_input_conv
+from .helpers import build_model_with_cfg, resolve_pretrained_cfg, named_apply, adapt_input_conv
 from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
 from .registry import register_model
 
@@ -132,7 +132,7 @@ default_cfgs = {
         num_classes=21843),
     'vit_huge_patch14_224_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-H_14.npz',
-        hf_hub='timm/vit_huge_patch14_224_in21k',
+        hf_hub_id='timm/vit_huge_patch14_224_in21k',
         num_classes=21843),
 
     # SAM trained models (https://arxiv.org/abs/2106.01548)
@@ -525,13 +525,13 @@ def checkpoint_filter_fn(state_dict, model):
     return out_dict
 
 
-def _create_vision_transformer(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
+def _create_vision_transformer(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
     # NOTE this extra code to support handling of repr size for in21k pretrained models
-    default_num_classes = default_cfg['num_classes']
+    pretrained_cfg = resolve_pretrained_cfg(variant, kwargs=kwargs)
+    default_num_classes = pretrained_cfg['num_classes']
     num_classes = kwargs.get('num_classes', default_num_classes)
     repr_size = kwargs.pop('representation_size', None)
     if repr_size is not None and num_classes != default_num_classes:
@@ -542,10 +542,10 @@ def _create_vision_transformer(variant, pretrained=False, default_cfg=None, **kw
 
     model = build_model_with_cfg(
         VisionTransformer, variant, pretrained,
-        default_cfg=default_cfg,
+        pretrained_cfg=pretrained_cfg,
         representation_size=repr_size,
         pretrained_filter_fn=checkpoint_filter_fn,
-        pretrained_custom_load='npz' in default_cfg['url'],
+        pretrained_custom_load='npz' in pretrained_cfg['url'],
         **kwargs)
     return model
 

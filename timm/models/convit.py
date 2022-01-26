@@ -318,10 +318,7 @@ def _create_convit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    return build_model_with_cfg(
-        ConViT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(ConViT, variant, pretrained, **kwargs)
 
 
 @register_model

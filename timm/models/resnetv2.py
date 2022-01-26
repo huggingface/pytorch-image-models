@@ -482,7 +482,6 @@ def _create_resnetv2(variant, pretrained=False, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
     return build_model_with_cfg(
         ResNetV2, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=feature_cfg,
         pretrained_custom_load='_bit' in variant,
         **kwargs)

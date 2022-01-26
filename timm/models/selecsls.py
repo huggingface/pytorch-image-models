@@ -321,7 +321,6 @@ def _create_selecsls(variant, pretrained, **kwargs):
     # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
     return build_model_with_cfg(
         SelecSLS, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=cfg,
         feature_cfg=dict(out_indices=(0, 1, 2, 3, 4), flatten_sequential=True),
         **kwargs)

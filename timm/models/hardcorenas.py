@@ -5,7 +5,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .efficientnet_blocks import SqueezeExcite
 from .efficientnet_builder import decode_arch_def, resolve_act_layer, resolve_bn_args, round_channels
-from .helpers import build_model_with_cfg, default_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from .layers import get_act_fn
 from .mobilenetv3 import MobileNetV3, MobileNetV3Features
 from .registry import register_model
@@ -59,12 +59,11 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
         model_cls = MobileNetV3Features
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
         **model_kwargs)
     if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
+        model.default_cfg = pretrained_cfg_for_features(model.default_cfg)
     return model
 
 

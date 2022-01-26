@@ -248,7 +248,6 @@ def _create_tnt(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(
         TNT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

@@ -250,7 +250,6 @@ def _create_ghostnet(variant, width=1.0, pretrained=False, **kwargs):
     )
     return build_model_with_cfg(
         GhostNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
         **model_kwargs)
 

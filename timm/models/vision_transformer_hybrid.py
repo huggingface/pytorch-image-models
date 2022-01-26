@@ -143,8 +143,7 @@ class HybridEmbed(nn.Module):
 def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwargs):
     embed_layer = partial(HybridEmbed, backbone=backbone)
     kwargs.setdefault('patch_size', 1)  # default patch size for hybrid models if not set
-    return _create_vision_transformer(
-        variant, pretrained=pretrained, embed_layer=embed_layer, default_cfg=default_cfgs[variant], **kwargs)
+    return _create_vision_transformer(variant, pretrained=pretrained, embed_layer=embed_layer, **kwargs)
 
 
 def _resnetv2(layers=(3, 4, 9), **kwargs):

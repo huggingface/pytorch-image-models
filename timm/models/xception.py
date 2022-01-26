@@ -222,7 +222,6 @@ class Xception(nn.Module):
 def _xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         Xception, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_cls='hook'),
         **kwargs)
 

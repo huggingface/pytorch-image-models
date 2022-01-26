@@ -183,7 +183,6 @@ def _create_vgg(variant: str, pretrained: bool, **kwargs: Any) -> VGG:
     out_indices = kwargs.get('out_indices', (0, 1, 2, 3, 4, 5))
     model = build_model_with_cfg(
         VGG, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=cfgs[cfg],
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         pretrained_filter_fn=_filter_fn,

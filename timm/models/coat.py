@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg
 from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
 from .registry import register_model
 from .layers import _assert
@@ -610,7 +610,6 @@ def _create_coat(variant, pretrained=False, default_cfg=None, **kwargs):
 
     model = build_model_with_cfg(
         CoaT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

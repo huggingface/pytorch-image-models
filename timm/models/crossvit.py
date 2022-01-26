@@ -413,7 +413,6 @@ def _create_crossvit(variant, pretrained=False, **kwargs):
 
     return build_model_with_cfg(
         CrossViT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=pretrained_filter_fn,
         **kwargs)
 

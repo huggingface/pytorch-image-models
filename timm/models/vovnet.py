@@ -339,7 +339,6 @@ class VovNet(nn.Module):
 def _create_vovnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         VovNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=model_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
         **kwargs)
