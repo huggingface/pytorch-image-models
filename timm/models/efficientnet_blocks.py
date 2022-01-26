@@ -1,6 +1,6 @@
 """ EfficientNet, MobileNetV3, etc Blocks
 
-Hacked together by / Copyright 2020 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 import math
 

@@ -14,7 +14,7 @@ Adapted from official impl at https://github.com/facebookresearch/LeViT, origina
 
 This version combines both conv/linear models and fixes torchscript compatibility.
 
-Modifications by/coyright Copyright 2021 Ross Wightman
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 
 # Copyright (c) 2015-present, Facebook, Inc.

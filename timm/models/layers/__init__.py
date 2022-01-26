@@ -23,7 +23,7 @@ from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
-from .mlp import Mlp, GluMlp, GatedMlp
+from .mlp import Mlp, GluMlp, GatedMlp, ConvMlp
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
 from .norm import GroupNorm, LayerNorm2d
 from .norm_act import BatchNormAct2d, GroupNormAct

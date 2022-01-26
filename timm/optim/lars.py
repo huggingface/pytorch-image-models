@@ -114,7 +114,7 @@ class Lars(Optimizer):
                     )
                     if group['trust_clip']:
                         trust_ratio = torch.minimum(trust_ratio / group['lr'], one_tensor)
-                    grad.add(p, alpha=weight_decay)
+                    grad.add_(p, alpha=weight_decay)
                     grad.mul_(trust_ratio)
 
                 # apply SGD update https://github.com/pytorch/pytorch/blob/1.7/torch/optim/sgd.py#L100

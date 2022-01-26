@@ -4,6 +4,7 @@ A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shi
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # --------------------------------------------------------
 # Swin Transformer

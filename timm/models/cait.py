@@ -4,6 +4,7 @@ Paper: 'Going deeper with Image Transformers' - https://arxiv.org/abs/2103.17239
 
 Original code and weights from https://github.com/facebookresearch/deit, copyright below
 
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.

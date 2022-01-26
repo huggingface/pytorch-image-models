@@ -8,7 +8,7 @@ CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Fea
 Code Reference:
 CutMix: https://github.com/clovaai/CutMix-PyTorch
 
-Hacked together by / Copyright 2020 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 import numpy as np
 import torch
