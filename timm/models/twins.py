@@ -357,10 +357,11 @@ class Twins(nn.Module):
             if i < len(self.depths) - 1:
                 x = x.reshape(B, *size, -1).permute(0, 3, 1, 2).contiguous()
         x = self.norm(x)
-        return x.mean(dim=1)  # GAP here
+        return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x.mean(dim=1)
         x = self.head(x)
         return x
 

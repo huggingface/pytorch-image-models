@@ -447,6 +447,7 @@ class CoaT(nn.Module):
                 self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
             else:
                 # CoaT-Lite series: Use feature of last scale for classification.
+                self.aggregate = None
                 self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         # Initialize weights.
@@ -542,8 +543,7 @@ class CoaT(nn.Module):
             else:
                 # Return features for classification.
                 x4 = self.norm4(x4)
-                x4_cls = x4[:, 0]
-                return x4_cls
+                return x4
 
         # Parallel blocks.
         for blk in self.parallel_blocks:
@@ -574,20 +574,20 @@ class CoaT(nn.Module):
             x2 = self.norm2(x2)
             x3 = self.norm3(x3)
             x4 = self.norm4(x4)
-            x2_cls = x2[:, :1]  # [B, 1, C]
-            x3_cls = x3[:, :1]
-            x4_cls = x4[:, :1]
-            merged_cls = torch.cat((x2_cls, x3_cls, x4_cls), dim=1)  # [B, 3, C]
-            merged_cls = self.aggregate(merged_cls).squeeze(dim=1)  # Shape: [B, C]
-            return merged_cls
+            return [x2, x3, x4]
 
-    def forward(self, x):
-        if self.return_interm_layers:
+    def forward(self, x) -> torch.Tensor:
+        if not torch.jit.is_scripting() and self.return_interm_layers:
             # Return intermediate features (for down-stream tasks).
             return self.forward_features(x)
         else:
             # Return features for classification.
-            x = self.forward_features(x) 
+            x_feat = self.forward_features(x)
+            if isinstance(x_feat, (tuple, list)):
+                x = torch.cat([xl[:, :1] for xl in x_feat], dim=1)  # [B, 3, C]
+                x = self.aggregate(x).squeeze(dim=1)  # Shape: [B, C]
+            else:
+                x = x_feat[:, 0]
             x = self.head(x)
             return x
 

@@ -319,7 +319,6 @@ def checkpoint_filter_fn(state_dict, model):
 def _create_convnext(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
         ConvNeXt, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(out_indices=(0, 1, 2, 3), flatten_sequential=True),
         **kwargs)

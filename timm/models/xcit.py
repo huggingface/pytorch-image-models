@@ -426,17 +426,17 @@ class XCiT(nn.Module):
         for blk in self.blocks:
             x = blk(x, Hp, Wp)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
+        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
 
         for blk in self.cls_attn_blocks:
             x = blk(x)
 
-        x = self.norm(x)[:, 0]
+        x = self.norm(x)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x[:, 0]
         x = self.head(x)
         return x
 

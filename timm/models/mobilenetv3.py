@@ -200,9 +200,10 @@ class MobileNetV3Features(nn.Module):
     and object detection models.
     """
 
-    def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
-                 stem_size=16, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
-                 se_from_exp=True, act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
+    def __init__(
+            self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
+            stem_size=16, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
+            se_from_exp=True, act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
         super(MobileNetV3Features, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d

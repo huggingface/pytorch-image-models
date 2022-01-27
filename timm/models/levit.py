@@ -290,10 +290,10 @@ class Attention(nn.Module):
             qkv = self.qkv(x)
             q, k, v = qkv.view(B, N, self.num_heads, -1).split([self.key_dim, self.key_dim, self.d], dim=3)
             q = q.permute(0, 2, 1, 3)
-            k = k.permute(0, 2, 1, 3)
+            k = k.permute(0, 2, 3, 1)
             v = v.permute(0, 2, 1, 3)
 
-            attn = q @ k.transpose(-2, -1) * self.scale + self.get_attention_biases(x.device)
+            attn = q @ k * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
             x = (attn @ v).transpose(1, 2).reshape(B, N, self.dh)
@@ -383,11 +383,11 @@ class AttentionSubsample(nn.Module):
         else:
             B, N, C = x.shape
             k, v = self.kv(x).view(B, N, self.num_heads, -1).split([self.key_dim, self.d], dim=3)
-            k = k.permute(0, 2, 1, 3)  # BHNC
+            k = k.permute(0, 2, 3, 1)  # BHCN
             v = v.permute(0, 2, 1, 3)  # BHNC
             q = self.q(x).view(B, self.resolution_2, self.num_heads, self.key_dim).permute(0, 2, 1, 3)
 
-            attn = q @ k.transpose(-2, -1) * self.scale + self.get_attention_biases(x.device)
+            attn = q @ k * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
             x = (attn @ v).transpose(1, 2).reshape(B, -1, self.dh)
@@ -519,11 +519,11 @@ class Levit(nn.Module):
         if not self.use_conv:
             x = x.flatten(2).transpose(1, 2)
         x = self.blocks(x)
-        x = x.mean((-2, -1)) if self.use_conv else x.mean(1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x.mean((-2, -1)) if self.use_conv else x.mean(1)
         if self.head_dist is not None:
             x, x_dist = self.head(x), self.head_dist(x)
             if self.training and not torch.jit.is_scripting():

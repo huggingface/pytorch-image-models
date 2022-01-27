@@ -294,11 +294,11 @@ class MlpMixer(nn.Module):
         x = self.stem(x)
         x = self.blocks(x)
         x = self.norm(x)
-        x = x.mean(dim=1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x.mean(dim=1)
         x = self.head(x)
         return x
 

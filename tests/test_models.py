@@ -205,22 +205,23 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     outputs = model.forward_features(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
-    assert len(outputs.shape) == 2
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
-    assert len(outputs.shape) == 2
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     # check classifier name matches default_cfg
     if cfg.get('num_classes', None):

@@ -69,13 +69,12 @@ class ConvMixer(nn.Module):
     def forward_features(self, x):
         x = self.stem(x)
         x = self.blocks(x)
-        x = self.pooling(x)
         return x
     
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.pooling(x)
         x = self.head(x)
-
         return x
 
 

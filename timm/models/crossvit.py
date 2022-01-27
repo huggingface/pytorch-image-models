@@ -368,7 +368,7 @@ class CrossViT(nn.Module):
             [nn.Linear(self.embed_dim[i], num_classes) if num_classes > 0 else nn.Identity() for i in
              range(self.num_branches)])
 
-    def forward_features(self, x):
+    def forward_features(self, x) -> List[torch.Tensor]:
         B = x.shape[0]
         xs = []
         for i, patch_embed in enumerate(self.patch_embed):
@@ -389,11 +389,11 @@ class CrossViT(nn.Module):
 
         # NOTE: was before branch token section, move to here to assure all branch token are before layer norm
         xs = [norm(xs[i]) for i, norm in enumerate(self.norm)]
-        return [xo[:, 0] for xo in xs]
+        return xs
 
     def forward(self, x):
         xs = self.forward_features(x)
-        ce_logits = [head(xs[i]) for i, head in enumerate(self.head)]
+        ce_logits = [head(xs[i][:, 0]) for i, head in enumerate(self.head)]
         if not isinstance(self.head[0], nn.Identity):
             ce_logits = torch.mean(torch.stack(ce_logits, dim=0), dim=0)
         return ce_logits
