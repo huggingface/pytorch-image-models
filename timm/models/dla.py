@@ -341,7 +341,6 @@ class DLA(nn.Module):
 def _create_dla(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         DLA, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_strict=False,
         feature_cfg=dict(out_indices=(1, 2, 3, 4, 5)),
         **kwargs)

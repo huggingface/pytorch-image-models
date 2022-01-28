@@ -186,7 +186,6 @@ def _create_rexnet(variant, pretrained, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
     return build_model_with_cfg(
         ReXNetV1, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=feature_cfg,
         **kwargs)
 

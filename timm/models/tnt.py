@@ -226,10 +226,11 @@ class TNT(nn.Module):
             pixel_embed, patch_embed = blk(pixel_embed, patch_embed)
 
         patch_embed = self.norm(patch_embed)
-        return patch_embed[:, 0]
+        return patch_embed
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x[:, 0]
         x = self.head(x)
         return x
 
@@ -248,7 +249,6 @@ def _create_tnt(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(
         TNT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

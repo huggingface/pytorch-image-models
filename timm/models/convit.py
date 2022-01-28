@@ -9,6 +9,8 @@
 
 Paper link: https://arxiv.org/abs/2103.10697
 Original code: https://github.com/facebookresearch/convit, original copyright below
+
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
@@ -306,10 +308,11 @@ class ConViT(nn.Module):
             x = blk(x)
 
         x = self.norm(x)
-        return x[:, 0]
+        return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x[:, 0]
         x = self.head(x)
         return x
 
@@ -318,10 +321,7 @@ def _create_convit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    return build_model_with_cfg(
-        ConViT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(ConViT, variant, pretrained, **kwargs)
 
 
 @register_model

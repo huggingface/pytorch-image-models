@@ -4,6 +4,7 @@ A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shi
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # --------------------------------------------------------
 # Swin Transformer
@@ -13,7 +14,7 @@ Code/weights from https://github.com/microsoft/Swin-Transformer, original copyri
 # --------------------------------------------------------
 import logging
 import math
-from copy import deepcopy
+from functools import partial
 from typing import Optional
 
 import torch
@@ -22,9 +23,8 @@ import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
-from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
-from .layers import _assert
+from .helpers import build_model_with_cfg, named_apply
+from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert
 from .registry import register_model
 from .vision_transformer import checkpoint_filter_fn, _init_vit_weights
 
@@ -443,15 +443,17 @@ class SwinTransformer(nn.Module):
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, num_classes=1000,
-                 embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24),
-                 window_size=7, mlp_ratio=4., qkv_bias=True,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
-                 norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, weight_init='', **kwargs):
+    def __init__(
+            self, img_size=224, patch_size=4, in_chans=3, num_classes=1000, global_pool='avg',
+            embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24),
+            window_size=7, mlp_ratio=4., qkv_bias=True,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+            norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
+            use_checkpoint=False, weight_init='', **kwargs):
         super().__init__()
-
+        assert global_pool in ('', 'avg')
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
         self.ape = ape
@@ -467,18 +469,11 @@ class SwinTransformer(nn.Module):
         self.patch_grid = self.patch_embed.grid_size
 
         # absolute position embedding
-        if self.ape:
-            self.absolute_pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
-            trunc_normal_(self.absolute_pos_embed, std=.02)
-        else:
-            self.absolute_pos_embed = None
-
+        self.absolute_pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim)) if ape else None
         self.pos_drop = nn.Dropout(p=drop_rate)
 
-        # stochastic depth
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
-
         # build layers
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
         layers = []
         for i_layer in range(self.num_layers):
             layers += [BasicLayer(
@@ -499,16 +494,16 @@ class SwinTransformer(nn.Module):
         self.layers = nn.Sequential(*layers)
 
         self.norm = norm_layer(self.num_features)
-        self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-        assert weight_init in ('jax', 'jax_nlhb', 'nlhb', '')
-        head_bias = -math.log(self.num_classes) if 'nlhb' in weight_init else 0.
-        if weight_init.startswith('jax'):
-            for n, m in self.named_modules():
-                _init_vit_weights(m, n, head_bias=head_bias, jax_impl=True)
-        else:
-            self.apply(_init_vit_weights)
+        self.init_weights(weight_init)
+
+    def init_weights(self, mode=''):
+        assert mode in ('jax', 'jax_nlhb', 'nlhb', '')
+        if self.absolute_pos_embed is not None:
+            trunc_normal_(self.absolute_pos_embed, std=.02)
+        head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
+        named_apply(partial(_init_vit_weights, head_bias=head_bias, jax_impl='jax' in mode), self)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -521,8 +516,9 @@ class SwinTransformer(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
@@ -532,33 +528,19 @@ class SwinTransformer(nn.Module):
         x = self.pos_drop(x)
         x = self.layers(x)
         x = self.norm(x)  # B L C
-        x = self.avgpool(x.transpose(1, 2))  # B C 1
-        x = torch.flatten(x, 1)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        if self.global_pool == 'avg':
+            x = x.mean(dim=1)
         x = self.head(x)
         return x
 
 
-def _create_swin_transformer(variant, pretrained=False, default_cfg=None, **kwargs):
-    if default_cfg is None:
-        default_cfg = deepcopy(default_cfgs[variant])
-    overlay_external_default_cfg(default_cfg, kwargs)
-    default_num_classes = default_cfg['num_classes']
-    default_img_size = default_cfg['input_size'][-2:]
-
-    num_classes = kwargs.pop('num_classes', default_num_classes)
-    img_size = kwargs.pop('img_size', default_img_size)
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
-
+def _create_swin_transformer(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
         SwinTransformer, variant, pretrained,
-        default_cfg=default_cfg,
-        img_size=img_size,
-        num_classes=num_classes,
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
 

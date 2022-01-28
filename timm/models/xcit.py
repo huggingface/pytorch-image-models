@@ -1,10 +1,12 @@
 """ Cross-Covariance Image Transformer (XCiT) in PyTorch
 
-Same as the official implementation, with some minor adaptations.
-    - https://github.com/facebookresearch/xcit/blob/master/xcit.py
-
 Paper:
     - https://arxiv.org/abs/2106.09681
+
+Same as the official implementation, with some minor adaptations, original copyright below
+    - https://github.com/facebookresearch/xcit/blob/master/xcit.py
+
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
@@ -424,17 +426,17 @@ class XCiT(nn.Module):
         for blk in self.blocks:
             x = blk(x, Hp, Wp)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
+        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
 
         for blk in self.cls_attn_blocks:
             x = blk(x)
 
-        x = self.norm(x)[:, 0]
+        x = self.norm(x)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        x = x[:, 0]
         x = self.head(x)
         return x
 
@@ -469,9 +471,8 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_xcit(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
     model = build_model_with_cfg(
-        XCiT, variant, pretrained, default_cfg=default_cfg, pretrained_filter_fn=checkpoint_filter_fn, **kwargs)
+        XCiT, variant, pretrained, pretrained_filter_fn=checkpoint_filter_fn, **kwargs)
     return model
 
 

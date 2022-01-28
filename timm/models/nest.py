@@ -395,11 +395,9 @@ def checkpoint_filter_fn(state_dict, model):
     return state_dict
 
 
-def _create_nest(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
+def _create_nest(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
         Nest, variant, pretrained,
-        default_cfg=default_cfg,
         feature_cfg=dict(out_indices=(0, 1, 2), flatten_sequential=True),
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)

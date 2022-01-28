@@ -288,7 +288,6 @@ def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
     kwargs['block_config'] = block_config
     return build_model_with_cfg(
         DenseNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True), pretrained_filter_fn=_filter_torchvision_pretrained,
         **kwargs)
 

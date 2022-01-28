@@ -1,11 +1,10 @@
-
 """ MobileNet V3
 
 A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
 
 Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
 from typing import List
@@ -19,7 +18,7 @@ from .efficientnet_blocks import SqueezeExcite
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg, default_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, get_norm_act_layer
 from .registry import register_model
 
@@ -47,8 +46,16 @@ default_cfgs = {
     'mobilenetv3_large_100_miil_in21k': _cfg(
         interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
-    'mobilenetv3_small_075': _cfg(url=''),
-    'mobilenetv3_small_100': _cfg(url=''),
+
+    'mobilenetv3_small_050': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_050_lambc-4b7bbe87.pth',
+        interpolation='bicubic'),
+    'mobilenetv3_small_075': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_075_lambc-384766db.pth',
+        interpolation='bicubic'),
+    'mobilenetv3_small_100': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_100_lamb-266a294c.pth',
+        interpolation='bicubic'),
 
     'mobilenetv3_rw': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
@@ -73,9 +80,30 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mobilenetv3_small_minimal_100-922a7843.pth',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
 
-    'fbnetv3_b': _cfg(),
-    'fbnetv3_d': _cfg(),
-    'fbnetv3_g': _cfg(),
+    'fbnetv3_b': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_b_224-ead5d2a1.pth',
+        test_input_size=(3, 256, 256), crop_pct=0.95),
+    'fbnetv3_d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_d_224-c98bce42.pth',
+        test_input_size=(3, 256, 256), crop_pct=0.95),
+    'fbnetv3_g': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_g_240-0b1df83b.pth',
+        input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95),
+
+    "lcnet_035": _cfg(),
+    "lcnet_050": _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_050-f447553b.pth',
+        interpolation='bicubic',
+    ),
+    "lcnet_075": _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_075-318cad2c.pth',
+        interpolation='bicubic',
+    ),
+    "lcnet_100": _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/lcnet_100-a929038c.pth',
+        interpolation='bicubic',
+    ),
+    "lcnet_150": _cfg(),
 }
 
 
@@ -86,12 +114,18 @@ class MobileNetV3(nn.Module):
     'efficient head', where global pooling is done before the head convolution without a final batch-norm
     layer before the classifier.
 
-    Paper: https://arxiv.org/abs/1905.02244
+    Paper: `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
+
+    Other architectures utilizing MobileNet-V3 efficient head that are supported by this impl include:
+      * HardCoRe-NAS - https://arxiv.org/abs/2102.11646 (defn in hardcorenas.py uses this class)
+      * FBNet-V3 - https://arxiv.org/abs/2006.02049
+      * LCNet - https://arxiv.org/abs/2109.15099
     """
 
-    def __init__(self, block_args, num_classes=1000, in_chans=3, stem_size=16, num_features=1280, head_bias=True,
-                 pad_type='', act_layer=None, norm_layer=None, se_layer=None, se_from_exp=True,
-                 round_chs_fn=round_channels, drop_rate=0., drop_path_rate=0., global_pool='avg'):
+    def __init__(
+            self, block_args, num_classes=1000, in_chans=3, stem_size=16, fix_stem=False, num_features=1280,
+            head_bias=True, pad_type='', act_layer=None, norm_layer=None, se_layer=None, se_from_exp=True,
+            round_chs_fn=round_channels, drop_rate=0., drop_path_rate=0., global_pool='avg'):
         super(MobileNetV3, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -102,7 +136,8 @@ class MobileNetV3(nn.Module):
         self.drop_rate = drop_rate
 
         # Stem
-        stem_size = round_chs_fn(stem_size)
+        if not fix_stem:
+            stem_size = round_chs_fn(stem_size)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_act_layer(stem_size, inplace=True)
 
@@ -165,9 +200,10 @@ class MobileNetV3Features(nn.Module):
     and object detection models.
     """
 
-    def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
-                 stem_size=16, output_stride=32, pad_type='', round_chs_fn=round_channels, se_from_exp=True,
-                 act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
+    def __init__(
+            self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
+            stem_size=16, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
+            se_from_exp=True, act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
         super(MobileNetV3Features, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -175,7 +211,8 @@ class MobileNetV3Features(nn.Module):
         self.drop_rate = drop_rate
 
         # Stem
-        stem_size = round_chs_fn(stem_size)
+        if not fix_stem:
+            stem_size = round_chs_fn(stem_size)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
         self.bn1 = norm_layer(stem_size)
         self.act1 = act_layer(inplace=True)
@@ -226,12 +263,11 @@ def _create_mnv3(variant, pretrained=False, **kwargs):
         model_cls = MobileNetV3Features
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
         **kwargs)
     if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
+        model.default_cfg = pretrained_cfg_for_features(model.default_cfg)
     return model
 
 
@@ -359,6 +395,7 @@ def _gen_mobilenet_v3(variant, channel_multiplier=1.0, pretrained=False, **kwarg
         block_args=decode_arch_def(arch_def),
         num_features=num_features,
         stem_size=16,
+        fix_stem=channel_multiplier < 0.75,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=act_layer,
@@ -430,6 +467,82 @@ def _gen_fbnetv3(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     return model
 
 
+def _gen_lcnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ LCNet
+    Essentially a MobileNet-V3 crossed with a MobileNet-V1
+
+    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer.
+    """
+    arch_def = [
+        # stage 0, 112x112 in
+        ['dsa_r1_k3_s1_c32'],
+        # stage 1, 112x112 in
+        ['dsa_r2_k3_s2_c64'],
+        # stage 2, 56x56 in
+        ['dsa_r2_k3_s2_c128'],
+        # stage 3, 28x28 in
+        ['dsa_r1_k3_s2_c256', 'dsa_r1_k5_s1_c256'],
+        # stage 4, 14x14in
+        ['dsa_r4_k5_s1_c256'],
+        # stage 5, 14x14in
+        ['dsa_r2_k5_s2_c512_se0.25'],
+        # 7x7
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        stem_size=16,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
+        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU),
+        num_features=1280,
+        **kwargs,
+    )
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_lcnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ LCNet
+    Essentially a MobileNet-V3 crossed with a MobileNet-V1
+
+    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer.
+    """
+    arch_def = [
+        # stage 0, 112x112 in
+        ['dsa_r1_k3_s1_c32'],
+        # stage 1, 112x112 in
+        ['dsa_r2_k3_s2_c64'],
+        # stage 2, 56x56 in
+        ['dsa_r2_k3_s2_c128'],
+        # stage 3, 28x28 in
+        ['dsa_r1_k3_s2_c256', 'dsa_r1_k5_s1_c256'],
+        # stage 4, 14x14in
+        ['dsa_r4_k5_s1_c256'],
+        # stage 5, 14x14in
+        ['dsa_r2_k5_s2_c512_se0.25'],
+        # 7x7
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        stem_size=16,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
+        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU),
+        num_features=1280,
+        **kwargs,
+    )
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
+    return model
+
+
 @register_model
 def mobilenetv3_large_075(pretrained=False, **kwargs):
     """ MobileNet V3 """
@@ -459,6 +572,13 @@ def mobilenetv3_large_100_miil_in21k(pretrained=False, **kwargs):
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
     model = _gen_mobilenet_v3('mobilenetv3_large_100_miil_in21k', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_small_050(pretrained=False, **kwargs):
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_small_050', 0.50, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -558,4 +678,39 @@ def fbnetv3_d(pretrained=False, **kwargs):
 def fbnetv3_g(pretrained=False, **kwargs):
     """ FBNetV3-G """
     model = _gen_fbnetv3('fbnetv3_g', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_035(pretrained=False, **kwargs):
+    """ PP-LCNet 0.35"""
+    model = _gen_lcnet('lcnet_035', 0.35, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_050(pretrained=False, **kwargs):
+    """ PP-LCNet 0.5"""
+    model = _gen_lcnet('lcnet_050', 0.5, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_075(pretrained=False, **kwargs):
+    """ PP-LCNet 1.0"""
+    model = _gen_lcnet('lcnet_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_100(pretrained=False, **kwargs):
+    """ PP-LCNet 1.0"""
+    model = _gen_lcnet('lcnet_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def lcnet_150(pretrained=False, **kwargs):
+    """ PP-LCNet 1.5"""
+    model = _gen_lcnet('lcnet_150', 1.5, pretrained=pretrained, **kwargs)
     return model

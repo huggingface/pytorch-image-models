@@ -1607,7 +1607,6 @@ def _init_weights(module, name='', zero_init_last=False):
 def _create_byobnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         ByobNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=model_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
         **kwargs)

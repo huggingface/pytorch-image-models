@@ -11,8 +11,8 @@ except ImportError:
     has_fx_feature_extraction = False
 
 import timm
-from timm import list_models, create_model, set_scriptable, has_model_default_key, is_model_default_key, \
-    get_model_default_value
+from timm import list_models, create_model, set_scriptable, has_pretrained_cfg_key, is_pretrained_cfg_key, \
+    get_pretrained_cfg_value
 from timm.models.fx_features import _leaf_modules, _autowrap_functions    
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
@@ -28,14 +28,16 @@ NON_STD_FILTERS = [
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
-if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
+if 'GITHUB_ACTIONS' in os.environ:
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
-        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*']
+        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*']
+    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*']
 else:
     EXCLUDE_FILTERS = []
+    NON_STD_EXCLUDE_FILTERS = ['vit_gi*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
@@ -54,9 +56,9 @@ MAX_BWD_FX_SIZE = 224
 def _get_input_size(model=None, model_name='', target=None):
     if model is None:
         assert model_name, "One of model or model_name must be provided"
-        input_size = get_model_default_value(model_name, 'input_size')
-        fixed_input_size = get_model_default_value(model_name, 'fixed_input_size')
-        min_input_size = get_model_default_value(model_name, 'min_input_size')
+        input_size = get_pretrained_cfg_value(model_name, 'input_size')
+        fixed_input_size = get_pretrained_cfg_value(model_name, 'fixed_input_size')
+        min_input_size = get_pretrained_cfg_value(model_name, 'min_input_size')
     else:
         default_cfg = model.default_cfg
         input_size = default_cfg['input_size']
@@ -168,11 +170,12 @@ def test_model_default_cfgs(model_name, batch_size):
                 assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier name matches default_cfg
-    classifier = cfg['classifier']
-    if not isinstance(classifier, (tuple, list)):
-        classifier = classifier,
-    for c in classifier:
-        assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
+    if cfg.get('num_classes', None):
+        classifier = cfg['classifier']
+        if not isinstance(classifier, (tuple, list)):
+            classifier = classifier,
+        for c in classifier:
+            assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
 
     # check first conv(s) names match default_cfg
     first_conv = cfg['first_conv']
@@ -184,7 +187,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs_non_std(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -202,29 +205,31 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     outputs = model.forward_features(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
-    assert len(outputs.shape) == 2
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
-    assert len(outputs.shape) == 2
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     # check classifier name matches default_cfg
-    classifier = cfg['classifier']
-    if not isinstance(classifier, (tuple, list)):
-        classifier = classifier,
-    for c in classifier:
-        assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
+    if cfg.get('num_classes', None):
+        classifier = cfg['classifier']
+        if not isinstance(classifier, (tuple, list)):
+            classifier = classifier,
+        for c in classifier:
+            assert c + ".weight" in state_dict.keys(), f'{c} not in model params'
 
     # check first conv(s) names match default_cfg
     first_conv = cfg['first_conv']
@@ -255,7 +260,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
     'dla*', 'hrnet*', 'ghostnet*',  # hopefully fix at some point
-    'vit_large_*', 'vit_huge_*',
+    'vit_large_*', 'vit_huge_*', 'vit_gi*',
 ]
 
 
@@ -334,7 +339,7 @@ def _create_fx_model(model, train=False):
     return fx_model
 
 
-EXCLUDE_FX_FILTERS = []
+EXCLUDE_FX_FILTERS = ['vit_gi*']
 # not enough memory to run fx on more models than other tests
 if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FX_FILTERS += [

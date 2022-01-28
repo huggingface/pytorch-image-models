@@ -452,10 +452,10 @@ visformer_small,in1k
 vit_base_patch16_224,in21k
 vit_base_patch16_224_miil,in21k
 vit_base_patch16_384,in21k
-vit_base_patch16_sam_224,in1k
+vit_base_patch16_224_sam,in1k
 vit_base_patch32_224,in21k
 vit_base_patch32_384,in21k
-vit_base_patch32_sam_224,in1k
+vit_base_patch32_224_sam,in1k
 vit_base_r50_s16_384,in21k
 vit_large_patch16_224,in21k
 vit_large_patch16_384,in21k

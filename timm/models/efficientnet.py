@@ -23,13 +23,17 @@ An implementation of EfficienNet that covers variety of related models with effi
 * Single-Path NAS Pixel1
   - Single-Path NAS: Designing Hardware-Efficient ConvNets - https://arxiv.org/abs/1904.02877
 
+* TinyNet
+    - Model Rubik's Cube: Twisting Resolution, Depth and Width for TinyNets - https://arxiv.org/abs/2010.14819
+    - Definitions & weights borrowed from https://github.com/huawei-noah/CV-Backbones/tree/master/tinynet_pytorch
+
 * And likely more...
 
 The majority of the above models (EfficientNet*, MixNet, MnasNet) and original weights were made available
 by Mingxing Tan, Quoc Le, and other members of their Google Brain team. Thanks for consistently releasing
 the models and weights open source!
 
-Hacked together by / Copyright 2021 Ross Wightman
+Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
 from typing import List
@@ -44,7 +48,7 @@ from .efficientnet_blocks import SqueezeExcite
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg, default_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from .layers import create_conv2d, create_classifier, get_norm_act_layer, EvoNorm2dS0, GroupNormAct
 from .registry import register_model
 
@@ -69,12 +73,22 @@ default_cfgs = {
     'mnasnet_140': _cfg(url=''),
 
     'semnasnet_050': _cfg(url=''),
-    'semnasnet_075': _cfg(url=''),
+    'semnasnet_075': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/semnasnet_075-18710866.pth'),
     'semnasnet_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_a1-d9418771.pth'),
     'semnasnet_140': _cfg(url=''),
-    'mnasnet_small': _cfg(url=''),
+    'mnasnet_small': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_small_lamb-aff75073.pth'),
 
+    'mobilenetv2_035': _cfg(
+        url=''),
+    'mobilenetv2_050': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_050-3d30d450.pth',
+        interpolation='bicubic',
+    ),
+    'mobilenetv2_075': _cfg(
+        url=''),
     'mobilenetv2_100': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_100_ra-b33bc2c4.pth'),
     'mobilenetv2_110d': _cfg(
@@ -421,11 +435,27 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_m-0f4d8805.pth'),
     'tf_mixnet_l': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_mixnet_l-6c92e0c8.pth'),
+
+    "tinynet_a": _cfg(
+        input_size=(3, 192, 192), pool_size=(6, 6),  # int(224 * 0.86)
+        url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_a.pth'),
+    "tinynet_b": _cfg(
+        input_size=(3, 188, 188), pool_size=(6, 6),  # int(224 * 0.84)
+        url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_b.pth'),
+    "tinynet_c": _cfg(
+        input_size=(3, 184, 184), pool_size=(6, 6),  # int(224 * 0.825)
+        url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_c.pth'),
+    "tinynet_d": _cfg(
+        input_size=(3, 152, 152), pool_size=(5, 5),  # int(224 * 0.68)
+        url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_d.pth'),
+    "tinynet_e": _cfg(
+        input_size=(3, 106, 106), pool_size=(4, 4),  # int(224 * 0.475)
+        url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_e.pth'),
 }
 
 
 class EfficientNet(nn.Module):
-    """ (Generic) EfficientNet
+    """ EfficientNet
 
     A flexible and performant PyTorch implementation of efficient network architectures, including:
       * EfficientNet-V2 Small, Medium, Large, XL & B0-B3
@@ -434,9 +464,10 @@ class EfficientNet(nn.Module):
       * EfficientNet-CondConv
       * MixNet S, M, L, XL
       * MnasNet A1, B1, and small
+      * MobileNet-V2
       * FBNet C
       * Single-Path NAS Pixel1
-
+      * TinyNet
     """
 
     def __init__(self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32, fix_stem=False,
@@ -572,12 +603,11 @@ def _create_effnet(variant, pretrained=False, **kwargs):
         model_cls = EfficientNetFeatures
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
         **kwargs)
     if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
+        model.default_cfg = pretrained_cfg_for_features(model.default_cfg)
     return model
 
 
@@ -700,7 +730,7 @@ def _gen_mobilenet_v2(
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
-        num_features=1280 if fix_stem_head else round_chs_fn(1280),
+        num_features=1280 if fix_stem_head else max(1280, round_chs_fn(1280)),
         stem_size=32,
         fix_stem=fix_stem_head,
         round_chs_fn=round_chs_fn,
@@ -1153,6 +1183,31 @@ def _gen_mixnet_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrai
     return model
 
 
+def _gen_tinynet(
+    variant, model_width=1.0, depth_multiplier=1.0, pretrained=False, **kwargs
+):
+    """Creates a TinyNet model.
+    """
+    arch_def = [
+        ['ds_r1_k3_s1_e1_c16_se0.25'], ['ir_r2_k3_s2_e6_c24_se0.25'],
+        ['ir_r2_k5_s2_e6_c40_se0.25'], ['ir_r3_k3_s2_e6_c80_se0.25'],
+        ['ir_r3_k5_s1_e6_c112_se0.25'], ['ir_r4_k5_s2_e6_c192_se0.25'],
+        ['ir_r1_k3_s1_e6_c320_se0.25'],
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier, depth_trunc='round'),
+        num_features=max(1280, round_channels(1280, model_width, 8, None)),
+        stem_size=32,
+        fix_stem=True,
+        round_chs_fn=partial(round_channels, multiplier=model_width),
+        act_layer=resolve_act_layer(kwargs, 'swish'),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 @register_model
 def mnasnet_050(pretrained=False, **kwargs):
     """ MNASNet B1, depth multiplier of 0.5. """
@@ -1225,6 +1280,27 @@ def semnasnet_140(pretrained=False, **kwargs):
 def mnasnet_small(pretrained=False, **kwargs):
     """ MNASNet Small,  depth multiplier of 1.0. """
     model = _gen_mnasnet_small('mnasnet_small', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_035(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 0.35 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_035', 0.35, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_050(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 0.5 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_050', 0.5, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv2_075(pretrained=False, **kwargs):
+    """ MobileNet V2 w/ 0.75 channel multiplier """
+    model = _gen_mobilenet_v2('mobilenetv2_075', 0.75, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1402,7 +1478,7 @@ def efficientnet_b0_g16_evos(pretrained=False, **kwargs):
     """ EfficientNet-B0 w/ group 16 conv + EvoNorm"""
     model = _gen_efficientnet(
         'efficientnet_b0_g16_evos', group_size=16, channel_divisor=16,
-        norm_layer=partial(EvoNorm2dS0, group_size=16), pretrained=pretrained, **kwargs)
+        pretrained=pretrained, **kwargs) #norm_layer=partial(EvoNorm2dS0, group_size=16),
     return model
 
 
@@ -2269,4 +2345,34 @@ def tf_mixnet_l(pretrained=False, **kwargs):
     kwargs['pad_type'] = 'same'
     model = _gen_mixnet_m(
         'tf_mixnet_l', channel_multiplier=1.3, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def tinynet_a(pretrained=False, **kwargs):
+    model = _gen_tinynet('tinynet_a', 1.0, 1.2, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def tinynet_b(pretrained=False, **kwargs):
+    model = _gen_tinynet('tinynet_b', 0.75, 1.1, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def tinynet_c(pretrained=False, **kwargs):
+    model = _gen_tinynet('tinynet_c', 0.54, 0.85, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def tinynet_d(pretrained=False, **kwargs):
+    model = _gen_tinynet('tinynet_d', 0.54, 0.695, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def tinynet_e(pretrained=False, **kwargs):
+    model = _gen_tinynet('tinynet_e', 0.51, 0.6, pretrained=pretrained, **kwargs)
     return model

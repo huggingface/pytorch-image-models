@@ -23,6 +23,18 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 
 ## What's New
 
+### Jan 14, 2022
+* Version 0.5.4 w/ release to be pushed to pypi. It's been a while since last pypi update and riskier changes will be merged to main branch soon....
+* Add ConvNeXT models /w weights from official impl (https://github.com/facebookresearch/ConvNeXt), a few perf tweaks, compatible with timm features
+* Tried training a few small (~1.8-3M param) / mobile optimized models, a few are good so far, more on the way...
+  * `mnasnet_small` - 65.6 top-1
+  * `mobilenetv2_050` - 65.9
+  * `lcnet_100/075/050` - 72.1 / 68.8 / 63.1
+  * `semnasnet_075` - 73
+  * `fbnetv3_b/d/g` - 79.1 / 79.7 / 82.0
+* TinyNet models added by [rsomani95](https://github.com/rsomani95)
+* LCNet added via MobileNetV3 architecture
+
 ### Nov 22, 2021
 * A number of updated weights anew new model defs
   * `eca_halonext26ts` - 79.5 @ 256
@@ -255,10 +267,12 @@ All model architecture families include variants with pretrained weights. There 
 A full version of the list below with source links can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
 
 * Aggregating Nested Transformers - https://arxiv.org/abs/2105.12723
+* BEiT - https://arxiv.org/abs/2106.08254
 * Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
+* ConvNeXt - https://arxiv.org/abs/2201.03545
 * ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT (Vision Transformer) - https://arxiv.org/abs/2012.12877
@@ -276,11 +290,11 @@ A full version of the list below with source links can be found in the [document
     * MNASNet B1, A1 (Squeeze-Excite), and Small - https://arxiv.org/abs/1807.11626
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
+    * TinyNet - https://arxiv.org/abs/2010.14819
 * GhostNet - https://arxiv.org/abs/1911.11907
 * gMLP - https://arxiv.org/abs/2105.08050
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
-* HardCoRe-NAS - https://arxiv.org/abs/2102.11646
 * HRNet - https://arxiv.org/abs/1908.07919
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
@@ -288,7 +302,11 @@ A full version of the list below with source links can be found in the [document
 * LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
+  * FBNet-V3 - https://arxiv.org/abs/2006.02049
+  * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
+  * LCNet - https://arxiv.org/abs/2109.15099
 * NASNet-A - https://arxiv.org/abs/1707.07012
+* NesT - https://arxiv.org/abs/2105.12723
 * NFNet-F - https://arxiv.org/abs/2102.06171
 * NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
 * PNasNet - https://arxiv.org/abs/1712.00559
@@ -314,6 +332,7 @@ A full version of the list below with source links can be found in the [document
 * Transformer-iN-Transformer (TNT) - https://arxiv.org/abs/2103.00112
 * TResNet - https://arxiv.org/abs/2003.13630
 * Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
+* Visformer - https://arxiv.org/abs/2104.12533
 * Vision Transformer - https://arxiv.org/abs/2010.11929
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357

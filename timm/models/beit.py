@@ -232,13 +232,15 @@ class Beit(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6), init_values=None,
-                 use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
-                 use_mean_pooling=True, init_scale=0.001):
+    def __init__(
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='avg',
+            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0.,
+            attn_drop_rate=0., drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            init_values=None, use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
+            head_init_scale=0.001):
         super().__init__()
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
 
         self.patch_embed = PatchEmbed(
@@ -247,10 +249,7 @@ class Beit(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         # self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        if use_abs_pos_emb:
-            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        else:
-            self.pos_embed = None
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) if use_abs_pos_emb else None
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         if use_shared_rel_pos_bias:
@@ -266,8 +265,9 @@ class Beit(nn.Module):
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
                 init_values=init_values, window_size=self.patch_embed.grid_size if use_rel_pos_bias else None)
             for i in range(depth)])
-        self.norm = nn.Identity() if use_mean_pooling else norm_layer(embed_dim)
-        self.fc_norm = norm_layer(embed_dim) if use_mean_pooling else None
+        use_fc_norm = self.global_pool == 'avg'
+        self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
+        self.fc_norm = norm_layer(embed_dim) if use_fc_norm else None
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -278,8 +278,8 @@ class Beit(nn.Module):
         self.fix_init_weight()
         if isinstance(self.head, nn.Linear):
             trunc_normal_(self.head.weight, std=.02)
-            self.head.weight.data.mul_(init_scale)
-            self.head.bias.data.mul_(init_scale)
+            self.head.weight.data.mul_(head_init_scale)
+            self.head.bias.data.mul_(head_init_scale)
 
     def fix_init_weight(self):
         def rescale(param, layer_id):
@@ -327,26 +327,25 @@ class Beit(nn.Module):
             x = blk(x, rel_pos_bias=rel_pos_bias)
 
         x = self.norm(x)
-        if self.fc_norm is not None:
-            t = x[:, 1:, :]
-            return self.fc_norm(t.mean(1))
-        else:
-            return x[:, 0]
+        return x
 
     def forward(self, x):
         x = self.forward_features(x)
+        if self.fc_norm is not None:
+            x = x[:, 1:].mean(dim=1)
+            x = self.fc_norm(x)
+        else:
+            x = x[:, 0]
         x = self.head(x)
         return x
 
 
-def _create_beit(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
+def _create_beit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Beit models.')
 
     model = build_model_with_cfg(
         Beit, variant, pretrained,
-        default_cfg=default_cfg,
         # FIXME an updated filter fn needed to interpolate rel pos emb if fine tuning to diff model sizes
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)

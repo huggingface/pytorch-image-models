@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .features import FeatureInfo
-from .helpers import build_model_with_cfg, default_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from .layers import create_classifier
 from .registry import register_model
 from .resnet import BasicBlock, Bottleneck  # leveraging ResNet blocks w/ additional features like SE
@@ -781,13 +781,13 @@ def _create_hrnet(variant, pretrained, **model_kwargs):
         features_only = True
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=cfg_cls[variant],
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
         **model_kwargs)
     if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
+        model.pretrained_cfg = pretrained_cfg_for_features(model.default_cfg)
+        model.default_cfg = model.pretrained_cfg  # backwards compat
     return model
 
 

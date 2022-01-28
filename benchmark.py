@@ -21,7 +21,7 @@ from functools import partial
 from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
 from timm.data import resolve_data_config
-from timm.utils import AverageMeter, setup_default_logging
+from timm.utils import setup_default_logging, set_jit_fuser
 
 
 has_apex = False
@@ -95,7 +95,8 @@ parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
-
+parser.add_argument('--fuser', default='', type=str,
+                    help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 
 
 # train optimizer parameters
@@ -186,7 +187,7 @@ def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False
 class BenchmarkRunner:
     def __init__(
             self, model_name, detail=False, device='cuda', torchscript=False, precision='float32',
-            num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
+            fuser='', num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
         self.model_name = model_name
         self.detail = detail
         self.device = device
@@ -194,6 +195,8 @@ class BenchmarkRunner:
         self.channels_last = kwargs.pop('channels_last', False)
         self.amp_autocast = torch.cuda.amp.autocast if self.use_amp else suppress
 
+        if fuser:
+            set_jit_fuser(fuser)
         self.model = create_model(
             model_name,
             num_classes=kwargs.pop('num_classes', None),
@@ -311,10 +314,7 @@ class TrainBenchmarkRunner(BenchmarkRunner):
         super().__init__(model_name=model_name, device=device, torchscript=torchscript, **kwargs)
         self.model.train()
 
-        if kwargs.pop('smoothing', 0) > 0:
-            self.loss = nn.CrossEntropyLoss().to(self.device)
-        else:
-            self.loss = nn.CrossEntropyLoss().to(self.device)
+        self.loss = nn.CrossEntropyLoss().to(self.device)
         self.target_shape = tuple()
 
         self.optimizer = create_optimizer_v2(
@@ -477,6 +477,7 @@ def decay_batch_exp(batch_size, factor=0.5, divisor=16):
 def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
     batch_size = initial_batch_size
     results = dict()
+    error_str = 'Unknown'
     while batch_size >= 1:
         torch.cuda.empty_cache()
         try:
@@ -484,13 +485,13 @@ def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
             results = bench.run()
             return results
         except RuntimeError as e:
-            e_str = str(e)
-            print(e_str)
-            if 'channels_last' in e_str:
-                print(f'Error: {model_name} not supported in channels_last, skipping.')
+            error_str = str(e)
+            if 'channels_last' in error_str:
+                _logger.error(f'{model_name} not supported in channels_last, skipping.')
                 break
-            print(f'Error: "{e_str}" while running benchmark. Reducing batch size to {batch_size} for retry.')
+            _logger.warning(f'"{error_str}" while running benchmark. Reducing batch size to {batch_size} for retry.')
         batch_size = decay_batch_exp(batch_size)
+    results['error'] = error_str
     return results
 
 
@@ -532,13 +533,14 @@ def benchmark(args):
     model_results = OrderedDict(model=model)
     for prefix, bench_fn in zip(prefixes, bench_fns):
         run_results = _try_run(model, bench_fn, initial_batch_size=batch_size, bench_kwargs=bench_kwargs)
-        if prefix:
+        if prefix and 'error' not in run_results:
             run_results = {'_'.join([prefix, k]): v for k, v in run_results.items()}
         model_results.update(run_results)
-    param_count = model_results.pop('infer_param_count', model_results.pop('train_param_count', 0))
-    model_results.setdefault('param_count', param_count)
-    model_results.pop('train_param_count', 0)
-    return model_results if model_results['param_count'] else dict()
+    if 'error' not in model_results:
+        param_count = model_results.pop('infer_param_count', model_results.pop('train_param_count', 0))
+        model_results.setdefault('param_count', param_count)
+        model_results.pop('train_param_count', 0)
+    return model_results
 
 
 def main():
@@ -582,13 +584,15 @@ def main():
             sort_key = 'train_samples_per_sec'
         elif 'profile' in args.bench:
             sort_key = 'infer_gmacs'
+        results = filter(lambda x: sort_key in x, results)
         results = sorted(results, key=lambda x: x[sort_key], reverse=True)
         if len(results):
             write_results(results_file, results)
     else:
         results = benchmark(args)
-    json_str = json.dumps(results, indent=4)
-    print(json_str)
+
+    # output results in JSON to stdout w/ delimiter for runner script
+    print(f'--result\n{json.dumps(results, indent=4)}')
 
 
 def write_results(results_file, results):

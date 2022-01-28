@@ -69,18 +69,17 @@ class ConvMixer(nn.Module):
     def forward_features(self, x):
         x = self.stem(x)
         x = self.blocks(x)
-        x = self.pooling(x)
         return x
     
     def forward(self, x):
         x = self.forward_features(x)
+        x = self.pooling(x)
         x = self.head(x)
-
         return x
 
 
 def _create_convmixer(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(ConvMixer, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
+    return build_model_with_cfg(ConvMixer, variant, pretrained, **kwargs)
 
 
 @register_model

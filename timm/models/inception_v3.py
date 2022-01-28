@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, resolve_pretrained_cfg
 from .registry import register_model
 from .layers import trunc_normal_, create_classifier, Linear
 
@@ -424,18 +424,19 @@ class InceptionV3Aux(InceptionV3):
 
 
 def _create_inception_v3(variant, pretrained=False, **kwargs):
-    default_cfg = default_cfgs[variant]
+    pretrained_cfg = resolve_pretrained_cfg(variant, kwargs=kwargs)
     aux_logits = kwargs.pop('aux_logits', False)
     if aux_logits:
         assert not kwargs.pop('features_only', False)
         model_cls = InceptionV3Aux
-        load_strict = default_cfg['has_aux']
+        load_strict = pretrained_cfg['has_aux']
     else:
         model_cls = InceptionV3
-        load_strict = not default_cfg['has_aux']
+        load_strict = not pretrained_cfg['has_aux']
+
     return build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfg,
+        pretrained_cfg=pretrained_cfg,
         pretrained_strict=load_strict,
         **kwargs)
 

@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg
 from .layers import trunc_normal_, to_2tuple
 from .registry import register_model
 from .vision_transformer import Block
@@ -125,10 +125,8 @@ class ConvHeadPooling(nn.Module):
         self.fc = nn.Linear(in_feature, out_feature)
 
     def forward(self, x, cls_token) -> Tuple[torch.Tensor, torch.Tensor]:
-
         x = self.conv(x)
         cls_token = self.fc(cls_token)
-
         return x, cls_token
 
 
@@ -225,21 +223,18 @@ class PoolingVisionTransformer(nn.Module):
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         x, cls_tokens = self.transformers((x, cls_tokens))
         cls_tokens = self.norm(cls_tokens)
-        if self.head_dist is not None:
-            return cls_tokens[:, 0], cls_tokens[:, 1]
-        else:
-            return cls_tokens[:, 0]
+        return cls_tokens
 
     def forward(self, x):
         x = self.forward_features(x)
         if self.head_dist is not None:
-            x, x_dist = self.head(x[0]), self.head_dist(x[1])  # x must be a tuple
+            x, x_dist = self.head(x[:, 0]), self.head_dist(x[:, 1])  # x must be a tuple
             if self.training and not torch.jit.is_scripting():
                 return x, x_dist
             else:
                 return (x + x_dist) / 2
         else:
-            return self.head(x)
+            return self.head(x[:, 0])
 
 
 def checkpoint_filter_fn(state_dict, model):
@@ -262,7 +257,6 @@ def _create_pit(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(
         PoolingVisionTransformer, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

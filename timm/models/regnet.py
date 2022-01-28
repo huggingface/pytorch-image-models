@@ -472,7 +472,6 @@ def _filter_fn(state_dict):
 def _create_regnet(variant, pretrained, **kwargs):
     return build_model_with_cfg(
         RegNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=model_cfgs[variant],
         pretrained_filter_fn=_filter_fn,
         **kwargs)

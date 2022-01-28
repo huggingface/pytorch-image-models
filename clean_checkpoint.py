@@ -48,7 +48,7 @@ def main():
                 # If all aux_bn keys are removed, the SplitBN layers will end up as normal and
                 # load with the unmodified model using BatchNorm2d.
                 continue
-            name = k[7:] if k.startswith('module') else k
+            name = k[7:] if k.startswith('module.') else k
             new_state_dict[name] = v
         print("=> Loaded state_dict from '{}'".format(args.checkpoint))
 

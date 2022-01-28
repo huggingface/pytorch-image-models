@@ -12,6 +12,8 @@ Paper link: https://arxiv.org/abs/2103.14899
 Original code: https://github.com/IBM/CrossViT/blob/main/models/crossvit.py
 
 NOTE: model names have been renamed from originals to represent actual input res all *_224 -> *_240 and *_384 -> *_408
+
+Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 
 # Copyright IBM All Rights Reserved.
@@ -366,7 +368,7 @@ class CrossViT(nn.Module):
             [nn.Linear(self.embed_dim[i], num_classes) if num_classes > 0 else nn.Identity() for i in
              range(self.num_branches)])
 
-    def forward_features(self, x):
+    def forward_features(self, x) -> List[torch.Tensor]:
         B = x.shape[0]
         xs = []
         for i, patch_embed in enumerate(self.patch_embed):
@@ -387,11 +389,11 @@ class CrossViT(nn.Module):
 
         # NOTE: was before branch token section, move to here to assure all branch token are before layer norm
         xs = [norm(xs[i]) for i, norm in enumerate(self.norm)]
-        return [xo[:, 0] for xo in xs]
+        return xs
 
     def forward(self, x):
         xs = self.forward_features(x)
-        ce_logits = [head(xs[i]) for i, head in enumerate(self.head)]
+        ce_logits = [head(xs[i][:, 0]) for i, head in enumerate(self.head)]
         if not isinstance(self.head[0], nn.Identity):
             ce_logits = torch.mean(torch.stack(ce_logits, dim=0), dim=0)
         return ce_logits
@@ -413,7 +415,6 @@ def _create_crossvit(variant, pretrained=False, **kwargs):
 
     return build_model_with_cfg(
         CrossViT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=pretrained_filter_fn,
         **kwargs)
 

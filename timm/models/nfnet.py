@@ -106,7 +106,7 @@ default_cfgs = dict(
         pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
     eca_nfnet_l0=_dcfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l0_ra2-e3e9ac50.pth',
-        hf_hub='timm/eca_nfnet_l0',
+        hf_hub_id='timm/eca_nfnet_l0',
         pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
     eca_nfnet_l1=_dcfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l1_ra2-7dce93cd.pth',
@@ -592,7 +592,6 @@ def _create_normfreenet(variant, pretrained=False, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
     return build_model_with_cfg(
         NormFreeNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=model_cfg,
         feature_cfg=feature_cfg,
         **kwargs)
