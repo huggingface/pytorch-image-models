@@ -34,19 +34,19 @@ def _cfg(url='', **kwargs):
         'crop_pct': 0.9, 'interpolation': 'bicubic',
         'mean': (0, 0, 0), 'std': (1, 1, 1),
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
-        'fixed_input_size': False, 'min_input_size': (3, 256, 256),
+        'fixed_input_size': False,
         **kwargs
     }
 
 
 default_cfgs = {
-    # GPU-Efficient (ResNet) weights
     'mobilevit_xxs': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevit_xxs-ad385b40.pth'),
     'mobilevit_xs': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevit_xs-8fbd6366.pth'),
     'mobilevit_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevit_s-38a5a959.pth'),
+    'semobilevit_s': _cfg(),
 }
 
 
@@ -117,6 +117,23 @@ model_cfgs = dict(
         stem_pool='',
         downsample='',
         act_layer='silu',
+        num_features=640,
+    ),
+
+    semobilevit_s=ByoModelCfg(
+        blocks=(
+            _inverted_residual_block(d=1, c=32, s=1),
+            _inverted_residual_block(d=3, c=64, s=2),
+            _mobilevit_block(d=1, c=96, s=2, transformer_dim=144, transformer_depth=2, patch_size=2),
+            _mobilevit_block(d=1, c=128, s=2, transformer_dim=192, transformer_depth=4, patch_size=2),
+            _mobilevit_block(d=1, c=160, s=2, transformer_dim=240, transformer_depth=3, patch_size=2),
+        ),
+        stem_chs=16,
+        stem_type='3x3',
+        stem_pool='',
+        downsample='',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=1/8),
         num_features=640,
     ),
 )
@@ -246,3 +263,8 @@ def mobilevit_xs(pretrained=False, **kwargs):
 @register_model
 def mobilevit_s(pretrained=False, **kwargs):
     return _create_mobilevit('mobilevit_s', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def semobilevit_s(pretrained=False, **kwargs):
+    return _create_mobilevit('semobilevit_s', pretrained=pretrained, **kwargs)
