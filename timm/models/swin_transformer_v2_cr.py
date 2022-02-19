@@ -785,7 +785,7 @@ class SwinTransformerStage(nn.Module):
         return output
 
 
-class SwinTransformerV2(nn.Module):
+class SwinTransformerV2CR(nn.Module):
     r""" Swin Transformer V2
         A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`  -
           https://arxiv.org/pdf/2111.09883
@@ -825,7 +825,7 @@ class SwinTransformerV2(nn.Module):
                  sequential_self_attention: bool = False,
                  use_deformable_block: bool = False) -> None:
         # Call super constructor
-        super(SwinTransformerV2, self).__init__()
+        super(SwinTransformerV2CR, self).__init__()
         # Save parameters
         self.patch_size: int = patch_size
         self.input_resolution: Tuple[int, int] = input_resolution
