@@ -22,15 +22,10 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-# from .helpers import build_model_with_cfg, overlay_external_default_cfg
-# from .vision_transformer import checkpoint_filter_fn
-# from .registry import register_model
-# from .layers import DropPath, Mlp
-
-from timm.models.helpers import build_model_with_cfg, overlay_external_default_cfg
-from timm.models.vision_transformer import checkpoint_filter_fn
-from timm.models.registry import register_model
-from timm.models.layers import DropPath, Mlp
+from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .vision_transformer import checkpoint_filter_fn
+from .registry import register_model
+from .layers import DropPath, Mlp
 
 _logger = logging.getLogger(__name__)
 
