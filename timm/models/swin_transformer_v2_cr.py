@@ -813,8 +813,7 @@ def swin_v2_cr_small_384(pretrained=False, **kwargs):
         num_heads=(3, 6, 12, 24),
         **kwargs
     )
-    return _create_swin_transformer_v2_cr(
-        'swin_v2_cr_small_384', pretrained=pretrained, **model_kwargs
+    return _create_swin_transformer_v2_cr('swin_v2_cr_small_384', pretrained=pretrained, **model_kwargs
     )
 
 
@@ -863,8 +862,7 @@ def swin_v2_cr_large_384(pretrained=False, **kwargs):
         num_heads=(6, 12, 24, 48),
         **kwargs
     )
-    return _create_swin_transformer_v2_cr(
-        'swin_v2_cr_large_384', pretrained=pretrained, **model_kwargs
+    return _create_swin_transformer_v2_cr('swin_v2_cr_large_384', pretrained=pretrained, **model_kwargs
     )
 
 
@@ -877,7 +875,7 @@ def swin_v2_cr_large_224(pretrained=False, **kwargs):
         num_heads=(6, 12, 24, 48),
         **kwargs
     )
-    return _create_swin_transformer_v2_cr('swin_v2_cr_large_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swin_v2_cr_large_224', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
@@ -890,7 +888,7 @@ def swin_v2_cr_huge_384(pretrained=False, **kwargs):
         extra_norm_period=6,
         **kwargs
     )
-    return _create_swin_transformer_v2_cr('swin_v2_cr_huge_patch4_window12_384', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swin_v2_cr_huge_384', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
@@ -903,7 +901,7 @@ def swin_v2_cr_huge_224(pretrained=False, **kwargs):
         extra_norm_period=6,
         **kwargs
     )
-    return _create_swin_transformer_v2_cr('swin_v2_cr_huge_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swin_v2_cr_huge_224', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
@@ -916,8 +914,7 @@ def swin_v2_cr_giant_384(pretrained=False, **kwargs):
         extra_norm_period=6,
         **kwargs
     )
-    return _create_swin_transformer_v2_cr(
-        'swin_v2_cr_giant_384', pretrained=pretrained, **model_kwargs
+    return _create_swin_transformer_v2_cr('swin_v2_cr_giant_384', pretrained=pretrained, **model_kwargs
     )
 
 
