@@ -38,6 +38,7 @@ from .selecsls import *
 from .senet import *
 from .sknet import *
 from .swin_transformer import *
+from .swin_transformer_v2_cr import *
 from .tnt import *
 from .tresnet import *
 from .twins import *
