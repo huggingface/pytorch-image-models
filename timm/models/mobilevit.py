@@ -20,6 +20,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from .byobnet import register_block, ByoBlockCfg, ByoModelCfg, ByobNet, LayerFn, num_groups
+from .fx_features import register_notrace_module
 from .layers import to_2tuple, make_divisible
 from .vision_transformer import Block as TransformerBlock
 from .helpers import build_model_with_cfg
@@ -139,6 +140,7 @@ model_cfgs = dict(
 )
 
 
+@register_notrace_module
 class MobileViTBlock(nn.Module):
     """ MobileViT block
         Paper: https://arxiv.org/abs/2110.02178?context=cs.LG
@@ -206,7 +208,7 @@ class MobileViTBlock(nn.Module):
         # Unfold (feature map -> patches)
         patch_h, patch_w = self.patch_size
         B, C, H, W = x.shape
-        new_h, new_w = int(math.ceil(H / patch_h) * patch_h), int(math.ceil(W / patch_w) * patch_w)
+        new_h, new_w = math.ceil(H / patch_h) * patch_h, math.ceil(W / patch_w) * patch_w
         num_patch_h, num_patch_w = new_h // patch_h, new_w // patch_w  # n_h, n_w
         num_patches = num_patch_h * num_patch_w  # N
         interpolate = False

@@ -30,6 +30,7 @@ from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
+from .poolformer import *
 from .regnet import *
 from .res2net import *
 from .resnest import *
@@ -47,6 +48,7 @@ from .vgg import *
 from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
+from .volo import *
 from .vovnet import *
 from .xception import *
 from .xception_aligned import *

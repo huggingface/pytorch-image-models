@@ -61,8 +61,8 @@ default_cfgs = {
 
 @register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
 class GPSA(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.,
-                 locality_strength=1.):
+    def __init__(
+            self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0., locality_strength=1.):
         super().__init__()
         self.num_heads = num_heads
         self.dim = dim
@@ -169,7 +169,7 @@ class MHSA(nn.Module):
         indy = ind.repeat_interleave(img_size, dim=0).repeat_interleave(img_size, dim=1)
         indd = indx ** 2 + indy ** 2
         distances = indd ** .5
-        distances = distances.to('cuda')
+        distances = distances.to(x.device)
 
         dist = torch.einsum('nm,hnm->h', (distances, attn_map)) / N
         if return_map:
@@ -180,7 +180,7 @@ class MHSA(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]
+        q, k, v = qkv.unbind(0)
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
@@ -194,8 +194,9 @@ class MHSA(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, use_gpsa=True, **kwargs):
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
+            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, use_gpsa=True, **kwargs):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.use_gpsa = use_gpsa
@@ -219,13 +220,16 @@ class ConViT(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=False, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, global_pool=None,
-                 local_up_to_layer=3, locality_strength=1., use_pos_embed=True):
+    def __init__(
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
+            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, drop_rate=0., attn_drop_rate=0.,
+            drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm,
+            local_up_to_layer=3, locality_strength=1., use_pos_embed=True):
         super().__init__()
+        assert global_pool in ('', 'avg', 'token')
         embed_dim *= num_heads
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.local_up_to_layer = local_up_to_layer
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.locality_strength = locality_strength
@@ -285,35 +289,49 @@ class ConViT(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('', 'token', 'avg')
+            self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
-        B = x.shape[0]
         x = self.patch_embed(x)
-
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-
         if self.use_pos_embed:
             x = x + self.pos_embed
         x = self.pos_drop(x)
-
+        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         for u, blk in enumerate(self.blocks):
             if u == self.local_up_to_layer:
                 x = torch.cat((cls_tokens, x), dim=1)
             x = blk(x)
-
         x = self.norm(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool:
+            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = x[:, 0]
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 

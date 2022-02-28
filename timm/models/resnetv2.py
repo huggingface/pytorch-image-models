@@ -36,10 +36,9 @@ import torch.nn as nn
 from functools import partial
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, named_apply, adapt_input_conv
+from .helpers import build_model_with_cfg, named_apply, adapt_input_conv, checkpoint_seq
 from .registry import register_model
-from .layers import GroupNormAct, BatchNormAct2d, EvoNorm2dB0, EvoNorm2dS0,\
-    EvoNorm2dS1, EvoNorm2dS2, FilterResponseNormTlu2d, FilterResponseNormAct2d,\
+from .layers import GroupNormAct, BatchNormAct2d, EvoNorm2dB0, EvoNorm2dS0, EvoNorm2dS1, FilterResponseNormTlu2d,\
     ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d
 
 
@@ -280,9 +279,10 @@ class DownsampleAvg(nn.Module):
 
 class ResNetStage(nn.Module):
     """ResNet Stage."""
-    def __init__(self, in_chs, out_chs, stride, dilation, depth, bottle_ratio=0.25, groups=1,
-                 avg_down=False, block_dpr=None, block_fn=PreActBottleneck,
-                 act_layer=None, conv_layer=None, norm_layer=None, **block_kwargs):
+    def __init__(
+            self, in_chs, out_chs, stride, dilation, depth, bottle_ratio=0.25, groups=1,
+            avg_down=False, block_dpr=None, block_fn=PreActBottleneck,
+            act_layer=None, conv_layer=None, norm_layer=None, **block_kwargs):
         super(ResNetStage, self).__init__()
         first_dilation = 1 if dilation in (1, 2) else 2
         layer_kwargs = dict(act_layer=act_layer, conv_layer=conv_layer, norm_layer=norm_layer)
@@ -397,7 +397,9 @@ class ResNetV2(nn.Module):
             self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate, use_conv=True)
 
         self.init_weights(zero_init_last=zero_init_last)
+        self.grad_checkpointing = False
 
+    @torch.jit.ignore
     def init_weights(self, zero_init_last=True):
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
@@ -405,6 +407,22 @@ class ResNetV2(nn.Module):
     def load_pretrained(self, checkpoint_path, prefix='resnet/'):
         _load_weights(self, checkpoint_path, prefix)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=r'^stages.(\d+)' if coarse else [
+                (r'^stages.(\d+).blocks.(\d+)', None),
+                (r'^norm', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -415,13 +433,19 @@ class ResNetV2(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.stages(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stages, x, flatten=True)
+        else:
+            x = self.stages(x)
         x = self.norm(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 

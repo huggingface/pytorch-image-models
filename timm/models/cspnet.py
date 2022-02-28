@@ -12,11 +12,13 @@ Reference impl via darknet cfg files at https://github.com/WongKinYiu/CrossStage
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+from functools import partial
+
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, named_apply, MATCH_PREV_GROUP
 from .layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, create_attn, get_norm_act_layer
 from .registry import register_model
 
@@ -172,7 +174,7 @@ class ResBottleneck(nn.Module):
         self.drop_path = drop_path
         self.act3 = act_layer(inplace=True)
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.conv3.bn.weight)
 
     def forward(self, x):
@@ -210,7 +212,7 @@ class DarkBlock(nn.Module):
         self.attn = create_attn(attn_layer, channels=out_chs)
         self.drop_path = drop_path
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.conv2.bn.weight)
 
     def forward(self, x):
@@ -345,9 +347,10 @@ class CspNet(nn.Module):
     darknet impl. I did it this way for simplicity and less special cases.
     """
 
-    def __init__(self, cfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg', drop_rate=0.,
-                 act_layer=nn.LeakyReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_path_rate=0.,
-                 zero_init_last_bn=True, stage_fn=CrossStage, block_fn=ResBottleneck):
+    def __init__(
+            self, cfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg', drop_rate=0.,
+            act_layer=nn.LeakyReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_path_rate=0.,
+            zero_init_last=True, stage_fn=CrossStage, block_fn=ResBottleneck):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -378,20 +381,25 @@ class CspNet(nn.Module):
         self.head = ClassifierHead(
             in_chs=prev_chs, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0.0, std=0.01)
-                nn.init.zeros_(m.bias)
-        if zero_init_last_bn:
-            for m in self.modules():
-                if hasattr(m, 'zero_init_last_bn'):
-                    m.zero_init_last_bn()
+        named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=r'^stages.(\d+)' if coarse else [
+                (r'^stages.(\d+).blocks.(\d+)', None),
+                (r'^stages.(\d+).*transition', MATCH_PREV_GROUP),  # map to last block in stage
+                (r'^stages.(\d+)', (0,)),
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -403,10 +411,26 @@ class CspNet(nn.Module):
         x = self.stages(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
+
+
+def _init_weights(module, name, zero_init_last=False):
+    if isinstance(module, nn.Conv2d):
+        nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+    elif isinstance(module, nn.BatchNorm2d):
+        nn.init.ones_(module.weight)
+        nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Linear):
+        nn.init.normal_(module.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(module.bias)
+    elif zero_init_last and hasattr(module, 'zero_init_last'):
+        module.zero_init_last()
 
 
 def _create_cspnet(variant, pretrained=False, **kwargs):

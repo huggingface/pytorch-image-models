@@ -296,6 +296,15 @@ class PNASNet5Large(nn.Module):
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(stem=r'^conv_0|cell_stem_[01]', blocks=r'^cell_(\d+)')
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.last_linear
 
@@ -323,12 +332,15 @@ class PNASNet5Large(nn.Module):
         x = self.act(x_cell_11)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
-        x = self.last_linear(x)
+        return x if pre_logits else self.last_linear(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 

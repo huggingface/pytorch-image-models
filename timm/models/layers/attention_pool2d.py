@@ -7,65 +7,14 @@ https://github.com/openai/CLIP/blob/3b473b0e682c091a9e53623eebc1ca1657385717/cli
 
 Hacked together by / Copyright 2021 Ross Wightman
 """
-import math
-from typing import List, Union, Tuple
+from typing import Union, Tuple
 
 import torch
 import torch.nn as nn
 
 from .helpers import to_2tuple
+from .pos_embed import apply_rot_embed, RotaryEmbedding
 from .weight_init import trunc_normal_
-
-
-def rot(x):
-    return torch.stack([-x[..., 1::2], x[..., ::2]], -1).reshape(x.shape)
-
-
-def apply_rot_embed(x: torch.Tensor, sin_emb, cos_emb):
-    return x * cos_emb + rot(x) * sin_emb
-
-
-def apply_rot_embed_list(x: List[torch.Tensor], sin_emb, cos_emb):
-    if isinstance(x, torch.Tensor):
-        x = [x]
-    return [t * cos_emb + rot(t) * sin_emb for t in x]
-
-
-class RotaryEmbedding(nn.Module):
-    """ Rotary position embedding
-
-    NOTE: This is my initial attempt at impl rotary embedding for spatial use, it has not
-    been well tested, and will likely change. It will be moved to its own file.
-
-    The following impl/resources were referenced for this impl:
-    * https://github.com/lucidrains/vit-pytorch/blob/6f3a5fcf0bca1c5ec33a35ef48d97213709df4ba/vit_pytorch/rvt.py
-    * https://blog.eleuther.ai/rotary-embeddings/
-    """
-    def __init__(self, dim, max_freq=4):
-        super().__init__()
-        self.dim = dim
-        self.register_buffer('bands', 2 ** torch.linspace(0., max_freq - 1, self.dim // 4), persistent=False)
-
-    def get_embed(self, shape: torch.Size, device: torch.device = None, dtype: torch.dtype = None):
-        """
-        NOTE: shape arg should include spatial dim only
-        """
-        device = device or self.bands.device
-        dtype = dtype or self.bands.dtype
-        if not isinstance(shape, torch.Size):
-            shape = torch.Size(shape)
-        N = shape.numel()
-        grid = torch.stack(torch.meshgrid(
-            [torch.linspace(-1., 1., steps=s, device=device, dtype=dtype) for s in shape]), dim=-1).unsqueeze(-1)
-        emb = grid * math.pi * self.bands
-        sin = emb.sin().reshape(N, -1).repeat_interleave(2, -1)
-        cos = emb.cos().reshape(N, -1).repeat_interleave(2, -1)
-        return sin, cos
-
-    def forward(self, x):
-        # assuming channel-first tensor where spatial dim are >= 2
-        sin_emb, cos_emb = self.get_embed(x.shape[2:])
-        return apply_rot_embed(x, sin_emb, cos_emb)
 
 
 class RotAttentionPool2d(nn.Module):
@@ -103,7 +52,6 @@ class RotAttentionPool2d(nn.Module):
     def forward(self, x):
         B, _, H, W = x.shape
         N = H * W
-        sin_emb, cos_emb = self.pos_embed.get_embed(x.shape[2:])
         x = x.reshape(B, -1, N).permute(0, 2, 1)
 
         x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
@@ -112,6 +60,7 @@ class RotAttentionPool2d(nn.Module):
         q, k, v = x[0], x[1], x[2]
 
         qc, q = q[:, :, :1], q[:, :, 1:]
+        sin_emb, cos_emb = self.pos_embed.get_embed((H, W))
         q = apply_rot_embed(q, sin_emb, cos_emb)
         q = torch.cat([qc, q], dim=2)
 

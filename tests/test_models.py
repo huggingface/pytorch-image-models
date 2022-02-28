@@ -24,7 +24,8 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit_*']
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit_*',
+    'poolformer_*', 'volo_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -144,7 +145,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
         # test forward_features (always unpooled)
         outputs = model.forward_features(input_tensor)
-        assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
+        assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2], 'unpooled feature shape != config'
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
@@ -156,8 +157,8 @@ def test_model_default_cfgs(model_name, batch_size):
         model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 4
-        if not isinstance(model, timm.models.MobileNetV3) and not isinstance(model, timm.models.GhostNet):
-            # FIXME mobilenetv3/ghostnet forward_features vs removed pooling differ
+        if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.VGG)):
+            # mobilenetv3/ghostnet/vgg forward_features vs removed pooling differ due to location or lack of GAP
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
         if 'pruned' not in model_name:  # FIXME better pruned model handling
@@ -165,8 +166,7 @@ def test_model_default_cfgs(model_name, batch_size):
             model = create_model(model_name, pretrained=False, num_classes=0, global_pool='').eval()
             outputs = model.forward(input_tensor)
             assert len(outputs.shape) == 4
-            if not isinstance(model, timm.models.MobileNetV3) and not isinstance(model, timm.models.GhostNet):
-                # FIXME mobilenetv3/ghostnet forward_features vs removed pooling differ
+            if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.VGG)):
                 assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier name matches default_cfg
@@ -204,9 +204,11 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     outputs = model.forward_features(input_tensor)
     if isinstance(outputs, (tuple, list)):
-        outputs = outputs[0]
-    feat_dim = -1 if outputs.ndim == 3 else 1
-    assert outputs.shape[feat_dim] == model.num_features
+        # cannot currently verify multi-tensor output.
+        pass
+    else:
+        feat_dim = -1 if outputs.ndim == 3 else 1
+        assert outputs.shape[feat_dim] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
@@ -214,7 +216,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
     feat_dim = -1 if outputs.ndim == 3 else 1
-    assert outputs.shape[feat_dim] == model.num_features
+    assert outputs.shape[feat_dim] == model.num_features, 'pooled num_features != config'
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
@@ -319,13 +321,18 @@ def _create_fx_model(model, train=False):
     # This block of code does a bit of juggling to handle any case where there are multiple outputs in train mode
     # So we trace once and look at the graph, and get the indices of the nodes that lead into the original fx output
     # node. Then we use those indices to select from train_nodes returned by torchvision get_graph_node_names
-    train_nodes, eval_nodes = get_graph_node_names(
-        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+    tracer_kwargs = dict(
+        leaf_modules=list(_leaf_modules),
+        autowrap_functions=list(_autowrap_functions),
+        #enable_cpatching=True,
+        param_shapes_constant=True
+    )
+    train_nodes, eval_nodes = get_graph_node_names(model, tracer_kwargs=tracer_kwargs)
 
     eval_return_nodes = [eval_nodes[-1]]
     train_return_nodes = [train_nodes[-1]]
     if train:
-        tracer = NodePathTracer(leaf_modules=list(_leaf_modules), autowrap_functions=list(_autowrap_functions))
+        tracer = NodePathTracer(**tracer_kwargs)
         graph = tracer.trace(model)
         graph_nodes = list(reversed(graph.nodes))
         output_node_names = [n.name for n in graph_nodes[0]._input_nodes.keys()]
@@ -334,8 +341,11 @@ def _create_fx_model(model, train=False):
         train_return_nodes = [train_nodes[ix] for ix in output_node_indices]
 
     fx_model = create_feature_extractor(
-        model, train_return_nodes=train_return_nodes, eval_return_nodes=eval_return_nodes,
-        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+        model,
+        train_return_nodes=train_return_nodes,
+        eval_return_nodes=eval_return_nodes,
+        tracer_kwargs=tracer_kwargs,
+    )
     return fx_model
 
 

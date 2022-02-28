@@ -9,7 +9,7 @@ Modified from timm/models/vision_transformer.py
 """
 from copy import deepcopy
 from functools import partial
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import torch
 import torch.nn as nn
@@ -125,7 +125,7 @@ class ConvRelPosEnc(nn.Module):
         return EV_hat
 
 
-class FactorAtt_ConvRelPosEnc(nn.Module):
+class FactorAttnConvRelPosEnc(nn.Module):
     """ Factorized attention with convolutional relative position encoding class. """
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0., shared_crpe=None):
         super().__init__()
@@ -205,7 +205,7 @@ class SerialBlock(nn.Module):
         self.cpe = shared_cpe
 
         self.norm1 = norm_layer(dim)
-        self.factoratt_crpe = FactorAtt_ConvRelPosEnc(
+        self.factoratt_crpe = FactorAttnConvRelPosEnc(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, shared_crpe=shared_crpe)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -239,15 +239,15 @@ class ParallelBlock(nn.Module):
         self.norm12 = norm_layer(dims[1])
         self.norm13 = norm_layer(dims[2])
         self.norm14 = norm_layer(dims[3])
-        self.factoratt_crpe2 = FactorAtt_ConvRelPosEnc(
+        self.factoratt_crpe2 = FactorAttnConvRelPosEnc(
             dims[1], num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, 
             shared_crpe=shared_crpes[1]
         )
-        self.factoratt_crpe3 = FactorAtt_ConvRelPosEnc(
+        self.factoratt_crpe3 = FactorAttnConvRelPosEnc(
             dims[2], num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, 
             shared_crpe=shared_crpes[2]
         )
-        self.factoratt_crpe4 = FactorAtt_ConvRelPosEnc(
+        self.factoratt_crpe4 = FactorAttnConvRelPosEnc(
             dims[3], num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, 
             shared_crpe=shared_crpes[3]
         )
@@ -328,17 +328,19 @@ class ParallelBlock(nn.Module):
 class CoaT(nn.Module):
     """ CoaT class. """
     def __init__(
-            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=(0, 0, 0, 0), 
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=(0, 0, 0, 0),
             serial_depths=(0, 0, 0, 0), parallel_depth=0, num_heads=0, mlp_ratios=(0, 0, 0, 0), qkv_bias=True,
             drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            return_interm_layers=False, out_features=None, crpe_window=None, **kwargs):
+            return_interm_layers=False, out_features=None, crpe_window=None, global_pool='token'):
         super().__init__()
+        assert global_pool in ('token', 'avg')
         crpe_window = crpe_window or {3: 2, 5: 3, 7: 3}
         self.return_interm_layers = return_interm_layers
         self.out_features = out_features
         self.embed_dims = embed_dims
         self.num_features = embed_dims[-1]
         self.num_classes = num_classes
+        self.global_pool = global_pool
 
         # Patch embeddings.
         img_size = to_2tuple(img_size)
@@ -470,22 +472,38 @@ class CoaT(nn.Module):
     def no_weight_decay(self):
         return {'cls_token1', 'cls_token2', 'cls_token3', 'cls_token4'}
 
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem1=r'^cls_token1|patch_embed1|crpe1|cpe1',
+            serial_blocks1=r'^serial_blocks1\.(\d+)',
+            stem2=r'^cls_token2|patch_embed2|crpe2|cpe2',
+            serial_blocks2=r'^serial_blocks2\.(\d+)',
+            stem3=r'^cls_token3|patch_embed3|crpe3|cpe3',
+            serial_blocks3=r'^serial_blocks3\.(\d+)',
+            stem4=r'^cls_token4|patch_embed4|crpe4|cpe4',
+            serial_blocks4=r'^serial_blocks4\.(\d+)',
+            parallel_blocks=[  # FIXME (partially?) overlap parallel w/ serial blocks??
+                (r'^parallel_blocks\.(\d+)', None),
+                (r'^norm|aggregate', (99999,)),
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('token', 'avg')
+            self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-
-    def insert_cls(self, x, cls_token):
-        """ Insert CLS token. """
-        cls_tokens = cls_token.expand(x.shape[0], -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
-        return x
-
-    def remove_cls(self, x):
-        """ Remove CLS token. """
-        return x[:, 1:, :]
 
     def forward_features(self, x0):
         B = x0.shape[0]
@@ -493,38 +511,34 @@ class CoaT(nn.Module):
         # Serial blocks 1.
         x1 = self.patch_embed1(x0)
         H1, W1 = self.patch_embed1.grid_size
-        x1 = self.insert_cls(x1, self.cls_token1)
+        x1 = insert_cls(x1, self.cls_token1)
         for blk in self.serial_blocks1:
             x1 = blk(x1, size=(H1, W1))
-        x1_nocls = self.remove_cls(x1)
-        x1_nocls = x1_nocls.reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
+        x1_nocls = remove_cls(x1).reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
         
         # Serial blocks 2.
         x2 = self.patch_embed2(x1_nocls)
         H2, W2 = self.patch_embed2.grid_size
-        x2 = self.insert_cls(x2, self.cls_token2)
+        x2 = insert_cls(x2, self.cls_token2)
         for blk in self.serial_blocks2:
             x2 = blk(x2, size=(H2, W2))
-        x2_nocls = self.remove_cls(x2)
-        x2_nocls = x2_nocls.reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
+        x2_nocls = remove_cls(x2).reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
 
         # Serial blocks 3.
         x3 = self.patch_embed3(x2_nocls)
         H3, W3 = self.patch_embed3.grid_size
-        x3 = self.insert_cls(x3, self.cls_token3)
+        x3 = insert_cls(x3, self.cls_token3)
         for blk in self.serial_blocks3:
             x3 = blk(x3, size=(H3, W3))
-        x3_nocls = self.remove_cls(x3)
-        x3_nocls = x3_nocls.reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
+        x3_nocls = remove_cls(x3).reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
 
         # Serial blocks 4.
         x4 = self.patch_embed4(x3_nocls)
         H4, W4 = self.patch_embed4.grid_size
-        x4 = self.insert_cls(x4, self.cls_token4)
+        x4 = insert_cls(x4, self.cls_token4)
         for blk in self.serial_blocks4:
             x4 = blk(x4, size=(H4, W4))
-        x4_nocls = self.remove_cls(x4)
-        x4_nocls = x4_nocls.reshape(B, H4, W4, -1).permute(0, 3, 1, 2).contiguous()
+        x4_nocls = remove_cls(x4).reshape(B, H4, W4, -1).permute(0, 3, 1, 2).contiguous()
 
         # Only serial blocks: Early return.
         if self.parallel_blocks is None:
@@ -554,20 +568,16 @@ class CoaT(nn.Module):
             # Return intermediate features for down-stream tasks (e.g. Deformable DETR and Detectron2).
             feat_out = {}   
             if 'x1_nocls' in self.out_features:
-                x1_nocls = self.remove_cls(x1)
-                x1_nocls = x1_nocls.reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
+                x1_nocls = remove_cls(x1).reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
                 feat_out['x1_nocls'] = x1_nocls
             if 'x2_nocls' in self.out_features:
-                x2_nocls = self.remove_cls(x2)
-                x2_nocls = x2_nocls.reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
+                x2_nocls = remove_cls(x2).reshape(B, H2, W2, -1).permute(0, 3, 1, 2).contiguous()
                 feat_out['x2_nocls'] = x2_nocls
             if 'x3_nocls' in self.out_features:
-                x3_nocls = self.remove_cls(x3)
-                x3_nocls = x3_nocls.reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
+                x3_nocls = remove_cls(x3).reshape(B, H3, W3, -1).permute(0, 3, 1, 2).contiguous()
                 feat_out['x3_nocls'] = x3_nocls
             if 'x4_nocls' in self.out_features:
-                x4_nocls = self.remove_cls(x4)
-                x4_nocls = x4_nocls.reshape(B, H4, W4, -1).permute(0, 3, 1, 2).contiguous()
+                x4_nocls = remove_cls(x4).reshape(B, H4, W4, -1).permute(0, 3, 1, 2).contiguous()
                 feat_out['x4_nocls'] = x4_nocls
             return feat_out
         else:
@@ -576,6 +586,18 @@ class CoaT(nn.Module):
             x4 = self.norm4(x4)
             return [x2, x3, x4]
 
+    def forward_head(self, x_feat: Union[torch.Tensor, List[torch.Tensor]], pre_logits: bool = False):
+        if isinstance(x_feat, list):
+            assert self.aggregate is not None
+            if self.global_pool == 'avg':
+                x = torch.cat([xl[:, 1:].mean(dim=1, keepdim=True) for xl in x_feat], dim=1)  # [B, 3, C]
+            else:
+                x = torch.stack([xl[:, 0] for xl in x_feat], dim=1)  # [B, 3, C]
+            x = self.aggregate(x).squeeze(dim=1)  # Shape: [B, C]
+        else:
+            x = x_feat[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x_feat[:, 0]
+        return x if pre_logits else self.head(x)
+
     def forward(self, x) -> torch.Tensor:
         if not torch.jit.is_scripting() and self.return_interm_layers:
             # Return intermediate features (for down-stream tasks).
@@ -583,13 +605,20 @@ class CoaT(nn.Module):
         else:
             # Return features for classification.
             x_feat = self.forward_features(x)
-            if isinstance(x_feat, (tuple, list)):
-                x = torch.cat([xl[:, :1] for xl in x_feat], dim=1)  # [B, 3, C]
-                x = self.aggregate(x).squeeze(dim=1)  # Shape: [B, C]
-            else:
-                x = x_feat[:, 0]
-            x = self.head(x)
+            x = self.forward_head(x_feat)
             return x
+
+
+def insert_cls(x, cls_token):
+    """ Insert CLS token. """
+    cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+    x = torch.cat((cls_tokens, x), dim=1)
+    return x
+
+
+def remove_cls(x):
+    """ Remove CLS token. """
+    return x[:, 1:, :]
 
 
 def checkpoint_filter_fn(state_dict, model):

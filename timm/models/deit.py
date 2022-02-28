@@ -13,7 +13,7 @@ from torch import nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
 
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .registry import register_model
 
 
@@ -66,10 +66,13 @@ class VisionTransformerDistilled(VisionTransformer):
     def __init__(self, *args, **kwargs):
         weight_init = kwargs.pop('weight_init', '')
         super().__init__(*args, **kwargs, weight_init='skip')
+        assert self.global_pool in ('token',)
+
         self.num_tokens = 2
         self.dist_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches + self.num_tokens, self.embed_dim))
         self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if self.num_classes > 0 else nn.Identity()
+        self.distilled_training = False
 
         self.init_weights(weight_init)
 
@@ -77,13 +80,27 @@ class VisionTransformerDistilled(VisionTransformer):
         trunc_normal_(self.dist_token, std=.02)
         super().init_weights(mode=mode)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^cls_token|pos_embed|patch_embed|dist_token',
+            blocks=[
+                (r'^blocks.(\d+)', None),
+                (r'^norm', (99999,))]  # final norm w/ last block
+        )
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+
+    @torch.jit.ignore
+    def set_distilled_training(self, enable=True):
+        self.distilled_training = enable
 
     def forward_features(self, x) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -91,18 +108,22 @@ class VisionTransformerDistilled(VisionTransformer):
             self.cls_token.expand(x.shape[0], -1, -1),
             self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
         x = self.pos_drop(x + self.pos_embed)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         x = self.norm(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
-        x_dist = self.head_dist(x[:, 1])
-        x = self.head(x[:, 0])
-        if self.training and not torch.jit.is_scripting():
+    def forward_head(self, x, pre_logits: bool = False) -> torch.Tensor:
+        if pre_logits:
+            return (x[:, 0] + x[:, 1]) / 2
+        x, x_dist = self.head(x[:, 0]), self.head_dist(x[:, 1])
+        if self.distilled_training and self.training and not torch.jit.is_scripting():
+            # only return separate classification predictions when training in distilled mode
             return x, x_dist
         else:
-            # during inference, return the average of both classifier predictions
+            # during standard train / finetune, inference average the classifier predictions
             return (x + x_dist) / 2
 
 

@@ -48,7 +48,7 @@ from .efficientnet_blocks import SqueezeExcite
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg, pretrained_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features, checkpoint_seq
 from .layers import create_conv2d, create_classifier, get_norm_act_layer, EvoNorm2dS0, GroupNormAct
 from .registry import register_model
 
@@ -470,9 +470,10 @@ class EfficientNet(nn.Module):
       * TinyNet
     """
 
-    def __init__(self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32, fix_stem=False,
-                 output_stride=32, pad_type='', round_chs_fn=round_channels, act_layer=None, norm_layer=None,
-                 se_layer=None, drop_rate=0., drop_path_rate=0., global_pool='avg'):
+    def __init__(
+            self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32, fix_stem=False,
+            output_stride=32, pad_type='', round_chs_fn=round_channels, act_layer=None, norm_layer=None,
+            se_layer=None, drop_rate=0., drop_path_rate=0., global_pool='avg'):
         super(EfficientNet, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -481,6 +482,7 @@ class EfficientNet(nn.Module):
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         # Stem
         if not fix_stem:
@@ -511,6 +513,21 @@ class EfficientNet(nn.Module):
         layers.extend([nn.Dropout(self.drop_rate), self.classifier])
         return nn.Sequential(*layers)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^conv_stem|bn1',
+            blocks=[
+                (r'^blocks.(\d+)' if coarse else r'^blocks.(\d+).(\d+)', None),
+                (r'conv_head|bn2', (99999,))
+            ]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -522,17 +539,24 @@ class EfficientNet(nn.Module):
     def forward_features(self, x):
         x = self.conv_stem(x)
         x = self.bn1(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x, flatten=True)
+        else:
+            x = self.blocks(x)
         x = self.conv_head(x)
         x = self.bn2(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        return self.classifier(x)
+        return x if pre_logits else self.classifier(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
 
 
 class EfficientNetFeatures(nn.Module):
@@ -542,9 +566,10 @@ class EfficientNetFeatures(nn.Module):
     and object detection models.
     """
 
-    def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
-                 stem_size=32, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
-                 act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
+    def __init__(
+            self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
+            stem_size=32, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
+            act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
         super(EfficientNetFeatures, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d

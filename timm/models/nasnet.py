@@ -407,8 +407,9 @@ class ReductionCell1(nn.Module):
 class NASNetALarge(nn.Module):
     """NASNetALarge (6 @ 4032) """
 
-    def __init__(self, num_classes=1000, in_chans=3, stem_size=96, channel_multiplier=2,
-                 num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
+    def __init__(
+            self, num_classes=1000, in_chans=3, stem_size=96, channel_multiplier=2,
+            num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
         super(NASNetALarge, self).__init__()
         self.num_classes = num_classes
         self.stem_size = stem_size
@@ -503,6 +504,23 @@ class NASNetALarge(nn.Module):
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^conv0|cell_stem_[01]',
+            blocks=[
+                (r'^cell_(\d+)', None),
+                (r'^reduction_cell_0', (6,)),
+                (r'^reduction_cell_1', (12,)),
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.last_linear
 
@@ -542,12 +560,16 @@ class NASNetALarge(nn.Module):
         x = self.act(x_cell_17)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x):
         x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
         x = self.last_linear(x)
+        return x
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 

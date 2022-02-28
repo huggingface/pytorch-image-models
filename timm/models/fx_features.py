@@ -89,13 +89,13 @@ class FeatureGraphNet(nn.Module):
         return list(self.graph_module(x).values())
 
 
-class FeatureExtractNet(nn.Module):
+class GraphExtractNet(nn.Module):
     """ A standalone feature extraction wrapper that maps dict -> list or single tensor
     NOTE:
       * one can use feature_extractor directly if dictionary output is desired
       * unlike FeatureGraphNet, this is intended to be used standalone and not with model feature_info
       metadata for builtin feature extraction mode
-      * feature_extractor can be used directly if dictionary output is acceptable
+      * create_feature_extractor can be used directly if dictionary output is acceptable
 
     Args:
         model: model to extract features from
