@@ -96,6 +96,12 @@ parser.add_argument('-b', '--batch-size', type=int, default=256, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-vb', '--validation-batch-size', type=int, default=None, metavar='N',
                     help='validation batch size override (default: None)')
+parser.add_argument('--channels-last', action='store_true', default=False,
+                    help='Use channels_last memory layout')
+parser.add_argument('--torchscript', dest='torchscript', action='store_true',
+                    help='torch.jit.script the full model')
+parser.add_argument('--grad-checkpointing', action='store_true', default=False,
+                    help='Enable gradient checkpointing through model blocks/stages')
 
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -112,7 +118,8 @@ parser.add_argument('--clip-grad', type=float, default=None, metavar='NORM',
                     help='Clip gradient norm (default: None, no clipping)')
 parser.add_argument('--clip-mode', type=str, default='norm',
                     help='Gradient clipping mode. One of ("norm", "value", "agc")')
-
+parser.add_argument('--layer-decay', type=float, default=None,
+                    help='layer-wise learning rate decay (default: None)')
 
 # Learning rate schedule parameters
 parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
@@ -251,8 +258,7 @@ parser.add_argument('--save-images', action='store_true', default=False,
                     help='save images of input bathes every log interval for debugging')
 parser.add_argument('--amp', action='store_true', default=False,
                     help='use NVIDIA Apex AMP or Native AMP for mixed precision training')
-parser.add_argument('--channels-last', action='store_true', default=False,
-                    help='Use channels_last memory layout')
+
 parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
@@ -266,8 +272,6 @@ parser.add_argument('--tta', type=int, default=0, metavar='N',
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
-parser.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
 parser.add_argument('--force-cpu', action='store_true', default=False,
                     help='Force CPU to be used even if HW accelerator exists.')
 parser.add_argument('--log-wandb', action='store_true', default=False,
@@ -435,6 +439,9 @@ def setup_train_task(args, dev_env: DeviceEnv, mixup_active: bool):
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
+
+    if args.grad_checkpointing:
+        model.set_grad_checkpointing(enable=True)
 
     if dev_env.primary:
         _logger.info(

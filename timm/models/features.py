@@ -86,7 +86,7 @@ class FeatureHooks:
 
     This module helps with the setup and extraction of hooks for extracting features from
     internal nodes in a model by node name. This works quite well in eager Python but needs
-    redesign for torcscript.
+    redesign for torchscript.
     """
 
     def __init__(self, hooks, named_modules, out_map=None, default_hook_type='forward'):
@@ -97,7 +97,7 @@ class FeatureHooks:
             m = modules[hook_name]
             hook_id = out_map[i] if out_map else hook_name
             hook_fn = partial(self._collect_output_hook, hook_id)
-            hook_type = h['hook_type'] if 'hook_type' in h else default_hook_type
+            hook_type = h.get('hook_type', default_hook_type)
             if hook_type == 'forward_pre':
                 m.register_forward_pre_hook(hook_fn)
             elif hook_type == 'forward':

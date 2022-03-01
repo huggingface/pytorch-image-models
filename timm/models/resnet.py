@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
 from .registry import register_model
 
@@ -105,7 +105,9 @@ default_cfgs = {
         first_conv='conv1.0'),
     'resnext101_32x4d': _cfg(url=''),
     'resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth'),
-    'resnext101_64x4d': _cfg(url=''),
+    'resnext101_64x4d': _cfg(
+        url='',
+        interpolation='bicubic', crop_pct=1.0,  test_input_size=(3, 288, 288)),
     'tv_resnext50_32x4d': _cfg(url='https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth'),
 
     #  ResNeXt models - Weakly Supervised Pretraining on Instagram Hashtags
@@ -345,7 +347,7 @@ class BasicBlock(nn.Module):
         self.dilation = dilation
         self.drop_path = drop_path
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.bn2.weight)
 
     def forward(self, x):
@@ -411,7 +413,7 @@ class Bottleneck(nn.Module):
         self.dilation = dilation
         self.drop_path = drop_path
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
@@ -600,12 +602,13 @@ class ResNet(nn.Module):
                  cardinality=1, base_width=64, stem_width=64, stem_type='', replace_stem_pool=False,
                  output_stride=32, block_reduce_first=1, down_kernel_size=1, avg_down=False,
                  act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_rate=0.0, drop_path_rate=0.,
-                 drop_block_rate=0., global_pool='avg', zero_init_last_bn=True, block_args=None):
+                 drop_block_rate=0., global_pool='avg', zero_init_last=True, block_args=None):
+        super(ResNet, self).__init__()
         block_args = block_args or dict()
         assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        super(ResNet, self).__init__()
+        self.grad_checkpointing = False
 
         # Stem
         deep_stem = 'deep' in stem_type
@@ -632,7 +635,7 @@ class ResNet(nn.Module):
         if replace_stem_pool:
             self.maxpool = nn.Sequential(*filter(None, [
                 nn.Conv2d(inplanes, inplanes, 3, stride=1 if aa_layer else 2, padding=1, bias=False),
-                create_aa(aa_layer, channels=inplanes, stride=2),
+                create_aa(aa_layer, channels=inplanes, stride=2) if aa_layer is not None else None,
                 norm_layer(inplanes),
                 act_layer(inplace=True)
             ]))
@@ -662,22 +665,33 @@ class ResNet(nn.Module):
         self.num_features = 512 * block.expansion
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
-        self.init_weights(zero_init_last_bn=zero_init_last_bn)
+        self.init_weights(zero_init_last=zero_init_last)
 
-    def init_weights(self, zero_init_last_bn=True):
+    @torch.jit.ignore
+    def init_weights(self, zero_init_last=True):
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
-        if zero_init_last_bn:
+        if zero_init_last:
             for m in self.modules():
-                if hasattr(m, 'zero_init_last_bn'):
-                    m.zero_init_last_bn()
+                if hasattr(m, 'zero_init_last'):
+                    m.zero_init_last()
 
-    def get_classifier(self):
-        return self.fc
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(stem=r'^conv1|bn1|maxpool', blocks=r'^layer(\d+)' if coarse else r'^layer(\d+)\.(\d+)')
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
+    def get_classifier(self, name_only=False):
+        return 'fc' if name_only else self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
@@ -689,10 +703,13 @@ class ResNet(nn.Module):
         x = self.act1(x)
         x = self.maxpool(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq([self.layer1, self.layer2, self.layer3, self.layer4], x, flatten=True)
+        else:
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+            x = self.layer4(x)
         return x
 
     def forward(self, x):

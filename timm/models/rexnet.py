@@ -16,7 +16,7 @@ from functools import partial
 from math import ceil
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath, make_divisible, SEModule
 from .registry import register_model
 from .efficientnet_builder import efficientnet_init_weights
@@ -54,8 +54,9 @@ SEWithNorm = partial(SEModule, norm_layer=nn.BatchNorm2d)
 
 
 class LinearBottleneck(nn.Module):
-    def __init__(self, in_chs, out_chs, stride, exp_ratio=1.0, se_ratio=0., ch_div=1,
-                 act_layer='swish', dw_act_layer='relu6', drop_path=None):
+    def __init__(
+            self, in_chs, out_chs, stride, exp_ratio=1.0, se_ratio=0., ch_div=1,
+            act_layer='swish', dw_act_layer='relu6', drop_path=None):
         super(LinearBottleneck, self).__init__()
         self.use_shortcut = stride == 1 and in_chs <= out_chs
         self.in_channels = in_chs
@@ -143,12 +144,15 @@ def _build_blocks(
 
 
 class ReXNetV1(nn.Module):
-    def __init__(self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32,
-                 initial_chs=16, final_chs=180, width_mult=1.0, depth_mult=1.0, se_ratio=1/12.,
-                 ch_div=1, act_layer='swish', dw_act_layer='relu6', drop_rate=0.2, drop_path_rate=0.):
+    def __init__(
+            self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32,
+            initial_chs=16, final_chs=180, width_mult=1.0, depth_mult=1.0, se_ratio=1/12.,
+            ch_div=1, act_layer='swish', dw_act_layer='relu6', drop_rate=0.2, drop_path_rate=0.
+    ):
         super(ReXNetV1, self).__init__()
-        self.drop_rate = drop_rate
         self.num_classes = num_classes
+        self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         assert output_stride == 32  # FIXME support dilation
         stem_base_chs = 32 / width_mult if width_mult < 1.0 else 32
@@ -165,6 +169,19 @@ class ReXNetV1(nn.Module):
 
         efficientnet_init_weights(self)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=r'^features.(\d+)',
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -173,12 +190,18 @@ class ReXNetV1(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.features(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.features, x, flatten=True)
+        else:
+            x = self.features(x)
         return x
+
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 

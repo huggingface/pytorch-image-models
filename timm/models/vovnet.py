@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath,\
     create_attn, create_norm_act_layer, get_norm_act_layer
 
@@ -178,8 +178,9 @@ class SequentialAppendList(nn.Sequential):
 
 class OsaBlock(nn.Module):
 
-    def __init__(self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
-                 depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path=None):
+    def __init__(
+            self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
+            depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path=None):
         super(OsaBlock, self).__init__()
 
         self.residual = residual
@@ -207,10 +208,7 @@ class OsaBlock(nn.Module):
         next_in_chs = in_chs + layer_per_block * mid_chs
         self.conv_concat = ConvNormAct(next_in_chs, out_chs, **conv_kwargs)
 
-        if attn:
-            self.attn = create_attn(attn, out_chs)
-        else:
-            self.attn = None
+        self.attn = create_attn(attn, out_chs) if attn else None
 
         self.drop_path = drop_path
 
@@ -231,10 +229,12 @@ class OsaBlock(nn.Module):
 
 class OsaStage(nn.Module):
 
-    def __init__(self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
-                 residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU,
-                 drop_path_rates=None):
+    def __init__(
+            self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
+            residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU,
+            drop_path_rates=None):
         super(OsaStage, self).__init__()
+        self.grad_checkpointing = False
 
         if downsample:
             self.pool = nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True)
@@ -258,14 +258,18 @@ class OsaStage(nn.Module):
     def forward(self, x):
         if self.pool is not None:
             x = self.pool(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
 
 
 class VovNet(nn.Module):
 
-    def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
-                 output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path_rate=0.):
+    def __init__(
+            self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
+            output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path_rate=0.):
         """ VovNet (v2)
         """
         super(VovNet, self).__init__()
@@ -315,12 +319,23 @@ class VovNet(nn.Module):
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1.)
-                nn.init.constant_(m.bias, 0.)
             elif isinstance(m, nn.Linear):
                 nn.init.zeros_(m.bias)
 
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=r'^stages.(\d+)' if coarse else r'^stages.(\d+).blocks.(\d+)',
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.stages:
+            s.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -331,9 +346,13 @@ class VovNet(nn.Module):
         x = self.stem(x)
         return self.stages(x)
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        return self.head(x)
+        x = self.forward_head(x)
+        return x
 
 
 def _create_vovnet(variant, pretrained=False, **kwargs):

@@ -97,7 +97,7 @@ def group_rms(x, groups: int = 32, eps: float = 1e-5):
 
 
 class EvoNorm2dB0(nn.Module):
-    def __init__(self, num_features, apply_act=True, momentum=0.1, eps=1e-5, **_):
+    def __init__(self, num_features, apply_act=True, momentum=0.1, eps=1e-3, **_):
         super().__init__()
         self.apply_act = apply_act  # apply activation (non-linearity)
         self.momentum = momentum
@@ -237,7 +237,7 @@ class EvoNorm2dS0(nn.Module):
 
 
 class EvoNorm2dS0a(EvoNorm2dS0):
-    def __init__(self, num_features, groups=32, group_size=None, apply_act=True, eps=1e-5, **_):
+    def __init__(self, num_features, groups=32, group_size=None, apply_act=True, eps=1e-3, **_):
         super().__init__(
             num_features, groups=groups, group_size=group_size, apply_act=apply_act, eps=eps)
 
@@ -290,7 +290,7 @@ class EvoNorm2dS1(nn.Module):
 class EvoNorm2dS1a(EvoNorm2dS1):
     def __init__(
             self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=nn.SiLU, eps=1e-5, **_):
+            apply_act=True, act_layer=nn.SiLU, eps=1e-3, **_):
         super().__init__(
             num_features, groups=groups, group_size=group_size, apply_act=apply_act, act_layer=act_layer, eps=eps)
 
@@ -338,7 +338,7 @@ class EvoNorm2dS2(nn.Module):
 class EvoNorm2dS2a(EvoNorm2dS2):
     def __init__(
             self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=nn.SiLU, eps=1e-5, **_):
+            apply_act=True, act_layer=nn.SiLU, eps=1e-3, **_):
         super().__init__(
             num_features, groups=groups, group_size=group_size, apply_act=apply_act, act_layer=act_layer, eps=eps)
 

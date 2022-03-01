@@ -7,11 +7,11 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from functools import partial
 
+import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import ClassifierHead, ConvNormAct, create_conv2d, get_norm_act_layer
 from .layers.helpers import to_3tuple
 from .registry import register_model
@@ -39,6 +39,7 @@ default_cfgs = dict(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_71-8eec7df1.pth'),
 
     xception41p=_cfg(url=''),
+    xception65p=_cfg(url=''),
 )
 
 
@@ -167,12 +168,14 @@ class XceptionAligned(nn.Module):
     """Modified Aligned Xception
     """
 
-    def __init__(self, block_cfg, num_classes=1000, in_chans=3, output_stride=32, preact=False,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, drop_rate=0., global_pool='avg'):
+    def __init__(
+            self, block_cfg, num_classes=1000, in_chans=3, output_stride=32, preact=False,
+            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, drop_rate=0., global_pool='avg'):
         super(XceptionAligned, self).__init__()
+        assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        assert output_stride in (8, 16, 32)
+        self.grad_checkpointing = False
 
         layer_args = dict(act_layer=act_layer, norm_layer=norm_layer)
         self.stem = nn.Sequential(*[
@@ -206,6 +209,18 @@ class XceptionAligned(nn.Module):
         self.head = ClassifierHead(
             in_chs=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=r'^blocks.(\d+)',
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -214,13 +229,19 @@ class XceptionAligned(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         x = self.act(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -307,3 +328,23 @@ def xception41p(pretrained=False, **kwargs):
     ]
     model_args = dict(block_cfg=block_cfg, preact=True, norm_layer=nn.BatchNorm2d, **kwargs)
     return _xception('xception41p', pretrained=pretrained, **model_args)
+
+
+@register_model
+def xception65p(pretrained=False, **kwargs):
+    """ Modified Aligned Xception-65 w/ Pre-Act
+    """
+    block_cfg = [
+        # entry flow
+        dict(in_chs=64, out_chs=128, stride=2),
+        dict(in_chs=128, out_chs=256, stride=2),
+        dict(in_chs=256, out_chs=728, stride=2),
+        # middle flow
+        *([dict(in_chs=728, out_chs=728, stride=1)] * 16),
+        # exit flow
+        dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
+        dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True),
+    ]
+    model_args = dict(
+        block_cfg=block_cfg, preact=True, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
+    return _xception('xception65p', pretrained=pretrained, **model_args)

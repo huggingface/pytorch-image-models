@@ -18,7 +18,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .fx_features import register_notrace_module
-from .helpers import named_apply, build_model_with_cfg
+from .helpers import named_apply, build_model_with_cfg, checkpoint_seq
 from .layers import trunc_normal_, ClassifierHead, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp
 from .registry import register_model
 
@@ -43,6 +43,7 @@ default_cfgs = dict(
     convnext_base=_cfg(url="https://dl.fbaipublicfiles.com/convnext/convnext_base_1k_224_ema.pth"),
     convnext_large=_cfg(url="https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth"),
 
+    convnext_nano_hnf=_cfg(url=''),
     convnext_tiny_hnf=_cfg(url=''),
 
     convnext_base_in22ft1k=_cfg(
@@ -151,6 +152,7 @@ class ConvNeXtStage(nn.Module):
             self, in_chs, out_chs, stride=2, depth=2, dp_rates=None, ls_init_value=1.0, conv_mlp=False,
             norm_layer=None, cl_norm_layer=None, cross_stage=False):
         super().__init__()
+        self.grad_checkpointing = False
 
         if in_chs != out_chs or stride > 1:
             self.downsample = nn.Sequential(
@@ -169,7 +171,10 @@ class ConvNeXtStage(nn.Module):
 
     def forward(self, x):
         x = self.downsample(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
 
 
@@ -190,7 +195,7 @@ class ConvNeXt(nn.Module):
 
     def __init__(
             self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32, patch_size=4,
-            depths=(3, 3, 9, 3), dims=(96, 192, 384, 768),  ls_init_value=1e-6, conv_mlp=False,
+            depths=(3, 3, 9, 3), dims=(96, 192, 384, 768),  ls_init_value=1e-6, conv_mlp=False, stem_type='patch',
             head_init_scale=1., head_norm_first=False, norm_layer=None, drop_rate=0., drop_path_rate=0.,
     ):
         super().__init__()
@@ -208,19 +213,29 @@ class ConvNeXt(nn.Module):
         self.feature_info = []
 
         # NOTE: this stem is a minimal form of ViT PatchEmbed, as used in SwinTransformer w/ patch_size = 4
-        self.stem = nn.Sequential(
-            nn.Conv2d(in_chans, dims[0], kernel_size=patch_size, stride=patch_size),
-            norm_layer(dims[0])
-        )
+        if stem_type == 'patch':
+            self.stem = nn.Sequential(
+                nn.Conv2d(in_chans, dims[0], kernel_size=patch_size, stride=patch_size),
+                norm_layer(dims[0])
+            )
+            curr_stride = patch_size
+            prev_chs = dims[0]
+        else:
+            self.stem = nn.Sequential(
+                nn.Conv2d(in_chans, 32, kernel_size=3, stride=2, padding=1),
+                norm_layer(32),
+                nn.GELU(),
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            )
+            curr_stride = 2
+            prev_chs = 64
 
         self.stages = nn.Sequential()
         dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
-        curr_stride = patch_size
-        prev_chs = dims[0]
         stages = []
         # 4 feature resolution stages, each consisting of multiple residual blocks
         for i in range(4):
-            stride = 2 if i > 0 else 1
+            stride = 2 if curr_stride == 2 or i > 0 else 1
             # FIXME support dilation / output_stride
             curr_stride *= stride
             out_chs = dims[i]
@@ -235,40 +250,43 @@ class ConvNeXt(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.num_features = prev_chs
-        if head_norm_first:
-            # norm -> global pool -> fc ordering, like most other nets (not compat with FB weights)
-            self.norm_pre = norm_layer(self.num_features)  # final norm layer, before pooling
-            self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
-        else:
-            # pool -> norm -> fc, the default ConvNeXt ordering (pretrained FB weights)
-            self.norm_pre = nn.Identity()
-            self.head = nn.Sequential(OrderedDict([
+        # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
+        # otherwise pool -> norm -> fc, the default ConvNeXt ordering (pretrained FB weights)
+        self.norm_pre = norm_layer(self.num_features) if head_norm_first else nn.Identity()
+        self.head = nn.Sequential(OrderedDict([
                 ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
-                ('norm', norm_layer(self.num_features)),
+                ('norm', nn.Identity() if head_norm_first else norm_layer(self.num_features)),
                 ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
                 ('drop', nn.Dropout(self.drop_rate)),
-                ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())
-            ]))
+                ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())]))
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.downsample', (0,)),  # blocks
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^norm_pre', (99999,))
+            ]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.stages:
+            s.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
-    def reset_classifier(self, num_classes=0, global_pool='avg'):
-        if isinstance(self.head, ClassifierHead):
-            # norm -> global pool -> fc
-            self.head = ClassifierHead(
-                self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
-        else:
-            # pool -> norm -> fc
-            self.head = nn.Sequential(OrderedDict([
-                ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
-                ('norm', self.head.norm),
-                ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
-                ('drop', nn.Dropout(self.drop_rate)),
-                ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())
-            ]))
+    def reset_classifier(self, num_classes=0, global_pool=None):
+        if global_pool is not None:
+            self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+        self.head.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -276,9 +294,17 @@ class ConvNeXt(nn.Module):
         x = self.norm_pre(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        # NOTE nn.Sequential in head broken down since can't call head[:-1](x) in torchscript :(
+        x = self.head.global_pool(x)
+        x = self.head.norm(x)
+        x = self.head.flatten(x)
+        x = self.head.drop(x)
+        return x if pre_logits else self.head.fc(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -326,16 +352,31 @@ def _create_convnext(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_tiny(pretrained=False, **kwargs):
-    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), **kwargs)
-    model = _create_convnext('convnext_tiny', pretrained=pretrained, **model_args)
+def convnext_nano_hnf(pretrained=False, **kwargs):
+    model_args = dict(depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), head_norm_first=True, conv_mlp=True, **kwargs)
+    model = _create_convnext('convnext_nano_hnf', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_tiny_hnf(pretrained=False, **kwargs):
-    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, **kwargs)
+    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_tiny_hnfd(pretrained=False, **kwargs):
+    model_args = dict(
+        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, stem_type='dual', **kwargs)
+    model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_tiny(pretrained=False, **kwargs):
+    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), **kwargs)
+    model = _create_convnext('convnext_tiny', pretrained=pretrained, **model_args)
     return model
 
 

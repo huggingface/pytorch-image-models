@@ -9,13 +9,13 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
 from copy import deepcopy
+from functools import partial
 
 import torch
 import torch.nn as nn
-from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
 from .registry import register_model
 
@@ -202,14 +202,13 @@ class Cait(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
     # with slight modifications to adapt to our cait models
     def __init__(
-            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-            num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0.,
-            drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            global_pool=None,
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
+            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
             block_layers=LayerScaleBlock,
             block_layers_token=LayerScaleBlockClassAttn,
             patch_layer=PatchEmbed,
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
             act_layer=nn.GELU,
             attn_block=TalkingHeadAttn,
             mlp_block=Mlp,
@@ -220,9 +219,12 @@ class Cait(nn.Module):
             mlp_ratio_token_only=4.0
     ):
         super().__init__()
+        assert global_pool in ('', 'token', 'avg')
 
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim
+        self.grad_checkpointing = False
 
         self.patch_embed = patch_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
@@ -271,32 +273,61 @@ class Cait(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        def _matcher(name):
+            if any([name.startswith(n) for n in ('cls_token', 'pos_embed', 'patch_embed')]):
+                return 0
+            elif name.startswith('blocks.'):
+                return int(name.split('.')[1]) + 1
+            elif name.startswith('blocks_token_only.'):
+                # overlap token only blocks with last blocks
+                to_offset = len(self.blocks) - len(self.blocks_token_only) + 1
+                return int(name.split('.')[1]) + to_offset
+            elif name.startswith('norm.'):
+                return len(self.blocks)
+            else:
+                return float('inf')
+        return _matcher
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('', 'token', 'avg')
+            self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
-        B = x.shape[0]
         x = self.patch_embed(x)
         x = x + self.pos_embed
         x = self.pos_drop(x)
-        x = self.blocks(x)
-
-        cls_tokens = self.cls_token.expand(B, -1, -1)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
+        cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         for i, blk in enumerate(self.blocks_token_only):
             cls_tokens = blk(x, cls_tokens)
         x = torch.cat((cls_tokens, x), dim=1)
-
         x = self.norm(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool:
+            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = x[:, 0]
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 

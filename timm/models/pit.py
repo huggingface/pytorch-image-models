@@ -148,9 +148,10 @@ class PoolingVisionTransformer(nn.Module):
         - https://arxiv.org/abs/2103.16302
     """
     def __init__(self, img_size, patch_size, stride, base_dims, depth, heads,
-                 mlp_ratio, num_classes=1000, in_chans=3, distilled=False,
+                 mlp_ratio, num_classes=1000, in_chans=3, distilled=False, global_pool='token',
                  attn_drop_rate=.0, drop_rate=.0, drop_path_rate=.0):
         super(PoolingVisionTransformer, self).__init__()
+        assert global_pool in ('token',)
 
         padding = 0
         img_size = to_2tuple(img_size)
@@ -161,6 +162,7 @@ class PoolingVisionTransformer(nn.Module):
         self.base_dims = base_dims
         self.heads = heads
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.num_tokens = 2 if distilled else 1
 
         self.patch_size = patch_size
@@ -205,13 +207,17 @@ class PoolingVisionTransformer(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
     def get_classifier(self):
         if self.head_dist is not None:
             return self.head, self.head_dist
         else:
             return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         if self.head_dist is not None:

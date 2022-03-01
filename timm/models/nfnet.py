@@ -27,7 +27,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .fx_features import register_notrace_module
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .registry import register_model
 from .layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame,\
     get_act_layer, get_act_fn, get_attn, make_divisible
@@ -82,23 +82,6 @@ default_cfgs = dict(
     nfnet_f6=_dcfg(
         url='', pool_size=(14, 14), input_size=(3, 448, 448), test_input_size=(3, 576, 576)),
     nfnet_f7=_dcfg(
-        url='', pool_size=(15, 15), input_size=(3, 480, 480), test_input_size=(3, 608, 608)),
-
-    nfnet_f0s=_dcfg(
-        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256)),
-    nfnet_f1s=_dcfg(
-        url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 320, 320)),
-    nfnet_f2s=_dcfg(
-        url='', pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 352, 352)),
-    nfnet_f3s=_dcfg(
-        url='', pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 416, 416)),
-    nfnet_f4s=_dcfg(
-        url='', pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 512, 512)),
-    nfnet_f5s=_dcfg(
-        url='', pool_size=(13, 13), input_size=(3, 416, 416), test_input_size=(3, 544, 544)),
-    nfnet_f6s=_dcfg(
-        url='', pool_size=(14, 14), input_size=(3, 448, 448), test_input_size=(3, 576, 576)),
-    nfnet_f7s=_dcfg(
         url='', pool_size=(15, 15), input_size=(3, 480, 480), test_input_size=(3, 608, 608)),
 
     nfnet_l0=_dcfg(
@@ -222,7 +205,7 @@ model_cfgs = dict(
     dm_nfnet_f5=_dm_nfnet_cfg(depths=(6, 12, 36, 18)),
     dm_nfnet_f6=_dm_nfnet_cfg(depths=(7, 14, 42, 21)),
 
-    # NFNet-F models w/ GELU (I will likely deprecate/remove these models and just keep dm_ ver for GELU)
+    # NFNet-F models w/ GELU
     nfnet_f0=_nfnet_cfg(depths=(1, 2, 6, 3)),
     nfnet_f1=_nfnet_cfg(depths=(2, 4, 12, 6)),
     nfnet_f2=_nfnet_cfg(depths=(3, 6, 18, 9)),
@@ -231,16 +214,6 @@ model_cfgs = dict(
     nfnet_f5=_nfnet_cfg(depths=(6, 12, 36, 18)),
     nfnet_f6=_nfnet_cfg(depths=(7, 14, 42, 21)),
     nfnet_f7=_nfnet_cfg(depths=(8, 16, 48, 24)),
-
-    # NFNet-F models w/ SiLU (much faster in PyTorch)
-    nfnet_f0s=_nfnet_cfg(depths=(1, 2, 6, 3), act_layer='silu'),
-    nfnet_f1s=_nfnet_cfg(depths=(2, 4, 12, 6), act_layer='silu'),
-    nfnet_f2s=_nfnet_cfg(depths=(3, 6, 18, 9), act_layer='silu'),
-    nfnet_f3s=_nfnet_cfg(depths=(4, 8, 24, 12), act_layer='silu'),
-    nfnet_f4s=_nfnet_cfg(depths=(5, 10, 30, 15), act_layer='silu'),
-    nfnet_f5s=_nfnet_cfg(depths=(6, 12, 36, 18), act_layer='silu'),
-    nfnet_f6s=_nfnet_cfg(depths=(7, 14, 42, 21), act_layer='silu'),
-    nfnet_f7s=_nfnet_cfg(depths=(8, 16, 48, 24), act_layer='silu'),
 
     # Experimental 'light' versions of NFNet-F that are little leaner
     nfnet_l0=_nfnet_cfg(
@@ -477,11 +450,15 @@ class NormFreeNet(nn.Module):
         * skipinit is disabled by default, it seems to have a rather drastic impact on GPU memory use and throughput
             for what it is/does. Approx 8-10% throughput loss.
     """
-    def __init__(self, cfg: NfCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-                 drop_rate=0., drop_path_rate=0.):
+    def __init__(
+            self, cfg: NfCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
+            drop_rate=0., drop_path_rate=0.
+    ):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
+
         assert cfg.act_layer in _nonlin_gamma, f"Please add non-linearity constants for activation ({cfg.act_layer})."
         conv_layer = ScaledStdConv2dSame if cfg.same_padding else ScaledStdConv2d
         if cfg.gamma_in_act:
@@ -568,6 +545,22 @@ class NormFreeNet(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=[
+                (r'^stages.(\d+)' if coarse else r'^stages.(\d+).(\d+)', None),
+                (r'^final_conv', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -576,14 +569,20 @@ class NormFreeNet(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.stages(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stages, x)
+        else:
+            x = self.stages(x)
         x = self.final_conv(x)
         x = self.final_act(x)
         return x
 
+    def forward_head(self, x):
+        return self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -730,78 +729,6 @@ def nfnet_f7(pretrained=False, **kwargs):
         - https://arxiv.org/abs/2102.06171
     """
     return _create_normfreenet('nfnet_f7', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f0s(pretrained=False, **kwargs):
-    """ NFNet-F0 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f0s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f1s(pretrained=False, **kwargs):
-    """ NFNet-F1 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f1s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f2s(pretrained=False, **kwargs):
-    """ NFNet-F2 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f2s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f3s(pretrained=False, **kwargs):
-    """ NFNet-F3 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f3s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f4s(pretrained=False, **kwargs):
-    """ NFNet-F4 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f4s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f5s(pretrained=False, **kwargs):
-    """ NFNet-F5 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f5s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f6s(pretrained=False, **kwargs):
-    """ NFNet-F6 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f6s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def nfnet_f7s(pretrained=False, **kwargs):
-    """ NFNet-F7 w/ SiLU
-    `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
-    """
-    return _create_normfreenet('nfnet_f7s', pretrained=pretrained, **kwargs)
 
 
 @register_model

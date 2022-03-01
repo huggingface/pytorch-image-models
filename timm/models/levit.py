@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import to_ntuple, get_act_layer
 from .vision_transformer import trunc_normal_
 from .registry import register_model
@@ -65,6 +65,8 @@ default_cfgs = dict(
     levit_384=_cfg(
         url='https://dl.fbaipublicfiles.com/LeViT/LeViT-384-9bdaf2e2.pth'
     ),
+
+    levit_256d=_cfg(url='', classifier='head.l'),
 )
 
 model_cfgs = dict(
@@ -78,6 +80,9 @@ model_cfgs = dict(
         embed_dim=(256, 384, 512), key_dim=32, num_heads=(4, 6, 8), depth=(4, 4, 4)),
     levit_384=dict(
         embed_dim=(384, 512, 768), key_dim=32, num_heads=(6, 9, 12), depth=(4, 4, 4)),
+
+    levit_256d=dict(
+        embed_dim=(256, 384, 512), key_dim=32, num_heads=(4, 6, 8), depth=(4, 8, 6)),
 )
 
 __all__ = ['Levit']
@@ -113,15 +118,21 @@ def levit_384(pretrained=False, use_conv=False, **kwargs):
         'levit_384', pretrained=pretrained, use_conv=use_conv, **kwargs)
 
 
+@register_model
+def levit_256d(pretrained=False, use_conv=False, **kwargs):
+    return create_levit(
+        'levit_256d', pretrained=pretrained, use_conv=use_conv, distilled=False, **kwargs)
+
+
 class ConvNorm(nn.Sequential):
     def __init__(
-            self, a, b, ks=1, stride=1, pad=0, dilation=1, groups=1, bn_weight_init=1, resolution=-10000):
+            self, in_chs, out_chs, kernel_size=1, stride=1, pad=0, dilation=1,
+            groups=1, bn_weight_init=1, resolution=-10000):
         super().__init__()
-        self.add_module('c', nn.Conv2d(a, b, ks, stride, pad, dilation, groups, bias=False))
-        bn = nn.BatchNorm2d(b)
-        nn.init.constant_(bn.weight, bn_weight_init)
-        nn.init.constant_(bn.bias, 0)
-        self.add_module('bn', bn)
+        self.add_module('c', nn.Conv2d(in_chs, out_chs, kernel_size, stride, pad, dilation, groups, bias=False))
+        self.add_module('bn', nn.BatchNorm2d(out_chs))
+
+        nn.init.constant_(self.bn.weight, bn_weight_init)
 
     @torch.no_grad()
     def fuse(self):
@@ -138,13 +149,12 @@ class ConvNorm(nn.Sequential):
 
 
 class LinearNorm(nn.Sequential):
-    def __init__(self, a, b, bn_weight_init=1, resolution=-100000):
+    def __init__(self, in_features, out_features, bn_weight_init=1, resolution=-100000):
         super().__init__()
-        self.add_module('c', nn.Linear(a, b, bias=False))
-        bn = nn.BatchNorm1d(b)
-        nn.init.constant_(bn.weight, bn_weight_init)
-        nn.init.constant_(bn.bias, 0)
-        self.add_module('bn', bn)
+        self.add_module('c', nn.Linear(in_features, out_features, bias=False))
+        self.add_module('bn', nn.BatchNorm1d(out_features))
+
+        nn.init.constant_(self.bn.weight, bn_weight_init)
 
     @torch.no_grad()
     def fuse(self):
@@ -163,14 +173,14 @@ class LinearNorm(nn.Sequential):
 
 
 class NormLinear(nn.Sequential):
-    def __init__(self, a, b, bias=True, std=0.02):
+    def __init__(self, in_features, out_features, bias=True, std=0.02):
         super().__init__()
-        self.add_module('bn', nn.BatchNorm1d(a))
-        l = nn.Linear(a, b, bias=bias)
-        trunc_normal_(l.weight, std=std)
-        if bias:
-            nn.init.constant_(l.bias, 0)
-        self.add_module('l', l)
+        self.add_module('bn', nn.BatchNorm1d(in_features))
+        self.add_module('l', nn.Linear(in_features, out_features, bias=bias))
+
+        trunc_normal_(self.l.weight, std=std)
+        if self.l.bias is not None:
+            nn.init.constant_(self.l.bias, 0)
 
     @torch.no_grad()
     def fuse(self):
@@ -231,34 +241,26 @@ class Attention(nn.Module):
     def __init__(
             self, dim, key_dim, num_heads=8, attn_ratio=4, act_layer=None, resolution=14, use_conv=False):
         super().__init__()
-
+        ln_layer = ConvNorm if use_conv else LinearNorm
+        self.use_conv = use_conv
         self.num_heads = num_heads
         self.scale = key_dim ** -0.5
         self.key_dim = key_dim
-        self.nh_kd = nh_kd = key_dim * num_heads
-        self.d = int(attn_ratio * key_dim)
-        self.dh = int(attn_ratio * key_dim) * num_heads
-        self.attn_ratio = attn_ratio
-        self.use_conv = use_conv
-        ln_layer = ConvNorm if self.use_conv else LinearNorm
-        h = self.dh + nh_kd * 2
-        self.qkv = ln_layer(dim, h, resolution=resolution)
+        self.key_attn_dim = key_dim * num_heads
+        self.val_dim = int(attn_ratio * key_dim)
+        self.val_attn_dim = int(attn_ratio * key_dim) * num_heads
+
+        self.qkv = ln_layer(dim, self.val_attn_dim + self.key_attn_dim * 2, resolution=resolution)
         self.proj = nn.Sequential(
             act_layer(),
-            ln_layer(self.dh, dim, bn_weight_init=0, resolution=resolution))
+            ln_layer(self.val_attn_dim, dim, bn_weight_init=0, resolution=resolution)
+        )
 
-        points = list(itertools.product(range(resolution), range(resolution)))
-        N = len(points)
-        attention_offsets = {}
-        idxs = []
-        for p1 in points:
-            for p2 in points:
-                offset = (abs(p1[0] - p2[0]), abs(p1[1] - p2[1]))
-                if offset not in attention_offsets:
-                    attention_offsets[offset] = len(attention_offsets)
-                idxs.append(attention_offsets[offset])
-        self.attention_biases = nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(N, N))
+        self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution ** 2))
+        pos = torch.stack(torch.meshgrid(torch.arange(resolution), torch.arange(resolution))).flatten(1)
+        rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
+        rel_pos = (rel_pos[0] * resolution) + rel_pos[1]
+        self.register_buffer('attention_bias_idxs', rel_pos)
         self.ab = {}
 
     @torch.no_grad()
@@ -279,7 +281,8 @@ class Attention(nn.Module):
     def forward(self, x):  # x (B,C,H,W)
         if self.use_conv:
             B, C, H, W = x.shape
-            q, k, v = self.qkv(x).view(B, self.num_heads, -1, H * W).split([self.key_dim, self.key_dim, self.d], dim=2)
+            q, k, v = self.qkv(x).view(
+                B, self.num_heads, -1, H * W).split([self.key_dim, self.key_dim, self.val_dim], dim=2)
 
             attn = (q.transpose(-2, -1) @ k) * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
@@ -287,8 +290,8 @@ class Attention(nn.Module):
             x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
         else:
             B, N, C = x.shape
-            qkv = self.qkv(x)
-            q, k, v = qkv.view(B, N, self.num_heads, -1).split([self.key_dim, self.key_dim, self.d], dim=3)
+            q, k, v = self.qkv(x).view(
+                B, N, self.num_heads, -1).split([self.key_dim, self.key_dim, self.val_dim], dim=3)
             q = q.permute(0, 2, 1, 3)
             k = k.permute(0, 2, 3, 1)
             v = v.permute(0, 2, 1, 3)
@@ -296,7 +299,7 @@ class Attention(nn.Module):
             attn = q @ k * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
-            x = (attn @ v).transpose(1, 2).reshape(B, N, self.dh)
+            x = (attn @ v).transpose(1, 2).reshape(B, N, self.val_attn_dim)
         x = self.proj(x)
         return x
 
@@ -306,17 +309,18 @@ class AttentionSubsample(nn.Module):
 
     def __init__(
             self, in_dim, out_dim, key_dim, num_heads=8, attn_ratio=2,
-            act_layer=None, stride=2, resolution=14, resolution_=7, use_conv=False):
+            act_layer=None, stride=2, resolution=14, resolution_out=7, use_conv=False):
         super().__init__()
+        self.stride = stride
         self.num_heads = num_heads
         self.scale = key_dim ** -0.5
         self.key_dim = key_dim
-        self.nh_kd = nh_kd = key_dim * num_heads
-        self.d = int(attn_ratio * key_dim)
-        self.dh = self.d * self.num_heads
-        self.attn_ratio = attn_ratio
-        self.resolution_ = resolution_
-        self.resolution_2 = resolution_ ** 2
+        self.key_attn_dim = key_dim * num_heads
+        self.val_dim = int(attn_ratio * key_dim)
+        self.val_attn_dim = self.val_dim * self.num_heads
+        self.resolution = resolution
+        self.resolution_out_area = resolution_out ** 2
+
         self.use_conv = use_conv
         if self.use_conv:
             ln_layer = ConvNorm
@@ -325,34 +329,25 @@ class AttentionSubsample(nn.Module):
             ln_layer = LinearNorm
             sub_layer = partial(Subsample, resolution=resolution)
 
-        h = self.dh + nh_kd
-        self.kv = ln_layer(in_dim, h, resolution=resolution)
+        self.kv = ln_layer(in_dim, self.val_attn_dim + self.key_attn_dim, resolution=resolution)
         self.q = nn.Sequential(
             sub_layer(stride=stride),
-            ln_layer(in_dim, nh_kd, resolution=resolution_))
+            ln_layer(in_dim, self.key_attn_dim, resolution=resolution_out)
+        )
         self.proj = nn.Sequential(
             act_layer(),
-            ln_layer(self.dh, out_dim, resolution=resolution_))
+            ln_layer(self.val_attn_dim, out_dim, resolution=resolution_out)
+        )
 
-        self.stride = stride
-        self.resolution = resolution
-        points = list(itertools.product(range(resolution), range(resolution)))
-        points_ = list(itertools.product(range(resolution_), range(resolution_)))
-        N = len(points)
-        N_ = len(points_)
-        attention_offsets = {}
-        idxs = []
-        for p1 in points_:
-            for p2 in points:
-                size = 1
-                offset = (
-                    abs(p1[0] * stride - p2[0] + (size - 1) / 2),
-                    abs(p1[1] * stride - p2[1] + (size - 1) / 2))
-                if offset not in attention_offsets:
-                    attention_offsets[offset] = len(attention_offsets)
-                idxs.append(attention_offsets[offset])
-        self.attention_biases = nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
-        self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(N_, N))
+        self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.resolution ** 2))
+        k_pos = torch.stack(torch.meshgrid(torch.arange(resolution), torch.arange(resolution))).flatten(1)
+        q_pos = torch.stack(torch.meshgrid(
+            torch.arange(0, resolution, step=stride),
+            torch.arange(0, resolution, step=stride))).flatten(1)
+        rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
+        rel_pos = (rel_pos[0] * resolution) + rel_pos[1]
+        self.register_buffer('attention_bias_idxs', rel_pos)
+
         self.ab = {}  # per-device attention_biases cache
 
     @torch.no_grad()
@@ -373,24 +368,24 @@ class AttentionSubsample(nn.Module):
     def forward(self, x):
         if self.use_conv:
             B, C, H, W = x.shape
-            k, v = self.kv(x).view(B, self.num_heads, -1, H * W).split([self.key_dim, self.d], dim=2)
-            q = self.q(x).view(B, self.num_heads, self.key_dim, self.resolution_2)
+            k, v = self.kv(x).view(B, self.num_heads, -1, H * W).split([self.key_dim, self.val_dim], dim=2)
+            q = self.q(x).view(B, self.num_heads, self.key_dim, self.resolution_out_area)
 
             attn = (q.transpose(-2, -1) @ k) * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
-            x = (v @ attn.transpose(-2, -1)).reshape(B, -1, self.resolution_, self.resolution_)
+            x = (v @ attn.transpose(-2, -1)).reshape(B, -1, self.resolution, self.resolution)
         else:
             B, N, C = x.shape
-            k, v = self.kv(x).view(B, N, self.num_heads, -1).split([self.key_dim, self.d], dim=3)
+            k, v = self.kv(x).view(B, N, self.num_heads, -1).split([self.key_dim, self.val_dim], dim=3)
             k = k.permute(0, 2, 3, 1)  # BHCN
             v = v.permute(0, 2, 1, 3)  # BHNC
-            q = self.q(x).view(B, self.resolution_2, self.num_heads, self.key_dim).permute(0, 2, 1, 3)
+            q = self.q(x).view(B, self.resolution_out_area, self.num_heads, self.key_dim).permute(0, 2, 1, 3)
 
             attn = q @ k * self.scale + self.get_attention_biases(x.device)
             attn = attn.softmax(dim=-1)
 
-            x = (attn @ v).transpose(1, 2).reshape(B, -1, self.dh)
+            x = (attn @ v).transpose(1, 2).reshape(B, -1, self.val_attn_dim)
         x = self.proj(x)
         return x
 
@@ -418,35 +413,37 @@ class Levit(nn.Module):
             down_ops=None,
             act_layer='hard_swish',
             attn_act_layer='hard_swish',
-            distillation=True,
             use_conv=False,
+            global_pool='avg',
             drop_rate=0.,
             drop_path_rate=0.):
         super().__init__()
         act_layer = get_act_layer(act_layer)
         attn_act_layer = get_act_layer(attn_act_layer)
+        ln_layer = ConvNorm if use_conv else LinearNorm
+        self.use_conv = use_conv
         if isinstance(img_size, tuple):
             # FIXME origin impl passes single img/res dim through whole hierarchy,
             # not sure this model will be used enough to spend time fixing it.
             assert img_size[0] == img_size[1]
             img_size = img_size[0]
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.num_features = embed_dim[-1]
         self.embed_dim = embed_dim
-        N = len(embed_dim)
-        assert len(depth) == len(num_heads) == N
-        key_dim = to_ntuple(N)(key_dim)
-        attn_ratio = to_ntuple(N)(attn_ratio)
-        mlp_ratio = to_ntuple(N)(mlp_ratio)
+        self.grad_checkpointing = False
+
+        num_stages = len(embed_dim)
+        assert len(depth) == len(num_heads) == num_stages
+        key_dim = to_ntuple(num_stages)(key_dim)
+        attn_ratio = to_ntuple(num_stages)(attn_ratio)
+        mlp_ratio = to_ntuple(num_stages)(mlp_ratio)
         down_ops = down_ops or (
             # ('Subsample',key_dim, num_heads, attn_ratio, mlp_ratio, stride)
             ('Subsample', key_dim[0], embed_dim[0] // key_dim[0], 4, 2, 2),
             ('Subsample', key_dim[0], embed_dim[1] // key_dim[1], 4, 2, 2),
             ('',)
         )
-        self.distillation = distillation
-        self.use_conv = use_conv
-        ln_layer = ConvNorm if self.use_conv else LinearNorm
 
         self.patch_embed = hybrid_backbone or stem_b16(in_chans, embed_dim[0], activation=act_layer)
 
@@ -471,13 +468,13 @@ class Levit(nn.Module):
                         ), drop_path_rate))
             if do[0] == 'Subsample':
                 # ('Subsample',key_dim, num_heads, attn_ratio, mlp_ratio, stride)
-                resolution_ = (resolution - 1) // do[5] + 1
+                resolution_out = (resolution - 1) // do[5] + 1
                 self.blocks.append(
                     AttentionSubsample(
                         *embed_dim[i:i + 2], key_dim=do[1], num_heads=do[2],
                         attn_ratio=do[3], act_layer=attn_act_layer, stride=do[5],
-                        resolution=resolution, resolution_=resolution_, use_conv=use_conv))
-                resolution = resolution_
+                        resolution=resolution, resolution_out=resolution_out, use_conv=use_conv))
+                resolution = resolution_out
                 if do[4] > 0:  # mlp_ratio
                     h = int(embed_dim[i + 1] * do[4])
                     self.blocks.append(
@@ -490,50 +487,85 @@ class Levit(nn.Module):
 
         # Classifier head
         self.head = NormLinear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
-        self.head_dist = None
-        if distillation:
-            self.head_dist = NormLinear(embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def no_weight_decay(self):
         return {x for x in self.state_dict().keys() if 'attention_biases' in x}
 
-    def get_classifier(self):
-        if self.head_dist is None:
-            return self.head
-        else:
-            return self.head, self.head_dist
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            blocks=[(r'^blocks.(\d+)', None), (r'^norm', (99999,))]
+        )
+        return matcher
 
-    def reset_classifier(self, num_classes, global_pool='', distillation=None):
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
+    def get_classifier(self):
+        return self.head
+
+    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            self.global_pool = global_pool
         self.head = NormLinear(self.embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
-        if distillation is not None:
-            self.distillation = distillation
-        if self.distillation:
-            self.head_dist = NormLinear(self.embed_dim[-1], num_classes) if num_classes > 0 else nn.Identity()
-        else:
-            self.head_dist = None
 
     def forward_features(self, x):
         x = self.patch_embed(x)
         if not self.use_conv:
             x = x.flatten(2).transpose(1, 2)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
+
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool == 'avg':
+            x = x.mean(dim=(-2, -1)) if self.use_conv else x.mean(dim=1)
+        return x if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = x.mean((-2, -1)) if self.use_conv else x.mean(1)
-        if self.head_dist is not None:
-            x, x_dist = self.head(x), self.head_dist(x)
-            if self.training and not torch.jit.is_scripting():
-                return x, x_dist
-            else:
-                # during inference, return the average of both classifier predictions
-                return (x + x_dist) / 2
-        else:
-            x = self.head(x)
+        x = self.forward_head(x)
         return x
+
+
+class LevitDistilled(Levit):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.head_dist = NormLinear(self.num_features, self.num_classes) if self.num_classes > 0 else nn.Identity()
+        self.distilled_training = False
+
+    @torch.jit.ignore
+    def get_classifier(self):
+        return self.head, self.head_dist
+
+    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
+        self.num_classes = num_classes
+        if global_pool is not None:
+            self.global_pool = global_pool
+        self.head = NormLinear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head_dist = NormLinear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
+    @torch.jit.ignore
+    def set_distilled_training(self, enable=True):
+        self.distilled_training = enable
+
+    def forward_head(self, x):
+        if self.global_pool == 'avg':
+            x = x.mean(dim=(-2, -1)) if self.use_conv else x.mean(dim=1)
+        x, x_dist = self.head(x), self.head_dist(x)
+        if self.distilled_training and self.training and not torch.jit.is_scripting():
+            # only return separate classification predictions when training in distilled mode
+            return x, x_dist
+        else:
+            # during standard train/finetune, inference average the classifier predictions
+            return (x + x_dist) / 2
 
 
 def checkpoint_filter_fn(state_dict, model):
@@ -547,16 +579,14 @@ def checkpoint_filter_fn(state_dict, model):
     return state_dict
 
 
-def create_levit(variant, pretrained=False, default_cfg=None, fuse=False, **kwargs):
+def create_levit(variant, pretrained=False, distilled=True, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
     model_cfg = dict(**model_cfgs[variant], **kwargs)
     model = build_model_with_cfg(
-        Levit, variant, pretrained,
+        LevitDistilled if distilled else Levit, variant, pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
         **model_cfg)
-    #if fuse:
-    #    utils.replace_batchnorm(model)
     return model
 

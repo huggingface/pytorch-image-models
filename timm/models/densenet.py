@@ -13,7 +13,7 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, MATCH_PREV_GROUP
 from .layers import BatchNormAct2d, create_norm_act_layer, BlurPool2d, create_classifier
 from .registry import register_model
 
@@ -162,10 +162,10 @@ class DenseNet(nn.Module):
           but slower. Default: *False*. See `"paper" <https://arxiv.org/pdf/1707.06990.pdf>`_
     """
 
-    def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16), bn_size=4, stem_type='',
-                 num_classes=1000, in_chans=3, global_pool='avg',
-                 norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0, memory_efficient=False,
-                 aa_stem_only=True):
+    def __init__(
+            self, growth_rate=32, block_config=(6, 12, 24, 16), num_classes=1000, in_chans=3, global_pool='avg',
+            bn_size=4, stem_type='', norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0, memory_efficient=False,
+            aa_stem_only=True):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         super(DenseNet, self).__init__()
@@ -249,6 +249,18 @@ class DenseNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.bias, 0)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^features.conv[012]|features.norm[012]|features.pool[012]',
+            blocks=r'^features.(?:denseblock|transition)(\d+)' if coarse else [
+                (r'^features.denseblock(\d+).denselayer(\d+)', None),
+                (r'^features.transition(\d+)', MATCH_PREV_GROUP)  # FIXME combine with previous denselayer
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 

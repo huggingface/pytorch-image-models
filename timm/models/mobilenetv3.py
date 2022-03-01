@@ -18,7 +18,7 @@ from .efficientnet_blocks import SqueezeExcite
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg, pretrained_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features, checkpoint_seq
 from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, get_norm_act_layer
 from .registry import register_model
 
@@ -27,7 +27,7 @@ __all__ = ['MobileNetV3', 'MobileNetV3Features']
 
 def _cfg(url='', **kwargs):
     return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (1, 1),
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv_stem', 'classifier': 'classifier',
@@ -88,7 +88,7 @@ default_cfgs = {
         test_input_size=(3, 256, 256), crop_pct=0.95),
     'fbnetv3_g': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_g_240-0b1df83b.pth',
-        input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95),
+        input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95, pool_size=(8, 8)),
 
     "lcnet_035": _cfg(),
     "lcnet_050": _cfg(
@@ -134,6 +134,7 @@ class MobileNetV3(nn.Module):
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         # Stem
         if not fix_stem:
@@ -166,6 +167,18 @@ class MobileNetV3(nn.Module):
         layers.extend([nn.Flatten(), nn.Dropout(self.drop_rate), self.classifier])
         return nn.Sequential(*layers)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^conv_stem|bn1',
+            blocks=r'^blocks.(\d+)' if coarse else r'^blocks.(\d+).(\d+)'
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -179,18 +192,28 @@ class MobileNetV3(nn.Module):
     def forward_features(self, x):
         x = self.conv_stem(x)
         x = self.bn1(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x, flatten=True)
+        else:
+            x = self.blocks(x)
+        return x
+
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
-        return x
+        if pre_logits:
+            return x.flatten(1)
+        else:
+            x = self.flatten(x)
+            if self.drop_rate > 0.:
+                x = F.dropout(x, p=self.drop_rate, training=self.training)
+            return self.classifier(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.flatten(x)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
-        return self.classifier(x)
+        x = self.forward_head(x)
+        return x
 
 
 class MobileNetV3Features(nn.Module):

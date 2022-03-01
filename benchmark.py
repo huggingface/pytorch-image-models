@@ -89,6 +89,8 @@ parser.add_argument('--gp', default=None, type=str, metavar='POOL',
                     help='Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.')
 parser.add_argument('--channels-last', action='store_true', default=False,
                     help='Use channels_last memory layout')
+parser.add_argument('--grad-checkpointing', action='store_true', default=False,
+                    help='Enable gradient checkpointing through model blocks/stages')
 parser.add_argument('--amp', action='store_true', default=False,
                     help='use PyTorch Native AMP for mixed precision training. Overrides --precision arg.')
 parser.add_argument('--precision', default='float32', type=str,
@@ -321,6 +323,9 @@ class TrainBenchmarkRunner(BenchmarkRunner):
             self.model,
             opt=kwargs.pop('opt', 'sgd'),
             lr=kwargs.pop('lr', 1e-4))
+
+        if kwargs.pop('grad_checkpointing', False):
+            self.model.set_grad_checkpointing()
 
     def _gen_target(self, batch_size):
         return torch.empty(

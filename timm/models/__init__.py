@@ -24,11 +24,13 @@ from .inception_v4 import *
 from .levit import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
+from .mobilevit import *
 from .nasnet import *
 from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
+from .poolformer import *
 from .regnet import *
 from .res2net import *
 from .resnest import *
@@ -46,6 +48,7 @@ from .vgg import *
 from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
+from .volo import *
 from .vovnet import *
 from .xception import *
 from .xception_aligned import *

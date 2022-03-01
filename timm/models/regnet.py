@@ -19,10 +19,11 @@ from functools import partial
 from typing import Optional, Union, Callable
 
 import numpy as np
+import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, named_apply
+from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
 from .layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
 from .layers import get_act_layer, get_norm_act_layer, create_conv2d
 from .registry import register_model
@@ -80,14 +81,13 @@ model_cfgs = dict(
     regnety_040s_gn=RegNetCfg(
         w0=96, wa=31.41, wm=2.24, group_size=64, depth=22, se_ratio=0.25,
         act_layer='silu', norm_layer=partial(GroupNormAct, group_size=16)),
+
     # regnetv = 'preact regnet y'
     regnetv_040=RegNetCfg(
         depth=22, w0=96, wa=31.41, wm=2.24, group_size=64, se_ratio=0.25, preact=True, act_layer='silu'),
-    # regnetw = 'preact regnet z'
-    regnetw_040=RegNetCfg(
-        depth=28, w0=48, wa=14.5, wm=2.226, group_size=8, bottle_ratio=4.0, se_ratio=0.25,
-        downsample=None, preact=True, num_features=1536, act_layer='silu',
-    ),
+    regnetv_064=RegNetCfg(
+        depth=25, w0=112, wa=33.22, wm=2.27, group_size=72, se_ratio=0.25, preact=True, act_layer='silu',
+        downsample='avg'),
 
     # RegNet-Z (unverified)
     regnetz_005=RegNetCfg(
@@ -95,6 +95,10 @@ model_cfgs = dict(
         downsample=None, linear_out=True, num_features=1024, act_layer='silu',
     ),
     regnetz_040=RegNetCfg(
+        depth=28, w0=48, wa=14.5, wm=2.226, group_size=8, bottle_ratio=4.0, se_ratio=0.25,
+        downsample=None, linear_out=True, num_features=0, act_layer='silu',
+    ),
+    regnetz_040h=RegNetCfg(
         depth=28, w0=48, wa=14.5, wm=2.226, group_size=8, bottle_ratio=4.0, se_ratio=0.25,
         downsample=None, linear_out=True, num_features=1536, act_layer='silu',
     ),
@@ -144,10 +148,11 @@ default_cfgs = dict(
 
     regnety_040s_gn=_cfg(url=''),
     regnetv_040=_cfg(url='', first_conv='stem'),
-    regnetw_040=_cfg(url='', first_conv='stem', input_size=(3, 256, 256), pool_size=(8, 8)),
+    regnetv_064=_cfg(url='', first_conv='stem'),
 
     regnetz_005=_cfg(url=''),
     regnetz_040=_cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    regnetz_040h=_cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 )
 
 
@@ -326,6 +331,8 @@ class RegStage(nn.Module):
             self, depth, in_chs, out_chs, stride, dilation,
             drop_path_rates=None, block_fn=Bottleneck, **block_kwargs):
         super(RegStage, self).__init__()
+        self.grad_checkpointing = False
+
         first_dilation = 1 if dilation in (1, 2) else 2
         for i in range(depth):
             block_stride = stride if i == 0 else 1
@@ -341,8 +348,11 @@ class RegStage(nn.Module):
             first_dilation = dilation
 
     def forward(self, x):
-        for block in self.children():
-            x = block(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.children(), x)
+        else:
+            for block in self.children():
+                x = block(x)
         return x
 
 
@@ -375,6 +385,7 @@ class RegNet(nn.Module):
         curr_stride = 2
         per_stage_args, common_args = self._get_stage_args(
             cfg, output_stride=output_stride, drop_path_rate=drop_path_rate)
+        assert len(per_stage_args) == 4
         block_fn = PreBottleneck if cfg.preact else Bottleneck
         for i, stage_args in enumerate(per_stage_args):
             stage_name = "s{}".format(i + 1)
@@ -429,6 +440,19 @@ class RegNet(nn.Module):
             act_layer=cfg.act_layer, norm_layer=cfg.norm_layer)
         return per_stage_args, common_args
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=r'^stages.(\d+)' if coarse else r'^stages.(\d+).blocks.(\d+)',
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for s in list(self.children())[1:-1]:
+            s.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -436,13 +460,20 @@ class RegNet(nn.Module):
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
 
     def forward_features(self, x):
-        for block in list(self.children())[:-1]:
-            x = block(x)
+        x = self.stem(x)
+        x = self.s1(x)
+        x = self.s2(x)
+        x = self.s3(x)
+        x = self.s4(x)
+        x = self.final_conv(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
-        for block in self.children():
-            x = block(x)
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -634,9 +665,9 @@ def regnetv_040(pretrained=False, **kwargs):
 
 
 @register_model
-def regnetw_040(pretrained=False, **kwargs):
+def regnetv_064(pretrained=False, **kwargs):
     """"""
-    return _create_regnet('regnetw_040', pretrained, **kwargs)
+    return _create_regnet('regnetv_064', pretrained, **kwargs)
 
 
 @register_model
@@ -655,3 +686,12 @@ def regnetz_040(pretrained=False, **kwargs):
     but it's not clear it is equivalent to paper model as not detailed in the paper.
     """
     return _create_regnet('regnetz_040', pretrained, zero_init_last=False, **kwargs)
+
+
+@register_model
+def regnetz_040h(pretrained=False, **kwargs):
+    """RegNetZ-4.0GF
+    NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
+    but it's not clear it is equivalent to paper model as not detailed in the paper.
+    """
+    return _create_regnet('regnetz_040h', pretrained, zero_init_last=False, **kwargs)

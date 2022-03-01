@@ -27,9 +27,10 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, resolve_pretrained_cfg, named_apply, adapt_input_conv
+from .helpers import build_model_with_cfg, resolve_pretrained_cfg, named_apply, adapt_input_conv, checkpoint_seq
 from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
 from .registry import register_model
 
@@ -202,20 +203,23 @@ class Attention(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
+            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        x = x + self.drop_path1(self.attn(self.norm1(x)))
+        x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
 
@@ -227,8 +231,8 @@ class VisionTransformer(nn.Module):
     """
 
     def __init__(
-            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-            num_heads=12, mlp_ratio=4., qkv_bias=True, representation_size=None, global_pool='',
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
+            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, representation_size=None,
             drop_rate=0., attn_drop_rate=0., drop_path_rate=0., weight_init='',
             embed_layer=PatchEmbed, norm_layer=None, act_layer=None):
         """
@@ -237,6 +241,7 @@ class VisionTransformer(nn.Module):
             patch_size (int, tuple): patch size
             in_chans (int): number of input channels
             num_classes (int): number of classes for classification head
+            global_pool (str): type of global pooling for final sequence (default: 'token')
             embed_dim (int): embedding dimension
             depth (int): depth of transformer
             num_heads (int): number of attention heads
@@ -252,12 +257,15 @@ class VisionTransformer(nn.Module):
             act_layer: (nn.Module): MLP activation layer
         """
         super().__init__()
+        assert global_pool in ('', 'avg', 'token')
+        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
+        act_layer = act_layer or nn.GELU
+
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_tokens = 1
-        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
-        act_layer = act_layer or nn.GELU
+        self.grad_checkpointing = False
 
         self.patch_embed = embed_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
@@ -301,17 +309,15 @@ class VisionTransformer(nn.Module):
             self.pre_logits = nn.Identity()
 
     def init_weights(self, mode=''):
-        assert mode in ('jax', 'jax_nlhb', 'nlhb', '')
+        assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         trunc_normal_(self.pos_embed, std=.02)
-        if 'jax' not in mode:
-            # init cls token to truncated normal if not following jax impl, jax impl is zero
-            trunc_normal_(self.cls_token, std=.02)
-        named_apply(partial(_init_vit_weights, head_bias=head_bias, jax_impl='jax' in mode), self)
+        nn.init.normal_(self.cls_token, std=1e-6)
+        named_apply(get_init_weights_vit(mode, head_bias), self)
 
     def _init_weights(self, m):
         # this fn left here for compat with downstream users
-        _init_vit_weights(m)
+        init_weights_vit_timm(m)
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path, prefix=''):
@@ -321,12 +327,26 @@ class VisionTransformer(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token', 'dist_token'}
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            blocks=[(r'^blocks.(\d+)', None), (r'^norm', (99999,))]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool='', representation_size=None):
+    def reset_classifier(self, num_classes: int, global_pool=None, representation_size=None):
         self.num_classes = num_classes
-        self.global_pool = global_pool
+        if global_pool is not None:
+            assert global_pool in ('', 'avg', 'token')
+            self.global_pool = global_pool
         if representation_size is not None:
             self._reset_representation(representation_size)
         final_chs = self.representation_size if self.representation_size else self.embed_dim
@@ -336,28 +356,36 @@ class VisionTransformer(nn.Module):
         x = self.patch_embed(x)
         x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
         x = self.pos_drop(x + self.pos_embed)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         x = self.norm(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
-        if self.global_pool == 'avg':
-            x = x[:, self.num_tokens:].mean(dim=1)
-        else:
-            x = x[:, 0]
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool:
+            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
         x = self.pre_logits(x)
-        x = self.head(x)
+        return x if pre_logits else self.head(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
-def _init_vit_weights(module: nn.Module, name: str = '', head_bias: float = 0., jax_impl: bool = False):
-    """ ViT weight initialization
-    * When called without n, head_bias, jax_impl args it will behave exactly the same
-      as my original init for compatibility with prev hparam / downstream use cases (ie DeiT).
-    * When called w/ valid n (module name) and jax_impl=True, will (hopefully) match JAX impl
-    """
+def init_weights_vit_timm(module: nn.Module, name: str = ''):
+    """ ViT weight initialization, original timm impl (for reproducibility) """
+    if isinstance(module, nn.Linear):
+        trunc_normal_(module.weight, std=.02)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
+
+def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0.):
+    """ ViT weight initialization, matching JAX (Flax) impl """
     if isinstance(module, nn.Linear):
         if name.startswith('head'):
             nn.init.zeros_(module.weight)
@@ -366,25 +394,35 @@ def _init_vit_weights(module: nn.Module, name: str = '', head_bias: float = 0., 
             lecun_normal_(module.weight)
             nn.init.zeros_(module.bias)
         else:
-            if jax_impl:
-                nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
-                    if 'mlp' in name:
-                        nn.init.normal_(module.bias, std=1e-6)
-                    else:
-                        nn.init.zeros_(module.bias)
-            else:
-                trunc_normal_(module.weight, std=.02)
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-    elif jax_impl and isinstance(module, nn.Conv2d):
-        # NOTE conv was left to pytorch default in my original init
+            nn.init.xavier_uniform_(module.weight)
+            if module.bias is not None:
+                nn.init.normal_(module.bias, std=1e-6) if 'mlp' in name else nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Conv2d):
         lecun_normal_(module.weight)
         if module.bias is not None:
             nn.init.zeros_(module.bias)
-    elif isinstance(module, (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm2d)):
-        nn.init.zeros_(module.bias)
-        nn.init.ones_(module.weight)
+
+
+def init_weights_vit_moco(module: nn.Module, name: str = ''):
+    """ ViT weight initialization, matching moco-v3 impl minus fixed PatchEmbed """
+    if isinstance(module, nn.Linear):
+        if 'qkv' in name:
+            # treat the weights of Q, K, V separately
+            val = math.sqrt(6. / float(module.weight.shape[0] // 3 + module.weight.shape[1]))
+            nn.init.uniform_(module.weight, -val, val)
+        else:
+            nn.init.xavier_uniform_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
+
+def get_init_weights_vit(mode='jax', head_bias: float = 0.):
+    if 'jax' in mode:
+        return partial(init_weights_vit_jax, head_bias=head_bias)
+    elif 'moco' in mode:
+        return init_weights_vit_moco
+    else:
+        return init_weights_vit_timm
 
 
 @torch.no_grad()

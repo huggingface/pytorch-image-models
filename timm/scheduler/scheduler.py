@@ -84,7 +84,10 @@ class Scheduler:
         if not isinstance(values, (list, tuple)):
             values = [values] * len(self.optimizer.param_groups)
         for param_group, value in zip(self.optimizer.param_groups, values):
-            param_group[self.param_group_field] = value
+            if 'lr_scale' in param_group:
+                param_group[self.param_group_field] = value * param_group['lr_scale']
+            else:
+                param_group[self.param_group_field] = value
 
     def _add_noise(self, lrs, t):
         if self.noise_range_t is not None:
