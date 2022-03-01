@@ -140,7 +140,7 @@ parser.add_argument('--clip-grad', type=float, default=None, metavar='NORM',
 parser.add_argument('--clip-mode', type=str, default='norm',
                     help='Gradient clipping mode. One of ("norm", "value", "agc")')
 parser.add_argument('--layer-decay', type=float, default=None,
-                    help='weight decay (default: None)')
+                    help='layer-wise learning rate decay (default: None)')
 
 # Learning rate schedule parameters
 parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',

@@ -660,7 +660,6 @@ def group_with_matcher(
     for k in sorted(filter(lambda x: x is not None, grouping.keys())):
         if lid < 0 or k[-1] != MATCH_PREV_GROUP[0]:
             lid += 1
-        print(lid, k, grouping[k])
         layer_id_to_param[lid].extend(grouping[k])
 
     if reverse:
