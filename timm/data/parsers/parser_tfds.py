@@ -163,7 +163,7 @@ class ParserTfds(Parser):
         self.subsplit = None  # set when data is distributed across workers using sub-splits
         self.ds = None  # initialized lazily on each dataloader worker process
         self.init_count = 0
-        self.reinit_each_iter = False  # self.is_training  # FIXME evaluating shuffle across epochs
+        self.reinit_each_iter = self.is_training  # FIXME need to determine if this is necessary
 
     def _lazy_init(self):
         """ Lazily initialize the dataset.
