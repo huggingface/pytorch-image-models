@@ -34,12 +34,12 @@ from .parser import Parser
 from timm.bits import get_global_device, is_global_device
 
 MAX_TP_SIZE = 8  # maximum TF threadpool size, only doing jpeg decodes and queuing activities
-SHUFFLE_SIZE = 8192  # examples to shuffle in DS queue
-PREFETCH_SIZE = 2048  # examples to prefetch
+SHUFFLE_SIZE = 8192  # number of samples to shuffle in DS queue
+PREFETCH_SIZE = 2048  # number of samples to prefetch
 
 
-def even_split_indices(split, n, num_examples):
-    partitions = [round(i * num_examples / n) for i in range(n + 1)]
+def even_split_indices(split, n, num_samples):
+    partitions = [round(i * num_samples / n) for i in range(n + 1)]
     return [f"{split}[{partitions[i]}:{partitions[i + 1]}]" for i in range(n)]
 
 
@@ -55,20 +55,20 @@ class ParserTfds(Parser):
     """ Wrap Tensorflow Datasets for use in PyTorch
 
     There several things to be aware of:
-      * To prevent excessive examples being dropped per epoch w/ distributed training or multiplicity of
+      * To prevent excessive samples being dropped per epoch w/ distributed training or multiplicity of
          dataloader workers, the train iterator wraps to avoid returning partial batches that trigger drop_last
          https://github.com/pytorch/pytorch/issues/33413
       * With PyTorch IterableDatasets, each worker in each replica operates in isolation, the final batch
         from each worker could be a different size. For training this is worked around by option above, for
-        validation extra examples are inserted iff distributed mode is enabled so that the batches being reduced
+        validation extra samples are inserted iff distributed mode is enabled so that the batches being reduced
         across replicas are of same size. This will slightly alter the results, distributed validation will not be
         100% correct. This is similar to common handling in DistributedSampler for normal Datasets but a bit worse
-        since there are up to N * J extra examples with IterableDatasets.
+        since there are up to N * J extra samples with IterableDatasets.
       * The sharding (splitting of dataset into TFRecord) files imposes limitations on the number of
         replicas and dataloader workers you can use. For really small datasets that only contain a few shards
         you may have to train non-distributed w/ 1-2 dataloader workers. This is likely not a huge concern as the
         benefit of distributed training or fast dataloading should be much less for small datasets.
-      * This wrapper is currently configured to return individual, decompressed image examples from the TFDS
+      * This wrapper is currently configured to return individual, decompressed image samples from the TFDS
         dataset. The augmentation (transforms) and batching is still done in PyTorch. It would be possible
         to specify TF augmentation fn and return augmented batches w/ some modifications to other downstream
         components.
@@ -100,7 +100,7 @@ class ParserTfds(Parser):
             name: tfds dataset name (eg `imagenet2012`)
             split: tfds dataset split (can use all TFDS split strings eg `train[:10%]`)
             is_training: training mode, shuffle enabled, dataset len rounded by batch_size
-            batch_size: batch_size to use to unsure total examples % batch_size == 0 in training across all dis nodes
+            batch_size: batch_size to use to unsure total samples % batch_size == 0 in training across all dis nodes
             download: download and build TFDS dataset if set, otherwise must use tfds CLI
             repeats: iterate through (repeat) the dataset this many times per iteration (once if 0 or 1)
             seed: common seed for shard shuffle across all distributed/worker instances
@@ -139,7 +139,7 @@ class ParserTfds(Parser):
             self.builder.download_and_prepare()
         self.class_to_idx = get_class_labels(self.builder.info) if self.target_name == 'label' else {}
         self.split_info = self.builder.info.splits[split]
-        self.num_examples = self.split_info.num_examples
+        self.num_samples = self.split_info.num_examples
 
         # Distributed world state
         self.dist_rank = 0
@@ -157,13 +157,18 @@ class ParserTfds(Parser):
                 self.dist_num_replicas = dist.get_world_size()
 
         # Attributes that are updated in _lazy_init, including the tf.data pipeline itself
-        self.global_num_workers = 1
-        self.worker_info = None
+        self.worker_init = False  # worker info initialized
+        self.worker_id = 0
         self.worker_seed = 0  # seed unique to each work instance
+        self.num_workers = 1
+        self.global_worker_id = 0
+        self.global_num_workers = 1
         self.subsplit = None  # set when data is distributed across workers using sub-splits
         self.ds = None  # initialized lazily on each dataloader worker process
-        self.init_count = 0
-        self.reinit_each_iter = self.is_training  # FIXME need to determine if this is necessary
+        self.init_count = 0  # number of ds TF data pipeline initializations
+        # FIXME need to determine if reinit_each_iter is necessary. I'm don't completely trust behaviour
+        #  of `shuffle_reshuffle_each_iteration` when there are multiple workers / nodes across epochs
+        self.reinit_each_iter = self.is_training
 
     def _lazy_init(self):
         """ Lazily initialize the dataset.
@@ -177,14 +182,15 @@ class ParserTfds(Parser):
         before it is passed to dataloader.
         """
         # setup input context to split dataset across distributed processes
-        if self.worker_info is None:
+        if not self.worker_init:
+            # worker init done once, even if data-pipeline is re-initialized
             worker_info = torch.utils.data.get_worker_info()
-            assert worker_info is not None
-            self.worker_info = worker_info
-            self.worker_seed = worker_info.seed
-            num_workers = worker_info.num_workers
-            self.global_num_workers = self.dist_num_replicas * num_workers
-            global_worker_id = self.dist_rank * num_workers + worker_info.id
+            if worker_info is not None:
+                self.worker_id = worker_info.id
+                self.worker_seed = worker_info.seed
+                self.num_workers = worker_info.num_workers
+                self.global_worker_id = self.dist_rank * self.num_workers + self.worker_id
+                self.global_num_workers = self.dist_num_replicas * self.num_workers
 
             """ Data sharding
             InputContext will assign subset of underlying TFRecord files to each 'pipeline' if used.
@@ -194,54 +200,59 @@ class ParserTfds(Parser):
             I am currently using a mix of InputContext shard assignment and fine-grained sub-splits for distributing
             the data across workers. For training InputContext is used to assign shards to nodes unless num_shards
             in dataset < total number of workers. Otherwise sub-split API is used for datasets without enough shards or
-            for validation where we can't drop examples and need to avoid minimize uneven splits to avoid padding.
+            for validation where we can't drop samples and need to avoid minimize uneven splits to avoid padding.
             """
             should_subsplit = self.global_num_workers > 1 and (
                     self.split_info.num_shards < self.global_num_workers or not self.is_training)
             if should_subsplit:
-                # split the dataset w/o using sharding for more even examples / worker, can result in less optimal
+                # split the dataset w/o using sharding for more even samples / worker, can result in less optimal
                 # read patterns for distributed training (overlap across shards) so better to use InputContext there
                 if has_buggy_even_splits:
                     # my even_split workaround doesn't work on subsplits, upgrade tfds!
                     if not isinstance(self.split_info, tfds.core.splits.SubSplitInfo):
-                        subsplits = even_split_indices(self.split, self.global_num_workers, self.num_examples)
-                        self.subsplit = subsplits[global_worker_id]
+                        subsplits = even_split_indices(self.split, self.global_num_workers, self.num_samples)
+                        self.subsplit = subsplits[self.global_worker_id]
                 else:
                     subsplits = tfds.even_splits(self.split, self.global_num_workers)
-                    self.subsplit = subsplits[global_worker_id]
-        else:
-            num_workers = self.worker_info.num_workers
-            global_worker_id = self.dist_rank * num_workers + self.worker_info.id
+                    self.subsplit = subsplits[self.global_worker_id]
 
+            self.worker_init = True
+
+        # initialize TF data pipeline
         input_context = None
         if self.global_num_workers > 1 and self.subsplit is None:
             # set input context to divide shards among distributed replicas
             input_context = tf.distribute.InputContext(
                 num_input_pipelines=self.global_num_workers,
-                input_pipeline_id=global_worker_id,
+                input_pipeline_id=self.global_worker_id,
                 num_replicas_in_sync=self.dist_num_replicas  # FIXME does this arg have any impact?
             )
         read_config = tfds.ReadConfig(
-            shuffle_seed=self.common_seed + self.init_count,
-            shuffle_reshuffle_each_iteration=not self.reinit_each_iter,
+            shuffle_seed=self.common_seed + self.init_count,  # shard shuffling seed
+            shuffle_reshuffle_each_iteration=not self.reinit_each_iter,  # re-shuffle shards per iteration
             input_context=input_context)
         ds = self.builder.as_dataset(
-            split=self.subsplit or self.split, shuffle_files=self.is_training, read_config=read_config)
+            split=self.subsplit or self.split,
+            shuffle_files=self.is_training,  # enable shard shuffling
+            read_config=read_config)
+
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
         options = tf.data.Options()
         thread_member = 'threading' if hasattr(options, 'threading') else 'experimental_threading'
-        getattr(options, thread_member).private_threadpool_size = max(1, self.max_threadpool_size // num_workers)
+        getattr(options, thread_member).private_threadpool_size = max(1, self.max_threadpool_size // self.num_workers)
         getattr(options, thread_member).max_intra_op_parallelism = 1
         ds = ds.with_options(options)
+
         if self.is_training or self.repeats > 1:
             # to prevent excessive drop_last batch behaviour w/ IterableDatasets
             # see warnings at https://pytorch.org/docs/stable/data.html#multi-process-data-loading
             ds = ds.repeat()  # allow wrap around and break iteration manually
         if self.is_training:
+            # shuffle samples
             ds = ds.shuffle(
-                min(self.num_examples, self.shuffle_size) // self.global_num_workers,
+                min(self.num_samples, self.shuffle_size) // self.global_num_workers,
                 seed=self.worker_seed + self.init_count)
-        ds = ds.prefetch(min(self.num_examples // self.global_num_workers, self.prefetch_size))
+        ds = ds.prefetch(min(self.num_samples // self.global_num_workers, self.prefetch_size))
         self.ds = tfds.as_numpy(ds)
         self.init_count += 1
 
@@ -251,10 +262,10 @@ class ParserTfds(Parser):
 
         # Compute a rounded up sample count that is used to:
         #   1. make batches even cross workers & replicas in distributed validation.
-        #     This adds extra examples and will slightly alter validation results.
+        #     This adds extra samples and will slightly alter validation results.
         #   2. determine loop ending condition in training w/ repeat enabled so that only full batch_size
         #     batches are produced (underlying tfds iter wraps around)
-        target_example_count = math.ceil(max(1, self.repeats) * self.num_examples / self.global_num_workers)
+        target_example_count = math.ceil(max(1, self.repeats) * self.num_samples / self.global_num_workers)
         if self.is_training:
             # round up to nearest batch_size per worker-replica
             target_example_count = math.ceil(target_example_count / self.batch_size) * self.batch_size
@@ -272,11 +283,11 @@ class ParserTfds(Parser):
             example_count += 1
             if self.is_training and example_count >= target_example_count:
                 # Need to break out of loop when repeat() is enabled for training w/ oversampling
-                # this results in extra examples per epoch but seems more desirable than dropping
+                # this results in extra samples per epoch but seems more desirable than dropping
                 # up to N*J batches per epoch (where N = num distributed processes, and J = num worker processes)
                 break
 
-        # Pad across distributed nodes (make counts equal by adding examples)
+        # Pad across distributed nodes (make counts equal by adding samples)
         if not self.is_training and self.dist_num_replicas > 1 and self.subsplit is not None and \
                 0 < example_count < target_example_count:
             # Validation batch padding only done for distributed training where results are reduced across nodes.
@@ -288,12 +299,12 @@ class ParserTfds(Parser):
                 example_count += 1
 
     def __len__(self):
-        # this is just an estimate and does not factor in extra examples added to pad batches based on
+        # this is just an estimate and does not factor in extra samples added to pad batches based on
         # complete worker & replica info (not available until init in dataloader).
-        return math.ceil(max(1, self.repeats) * self.num_examples / self.dist_num_replicas)
+        return math.ceil(max(1, self.repeats) * self.num_samples / self.dist_num_replicas)
 
     def _filename(self, index, basename=False, absolute=False):
-        assert False, "Not supported"  # no random access to examples
+        assert False, "Not supported"  # no random access to samples
 
     def filenames(self, basename=False, absolute=False):
         """ Return all filenames in dataset, overrides base"""
@@ -301,7 +312,7 @@ class ParserTfds(Parser):
             self._lazy_init()
         names = []
         for sample in self.ds:
-            if len(names) > self.num_examples:
+            if len(names) >= self.num_samples:
                 break  # safety for ds.repeat() case
             if 'file_name' in sample:
                 name = sample['file_name']

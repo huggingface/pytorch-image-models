@@ -607,7 +607,7 @@ def setup_data(args, default_cfg, dev_env: DeviceEnv, mixup_active: bool):
     )
 
     eval_workers = args.workers
-    if 'tfds' in args.dataset:
+    if 'tfds' in args.dataset or 'wds' in args.dataset:
         # FIXME reduces validation padding issues when using TFDS w/ workers and distributed training
         eval_workers = min(2, args.workers)
 
