@@ -262,6 +262,7 @@ def main():
                 batch_size = start_batch_size
                 args.model = m
                 args.checkpoint = c
+                args.num_gpu = 1  # FIXME support data-parallel?
                 result = OrderedDict(model=args.model)
                 r = {}
                 while not r and batch_size >= 1:
