@@ -285,7 +285,7 @@ class ParserWebdataset(Parser):
 
     def _split_by_node_and_worker(self, src):
         if self.global_num_workers > 1:
-            for s in islice(src, self.global_worker_id, self.global_num_workers):
+            for s in islice(src, self.global_worker_id, None, self.global_num_workers):
                 yield s
         else:
             for s in src:
