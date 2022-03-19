@@ -106,7 +106,7 @@ default_cfgs = {
     'resnext101_32x4d': _cfg(url=''),
     'resnext101_32x8d': _cfg(url='https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth'),
     'resnext101_64x4d': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnext101_64x4d_c-0d0e0cc0.pth',
         interpolation='bicubic', crop_pct=1.0,  test_input_size=(3, 288, 288)),
     'tv_resnext50_32x4d': _cfg(url='https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth'),
 
@@ -197,8 +197,8 @@ default_cfgs = {
         url='',
         interpolation='bicubic'),
     'seresnext101_32x8d': _cfg(
-        url='',
-        interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnext101_32x8d_ah-e6bc4c0a.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
     'senet154': _cfg(
         url='',
         interpolation='bicubic',
@@ -283,7 +283,7 @@ default_cfgs = {
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs200': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rs-weights/resnetrs200_ema-623d2f59.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnetrs200_c-6b698b88.pth',
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320),
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetrs270': _cfg(

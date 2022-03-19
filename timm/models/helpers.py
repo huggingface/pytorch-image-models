@@ -407,16 +407,6 @@ def pretrained_cfg_for_features(pretrained_cfg):
     return pretrained_cfg
 
 
-# def overlay_external_pretrained_cfg(pretrained_cfg, kwargs):
-#     """ Overlay 'external_pretrained_cfg' in kwargs on top of pretrained_cfg arg.
-#     """
-#     external_pretrained_cfg = kwargs.pop('external_pretrained_cfg', None)
-#     if external_pretrained_cfg:
-#         pretrained_cfg.pop('url', None)  # url should come from external cfg
-#         pretrained_cfg.pop('hf_hub', None)  # hf hub id should come from external cfg
-#         pretrained_cfg.update(external_pretrained_cfg)
-
-
 def set_default_kwargs(kwargs, names, pretrained_cfg):
     for n in names:
         # for legacy reasons, model __init__args uses img_size + in_chans as separate args while
