@@ -184,7 +184,7 @@ class Xception65(nn.Module):
         matcher = dict(
             stem=r'^conv[12]|bn[12]',
             blocks=[
-                (r'^mid.block(\d+)', None),
+                (r'^mid\.block(\d+)', None),
                 (r'^block(\d+)', None),
                 (r'^conv[345]|bn[345]', (99,)),
             ],

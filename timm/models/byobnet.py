@@ -1004,9 +1004,10 @@ class BottleneckBlock(nn.Module):
     """ ResNet-like Bottleneck Block - 1x1 - kxk - 1x1
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
-                 downsample='avg', attn_last=False, linear_out=False, extra_conv=False, bottle_in=False,
-                 layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
+            downsample='avg', attn_last=False, linear_out=False, extra_conv=False, bottle_in=False,
+            layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
         super(BottleneckBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
@@ -1061,9 +1062,10 @@ class DarkBlock(nn.Module):
     for more optimal compute.
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-                 downsample='avg', attn_last=True, linear_out=False, layers: LayerFn = None, drop_block=None,
-                 drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
+            downsample='avg', attn_last=True, linear_out=False, layers: LayerFn = None, drop_block=None,
+            drop_path_rate=0.):
         super(DarkBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -1111,9 +1113,10 @@ class EdgeBlock(nn.Module):
     FIXME is there a more common 3x3 + 1x1 conv block to name this after?
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-                 downsample='avg', attn_last=False, linear_out=False, layers: LayerFn = None,
-                 drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
+            downsample='avg', attn_last=False, linear_out=False, layers: LayerFn = None,
+            drop_block=None, drop_path_rate=0.):
         super(EdgeBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -1158,8 +1161,9 @@ class RepVggBlock(nn.Module):
     This version does not currently support the deploy optimization. It is currently fixed in 'train' mode.
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-                 downsample='', layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
+            downsample='', layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
         super(RepVggBlock, self).__init__()
         layers = layers or LayerFn()
         groups = num_groups(group_size, in_chs)
@@ -1522,7 +1526,7 @@ class ByobNet(nn.Module):
         matcher = dict(
             stem=r'^stem',
             blocks=[
-                (r'^stages\.(\d+)' if coarse else r'^stages\.(\d+).(\d+)', None),
+                (r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.(\d+)', None),
                 (r'^final_conv', (99999,))
             ]
         )

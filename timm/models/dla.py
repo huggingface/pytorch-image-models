@@ -323,8 +323,8 @@ class DLA(nn.Module):
             stem=r'^base_layer',
             blocks=r'^level(\d+)' if coarse else [
                 # an unusual arch, this achieves somewhat more granularity without getting super messy
-                (r'^level(\d+).tree(\d+)', None),
-                (r'^level(\d+).root', (2,)),
+                (r'^level(\d+)\.tree(\d+)', None),
+                (r'^level(\d+)\.root', (2,)),
                 (r'^level(\d+)', (1,))
             ]
         )

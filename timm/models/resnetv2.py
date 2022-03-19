@@ -411,8 +411,8 @@ class ResNetV2(nn.Module):
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^stem',
-            blocks=r'^stages.(\d+)' if coarse else [
-                (r'^stages.(\d+).blocks.(\d+)', None),
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
                 (r'^norm', (99999,))
             ]
         )

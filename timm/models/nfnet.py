@@ -194,7 +194,6 @@ def _dm_nfnet_cfg(depths, channels=(256, 512, 1536, 1536), act_layer='gelu', ski
     return cfg
 
 
-
 model_cfgs = dict(
     # NFNet-F models w/ GELU compatible with DeepMind weights
     dm_nfnet_f0=_dm_nfnet_cfg(depths=(1, 2, 6, 3)),
@@ -550,7 +549,7 @@ class NormFreeNet(nn.Module):
         matcher = dict(
             stem=r'^stem',
             blocks=[
-                (r'^stages.(\d+)' if coarse else r'^stages.(\d+).(\d+)', None),
+                (r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.(\d+)', None),
                 (r'^final_conv', (99999,))
             ]
         )

@@ -360,7 +360,7 @@ class SENet(nn.Module):
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
-        matcher = dict(stem=r'^layer0', blocks=r'^layer(\d+)' if coarse else r'^layer(\d+).(\d+)')
+        matcher = dict(stem=r'^layer0', blocks=r'^layer(\d+)' if coarse else r'^layer(\d+)\.(\d+)')
         return matcher
 
     @torch.jit.ignore

@@ -334,8 +334,8 @@ class Nest(nn.Module):
         matcher = dict(
             stem=r'^patch_embed',  # stem and embed
             blocks=[
-                (r'^levels.(\d+)' if coarse else r'^levels.(\d+).transformer_encoder.(\d+)', None),
-                (r'^levels.(\d+).(?:pool|pos_embed)', (0,)),
+                (r'^levels\.(\d+)' if coarse else r'^levels\.(\d+)\.transformer_encoder\.(\d+)', None),
+                (r'^levels\.(\d+)\.(?:pool|pos_embed)', (0,)),
                 (r'^norm', (99999,))
             ]
         )

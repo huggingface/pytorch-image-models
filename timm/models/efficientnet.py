@@ -518,7 +518,7 @@ class EfficientNet(nn.Module):
         return dict(
             stem=r'^conv_stem|bn1',
             blocks=[
-                (r'^blocks.(\d+)' if coarse else r'^blocks.(\d+).(\d+)', None),
+                (r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)', None),
                 (r'conv_head|bn2', (99999,))
             ]
         )

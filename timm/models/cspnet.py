@@ -157,9 +157,10 @@ class ResBottleneck(nn.Module):
     """ ResNe(X)t Bottleneck Block
     """
 
-    def __init__(self, in_chs, out_chs, dilation=1, bottle_ratio=0.25, groups=1,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_last=False,
-                 attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+    def __init__(
+            self, in_chs, out_chs, dilation=1, bottle_ratio=0.25, groups=1,
+            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_last=False,
+            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
         super(ResBottleneck, self).__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
@@ -199,9 +200,10 @@ class DarkBlock(nn.Module):
     """ DarkNet Block
     """
 
-    def __init__(self, in_chs, out_chs, dilation=1, bottle_ratio=0.5, groups=1,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None,
-                 drop_block=None, drop_path=None):
+    def __init__(
+            self, in_chs, out_chs, dilation=1, bottle_ratio=0.5, groups=1,
+            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None,
+            drop_block=None, drop_path=None):
         super(DarkBlock, self).__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
@@ -229,9 +231,10 @@ class DarkBlock(nn.Module):
 
 class CrossStage(nn.Module):
     """Cross Stage."""
-    def __init__(self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., exp_ratio=1.,
-                 groups=1, first_dilation=None, down_growth=False, cross_linear=False, block_dpr=None,
-                 block_fn=ResBottleneck, **block_kwargs):
+    def __init__(
+            self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., exp_ratio=1.,
+            groups=1, first_dilation=None, down_growth=False, cross_linear=False, block_dpr=None,
+            block_fn=ResBottleneck, **block_kwargs):
         super(CrossStage, self).__init__()
         first_dilation = first_dilation or dilation
         down_chs = out_chs if down_growth else in_chs  # grow downsample channels to output channels
@@ -280,8 +283,9 @@ class CrossStage(nn.Module):
 class DarkStage(nn.Module):
     """DarkNet stage."""
 
-    def __init__(self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., groups=1,
-                 first_dilation=None, block_fn=ResBottleneck, block_dpr=None, **block_kwargs):
+    def __init__(
+            self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., groups=1,
+            first_dilation=None, block_fn=ResBottleneck, block_dpr=None, **block_kwargs):
         super(DarkStage, self).__init__()
         first_dilation = first_dilation or dilation
 
@@ -387,10 +391,10 @@ class CspNet(nn.Module):
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^stem',
-            blocks=r'^stages.(\d+)' if coarse else [
-                (r'^stages.(\d+).blocks.(\d+)', None),
-                (r'^stages.(\d+).*transition', MATCH_PREV_GROUP),  # map to last block in stage
-                (r'^stages.(\d+)', (0,)),
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^stages\.(\d+)\..*transition', MATCH_PREV_GROUP),  # map to last block in stage
+                (r'^stages\.(\d+)', (0,)),
             ]
         )
         return matcher

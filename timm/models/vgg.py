@@ -136,7 +136,7 @@ class VGG(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         # this treats BN layers as separate groups for bn variants, a lot of effort to fix that
-        return dict(stem=r'^features.0', blocks=r'^features.(\d+)')
+        return dict(stem=r'^features\.0', blocks=r'^features\.(\d+)')
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):

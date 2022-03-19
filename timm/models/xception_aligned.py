@@ -221,7 +221,7 @@ class XceptionAligned(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^stem',
-            blocks=r'^blocks.(\d+)',
+            blocks=r'^blocks\.(\d+)',
         )
 
     @torch.jit.ignore

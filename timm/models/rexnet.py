@@ -173,7 +173,7 @@ class ReXNetV1(nn.Module):
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^stem',
-            blocks=r'^features.(\d+)',
+            blocks=r'^features\.(\d+)',
         )
         return matcher
 

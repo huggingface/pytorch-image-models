@@ -525,9 +525,9 @@ class SwinTransformer(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^absolute_pos_embed|patch_embed',  # stem and embed
-            blocks=r'^layers.(\d+)' if coarse else [
-                (r'^layers.(\d+).downsample', (0,)),
-                (r'^layers.(\d+).\w+.(\d+)', None),
+            blocks=r'^layers\.(\d+)' if coarse else [
+                (r'^layers\.(\d+).downsample', (0,)),
+                (r'^layers\.(\d+)\.\w+\.(\d+)', None),
                 (r'^norm', (99999,)),
             ]
         )

@@ -327,11 +327,11 @@ class Twins(nn.Module):
         matcher = dict(
             stem=r'^patch_embeds.0',  # stem and embed
             blocks=[
-                (r'^(?:blocks|patch_embeds|pos_block).(\d+)', None),
+                (r'^(?:blocks|patch_embeds|pos_block)\.(\d+)', None),
                 ('^norm', (99999,))
             ] if coarse else [
-                (r'^blocks.(\d+).(\d+)', None),
-                (r'^(?:patch_embeds|pos_block).(\d+)', (0,)),
+                (r'^blocks\.(\d+)\.(\d+)', None),
+                (r'^(?:patch_embeds|pos_block)\.(\d+)', (0,)),
                 (r'^norm', (99999,))
             ]
         )

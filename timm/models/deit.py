@@ -85,7 +85,7 @@ class VisionTransformerDistilled(VisionTransformer):
         return dict(
             stem=r'^cls_token|pos_embed|patch_embed|dist_token',
             blocks=[
-                (r'^blocks.(\d+)', None),
+                (r'^blocks\.(\d+)', None),
                 (r'^norm', (99999,))]  # final norm w/ last block
         )
 
