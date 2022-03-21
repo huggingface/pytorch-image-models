@@ -125,6 +125,7 @@ def _resolve_pretrained_source(pretrained_cfg):
         # hf-hub specified as source via model identifier
         load_from = 'hf-hub'
         assert hf_hub_id
+        pretrained_loc = hf_hub_id
     else:
         # default source == timm or unspecified
         if pretrained_file:
