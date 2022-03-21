@@ -92,6 +92,7 @@ class Scheduler:
 
     def _is_apply_noise(self, t) -> bool:
         """Return True if scheduler in noise range."""
+        apply_noise = False
         if self.noise_range_t is not None:
             if isinstance(self.noise_range_t, (list, tuple)):
                 apply_noise = self.noise_range_t[0] <= t < self.noise_range_t[1]
@@ -104,7 +105,7 @@ class Scheduler:
         g.manual_seed(self.noise_seed + t)
         if self.noise_type == 'normal':
             while True:
-                        # resample if noise out of percent limit, brute force but shouldn't spin much
+                # resample if noise out of percent limit, brute force but shouldn't spin much
                 noise = torch.randn(1, generator=g).item()
                 if abs(noise) < self.noise_pct:
                     return noise
