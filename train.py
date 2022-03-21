@@ -115,7 +115,6 @@ parser.add_argument('-b', '--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('-vb', '--validation-batch-size', type=int, default=None, metavar='N',
                     help='validation batch size override (default: None)')
-parser.add_argument('--use-ml-decoder-head', type=int, default=0)
 
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -380,8 +379,7 @@ def main():
         bn_momentum=args.bn_momentum,
         bn_eps=args.bn_eps,
         scriptable=args.torchscript,
-        checkpoint_path=args.initial_checkpoint,
-        use_ml_decoder_head=args.use_ml_decoder_head)
+        checkpoint_path=args.initial_checkpoint)
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
