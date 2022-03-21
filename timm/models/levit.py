@@ -539,7 +539,7 @@ class LevitDistilled(Levit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.head_dist = NormLinear(self.num_features, self.num_classes) if self.num_classes > 0 else nn.Identity()
-        self.distilled_training = False
+        self.distilled_training = False  # must set this True to train w/ distillation token
 
     @torch.jit.ignore
     def get_classifier(self):

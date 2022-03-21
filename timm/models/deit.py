@@ -72,7 +72,7 @@ class VisionTransformerDistilled(VisionTransformer):
         self.dist_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches + self.num_tokens, self.embed_dim))
         self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if self.num_classes > 0 else nn.Identity()
-        self.distilled_training = False
+        self.distilled_training = False  # must set this True to train w/ distillation token
 
         self.init_weights(weight_init)
 
