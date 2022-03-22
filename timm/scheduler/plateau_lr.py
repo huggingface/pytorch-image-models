@@ -30,7 +30,16 @@ class PlateauLRScheduler(Scheduler):
                  noise_seed=None,
                  initialize=True,
                  ):
-        super().__init__(optimizer, 'lr', initialize=initialize)
+        super().__init__(
+            optimizer,
+            'lr',
+            noise_range_t=noise_range_t,
+            noise_type=noise_type,
+            noise_pct=noise_pct,
+            noise_std=noise_std,
+            noise_seed=noise_seed,
+            initialize=initialize,
+        )
 
         self.lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
@@ -43,11 +52,6 @@ class PlateauLRScheduler(Scheduler):
             min_lr=lr_min
         )
 
-        self.noise_range_t = noise_range_t
-        self.noise_pct = noise_pct
-        self.noise_type = noise_type
-        self.noise_std = noise_std
-        self.noise_seed = noise_seed if noise_seed is not None else 42
         self.warmup_t = warmup_t
         self.warmup_lr_init = warmup_lr_init
         if self.warmup_t:
@@ -84,7 +88,6 @@ class PlateauLRScheduler(Scheduler):
 
             if self._is_apply_noise(epoch):
                 self._apply_noise(epoch)
-                
 
     def _apply_noise(self, epoch):
         noise = self._calculate_noise(epoch)
