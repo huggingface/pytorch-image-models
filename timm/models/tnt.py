@@ -217,7 +217,7 @@ class TNT(nn.Module):
         matcher = dict(
             stem=r'^cls_token|patch_pos|pixel_pos|pixel_embed|norm[12]_proj|proj',  # stem and embed / pos
             blocks=[
-                (r'^blocks.(\d+)', None),
+                (r'^blocks\.(\d+)', None),
                 (r'^norm', (99999,)),
             ]
         )

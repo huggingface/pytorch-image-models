@@ -412,8 +412,8 @@ class XCiT(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
-            blocks=r'^blocks.(\d+)',
-            cls_attn_blocks=[(r'^cls_attn_blocks.(\d+)', None), (r'^norm', (99999,))]
+            blocks=r'^blocks\.(\d+)',
+            cls_attn_blocks=[(r'^cls_attn_blocks\.(\d+)', None), (r'^norm', (99999,))]
         )
 
     @torch.jit.ignore

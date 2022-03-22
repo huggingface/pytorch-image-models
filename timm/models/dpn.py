@@ -243,10 +243,10 @@ class DPN(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^features.conv1',
+            stem=r'^features\.conv1',
             blocks=[
-                (r'^features.conv(\d+)' if coarse else r'^features.conv(\d+)_(\d+)', None),
-                (r'^features.conv5_bn_ac', (99999,))
+                (r'^features\.conv(\d+)' if coarse else r'^features\.conv(\d+)_(\d+)', None),
+                (r'^features\.conv5_bn_ac', (99999,))
             ]
         )
         return matcher

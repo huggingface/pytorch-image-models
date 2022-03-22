@@ -271,7 +271,7 @@ class Visformer(nn.Module):
         return dict(
             stem=r'^patch_embed1|pos_embed1|stem',  # stem and embed
             blocks=[
-                (r'^stage(\d+).(\d+)' if coarse else r'^stage(\d+).(\d+)', None),
+                (r'^stage(\d+)\.(\d+)' if coarse else r'^stage(\d+)\.(\d+)', None),
                 (r'^(?:patch_embed|pos_embed)(\d+)', (0,)),
                 (r'^norm', (99999,))
             ]

@@ -327,7 +327,7 @@ class VovNet(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^stem',
-            blocks=r'^stages.(\d+)' if coarse else r'^stages.(\d+).blocks.(\d+)',
+            blocks=r'^stages\.(\d+)' if coarse else r'^stages\.(\d+).blocks\.(\d+)',
         )
 
     @torch.jit.ignore

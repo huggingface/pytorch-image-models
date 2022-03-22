@@ -145,7 +145,7 @@ torch.Size([2, 1512, 7, 7])
 
 ### Select specific feature levels or limit the stride
 
-There are to additional creation arguments impacting the output features. 
+There are two additional creation arguments impacting the output features. 
 
 * `out_indices` selects which indices to output
 * `output_stride` limits the feature output stride of the network (also works in classification mode BTW)

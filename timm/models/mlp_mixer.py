@@ -291,7 +291,7 @@ class MlpMixer(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^stem',  # stem and embed
-            blocks=[(r'^blocks.(\d+)', None), (r'^norm', (99999,))]
+            blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
         )
 
     @torch.jit.ignore

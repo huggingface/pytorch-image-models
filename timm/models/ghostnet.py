@@ -193,7 +193,7 @@ class GhostNet(nn.Module):
         matcher = dict(
             stem=r'^conv_stem|bn1',
             blocks=[
-                (r'^blocks.(\d+)' if coarse else r'^blocks.(\d+).(\d+)', None),
+                (r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)', None),
                 (r'conv_head', (99999,))
             ]
         )

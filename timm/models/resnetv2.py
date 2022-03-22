@@ -122,13 +122,13 @@ default_cfgs = {
         interpolation='bicubic', first_conv='stem.conv1'),
 
     'resnetv2_50d_gn': _cfg(
-        interpolation='bicubic', first_conv='stem.conv1'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnetv2_50d_gn_ah-c415c11a.pth',
+        interpolation='bicubic', first_conv='stem.conv1', test_input_size=(3, 288, 288), crop_pct=0.95),
     'resnetv2_50d_evob': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
-    'resnetv2_50d_evos0': _cfg(
-        interpolation='bicubic', first_conv='stem.conv1'),
-    'resnetv2_50d_evos1': _cfg(
-        interpolation='bicubic', first_conv='stem.conv1'),
+    'resnetv2_50d_evos': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnetv2_50d_evos_ah-7c4dd548.pth',
+        interpolation='bicubic', first_conv='stem.conv1', test_input_size=(3, 288, 288), crop_pct=0.95),
     'resnetv2_50d_frn': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
 }
@@ -411,8 +411,8 @@ class ResNetV2(nn.Module):
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^stem',
-            blocks=r'^stages.(\d+)' if coarse else [
-                (r'^stages.(\d+).blocks.(\d+)', None),
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
                 (r'^norm', (99999,))
             ]
         )
@@ -693,18 +693,10 @@ def resnetv2_50d_evob(pretrained=False, **kwargs):
 
 
 @register_model
-def resnetv2_50d_evos0(pretrained=False, **kwargs):
+def resnetv2_50d_evos(pretrained=False, **kwargs):
     return _create_resnetv2(
-        'resnetv2_50d_evos0', pretrained=pretrained,
+        'resnetv2_50d_evos', pretrained=pretrained,
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dS0,
-        stem_type='deep', avg_down=True, **kwargs)
-
-
-@register_model
-def resnetv2_50d_evos1(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50d_evos1', pretrained=pretrained,
-        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=partial(EvoNorm2dS1, group_size=16),
         stem_type='deep', avg_down=True, **kwargs)
 
 

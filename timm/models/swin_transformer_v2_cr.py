@@ -12,6 +12,7 @@ This implementation is experimental and subject to change in manners that will b
   GitHub link above. It needs further investigation as throughput vs mem tradeoff doesn't appear beneficial.
 * num_heads per stage is not detailed for Huge and Giant model variants
 * 'Giant' is 3B params in paper but ~2.6B here despite matching paper dim + block counts
+* experiments are ongoing wrt to 'main branch' norm layer use and weight init scheme
 
 Noteworthy additions over official Swin v1:
 * MLP relative position embedding is looking promising and adapts to different image/window sizes
@@ -67,27 +68,29 @@ default_cfgs = {
     'swin_v2_cr_tiny_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_tiny_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=1.0),
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+    'swin_v2_cr_tiny_ns_224': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_small_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_small_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=1.0),
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_base_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_base_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=1.0),
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_large_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_large_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=1.0),
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_huge_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_huge_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=1.0),
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_giant_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_giant_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=1.0),
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
 }
 
 
@@ -175,7 +178,7 @@ class WindowMultiHeadAttention(nn.Module):
             hidden_features=meta_hidden_dim,
             out_features=num_heads,
             act_layer=nn.ReLU,
-            drop=0.  # FIXME should we add stochasticity?
+            drop=0.1  # FIXME should there be stochasticity, appears to 'overfit' without?
         )
         self.register_parameter("tau", torch.nn.Parameter(torch.ones(num_heads)))
         self._make_pair_wise_relative_positions()
@@ -336,7 +339,8 @@ class SwinTransformerBlock(nn.Module):
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_prob=drop_path) if drop_path > 0.0 else nn.Identity()
 
-        # extra norm layer mentioned for Huge/Giant models in V2 paper (FIXME may be in wrong spot?)
+        # Extra main branch norm layer mentioned for Huge/Giant models in V2 paper.
+        # Also being used as final network norm and optional stage ending norm while still in a C-last format.
         self.norm3 = norm_layer(dim) if extra_norm else nn.Identity()
 
         self._make_attention_mask()
@@ -393,7 +397,8 @@ class SwinTransformerBlock(nn.Module):
 
         # cyclic shift
         sh, sw = self.shift_size
-        if any(self.shift_size):
+        do_shift: bool = any(self.shift_size)
+        if do_shift:
             # FIXME PyTorch XLA needs cat impl, roll not lowered
             # x = torch.cat([x[:, sh:], x[:, :sh]], dim=1)
             # x = torch.cat([x[:, :, sw:], x[:, :, :sw]], dim=2)
@@ -411,7 +416,7 @@ class SwinTransformerBlock(nn.Module):
         x = window_reverse(attn_windows, self.window_size, self.feat_size)  # B H' W' C
 
         # reverse cyclic shift
-        if any(self.shift_size):
+        if do_shift:
             # FIXME PyTorch XLA needs cat impl, roll not lowered
             # x = torch.cat([x[:, -sh:], x[:, :-sh]], dim=1)
             # x = torch.cat([x[:, :, -sw:], x[:, :, :-sw]], dim=2)
@@ -432,7 +437,7 @@ class SwinTransformerBlock(nn.Module):
         # NOTE post-norm branches (op -> norm -> drop)
         x = x + self.drop_path1(self.norm1(self._shifted_window_attn(x)))
         x = x + self.drop_path2(self.norm2(self.mlp(x)))
-        x = self.norm3(x)  # main-branch norm enabled for some blocks (every 6 for Huge/Giant)
+        x = self.norm3(x)  # main-branch norm enabled for some blocks / stages (every 6 for Huge/Giant)
         return x
 
 
@@ -502,8 +507,8 @@ class SwinTransformerStage(nn.Module):
         drop_attn (float): Dropout rate of attention map
         drop_path (float): Dropout in main path
         norm_layer (Type[nn.Module]): Type of normalization layer to be utilized. Default: nn.LayerNorm
-        grad_checkpointing (bool): If true checkpointing is utilized
         extra_norm_period (int): Insert extra norm layer on main branch every N (period) blocks
+        extra_norm_stage (bool): End each stage with an extra norm layer in main branch
         sequential_attn (bool): If true sequential self-attention is performed
     """
 
@@ -520,16 +525,22 @@ class SwinTransformerStage(nn.Module):
         drop_attn: float = 0.0,
         drop_path: Union[List[float], float] = 0.0,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
-        grad_checkpointing: bool = False,
         extra_norm_period: int = 0,
+        extra_norm_stage: bool = False,
         sequential_attn: bool = False,
     ) -> None:
         super(SwinTransformerStage, self).__init__()
         self.downscale: bool = downscale
-        self.grad_checkpointing: bool = grad_checkpointing
+        self.grad_checkpointing: bool = False
         self.feat_size: Tuple[int, int] = (feat_size[0] // 2, feat_size[1] // 2) if downscale else feat_size
 
         self.downsample = PatchMerging(embed_dim, norm_layer=norm_layer) if downscale else nn.Identity()
+
+        def _extra_norm(index):
+            i = index + 1
+            if extra_norm_period and i % extra_norm_period == 0:
+                return True
+            return i == depth if extra_norm_stage else False
 
         embed_dim = embed_dim * 2 if downscale else embed_dim
         self.blocks = nn.Sequential(*[
@@ -543,7 +554,7 @@ class SwinTransformerStage(nn.Module):
                 drop=drop,
                 drop_attn=drop_attn,
                 drop_path=drop_path[index] if isinstance(drop_path, list) else drop_path,
-                extra_norm=not (index + 1) % extra_norm_period if extra_norm_period else False,
+                extra_norm=_extra_norm(index),
                 sequential_attn=sequential_attn,
                 norm_layer=norm_layer,
             )
@@ -605,9 +616,9 @@ class SwinTransformerV2Cr(nn.Module):
         attn_drop_rate (float): Dropout rate of attention map. Default: 0.0
         drop_path_rate (float): Stochastic depth rate. Default: 0.0
         norm_layer (Type[nn.Module]): Type of normalization layer to be utilized. Default: nn.LayerNorm
-        grad_checkpointing (bool): If true checkpointing is utilized. Default: False
+        extra_norm_period (int): Insert extra norm layer on main branch every N (period) blocks in stage
+        extra_norm_stage (bool): End each stage with an extra norm layer in main branch
         sequential_attn (bool): If true sequential self-attention is performed. Default: False
-        use_deformable (bool): If true deformable block is used. Default: False
     """
 
     def __init__(
@@ -626,10 +637,11 @@ class SwinTransformerV2Cr(nn.Module):
         attn_drop_rate: float = 0.0,
         drop_path_rate: float = 0.0,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
-        grad_checkpointing: bool = False,
         extra_norm_period: int = 0,
+        extra_norm_stage: bool = False,
         sequential_attn: bool = False,
         global_pool: str = 'avg',
+        weight_init='skip',
         **kwargs: Any
     ) -> None:
         super(SwinTransformerV2Cr, self).__init__()
@@ -643,7 +655,7 @@ class SwinTransformerV2Cr(nn.Module):
         self.window_size: int = window_size
         self.num_features: int = int(embed_dim * 2 ** (len(depths) - 1))
 
-        self.patch_embed: nn.Module = PatchEmbed(
+        self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans,
             embed_dim=embed_dim, norm_layer=norm_layer)
         patch_grid_size: Tuple[int, int] = self.patch_embed.grid_size
@@ -664,8 +676,8 @@ class SwinTransformerV2Cr(nn.Module):
                     drop=drop_rate,
                     drop_attn=attn_drop_rate,
                     drop_path=drop_path_rate[sum(depths[:index]):sum(depths[:index + 1])],
-                    grad_checkpointing=grad_checkpointing,
                     extra_norm_period=extra_norm_period,
+                    extra_norm_stage=extra_norm_stage or (index + 1) == len(depths),  # last stage ends w/ norm
                     sequential_attn=sequential_attn,
                     norm_layer=norm_layer,
                 )
@@ -673,12 +685,12 @@ class SwinTransformerV2Cr(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.global_pool: str = global_pool
-        self.head: nn.Module = nn.Linear(
-            in_features=self.num_features, out_features=num_classes) if num_classes else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes else nn.Identity()
 
-        # FIXME weight init TBD, PyTorch default init appears to be working well,
-        # but differs from usual ViT or Swin init.
-        # named_apply(init_weights, self)
+        # current weight init skips custom init and uses pytorch layer defaults, seems to work well
+        # FIXME more experiments needed
+        if weight_init != 'skip':
+            named_apply(init_weights, self)
 
     def update_input_size(
             self,
@@ -709,13 +721,28 @@ class SwinTransformerV2Cr(nn.Module):
                 new_img_size=(new_patch_grid_size[0] // stage_scale, new_patch_grid_size[1] // stage_scale),
             )
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^patch_embed',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
+            ]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.stages:
+            s.grad_checkpointing = enable
+
+    @torch.jit.ignore()
     def get_classifier(self) -> nn.Module:
         """Method returns the classification head of the model.
         Returns:
             head (nn.Module): Current classification head
         """
-        head: nn.Module = self.head
-        return head
+        return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Method results the classification head
@@ -727,8 +754,7 @@ class SwinTransformerV2Cr(nn.Module):
         self.num_classes: int = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head: nn.Module = nn.Linear(
-            in_features=self.num_features, out_features=num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -747,12 +773,14 @@ class SwinTransformerV2Cr(nn.Module):
 
 
 def init_weights(module: nn.Module, name: str = ''):
-    # FIXME WIP
+    # FIXME WIP determining if there's a better weight init
     if isinstance(module, nn.Linear):
         if 'qkv' in name:
             # treat the weights of Q, K, V separately
             val = math.sqrt(6. / float(module.weight.shape[0] // 3 + module.weight.shape[1]))
             nn.init.uniform_(module.weight, -val, val)
+        elif 'head' in name:
+            nn.init.zeros_(module.weight)
         else:
             nn.init.xavier_uniform_(module.weight)
         if module.bias is not None:
@@ -788,6 +816,21 @@ def swin_v2_cr_tiny_224(pretrained=False, **kwargs):
         **kwargs
     )
     return _create_swin_transformer_v2_cr('swin_v2_cr_tiny_224', pretrained=pretrained, **model_kwargs)
+
+
+@register_model
+def swin_v2_cr_tiny_ns_224(pretrained=False, **kwargs):
+    """Swin-T V2 CR @ 224x224, trained ImageNet-1k w/ extra stage norms.
+    ** Experimental, may make default if results are improved. **
+    """
+    model_kwargs = dict(
+        embed_dim=96,
+        depths=(2, 2, 6, 2),
+        num_heads=(3, 6, 12, 24),
+        extra_norm_stage=True,
+        **kwargs
+    )
+    return _create_swin_transformer_v2_cr('swin_v2_cr_tiny_ns_224', pretrained=pretrained, **model_kwargs)
 
 
 @register_model

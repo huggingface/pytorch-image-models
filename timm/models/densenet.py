@@ -45,8 +45,9 @@ default_cfgs = {
 
 
 class DenseLayer(nn.Module):
-    def __init__(self, num_input_features, growth_rate, bn_size, norm_layer=BatchNormAct2d,
-                 drop_rate=0., memory_efficient=False):
+    def __init__(
+            self, num_input_features, growth_rate, bn_size, norm_layer=BatchNormAct2d,
+            drop_rate=0., memory_efficient=False):
         super(DenseLayer, self).__init__()
         self.add_module('norm1', norm_layer(num_input_features)),
         self.add_module('conv1', nn.Conv2d(
@@ -113,8 +114,9 @@ class DenseLayer(nn.Module):
 class DenseBlock(nn.ModuleDict):
     _version = 2
 
-    def __init__(self, num_layers, num_input_features, bn_size, growth_rate, norm_layer=nn.ReLU,
-                 drop_rate=0., memory_efficient=False):
+    def __init__(
+            self, num_layers, num_input_features, bn_size, growth_rate, norm_layer=nn.ReLU,
+            drop_rate=0., memory_efficient=False):
         super(DenseBlock, self).__init__()
         for i in range(num_layers):
             layer = DenseLayer(
@@ -164,8 +166,8 @@ class DenseNet(nn.Module):
 
     def __init__(
             self, growth_rate=32, block_config=(6, 12, 24, 16), num_classes=1000, in_chans=3, global_pool='avg',
-            bn_size=4, stem_type='', norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0, memory_efficient=False,
-            aa_stem_only=True):
+            bn_size=4, stem_type='', norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0,
+            memory_efficient=False, aa_stem_only=True):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         super(DenseNet, self).__init__()
@@ -252,10 +254,10 @@ class DenseNet(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^features.conv[012]|features.norm[012]|features.pool[012]',
-            blocks=r'^features.(?:denseblock|transition)(\d+)' if coarse else [
-                (r'^features.denseblock(\d+).denselayer(\d+)', None),
-                (r'^features.transition(\d+)', MATCH_PREV_GROUP)  # FIXME combine with previous denselayer
+            stem=r'^features\.conv[012]|features\.norm[012]|features\.pool[012]',
+            blocks=r'^features\.(?:denseblock|transition)(\d+)' if coarse else [
+                (r'^features\.denseblock(\d+)\.denselayer(\d+)', None),
+                (r'^features\.transition(\d+)', MATCH_PREV_GROUP)  # FIXME combine with previous denselayer
             ]
         )
         return matcher

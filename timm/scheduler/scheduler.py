@@ -90,21 +90,30 @@ class Scheduler:
                 param_group[self.param_group_field] = value
 
     def _add_noise(self, lrs, t):
+        if self._is_apply_noise(t):
+            noise = self._calculate_noise(t)
+            lrs = [v + v * noise for v in lrs]
+        return lrs
+
+    def _is_apply_noise(self, t) -> bool:
+        """Return True if scheduler in noise range."""
+        apply_noise = False
         if self.noise_range_t is not None:
             if isinstance(self.noise_range_t, (list, tuple)):
                 apply_noise = self.noise_range_t[0] <= t < self.noise_range_t[1]
             else:
                 apply_noise = t >= self.noise_range_t
-            if apply_noise:
-                g = torch.Generator()
-                g.manual_seed(self.noise_seed + t)
-                if self.noise_type == 'normal':
-                    while True:
-                        # resample if noise out of percent limit, brute force but shouldn't spin much
-                        noise = torch.randn(1, generator=g).item()
-                        if abs(noise) < self.noise_pct:
-                            break
-                else:
-                    noise = 2 * (torch.rand(1, generator=g).item() - 0.5) * self.noise_pct
-                lrs = [v + v * noise for v in lrs]
-        return lrs
+        return apply_noise
+
+    def _calculate_noise(self, t) -> float:
+        g = torch.Generator()
+        g.manual_seed(self.noise_seed + t)
+        if self.noise_type == 'normal':
+            while True:
+                # resample if noise out of percent limit, brute force but shouldn't spin much
+                noise = torch.randn(1, generator=g).item()
+                if abs(noise) < self.noise_pct:
+                    return noise
+        else:
+            noise = 2 * (torch.rand(1, generator=g).item() - 0.5) * self.noise_pct
+        return noise

@@ -686,8 +686,8 @@ class HighResolutionNet(nn.Module):
         matcher = dict(
             stem=r'^conv[12]|bn[12]',
             blocks=r'^(?:layer|stage|transition)(\d+)' if coarse else [
-                (r'^layer(\d+).(\d+)', None),
-                (r'^stage(\d+).(\d+)', None),
+                (r'^layer(\d+)\.(\d+)', None),
+                (r'^stage(\d+)\.(\d+)', None),
                 (r'^transition(\d+)', (99999,)),
             ],
         )

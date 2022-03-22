@@ -137,9 +137,15 @@ default_cfgs = dict(
     regnety_032=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/regnety_032_ra-7f2439f9.pth',
         crop_pct=1.0, test_input_size=(3, 288, 288)),
-    regnety_040=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_040-f0d569f9.pth'),
-    regnety_064=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_064-0a48325c.pth'),
-    regnety_080=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_080-e7f3eb93.pth'),
+    regnety_040=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnety_040_ra3-670e1166.pth',
+        crop_pct=1.0, test_input_size=(3, 288, 288)),
+    regnety_064=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnety_064_ra3-aa26dc7d.pth',
+        crop_pct=1.0, test_input_size=(3, 288, 288)),
+    regnety_080=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnety_080_ra3-1fdc4344.pth',
+        crop_pct=1.0, test_input_size=(3, 288, 288)),
     regnety_120=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_120-721ba79a.pth'),
     regnety_160=_cfg(
         url='https://dl.fbaipublicfiles.com/deit/regnety_160-a5fe301d.pth',  # from Facebook DeiT GitHub repository
@@ -147,12 +153,20 @@ default_cfgs = dict(
     regnety_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'),
 
     regnety_040s_gn=_cfg(url=''),
-    regnetv_040=_cfg(url='', first_conv='stem'),
-    regnetv_064=_cfg(url='', first_conv='stem'),
+    regnetv_040=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetv_040_ra3-c248f51f.pth',
+        first_conv='stem'),
+    regnetv_064=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetv_064_ra3-530616c2.pth',
+        first_conv='stem'),
 
     regnetz_005=_cfg(url=''),
-    regnetz_040=_cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
-    regnetz_040h=_cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    regnetz_040=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetz_040_ra3-9007edf5.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320)),
+    regnetz_040h=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetz_040h_ra3-f594343b.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, test_input_size=(3, 320, 320)),
 )
 
 
@@ -444,7 +458,7 @@ class RegNet(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^stem',
-            blocks=r'^stages.(\d+)' if coarse else r'^stages.(\d+).blocks.(\d+)',
+            blocks=r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.blocks\.(\d+)',
         )
 
     @torch.jit.ignore

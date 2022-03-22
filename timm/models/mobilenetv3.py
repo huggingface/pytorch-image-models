@@ -171,7 +171,7 @@ class MobileNetV3(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^conv_stem|bn1',
-            blocks=r'^blocks.(\d+)' if coarse else r'^blocks.(\d+).(\d+)'
+            blocks=r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)'
         )
 
     @torch.jit.ignore

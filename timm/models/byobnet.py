@@ -157,15 +157,13 @@ default_cfgs = {
     'regnetz_b16_evos': _cfgr(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv', crop_pct=0.94),
+        input_size=(3, 224, 224), pool_size=(7, 7), test_input_size=(3, 288, 288), first_conv='stem.conv',
+        crop_pct=0.94),
     'regnetz_c16_evos': _cfgr(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetz_c16_evos_ch-d8311942.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), first_conv='stem.conv', crop_pct=0.95),
     'regnetz_d8_evos': _cfgr(
-        url='',
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
-    'regnetz_e8_evos': _cfgr(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetz_d8_evos_ch-2bc12646.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), test_input_size=(3, 320, 320), crop_pct=0.95),
 }
 
@@ -658,24 +656,6 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
         block_kwargs=dict(bottle_in=True, linear_out=True),
     ),
-    regnetz_e8_evos=ByoModelCfg(
-        blocks=(
-            ByoBlockCfg(type='bottle', d=3, c=96, s=1, gs=8, br=4),
-            ByoBlockCfg(type='bottle', d=8, c=192, s=2, gs=8, br=4),
-            ByoBlockCfg(type='bottle', d=16, c=384, s=2, gs=8, br=4),
-            ByoBlockCfg(type='bottle', d=3, c=512, s=2, gs=8, br=4),
-        ),
-        stem_chs=64,
-        stem_type='deep',
-        stem_pool='',
-        downsample='',
-        num_features=2048,
-        act_layer='silu',
-        attn_layer='se',
-        attn_kwargs=dict(rd_ratio=0.25),
-        norm_layer=partial(EvoNorm2dS0a, group_size=16),
-        block_kwargs=dict(bottle_in=True, linear_out=True),
-    ),
 )
 
 @register_model
@@ -920,13 +900,6 @@ def regnetz_d8_evos(pretrained=False, **kwargs):
     return _create_byobnet('regnetz_d8_evos', pretrained=pretrained, **kwargs)
 
 
-@register_model
-def regnetz_e8_evos(pretrained=False, **kwargs):
-    """
-    """
-    return _create_byobnet('regnetz_e8_evos', pretrained=pretrained, **kwargs)
-
-
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
     if not isinstance(stage_blocks_cfg, Sequence):
         stage_blocks_cfg = (stage_blocks_cfg,)
@@ -1031,9 +1004,10 @@ class BottleneckBlock(nn.Module):
     """ ResNet-like Bottleneck Block - 1x1 - kxk - 1x1
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
-                 downsample='avg', attn_last=False, linear_out=False, extra_conv=False, bottle_in=False,
-                 layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
+            downsample='avg', attn_last=False, linear_out=False, extra_conv=False, bottle_in=False,
+            layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
         super(BottleneckBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
@@ -1088,9 +1062,10 @@ class DarkBlock(nn.Module):
     for more optimal compute.
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-                 downsample='avg', attn_last=True, linear_out=False, layers: LayerFn = None, drop_block=None,
-                 drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
+            downsample='avg', attn_last=True, linear_out=False, layers: LayerFn = None, drop_block=None,
+            drop_path_rate=0.):
         super(DarkBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -1138,9 +1113,10 @@ class EdgeBlock(nn.Module):
     FIXME is there a more common 3x3 + 1x1 conv block to name this after?
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-                 downsample='avg', attn_last=False, linear_out=False, layers: LayerFn = None,
-                 drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
+            downsample='avg', attn_last=False, linear_out=False, layers: LayerFn = None,
+            drop_block=None, drop_path_rate=0.):
         super(EdgeBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -1185,8 +1161,9 @@ class RepVggBlock(nn.Module):
     This version does not currently support the deploy optimization. It is currently fixed in 'train' mode.
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-                 downsample='', layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
+            downsample='', layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
         super(RepVggBlock, self).__init__()
         layers = layers or LayerFn()
         groups = num_groups(group_size, in_chs)
@@ -1226,9 +1203,10 @@ class SelfAttnBlock(nn.Module):
     """ ResNet-like Bottleneck Block - 1x1 - optional kxk - self attn - 1x1
     """
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
-                 downsample='avg', extra_conv=False, linear_out=False, bottle_in=False, post_attn_na=True,
-                 feat_size=None, layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
+            downsample='avg', extra_conv=False, linear_out=False, bottle_in=False, post_attn_na=True,
+            feat_size=None, layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
         super(SelfAttnBlock, self).__init__()
         assert layers is not None
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
@@ -1295,8 +1273,9 @@ def create_block(block: Union[str, nn.Module], **kwargs):
 
 class Stem(nn.Sequential):
 
-    def __init__(self, in_chs, out_chs, kernel_size=3, stride=4, pool='maxpool',
-                 num_rep=3, num_act=None, chs_decay=0.5, layers: LayerFn = None):
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=4, pool='maxpool',
+            num_rep=3, num_act=None, chs_decay=0.5, layers: LayerFn = None):
         super().__init__()
         assert stride in (2, 4)
         layers = layers or LayerFn()
@@ -1505,11 +1484,13 @@ class ByobNet(nn.Module):
 
     Current assumption is that both stem and blocks are in conv-bn-act order (w/ block ending in act).
     """
-    def __init__(self, cfg: ByoModelCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-                 zero_init_last=True, img_size=None, drop_rate=0., drop_path_rate=0.):
+    def __init__(
+            self, cfg: ByoModelCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
+            zero_init_last=True, img_size=None, drop_rate=0., drop_path_rate=0.):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
         layers = get_layer_fns(cfg)
         if cfg.fixed_input_size:
             assert img_size is not None, 'img_size argument is required for fixed input size model'
@@ -1540,6 +1521,22 @@ class ByobNet(nn.Module):
         # init weights
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=[
+                (r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.(\d+)', None),
+                (r'^final_conv', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -1548,13 +1545,19 @@ class ByobNet(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.stages(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stages, x)
+        else:
+            x = self.stages(x)
         x = self.final_conv(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
