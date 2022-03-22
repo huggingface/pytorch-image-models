@@ -38,7 +38,7 @@ class InplaceAbn(nn.Module):
     """
 
     def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True, apply_act=True,
-                 act_layer="leaky_relu", act_param=0.01, drop_block=None):
+                 act_layer="leaky_relu", act_param=0.01, drop_layer=None):
         super(InplaceAbn, self).__init__()
         self.num_features = num_features
         self.affine = affine
@@ -54,7 +54,7 @@ class InplaceAbn(nn.Module):
                     self.act_name = 'elu'
                 elif act_layer == nn.LeakyReLU:
                     self.act_name = 'leaky_relu'
-                elif act_layer == nn.Identity:
+                elif act_layer is None or act_layer == nn.Identity:
                     self.act_name = 'identity'
                 else:
                     assert False, f'Invalid act layer {act_layer.__name__} for IABN'

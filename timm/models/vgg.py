@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from typing import Union, List, Dict, Any, cast
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .fx_features import register_notrace_module
 from .layers import ClassifierHead
 from .registry import register_model
@@ -25,7 +25,7 @@ __all__ = [
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (1, 1),
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'features.0', 'classifier': 'head.fc',
@@ -56,8 +56,9 @@ cfgs: Dict[str, List[Union[str, int]]] = {
 @register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
 class ConvMlp(nn.Module):
 
-    def __init__(self, in_features=512, out_features=4096, kernel_size=7, mlp_ratio=1.0,
-                 drop_rate: float = 0.2, act_layer: nn.Module = None, conv_layer: nn.Module = None):
+    def __init__(
+            self, in_features=512, out_features=4096, kernel_size=7, mlp_ratio=1.0,
+            drop_rate: float = 0.2, act_layer: nn.Module = None, conv_layer: nn.Module = None):
         super(ConvMlp, self).__init__()
         self.input_kernel_size = kernel_size
         mid_features = int(out_features * mlp_ratio)
@@ -83,23 +84,25 @@ class ConvMlp(nn.Module):
 class VGG(nn.Module):
 
     def __init__(
-        self,
-        cfg: List[Any],
-        num_classes: int = 1000,
-        in_chans: int = 3,
-        output_stride: int = 32,
-        mlp_ratio: float = 1.0,
-        act_layer: nn.Module = nn.ReLU,
-        conv_layer: nn.Module = nn.Conv2d,
-        norm_layer: nn.Module = None,
-        global_pool: str = 'avg',
-        drop_rate: float = 0.,
+            self,
+            cfg: List[Any],
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            output_stride: int = 32,
+            mlp_ratio: float = 1.0,
+            act_layer: nn.Module = nn.ReLU,
+            conv_layer: nn.Module = nn.Conv2d,
+            norm_layer: nn.Module = None,
+            global_pool: str = 'avg',
+            drop_rate: float = 0.,
     ) -> None:
         super(VGG, self).__init__()
         assert output_stride == 32
         self.num_classes = num_classes
         self.num_features = 4096
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
+        self.use_norm = norm_layer is not None
         self.feature_info = []
         prev_chs = in_chans
         net_stride = 1
@@ -121,6 +124,7 @@ class VGG(nn.Module):
                 prev_chs = v
         self.features = nn.Sequential(*layers)
         self.feature_info.append(dict(num_chs=prev_chs, reduction=net_stride, module=f'features.{len(layers) - 1}'))
+
         self.pre_logits = ConvMlp(
             prev_chs, self.num_features, 7, mlp_ratio=mlp_ratio,
             drop_rate=drop_rate, act_layer=act_layer, conv_layer=conv_layer)
@@ -129,6 +133,16 @@ class VGG(nn.Module):
 
         self._initialize_weights()
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        # this treats BN layers as separate groups for bn variants, a lot of effort to fix that
+        return dict(stem=r'^features\.0', blocks=r'^features\.(\d+)')
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -139,12 +153,15 @@ class VGG(nn.Module):
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
-        x = self.pre_logits(x)
         return x
+
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
+        x = self.pre_logits(x)
+        return x if pre_logits else self.head(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
     def _initialize_weights(self) -> None:
@@ -183,7 +200,6 @@ def _create_vgg(variant: str, pretrained: bool, **kwargs: Any) -> VGG:
     out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4, 5))
     model = build_model_with_cfg(
         VGG, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=cfgs[cfg],
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         pretrained_filter_fn=_filter_fn,

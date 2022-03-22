@@ -9,6 +9,7 @@ https://gitee.com/mindspore/mindspore/tree/master/model_zoo/research/cv/TNT
 import math
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.helpers import build_model_with_cfg
@@ -77,7 +78,8 @@ class Attention(nn.Module):
 class Block(nn.Module):
     """ TNT Block
     """
-    def __init__(self, dim, in_dim, num_pixel, num_heads=12, in_num_head=4, mlp_ratio=4.,
+    def __init__(
+            self, dim, in_dim, num_pixel, num_heads=12, in_num_head=4, mlp_ratio=4.,
             qkv_bias=False, drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         # Inner transformer
@@ -153,12 +155,16 @@ class PixelEmbed(nn.Module):
 class TNT(nn.Module):
     """ Transformer in Transformer - https://arxiv.org/abs/2103.00112
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, in_dim=48, depth=12,
-                 num_heads=12, in_num_head=4, mlp_ratio=4., qkv_bias=False, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., norm_layer=nn.LayerNorm, first_stride=4):
+    def __init__(
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
+            embed_dim=768, in_dim=48, depth=12, num_heads=12, in_num_head=4, mlp_ratio=4., qkv_bias=False,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm, first_stride=4):
         super().__init__()
+        assert global_pool in ('', 'token', 'avg')
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.grad_checkpointing = False
 
         self.pixel_embed = PixelEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, in_dim=in_dim, stride=first_stride)
@@ -206,11 +212,29 @@ class TNT(nn.Module):
     def no_weight_decay(self):
         return {'patch_pos', 'pixel_pos', 'cls_token'}
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^cls_token|patch_pos|pixel_pos|pixel_embed|norm[12]_proj|proj',  # stem and embed / pos
+            blocks=[
+                (r'^blocks\.(\d+)', None),
+                (r'^norm', (99999,)),
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('', 'token', 'avg')
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
@@ -222,15 +246,24 @@ class TNT(nn.Module):
         patch_embed = patch_embed + self.patch_pos
         patch_embed = self.pos_drop(patch_embed)
 
-        for blk in self.blocks:
-            pixel_embed, patch_embed = blk(pixel_embed, patch_embed)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            for blk in self.blocks:
+                pixel_embed, patch_embed = checkpoint(blk, pixel_embed, patch_embed)
+        else:
+            for blk in self.blocks:
+                pixel_embed, patch_embed = blk(pixel_embed, patch_embed)
 
         patch_embed = self.norm(patch_embed)
-        return patch_embed[:, 0]
+        return patch_embed
+
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool:
+            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        return x if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -248,7 +281,6 @@ def _create_tnt(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(
         TNT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
     return model

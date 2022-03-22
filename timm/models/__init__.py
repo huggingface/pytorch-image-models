@@ -8,6 +8,7 @@ from .convmixer import *
 from .convnext import *
 from .crossvit import *
 from .cspnet import *
+from .deit import *
 from .densenet import *
 from .dla import *
 from .dpn import *
@@ -23,11 +24,13 @@ from .inception_v4 import *
 from .levit import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
+from .mobilevit import *
 from .nasnet import *
 from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
+from .poolformer import *
 from .regnet import *
 from .res2net import *
 from .resnest import *
@@ -46,15 +49,16 @@ from .vgg import *
 from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
+from .volo import *
 from .vovnet import *
 from .xception import *
 from .xception_aligned import *
 from .xcit import *
 
-from .factory import create_model, split_model_name, safe_model_name
+from .factory import create_model, parse_model_name, safe_model_name
 from .helpers import load_checkpoint, resume_checkpoint, model_parameters
 from .layers import TestTimePoolHead, apply_test_time_pool
 from .layers import convert_splitbn_model
 from .layers import is_scriptable, is_exportable, set_scriptable, set_exportable, is_no_jit, set_no_jit
 from .registry import register_model, model_entrypoint, list_models, is_model, list_modules, is_model_in_modules,\
-    has_model_default_key, is_model_default_key, get_model_default_value, is_model_pretrained
+    is_model_pretrained, get_pretrained_cfg, has_pretrained_cfg_key, is_pretrained_cfg_key, get_pretrained_cfg_value

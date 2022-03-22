@@ -139,60 +139,52 @@ def _decode_block_str(block_str):
     exp_kernel_size = _parse_ksize(options['a']) if 'a' in options else 1
     pw_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
     force_in_chs = int(options['fc']) if 'fc' in options else 0  # FIXME hack to deal with in_chs issue in TPU def
-
     num_repeat = int(options['r'])
+
     # each type of block has different valid arguments, fill accordingly
+    block_args = dict(
+        block_type=block_type,
+        out_chs=int(options['c']),
+        stride=int(options['s']),
+        act_layer=act_layer,
+    )
     if block_type == 'ir':
-        block_args = dict(
-            block_type=block_type,
+        block_args.update(dict(
             dw_kernel_size=_parse_ksize(options['k']),
             exp_kernel_size=exp_kernel_size,
             pw_kernel_size=pw_kernel_size,
-            out_chs=int(options['c']),
             exp_ratio=float(options['e']),
             se_ratio=float(options['se']) if 'se' in options else 0.,
-            stride=int(options['s']),
-            act_layer=act_layer,
             noskip=skip is False,
-        )
+        ))
         if 'cc' in options:
             block_args['num_experts'] = int(options['cc'])
     elif block_type == 'ds' or block_type == 'dsa':
-        block_args = dict(
-            block_type=block_type,
+        block_args.update(dict(
             dw_kernel_size=_parse_ksize(options['k']),
             pw_kernel_size=pw_kernel_size,
-            out_chs=int(options['c']),
             se_ratio=float(options['se']) if 'se' in options else 0.,
-            stride=int(options['s']),
-            act_layer=act_layer,
             pw_act=block_type == 'dsa',
             noskip=block_type == 'dsa' or skip is False,
-        )
+        ))
     elif block_type == 'er':
-        block_args = dict(
-            block_type=block_type,
+        block_args.update(dict(
             exp_kernel_size=_parse_ksize(options['k']),
             pw_kernel_size=pw_kernel_size,
-            out_chs=int(options['c']),
             exp_ratio=float(options['e']),
             force_in_chs=force_in_chs,
             se_ratio=float(options['se']) if 'se' in options else 0.,
-            stride=int(options['s']),
-            act_layer=act_layer,
             noskip=skip is False,
-        )
+        ))
     elif block_type == 'cn':
-        block_args = dict(
-            block_type=block_type,
+        block_args.update(dict(
             kernel_size=int(options['k']),
-            out_chs=int(options['c']),
-            stride=int(options['s']),
-            act_layer=act_layer,
             skip=skip is True,
-        )
+        ))
     else:
         assert False, 'Unknown block type (%s)' % block_type
+    if 'gs' in options:
+        block_args['group_size'] = options['gs']
 
     return block_args, num_repeat
 
@@ -235,7 +227,27 @@ def _scale_stage_depth(stack_args, repeats, depth_multiplier=1.0, depth_trunc='c
     return sa_scaled
 
 
-def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_multiplier=1, fix_first_last=False):
+def decode_arch_def(
+        arch_def,
+        depth_multiplier=1.0,
+        depth_trunc='ceil',
+        experts_multiplier=1,
+        fix_first_last=False,
+        group_size=None,
+):
+    """ Decode block architecture definition strings -> block kwargs
+
+    Args:
+        arch_def: architecture definition strings, list of list of strings
+        depth_multiplier: network depth multiplier
+        depth_trunc: networ depth truncation mode when applying multiplier
+        experts_multiplier: CondConv experts multiplier
+        fix_first_last: fix first and last block depths when multiplier is applied
+        group_size: group size override for all blocks that weren't explicitly set in arch string
+
+    Returns:
+        list of list of block kwargs
+    """
     arch_args = []
     if isinstance(depth_multiplier, tuple):
         assert len(depth_multiplier) == len(arch_def)
@@ -250,6 +262,8 @@ def decode_arch_def(arch_def, depth_multiplier=1.0, depth_trunc='ceil', experts_
             ba, rep = _decode_block_str(block_str)
             if ba.get('num_experts', 0) > 0 and experts_multiplier > 1:
                 ba['num_experts'] *= experts_multiplier
+            if group_size is not None:
+                ba.setdefault('group_size', group_size)
             stack_args.append(ba)
             repeats.append(rep)
         if fix_first_last and (stack_idx == 0 or stack_idx == len(arch_def) - 1):

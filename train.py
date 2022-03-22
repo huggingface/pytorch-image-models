@@ -112,9 +112,17 @@ parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('-b', '--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 128)')
+                    help='Input batch size for training (default: 128)')
 parser.add_argument('-vb', '--validation-batch-size', type=int, default=None, metavar='N',
-                    help='validation batch size override (default: None)')
+                    help='Validation batch size override (default: None)')
+parser.add_argument('--channels-last', action='store_true', default=False,
+                    help='Use channels_last memory layout')
+parser.add_argument('--torchscript', dest='torchscript', action='store_true',
+                    help='torch.jit.script the full model')
+parser.add_argument('--fuser', default='', type=str,
+                    help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+parser.add_argument('--grad-checkpointing', action='store_true', default=False,
+                    help='Enable gradient checkpointing through model blocks/stages')
 
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -131,7 +139,8 @@ parser.add_argument('--clip-grad', type=float, default=None, metavar='NORM',
                     help='Clip gradient norm (default: None, no clipping)')
 parser.add_argument('--clip-mode', type=str, default='norm',
                     help='Gradient clipping mode. One of ("norm", "value", "agc")')
-
+parser.add_argument('--layer-decay', type=float, default=None,
+                    help='layer-wise learning rate decay (default: None)')
 
 # Learning rate schedule parameters
 parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
@@ -188,7 +197,7 @@ parser.add_argument('--color-jitter', type=float, default=0.4, metavar='PCT',
                     help='Color jitter factor (default: 0.4)')
 parser.add_argument('--aa', type=str, default=None, metavar='NAME',
                     help='Use AutoAugment policy. "v0" or "original". (default: None)'),
-parser.add_argument('--aug-repeats', type=int, default=0,
+parser.add_argument('--aug-repeats', type=float, default=0,
                     help='Number of augmentation repetitions (distributed training only) (default: 0)')
 parser.add_argument('--aug-splits', type=int, default=0,
                     help='Number of augmentation splits (default: 0, valid: 0 or >=2)')
@@ -276,8 +285,6 @@ parser.add_argument('--native-amp', action='store_true', default=False,
                     help='Use Native Torch AMP mixed precision')
 parser.add_argument('--no-ddp-bb', action='store_true', default=False,
                     help='Force broadcast buffers for native DDP to off.')
-parser.add_argument('--channels-last', action='store_true', default=False,
-                    help='Use channels_last memory layout')
 parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
@@ -293,10 +300,6 @@ parser.add_argument('--tta', type=int, default=0, metavar='N',
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
-parser.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
-parser.add_argument('--fuser', default='', type=str,
-                    help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
 
@@ -386,6 +389,9 @@ def main():
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
 
+    if args.grad_checkpointing:
+        model.set_grad_checkpointing(enable=True)
+
     if args.local_rank == 0:
         _logger.info(
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
@@ -445,6 +451,7 @@ def main():
         if args.local_rank == 0:
             _logger.info('AMP not enabled. Training in float32.')
 
+
     # optionally resume from a checkpoint
     resume_epoch = None
     if args.resume:
@@ -457,7 +464,7 @@ def main():
     # setup exponential moving average of model weights, SWA could be used here too
     model_ema = None
     if args.model_ema:
-        # Important to create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
+        # Important to create EMA model after cuda(), DP wrapper, and AMP but before DDP wrapper
         model_ema = ModelEmaV2(
             model, decay=args.model_ema_decay, device='cpu' if args.model_ema_force_cpu else None)
         if args.resume:

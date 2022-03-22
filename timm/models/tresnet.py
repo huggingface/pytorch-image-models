@@ -107,8 +107,9 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, use_se=True,
-                 act_layer="leaky_relu", aa_layer=None):
+    def __init__(
+            self, inplanes, planes, stride=1, downsample=None, use_se=True,
+            act_layer="leaky_relu", aa_layer=None):
         super(Bottleneck, self).__init__()
         self.conv1 = conv2d_iabn(
             inplanes, planes, kernel_size=1, stride=1, act_layer=act_layer, act_param=1e-3)
@@ -130,7 +131,7 @@ class Bottleneck(nn.Module):
         self.conv3 = conv2d_iabn(
             planes, planes * self.expansion, kernel_size=1, stride=1, act_layer="identity")
 
-        self.relu = nn.ReLU(inplace=True)
+        self.act = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -144,10 +145,9 @@ class Bottleneck(nn.Module):
         out = self.conv2(out)
         if self.se is not None:
             out = self.se(out)
-
         out = self.conv3(out)
         out = out + shortcut  # no inplace
-        out = self.relu(out)
+        out = self.act(out)
 
         return out
 
@@ -194,7 +194,7 @@ class TResNet(nn.Module):
         self.num_features = (self.planes * 8) * Bottleneck.expansion
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
-        # model initilization
+        # model initialization
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
@@ -231,6 +231,16 @@ class TResNet(nn.Module):
                 block(self.inplanes, planes, use_se=use_se, aa_layer=aa_layer))
         return nn.Sequential(*layers)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(stem=r'^body\.conv1', blocks=r'^body\.layer(\d+)' if coarse else r'^body\.layer(\d+)\.(\d+)')
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -241,16 +251,18 @@ class TResNet(nn.Module):
     def forward_features(self, x):
         return self.body(x)
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
 def _create_tresnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         TResNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(out_indices=(1, 2, 3, 4), flatten_sequential=True),
         **kwargs)
 

@@ -18,8 +18,8 @@ from .efficientnet_blocks import SqueezeExcite
 from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg, default_cfg_for_features
-from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, hard_sigmoid
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features, checkpoint_seq
+from .layers import SelectAdaptivePool2d, Linear, create_conv2d, get_act_fn, get_norm_act_layer
 from .registry import register_model
 
 __all__ = ['MobileNetV3', 'MobileNetV3Features']
@@ -27,7 +27,7 @@ __all__ = ['MobileNetV3', 'MobileNetV3Features']
 
 def _cfg(url='', **kwargs):
     return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (1, 1),
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv_stem', 'classifier': 'classifier',
@@ -88,7 +88,7 @@ default_cfgs = {
         test_input_size=(3, 256, 256), crop_pct=0.95),
     'fbnetv3_g': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/fbnetv3_g_240-0b1df83b.pth',
-        input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95),
+        input_size=(3, 240, 240), test_input_size=(3, 288, 288), crop_pct=0.95, pool_size=(8, 8)),
 
     "lcnet_035": _cfg(),
     "lcnet_050": _cfg(
@@ -129,17 +129,18 @@ class MobileNetV3(nn.Module):
         super(MobileNetV3, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
+        norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
         self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
-        self.bn1 = norm_layer(stem_size)
-        self.act1 = act_layer(inplace=True)
+        self.bn1 = norm_act_layer(stem_size, inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
         builder = EfficientNetBuilder(
@@ -160,12 +161,24 @@ class MobileNetV3(nn.Module):
         efficientnet_init_weights(self)
 
     def as_sequential(self):
-        layers = [self.conv_stem, self.bn1, self.act1]
+        layers = [self.conv_stem, self.bn1]
         layers.extend(self.blocks)
         layers.extend([self.global_pool, self.conv_head, self.act2])
         layers.extend([nn.Flatten(), nn.Dropout(self.drop_rate), self.classifier])
         return nn.Sequential(*layers)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^conv_stem|bn1',
+            blocks=r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)'
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -179,19 +192,28 @@ class MobileNetV3(nn.Module):
     def forward_features(self, x):
         x = self.conv_stem(x)
         x = self.bn1(x)
-        x = self.act1(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x, flatten=True)
+        else:
+            x = self.blocks(x)
+        return x
+
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
-        return x
+        if pre_logits:
+            return x.flatten(1)
+        else:
+            x = self.flatten(x)
+            if self.drop_rate > 0.:
+                x = F.dropout(x, p=self.drop_rate, training=self.training)
+            return self.classifier(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.flatten(x)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
-        return self.classifier(x)
+        x = self.forward_head(x)
+        return x
 
 
 class MobileNetV3Features(nn.Module):
@@ -201,9 +223,10 @@ class MobileNetV3Features(nn.Module):
     and object detection models.
     """
 
-    def __init__(self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
-                 stem_size=16, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
-                 se_from_exp=True, act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
+    def __init__(
+            self, block_args, out_indices=(0, 1, 2, 3, 4), feature_location='bottleneck', in_chans=3,
+            stem_size=16, fix_stem=False, output_stride=32, pad_type='', round_chs_fn=round_channels,
+            se_from_exp=True, act_layer=None, norm_layer=None, se_layer=None, drop_rate=0., drop_path_rate=0.):
         super(MobileNetV3Features, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -263,12 +286,11 @@ def _create_mnv3(variant, pretrained=False, **kwargs):
         model_cls = MobileNetV3Features
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
         **kwargs)
     if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
+        model.default_cfg = pretrained_cfg_for_features(model.default_cfg)
     return model
 
 
@@ -462,6 +484,44 @@ def _gen_fbnetv3(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=act_layer,
         se_layer=se_layer,
+        **kwargs,
+    )
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_lcnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
+    """ LCNet
+    Essentially a MobileNet-V3 crossed with a MobileNet-V1
+
+    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer.
+    """
+    arch_def = [
+        # stage 0, 112x112 in
+        ['dsa_r1_k3_s1_c32'],
+        # stage 1, 112x112 in
+        ['dsa_r2_k3_s2_c64'],
+        # stage 2, 56x56 in
+        ['dsa_r2_k3_s2_c128'],
+        # stage 3, 28x28 in
+        ['dsa_r1_k3_s2_c256', 'dsa_r1_k5_s1_c256'],
+        # stage 4, 14x14in
+        ['dsa_r4_k5_s1_c256'],
+        # stage 5, 14x14in
+        ['dsa_r2_k5_s2_c512_se0.25'],
+        # 7x7
+    ]
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        stem_size=16,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
+        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU),
+        num_features=1280,
         **kwargs,
     )
     model = _create_mnv3(variant, pretrained, **model_kwargs)

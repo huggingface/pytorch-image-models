@@ -164,8 +164,9 @@ class CrossAttention(nn.Module):
 
 class CrossAttentionBlock(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = CrossAttention(
@@ -175,7 +176,6 @@ class CrossAttentionBlock(nn.Module):
 
     def forward(self, x):
         x = x[:, 0:1, ...] + self.drop_path(self.attn(self.norm1(x)))
-
         return x
 
 
@@ -289,12 +289,14 @@ class CrossViT(nn.Module):
     def __init__(
             self, img_size=224, img_scale=(1.0, 1.0), patch_size=(8, 16), in_chans=3, num_classes=1000,
             embed_dim=(192, 384), depth=((1, 3, 1), (1, 3, 1), (1, 3, 1)), num_heads=(6, 12), mlp_ratio=(2., 2., 4.),
-            qkv_bias=True, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6), multi_conv=False, crop_scale=False,
+            multi_conv=False, crop_scale=False, qkv_bias=True, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
+            norm_layer=partial(nn.LayerNorm, eps=1e-6), global_pool='token',
     ):
         super().__init__()
+        assert global_pool in ('token', 'avg')
 
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.img_size = to_2tuple(img_size)
         img_scale = to_2tuple(img_scale)
         self.img_size_scaled = [tuple([int(sj * si) for sj in self.img_size]) for si in img_scale]
@@ -302,7 +304,7 @@ class CrossViT(nn.Module):
         num_patches = _compute_num_patches(self.img_size_scaled, patch_size)
         self.num_branches = len(patch_size)
         self.embed_dim = embed_dim
-        self.num_features = embed_dim[0]  # to pass the tests
+        self.num_features = sum(embed_dim)
         self.patch_embed = nn.ModuleList()
 
         # hard-coded for torch jit script
@@ -359,16 +361,31 @@ class CrossViT(nn.Module):
                 out.add(f'pos_embed_{i}')
         return out
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('token', 'avg')
+            self.global_pool = global_pool
         self.head = nn.ModuleList(
             [nn.Linear(self.embed_dim[i], num_classes) if num_classes > 0 else nn.Identity() for i in
              range(self.num_branches)])
 
-    def forward_features(self, x):
+    def forward_features(self, x) -> List[torch.Tensor]:
         B = x.shape[0]
         xs = []
         for i, patch_embed in enumerate(self.patch_embed):
@@ -389,14 +406,18 @@ class CrossViT(nn.Module):
 
         # NOTE: was before branch token section, move to here to assure all branch token are before layer norm
         xs = [norm(xs[i]) for i, norm in enumerate(self.norm)]
-        return [xo[:, 0] for xo in xs]
+        return xs
+
+    def forward_head(self, xs: List[torch.Tensor], pre_logits: bool = False) -> torch.Tensor:
+        xs = [x[:, 1:].mean(dim=1) for x in xs] if self.global_pool == 'avg' else [x[:, 0] for x in xs]
+        if pre_logits or isinstance(self.head[0], nn.Identity):
+            return torch.cat([x for x in xs], dim=1)
+        return torch.mean(torch.stack([head(xs[i]) for i, head in enumerate(self.head)], dim=0), dim=0)
 
     def forward(self, x):
         xs = self.forward_features(x)
-        ce_logits = [head(xs[i]) for i, head in enumerate(self.head)]
-        if not isinstance(self.head[0], nn.Identity):
-            ce_logits = torch.mean(torch.stack(ce_logits, dim=0), dim=0)
-        return ce_logits
+        x = self.forward_head(xs)
+        return x
 
 
 def _create_crossvit(variant, pretrained=False, **kwargs):
@@ -415,7 +436,6 @@ def _create_crossvit(variant, pretrained=False, **kwargs):
 
     return build_model_with_cfg(
         CrossViT, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_filter_fn=pretrained_filter_fn,
         **kwargs)
 

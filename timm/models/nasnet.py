@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, create_conv2d, create_pool2d, create_classifier
+from .layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['NASNetALarge']
@@ -407,8 +407,9 @@ class ReductionCell1(nn.Module):
 class NASNetALarge(nn.Module):
     """NASNetALarge (6 @ 4032) """
 
-    def __init__(self, num_classes=1000, in_chans=3, stem_size=96, channel_multiplier=2,
-                 num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
+    def __init__(
+            self, num_classes=1000, in_chans=3, stem_size=96, channel_multiplier=2,
+            num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
         super(NASNetALarge, self).__init__()
         self.num_classes = num_classes
         self.stem_size = stem_size
@@ -420,7 +421,7 @@ class NASNetALarge(nn.Module):
         channels = self.num_features // 24
         # 24 is default value for the architecture
 
-        self.conv0 = ConvBnAct(
+        self.conv0 = ConvNormAct(
             in_channels=in_chans, out_channels=self.stem_size, kernel_size=3, padding=0, stride=2,
             norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
 
@@ -503,6 +504,23 @@ class NASNetALarge(nn.Module):
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^conv0|cell_stem_[01]',
+            blocks=[
+                (r'^cell_(\d+)', None),
+                (r'^reduction_cell_0', (6,)),
+                (r'^reduction_cell_1', (12,)),
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.last_linear
 
@@ -542,19 +560,22 @@ class NASNetALarge(nn.Module):
         x = self.act(x_cell_17)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x):
         x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
         x = self.last_linear(x)
         return x
 
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
+
 
 def _create_nasnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         NASNetALarge, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_cls='hook', no_rewrite=True),  # not possible to re-write this model
         **kwargs)
 

@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, flatten_modules
 from .layers import create_classifier
 from .registry import register_model
 
@@ -300,6 +300,30 @@ class InceptionResnetV2(nn.Module):
 
         self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        module_map = {k: i for i, (k, _) in enumerate(flatten_modules(self.named_children(), prefix=()))}
+        module_map.pop(('classif',))
+
+        def _matcher(name):
+            if any([name.startswith(n) for n in ('conv2d_1', 'conv2d_2')]):
+                return 0
+            elif any([name.startswith(n) for n in ('conv2d_3', 'conv2d_4')]):
+                return 1
+            elif any([name.startswith(n) for n in ('block8', 'conv2d_7')]):
+                return len(module_map) + 1
+            else:
+                for k in module_map.keys():
+                    if k == tuple(name.split('.')[:len(k)]):
+                        return module_map[k]
+                return float('inf')
+        return _matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, "checkpointing not supported"
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classif
 
@@ -325,20 +349,20 @@ class InceptionResnetV2(nn.Module):
         x = self.conv2d_7b(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.classif(x)
+        return x if pre_logits else self.classif(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
 def _create_inception_resnet_v2(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(
-        InceptionResnetV2, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(InceptionResnetV2, variant, pretrained, **kwargs)
 
 
 @register_model

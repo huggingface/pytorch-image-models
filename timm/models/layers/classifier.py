@@ -45,10 +45,12 @@ class ClassifierHead(nn.Module):
         self.fc = _create_fc(num_pooled_features, num_classes, use_conv=use_conv)
         self.flatten = nn.Flatten(1) if use_conv and pool_type else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate:
             x = F.dropout(x, p=float(self.drop_rate), training=self.training)
-        x = self.fc(x)
-        x = self.flatten(x)
-        return x
+        if pre_logits:
+            return x.flatten(1)
+        else:
+            x = self.fc(x)
+            return self.flatten(x)

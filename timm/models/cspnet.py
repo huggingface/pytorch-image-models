@@ -12,13 +12,14 @@ Reference impl via darknet cfg files at https://github.com/WongKinYiu/CrossStage
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+from functools import partial
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import ClassifierHead, ConvBnAct, DropPath, create_attn, get_norm_act_layer
+from .helpers import build_model_with_cfg, named_apply, MATCH_PREV_GROUP
+from .layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, create_attn, get_norm_act_layer
 from .registry import register_model
 
 
@@ -130,7 +131,7 @@ model_cfgs = dict(
 
 def create_stem(
         in_chans=3, out_chs=32, kernel_size=3, stride=2, pool='',
-        act_layer=None, norm_layer=None, aa_layer=None):
+        act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None):
     stem = nn.Sequential()
     if not isinstance(out_chs, (tuple, list)):
         out_chs = [out_chs]
@@ -138,7 +139,7 @@ def create_stem(
     in_c = in_chans
     for i, out_c in enumerate(out_chs):
         conv_name = f'conv{i + 1}'
-        stem.add_module(conv_name, ConvBnAct(
+        stem.add_module(conv_name, ConvNormAct(
             in_c, out_c, kernel_size, stride=stride if i == 0 else 1,
             act_layer=act_layer, norm_layer=norm_layer))
         in_c = out_c
@@ -156,22 +157,25 @@ class ResBottleneck(nn.Module):
     """ ResNe(X)t Bottleneck Block
     """
 
-    def __init__(self, in_chs, out_chs, dilation=1, bottle_ratio=0.25, groups=1,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_last=False,
-                 attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+    def __init__(
+            self, in_chs, out_chs, dilation=1, bottle_ratio=0.25, groups=1,
+            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_last=False,
+            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
         super(ResBottleneck, self).__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
-        ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer, drop_block=drop_block)
+        ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
 
-        self.conv1 = ConvBnAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
-        self.conv2 = ConvBnAct(mid_chs, mid_chs, kernel_size=3, dilation=dilation, groups=groups, **ckwargs)
+        self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
+        self.conv2 = ConvNormActAa(
+            mid_chs, mid_chs, kernel_size=3, dilation=dilation, groups=groups,
+            aa_layer=aa_layer, drop_layer=drop_block, **ckwargs)
         self.attn2 = create_attn(attn_layer, channels=mid_chs) if not attn_last else None
-        self.conv3 = ConvBnAct(mid_chs, out_chs, kernel_size=1, apply_act=False, **ckwargs)
+        self.conv3 = ConvNormAct(mid_chs, out_chs, kernel_size=1, apply_act=False, **ckwargs)
         self.attn3 = create_attn(attn_layer, channels=out_chs) if attn_last else None
         self.drop_path = drop_path
         self.act3 = act_layer(inplace=True)
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.conv3.bn.weight)
 
     def forward(self, x):
@@ -196,18 +200,21 @@ class DarkBlock(nn.Module):
     """ DarkNet Block
     """
 
-    def __init__(self, in_chs, out_chs, dilation=1, bottle_ratio=0.5, groups=1,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None,
-                 drop_block=None, drop_path=None):
+    def __init__(
+            self, in_chs, out_chs, dilation=1, bottle_ratio=0.5, groups=1,
+            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None,
+            drop_block=None, drop_path=None):
         super(DarkBlock, self).__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
-        ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer, drop_block=drop_block)
-        self.conv1 = ConvBnAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
-        self.conv2 = ConvBnAct(mid_chs, out_chs, kernel_size=3, dilation=dilation, groups=groups, **ckwargs)
+        ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
+        self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
+        self.conv2 = ConvNormActAa(
+            mid_chs, out_chs, kernel_size=3, dilation=dilation, groups=groups,
+            aa_layer=aa_layer, drop_layer=drop_block, **ckwargs)
         self.attn = create_attn(attn_layer, channels=out_chs)
         self.drop_path = drop_path
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.conv2.bn.weight)
 
     def forward(self, x):
@@ -224,9 +231,10 @@ class DarkBlock(nn.Module):
 
 class CrossStage(nn.Module):
     """Cross Stage."""
-    def __init__(self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., exp_ratio=1.,
-                 groups=1, first_dilation=None, down_growth=False, cross_linear=False, block_dpr=None,
-                 block_fn=ResBottleneck, **block_kwargs):
+    def __init__(
+            self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., exp_ratio=1.,
+            groups=1, first_dilation=None, down_growth=False, cross_linear=False, block_dpr=None,
+            block_fn=ResBottleneck, **block_kwargs):
         super(CrossStage, self).__init__()
         first_dilation = first_dilation or dilation
         down_chs = out_chs if down_growth else in_chs  # grow downsample channels to output channels
@@ -235,7 +243,7 @@ class CrossStage(nn.Module):
         conv_kwargs = dict(act_layer=block_kwargs.get('act_layer'), norm_layer=block_kwargs.get('norm_layer'))
 
         if stride != 1 or first_dilation != dilation:
-            self.conv_down = ConvBnAct(
+            self.conv_down = ConvNormActAa(
                 in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                 aa_layer=block_kwargs.get('aa_layer', None), **conv_kwargs)
             prev_chs = down_chs
@@ -246,7 +254,7 @@ class CrossStage(nn.Module):
         # FIXME this 1x1 expansion is pushed down into the cross and block paths in the darknet cfgs. Also,
         # there is also special case for the first stage for some of the model that results in uneven split
         # across the two paths. I did it this way for simplicity for now.
-        self.conv_exp = ConvBnAct(prev_chs, exp_chs, kernel_size=1, apply_act=not cross_linear, **conv_kwargs)
+        self.conv_exp = ConvNormAct(prev_chs, exp_chs, kernel_size=1, apply_act=not cross_linear, **conv_kwargs)
         prev_chs = exp_chs // 2  # output of conv_exp is always split in two
 
         self.blocks = nn.Sequential()
@@ -257,8 +265,8 @@ class CrossStage(nn.Module):
             prev_chs = block_out_chs
 
         # transition convs
-        self.conv_transition_b = ConvBnAct(prev_chs, exp_chs // 2, kernel_size=1, **conv_kwargs)
-        self.conv_transition = ConvBnAct(exp_chs, out_chs, kernel_size=1, **conv_kwargs)
+        self.conv_transition_b = ConvNormAct(prev_chs, exp_chs // 2, kernel_size=1, **conv_kwargs)
+        self.conv_transition = ConvNormAct(exp_chs, out_chs, kernel_size=1, **conv_kwargs)
 
     def forward(self, x):
         if self.conv_down is not None:
@@ -275,12 +283,13 @@ class CrossStage(nn.Module):
 class DarkStage(nn.Module):
     """DarkNet stage."""
 
-    def __init__(self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., groups=1,
-                 first_dilation=None, block_fn=ResBottleneck, block_dpr=None, **block_kwargs):
+    def __init__(
+            self, in_chs, out_chs, stride, dilation, depth, block_ratio=1., bottle_ratio=1., groups=1,
+            first_dilation=None, block_fn=ResBottleneck, block_dpr=None, **block_kwargs):
         super(DarkStage, self).__init__()
         first_dilation = first_dilation or dilation
 
-        self.conv_down = ConvBnAct(
+        self.conv_down = ConvNormActAa(
             in_chs, out_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
             act_layer=block_kwargs.get('act_layer'), norm_layer=block_kwargs.get('norm_layer'),
             aa_layer=block_kwargs.get('aa_layer', None))
@@ -342,9 +351,10 @@ class CspNet(nn.Module):
     darknet impl. I did it this way for simplicity and less special cases.
     """
 
-    def __init__(self, cfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg', drop_rate=0.,
-                 act_layer=nn.LeakyReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_path_rate=0.,
-                 zero_init_last_bn=True, stage_fn=CrossStage, block_fn=ResBottleneck):
+    def __init__(
+            self, cfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg', drop_rate=0.,
+            act_layer=nn.LeakyReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_path_rate=0.,
+            zero_init_last=True, stage_fn=CrossStage, block_fn=ResBottleneck):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -375,20 +385,25 @@ class CspNet(nn.Module):
         self.head = ClassifierHead(
             in_chs=prev_chs, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0.0, std=0.01)
-                nn.init.zeros_(m.bias)
-        if zero_init_last_bn:
-            for m in self.modules():
-                if hasattr(m, 'zero_init_last_bn'):
-                    m.zero_init_last_bn()
+        named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^stages\.(\d+)\..*transition', MATCH_PREV_GROUP),  # map to last block in stage
+                (r'^stages\.(\d+)', (0,)),
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -400,10 +415,26 @@ class CspNet(nn.Module):
         x = self.stages(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
+
+
+def _init_weights(module, name, zero_init_last=False):
+    if isinstance(module, nn.Conv2d):
+        nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+    elif isinstance(module, nn.BatchNorm2d):
+        nn.init.ones_(module.weight)
+        nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Linear):
+        nn.init.normal_(module.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(module.bias)
+    elif zero_init_last and hasattr(module, 'zero_init_last'):
+        module.zero_init_last()
 
 
 def _create_cspnet(variant, pretrained=False, **kwargs):
@@ -412,7 +443,6 @@ def _create_cspnet(variant, pretrained=False, **kwargs):
     out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4, 5) if 'darknet' in variant else (0, 1, 2, 3, 4))
     return build_model_with_cfg(
         CspNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=model_cfgs[cfg_variant],
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs)
@@ -440,7 +470,7 @@ def cspresnext50(pretrained=False, **kwargs):
 
 @register_model
 def cspresnext50_iabn(pretrained=False, **kwargs):
-    norm_layer = get_norm_act_layer('iabn')
+    norm_layer = get_norm_act_layer('iabn', act_layer='leaky_relu')
     return _create_cspnet('cspresnext50_iabn', pretrained=pretrained, norm_layer=norm_layer, **kwargs)
 
 
@@ -451,7 +481,7 @@ def cspdarknet53(pretrained=False, **kwargs):
 
 @register_model
 def cspdarknet53_iabn(pretrained=False, **kwargs):
-    norm_layer = get_norm_act_layer('iabn')
+    norm_layer = get_norm_act_layer('iabn', act_layer='leaky_relu')
     return _create_cspnet('cspdarknet53_iabn', pretrained=pretrained, block_fn=DarkBlock, norm_layer=norm_layer, **kwargs)
 
 

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, resolve_pretrained_cfg, flatten_modules
 from .registry import register_model
 from .layers import trunc_normal_, create_classifier, Linear
 
@@ -336,54 +336,28 @@ class InceptionV3(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def forward_preaux(self, x):
-        # N x 3 x 299 x 299
-        x = self.Conv2d_1a_3x3(x)
-        # N x 32 x 149 x 149
-        x = self.Conv2d_2a_3x3(x)
-        # N x 32 x 147 x 147
-        x = self.Conv2d_2b_3x3(x)
-        # N x 64 x 147 x 147
-        x = self.Pool1(x)
-        # N x 64 x 73 x 73
-        x = self.Conv2d_3b_1x1(x)
-        # N x 80 x 73 x 73
-        x = self.Conv2d_4a_3x3(x)
-        # N x 192 x 71 x 71
-        x = self.Pool2(x)
-        # N x 192 x 35 x 35
-        x = self.Mixed_5b(x)
-        # N x 256 x 35 x 35
-        x = self.Mixed_5c(x)
-        # N x 288 x 35 x 35
-        x = self.Mixed_5d(x)
-        # N x 288 x 35 x 35
-        x = self.Mixed_6a(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6b(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6c(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6d(x)
-        # N x 768 x 17 x 17
-        x = self.Mixed_6e(x)
-        # N x 768 x 17 x 17
-        return x
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        module_map = {k: i for i, (k, _) in enumerate(flatten_modules(self.named_children(), prefix=()))}
+        module_map.pop(('fc',))
 
-    def forward_postaux(self, x):
-        x = self.Mixed_7a(x)
-        # N x 1280 x 8 x 8
-        x = self.Mixed_7b(x)
-        # N x 2048 x 8 x 8
-        x = self.Mixed_7c(x)
-        # N x 2048 x 8 x 8
-        return x
+        def _matcher(name):
+            if any([name.startswith(n) for n in ('Conv2d_1', 'Conv2d_2')]):
+                return 0
+            elif any([name.startswith(n) for n in ('Conv2d_3', 'Conv2d_4')]):
+                return 1
+            else:
+                for k in module_map.keys():
+                    if k == tuple(name.split('.')[:len(k)]):
+                        return module_map[k]
+                return float('inf')
+        return _matcher
 
-    def forward_features(self, x):
-        x = self.forward_preaux(x)
-        x = self.forward_postaux(x)
-        return x
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
 
+    @torch.jit.ignore
     def get_classifier(self):
         return self.fc
 
@@ -391,12 +365,45 @@ class InceptionV3(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_preaux(self, x):
+        x = self.Conv2d_1a_3x3(x)  # N x 32 x 149 x 149
+        x = self.Conv2d_2a_3x3(x)  # N x 32 x 147 x 147
+        x = self.Conv2d_2b_3x3(x)  # N x 64 x 147 x 147
+        x = self.Pool1(x)  # N x 64 x 73 x 73
+        x = self.Conv2d_3b_1x1(x)  # N x 80 x 73 x 73
+        x = self.Conv2d_4a_3x3(x)  # N x 192 x 71 x 71
+        x = self.Pool2(x)  # N x 192 x 35 x 35
+        x = self.Mixed_5b(x)  # N x 256 x 35 x 35
+        x = self.Mixed_5c(x)  # N x 288 x 35 x 35
+        x = self.Mixed_5d(x)  # N x 288 x 35 x 35
+        x = self.Mixed_6a(x)  # N x 768 x 17 x 17
+        x = self.Mixed_6b(x)  # N x 768 x 17 x 17
+        x = self.Mixed_6c(x)  # N x 768 x 17 x 17
+        x = self.Mixed_6d(x)  # N x 768 x 17 x 17
+        x = self.Mixed_6e(x)  # N x 768 x 17 x 17
+        return x
+
+    def forward_postaux(self, x):
+        x = self.Mixed_7a(x)  # N x 1280 x 8 x 8
+        x = self.Mixed_7b(x)  # N x 2048 x 8 x 8
+        x = self.Mixed_7c(x)  # N x 2048 x 8 x 8
+        return x
+
+    def forward_features(self, x):
+        x = self.forward_preaux(x)
+        x = self.forward_postaux(x)
+        return x
+
+    def forward_head(self, x):
         x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         x = self.fc(x)
+        return x
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -416,26 +423,24 @@ class InceptionV3Aux(InceptionV3):
 
     def forward(self, x):
         x, aux = self.forward_features(x)
-        x = self.global_pool(x)
-        if self.drop_rate > 0:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.fc(x)
+        x = self.forward_head(x)
         return x, aux
 
 
 def _create_inception_v3(variant, pretrained=False, **kwargs):
-    default_cfg = default_cfgs[variant]
+    pretrained_cfg = resolve_pretrained_cfg(variant, kwargs=kwargs)
     aux_logits = kwargs.pop('aux_logits', False)
     if aux_logits:
         assert not kwargs.pop('features_only', False)
         model_cls = InceptionV3Aux
-        load_strict = default_cfg['has_aux']
+        load_strict = pretrained_cfg['has_aux']
     else:
         model_cls = InceptionV3
-        load_strict = not default_cfg['has_aux']
+        load_strict = not pretrained_cfg['has_aux']
+
     return build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfg,
+        pretrained_cfg=pretrained_cfg,
         pretrained_strict=load_strict,
         **kwargs)
 

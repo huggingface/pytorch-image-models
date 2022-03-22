@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 
 def drop_block_2d(
-        x, drop_prob: float = 0.1, block_size: int = 7,  gamma_scale: float = 1.0,
+        x, drop_prob: float = 0.1, block_size: int = 7, gamma_scale: float = 1.0,
         with_noise: bool = False, inplace: bool = False, batchwise: bool = False):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
@@ -32,7 +32,7 @@ def drop_block_2d(
     clipped_block_size = min(block_size, min(W, H))
     # seed_drop_rate, the gamma parameter
     gamma = gamma_scale * drop_prob * total_size / clipped_block_size ** 2 / (
-        (W - block_size + 1) * (H - block_size + 1))
+            (W - block_size + 1) * (H - block_size + 1))
 
     # Forces the block to be inside the feature map.
     w_i, h_i = torch.meshgrid(torch.arange(W).to(x.device), torch.arange(H).to(x.device))
@@ -104,14 +104,16 @@ def drop_block_fast_2d(
 class DropBlock2d(nn.Module):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
     """
-    def __init__(self,
-                 drop_prob=0.1,
-                 block_size=7,
-                 gamma_scale=1.0,
-                 with_noise=False,
-                 inplace=False,
-                 batchwise=False,
-                 fast=True):
+
+    def __init__(
+            self,
+            drop_prob=0.1,
+            block_size=7,
+            gamma_scale=1.0,
+            with_noise=False,
+            inplace=False,
+            batchwise=False,
+            fast=True):
         super(DropBlock2d, self).__init__()
         self.drop_prob = drop_prob
         self.gamma_scale = gamma_scale

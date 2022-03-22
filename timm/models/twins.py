@@ -198,8 +198,9 @@ class GlobalSubSampleAttn(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, ws=None):
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., drop=0., attn_drop=0., drop_path=0.,
+            act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, ws=None):
         super().__init__()
         self.norm1 = norm_layer(dim)
         if ws is None:
@@ -273,15 +274,17 @@ class Twins(nn.Module):
     Adapted from PVT (PyramidVisionTransformer) class at https://github.com/whai362/PVT.git
     """
     def __init__(
-            self, img_size=224, patch_size=4, in_chans=3, num_classes=1000, embed_dims=(64, 128, 256, 512),
-            num_heads=(1, 2, 4, 8), mlp_ratios=(4, 4, 4, 4), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=(3, 4, 6, 3), sr_ratios=(8, 4, 2, 1), wss=None,
-            block_cls=Block):
+            self, img_size=224, patch_size=4, in_chans=3, num_classes=1000, global_pool='avg',
+            embed_dims=(64, 128, 256, 512), num_heads=(1, 2, 4, 8), mlp_ratios=(4, 4, 4, 4), depths=(3, 4, 6, 3),
+            sr_ratios=(8, 4, 2, 1), wss=None, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
+            norm_layer=partial(nn.LayerNorm, eps=1e-6), block_cls=Block):
         super().__init__()
         self.num_classes = num_classes
+        self.global_pool = global_pool
         self.depths = depths
         self.embed_dims = embed_dims
         self.num_features = embed_dims[-1]
+        self.grad_checkpointing = False
 
         img_size = to_2tuple(img_size)
         prev_chs = in_chans
@@ -319,11 +322,34 @@ class Twins(nn.Module):
     def no_weight_decay(self):
         return set(['pos_block.' + n for n, p in self.pos_block.named_parameters()])
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^patch_embeds.0',  # stem and embed
+            blocks=[
+                (r'^(?:blocks|patch_embeds|pos_block)\.(\d+)', None),
+                ('^norm', (99999,))
+            ] if coarse else [
+                (r'^blocks\.(\d+)\.(\d+)', None),
+                (r'^(?:patch_embeds|pos_block)\.(\d+)', (0,)),
+                (r'^norm', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('', 'avg')
+            self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def _init_weights(self, m):
@@ -340,9 +366,6 @@ class Twins(nn.Module):
             m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
             if m.bias is not None:
                 m.bias.data.zero_()
-        elif isinstance(m, nn.BatchNorm2d):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -357,11 +380,16 @@ class Twins(nn.Module):
             if i < len(self.depths) - 1:
                 x = x.reshape(B, *size, -1).permute(0, 3, 1, 2).contiguous()
         x = self.norm(x)
-        return x.mean(dim=1)  # GAP here
+        return x
+
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool == 'avg':
+            x = x.mean(dim=1)
+        return x if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -369,10 +397,7 @@ def _create_twins(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    model = build_model_with_cfg(
-        Twins, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    model = build_model_with_cfg(Twins, variant, pretrained, **kwargs)
     return model
 
 

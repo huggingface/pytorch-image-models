@@ -16,6 +16,7 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
@@ -215,8 +216,9 @@ class LPI(nn.Module):
 class ClassAttentionBlock(nn.Module):
     """Class Attention Layer as in CaiT https://arxiv.org/abs/2103.17239"""
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm, eta=1., tokens_norm=False):
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0., drop_path=0.,
+            act_layer=nn.GELU, norm_layer=nn.LayerNorm, eta=1., tokens_norm=False):
         super().__init__()
         self.norm1 = norm_layer(dim)
 
@@ -292,8 +294,9 @@ class XCA(nn.Module):
 
 
 class XCABlock(nn.Module):
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, eta=1.):
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
+            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, eta=1.):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = XCA(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
@@ -325,9 +328,10 @@ class XCiT(nn.Module):
     https://github.com/facebookresearch/deit/
     """
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-                 act_layer=None, norm_layer=None, cls_attn_layers=2, use_pos_embed=True, eta=1., tokens_norm=False):
+    def __init__(
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token', embed_dim=768,
+            depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
+            act_layer=None, norm_layer=None, cls_attn_layers=2, use_pos_embed=True, eta=1., tokens_norm=False):
         """
         Args:
             img_size (int, tuple): input image size
@@ -353,14 +357,17 @@ class XCiT(nn.Module):
               interaction (class LPI) and the patch embedding (class ConvPatchEmbed)
         """
         super().__init__()
+        assert global_pool in ('', 'avg', 'token')
         img_size = to_2tuple(img_size)
         assert (img_size[0] % patch_size == 0) and (img_size[0] % patch_size == 0), \
             '`patch_size` should divide image dimensions evenly'
+        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
+        act_layer = act_layer or nn.GELU
 
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim
-        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
-        act_layer = act_layer or nn.GELU
+        self.global_pool = global_pool
+        self.grad_checkpointing = False
 
         self.patch_embed = ConvPatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim, act_layer=act_layer)
@@ -396,19 +403,32 @@ class XCiT(nn.Module):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
 
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
+            blocks=r'^blocks\.(\d+)',
+            cls_attn_blocks=[(r'^cls_attn_blocks\.(\d+)', None), (r'^norm', (99999,))]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('', 'avg', 'token')
+            self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
@@ -420,24 +440,33 @@ class XCiT(nn.Module):
             # `pos_embed` (B, C, Hp, Wp), reshape -> (B, C, N), permute -> (B, N, C)
             pos_encoding = self.pos_embed(B, Hp, Wp).reshape(B, -1, x.shape[1]).permute(0, 2, 1)
             x = x + pos_encoding
-
         x = self.pos_drop(x)
 
         for blk in self.blocks:
-            x = blk(x, Hp, Wp)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, Hp, Wp)
+            else:
+                x = blk(x, Hp, Wp)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
+        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
 
         for blk in self.cls_attn_blocks:
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
 
-        x = self.norm(x)[:, 0]
+        x = self.norm(x)
         return x
+
+    def forward_head(self, x, pre_logits: bool = False):
+        if self.global_pool:
+            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        return x if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -471,9 +500,8 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_xcit(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
     model = build_model_with_cfg(
-        XCiT, variant, pretrained, default_cfg=default_cfg, pretrained_filter_fn=checkpoint_filter_fn, **kwargs)
+        XCiT, variant, pretrained, pretrained_filter_fn=checkpoint_filter_fn, **kwargs)
     return model
 
 

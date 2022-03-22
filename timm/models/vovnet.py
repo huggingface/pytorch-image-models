@@ -19,9 +19,9 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .registry import register_model
-from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, SeparableConvBnAct, BatchNormAct2d, ClassifierHead, DropPath,\
-    create_attn, create_norm_act, get_norm_act_layer
+from .helpers import build_model_with_cfg, checkpoint_seq
+from .layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath,\
+    create_attn, create_norm_act_layer, get_norm_act_layer
 
 
 # model cfgs adapted from https://github.com/youngwanLEE/vovnet-detectron2 &
@@ -178,8 +178,9 @@ class SequentialAppendList(nn.Sequential):
 
 class OsaBlock(nn.Module):
 
-    def __init__(self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
-                 depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path=None):
+    def __init__(
+            self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
+            depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path=None):
         super(OsaBlock, self).__init__()
 
         self.residual = residual
@@ -189,28 +190,25 @@ class OsaBlock(nn.Module):
         next_in_chs = in_chs
         if self.depthwise and next_in_chs != mid_chs:
             assert not residual
-            self.conv_reduction = ConvBnAct(next_in_chs, mid_chs, 1, **conv_kwargs)
+            self.conv_reduction = ConvNormAct(next_in_chs, mid_chs, 1, **conv_kwargs)
         else:
             self.conv_reduction = None
 
         mid_convs = []
         for i in range(layer_per_block):
             if self.depthwise:
-                conv = SeparableConvBnAct(mid_chs, mid_chs, **conv_kwargs)
+                conv = SeparableConvNormAct(mid_chs, mid_chs, **conv_kwargs)
             else:
-                conv = ConvBnAct(next_in_chs, mid_chs, 3, **conv_kwargs)
+                conv = ConvNormAct(next_in_chs, mid_chs, 3, **conv_kwargs)
             next_in_chs = mid_chs
             mid_convs.append(conv)
         self.conv_mid = SequentialAppendList(*mid_convs)
 
         # feature aggregation
         next_in_chs = in_chs + layer_per_block * mid_chs
-        self.conv_concat = ConvBnAct(next_in_chs, out_chs, **conv_kwargs)
+        self.conv_concat = ConvNormAct(next_in_chs, out_chs, **conv_kwargs)
 
-        if attn:
-            self.attn = create_attn(attn, out_chs)
-        else:
-            self.attn = None
+        self.attn = create_attn(attn, out_chs) if attn else None
 
         self.drop_path = drop_path
 
@@ -231,10 +229,12 @@ class OsaBlock(nn.Module):
 
 class OsaStage(nn.Module):
 
-    def __init__(self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
-                 residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU,
-                 drop_path_rates=None):
+    def __init__(
+            self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
+            residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU,
+            drop_path_rates=None):
         super(OsaStage, self).__init__()
+        self.grad_checkpointing = False
 
         if downsample:
             self.pool = nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True)
@@ -258,14 +258,18 @@ class OsaStage(nn.Module):
     def forward(self, x):
         if self.pool is not None:
             x = self.pool(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
 
 
 class VovNet(nn.Module):
 
-    def __init__(self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
-                 output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path_rate=0.):
+    def __init__(
+            self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
+            output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path_rate=0.):
         """ VovNet (v2)
         """
         super(VovNet, self).__init__()
@@ -283,9 +287,9 @@ class VovNet(nn.Module):
 
         # Stem module
         last_stem_stride = stem_stride // 2
-        conv_type = SeparableConvBnAct if cfg["depthwise"] else ConvBnAct
+        conv_type = SeparableConvNormAct if cfg["depthwise"] else ConvNormAct
         self.stem = nn.Sequential(*[
-            ConvBnAct(in_chans, stem_chs[0], 3, stride=2, **conv_kwargs),
+            ConvNormAct(in_chans, stem_chs[0], 3, stride=2, **conv_kwargs),
             conv_type(stem_chs[0], stem_chs[1], 3, stride=1, **conv_kwargs),
             conv_type(stem_chs[1], stem_chs[2], 3, stride=last_stem_stride, **conv_kwargs),
         ])
@@ -315,12 +319,23 @@ class VovNet(nn.Module):
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1.)
-                nn.init.constant_(m.bias, 0.)
             elif isinstance(m, nn.Linear):
                 nn.init.zeros_(m.bias)
 
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=r'^stages\.(\d+)' if coarse else r'^stages\.(\d+).blocks\.(\d+)',
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.stages:
+            s.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -331,15 +346,18 @@ class VovNet(nn.Module):
         x = self.stem(x)
         return self.stages(x)
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        return self.head(x)
+        x = self.forward_head(x)
+        return x
 
 
 def _create_vovnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         VovNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=model_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
         **kwargs)
@@ -395,12 +413,12 @@ def eca_vovnet39b(pretrained=False, **kwargs):
 @register_model
 def ese_vovnet39b_evos(pretrained=False, **kwargs):
     def norm_act_fn(num_features, **nkwargs):
-        return create_norm_act('EvoNormSample', num_features, jit=False, **nkwargs)
+        return create_norm_act_layer('evonorms0', num_features, jit=False, **nkwargs)
     return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
 
 
 @register_model
 def ese_vovnet99b_iabn(pretrained=False, **kwargs):
-    norm_layer = get_norm_act_layer('iabn')
+    norm_layer = get_norm_act_layer('iabn', act_layer='leaky_relu')
     return _create_vovnet(
         'ese_vovnet99b_iabn', pretrained=pretrained, norm_layer=norm_layer, act_layer=nn.LeakyReLU, **kwargs)

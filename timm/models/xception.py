@@ -21,7 +21,7 @@ normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
 
 The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
 """
-
+import torch.jit
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -172,6 +172,21 @@ class Xception(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^conv[12]|bn[12]',
+            blocks=[
+                (r'^block(\d+)', None),
+                (r'^conv[34]|bn[34]', (99,)),
+            ],
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, "gradient checkpointing not supported"
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.fc
 
@@ -210,19 +225,21 @@ class Xception(nn.Module):
         x = self.act4(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
-        x = self.fc(x)
+        return x if pre_logits else self.fc(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
 def _xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         Xception, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_cls='hook'),
         **kwargs)
 

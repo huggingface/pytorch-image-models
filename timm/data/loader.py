@@ -7,6 +7,7 @@ Hacked together by / Copyright 2019, Ross Wightman
 """
 import random
 from functools import partial
+from itertools import repeat
 from typing import Callable
 
 import torch.utils.data
@@ -54,20 +55,37 @@ def fast_collate(batch):
         assert False
 
 
+def expand_to_chs(x, n):
+    if not isinstance(x, (tuple, list)):
+        x = tuple(repeat(x, n))
+    elif len(x) == 1:
+        x = x * n
+    else:
+        assert len(x) == n, 'normalization stats must match image channels'
+    return x
+
+
 class PrefetchLoader:
 
-    def __init__(self,
-                 loader,
-                 mean=IMAGENET_DEFAULT_MEAN,
-                 std=IMAGENET_DEFAULT_STD,
-                 fp16=False,
-                 re_prob=0.,
-                 re_mode='const',
-                 re_count=1,
-                 re_num_splits=0):
+    def __init__(
+            self,
+            loader,
+            mean=IMAGENET_DEFAULT_MEAN,
+            std=IMAGENET_DEFAULT_STD,
+            channels=3,
+            fp16=False,
+            re_prob=0.,
+            re_mode='const',
+            re_count=1,
+            re_num_splits=0):
+
+        mean = expand_to_chs(mean, channels)
+        std = expand_to_chs(std, channels)
+        normalization_shape = (1, channels, 1, 1)
+
         self.loader = loader
-        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
-        self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
+        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(normalization_shape)
+        self.std = torch.tensor([x * 255 for x in std]).cuda().view(normalization_shape)
         self.fp16 = fp16
         if fp16:
             self.mean = self.mean.half()
@@ -247,6 +265,7 @@ def create_loader(
             loader,
             mean=mean,
             std=std,
+            channels=input_size[0],
             fp16=fp16,
             re_prob=prefetch_re_prob,
             re_mode=re_mode,

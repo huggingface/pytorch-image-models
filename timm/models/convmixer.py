@@ -1,7 +1,13 @@
+""" ConvMixer
+
+"""
+import torch
 import torch.nn as nn
+
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.registry import register_model
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
+from .layers import SelectAdaptivePool2d
 
 
 def _cfg(url='', **kwargs):
@@ -32,55 +38,73 @@ class Residual(nn.Module):
 
 
 class ConvMixer(nn.Module):
-    def __init__(self, dim, depth, kernel_size=9, patch_size=7, in_chans=3, num_classes=1000, activation=nn.GELU, **kwargs):
+    def __init__(
+            self, dim, depth, kernel_size=9, patch_size=7, in_chans=3, num_classes=1000, global_pool='avg',
+            act_layer=nn.GELU, **kwargs):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = dim
-        self.head = nn.Linear(dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.grad_checkpointing = False
+
         self.stem = nn.Sequential(
             nn.Conv2d(in_chans, dim, kernel_size=patch_size, stride=patch_size),
-            activation(),
+            act_layer(),
             nn.BatchNorm2d(dim)
         )
         self.blocks = nn.Sequential(
             *[nn.Sequential(
                     Residual(nn.Sequential(
                         nn.Conv2d(dim, dim, kernel_size, groups=dim, padding="same"),
-                        activation(),
+                        act_layer(),
                         nn.BatchNorm2d(dim)
                     )),
                     nn.Conv2d(dim, dim, kernel_size=1),
-                    activation(),
+                    act_layer(),
                     nn.BatchNorm2d(dim)
             ) for i in range(depth)]
         )
-        self.pooling = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten()
-        )
+        self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+        self.head = nn.Linear(dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(stem=r'^stem', blocks=r'^blocks\.(\d+)')
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
           
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.blocks(x)
-        x = self.pooling(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
-    
+
+    def forward_head(self, x, pre_logits: bool = False):
+        x = self.pooling(x)
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
-
+        x = self.forward_head(x)
         return x
 
 
 def _create_convmixer(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(ConvMixer, variant, pretrained, default_cfg=default_cfgs[variant], **kwargs)
+    return build_model_with_cfg(ConvMixer, variant, pretrained, **kwargs)
 
 
 @register_model
@@ -91,7 +115,7 @@ def convmixer_1536_20(pretrained=False, **kwargs):
 
 @register_model
 def convmixer_768_32(pretrained=False, **kwargs):
-    model_args = dict(dim=768, depth=32, kernel_size=7, patch_size=7, activation=nn.ReLU, **kwargs)
+    model_args = dict(dim=768, depth=32, kernel_size=7, patch_size=7, act_layer=nn.ReLU, **kwargs)
     return _create_convmixer('convmixer_768_32', pretrained, **model_args)
 
 

@@ -8,6 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 from collections import OrderedDict
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -178,6 +179,23 @@ class Xception65(nn.Module):
 
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^conv[12]|bn[12]',
+            blocks=[
+                (r'^mid\.block(\d+)', None),
+                (r'^block(\d+)', None),
+                (r'^conv[345]|bn[345]', (99,)),
+            ],
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, "gradient checkpointing not supported"
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.fc
 
@@ -222,19 +240,22 @@ class Xception65(nn.Module):
         x = self.act5(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x):
         x = self.global_pool(x)
         if self.drop_rate:
             F.dropout(x, self.drop_rate, training=self.training)
         x = self.fc(x)
         return x
 
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
+
 
 def _create_gluon_xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         Xception65, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_cls='hook'),
         **kwargs)
 

@@ -14,7 +14,7 @@ from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import SelectiveKernel, ConvBnAct, create_attn
+from .layers import SelectiveKernel, ConvNormAct, ConvNormActAa, create_attn
 from .registry import register_model
 from .resnet import ResNet
 
@@ -46,13 +46,14 @@ default_cfgs = {
 class SelectiveKernelBasic(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
-                 sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU,
-                 norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+    def __init__(
+            self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
+            sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
         super(SelectiveKernelBasic, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
-        conv_kwargs = dict(drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer)
+        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
         assert base_width == 64, 'BasicBlock doest not support changing base width'
         first_planes = planes // reduce_first
@@ -60,19 +61,16 @@ class SelectiveKernelBasic(nn.Module):
         first_dilation = first_dilation or dilation
 
         self.conv1 = SelectiveKernel(
-            inplanes, first_planes, stride=stride, dilation=first_dilation, **conv_kwargs, **sk_kwargs)
-        conv_kwargs['act_layer'] = None
-        self.conv2 = ConvBnAct(
-            first_planes, outplanes, kernel_size=3, dilation=dilation, **conv_kwargs)
+            inplanes, first_planes, stride=stride, dilation=first_dilation,
+            aa_layer=aa_layer, drop_layer=drop_block, **conv_kwargs, **sk_kwargs)
+        self.conv2 = ConvNormAct(
+            first_planes, outplanes, kernel_size=3, dilation=dilation, apply_act=False, **conv_kwargs)
         self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
-        self.stride = stride
-        self.dilation = dilation
-        self.drop_block = drop_block
         self.drop_path = drop_path
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.conv2.bn.weight)
 
     def forward(self, x):
@@ -93,34 +91,30 @@ class SelectiveKernelBasic(nn.Module):
 class SelectiveKernelBottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=64, sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None,
-                 drop_block=None, drop_path=None):
+    def __init__(
+            self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64, sk_kwargs=None,
+            reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
+            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
         super(SelectiveKernelBottleneck, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
-        conv_kwargs = dict(drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer)
+        conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
         first_planes = width // reduce_first
         outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
 
-        self.conv1 = ConvBnAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
+        self.conv1 = ConvNormAct(inplanes, first_planes, kernel_size=1, **conv_kwargs)
         self.conv2 = SelectiveKernel(
             first_planes, width, stride=stride, dilation=first_dilation, groups=cardinality,
-            **conv_kwargs, **sk_kwargs)
-        conv_kwargs['act_layer'] = None
-        self.conv3 = ConvBnAct(width, outplanes, kernel_size=1, **conv_kwargs)
+            aa_layer=aa_layer, drop_layer=drop_block, **conv_kwargs, **sk_kwargs)
+        self.conv3 = ConvNormAct(width, outplanes, kernel_size=1, apply_act=False, **conv_kwargs)
         self.se = create_attn(attn_layer, outplanes)
         self.act = act_layer(inplace=True)
         self.downsample = downsample
-        self.stride = stride
-        self.dilation = dilation
-        self.drop_block = drop_block
         self.drop_path = drop_path
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.conv3.bn.weight)
 
     def forward(self, x):
@@ -140,10 +134,7 @@ class SelectiveKernelBottleneck(nn.Module):
 
 
 def _create_skresnet(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(
-        ResNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(ResNet, variant, pretrained, **kwargs)
 
 
 @register_model
@@ -156,7 +147,7 @@ def skresnet18(pretrained=False, **kwargs):
     sk_kwargs = dict(rd_ratio=1 / 8, rd_divisor=16, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[2, 2, 2, 2], block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last_bn=False, **kwargs)
+        zero_init_last=False, **kwargs)
     return _create_skresnet('skresnet18', pretrained, **model_args)
 
 
@@ -170,7 +161,7 @@ def skresnet34(pretrained=False, **kwargs):
     sk_kwargs = dict(rd_ratio=1 / 8, rd_divisor=16, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last_bn=False, **kwargs)
+        zero_init_last=False, **kwargs)
     return _create_skresnet('skresnet34', pretrained, **model_args)
 
 
@@ -184,7 +175,7 @@ def skresnet50(pretrained=False, **kwargs):
     sk_kwargs = dict(split_input=True)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last_bn=False, **kwargs)
+        zero_init_last=False, **kwargs)
     return _create_skresnet('skresnet50', pretrained, **model_args)
 
 
@@ -198,7 +189,7 @@ def skresnet50d(pretrained=False, **kwargs):
     sk_kwargs = dict(split_input=True)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last=False, **kwargs)
     return _create_skresnet('skresnet50d', pretrained, **model_args)
 
 
@@ -210,6 +201,6 @@ def skresnext50_32x4d(pretrained=False, **kwargs):
     sk_kwargs = dict(rd_ratio=1/16, rd_divisor=32, split_input=False)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], cardinality=32, base_width=4,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last_bn=False, **kwargs)
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last=False, **kwargs)
     return _create_skresnet('skresnext50_32x4d', pretrained, **model_args)
 

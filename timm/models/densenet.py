@@ -13,8 +13,8 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import BatchNormAct2d, create_norm_act, BlurPool2d, create_classifier
+from .helpers import build_model_with_cfg, MATCH_PREV_GROUP
+from .layers import BatchNormAct2d, create_norm_act_layer, BlurPool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['DenseNet']
@@ -45,8 +45,9 @@ default_cfgs = {
 
 
 class DenseLayer(nn.Module):
-    def __init__(self, num_input_features, growth_rate, bn_size, norm_layer=BatchNormAct2d,
-                 drop_rate=0., memory_efficient=False):
+    def __init__(
+            self, num_input_features, growth_rate, bn_size, norm_layer=BatchNormAct2d,
+            drop_rate=0., memory_efficient=False):
         super(DenseLayer, self).__init__()
         self.add_module('norm1', norm_layer(num_input_features)),
         self.add_module('conv1', nn.Conv2d(
@@ -113,8 +114,9 @@ class DenseLayer(nn.Module):
 class DenseBlock(nn.ModuleDict):
     _version = 2
 
-    def __init__(self, num_layers, num_input_features, bn_size, growth_rate, norm_layer=nn.ReLU,
-                 drop_rate=0., memory_efficient=False):
+    def __init__(
+            self, num_layers, num_input_features, bn_size, growth_rate, norm_layer=nn.ReLU,
+            drop_rate=0., memory_efficient=False):
         super(DenseBlock, self).__init__()
         for i in range(num_layers):
             layer = DenseLayer(
@@ -162,10 +164,10 @@ class DenseNet(nn.Module):
           but slower. Default: *False*. See `"paper" <https://arxiv.org/pdf/1707.06990.pdf>`_
     """
 
-    def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16), bn_size=4, stem_type='',
-                 num_classes=1000, in_chans=3, global_pool='avg',
-                 norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0, memory_efficient=False,
-                 aa_stem_only=True):
+    def __init__(
+            self, growth_rate=32, block_config=(6, 12, 24, 16), num_classes=1000, in_chans=3, global_pool='avg',
+            bn_size=4, stem_type='', norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0,
+            memory_efficient=False, aa_stem_only=True):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         super(DenseNet, self).__init__()
@@ -249,6 +251,18 @@ class DenseNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.bias, 0)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^features\.conv[012]|features\.norm[012]|features\.pool[012]',
+            blocks=r'^features\.(?:denseblock|transition)(\d+)' if coarse else [
+                (r'^features\.denseblock(\d+)\.denselayer(\d+)', None),
+                (r'^features\.transition(\d+)', MATCH_PREV_GROUP)  # FIXME combine with previous denselayer
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -288,7 +302,6 @@ def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
     kwargs['block_config'] = block_config
     return build_model_with_cfg(
         DenseNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True), pretrained_filter_fn=_filter_torchvision_pretrained,
         **kwargs)
 
@@ -370,7 +383,7 @@ def densenet264d_iabn(pretrained=False, **kwargs):
     r"""Densenet-264 model with deep stem and Inplace-ABN
     """
     def norm_act_fn(num_features, **kwargs):
-        return create_norm_act('iabn', num_features, **kwargs)
+        return create_norm_act_layer('iabn', num_features, act_layer='leaky_relu', **kwargs)
     model = _create_densenet(
         'densenet264d_iabn', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep',
         norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)

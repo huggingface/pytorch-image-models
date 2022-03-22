@@ -6,6 +6,7 @@ Res2Net additions from: https://github.com/gasvn/Res2Net/
 Res2Net Paper: `Res2Net: A New Multi-scale Backbone Architecture` - https://arxiv.org/abs/1904.01169
 """
 import math
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
@@ -62,7 +63,7 @@ class DlaBasic(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
         self.stride = stride
 
-    def forward(self, x, shortcut=None):
+    def forward(self, x, shortcut=None, children: Optional[List[torch.Tensor]] = None):
         if shortcut is None:
             shortcut = x
 
@@ -99,7 +100,7 @@ class DlaBottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(outplanes)
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x, shortcut=None):
+    def forward(self, x, shortcut: Optional[torch.Tensor] = None, children: Optional[List[torch.Tensor]] = None):
         if shortcut is None:
             shortcut = x
 
@@ -147,14 +148,13 @@ class DlaBottle2neck(nn.Module):
             bns.append(nn.BatchNorm2d(mid_planes))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)
-        if self.is_first:
-            self.pool = nn.AvgPool2d(kernel_size=3, stride=stride, padding=1)
+        self.pool = nn.AvgPool2d(kernel_size=3, stride=stride, padding=1) if self.is_first else None
 
         self.conv3 = nn.Conv2d(mid_planes * scale, outplanes, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(outplanes)
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x, shortcut=None):
+    def forward(self, x, shortcut: Optional[torch.Tensor] = None, children: Optional[List[torch.Tensor]] = None):
         if shortcut is None:
             shortcut = x
 
@@ -164,14 +164,21 @@ class DlaBottle2neck(nn.Module):
 
         spx = torch.split(out, self.width, 1)
         spo = []
+        sp = spx[0]  # redundant, for torchscript
         for i, (conv, bn) in enumerate(zip(self.convs, self.bns)):
-            sp = spx[i] if i == 0 or self.is_first else sp + spx[i]
+            if i == 0 or self.is_first:
+                sp = spx[i]
+            else:
+                sp = sp + spx[i]
             sp = conv(sp)
             sp = bn(sp)
             sp = self.relu(sp)
             spo.append(sp)
         if self.scale > 1:
-            spo.append(self.pool(spx[-1]) if self.is_first else spx[-1])
+            if self.pool is not None:  # self.is_first == True, None check for torchscript
+                spo.append(self.pool(spx[-1]))
+            else:
+                spo.append(spx[-1])
         out = torch.cat(spo, 1)
 
         out = self.conv3(out)
@@ -192,21 +199,20 @@ class DlaRoot(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.shortcut = shortcut
 
-    def forward(self, *x):
-        children = x
-        x = self.conv(torch.cat(x, 1))
+    def forward(self, x_children: List[torch.Tensor]):
+        x = self.conv(torch.cat(x_children, 1))
         x = self.bn(x)
         if self.shortcut:
-            x += children[0]
+            x += x_children[0]
         x = self.relu(x)
 
         return x
 
 
 class DlaTree(nn.Module):
-    def __init__(self, levels, block, in_channels, out_channels, stride=1,
-                 dilation=1, cardinality=1, base_width=64,
-                 level_root=False, root_dim=0, root_kernel_size=1, root_shortcut=False):
+    def __init__(
+            self, levels, block, in_channels, out_channels, stride=1, dilation=1, cardinality=1,
+            base_width=64, level_root=False, root_dim=0, root_kernel_size=1, root_shortcut=False):
         super(DlaTree, self).__init__()
         if root_dim == 0:
             root_dim = 2 * out_channels
@@ -225,38 +231,39 @@ class DlaTree(nn.Module):
                 self.project = nn.Sequential(
                     nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
                     nn.BatchNorm2d(out_channels))
+            self.root = DlaRoot(root_dim, out_channels, root_kernel_size, root_shortcut)
         else:
             cargs.update(dict(root_kernel_size=root_kernel_size, root_shortcut=root_shortcut))
             self.tree1 = DlaTree(
                 levels - 1, block, in_channels, out_channels, stride, root_dim=0, **cargs)
             self.tree2 = DlaTree(
                 levels - 1, block, out_channels, out_channels, root_dim=root_dim + out_channels, **cargs)
-        if levels == 1:
-            self.root = DlaRoot(root_dim, out_channels, root_kernel_size, root_shortcut)
+            self.root = None
         self.level_root = level_root
         self.root_dim = root_dim
         self.levels = levels
 
-    def forward(self, x, shortcut=None, children=None):
-        children = [] if children is None else children
+    def forward(self, x, shortcut: Optional[torch.Tensor] = None, children: Optional[List[torch.Tensor]] = None):
+        if children is None:
+            children = []
         bottom = self.downsample(x)
         shortcut = self.project(bottom)
         if self.level_root:
             children.append(bottom)
         x1 = self.tree1(x, shortcut)
-        if self.levels == 1:
+        if self.root is not None:  # levels == 1
             x2 = self.tree2(x1)
-            x = self.root(x2, x1, *children)
+            x = self.root([x2, x1] + children)
         else:
             children.append(x1)
-            x = self.tree2(x1, children=children)
+            x = self.tree2(x1, None, children)
         return x
 
 
 class DLA(nn.Module):
-    def __init__(self, levels, channels, output_stride=32, num_classes=1000, in_chans=3,
-                 cardinality=1, base_width=64, block=DlaBottle2neck, shortcut_root=False,
-                 drop_rate=0.0, global_pool='avg'):
+    def __init__(
+            self, levels, channels, output_stride=32, num_classes=1000, in_chans=3, global_pool='avg',
+            cardinality=1, base_width=64, block=DlaBottle2neck, shortcut_root=False, drop_rate=0.0):
         super(DLA, self).__init__()
         self.channels = channels
         self.num_classes = num_classes
@@ -302,13 +309,32 @@ class DLA(nn.Module):
         modules = []
         for i in range(convs):
             modules.extend([
-                nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride if i == 0 else 1,
-                          padding=dilation, bias=False, dilation=dilation),
+                nn.Conv2d(
+                    inplanes, planes, kernel_size=3, stride=stride if i == 0 else 1,
+                    padding=dilation, bias=False, dilation=dilation),
                 nn.BatchNorm2d(planes),
                 nn.ReLU(inplace=True)])
             inplanes = planes
         return nn.Sequential(*modules)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^base_layer',
+            blocks=r'^level(\d+)' if coarse else [
+                # an unusual arch, this achieves somewhat more granularity without getting super messy
+                (r'^level(\d+)\.tree(\d+)', None),
+                (r'^level(\d+)\.root', (2,)),
+                (r'^level(\d+)', (1,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.fc
 
@@ -328,20 +354,25 @@ class DLA(nn.Module):
         x = self.level5(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.fc(x)
-        x = self.flatten(x)
+        if pre_logits:
+            return x.flatten(1)
+        else:
+            x = self.fc(x)
+            return self.flatten(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
 def _create_dla(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         DLA, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         pretrained_strict=False,
         feature_cfg=dict(out_indices=(1, 2, 3, 4, 5)),
         **kwargs)

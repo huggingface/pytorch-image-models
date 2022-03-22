@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .layers import SelectAdaptivePool2d, Linear, make_divisible
 from .efficientnet_blocks import SqueezeExcite, ConvBnAct
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .registry import register_model
 
 
@@ -24,7 +24,7 @@ __all__ = ['GhostNet']
 
 def _cfg(url='', **kwargs):
     return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (1, 1),
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'conv_stem', 'classifier': 'classifier',
@@ -133,13 +133,15 @@ class GhostBottleneck(nn.Module):
 
 
 class GhostNet(nn.Module):
-    def __init__(self, cfgs, num_classes=1000, width=1.0, dropout=0.2, in_chans=3, output_stride=32, global_pool='avg'):
+    def __init__(
+            self, cfgs, num_classes=1000, width=1.0, in_chans=3, output_stride=32, global_pool='avg', drop_rate=0.2):
         super(GhostNet, self).__init__()
         # setting of inverted residual blocks
         assert output_stride == 32, 'only output_stride==32 is valid, dilation not supported'
         self.cfgs = cfgs
         self.num_classes = num_classes
-        self.dropout = dropout
+        self.drop_rate = drop_rate
+        self.grad_checkpointing = False
         self.feature_info = []
 
         # building first layer
@@ -184,6 +186,24 @@ class GhostNet(nn.Module):
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(out_chs, num_classes) if num_classes > 0 else nn.Identity()
 
+        # FIXME init
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^conv_stem|bn1',
+            blocks=[
+                (r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)', None),
+                (r'conv_head', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -198,18 +218,25 @@ class GhostNet(nn.Module):
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x, flatten=True)
+        else:
+            x = self.blocks(x)
+        return x
+
+    def forward_head(self, x):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
+        x = self.flatten(x)
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.classifier(x)
         return x
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.flatten(x)
-        if self.dropout > 0.:
-            x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.classifier(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -250,7 +277,6 @@ def _create_ghostnet(variant, width=1.0, pretrained=False, **kwargs):
     )
     return build_model_with_cfg(
         GhostNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
         **model_kwargs)
 

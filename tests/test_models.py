@@ -11,8 +11,8 @@ except ImportError:
     has_fx_feature_extraction = False
 
 import timm
-from timm import list_models, create_model, set_scriptable, has_model_default_key, is_model_default_key, \
-    get_model_default_value
+from timm import list_models, create_model, set_scriptable, has_pretrained_cfg_key, is_pretrained_cfg_key, \
+    get_pretrained_cfg_value
 from timm.models.fx_features import _leaf_modules, _autowrap_functions    
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
@@ -24,7 +24,8 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit_*']
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit_*',
+    'poolformer_*', 'volo_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -57,9 +58,9 @@ MAX_BWD_FX_SIZE = 224
 def _get_input_size(model=None, model_name='', target=None):
     if model is None:
         assert model_name, "One of model or model_name must be provided"
-        input_size = get_model_default_value(model_name, 'input_size')
-        fixed_input_size = get_model_default_value(model_name, 'fixed_input_size')
-        min_input_size = get_model_default_value(model_name, 'min_input_size')
+        input_size = get_pretrained_cfg_value(model_name, 'input_size')
+        fixed_input_size = get_pretrained_cfg_value(model_name, 'fixed_input_size')
+        min_input_size = get_pretrained_cfg_value(model_name, 'min_input_size')
     else:
         default_cfg = model.default_cfg
         input_size = default_cfg['input_size']
@@ -145,7 +146,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
         # test forward_features (always unpooled)
         outputs = model.forward_features(input_tensor)
-        assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
+        assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2], 'unpooled feature shape != config'
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
@@ -157,8 +158,8 @@ def test_model_default_cfgs(model_name, batch_size):
         model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 4
-        if not isinstance(model, timm.models.MobileNetV3) and not isinstance(model, timm.models.GhostNet):
-            # FIXME mobilenetv3/ghostnet forward_features vs removed pooling differ
+        if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.VGG)):
+            # mobilenetv3/ghostnet/vgg forward_features vs removed pooling differ due to location or lack of GAP
             assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
         if 'pruned' not in model_name:  # FIXME better pruned model handling
@@ -166,8 +167,7 @@ def test_model_default_cfgs(model_name, batch_size):
             model = create_model(model_name, pretrained=False, num_classes=0, global_pool='').eval()
             outputs = model.forward(input_tensor)
             assert len(outputs.shape) == 4
-            if not isinstance(model, timm.models.MobileNetV3) and not isinstance(model, timm.models.GhostNet):
-                # FIXME mobilenetv3/ghostnet forward_features vs removed pooling differ
+            if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.VGG)):
                 assert outputs.shape[-1] == pool_size[-1] and outputs.shape[-2] == pool_size[-2]
 
     # check classifier name matches default_cfg
@@ -205,23 +205,26 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     outputs = model.forward_features(input_tensor)
     if isinstance(outputs, (tuple, list)):
-        outputs = outputs[0]
-    assert outputs.shape[1] == model.num_features
+        # cannot currently verify multi-tensor output.
+        pass
+    else:
+        feat_dim = -1 if outputs.ndim == 3 else 1
+        assert outputs.shape[feat_dim] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
-    assert len(outputs.shape) == 2
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features, 'pooled num_features != config'
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
-    assert len(outputs.shape) == 2
-    assert outputs.shape[1] == model.num_features
+    feat_dim = -1 if outputs.ndim == 3 else 1
+    assert outputs.shape[feat_dim] == model.num_features
 
     # check classifier name matches default_cfg
     if cfg.get('num_classes', None):
@@ -319,13 +322,18 @@ def _create_fx_model(model, train=False):
     # This block of code does a bit of juggling to handle any case where there are multiple outputs in train mode
     # So we trace once and look at the graph, and get the indices of the nodes that lead into the original fx output
     # node. Then we use those indices to select from train_nodes returned by torchvision get_graph_node_names
-    train_nodes, eval_nodes = get_graph_node_names(
-        model, tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+    tracer_kwargs = dict(
+        leaf_modules=list(_leaf_modules),
+        autowrap_functions=list(_autowrap_functions),
+        #enable_cpatching=True,
+        param_shapes_constant=True
+    )
+    train_nodes, eval_nodes = get_graph_node_names(model, tracer_kwargs=tracer_kwargs)
 
     eval_return_nodes = [eval_nodes[-1]]
     train_return_nodes = [train_nodes[-1]]
     if train:
-        tracer = NodePathTracer(leaf_modules=list(_leaf_modules), autowrap_functions=list(_autowrap_functions))
+        tracer = NodePathTracer(**tracer_kwargs)
         graph = tracer.trace(model)
         graph_nodes = list(reversed(graph.nodes))
         output_node_names = [n.name for n in graph_nodes[0]._input_nodes.keys()]
@@ -334,8 +342,11 @@ def _create_fx_model(model, train=False):
         train_return_nodes = [train_nodes[ix] for ix in output_node_indices]
 
     fx_model = create_feature_extractor(
-        model, train_return_nodes=train_return_nodes, eval_return_nodes=eval_return_nodes,
-        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)})
+        model,
+        train_return_nodes=train_return_nodes,
+        eval_return_nodes=eval_return_nodes,
+        tracer_kwargs=tracer_kwargs,
+    )
     return fx_model
 
 
@@ -355,7 +366,6 @@ if 'GITHUB_ACTIONS' in os.environ:
         'vit_large*',
         'vit_base_patch8*',
         'xcit_large*',
-        '*evob', '*evos',  # until norm_norm_norm branch is merged
     ]
 
 
@@ -392,41 +402,41 @@ def test_model_forward_fx(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(
+    exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FX_FILTERS, name_matches_cfg=True))
+@pytest.mark.parametrize('batch_size', [2])
+def test_model_backward_fx(model_name, batch_size):
+    """Symbolically trace each model and run single backward pass through the resulting GraphModule"""
+    if not has_fx_feature_extraction:
+        pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
+
+    input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_FX_SIZE)
+    if max(input_size) > MAX_BWD_FX_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+
+    model = create_model(model_name, pretrained=False, num_classes=42)
+    model.train()
+    num_params = sum([x.numel() for x in model.parameters()])
+    if 'GITHUB_ACTIONS' in os.environ and num_params > 100e6:
+        pytest.skip("Skipping FX backward test on model with more than 100M params.")
+
+    model = _create_fx_model(model, train=True)
+    outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
+    if isinstance(outputs, tuple):
+        outputs = torch.cat(outputs)
+    outputs.mean().backward()
+    for n, x in model.named_parameters():
+        assert x.grad is not None, f'No gradient for {n}'
+    num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
+
+    assert outputs.shape[-1] == 42
+    assert num_params == num_grad, 'Some parameters are missing gradients'
+    assert not torch.isnan(outputs).any(), 'Output included NaNs'
+
+
 if 'GITHUB_ACTIONS' not in os.environ:
     # FIXME this test is causing GitHub actions to run out of RAM and abruptly kill the test process
-
-    @pytest.mark.timeout(120)
-    @pytest.mark.parametrize('model_name', list_models(
-        exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FX_FILTERS, name_matches_cfg=True))
-    @pytest.mark.parametrize('batch_size', [2])
-    def test_model_backward_fx(model_name, batch_size):
-        """Symbolically trace each model and run single backward pass through the resulting GraphModule"""
-        if not has_fx_feature_extraction:
-            pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
-
-        input_size = _get_input_size(model_name=model_name, target=TARGET_BWD_FX_SIZE)
-        if max(input_size) > MAX_BWD_FX_SIZE:
-            pytest.skip("Fixed input size model > limit.")
-
-        model = create_model(model_name, pretrained=False, num_classes=42)
-        model.train()
-        num_params = sum([x.numel() for x in model.parameters()])
-        if 'GITHUB_ACTIONS' in os.environ and num_params > 100e6:
-            pytest.skip("Skipping FX backward test on model with more than 100M params.")
-
-        model = _create_fx_model(model, train=True)
-        outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
-        if isinstance(outputs, tuple):
-            outputs = torch.cat(outputs)
-        outputs.mean().backward()
-        for n, x in model.named_parameters():
-            assert x.grad is not None, f'No gradient for {n}'
-        num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
-
-        assert outputs.shape[-1] == 42
-        assert num_params == num_grad, 'Some parameters are missing gradients'
-        assert not torch.isnan(outputs).any(), 'Output included NaNs'
-
 
     # reason: model is scripted after fx tracing, but beit has torch.jit.is_scripting() control flow
     EXCLUDE_FX_JIT_FILTERS = [

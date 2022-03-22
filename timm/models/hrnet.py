@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .features import FeatureInfo
-from .helpers import build_model_with_cfg, default_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from .layers import create_classifier
 from .registry import register_model
 from .resnet import BasicBlock, Bottleneck  # leveraging ResNet blocks w/ additional features like SE
@@ -386,13 +386,13 @@ cfg_cls = dict(
 
 
 class HighResolutionModule(nn.Module):
-    def __init__(self, num_branches, blocks, num_blocks, num_inchannels,
+    def __init__(self, num_branches, blocks, num_blocks, num_in_chs,
                  num_channels, fuse_method, multi_scale_output=True):
         super(HighResolutionModule, self).__init__()
         self._check_branches(
-            num_branches, blocks, num_blocks, num_inchannels, num_channels)
+            num_branches, blocks, num_blocks, num_in_chs, num_channels)
 
-        self.num_inchannels = num_inchannels
+        self.num_in_chs = num_in_chs
         self.fuse_method = fuse_method
         self.num_branches = num_branches
 
@@ -403,32 +403,32 @@ class HighResolutionModule(nn.Module):
         self.fuse_layers = self._make_fuse_layers()
         self.fuse_act = nn.ReLU(False)
 
-    def _check_branches(self, num_branches, blocks, num_blocks, num_inchannels, num_channels):
+    def _check_branches(self, num_branches, blocks, num_blocks, num_in_chs, num_channels):
         error_msg = ''
         if num_branches != len(num_blocks):
             error_msg = 'NUM_BRANCHES({}) <> NUM_BLOCKS({})'.format(num_branches, len(num_blocks))
         elif num_branches != len(num_channels):
             error_msg = 'NUM_BRANCHES({}) <> NUM_CHANNELS({})'.format(num_branches, len(num_channels))
-        elif num_branches != len(num_inchannels):
-            error_msg = 'NUM_BRANCHES({}) <> NUM_INCHANNELS({})'.format(num_branches, len(num_inchannels))
+        elif num_branches != len(num_in_chs):
+            error_msg = 'NUM_BRANCHES({}) <> num_in_chs({})'.format(num_branches, len(num_in_chs))
         if error_msg:
             _logger.error(error_msg)
             raise ValueError(error_msg)
 
     def _make_one_branch(self, branch_index, block, num_blocks, num_channels, stride=1):
         downsample = None
-        if stride != 1 or self.num_inchannels[branch_index] != num_channels[branch_index] * block.expansion:
+        if stride != 1 or self.num_in_chs[branch_index] != num_channels[branch_index] * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(
-                    self.num_inchannels[branch_index], num_channels[branch_index] * block.expansion,
+                    self.num_in_chs[branch_index], num_channels[branch_index] * block.expansion,
                     kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(num_channels[branch_index] * block.expansion, momentum=_BN_MOMENTUM),
             )
 
-        layers = [block(self.num_inchannels[branch_index], num_channels[branch_index], stride, downsample)]
-        self.num_inchannels[branch_index] = num_channels[branch_index] * block.expansion
+        layers = [block(self.num_in_chs[branch_index], num_channels[branch_index], stride, downsample)]
+        self.num_in_chs[branch_index] = num_channels[branch_index] * block.expansion
         for i in range(1, num_blocks[branch_index]):
-            layers.append(block(self.num_inchannels[branch_index], num_channels[branch_index]))
+            layers.append(block(self.num_in_chs[branch_index], num_channels[branch_index]))
 
         return nn.Sequential(*layers)
 
@@ -444,15 +444,15 @@ class HighResolutionModule(nn.Module):
             return nn.Identity()
 
         num_branches = self.num_branches
-        num_inchannels = self.num_inchannels
+        num_in_chs = self.num_in_chs
         fuse_layers = []
         for i in range(num_branches if self.multi_scale_output else 1):
             fuse_layer = []
             for j in range(num_branches):
                 if j > i:
                     fuse_layer.append(nn.Sequential(
-                        nn.Conv2d(num_inchannels[j], num_inchannels[i], 1, 1, 0, bias=False),
-                        nn.BatchNorm2d(num_inchannels[i], momentum=_BN_MOMENTUM),
+                        nn.Conv2d(num_in_chs[j], num_in_chs[i], 1, 1, 0, bias=False),
+                        nn.BatchNorm2d(num_in_chs[i], momentum=_BN_MOMENTUM),
                         nn.Upsample(scale_factor=2 ** (j - i), mode='nearest')))
                 elif j == i:
                     fuse_layer.append(nn.Identity())
@@ -460,14 +460,14 @@ class HighResolutionModule(nn.Module):
                     conv3x3s = []
                     for k in range(i - j):
                         if k == i - j - 1:
-                            num_outchannels_conv3x3 = num_inchannels[i]
+                            num_outchannels_conv3x3 = num_in_chs[i]
                             conv3x3s.append(nn.Sequential(
-                                nn.Conv2d(num_inchannels[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
+                                nn.Conv2d(num_in_chs[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
                                 nn.BatchNorm2d(num_outchannels_conv3x3, momentum=_BN_MOMENTUM)))
                         else:
-                            num_outchannels_conv3x3 = num_inchannels[j]
+                            num_outchannels_conv3x3 = num_in_chs[j]
                             conv3x3s.append(nn.Sequential(
-                                nn.Conv2d(num_inchannels[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
+                                nn.Conv2d(num_in_chs[j], num_outchannels_conv3x3, 3, 2, 1, bias=False),
                                 nn.BatchNorm2d(num_outchannels_conv3x3, momentum=_BN_MOMENTUM),
                                 nn.ReLU(False)))
                     fuse_layer.append(nn.Sequential(*conv3x3s))
@@ -475,8 +475,8 @@ class HighResolutionModule(nn.Module):
 
         return nn.ModuleList(fuse_layers)
 
-    def get_num_inchannels(self):
-        return self.num_inchannels
+    def get_num_in_chs(self):
+        return self.num_in_chs
 
     def forward(self, x: List[torch.Tensor]):
         if self.num_branches == 1:
@@ -652,7 +652,7 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _make_stage(self, layer_config, num_inchannels, multi_scale_output=True):
+    def _make_stage(self, layer_config, num_in_chs, multi_scale_output=True):
         num_modules = layer_config['NUM_MODULES']
         num_branches = layer_config['NUM_BRANCHES']
         num_blocks = layer_config['NUM_BLOCKS']
@@ -665,12 +665,13 @@ class HighResolutionNet(nn.Module):
             # multi_scale_output is only used last module
             reset_multi_scale_output = multi_scale_output or i < num_modules - 1
             modules.append(HighResolutionModule(
-                num_branches, block, num_blocks, num_inchannels, num_channels, fuse_method, reset_multi_scale_output)
+                num_branches, block, num_blocks, num_in_chs, num_channels, fuse_method, reset_multi_scale_output)
             )
-            num_inchannels = modules[-1].get_num_inchannels()
+            num_in_chs = modules[-1].get_num_in_chs()
 
-        return nn.Sequential(*modules), num_inchannels
+        return nn.Sequential(*modules), num_in_chs
 
+    @torch.jit.ignore
     def init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -680,6 +681,23 @@ class HighResolutionNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^conv[12]|bn[12]',
+            blocks=r'^(?:layer|stage|transition)(\d+)' if coarse else [
+                (r'^layer(\d+)\.(\d+)', None),
+                (r'^stage(\d+)\.(\d+)', None),
+                (r'^transition(\d+)', (99999,)),
+            ],
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, "gradient checkpointing not supported"
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -712,20 +730,24 @@ class HighResolutionNet(nn.Module):
 
         # Stages
         yl = self.stages(x)
-
-        # Classification Head
+        if self.incre_modules is None or self.downsamp_modules is None:
+            return yl
         y = self.incre_modules[0](yl[0])
         for i, down in enumerate(self.downsamp_modules):
             y = self.incre_modules[i + 1](yl[i + 1]) + down(y)
         y = self.final_layer(y)
         return y
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
+        # Classification Head
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.classifier(x)
+        return x if pre_logits else self.classifier(x)
+
+    def forward(self, x):
+        y = self.forward_features(x)
+        x = self.forward_head(y)
         return x
 
 
@@ -781,13 +803,13 @@ def _create_hrnet(variant, pretrained, **model_kwargs):
         features_only = True
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         model_cfg=cfg_cls[variant],
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
         **model_kwargs)
     if features_only:
-        model.default_cfg = default_cfg_for_features(model.default_cfg)
+        model.pretrained_cfg = pretrained_cfg_for_features(model.default_cfg)
+        model.default_cfg = model.pretrained_cfg  # backwards compat
     return model
 
 

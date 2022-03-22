@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, overlay_external_default_cfg
+from .helpers import build_model_with_cfg, checkpoint_seq
 from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier
 from .registry import register_model
 
@@ -41,8 +41,9 @@ default_cfgs = dict(
 
 
 class SpatialMlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None,
-                 act_layer=nn.GELU, drop=0., group=8, spatial_conv=False):
+    def __init__(
+            self, in_features, hidden_features=None, out_features=None,
+            act_layer=nn.GELU, drop=0., group=8, spatial_conv=False):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -99,7 +100,7 @@ class Attention(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         x = self.qkv(x).reshape(B, 3, self.num_heads, self.head_dim, -1).permute(1, 0, 2, 4, 3)
-        q, k, v = x[0], x[1], x[2]
+        q, k, v = x.unbind(0)
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
@@ -113,9 +114,10 @@ class Attention(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, dim, num_heads, head_dim_ratio=1., mlp_ratio=4.,
-                 drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=LayerNorm2d,
-                 group=8, attn_disabled=False, spatial_conv=False):
+    def __init__(
+            self, dim, num_heads, head_dim_ratio=1., mlp_ratio=4.,
+            drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=LayerNorm2d,
+            group=8, attn_disabled=False, spatial_conv=False):
         super().__init__()
         self.spatial_conv = spatial_conv
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -128,9 +130,8 @@ class Block(nn.Module):
                 dim, num_heads=num_heads, head_dim_ratio=head_dim_ratio, attn_drop=attn_drop, proj_drop=drop)
 
         self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = SpatialMlp(
-            in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop,
+            in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop,
             group=group, spatial_conv=spatial_conv)  # new setting
 
     def forward(self, x):
@@ -141,10 +142,11 @@ class Block(nn.Module):
 
 
 class Visformer(nn.Module):
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, init_channels=32, embed_dim=384,
-                 depth=12, num_heads=6, mlp_ratio=4., drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-                 norm_layer=LayerNorm2d, attn_stage='111', pos_embed=True, spatial_conv='111',
-                 vit_stem=False, group=8, global_pool='avg', conv_init=False, embed_norm=None):
+    def __init__(
+            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, init_channels=32, embed_dim=384,
+            depth=12, num_heads=6, mlp_ratio=4., drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
+            norm_layer=LayerNorm2d, attn_stage='111', pos_embed=True, spatial_conv='111',
+            vit_stem=False, group=8, global_pool='avg', conv_init=False, embed_norm=None):
         super().__init__()
         img_size = to_2tuple(img_size)
         self.num_classes = num_classes
@@ -160,8 +162,9 @@ class Visformer(nn.Module):
             self.stage_num1 = self.stage_num3 = depth // 3
             self.stage_num2 = depth - self.stage_num1 - self.stage_num3
         self.pos_embed = pos_embed
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        self.grad_checkpointing = False
 
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
         # stage 1
         if self.vit_stem:
             self.stem = None
@@ -194,7 +197,7 @@ class Visformer(nn.Module):
             else:
                 self.pos_embed1 = nn.Parameter(torch.zeros(1, embed_dim//2, *img_size))
             self.pos_drop = nn.Dropout(p=drop_rate)
-        self.stage1 = nn.ModuleList([
+        self.stage1 = nn.Sequential(*[
             Block(
                 dim=embed_dim//2, num_heads=num_heads, head_dim_ratio=0.5, mlp_ratio=mlp_ratio,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
@@ -211,7 +214,7 @@ class Visformer(nn.Module):
             img_size = [x // (patch_size // 8) for x in img_size]
             if self.pos_embed:
                 self.pos_embed2 = nn.Parameter(torch.zeros(1, embed_dim, *img_size))
-        self.stage2 = nn.ModuleList([
+        self.stage2 = nn.Sequential(*[
             Block(
                 dim=embed_dim, num_heads=num_heads, head_dim_ratio=1.0, mlp_ratio=mlp_ratio,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
@@ -228,7 +231,7 @@ class Visformer(nn.Module):
             img_size = [x // (patch_size // 8) for x in img_size]
             if self.pos_embed:
                 self.pos_embed3 = nn.Parameter(torch.zeros(1, embed_dim*2, *img_size))
-        self.stage3 = nn.ModuleList([
+        self.stage3 = nn.Sequential(*[
             Block(
                 dim=embed_dim*2, num_heads=num_heads, head_dim_ratio=1.0, mlp_ratio=mlp_ratio,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
@@ -255,12 +258,6 @@ class Visformer(nn.Module):
             trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-        elif isinstance(m, nn.BatchNorm2d):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
         elif isinstance(m, nn.Conv2d):
             if self.conv_init:
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -269,6 +266,22 @@ class Visformer(nn.Module):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0.)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^patch_embed1|pos_embed1|stem',  # stem and embed
+            blocks=[
+                (r'^stage(\d+)\.(\d+)' if coarse else r'^stage(\d+)\.(\d+)', None),
+                (r'^(?:patch_embed|pos_embed)(\d+)', (0,)),
+                (r'^norm', (99999,))
+            ]
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
@@ -283,46 +296,49 @@ class Visformer(nn.Module):
         # stage 1
         x = self.patch_embed1(x)
         if self.pos_embed:
-            x = x + self.pos_embed1
-            x = self.pos_drop(x)
-        for b in self.stage1:
-            x = b(x)
+            x = self.pos_drop(x + self.pos_embed1)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stage1, x)
+        else:
+            x = self.stage1(x)
 
         # stage 2
         if not self.vit_stem:
             x = self.patch_embed2(x)
             if self.pos_embed:
-                x = x + self.pos_embed2
-                x = self.pos_drop(x)
-        for b in self.stage2:
-            x = b(x)
+                x = self.pos_drop(x + self.pos_embed2)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stage2, x)
+        else:
+            x = self.stage2(x)
 
         # stage3
         if not self.vit_stem:
             x = self.patch_embed3(x)
             if self.pos_embed:
-                x = x + self.pos_embed3
-                x = self.pos_drop(x)
-        for b in self.stage3:
-            x = b(x)
+                x = self.pos_drop(x + self.pos_embed3)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stage3, x)
+        else:
+            x = self.stage3(x)
 
         x = self.norm(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        x = self.global_pool(x)
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.global_pool(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
 def _create_visformer(variant, pretrained=False, default_cfg=None, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    model = build_model_with_cfg(
-        Visformer, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    model = build_model_with_cfg(Visformer, variant, pretrained, **kwargs)
     return model
 
 

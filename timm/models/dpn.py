@@ -16,7 +16,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
-from .layers import BatchNormAct2d, ConvBnAct, create_conv2d, create_classifier
+from .layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier
 from .registry import register_model
 
 __all__ = ['DPN']
@@ -166,21 +166,22 @@ class DualPathBlock(nn.Module):
 
 
 class DPN(nn.Module):
-    def __init__(self, small=False, num_init_features=64, k_r=96, groups=32,
-                 b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128), output_stride=32,
-                 num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg', fc_act=nn.ELU):
+    def __init__(
+            self, small=False, num_init_features=64, k_r=96, groups=32, global_pool='avg',
+            b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128), output_stride=32,
+            num_classes=1000, in_chans=3, drop_rate=0., fc_act_layer=nn.ELU):
         super(DPN, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.b = b
         assert output_stride == 32  # FIXME look into dilation support
         norm_layer = partial(BatchNormAct2d, eps=.001)
-        fc_norm_layer = partial(BatchNormAct2d, eps=.001, act_layer=fc_act, inplace=False)
+        fc_norm_layer = partial(BatchNormAct2d, eps=.001, act_layer=fc_act_layer, inplace=False)
         bw_factor = 1 if small else 4
         blocks = OrderedDict()
 
         # conv1
-        blocks['conv1_1'] = ConvBnAct(
+        blocks['conv1_1'] = ConvNormAct(
             in_chans, num_init_features, kernel_size=3 if small else 7, stride=2, norm_layer=norm_layer)
         blocks['conv1_pool'] = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.feature_info = [dict(num_chs=num_init_features, reduction=2, module='features.conv1_1')]
@@ -239,6 +240,22 @@ class DPN(nn.Module):
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^features\.conv1',
+            blocks=[
+                (r'^features\.conv(\d+)' if coarse else r'^features\.conv(\d+)_(\d+)', None),
+                (r'^features\.conv5_bn_ac', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.classifier
 
@@ -251,20 +268,25 @@ class DPN(nn.Module):
     def forward_features(self, x):
         return self.features(x)
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.classifier(x)
-        x = self.flatten(x)
+        if pre_logits:
+            return x.flatten(1)
+        else:
+            x = self.classifier(x)
+            return self.flatten(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
 def _create_dpn(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         DPN, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_concat=True, flatten_sequential=True),
         **kwargs)
 

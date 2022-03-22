@@ -50,9 +50,10 @@ class Bottle2neck(nn.Module):
     """
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None,
-                 cardinality=1, base_width=26, scale=4, dilation=1, first_dilation=None,
-                 act_layer=nn.ReLU, norm_layer=None, attn_layer=None, **_):
+    def __init__(
+            self, inplanes, planes, stride=1, downsample=None,
+            cardinality=1, base_width=26, scale=4, dilation=1, first_dilation=None,
+            act_layer=nn.ReLU, norm_layer=None, attn_layer=None, **_):
         super(Bottle2neck, self).__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
@@ -87,7 +88,7 @@ class Bottle2neck(nn.Module):
         self.relu = act_layer(inplace=True)
         self.downsample = downsample
 
-    def zero_init_last_bn(self):
+    def zero_init_last(self):
         nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
@@ -110,8 +111,7 @@ class Bottle2neck(nn.Module):
             sp = self.relu(sp)
             spo.append(sp)
         if self.scale > 1:
-            if self.pool is not None:
-                # self.is_first == True, None check for torchscript
+            if self.pool is not None:  # self.is_first == True, None check for torchscript
                 spo.append(self.pool(spx[-1]))
             else:
                 spo.append(spx[-1])
@@ -133,10 +133,7 @@ class Bottle2neck(nn.Module):
 
 
 def _create_res2net(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(
-        ResNet, variant, pretrained,
-        default_cfg=default_cfgs[variant],
-        **kwargs)
+    return build_model_with_cfg(ResNet, variant, pretrained, **kwargs)
 
 
 @register_model

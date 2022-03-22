@@ -26,7 +26,7 @@ from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg, named_apply
+from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
 from .layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_
 from .layers import _assert
 from .layers import create_conv2d, create_pool2d, to_ntuple
@@ -179,6 +179,8 @@ class NestLevel(nn.Module):
             norm_layer=None, act_layer=None, pad_type=''):
         super().__init__()
         self.block_size = block_size
+        self.grad_checkpointing = False
+
         self.pos_embed = nn.Parameter(torch.zeros(1, num_blocks, seq_length, embed_dim))
 
         if prev_embed_dim is not None:
@@ -204,7 +206,10 @@ class NestLevel(nn.Module):
         x = x.permute(0, 2, 3, 1)  # (B, H', W', C), switch to channels last for transformer
         x = blockify(x, self.block_size)  # (B, T, N, C')
         x = x + self.pos_embed
-        x = self.transformer_encoder(x)  # (B, T, N, C')
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.transformer_encoder, x)
+        else:
+            x = self.transformer_encoder(x)  # (B, T, N, C')
         x = deblockify(x, self.block_size)  # (B, H', W', C')
         # Channel-first for block aggregation, and generally to replicate convnet feature map at each stage
         return x.permute(0, 3, 1, 2)  # (B, C, H', W')
@@ -217,10 +222,12 @@ class Nest(nn.Module):
         - https://arxiv.org/abs/2105.12723
     """
 
-    def __init__(self, img_size=224, in_chans=3, patch_size=4, num_levels=3, embed_dims=(128, 256, 512),
-                 num_heads=(4, 8, 16), depths=(2, 2, 20), num_classes=1000, mlp_ratio=4., qkv_bias=True,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.5, norm_layer=None, act_layer=None,
-                 pad_type='', weight_init='', global_pool='avg'):
+    def __init__(
+            self, img_size=224, in_chans=3, patch_size=4, num_levels=3, embed_dims=(128, 256, 512),
+            num_heads=(4, 8, 16), depths=(2, 2, 20), num_classes=1000, mlp_ratio=4., qkv_bias=True,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0.5, norm_layer=None, act_layer=None,
+            pad_type='', weight_init='', global_pool='avg'
+    ):
         """
         Args:
             img_size (int, tuple): input image size
@@ -310,6 +317,7 @@ class Nest(nn.Module):
 
         self.init_weights(weight_init)
 
+    @torch.jit.ignore
     def init_weights(self, mode=''):
         assert mode in ('nlhb', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
@@ -321,6 +329,24 @@ class Nest(nn.Module):
     def no_weight_decay(self):
         return {f'level.{i}.pos_embed' for i in range(len(self.levels))}
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^patch_embed',  # stem and embed
+            blocks=[
+                (r'^levels\.(\d+)' if coarse else r'^levels\.(\d+)\.transformer_encoder\.(\d+)', None),
+                (r'^levels\.(\d+)\.(?:pool|pos_embed)', (0,)),
+                (r'^norm', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for l in self.levels:
+            l.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head
 
@@ -330,22 +356,22 @@ class Nest(nn.Module):
             self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
-        """ x shape (B, C, H, W)
-        """
         x = self.patch_embed(x)
         x = self.levels(x)
         # Layer norm done over channel dim only (to NHWC and back)
         x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         return x
 
-    def forward(self, x):
-        """ x shape (B, C, H, W)
-        """
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        return self.head(x)
+        return x if pre_logits else self.head(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
 
 
 def _init_nest_weights(module: nn.Module, name: str = '', head_bias: float = 0.):
@@ -364,9 +390,6 @@ def _init_nest_weights(module: nn.Module, name: str = '', head_bias: float = 0.)
         trunc_normal_(module.weight, std=.02, a=-2, b=2)
         if module.bias is not None:
             nn.init.zeros_(module.bias)
-    elif isinstance(module, (nn.LayerNorm, nn.GroupNorm, nn.BatchNorm2d)):
-        nn.init.zeros_(module.bias)
-        nn.init.ones_(module.weight)
 
 
 def resize_pos_embed(posemb, posemb_new):
@@ -395,11 +418,9 @@ def checkpoint_filter_fn(state_dict, model):
     return state_dict
 
 
-def _create_nest(variant, pretrained=False, default_cfg=None, **kwargs):
-    default_cfg = default_cfg or default_cfgs[variant]
+def _create_nest(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
         Nest, variant, pretrained,
-        default_cfg=default_cfg,
         feature_cfg=dict(out_indices=(0, 1, 2), flatten_sequential=True),
         pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)

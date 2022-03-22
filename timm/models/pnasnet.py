@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .helpers import build_model_with_cfg
-from .layers import ConvBnAct, create_conv2d, create_pool2d, create_classifier
+from .layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from .registry import register_model
 
 __all__ = ['PNASNet5Large']
@@ -243,7 +243,7 @@ class PNASNet5Large(nn.Module):
         self.num_features = 4320
         assert output_stride == 32
 
-        self.conv_0 = ConvBnAct(
+        self.conv_0 = ConvNormAct(
             in_chans, 96, kernel_size=3, stride=2, padding=0,
             norm_layer=partial(nn.BatchNorm2d, eps=0.001, momentum=0.1), apply_act=False)
 
@@ -296,6 +296,15 @@ class PNASNet5Large(nn.Module):
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(stem=r'^conv_0|cell_stem_[01]', blocks=r'^cell_(\d+)')
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        assert not enable, 'gradient checkpointing not supported'
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.last_linear
 
@@ -323,19 +332,21 @@ class PNASNet5Large(nn.Module):
         x = self.act(x_cell_11)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         if self.drop_rate > 0:
             x = F.dropout(x, self.drop_rate, training=self.training)
-        x = self.last_linear(x)
+        return x if pre_logits else self.last_linear(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 
 def _create_pnasnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         PNASNet5Large, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=dict(feature_cls='hook', no_rewrite=True),  # not possible to re-write this model
         **kwargs)
 

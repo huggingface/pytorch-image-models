@@ -36,9 +36,9 @@ import torch.nn as nn
 from functools import partial
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, named_apply, adapt_input_conv
+from .helpers import build_model_with_cfg, named_apply, adapt_input_conv, checkpoint_seq
 from .registry import register_model
-from .layers import GroupNormAct, BatchNormAct2d, EvoNormBatch2d, EvoNormSample2d,\
+from .layers import GroupNormAct, BatchNormAct2d, EvoNorm2dB0, EvoNorm2dS0, EvoNorm2dS1, FilterResponseNormTlu2d,\
     ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d
 
 
@@ -122,10 +122,14 @@ default_cfgs = {
         interpolation='bicubic', first_conv='stem.conv1'),
 
     'resnetv2_50d_gn': _cfg(
-        interpolation='bicubic', first_conv='stem.conv1'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnetv2_50d_gn_ah-c415c11a.pth',
+        interpolation='bicubic', first_conv='stem.conv1', test_input_size=(3, 288, 288), crop_pct=0.95),
     'resnetv2_50d_evob': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50d_evos': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/resnetv2_50d_evos_ah-7c4dd548.pth',
+        interpolation='bicubic', first_conv='stem.conv1', test_input_size=(3, 288, 288), crop_pct=0.95),
+    'resnetv2_50d_frn': _cfg(
         interpolation='bicubic', first_conv='stem.conv1'),
 }
 
@@ -275,9 +279,10 @@ class DownsampleAvg(nn.Module):
 
 class ResNetStage(nn.Module):
     """ResNet Stage."""
-    def __init__(self, in_chs, out_chs, stride, dilation, depth, bottle_ratio=0.25, groups=1,
-                 avg_down=False, block_dpr=None, block_fn=PreActBottleneck,
-                 act_layer=None, conv_layer=None, norm_layer=None, **block_kwargs):
+    def __init__(
+            self, in_chs, out_chs, stride, dilation, depth, bottle_ratio=0.25, groups=1,
+            avg_down=False, block_dpr=None, block_fn=PreActBottleneck,
+            act_layer=None, conv_layer=None, norm_layer=None, **block_kwargs):
         super(ResNetStage, self).__init__()
         first_dilation = 1 if dilation in (1, 2) else 2
         layer_kwargs = dict(act_layer=act_layer, conv_layer=conv_layer, norm_layer=norm_layer)
@@ -392,7 +397,9 @@ class ResNetV2(nn.Module):
             self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate, use_conv=True)
 
         self.init_weights(zero_init_last=zero_init_last)
+        self.grad_checkpointing = False
 
+    @torch.jit.ignore
     def init_weights(self, zero_init_last=True):
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
@@ -400,6 +407,22 @@ class ResNetV2(nn.Module):
     def load_pretrained(self, checkpoint_path, prefix='resnet/'):
         _load_weights(self, checkpoint_path, prefix)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        matcher = dict(
+            stem=r'^stem',
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^norm', (99999,))
+            ]
+        )
+        return matcher
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
+    @torch.jit.ignore
     def get_classifier(self):
         return self.head.fc
 
@@ -410,13 +433,19 @@ class ResNetV2(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.stages(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.stages, x, flatten=True)
+        else:
+            x = self.stages(x)
         x = self.norm(x)
         return x
 
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits)
+
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -477,7 +506,6 @@ def _create_resnetv2(variant, pretrained=False, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
     return build_model_with_cfg(
         ResNetV2, variant, pretrained,
-        default_cfg=default_cfgs[variant],
         feature_cfg=feature_cfg,
         pretrained_custom_load='_bit' in variant,
         **kwargs)
@@ -660,13 +688,21 @@ def resnetv2_50d_gn(pretrained=False, **kwargs):
 def resnetv2_50d_evob(pretrained=False, **kwargs):
     return _create_resnetv2(
         'resnetv2_50d_evob', pretrained=pretrained,
-        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormBatch2d,
-        stem_type='deep', avg_down=True, **kwargs)
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dB0,
+        stem_type='deep', avg_down=True, zero_init_last=True, **kwargs)
 
 
 @register_model
 def resnetv2_50d_evos(pretrained=False, **kwargs):
     return _create_resnetv2(
         'resnetv2_50d_evos', pretrained=pretrained,
-        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNormSample2d,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dS0,
+        stem_type='deep', avg_down=True, **kwargs)
+
+
+@register_model
+def resnetv2_50d_frn(pretrained=False, **kwargs):
+    return _create_resnetv2(
+        'resnetv2_50d_frn', pretrained=pretrained,
+        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=FilterResponseNormTlu2d,
         stem_type='deep', avg_down=True, **kwargs)
