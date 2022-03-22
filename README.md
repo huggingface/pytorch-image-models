@@ -45,7 +45,7 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
   * `resnetrs200` - 83.85 @ 256, 84.44 @ 320
 * HuggingFace hub support fixed w/ initial groundwork for allowing alternative 'config sources' for pretrained model definitions and weights (generic local file / remote url support soon)
 * SwinTransformer-V2 implementation added. Submitted by [Christoph Reich](https://github.com/ChristophReich1996). Training experiments and model changes by myself are ongoing so expect compat breaks.
-* MobileViT models w/ weights adapted from https://github.com/apple/ml-cvnets (
+* MobileViT models w/ weights adapted from https://github.com/apple/ml-cvnets
 * PoolFormer models w/ weights adapted from https://github.com/sail-sg/poolformer
 * VOLO models w/ weights adapted from https://github.com/sail-sg/volo
 * Significant work experimenting with non-BatchNorm norm layers such as EvoNorm, FilterResponseNorm, GroupNorm, etc
