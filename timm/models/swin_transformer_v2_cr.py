@@ -121,7 +121,7 @@ def window_partition(x, window_size: Tuple[int, int]):
 
 @register_notrace_function  # reason: int argument is a Proxy
 def window_reverse(windows, window_size: Tuple[int, int], img_size: Tuple[int, int]):
-    """`
+    """
     Args:
         windows: (num_windows * B, window_size[0], window_size[1], C)
         window_size (Tuple[int, int]): Window size
