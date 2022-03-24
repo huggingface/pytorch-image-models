@@ -155,10 +155,10 @@ default_cfgs = dict(
     regnety_040s_gn=_cfg(url=''),
     regnetv_040=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetv_040_ra3-c248f51f.pth',
-        first_conv='stem'),
+        first_conv='stem', crop_pct=1.0, test_input_size=(3, 288, 288)),
     regnetv_064=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetv_064_ra3-530616c2.pth',
-        first_conv='stem'),
+        first_conv='stem', crop_pct=1.0, test_input_size=(3, 288, 288)),
 
     regnetz_005=_cfg(url=''),
     regnetz_040=_cfg(
