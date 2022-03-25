@@ -6,6 +6,7 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
+from .trace_utils import _assert
 from .create_act import get_act_layer
 
 
@@ -29,9 +30,10 @@ class BatchNormAct2d(nn.BatchNorm2d):
         else:
             self.act = nn.Identity()
 
-    def _forward_jit(self, x):
-        """ A cut & paste of the contents of the PyTorch BatchNorm2d forward function
-        """
+    def forward(self, x):
+        # cut & paste of torch.nn.BatchNorm2d.forward impl to avoid issues with torchscript and tracing
+        _assert(x.ndim == 4, f'expected 4D input (got {x.ndim}D input)')
+
         # exponential_average_factor is set to self.momentum
         # (when it is available) only so that it gets updated
         # in ONNX graph when this node is exported to ONNX.
@@ -63,7 +65,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
         passed when the update should occur (i.e. in training mode when they are tracked), or when buffer stats are
         used for normalization (i.e. in eval mode when buffers are not None).
         """
-        return F.batch_norm(
+        x = F.batch_norm(
             x,
             # If buffers are not to be tracked, ensure that they won't be updated
             self.running_mean if not self.training or self.track_running_stats else None,
@@ -74,17 +76,6 @@ class BatchNormAct2d(nn.BatchNorm2d):
             exponential_average_factor,
             self.eps,
         )
-
-    @torch.jit.ignore
-    def _forward_python(self, x):
-        return super(BatchNormAct2d, self).forward(x)
-
-    def forward(self, x):
-        # FIXME cannot call parent forward() and maintain jit.script compatibility?
-        if torch.jit.is_scripting():
-            x = self._forward_jit(x)
-        else:
-            x = self._forward_python(x)
         x = self.drop(x)
         x = self.act(x)
         return x
