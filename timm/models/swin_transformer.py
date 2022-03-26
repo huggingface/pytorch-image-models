@@ -4,6 +4,9 @@ A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shi
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 
+S3 (AutoFormerV2, https://arxiv.org/abs/2111.14725) Swin weights from
+    - https://github.com/microsoft/Cream/tree/main/AutoFormerV2
+
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
 # --------------------------------------------------------
@@ -669,7 +672,7 @@ def swin_large_patch4_window7_224_in22k(pretrained=False, **kwargs):
 
 @register_model
 def swin_s3_tiny_224(pretrained=False, **kwargs):
-    """ Swin-S3-T @ 224x224, ImageNet-1k
+    """ Swin-S3-T @ 224x224, ImageNet-1k. https://arxiv.org/abs/2111.14725
     """
     model_kwargs = dict(
         patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2),
@@ -679,7 +682,7 @@ def swin_s3_tiny_224(pretrained=False, **kwargs):
 
 @register_model
 def swin_s3_small_224(pretrained=False, **kwargs):
-    """ Swin-S3-S @ 224x224, trained ImageNet-1k
+    """ Swin-S3-S @ 224x224, trained ImageNet-1k. https://arxiv.org/abs/2111.14725
     """
     model_kwargs = dict(
         patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2),
@@ -689,7 +692,7 @@ def swin_s3_small_224(pretrained=False, **kwargs):
 
 @register_model
 def swin_s3_base_224(pretrained=False, **kwargs):
-    """ Swin-S3-B @ 224x224, trained ImageNet-1k
+    """ Swin-S3-B @ 224x224, trained ImageNet-1k. https://arxiv.org/abs/2111.14725
     """
     model_kwargs = dict(
         patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2),

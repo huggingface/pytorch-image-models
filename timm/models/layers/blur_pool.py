@@ -39,4 +39,4 @@ class BlurPool2d(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.pad(x, self.padding, 'reflect')
-        return F.conv2d(x, self.filt, stride=self.stride, groups=x.shape[1])
+        return F.conv2d(x, self.filt, stride=self.stride, groups=self.channels)
