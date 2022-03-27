@@ -225,6 +225,7 @@ def create_loader(
     if use_multi_epochs_loader:
         loader_class = MultiEpochsDataLoader
 
+    print(loader_class)
     loader_args = dict(
         batch_size=batch_size,
         shuffle=not isinstance(dataset, torch.utils.data.IterableDataset) and sampler is None and is_training,
@@ -255,6 +256,7 @@ def create_loader(
         )
 
     return loader
+    
 
 
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):

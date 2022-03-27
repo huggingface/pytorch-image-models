@@ -17,6 +17,7 @@ except ImportError:
     has_inaturalist = False
 
 from .dataset import IterableImageDataset, ImageDataset
+from .textdataset import TextDataset
 
 _TORCH_BASIC_DS = dict(
     cifar10=CIFAR10,
@@ -134,6 +135,11 @@ def create_dataset(
         ds = IterableImageDataset(
             root, parser=name, split=split, is_training=is_training,
             download=download, batch_size=batch_size, repeats=repeats, **kwargs)
+    elif name == 'embeddings':
+        if search_split and os.path.isdir(root):
+            # look for split specific sub-folder in root
+            root = _search_split(root, split)
+        ds = TextDataset(root, split)
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future
         if search_split and os.path.isdir(root):

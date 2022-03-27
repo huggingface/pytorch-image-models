@@ -85,7 +85,7 @@ default_cfgs = dict(
     # Mixer ImageNet-21K-P pretraining
     mixer_b16_224_miil_in21k=_cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil_in21k.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
+        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=2,
     ),
     mixer_b16_224_miil=_cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil.pth',
@@ -269,14 +269,25 @@ class MlpMixer(nn.Module):
             img_size=img_size, patch_size=patch_size, in_chans=in_chans,
             embed_dim=embed_dim, norm_layer=norm_layer if stem_norm else None)
         # FIXME drop_path (stochastic depth scaling rule or all the same?)
+        #embed_dim=256
+        #print("num_classes:",self.num_classes, "embed_dim:", embed_dim)
+        self.blocks = nn.Sequential(*[
+            block_layer(
+                embed_dim
+                , 16 #self.stem.num_patches
+                , mlp_ratio, mlp_layer=mlp_layer, norm_layer=norm_layer,
+                act_layer=act_layer, drop=drop_rate, drop_path=drop_path_rate)
+            for _ in range(num_blocks)])
+        """
         self.blocks = nn.Sequential(*[
             block_layer(
                 embed_dim, self.stem.num_patches, mlp_ratio, mlp_layer=mlp_layer, norm_layer=norm_layer,
                 act_layer=act_layer, drop=drop_rate, drop_path=drop_path_rate)
             for _ in range(num_blocks)])
+        """
         self.norm = norm_layer(embed_dim)
         self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
-
+        
         self.init_weights(nlhb=nlhb)
 
     def init_weights(self, nlhb=False):
@@ -291,7 +302,8 @@ class MlpMixer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
-        x = self.stem(x)
+        #x = self.stem(x)
+        #print(x.shape)
         x = self.blocks(x)
         x = self.norm(x)
         x = x.mean(dim=1)
@@ -461,7 +473,7 @@ def mixer_b16_224_miil_in21k(pretrained=False, **kwargs):
     """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=12, embed_dim=256, **kwargs)
     model = _create_mixer('mixer_b16_224_miil_in21k', pretrained=pretrained, **model_args)
     return model
 
