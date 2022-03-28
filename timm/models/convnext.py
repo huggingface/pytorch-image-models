@@ -88,16 +88,6 @@ default_cfgs = dict(
 )
 
 
-def _is_contiguous(tensor: torch.Tensor) -> bool:
-    # jit is oh so lovely :/
-    # if torch.jit.is_tracing():
-    #     return True
-    if torch.jit.is_scripting():
-        return tensor.is_contiguous()
-    else:
-        return tensor.is_contiguous(memory_format=torch.contiguous_format)
-
-
 @register_notrace_module
 class LayerNorm2d(nn.LayerNorm):
     r""" LayerNorm for channels_first tensors with 2d spatial dimensions (ie N, C, H, W).
@@ -107,14 +97,10 @@ class LayerNorm2d(nn.LayerNorm):
         super().__init__(normalized_shape, eps=eps)
 
     def forward(self, x) -> torch.Tensor:
-        if _is_contiguous(x):
-            return F.layer_norm(
-                x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
-        else:
-            s, u = torch.var_mean(x, dim=1, unbiased=False, keepdim=True)
-            x = (x - u) * torch.rsqrt(s + self.eps)
-            x = x * self.weight[:, None, None] + self.bias[:, None, None]
-            return x
+        s, u = torch.var_mean(x, dim=1, unbiased=False, keepdim=True)
+        x = (x - u) * torch.rsqrt(s + self.eps)
+        x = x * self.weight[:, None, None] + self.bias[:, None, None]
+        return x
 
 
 class ConvNeXtBlock(nn.Module):
@@ -158,7 +144,7 @@ class ConvNeXtBlock(nn.Module):
             x = x.permute(0, 3, 1, 2)
         if self.gamma is not None:
             x = x.mul(self.gamma.reshape(1, -1, 1, 1))
-        x = self.drop_path(x) + shortcut
+        x = shortcut + self.drop_path(x)
         return x
 
 
