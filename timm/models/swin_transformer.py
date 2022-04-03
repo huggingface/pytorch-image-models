@@ -46,7 +46,6 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    # patch models (my experiments)
     'swin_base_patch4_window12_384': _cfg(
         url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window12_384_22kto1k.pth',
         input_size=(3, 384, 384), crop_pct=1.0),
