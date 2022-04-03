@@ -100,9 +100,12 @@ venv.bak/
 # PyCharm
 .idea
 
+output/
+
 # PyTorch weights
 *.tar
 *.pth
+*.pt
 *.gz
 Untitled.ipynb
 Testing notebook.ipynb
