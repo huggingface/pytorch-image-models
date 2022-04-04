@@ -172,11 +172,6 @@ def load_custom_pretrained(
         pretrained_cfg (dict): Default pretrained model cfg
         load_fn: An external stand alone fn that loads weights into provided model, otherwise a fn named
             'laod_pretrained' on the model will be called if it exists
-        progress (bool, optional): whether or not to display a progress bar to stderr. Default: False
-        check_hash(bool, optional): If True, the filename part of the URL should follow the naming convention
-            ``filename-<sha256>.ext`` where ``<sha256>`` is the first eight or more
-            digits of the SHA256 hash of the contents of the file. The hash is used to
-            ensure unique names and to verify the contents of the file. Default: False
     """
     pretrained_cfg = pretrained_cfg or getattr(model, 'pretrained_cfg', None) or {}
     load_from, pretrained_loc = _resolve_pretrained_source(pretrained_cfg)

@@ -64,17 +64,18 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    # patch models (my experiments)
     'swin_v2_cr_tiny_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_tiny_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_tiny_ns_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
+        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_tiny_ns_224-ba8166c6.pth",
+        input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_small_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_small_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
+        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_224-0813c165.pth",
+        input_size=(3, 224, 224), crop_pct=0.9),
     'swin_v2_cr_base_384': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0),
     'swin_v2_cr_base_224': _cfg(
