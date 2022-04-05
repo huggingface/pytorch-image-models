@@ -421,14 +421,14 @@ def convnext_large(pretrained=False, **kwargs):
 
 @register_model
 def convnext_tiny_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), **kwargs)
     model = _create_convnext('convnext_tiny_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_small_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], **kwargs)
     model = _create_convnext('convnext_small_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
@@ -456,14 +456,14 @@ def convnext_xlarge_in22ft1k(pretrained=False, **kwargs):
 
 @register_model
 def convnext_tiny_384_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), **kwargs)
     model = _create_convnext('convnext_tiny_384_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_small_384_in22ft1k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], **kwargs)
     model = _create_convnext('convnext_small_384_in22ft1k', pretrained=pretrained, **model_args)
     return model
 
@@ -491,14 +491,14 @@ def convnext_xlarge_384_in22ft1k(pretrained=False, **kwargs):
 
 @register_model
 def convnext_tiny_in22k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), **kwargs)
     model = _create_convnext('convnext_tiny_in22k', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_small_in22k(pretrained=False, **kwargs):
-    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
+    model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], **kwargs)
     model = _create_convnext('convnext_small_in22k', pretrained=pretrained, **model_args)
     return model
 
