@@ -248,7 +248,7 @@ def load_pretrained(
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         state_dict = load_state_dict_from_hf(pretrained_loc)
     else:
-        _logger.warning("No pretrained weights exist or were found for this model. Using random initialization.")
+        raise ValueError("No pretrained weights exist or were found for this model.")
         return
 
     if filter_fn is not None:
