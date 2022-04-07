@@ -249,7 +249,6 @@ def load_pretrained(
         state_dict = load_state_dict_from_hf(pretrained_loc)
     else:
         raise ValueError("No pretrained weights exist or were found for this model.")
-        return
 
     if filter_fn is not None:
         # for backwards compat with filter fn that take one arg, try one first, the two
