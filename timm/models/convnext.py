@@ -109,7 +109,7 @@ class LayerNorm2d(nn.LayerNorm):
     def forward(self, x) -> torch.Tensor:
         if _is_contiguous(x):
             return F.layer_norm(
-                x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
+                x.permute(0, 2, 3, 1).contiguous(), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2).contiguous()
         else:
             s, u = torch.var_mean(x, dim=1, unbiased=False, keepdim=True)
             x = (x - u) * torch.rsqrt(s + self.eps)
@@ -152,10 +152,10 @@ class ConvNeXtBlock(nn.Module):
             x = self.norm(x)
             x = self.mlp(x)
         else:
-            x = x.permute(0, 2, 3, 1)
+            x = x.permute(0, 2, 3, 1).contiguous()
             x = self.norm(x)
             x = self.mlp(x)
-            x = x.permute(0, 3, 1, 2)
+            x = x.permute(0, 3, 1, 2).contiguous()
         if self.gamma is not None:
             x = x.mul(self.gamma.reshape(1, -1, 1, 1))
         x = self.drop_path(x) + shortcut
