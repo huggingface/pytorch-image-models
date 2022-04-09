@@ -12,7 +12,7 @@ https://arxiv.org/pdf/1610.02357.pdf
 
 This weights ported from the Keras implementation. Achieves the following performance on the validation set:
 
-Loss:0.9173 Prec@1:78.892 Prec@5:94.292
+Loss:0.9173 Acc@1:78.892 Acc@5:94.292
 
 REMEMBER to set your image size to 3x299x299 for both test and validation
 
