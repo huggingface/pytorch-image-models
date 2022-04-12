@@ -196,6 +196,8 @@ parser.add_argument('--jsd-loss', action='store_true', default=False,
                     help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 parser.add_argument('--bce-loss', action='store_true', default=False,
                     help='Enable BCE loss w/ Mixup/CutMix use.')
+parser.add_argument('--mil-loss', action='store_true', default=False,
+                    help='Enable MIL ranking loss')
 parser.add_argument('--bce-target-thresh', type=float, default=None,
                     help='Threshold for binarizing softened BCE targets (default: None, disabled)')
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
@@ -575,6 +577,8 @@ def main():
     if args.jsd_loss:
         assert num_aug_splits > 1  # JSD only valid with aug splits set
         train_loss_fn = JsdCrossEntropy(num_splits=num_aug_splits, smoothing=args.smoothing)
+    elif args.mil_loss:
+        train_loss_fn = MilRankingLoss()
     elif mixup_active:
         # smoothing is handled with mixup target transform which outputs sparse, soft targets
         if args.bce_loss:
@@ -690,7 +694,11 @@ def train_one_epoch(
             input = input.contiguous(memory_format=torch.channels_last)
 
         with amp_autocast():
+            #print(model)
             output = model(input)
+            print(output.shape)
+            print(target.shape)
+            print(loss_fn)
             loss = loss_fn(output, target)
 
         if not args.distributed:
