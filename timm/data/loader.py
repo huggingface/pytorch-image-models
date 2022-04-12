@@ -15,6 +15,7 @@ import numpy as np
 from .transforms_factory import create_transform
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .distributed_sampler import OrderedDistributedSampler, RepeatAugSampler
+from .bag_sampler import BagSampler
 from .random_erasing import RandomErasing
 from .mixup import FastCollateMixup
 
@@ -148,6 +149,7 @@ def create_loader(
         dataset,
         input_size,
         batch_size,
+        custom_sampler=False,
         is_training=False,
         use_prefetcher=True,
         no_aug=False,
@@ -205,6 +207,10 @@ def create_loader(
     )
 
     sampler = None
+    print("dataset_len=", len(dataset))
+    print(custom_sampler)
+    #if custom_sampler:
+    #    sampler = BagSampler(dataset)
     if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
         if is_training:
             if num_aug_repeats:

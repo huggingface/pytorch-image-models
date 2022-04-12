@@ -14,15 +14,17 @@ class MilRankingLoss(nn.Module):
 
         y_true = torch.flatten(y_true)
         y_pred = torch.flatten(y_pred)
-
-        #print(y_true.shape)
+        print("MIL_Ranking")
+        print(y_true)
         #print(y_true.type)
-        #print(y_pred.shape)
+        print(y_pred)
         #print(y_pred.type)
 
         n_seg = 32  # Because we have 32 segments per video.
-        nvid = 60
-        n_exp = nvid / 2
+        #nvid = 60
+        nvid = 1
+        #n_exp = nvid / 2
+        n_exp = nvid // 2
         Num_d=32*nvid
 
 
@@ -34,7 +36,9 @@ class MilRankingLoss(nn.Module):
         for ii in range(0, nvid, 1):
             # For Labels
             mm = y_true[ii * n_seg:ii * n_seg + n_seg]
-            sub_sum_labels = torch.cat([sub_sum_labels, torch.stack((torch.sum(mm)))])  # Just to keep track of abnormal and normal vidoes
+            
+            print(torch.sum(mm))
+            sub_sum_labels = torch.cat([sub_sum_labels, torch.sum(mm)])  # Just to keep track of abnormal and normal vidoes
 
             # For Features scores
             Feat_Score = y_pred[ii * n_seg:ii * n_seg + n_seg]

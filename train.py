@@ -530,6 +530,7 @@ def main():
         train_interpolation = data_config['interpolation']
     loader_train = create_loader(
         dataset_train,
+        custom_sampler = True,
         input_size=data_config['input_size'],
         batch_size=args.batch_size,
         is_training=True,
@@ -681,9 +682,11 @@ def train_one_epoch(
     model.train()
 
     end = time.time()
+    print("loader_length=",len(loader))
     last_idx = len(loader) - 1
     num_updates = epoch * len(loader)
     for batch_idx, (input, target) in enumerate(loader):
+        print("batch=", batch_idx)
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
         if not args.prefetcher:
@@ -698,7 +701,9 @@ def train_one_epoch(
             output = model(input)
             print(output.shape)
             print(target.shape)
-            print(loss_fn)
+            #print(output)
+            #print(target)
+            #print(loss_fn)
             loss = loss_fn(output, target)
 
         if not args.distributed:

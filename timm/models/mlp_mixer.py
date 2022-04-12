@@ -85,7 +85,7 @@ default_cfgs = dict(
     # Mixer ImageNet-21K-P pretraining
     mixer_b16_224_miil_in21k=_cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil_in21k.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=1,
+        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=2,
     ),
     mixer_b16_224_miil=_cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil.pth',
@@ -312,6 +312,9 @@ class MlpMixer(nn.Module):
     def forward(self, x):
         x = self.forward_features(x)
         x = self.head(x)
+        #print("In_model")
+        #print(x.shape)
+        #print(x)
         return x
 
 
