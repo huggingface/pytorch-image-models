@@ -2,6 +2,7 @@ import torch
 import random
 from torch.utils.data.sampler import Sampler
 
+##TODO: Ensure that all videos are covered. Make a copy of indices and remove the indices that were already picked.
 class BagSampler(Sampler):
     def __init__(self, dataset):
         halfway_point = int(len(dataset)/2)

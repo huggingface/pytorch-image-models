@@ -9,15 +9,15 @@ class MilRankingLoss(nn.Module):
     #def forward(self, x: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     #    pass
     #def mil_ranking(y_true, y_pred):
-    def forward(self, y_true, y_pred):
+    def forward(self, y_pred, y_true):
         'Custom Objective function'
 
         y_true = torch.flatten(y_true)
         y_pred = torch.flatten(y_pred)
         print("MIL_Ranking")
-        print(y_true)
+        #print(y_true)
         #print(y_true.type)
-        print(y_pred)
+        #print(y_pred)
         #print(y_pred.type)
 
         n_seg = 32  # Because we have 32 segments per video.
