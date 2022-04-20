@@ -39,14 +39,19 @@ class TextDataset(Dataset):
         All_Videos.sort()
         #print(All_Videos)
         VideoPath = os.path.join(self.path, All_Videos[idx//32])
+        #print(VideoPath)
         f = open(VideoPath, "r")
         feat = idx%32
         words = f.read().split()
         features = np.float32(words[feat * 4096:feat * 4096 + 4096])
         features = torch.tensor(features)
-        # features = torch.reshape(features, (16, 256))
+        #print(features.shape)
+        if len(features) == 0:
+            print(idx)
+            print(VideoPath)
+        features = torch.reshape(features, (16, 256))
         # features = torch.reshape(features, (196, 768))
-        features = torch.reshape(features, (1, 4096))
+        #features = torch.reshape(features, (1, 4096))
         #print(VideoPath)
         if VideoPath.find('Normal') == -1:
             label = 0
@@ -54,9 +59,9 @@ class TextDataset(Dataset):
             label = 1
 
         label = torch.tensor(label)
-        print(features.shape)
+        #print(features.shape)
         #print(features)
-        print(label.shape)
+        #print(label.shape)
         #print(label)
 
         return features, label

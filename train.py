@@ -679,10 +679,11 @@ def train_one_epoch(
     data_time_m = AverageMeter()
     losses_m = AverageMeter()
 
+    print("------Training-------")
     model.train()
 
     end = time.time()
-    print("loader_length=",len(loader))
+    #print("loader_length=",len(loader))
     last_idx = len(loader) - 1
     num_updates = epoch * len(loader)
     for batch_idx, (input, target) in enumerate(loader):
@@ -698,13 +699,15 @@ def train_one_epoch(
 
         with amp_autocast():
             #print(model)
+            print(input.shape)
             output = model(input)
             print(output.shape)
             print(target.shape)
             #print(output)
             #print(target)
-            #print(loss_fn)
+            print(loss_fn)
             loss = loss_fn(output, target)
+            print("loss=", loss)
 
         if not args.distributed:
             losses_m.update(loss.item(), input.size(0))
@@ -785,6 +788,7 @@ def validate(model, loader, loss_fn, args, amp_autocast=suppress, log_suffix='')
     top1_m = AverageMeter()
     top5_m = AverageMeter()
 
+    print("------Validating-------")
     model.eval()
 
     end = time.time()
@@ -809,8 +813,12 @@ def validate(model, loader, loss_fn, args, amp_autocast=suppress, log_suffix='')
                 output = output.unfold(0, reduce_factor, reduce_factor).mean(dim=2)
                 target = target[0:target.size(0):reduce_factor]
 
+            print("output =", output)
+            print("target=", target)
             loss = loss_fn(output, target)
+            print("eval_loss=", loss)
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            print("eval_acc1=", acc1)
 
             if args.distributed:
                 reduced_loss = reduce_tensor(loss.data, args.world_size)

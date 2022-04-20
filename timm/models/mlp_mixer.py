@@ -63,7 +63,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = dict(
-    mixer_s32_224=_cfg(),
+    mixer_s32_224=_cfg(num_classes=2),
     mixer_s16_224=_cfg(),
     mixer_b32_224=_cfg(),
     mixer_b16_224=_cfg(
@@ -264,12 +264,13 @@ class MlpMixer(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.initial_fc =nn.Linear(4096, 150528)
-        self.stem = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans,
-            embed_dim=embed_dim, norm_layer=norm_layer if stem_norm else None)
+        
+        ##initial_fc and stem not needed
+        #self.initial_fc =nn.Linear(4096, 150528)
+        #self.stem = PatchEmbed(
+        #    img_size=img_size, patch_size=patch_size, in_chans=in_chans,
+        #    embed_dim=embed_dim, norm_layer=norm_layer if stem_norm else None)
         # FIXME drop_path (stochastic depth scaling rule or all the same?)
-        #embed_dim=256
         #print("num_classes:",self.num_classes, "embed_dim:", embed_dim)
         self.blocks = nn.Sequential(*[
             block_layer(
@@ -286,23 +287,24 @@ class MlpMixer(nn.Module):
             for _ in range(num_blocks)])
         """
         self.norm = norm_layer(embed_dim)
-        # self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
-        self.head = nn.Sequential(
-            nn.Linear(embed_dim, self.num_classes),
-            nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(self.num_classes, 1024),
-            nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(256, 2)
-        )
-        self.sigmoid = nn.Sigmoid()
+        self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+        # self.head = nn.Sequential(
+        #     nn.Linear(embed_dim, self.num_classes),
+        #     nn.ReLU(),
+        #     nn.Dropout(p=0.3),
+        #     nn.Linear(self.num_classes, 1024),
+        #     nn.ReLU(),
+        #     nn.Dropout(p=0.3),
+        #     nn.Linear(1024, 512),
+        #     nn.ReLU(),
+        #     nn.Dropout(p=0.3),
+        #     nn.Linear(512, 256),
+        #     nn.ReLU(),
+        #     nn.Dropout(p=0.3),
+        #     nn.Linear(256, 2)
+        # )
+        #self.sigmoid = nn.Sigmoid()
+        self.sm = nn.Softmax(dim=1)
         self.init_weights(nlhb=nlhb)
 
     def init_weights(self, nlhb=False):
@@ -318,23 +320,24 @@ class MlpMixer(nn.Module):
 
     def forward_features(self, x):
         #x = self.stem(x)
-        print("In_Model")
+        #print("In_Model")
         x = self.blocks(x)
-        print(x)
+        #print(x)
         x = self.norm(x)
-        print(x)
+        #print(x)
         x = x.mean(dim=1)
-        print(x)
+        #print(x)
         return x
 
     def forward(self, x):
-        x = self.initial_fc(x)
-        x = torch.reshape(x, (196, 768))
+        #x = self.initial_fc(x)
+        #x = torch.reshape(x, (196, 768))
         x = self.forward_features(x)
         x = self.head(x)
-        print(x)
-        x = self.sigmoid(x)
-        print(x)
+        #print(x)
+        #x = self.sigmoid(x)
+        #print(x)
+        x = self.sm(x)
         return x
 
 
@@ -413,7 +416,8 @@ def mixer_s32_224(pretrained=False, **kwargs):
     """ Mixer-S/32 224x224
     Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
-    model_args = dict(patch_size=32, num_blocks=8, embed_dim=512, **kwargs)
+    #model_args = dict(patch_size=32, num_blocks=8, embed_dim=512, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=8, embed_dim=256, **kwargs)
     model = _create_mixer('mixer_s32_224', pretrained=pretrained, **model_args)
     return model
 
