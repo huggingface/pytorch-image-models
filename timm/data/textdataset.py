@@ -24,9 +24,9 @@ class TextDataset(Dataset):
         # Go to file idx//32
         # Get label(1x1) based on file name
         # Get vector(1x4096) at idx%32 in the file
-        #return a tensor x*y (x*y = 4096) and target tensor (1,) //Use x,y =64
+        #return a tensor x*y (x*y = 4096) and target tensor (1,) //Use x,y = 16,256
 
-
+        #print("idx=", idx)
         def listdir_nohidden(AllVideos_Path):  # To ignore hidden files
             file_dir_extension = os.path.join(AllVideos_Path, '*.txt')
             for f in glob.glob(file_dir_extension):
@@ -44,17 +44,19 @@ class TextDataset(Dataset):
         words = f.read().split()
         features = np.float32(words[feat * 4096:feat * 4096 + 4096])
         features = torch.tensor(features)
-        features = torch.reshape(features, (16, 256))
-        print(VideoPath)
+        # features = torch.reshape(features, (16, 256))
+        # features = torch.reshape(features, (196, 768))
+        features = torch.reshape(features, (1, 4096))
+        #print(VideoPath)
         if VideoPath.find('Normal') == -1:
             label = 0
         else:
             label = 1
 
         label = torch.tensor(label)
-        #print(features.shape)
+        print(features.shape)
         #print(features)
-        #print(label.shape)
-        print(label)
+        print(label.shape)
+        #print(label)
 
         return features, label

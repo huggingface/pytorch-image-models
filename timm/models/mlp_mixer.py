@@ -85,7 +85,7 @@ default_cfgs = dict(
     # Mixer ImageNet-21K-P pretraining
     mixer_b16_224_miil_in21k=_cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil_in21k.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=1, #11221
+        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
     ),
     mixer_b16_224_miil=_cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil.pth',
@@ -264,7 +264,7 @@ class MlpMixer(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-
+        self.initial_fc =nn.Linear(4096, 150528)
         self.stem = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans,
             embed_dim=embed_dim, norm_layer=norm_layer if stem_norm else None)
@@ -274,7 +274,7 @@ class MlpMixer(nn.Module):
         self.blocks = nn.Sequential(*[
             block_layer(
                 embed_dim
-                , 16 #self.stem.num_patches
+                ,16 #196 #self.stem.num_patches
                 , mlp_ratio, mlp_layer=mlp_layer, norm_layer=norm_layer,
                 act_layer=act_layer, drop=drop_rate, drop_path=drop_path_rate)
             for _ in range(num_blocks)])
@@ -286,24 +286,24 @@ class MlpMixer(nn.Module):
             for _ in range(num_blocks)])
         """
         self.norm = norm_layer(embed_dim)
-        self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
-        #self.head = nn.Sequential(
-        #     nn.Linear(embed_dim, self.num_classes),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(self.num_classes, 1024),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(1024, 512),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(512, 256),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(256, 1)
-        # )
+        # self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Sequential(
+            nn.Linear(embed_dim, self.num_classes),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(self.num_classes, 1024),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(256, 2)
+        )
         self.sigmoid = nn.Sigmoid()
-        #self.init_weights(nlhb=nlhb)
+        self.init_weights(nlhb=nlhb)
 
     def init_weights(self, nlhb=False):
         head_bias = -math.log(self.num_classes) if nlhb else 0.
@@ -318,7 +318,6 @@ class MlpMixer(nn.Module):
 
     def forward_features(self, x):
         #x = self.stem(x)
-        #print(x.shape)
         print("In_Model")
         x = self.blocks(x)
         print(x)
@@ -329,6 +328,8 @@ class MlpMixer(nn.Module):
         return x
 
     def forward(self, x):
+        x = self.initial_fc(x)
+        x = torch.reshape(x, (196, 768))
         x = self.forward_features(x)
         x = self.head(x)
         print(x)
@@ -384,7 +385,11 @@ def checkpoint_filter_fn(state_dict, model):
             if k.endswith('.alpha') or k.endswith('.beta'):
                 v = v.reshape(1, 1, -1)
             out_dict[k] = v
+        #print("checkpoint_filter_out_dict")
+        #print(out_dict)
         return out_dict
+    #print("checkpoint_filter_state_dict")
+    #print(state_dict)
     return state_dict
 
 
@@ -392,6 +397,9 @@ def _create_mixer(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for MLP-Mixer models.')
 
+    print("_create_mixer")
+    print("Pretrained=",pretrained)
+    print("default_Cfgs=", default_cfgs[variant])
     model = build_model_with_cfg(
         MlpMixer, variant, pretrained,
         default_cfg=default_cfgs[variant],
@@ -495,7 +503,8 @@ def mixer_b16_224_miil_in21k(pretrained=False, **kwargs):
     """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model_args = dict(patch_size=16, num_blocks=12, embed_dim=256, **kwargs)
+    model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
+    #model_args = dict(patch_size=16, num_blocks=12, embed_dim=256, **kwargs)
     model = _create_mixer('mixer_b16_224_miil_in21k', pretrained=pretrained, **model_args)
     return model
 

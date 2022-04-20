@@ -190,6 +190,15 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
     elif hf_hub_id and has_hf_hub(necessary=True):
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({hf_hub_id})')
         state_dict = load_state_dict_from_hf(hf_hub_id)
+    print("pretrain state_dict:")
+    print(type(state_dict))
+    print(len(state_dict))
+    for key in list(state_dict.keys()):
+        if key.startswith('stem'):
+            del state_dict[key]
+    for param_tensor in state_dict:
+        print(param_tensor, "\t", state_dict[param_tensor].size())
+    
     if filter_fn is not None:
         # for backwards compat with filter fn that take one arg, try one first, the two
         try:
@@ -232,7 +241,9 @@ def load_pretrained(model, default_cfg=None, num_classes=1000, in_chans=3, filte
                 classifier_bias = state_dict[classifier_name + '.bias']
                 state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
 
-    model.load_state_dict(state_dict, strict=strict)
+    #print(state_dict.shape)
+    #model.load_state_dict(state_dict, strict=strict)
+    model.load_state_dict(state_dict, strict=False)
 
 
 def extract_layer(model, layer):
@@ -462,6 +473,7 @@ def build_model_with_cfg(
         if pretrained_custom_load:
             load_custom_pretrained(model)
         else:
+            print("num_classes_pretrained=",num_classes_pretrained)
             load_pretrained(
                 model,
                 num_classes=num_classes_pretrained,
