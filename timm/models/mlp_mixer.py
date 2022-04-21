@@ -266,16 +266,18 @@ class MlpMixer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         
         ##initial_fc and stem not needed
-        #self.initial_fc =nn.Linear(4096, 150528)
+        self.initial_fc =nn.Linear(4096, 150528)
+        
         #self.stem = PatchEmbed(
         #    img_size=img_size, patch_size=patch_size, in_chans=in_chans,
         #    embed_dim=embed_dim, norm_layer=norm_layer if stem_norm else None)
         # FIXME drop_path (stochastic depth scaling rule or all the same?)
         #print("num_classes:",self.num_classes, "embed_dim:", embed_dim)
+        
         self.blocks = nn.Sequential(*[
             block_layer(
                 embed_dim
-                ,16 #196 #self.stem.num_patches
+                ,196 #16 #self.stem.num_patches
                 , mlp_ratio, mlp_layer=mlp_layer, norm_layer=norm_layer,
                 act_layer=act_layer, drop=drop_rate, drop_path=drop_path_rate)
             for _ in range(num_blocks)])
@@ -288,21 +290,21 @@ class MlpMixer(nn.Module):
         """
         self.norm = norm_layer(embed_dim)
         self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
-        # self.head = nn.Sequential(
-        #     nn.Linear(embed_dim, self.num_classes),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(self.num_classes, 1024),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(1024, 512),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(512, 256),
-        #     nn.ReLU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(256, 2)
-        # )
+        self.final_head = nn.Sequential(
+            # nn.Linear(embed_dim, self.num_classes),
+            # nn.ReLU(),
+            # nn.Dropout(p=0.3),
+            nn.Linear(self.num_classes, 1024),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(p=0.3),
+            nn.Linear(256, 2)
+        )
         #self.sigmoid = nn.Sigmoid()
         self.sm = nn.Softmax(dim=1)
         self.init_weights(nlhb=nlhb)
@@ -330,10 +332,12 @@ class MlpMixer(nn.Module):
         return x
 
     def forward(self, x):
-        #x = self.initial_fc(x)
-        #x = torch.reshape(x, (196, 768))
+        x = self.initial_fc(x)
+        x = nn.ReLU(x)
+        x = torch.reshape(x, (196, 768))
         x = self.forward_features(x)
         x = self.head(x)
+        x = self.final_head(x)
         #print(x)
         #x = self.sigmoid(x)
         #print(x)

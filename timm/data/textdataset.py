@@ -49,9 +49,9 @@ class TextDataset(Dataset):
         if len(features) == 0:
             print(idx)
             print(VideoPath)
-        features = torch.reshape(features, (16, 256))
+        #features = torch.reshape(features, (16, 256))
         # features = torch.reshape(features, (196, 768))
-        #features = torch.reshape(features, (1, 4096))
+        features = torch.reshape(features, (1, 4096))
         #print(VideoPath)
         if VideoPath.find('Normal') == -1:
             label = 0
