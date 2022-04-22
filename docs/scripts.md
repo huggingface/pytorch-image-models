@@ -12,7 +12,7 @@ To train an SE-ResNet34 on ImageNet, locally distributed, 4 GPUs, one process pe
 
 `./distributed_train.sh 4 /data/imagenet --model seresnet34 --sched cosine --epochs 150 --warmup-epochs 5 --lr 0.4 --reprob 0.5 --remode pixel --batch-size 256 --amp -j 4`
 
-NOTE: It is recommended to use PyTorch 1.7+ w/ PyTorch native AMP and DDP instead of APEX AMP. `--amp` defaults to native AMP as of timm ver 0.4.3.  `--apex-amp` will force use of APEX components if they are installed.
+NOTE: It is recommended to use PyTorch 1.9+ w/ PyTorch native AMP and DDP instead of APEX AMP. `--amp` defaults to native AMP as of timm ver 0.4.3.  `--apex-amp` will force use of APEX components if they are installed.
  
 ## Validation / Inference Scripts
 
