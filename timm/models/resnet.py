@@ -148,63 +148,7 @@ default_cfgs = {
     'swsl_resnext101_32x16d': _cfg(
         url='https://dl.fbaipublicfiles.com/semiweaksupervision/model_files/semi_weakly_supervised_resnext101_32x16-f3559a9c.pth'),
 
-    #  Squeeze-Excitation ResNets, to eventually replace the models in senet.py
-    'seresnet18': _cfg(
-        url='',
-        interpolation='bicubic'),
-    'seresnet34': _cfg(
-        url='',
-        interpolation='bicubic'),
-    'seresnet50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet50_ra_224-8efdb4bb.pth',
-        interpolation='bicubic'),
-    'seresnet50t': _cfg(
-        url='',
-        interpolation='bicubic',
-        first_conv='conv1.0'),
-    'seresnet101': _cfg(
-        url='',
-        interpolation='bicubic'),
-    'seresnet152': _cfg(
-        url='',
-        interpolation='bicubic'),
-    'seresnet152d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet152d_ra2-04464dd2.pth',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
-        crop_pct=1.0, test_input_size=(3, 320, 320)
-    ),
-    'seresnet200d': _cfg(
-        url='',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
-    'seresnet269d': _cfg(
-        url='',
-        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
-
-
-    #  Squeeze-Excitation ResNeXts, to eventually replace the models in senet.py
-    'seresnext26d_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26d_32x4d-80fa48a3.pth',
-        interpolation='bicubic',
-        first_conv='conv1.0'),
-    'seresnext26t_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26tn_32x4d-569cb627.pth',
-        interpolation='bicubic',
-        first_conv='conv1.0'),
-    'seresnext50_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext50_32x4d_racm-a304a460.pth',
-        interpolation='bicubic'),
-    'seresnext101_32x4d': _cfg(
-        url='',
-        interpolation='bicubic'),
-    'seresnext101_32x8d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnext101_32x8d_ah-e6bc4c0a.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
-    'senet154': _cfg(
-        url='',
-        interpolation='bicubic',
-        first_conv='conv1.0'),
-
-    # Efficient Channel Attention ResNets
+    #  Efficient Channel Attention ResNets
     'ecaresnet26t': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecaresnet26t_ra2-46609757.pth',
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
@@ -239,7 +183,7 @@ default_cfgs = {
         interpolation='bicubic', first_conv='conv1.0', input_size=(3, 320, 320), pool_size=(10, 10),
         crop_pct=1.0, test_input_size=(3, 352, 352)),
 
-    # Efficient Channel Attention ResNeXts
+    #  Efficient Channel Attention ResNeXts
     'ecaresnext26t_32x4d': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
@@ -247,7 +191,66 @@ default_cfgs = {
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
 
-    # ResNets with anti-aliasing blur pool
+    #  Squeeze-Excitation ResNets, to eventually replace the models in senet.py
+    'seresnet18': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet34': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet50': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet50_ra_224-8efdb4bb.pth',
+        interpolation='bicubic'),
+    'seresnet50t': _cfg(
+        url='',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'seresnet101': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet152': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnet152d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet152d_ra2-04464dd2.pth',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), pool_size=(8, 8),
+        crop_pct=1.0, test_input_size=(3, 320, 320)
+    ),
+    'seresnet200d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+    'seresnet269d': _cfg(
+        url='',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 256, 256), crop_pct=0.94, pool_size=(8, 8)),
+
+    #  Squeeze-Excitation ResNeXts, to eventually replace the models in senet.py
+    'seresnext26d_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26d_32x4d-80fa48a3.pth',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'seresnext26t_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26tn_32x4d-569cb627.pth',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+    'seresnext50_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext50_32x4d_racm-a304a460.pth',
+        interpolation='bicubic'),
+    'seresnext101_32x4d': _cfg(
+        url='',
+        interpolation='bicubic'),
+    'seresnext101_32x8d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnext101_32x8d_ah-e6bc4c0a.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
+    'seresnext101d_32x8d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnext101d_32x8d_ah-191d7b94.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
+
+    'senet154': _cfg(
+        url='',
+        interpolation='bicubic',
+        first_conv='conv1.0'),
+
+    # ResNets with anti-aliasing / blur pool
     'resnetblur18': _cfg(
         interpolation='bicubic'),
     'resnetblur50': _cfg(
@@ -268,6 +271,9 @@ default_cfgs = {
     'seresnetaa50d': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
+    'seresnextaa101d_32x8d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnextaa101d_32x8d_ah-83c8ae12.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
 
     # ResNet-RS models
     'resnetrs50': _cfg(
@@ -1158,98 +1164,6 @@ def ecaresnet50d(pretrained=False, **kwargs):
 
 
 @register_model
-def resnetrs50(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-50 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs50', pretrained, **model_args)
-
-
-@register_model
-def resnetrs101(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-101 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs101', pretrained, **model_args)
-
-
-@register_model
-def resnetrs152(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-152 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs152', pretrained, **model_args)
-
-
-@register_model
-def resnetrs200(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-200 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs200', pretrained, **model_args)
-
-
-@register_model
-def resnetrs270(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-270 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[4, 29, 53, 4], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs270', pretrained, **model_args)
-
-
-
-@register_model
-def resnetrs350(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-350 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[4, 36, 72, 4], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs350', pretrained, **model_args)
-
-
-@register_model
-def resnetrs420(pretrained=False, **kwargs):
-    """Constructs a ResNet-RS-420 model
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
-    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
-    """
-    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
-    model_args = dict(
-        block=Bottleneck, layers=[4, 44, 87, 4], stem_width=32, stem_type='deep', replace_stem_pool=True,
-        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
-    return _create_resnet('resnetrs420', pretrained, **model_args)
-
-
-@register_model
 def ecaresnet50d_pruned(pretrained=False, **kwargs):
     """Constructs a ResNet-50-D model pruned with eca.
         The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf
@@ -1344,72 +1258,6 @@ def ecaresnext50t_32x4d(pretrained=False, **kwargs):
         block=Bottleneck, layers=[2, 2, 2, 2], cardinality=32, base_width=4, stem_width=32,
         stem_type='deep_tiered', avg_down=True, block_args=dict(attn_layer='eca'), **kwargs)
     return _create_resnet('ecaresnext50t_32x4d', pretrained, **model_args)
-
-
-@register_model
-def resnetblur18(pretrained=False, **kwargs):
-    """Constructs a ResNet-18 model with blur anti-aliasing
-    """
-    model_args = dict(block=BasicBlock, layers=[2, 2, 2, 2], aa_layer=BlurPool2d, **kwargs)
-    return _create_resnet('resnetblur18', pretrained, **model_args)
-
-
-@register_model
-def resnetblur50(pretrained=False, **kwargs):
-    """Constructs a ResNet-50 model with blur anti-aliasing
-    """
-    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=BlurPool2d, **kwargs)
-    return _create_resnet('resnetblur50', pretrained, **model_args)
-
-
-@register_model
-def resnetblur50d(pretrained=False, **kwargs):
-    """Constructs a ResNet-50-D model with blur anti-aliasing
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=BlurPool2d,
-        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
-    return _create_resnet('resnetblur50d', pretrained, **model_args)
-
-
-@register_model
-def resnetblur101d(pretrained=False, **kwargs):
-    """Constructs a ResNet-101-D model with blur anti-aliasing
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 23, 3], aa_layer=BlurPool2d,
-        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
-    return _create_resnet('resnetblur101d', pretrained, **model_args)
-
-
-@register_model
-def resnetaa50d(pretrained=False, **kwargs):
-    """Constructs a ResNet-50-D model with avgpool anti-aliasing
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=nn.AvgPool2d,
-        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
-    return _create_resnet('resnetaa50d', pretrained, **model_args)
-
-
-@register_model
-def resnetaa101d(pretrained=False, **kwargs):
-    """Constructs a ResNet-101-D model with avgpool anti-aliasing
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 23, 3], aa_layer=nn.AvgPool2d,
-        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
-    return _create_resnet('resnetaa101d', pretrained, **model_args)
-
-
-@register_model
-def seresnetaa50d(pretrained=False, **kwargs):
-    """Constructs a SE=ResNet-50-D model with avgpool anti-aliasing
-    """
-    model_args = dict(
-        block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=nn.AvgPool2d,
-        stem_width=32, stem_type='deep', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
-    return _create_resnet('seresnetaa50d', pretrained, **model_args)
 
 
 @register_model
@@ -1536,8 +1384,186 @@ def seresnext101_32x8d(pretrained=False, **kwargs):
 
 
 @register_model
+def seresnext101d_32x8d(pretrained=False, **kwargs):
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], cardinality=32, base_width=8,
+        stem_width=32, stem_type='deep', avg_down=True,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnext101d_32x8d', pretrained, **model_args)
+
+
+@register_model
 def senet154(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 8, 36, 3], cardinality=64, base_width=4, stem_type='deep',
         down_kernel_size=3, block_reduce_first=2, block_args=dict(attn_layer='se'), **kwargs)
     return _create_resnet('senet154', pretrained, **model_args)
+
+
+@register_model
+def resnetblur18(pretrained=False, **kwargs):
+    """Constructs a ResNet-18 model with blur anti-aliasing
+    """
+    model_args = dict(block=BasicBlock, layers=[2, 2, 2, 2], aa_layer=BlurPool2d, **kwargs)
+    return _create_resnet('resnetblur18', pretrained, **model_args)
+
+
+@register_model
+def resnetblur50(pretrained=False, **kwargs):
+    """Constructs a ResNet-50 model with blur anti-aliasing
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=BlurPool2d, **kwargs)
+    return _create_resnet('resnetblur50', pretrained, **model_args)
+
+
+@register_model
+def resnetblur50d(pretrained=False, **kwargs):
+    """Constructs a ResNet-50-D model with blur anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=BlurPool2d,
+        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnetblur50d', pretrained, **model_args)
+
+
+@register_model
+def resnetblur101d(pretrained=False, **kwargs):
+    """Constructs a ResNet-101-D model with blur anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], aa_layer=BlurPool2d,
+        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnetblur101d', pretrained, **model_args)
+
+
+@register_model
+def resnetaa50d(pretrained=False, **kwargs):
+    """Constructs a ResNet-50-D model with avgpool anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=nn.AvgPool2d,
+        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnetaa50d', pretrained, **model_args)
+
+
+@register_model
+def resnetaa101d(pretrained=False, **kwargs):
+    """Constructs a ResNet-101-D model with avgpool anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], aa_layer=nn.AvgPool2d,
+        stem_width=32, stem_type='deep', avg_down=True, **kwargs)
+    return _create_resnet('resnetaa101d', pretrained, **model_args)
+
+
+@register_model
+def seresnetaa50d(pretrained=False, **kwargs):
+    """Constructs a SE=ResNet-50-D model with avgpool anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=nn.AvgPool2d,
+        stem_width=32, stem_type='deep', avg_down=True, block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnetaa50d', pretrained, **model_args)
+
+
+@register_model
+def seresnextaa101d_32x8d(pretrained=False, **kwargs):
+    """Constructs a SE=ResNeXt-101-D 32x8d model with avgpool anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], cardinality=32, base_width=8,
+        stem_width=32, stem_type='deep', avg_down=True, aa_layer=nn.AvgPool2d,
+        block_args=dict(attn_layer='se'), **kwargs)
+    return _create_resnet('seresnextaa101d_32x8d', pretrained, **model_args)
+
+
+@register_model
+def resnetrs50(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-50 model.
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs50', pretrained, **model_args)
+
+
+@register_model
+def resnetrs101(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-101 model.
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs101', pretrained, **model_args)
+
+
+@register_model
+def resnetrs152(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-152 model.
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[3, 8, 36, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs152', pretrained, **model_args)
+
+
+@register_model
+def resnetrs200(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-200 model.
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[3, 24, 36, 3], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs200', pretrained, **model_args)
+
+
+@register_model
+def resnetrs270(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-270 model.
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[4, 29, 53, 4], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs270', pretrained, **model_args)
+
+
+
+@register_model
+def resnetrs350(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-350 model.
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[4, 36, 72, 4], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs350', pretrained, **model_args)
+
+
+@register_model
+def resnetrs420(pretrained=False, **kwargs):
+    """Constructs a ResNet-RS-420 model
+    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
+    """
+    attn_layer = partial(get_attn('se'), rd_ratio=0.25)
+    model_args = dict(
+        block=Bottleneck, layers=[4, 44, 87, 4], stem_width=32, stem_type='deep', replace_stem_pool=True,
+        avg_down=True,  block_args=dict(attn_layer=attn_layer), **kwargs)
+    return _create_resnet('resnetrs420', pretrained, **model_args)
