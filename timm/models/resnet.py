@@ -243,7 +243,7 @@ default_cfgs = {
         interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
     'seresnext101d_32x8d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnext101d_32x8d_ah-191d7b94.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
+        interpolation='bicubic', first_conv='conv1.0', test_input_size=(3, 288, 288), crop_pct=1.0),
 
     'senet154': _cfg(
         url='',
@@ -273,7 +273,7 @@ default_cfgs = {
         interpolation='bicubic', first_conv='conv1.0'),
     'seresnextaa101d_32x8d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/seresnextaa101d_32x8d_ah-83c8ae12.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), crop_pct=1.0),
+        interpolation='bicubic', first_conv='conv1.0', test_input_size=(3, 288, 288), crop_pct=1.0),
 
     # ResNet-RS models
     'resnetrs50': _cfg(
