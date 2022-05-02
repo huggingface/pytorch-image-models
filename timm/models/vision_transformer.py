@@ -23,6 +23,7 @@ import math
 import logging
 from functools import partial
 from collections import OrderedDict
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -107,7 +108,6 @@ default_cfgs = {
     'vit_giant_patch14_224': _cfg(url=''),
     'vit_gigantic_patch14_224': _cfg(url=''),
 
-    'vit_base2_patch32_256': _cfg(url='', input_size=(3, 256, 256), crop_pct=0.95),
 
     # patch models, imagenet21k (weights from official Google JAX impl)
     'vit_tiny_patch16_224_in21k': _cfg(
@@ -171,7 +171,12 @@ default_cfgs = {
         mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear',
     ),
 
-    # experimental
+    'vit_base_patch16_rpn_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_base_patch16_rpn_224-sw-3b07e89d.pth'),
+
+    # experimental (may be removed)
+    'vit_base_patch32_plus_256': _cfg(url='', input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_base_patch16_plus_240': _cfg(url='', input_size=(3, 240, 240), crop_pct=0.95),
     'vit_small_patch16_36x1_224': _cfg(url=''),
     'vit_small_patch16_18x2_224': _cfg(url=''),
     'vit_base_patch16_18x2_224': _cfg(url=''),
@@ -229,14 +234,43 @@ class Block(nn.Module):
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
         x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        return x
+
+
+class ResPostBlock(nn.Module):
+
+    def __init__(
+            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0., init_values=None,
+            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.init_values = init_values
+
+        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.norm1 = norm_layer(dim)
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
+        self.norm2 = norm_layer(dim)
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.init_weights()
+
+    def init_weights(self):
+        # NOTE this init overrides that base model init with specific changes for the block type
+        if self.init_values is not None:
+            nn.init.constant_(self.norm1.weight, self.init_values)
+            nn.init.constant_(self.norm2.weight, self.init_values)
+
+    def forward(self, x):
+        x = x + self.drop_path1(self.norm1(self.attn(x)))
+        x = x + self.drop_path2(self.norm2(self.mlp(x)))
         return x
 
 
@@ -290,9 +324,9 @@ class VisionTransformer(nn.Module):
 
     def __init__(
             self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
-            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, representation_size=None,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., weight_init='', init_values=None,
-            embed_layer=PatchEmbed, norm_layer=None, act_layer=None, block_fn=Block):
+            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, init_values=None,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., weight_init='', class_token=True,
+            fc_norm=None, embed_layer=PatchEmbed, norm_layer=None, act_layer=None, block_fn=Block):
         """
         Args:
             img_size (int, tuple): input image size
@@ -305,33 +339,36 @@ class VisionTransformer(nn.Module):
             num_heads (int): number of attention heads
             mlp_ratio (int): ratio of mlp hidden dim to embedding dim
             qkv_bias (bool): enable bias for qkv if True
-            representation_size (Optional[int]): enable and set representation layer (pre-logits) to this value if set
+            init_values: (float): layer-scale init values
             drop_rate (float): dropout rate
             attn_drop_rate (float): attention dropout rate
             drop_path_rate (float): stochastic depth rate
-            weight_init: (str): weight init scheme
-            init_values: (float): layer-scale init values
+            weight_init (str): weight init scheme
+            class_token (bool): use class token
+            fc_norm (Optional[bool]): pre-fc norm after pool, set if global_pool == 'avg' if None (default: None)
             embed_layer (nn.Module): patch embedding layer
             norm_layer: (nn.Module): normalization layer
             act_layer: (nn.Module): MLP activation layer
         """
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
+        assert class_token or global_pool != 'token'
+        use_fc_norm = global_pool == 'avg' if fc_norm is None else fc_norm
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
 
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.num_tokens = 1
+        self.num_tokens = 1 if class_token else 0
         self.grad_checkpointing = False
 
         self.patch_embed = embed_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         num_patches = self.patch_embed.num_patches
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + self.num_tokens, embed_dim))
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if self.num_tokens > 0 else None
+        self.pos_embed = nn.Parameter(torch.randn(1, num_patches + self.num_tokens, embed_dim) * .02)
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -340,38 +377,21 @@ class VisionTransformer(nn.Module):
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, init_values=init_values,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer)
             for i in range(depth)])
-        use_fc_norm = self.global_pool == 'avg'
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
-
-        # Representation layer. Used for original ViT models w/ in21k pretraining.
-        self.representation_size = representation_size
-        self.pre_logits = nn.Identity()
-        if representation_size:
-            self._reset_representation(representation_size)
 
         # Classifier Head
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
-        final_chs = self.representation_size if self.representation_size else self.embed_dim
-        self.head = nn.Linear(final_chs, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         if weight_init != 'skip':
             self.init_weights(weight_init)
-
-    def _reset_representation(self, representation_size):
-        self.representation_size = representation_size
-        if self.representation_size:
-            self.pre_logits = nn.Sequential(OrderedDict([
-                ('fc', nn.Linear(self.embed_dim, self.representation_size)),
-                ('act', nn.Tanh())
-            ]))
-        else:
-            self.pre_logits = nn.Identity()
 
     def init_weights(self, mode=''):
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         trunc_normal_(self.pos_embed, std=.02)
-        nn.init.normal_(self.cls_token, std=1e-6)
+        if self.cls_token is not None:
+            nn.init.normal_(self.cls_token, std=1e-6)
         named_apply(get_init_weights_vit(mode, head_bias), self)
 
     def _init_weights(self, m):
@@ -401,19 +421,17 @@ class VisionTransformer(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool=None, representation_size=None):
+    def reset_classifier(self, num_classes: int, global_pool=None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'token')
             self.global_pool = global_pool
-        if representation_size is not None:
-            self._reset_representation(representation_size)
-        final_chs = self.representation_size if self.representation_size else self.embed_dim
-        self.head = nn.Linear(final_chs, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+        if self.cls_token is not None:
+            x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
         x = self.pos_drop(x + self.pos_embed)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
@@ -424,9 +442,8 @@ class VisionTransformer(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
-            x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+            x = x[:, self.num_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
-        x = self.pre_logits(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -441,6 +458,8 @@ def init_weights_vit_timm(module: nn.Module, name: str = ''):
         trunc_normal_(module.weight, std=.02)
         if module.bias is not None:
             nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights()
 
 
 def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0.):
@@ -449,9 +468,6 @@ def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0
         if name.startswith('head'):
             nn.init.zeros_(module.weight)
             nn.init.constant_(module.bias, head_bias)
-        elif name.startswith('pre_logits'):
-            lecun_normal_(module.weight)
-            nn.init.zeros_(module.bias)
         else:
             nn.init.xavier_uniform_(module.weight)
             if module.bias is not None:
@@ -460,6 +476,8 @@ def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0
         lecun_normal_(module.weight)
         if module.bias is not None:
             nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights()
 
 
 def init_weights_vit_moco(module: nn.Module, name: str = ''):
@@ -473,6 +491,8 @@ def init_weights_vit_moco(module: nn.Module, name: str = ''):
             nn.init.xavier_uniform_(module.weight)
         if module.bias is not None:
             nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights()
 
 
 def get_init_weights_vit(mode='jax', head_bias: float = 0.):
@@ -543,9 +563,10 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     if isinstance(model.head, nn.Linear) and model.head.bias.shape[0] == w[f'{prefix}head/bias'].shape[-1]:
         model.head.weight.copy_(_n2p(w[f'{prefix}head/kernel']))
         model.head.bias.copy_(_n2p(w[f'{prefix}head/bias']))
-    if isinstance(getattr(model.pre_logits, 'fc', None), nn.Linear) and f'{prefix}pre_logits/bias' in w:
-        model.pre_logits.fc.weight.copy_(_n2p(w[f'{prefix}pre_logits/kernel']))
-        model.pre_logits.fc.bias.copy_(_n2p(w[f'{prefix}pre_logits/bias']))
+    # NOTE representation layer has been removed, not used in latest 21k/1k pretrained weights
+    # if isinstance(getattr(model.pre_logits, 'fc', None), nn.Linear) and f'{prefix}pre_logits/bias' in w:
+    #     model.pre_logits.fc.weight.copy_(_n2p(w[f'{prefix}pre_logits/kernel']))
+    #     model.pre_logits.fc.bias.copy_(_n2p(w[f'{prefix}pre_logits/bias']))
     for i, block in enumerate(model.blocks.children()):
         block_prefix = f'{prefix}Transformer/encoderblock_{i}/'
         mha_prefix = block_prefix + 'MultiHeadDotProductAttention_1/'
@@ -601,6 +622,9 @@ def checkpoint_filter_fn(state_dict, model):
             # To resize pos embedding when using model at different size from pretrained weights
             v = resize_pos_embed(
                 v, model.pos_embed, getattr(model, 'num_tokens', 1), model.patch_embed.grid_size)
+        elif 'pre_logits' in k:
+            # NOTE representation layer removed as not used in latest 21k/1k pretrained weights
+            continue
         out_dict[k] = v
     return out_dict
 
@@ -609,21 +633,10 @@ def _create_vision_transformer(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    # NOTE this extra code to support handling of repr size for in21k pretrained models
     pretrained_cfg = resolve_pretrained_cfg(variant, kwargs=kwargs)
-    default_num_classes = pretrained_cfg['num_classes']
-    num_classes = kwargs.get('num_classes', default_num_classes)
-    repr_size = kwargs.pop('representation_size', None)
-    if repr_size is not None and num_classes != default_num_classes:
-        # Remove representation layer if fine-tuning. This may not always be the desired action,
-        # but I feel better than doing nothing by default for fine-tuning. Perhaps a better interface?
-        _logger.warning("Removing representation layer for fine-tuning.")
-        repr_size = None
-
     model = build_model_with_cfg(
         VisionTransformer, variant, pretrained,
         pretrained_cfg=pretrained_cfg,
-        representation_size=repr_size,
         pretrained_filter_fn=checkpoint_filter_fn,
         pretrained_custom_load='npz' in pretrained_cfg['url'],
         **kwargs)
@@ -693,16 +706,6 @@ def vit_base_patch32_224(pretrained=False, **kwargs):
     """
     model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch32_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_base2_patch32_256(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/32)
-    # FIXME experiment
-    """
-    model_kwargs = dict(patch_size=32, embed_dim=896, depth=12, num_heads=14, **kwargs)
-    model = _create_vision_transformer('vit_base2_patch32_256', pretrained=pretrained, **model_kwargs)
     return model
 
 
@@ -860,8 +863,7 @@ def vit_base_patch32_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     NOTE: this model has valid 21k classifier head and no representation (pre-logits) layer
     """
-    model_kwargs = dict(
-        patch_size=32, embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch32_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -872,8 +874,7 @@ def vit_base_patch16_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     NOTE: this model has valid 21k classifier head and no representation (pre-logits) layer
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -884,8 +885,7 @@ def vit_base_patch8_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     NOTE: this model has valid 21k classifier head and no representation (pre-logits) layer
     """
-    model_kwargs = dict(
-        patch_size=8, embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_kwargs = dict(patch_size=8, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch8_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -896,8 +896,7 @@ def vit_large_patch32_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     NOTE: this model has a representation layer but the 21k classifier head is zero'd out in original weights
     """
-    model_kwargs = dict(
-        patch_size=32, embed_dim=1024, depth=24, num_heads=16, representation_size=1024, **kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16, **kwargs)
     model = _create_vision_transformer('vit_large_patch32_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -908,8 +907,7 @@ def vit_large_patch16_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     NOTE: this model has valid 21k classifier head and no representation (pre-logits) layer
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=1024, depth=24, num_heads=16, **kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, **kwargs)
     model = _create_vision_transformer('vit_large_patch16_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -920,8 +918,7 @@ def vit_huge_patch14_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     NOTE: this model has a representation layer but the 21k classifier head is zero'd out in original weights
     """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1280, depth=32, num_heads=16, representation_size=1280, **kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, **kwargs)
     model = _create_vision_transformer('vit_huge_patch14_224_in21k', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -930,7 +927,6 @@ def vit_huge_patch14_224_in21k(pretrained=False, **kwargs):
 def vit_base_patch16_224_sam(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ SAM pretrained weights. Paper: https://arxiv.org/abs/2106.01548
     """
-    # NOTE original SAM weights release worked with representation_size=768
     model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_224_sam', pretrained=pretrained, **model_kwargs)
     return model
@@ -940,7 +936,6 @@ def vit_base_patch16_224_sam(pretrained=False, **kwargs):
 def vit_base_patch32_224_sam(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/32) w/ SAM pretrained weights. Paper: https://arxiv.org/abs/2106.01548
     """
-    # NOTE original SAM weights release worked with representation_size=768
     model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch32_224_sam', pretrained=pretrained, **model_kwargs)
     return model
@@ -999,6 +994,37 @@ def vit_base_patch16_224_miil(pretrained=False, **kwargs):
     """
     model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_224_miil', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+# Experimental models below
+
+@register_model
+def vit_base_patch32_plus_256(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/32+)
+    """
+    model_kwargs = dict(patch_size=32, embed_dim=896, depth=12, num_heads=14, init_values=1e-5, **kwargs)
+    model = _create_vision_transformer('vit_base_patch32_plus_256', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_base_patch16_plus_240(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16+)
+    """
+    model_kwargs = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14, init_values=1e-5, **kwargs)
+    model = _create_vision_transformer('vit_base_patch16_plus_240', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_base_patch16_rpn_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ residual post-norm
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, init_values=1e-5, class_token=False,
+        block_fn=ResPostBlock, global_pool=kwargs.pop('global_pool', 'avg'), **kwargs)
+    model = _create_vision_transformer('vit_base_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
     return model
 
 

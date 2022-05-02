@@ -295,7 +295,7 @@ def vit_base_r50_s16_224_in21k(pretrained=False, **kwargs):
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     """
     backbone = _resnetv2(layers=(3, 4, 9), **kwargs)
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, representation_size=768, **kwargs)
+    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer_hybrid(
         'vit_base_r50_s16_224_in21k', backbone=backbone, pretrained=pretrained, **model_kwargs)
     return model
