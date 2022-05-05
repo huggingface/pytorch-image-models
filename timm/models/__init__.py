@@ -39,6 +39,7 @@ from .resnetv2 import *
 from .rexnet import *
 from .selecsls import *
 from .senet import *
+from .sequencer import *
 from .sknet import *
 from .swin_transformer import *
 from .swin_transformer_v2_cr import *
