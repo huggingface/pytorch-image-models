@@ -276,7 +276,7 @@ class Sequencer2D(nn.Module):
     ):
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = embed_dims[0]  # num_features for consistency with other models
+        self.num_features = embed_dims[-1]  # num_features for consistency with other models
         self.embed_dims = embed_dims
         self.stem = PatchEmbed(
             img_size=img_size, patch_size=patch_sizes[0], in_chans=in_chans,
