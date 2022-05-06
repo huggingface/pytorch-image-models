@@ -66,8 +66,8 @@ def list_models(filter='', module='', pretrained=False, exclude_filters='', name
         name_matches_cfg (bool) - Include only models w/ model_name matching default_cfg name (excludes some aliases)
 
     Example:
-        model_list('gluon_resnet*') -- returns all models starting with 'gluon_resnet'
-        model_list('*resnext*, 'resnet') -- returns all models with 'resnext' in 'resnet' module
+        list_models('gluon_resnet*') -- returns all models starting with 'gluon_resnet'
+        list_models('*resnext*, 'resnet') -- returns all models with 'resnext' in 'resnet' module
     """
     if module:
         all_models = list(_module_to_models[module])
@@ -94,6 +94,25 @@ def list_models(filter='', module='', pretrained=False, exclude_filters='', name
     if name_matches_cfg:
         models = set(_model_pretrained_cfgs).intersection(models)
     return list(sorted(models, key=_natural_key))
+
+
+def list_benchmarks(filter='', module='', pretrained=False, exclude_filters='', name_matches_cfg=False):
+    """ Return list of available benchmarks on imagenet, sorted alphabetically
+
+    Args:
+        filter (str) - Wildcard filter string that works with fnmatch
+        module (str) - Limit model selection to a specific sub-module (ie 'gen_efficientnet')
+        pretrained (bool) - Include only models with pretrained weights if True
+        exclude_filters (str or list[str]) - Wildcard filters to exclude models after including them with filter
+        name_matches_cfg (bool) - Include only models w/ model_name matching default_cfg name (excludes some aliases)
+
+    Example:
+        list_benchmarks('gluon_resnet*') -- returns a pandas dataframe with all the benchmarks starting with 'gluon_resnet'
+    """
+    models = list_models(filter=filter, module=module, pretrained=pretrained, exclude_filters=exclude_filters, name_matches_cfg=name_matches_cfg)
+    df = pd.read_csv("https://raw.githubusercontent.com/rwightman/pytorch-image-models/master/results/results-imagenet.csv")    
+    
+    return df[df["model"].isin(models)]
 
 
 def is_model(model_name):
