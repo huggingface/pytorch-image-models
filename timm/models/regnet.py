@@ -458,7 +458,7 @@ class RegNet(nn.Module):
     def group_matcher(self, coarse=False):
         return dict(
             stem=r'^stem',
-            blocks=r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.blocks\.(\d+)',
+            blocks=r'^s(\d+)' if coarse else r'^s(\d+)\.b(\d+)',
         )
 
     @torch.jit.ignore
