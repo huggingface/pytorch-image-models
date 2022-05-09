@@ -234,8 +234,8 @@ class PoolFormer(nn.Module):
         return dict(
             stem=r'^patch_embed',  # stem and embed
             blocks=[
-                (r'^network\.(\d+)\.(\d+)', None),
-                (r'^network\.(\d+)', (0,)),
+                (r'^network\.(\d+).*\.proj', (99999,)),
+                (r'^network\.(\d+)', None) if coarse else (r'^network\.(\d+)\.(\d+)', None),
                 (r'^norm', (99999,))
             ],
         )
