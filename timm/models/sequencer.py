@@ -288,6 +288,7 @@ class Sequencer2D(nn.Module):
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = embed_dims[-1]  # num_features for consistency with other models
+        self.feature_dim = -1  # channel dim index for feature outputs (rank 4, NHWC)
         self.embed_dims = embed_dims
         self.stem = PatchEmbed(
             img_size=img_size, patch_size=patch_sizes[0], in_chans=in_chans,
@@ -333,7 +334,7 @@ class Sequencer2D(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
-        if self.global_pool is not None:
+        if global_pool is not None:
             assert global_pool in ('', 'avg')
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()

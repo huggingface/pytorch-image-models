@@ -202,13 +202,15 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
         pytest.skip("Fixed input size model > limit.")
 
     input_tensor = torch.randn((batch_size, *input_size))
+    feat_dim = getattr(model, 'feature_dim', None)
 
     outputs = model.forward_features(input_tensor)
     if isinstance(outputs, (tuple, list)):
         # cannot currently verify multi-tensor output.
         pass
     else:
-        feat_dim = -1 if outputs.ndim == 3 else 1
+        if feat_dim is None:
+            feat_dim = -1 if outputs.ndim == 3 else 1
         assert outputs.shape[feat_dim] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
@@ -216,14 +218,16 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
-    feat_dim = -1 if outputs.ndim == 3 else 1
+    if feat_dim is None:
+        feat_dim = -1 if outputs.ndim == 3 else 1
     assert outputs.shape[feat_dim] == model.num_features, 'pooled num_features != config'
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
-    feat_dim = -1 if outputs.ndim == 3 else 1
+    if feat_dim is None:
+        feat_dim = -1 if outputs.ndim == 3 else 1
     assert outputs.shape[feat_dim] == model.num_features
 
     # check classifier name matches default_cfg
