@@ -36,12 +36,12 @@ class ToTensor:
 
 
 _pil_interpolation_to_str = {
-    Image.NEAREST: 'nearest',
-    Image.BILINEAR: 'bilinear',
-    Image.BICUBIC: 'bicubic',
-    Image.BOX: 'box',
-    Image.HAMMING: 'hamming',
-    Image.LANCZOS: 'lanczos',
+    Image.Resampling.NEAREST: 'nearest',
+    Image.Resampling.BILINEAR: 'bilinear',
+    Image.Resampling.BICUBIC: 'bicubic',
+    Image.Resampling.BOX: 'box',
+    Image.Resampling.HAMMING: 'hamming',
+    Image.Resampling.LANCZOS: 'lanczos',
 }
 _str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
 
