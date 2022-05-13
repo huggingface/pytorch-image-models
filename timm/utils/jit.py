@@ -35,8 +35,8 @@ def set_jit_fuser(fuser):
         torch._C._jit_set_texpr_fuser_enabled(False)
     elif fuser == "nvfuser" or fuser == "nvf":
         os.environ['PYTORCH_NVFUSER_DISABLE_FALLBACK'] = '1'
-        os.environ['PYTORCH_NVFUSER_DISABLE_FMA'] = '1'
-        os.environ['PYTORCH_NVFUSER_JIT_OPT_LEVEL'] = '0'
+        #os.environ['PYTORCH_NVFUSER_DISABLE_FMA'] = '1'
+        #os.environ['PYTORCH_NVFUSER_JIT_OPT_LEVEL'] = '0'
         torch._C._jit_set_texpr_fuser_enabled(False)
         torch._C._jit_set_profiling_executor(True)
         torch._C._jit_set_profiling_mode(True)
