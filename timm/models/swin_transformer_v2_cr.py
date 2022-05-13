@@ -51,7 +51,7 @@ def _cfg(url='', **kwargs):
         'url': url,
         'num_classes': 1000,
         'input_size': (3, 224, 224),
-        'pool_size': None,
+        'pool_size': (7, 7),
         'crop_pct': 0.9,
         'interpolation': 'bicubic',
         'fixed_input_size': True,
@@ -65,14 +65,14 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     'swinv2_cr_tiny_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0),
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
     'swinv2_cr_tiny_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_tiny_ns_224': _cfg(
         url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_tiny_ns_224-ba8166c6.pth",
         input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_small_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0),
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
     'swinv2_cr_small_224': _cfg(
         url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_224-0813c165.pth",
         input_size=(3, 224, 224), crop_pct=0.9),
@@ -80,21 +80,21 @@ default_cfgs = {
         url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_ns_224_iv-2ce90f8e.pth",
         input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_base_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0),
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
     'swinv2_cr_base_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_base_ns_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_large_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0),
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
     'swinv2_cr_large_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_huge_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0),
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
     'swinv2_cr_huge_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
     'swinv2_cr_giant_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0),
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
     'swinv2_cr_giant_224': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
 }

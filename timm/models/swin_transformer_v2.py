@@ -39,7 +39,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    'swinv2_tiny_window8_256.': _cfg(
+    'swinv2_tiny_window8_256': _cfg(
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_tiny_patch4_window8_256.pth',
         input_size=(3, 256, 256)
     ),
@@ -106,6 +106,7 @@ def window_partition(x, window_size):
     return windows
 
 
+@register_notrace_function  # reason: int argument is a Proxy
 def window_reverse(windows, window_size, H, W):
     """
     Args:
@@ -190,9 +191,11 @@ class WindowAttention(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias=False)
         if qkv_bias:
             self.q_bias = nn.Parameter(torch.zeros(dim))
+            self.register_buffer('k_bias', torch.zeros(dim), persistent=False)
             self.v_bias = nn.Parameter(torch.zeros(dim))
         else:
             self.q_bias = None
+            self.k_bias = None
             self.v_bias = None
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
@@ -208,7 +211,7 @@ class WindowAttention(nn.Module):
         B_, N, C = x.shape
         qkv_bias = None
         if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+            qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias))
         qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
