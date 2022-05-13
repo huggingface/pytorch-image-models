@@ -1,5 +1,7 @@
 """ Relative Position Vision Transformer (ViT) in PyTorch
 
+NOTE: these models are experimental / WIP, expect changes
+
 Hacked together by / Copyright 2022, Ross Wightman
 """
 import math
@@ -37,9 +39,23 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_replos_base_patch32_plus_rpn_256-sw-dd486f51.pth',
         input_size=(3, 256, 256)),
     'vit_relpos_base_patch16_plus_240': _cfg(url='', input_size=(3, 240, 240)),
-    'vit_relpos_base_patch16_rpn_224': _cfg(url=''),
+
+    'vit_relpos_small_patch16_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_small_patch16_224-sw-ec2778b4.pth'),
+    'vit_relpos_medium_patch16_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_224-sw-11c174af.pth'),
     'vit_relpos_base_patch16_224': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_base_patch16_224-sw-49049aed.pth'),
+
+    'vit_relpos_base_patch16_cls_224': _cfg(
+        url=''),
+    'vit_relpos_base_patch16_gapcls_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_base_patch16_gapcls_224-sw-1a341d6c.pth'),
+
+    'vit_relpos_small_patch16_rpn_224': _cfg(url=''),
+    'vit_relpos_medium_patch16_rpn_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_rpn_224-sw-5d2befd8.pth'),
+    'vit_relpos_base_patch16_rpn_224': _cfg(url=''),
 }
 
 
@@ -66,43 +82,84 @@ def gen_relative_position_index(win_size: Tuple[int, int], class_token: int = 0)
     return relative_position_index
 
 
-def gen_relative_position_log(win_size: Tuple[int, int]) -> torch.Tensor:
-    """Method initializes the pair-wise relative positions to compute the positional biases."""
-    coordinates = torch.stack(torch.meshgrid([torch.arange(win_size[0]), torch.arange(win_size[1])])).flatten(1)
-    relative_coords = coordinates[:, :, None] - coordinates[:, None, :]
-    relative_coords = relative_coords.permute(1, 2, 0).float()
-    relative_coordinates_log = torch.sign(relative_coords) * torch.log(1.0 + relative_coords.abs())
-    return relative_coordinates_log
+def gen_relative_log_coords(
+        win_size: Tuple[int, int],
+        pretrained_win_size: Tuple[int, int] = (0, 0),
+        mode='swin'
+):
+    # as per official swin-v2 impl, supporting timm swin-v2-cr coords as well
+    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0], dtype=torch.float32)
+    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1], dtype=torch.float32)
+    relative_coords_table = torch.stack(torch.meshgrid([relative_coords_h, relative_coords_w]))
+    relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous()  # 2*Wh-1, 2*Ww-1, 2
+    if mode == 'swin':
+        if pretrained_win_size[0] > 0:
+            relative_coords_table[:, :, 0] /= (pretrained_win_size[0] - 1)
+            relative_coords_table[:, :, 1] /= (pretrained_win_size[1] - 1)
+        else:
+            relative_coords_table[:, :, 0] /= (win_size[0] - 1)
+            relative_coords_table[:, :, 1] /= (win_size[1] - 1)
+        relative_coords_table *= 8  # normalize to -8, 8
+        scale = math.log2(8)
+    else:
+        # FIXME we should support a form of normalization (to -1/1) for this mode?
+        scale = math.log2(math.e)
+    relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
+        1.0 + relative_coords_table.abs()) / scale
+    return relative_coords_table
 
 
 class RelPosMlp(nn.Module):
-    # based on timm swin-v2 impl
-    def __init__(self, window_size, num_heads=8, hidden_dim=32, class_token=False):
+    def __init__(
+            self,
+            window_size,
+            num_heads=8,
+            hidden_dim=128,
+            class_token=False,
+            mode='cr',
+            pretrained_window_size=(0, 0)
+    ):
         super().__init__()
         self.window_size = window_size
         self.window_area = self.window_size[0] * self.window_size[1]
         self.class_token = 1 if class_token else 0
         self.num_heads = num_heads
+        self.bias_shape = (self.window_area,) * 2 + (num_heads,)
+        self.apply_sigmoid = mode == 'swin'
 
+        mlp_bias = (True, False) if mode == 'swin' else True
         self.mlp = Mlp(
             2,  # x, y
-            hidden_features=min(128, hidden_dim * num_heads),
+            hidden_features=hidden_dim,
             out_features=num_heads,
             act_layer=nn.ReLU,
+            bias=mlp_bias,
             drop=(0.125, 0.)
         )
 
         self.register_buffer(
-            'rel_coords_log',
-            gen_relative_position_log(window_size),
-            persistent=False
-        )
+            "relative_position_index",
+            gen_relative_position_index(window_size),
+            persistent=False)
+
+        # get relative_coords_table
+        self.register_buffer(
+            "rel_coords_log",
+            gen_relative_log_coords(window_size, pretrained_window_size, mode=mode),
+            persistent=False)
 
     def get_bias(self) -> torch.Tensor:
-        relative_position_bias = self.mlp(self.rel_coords_log).permute(2, 0, 1).unsqueeze(0)
+        relative_position_bias = self.mlp(self.rel_coords_log)
+        if self.relative_position_index is not None:
+            relative_position_bias = relative_position_bias.view(-1, self.num_heads)[
+                self.relative_position_index.view(-1)]  # Wh*Ww,Wh*Ww,nH
+            relative_position_bias = relative_position_bias.view(self.bias_shape)
+        relative_position_bias = relative_position_bias.permute(2, 0, 1)
+        if self.apply_sigmoid:
+            relative_position_bias = 16 * torch.sigmoid(relative_position_bias)
         if self.class_token:
             relative_position_bias = F.pad(relative_position_bias, [self.class_token, 0, self.class_token, 0])
-        return relative_position_bias
+        return relative_position_bias.unsqueeze(0).contiguous()
 
     def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
         return attn + self.get_bias()
@@ -131,10 +188,10 @@ class RelPosBias(nn.Module):
         trunc_normal_(self.relative_position_bias_table, std=.02)
 
     def get_bias(self) -> torch.Tensor:
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-            self.bias_shape)  # win_h * win_w, win_h * win_w, num_heads
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()
-        return relative_position_bias
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
+        # win_h * win_w, win_h * win_w, num_heads
+        relative_position_bias = relative_position_bias.view(self.bias_shape).permute(2, 0, 1)
+        return relative_position_bias.unsqueeze(0).contiguous()
 
     def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
         return attn + self.get_bias()
@@ -250,8 +307,8 @@ class VisionTransformerRelPos(nn.Module):
 
     def __init__(
             self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='avg',
-            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, init_values=1e-5,
-            class_token=False, rel_pos_type='mlp', shared_rel_pos=False, fc_norm=False,
+            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, init_values=1e-6,
+            class_token=False, fc_norm=False, rel_pos_type='mlp', shared_rel_pos=False, rel_pos_dim=None,
             drop_rate=0., attn_drop_rate=0., drop_path_rate=0., weight_init='skip',
             embed_layer=PatchEmbed, norm_layer=None, act_layer=None, block_fn=RelPosBlock):
         """
@@ -268,9 +325,9 @@ class VisionTransformerRelPos(nn.Module):
             qkv_bias (bool): enable bias for qkv if True
             init_values: (float): layer-scale init values
             class_token (bool): use class token (default: False)
+            fc_norm (bool): use pre classifier norm instead of pre-pool
             rel_pos_ty pe (str): type of relative position
             shared_rel_pos (bool): share relative pos across all blocks
-            fc_norm (bool): use pre classifier norm instead of pre-pool
             drop_rate (float): dropout rate
             attn_drop_rate (float): attention dropout rate
             drop_path_rate (float): stochastic depth rate
@@ -295,8 +352,15 @@ class VisionTransformerRelPos(nn.Module):
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         feat_size = self.patch_embed.grid_size
 
-        rel_pos_cls = RelPosMlp if rel_pos_type == 'mlp' else RelPosBias
-        rel_pos_cls = partial(rel_pos_cls, window_size=feat_size, class_token=class_token)
+        rel_pos_args = dict(window_size=feat_size, class_token=class_token)
+        if rel_pos_type.startswith('mlp'):
+            if rel_pos_dim:
+                rel_pos_args['hidden_dim'] = rel_pos_dim
+            if 'swin' in rel_pos_type:
+                rel_pos_args['mode'] = 'swin'
+            rel_pos_cls = partial(RelPosMlp, **rel_pos_args)
+        else:
+            rel_pos_cls = partial(RelPosBias, **rel_pos_args)
         self.shared_rel_pos = None
         if shared_rel_pos:
             self.shared_rel_pos = rel_pos_cls(num_heads=num_heads)
@@ -409,6 +473,26 @@ def vit_relpos_base_patch16_plus_240(pretrained=False, **kwargs):
 
 
 @register_model
+def vit_relpos_small_patch16_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=True, **kwargs)
+    model = _create_vision_transformer_relpos('vit_relpos_small_patch16_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_relpos_medium_patch16_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=True, **kwargs)
+    model = _create_vision_transformer_relpos('vit_relpos_medium_patch16_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
 def vit_relpos_base_patch16_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
     """
@@ -419,10 +503,56 @@ def vit_relpos_base_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
+def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False,
+        class_token=True, global_pool='token', **kwargs)
+    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_cls_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_relpos_base_patch16_gapcls_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
+    NOTE this config is a bit of a mistake, class token was enabled but global avg-pool w/ fc-norm was not disabled
+    Leaving here for comparisons w/ a future re-train as it performs quite well.
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, fc_norm=True, class_token=True, **kwargs)
+    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_gapcls_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_relpos_small_patch16_rpn_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, block_fn=ResPostRelPosBlock, **kwargs)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_small_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_relpos_medium_patch16_rpn_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, block_fn=ResPostRelPosBlock, **kwargs)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_medium_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
 def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, block_fn=ResPostRelPosBlock, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_base_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
     return model

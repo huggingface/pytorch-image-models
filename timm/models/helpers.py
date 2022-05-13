@@ -477,7 +477,7 @@ def build_model_with_cfg(
         pretrained_cfg: Optional[Dict] = None,
         model_cfg: Optional[Any] = None,
         feature_cfg: Optional[Dict] = None,
-        pretrained_strict: bool = False,
+        pretrained_strict: bool = True,
         pretrained_filter_fn: Optional[Callable] = None,
         pretrained_custom_load: bool = False,
         kwargs_filter: Optional[Tuple[str]] = None,
