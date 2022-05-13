@@ -25,7 +25,6 @@ from .fx_features import register_notrace_function
 from .helpers import build_model_with_cfg, named_apply
 from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, to_ntuple, trunc_normal_, _assert
 from .registry import register_model
-from .vision_transformer import checkpoint_filter_fn, get_init_weights_vit
 
 
 def _cfg(url='', **kwargs):
@@ -75,7 +74,7 @@ default_cfgs = {
     ),
     'swinv2_base_window12to24_192to384_22kft1k': _cfg(
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window12to24_192to384_22kto1k_ft.pth',
-        input_size=(3, 384, 384)
+        input_size=(3, 384, 384), crop_pct=1.0,
     ),
     'swinv2_large_window12_192_22k': _cfg(
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_large_patch4_window12_192_22k.pth',
@@ -87,7 +86,7 @@ default_cfgs = {
     ),
     'swinv2_large_window12to24_192to384_22kft1k': _cfg(
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_large_patch4_window12to24_192to384_22kto1k_ft.pth',
-        input_size=(3, 384, 384)
+        input_size=(3, 384, 384), crop_pct=1.0,
     ),
 }
 
@@ -174,7 +173,7 @@ class WindowAttention(nn.Module):
         relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
             torch.abs(relative_coords_table) + 1.0) / math.log2(8)
 
-        self.register_buffer("relative_coords_table", relative_coords_table)
+        self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
 
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(self.window_size[0])
@@ -187,7 +186,7 @@ class WindowAttention(nn.Module):
         relative_coords[:, :, 1] += self.window_size[1] - 1
         relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-        self.register_buffer("relative_position_index", relative_position_index)
+        self.register_buffer("relative_position_index", relative_position_index, persistent=False)
 
         self.qkv = nn.Linear(dim, dim * 3, bias=False)
         if qkv_bias:
@@ -215,7 +214,7 @@ class WindowAttention(nn.Module):
             qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias))
         qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv.unbind(0)
 
         # cosine attention
         attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1))
@@ -559,9 +558,6 @@ class SwinTransformerV2(nn.Module):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -619,6 +615,18 @@ class SwinTransformerV2(nn.Module):
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
+
+
+def checkpoint_filter_fn(state_dict, model):
+    out_dict = {}
+    if 'model' in state_dict:
+        # For deit models
+        state_dict = state_dict['model']
+    for k, v in state_dict.items():
+        if any([n in k for n in ('relative_position_index', 'relative_coords_table')]):
+            continue  # skip buffers that should not be persistent
+        out_dict[k] = v
+    return out_dict
 
 
 def _create_swin_transformer_v2(variant, pretrained=False, **kwargs):
