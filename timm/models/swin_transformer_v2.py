@@ -450,7 +450,7 @@ class BasicLayer(nn.Module):
 
     def forward(self, x):
         for blk in self.blocks:
-            if not torch.jit.is_scripting() and self.grad_checkpointing:
+            if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
