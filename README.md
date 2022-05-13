@@ -26,7 +26,7 @@ I'm fortunate to be able to dedicate significant time and money of my own suppor
 ### May 13, 2022
 * Official Swin-V2 models and weights added from (https://github.com/microsoft/Swin-Transformer). Cleaned up to support torchscript.
 * Some refactoring for existing `timm` Swin-V2-CR impl, will likely do a bit more to bring parts closer to official and decide whether to merge some aspects.
-* More Vision Transformer relative position / residual post-norm experiments w/ 512 dim
+* More Vision Transformer relative position / residual post-norm experiments w/ 512 dim (all trained on TPU thanks to TRC program)
   * `vit_relpos_small_patch16_224` - 81.5 @ 224, 82.5 @ 320 -- rel pos, layer scale, no class token, avg pool
   * `vit_relpos_medium_patch16_rpn_224` - 82.3 @ 224, 83.1 @ 320 -- rel pos + res-post-norm, no class token, avg pool
   * `vit_relpos_medium_patch16_224` - 82.5 @ 224, 83.3 @ 320 -- rel pos, layer scale, no class token, avg pool
