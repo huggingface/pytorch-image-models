@@ -271,7 +271,7 @@ def validate(args):
         top5=round(top5a, 4), top5_err=round(100 - top5a, 4),
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
-        cropt_pct=crop_pct,
+        crop_pct=crop_pct,
         interpolation=data_config['interpolation'])
 
     _logger.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
