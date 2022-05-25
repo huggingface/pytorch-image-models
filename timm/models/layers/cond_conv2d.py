@@ -91,7 +91,8 @@ class CondConv2d(nn.Module):
             bias = torch.matmul(routing_weights, self.bias)
             bias = bias.view(B * self.out_channels)
         # move batch elements with channels so each batch element can be efficiently convolved with separate kernel
-        x = x.view(1, B * C, H, W)
+        # reshape instead of view to work with channels_last input
+        x = x.reshape(1, B * C, H, W)
         if self.dynamic_padding:
             out = conv2d_same(
                 x, weight, bias, stride=self.stride, padding=self.padding,

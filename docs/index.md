@@ -4,7 +4,7 @@
 
 Welcome to the `timm` documentation, a lean set of docs that covers the basics of `timm`.
 
-For a more comprehensive set of docs (currently under development), please visit [timmdocs](https://fastai.github.io/timmdocs/) by [Aman Arora](https://github.com/amaarora).
+For a more comprehensive set of docs (currently under development), please visit [timmdocs](http://timm.fast.ai) by [Aman Arora](https://github.com/amaarora).
 
 ## Install
 
@@ -20,17 +20,17 @@ pip install git+https://github.com/rwightman/pytorch-image-models.git
 ```
 
 !!! info "Conda Environment"
-    All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically Python 3.6.x, 3.7.x., 3.8.x., 3.9
+    All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically 3.7, 3.8, 3.9, 3.10
     
     Little to no care has been taken to be Python 2.x friendly and will not support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.
     
-    PyTorch versions 1.4, 1.5.x, 1.6, 1.7.x, and 1.8 have been tested with this code.
+    PyTorch versions 1.9, 1.10, 1.11 have been tested with the latest versions of this code.
     
     I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
     ```
     conda create -n torch-env
     conda activate torch-env
-    conda install pytorch torchvision cudatoolkit=11.1 -c pytorch -c conda-forge
+    conda install pytorch torchvision cudatoolkit=11.3 -c pytorch
     conda install pyyaml
     ```
 

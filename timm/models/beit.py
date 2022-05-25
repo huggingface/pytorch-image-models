@@ -46,27 +46,27 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     'beit_base_patch16_224': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_base_patch16_224_pt22k_ft22kto1k.pth'),
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_224_pt22k_ft22kto1k.pth'),
     'beit_base_patch16_384': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_base_patch16_384_pt22k_ft22kto1k.pth',
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_384_pt22k_ft22kto1k.pth',
         input_size=(3, 384, 384), crop_pct=1.0,
     ),
     'beit_base_patch16_224_in22k': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_base_patch16_224_pt22k_ft22k.pth',
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_224_pt22k_ft22k.pth',
         num_classes=21841,
     ),
     'beit_large_patch16_224': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_large_patch16_224_pt22k_ft22kto1k.pth'),
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_224_pt22k_ft22kto1k.pth'),
     'beit_large_patch16_384': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_large_patch16_384_pt22k_ft22kto1k.pth',
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_384_pt22k_ft22kto1k.pth',
         input_size=(3, 384, 384), crop_pct=1.0,
     ),
     'beit_large_patch16_512': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_large_patch16_512_pt22k_ft22kto1k.pth',
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_512_pt22k_ft22kto1k.pth',
         input_size=(3, 512, 512), crop_pct=1.0,
     ),
     'beit_large_patch16_224_in22k': _cfg(
-        url='https://unilm.blob.core.windows.net/beit/beit_large_patch16_224_pt22k_ft22k.pth',
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_224_pt22k_ft22k.pth',
         num_classes=21841,
     ),
 }

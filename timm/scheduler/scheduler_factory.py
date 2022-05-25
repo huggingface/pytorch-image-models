@@ -71,7 +71,7 @@ def create_scheduler(args, optimizer):
     elif args.sched == 'multistep':
         lr_scheduler = MultiStepLRScheduler(
             optimizer,
-            decay_t=args.decay_epochs,
+            decay_t=args.decay_milestones,
             decay_rate=args.decay_rate,
             warmup_lr_init=args.warmup_lr,
             warmup_t=args.warmup_epochs,
