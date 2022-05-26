@@ -90,6 +90,7 @@ print(f'Pooled shape: {o.shape}')
 ```
 Output:
 ```text
+Original shape: torch.Size([2, 1000])
 Pooled shape: torch.Size([2, 1024])
 ```
 
