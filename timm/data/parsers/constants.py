@@ -1,1 +1,1 @@
-IMG_EXTENSIONS = ('.png', '.jpg', '.jpeg')
+IMG_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.tif')
