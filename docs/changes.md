@@ -27,7 +27,7 @@
 * Add CoaT models and weights. Thanks [Mohammed Rizin](https://github.com/morizin)
 * Add new ImageNet-21k weights & finetuned weights for TResNet, MobileNet-V3, ViT models. Thanks [mrT](https://github.com/mrT23)
 * Add GhostNet models and weights. Thanks [Kai Han](https://github.com/iamhankai)
-* Update ByoaNet attention modules
+* Update ByoaNet attention modles
    * Improve SA module inits
    * Hack together experimental stand-alone Swin based attn module and `swinnet`
    * Consistent '26t' model defs for experiments.
