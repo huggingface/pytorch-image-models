@@ -51,6 +51,12 @@ except ImportError as e:
     FlopCountAnalysis = None
     has_fvcore_profiling = False
 
+try:
+    from functorch.compile import memory_efficient_fusion
+    has_functorch = True
+except ImportError as e:
+    has_functorch = False
+
 
 torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('validate')
@@ -95,10 +101,13 @@ parser.add_argument('--amp', action='store_true', default=False,
                     help='use PyTorch Native AMP for mixed precision training. Overrides --precision arg.')
 parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
-parser.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+scripting_group = parser.add_mutually_exclusive_group()
+scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
+                    help='convert model torchscript for inference')
+scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
+                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
 
 
 # train optimizer parameters
@@ -188,7 +197,7 @@ def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False
 
 class BenchmarkRunner:
     def __init__(
-            self, model_name, detail=False, device='cuda', torchscript=False, precision='float32',
+            self, model_name, detail=False, device='cuda', torchscript=False, aot_autograd=False, precision='float32',
             fuser='', num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
         self.model_name = model_name
         self.detail = detail
@@ -220,10 +229,13 @@ class BenchmarkRunner:
         if torchscript:
             self.model = torch.jit.script(self.model)
             self.scripted = True
-
         data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
+
+        if aot_autograd:
+            assert has_functorch, "functorch is needed for --aot-autograd"
+            self.model = memory_efficient_fusion(self.model)
 
         self.example_inputs = None
         self.num_warm_iter = num_warm_iter
