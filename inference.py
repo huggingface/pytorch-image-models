@@ -38,7 +38,7 @@ parser.add_argument('--input-size', default=None, nargs=3, type=int,
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
-                    help='Override std deviation of of dataset')
+                    help='Override std deviation of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('--num-classes', type=int, default=1000,

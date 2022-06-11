@@ -55,7 +55,7 @@ class SelectiveKernelBasic(nn.Module):
         sk_kwargs = sk_kwargs or {}
         conv_kwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
-        assert base_width == 64, 'BasicBlock doest not support changing base width'
+        assert base_width == 64, 'BasicBlock does not support changing base width'
         first_planes = planes // reduce_first
         outplanes = planes * self.expansion
         first_dilation = first_dilation or dilation
