@@ -35,14 +35,28 @@ class ToTensor:
         return torch.from_numpy(np_img).to(dtype=self.dtype)
 
 
-_pil_interpolation_to_str = {
-    Image.NEAREST: 'nearest',
-    Image.BILINEAR: 'bilinear',
-    Image.BICUBIC: 'bicubic',
-    Image.BOX: 'box',
-    Image.HAMMING: 'hamming',
-    Image.LANCZOS: 'lanczos',
-}
+# Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in
+# favor of the Image.Resampling enum. The top-level resampling attributes will be
+# removed in Pillow 10.
+if hasattr(Image, "Resampling"):
+    _pil_interpolation_to_str = {
+        Image.Resampling.NEAREST: 'nearest',
+        Image.Resampling.BILINEAR: 'bilinear',
+        Image.Resampling.BICUBIC: 'bicubic',
+        Image.Resampling.BOX: 'box',
+        Image.Resampling.HAMMING: 'hamming',
+        Image.Resampling.LANCZOS: 'lanczos',
+    }
+else:
+    _pil_interpolation_to_str = {
+        Image.NEAREST: 'nearest',
+        Image.BILINEAR: 'bilinear',
+        Image.BICUBIC: 'bicubic',
+        Image.BOX: 'box',
+        Image.HAMMING: 'hamming',
+        Image.LANCZOS: 'lanczos',
+    }
+
 _str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
 
 
@@ -181,5 +195,3 @@ class RandomResizedCropAndInterpolation:
         format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
         format_string += ', interpolation={0})'.format(interpolate_str)
         return format_string
-
-
