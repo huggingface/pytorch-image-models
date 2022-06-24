@@ -5,11 +5,6 @@ from typing import Union, List, Optional, Any
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-try:
-    from torch.nn.modules._functions import SyncBatchNorm as sync_batch_norm
-    FULL_SYNC_BN = True
-except ImportError:
-    FULL_SYNC_BN = False
 
 from .trace_utils import _assert
 from .create_act import get_act_layer
