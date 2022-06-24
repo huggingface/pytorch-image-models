@@ -256,8 +256,9 @@ class EvoNorm2dS0a(EvoNorm2dS0):
 class EvoNorm2dS1(nn.Module):
     def __init__(
             self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=nn.SiLU, eps=1e-5, **_):
+            apply_act=True, act_layer=None, eps=1e-5, **_):
         super().__init__()
+        act_layer = act_layer or nn.SiLU
         self.apply_act = apply_act  # apply activation (non-linearity)
         if act_layer is not None and apply_act:
             self.act = create_act_layer(act_layer)
@@ -290,7 +291,7 @@ class EvoNorm2dS1(nn.Module):
 class EvoNorm2dS1a(EvoNorm2dS1):
     def __init__(
             self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=nn.SiLU, eps=1e-3, **_):
+            apply_act=True, act_layer=None, eps=1e-3, **_):
         super().__init__(
             num_features, groups=groups, group_size=group_size, apply_act=apply_act, act_layer=act_layer, eps=eps)
 
@@ -305,8 +306,9 @@ class EvoNorm2dS1a(EvoNorm2dS1):
 class EvoNorm2dS2(nn.Module):
     def __init__(
             self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=nn.SiLU, eps=1e-5, **_):
+            apply_act=True, act_layer=None, eps=1e-5, **_):
         super().__init__()
+        act_layer = act_layer or nn.SiLU
         self.apply_act = apply_act  # apply activation (non-linearity)
         if act_layer is not None and apply_act:
             self.act = create_act_layer(act_layer)
@@ -338,7 +340,7 @@ class EvoNorm2dS2(nn.Module):
 class EvoNorm2dS2a(EvoNorm2dS2):
     def __init__(
             self, num_features, groups=32, group_size=None,
-            apply_act=True, act_layer=nn.SiLU, eps=1e-3, **_):
+            apply_act=True, act_layer=None, eps=1e-3, **_):
         super().__init__(
             num_features, groups=groups, group_size=group_size, apply_act=apply_act, act_layer=act_layer, eps=eps)
 
