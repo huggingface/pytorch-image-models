@@ -455,18 +455,27 @@ def update_pretrained_cfg_and_kwargs(pretrained_cfg, kwargs, kwargs_filter):
     filter_kwargs(kwargs, names=kwargs_filter)
 
 
-def resolve_pretrained_cfg(variant: str, pretrained_cfg=None, kwargs=None):
+def resolve_pretrained_cfg(variant: str, **kwargs):
+    pretrained_cfg = kwargs.pop('pretrained_cfg', None)
     if pretrained_cfg and isinstance(pretrained_cfg, dict):
-        # highest priority, pretrained_cfg available and passed explicitly
+        # highest priority, pretrained_cfg available and passed in args
         return deepcopy(pretrained_cfg)
-    if kwargs and 'pretrained_cfg' in kwargs:
-        # next highest, pretrained_cfg in a kwargs dict, pop and return
-        pretrained_cfg = kwargs.pop('pretrained_cfg', {})
-        if pretrained_cfg:
-            return deepcopy(pretrained_cfg)
-    # lookup pretrained cfg in model registry by variant
+    # fallback to looking up pretrained cfg in model registry by variant identifier
     pretrained_cfg = get_pretrained_cfg(variant)
-    assert pretrained_cfg
+    if not pretrained_cfg:
+        _logger.warning(
+            f"No pretrained configuration specified for {variant} model. Using a default."
+            f" Please add a config to the model pretrained_cfg registry or pass explicitly.")
+        pretrained_cfg = dict(
+            url='',
+            num_classes=1000,
+            input_size=(3, 224, 224),
+            pool_size=None,
+            crop_pct=.9,
+            interpolation='bicubic',
+            first_conv='',
+            classifier='',
+        )
     return pretrained_cfg
 
 
