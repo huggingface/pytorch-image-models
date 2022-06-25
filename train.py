@@ -15,10 +15,9 @@ NVIDIA CUDA specific speedups adopted from NVIDIA Apex examples
 Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import time
-import yaml
-import os
 import logging
+import os
+import time
 from collections import OrderedDict
 from contextlib import suppress
 from datetime import datetime
@@ -26,14 +25,15 @@ from datetime import datetime
 import torch
 import torch.nn as nn
 import torchvision.utils
+import yaml
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
-from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
-from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint,\
-    convert_splitbn_model, model_parameters
 from timm import utils
-from timm.loss import JsdCrossEntropy, BinaryCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy,\
+from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
+from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, \
     LabelSmoothingCrossEntropy
+from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, \
+    convert_splitbn_model, convert_sync_batchnorm, model_parameters
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler
 from timm.utils import ApexScaler, NativeScaler
@@ -438,12 +438,14 @@ def main():
 
     # setup synchronized BatchNorm for distributed training
     if args.distributed and args.sync_bn:
+        args.dist_bn = ''  # disable dist_bn when sync BN active
         assert not args.split_bn
         if has_apex and use_amp == 'apex':
-            # Apex SyncBN preferred unless native amp is activated
+            # Apex SyncBN used with Apex AMP
+            # WARNING this won't currently work with models using BatchNormAct2d
             model = convert_syncbn_model(model)
         else:
-            model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+            model = convert_sync_batchnorm(model)
         if args.local_rank == 0:
             _logger.info(
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
