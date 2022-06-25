@@ -455,10 +455,9 @@ def update_pretrained_cfg_and_kwargs(pretrained_cfg, kwargs, kwargs_filter):
     filter_kwargs(kwargs, names=kwargs_filter)
 
 
-def resolve_pretrained_cfg(variant: str, **kwargs):
-    pretrained_cfg = kwargs.pop('pretrained_cfg', None)
+def resolve_pretrained_cfg(variant: str, pretrained_cfg=None):
     if pretrained_cfg and isinstance(pretrained_cfg, dict):
-        # highest priority, pretrained_cfg available and passed in args
+        # highest priority, pretrained_cfg available and passed as arg
         return deepcopy(pretrained_cfg)
     # fallback to looking up pretrained cfg in model registry by variant identifier
     pretrained_cfg = get_pretrained_cfg(variant)
