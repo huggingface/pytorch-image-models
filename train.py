@@ -438,6 +438,7 @@ def main():
 
     # setup synchronized BatchNorm for distributed training
     if args.distributed and args.sync_bn:
+        args.dist_bn = ''  # disable dist_bn when sync BN active
         assert not args.split_bn
         if has_apex and use_amp == 'apex':
             # Apex SyncBN used with Apex AMP
