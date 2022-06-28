@@ -6,7 +6,6 @@ An inference and train step benchmark script for timm models.
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import os
 import csv
 import json
 import time
