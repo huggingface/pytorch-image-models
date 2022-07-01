@@ -724,6 +724,24 @@ def _create_resnet(variant, pretrained=False, **kwargs):
 
 
 @register_model
+def resnet10t(pretrained=False, **kwargs):
+    """Constructs a ResNet-10-T model.
+    """
+    model_args = dict(
+        block=BasicBlock, layers=[1, 1, 1, 1], stem_width=32, stem_type='deep_tiered', avg_down=True, **kwargs)
+    return _create_resnet('resnet10t', pretrained, **model_args)
+
+
+@register_model
+def resnet14t(pretrained=False, **kwargs):
+    """Constructs a ResNet-14-T model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[1, 1, 1, 1], stem_width=32, stem_type='deep_tiered', avg_down=True, **kwargs)
+    return _create_resnet('resnet14t', pretrained, **model_args)
+
+
+@register_model
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
     """
