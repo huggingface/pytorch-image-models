@@ -434,7 +434,7 @@ def convnext_tiny_hnf(pretrained=False, **kwargs):
 @register_model
 def convnext_tiny_hnfd(pretrained=False, **kwargs):
     model_args = dict(
-        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, stem_type='dual', **kwargs)
+        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
     return model
 
