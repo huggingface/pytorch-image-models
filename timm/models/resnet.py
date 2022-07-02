@@ -274,8 +274,7 @@ default_cfgs = {
         interpolation='bicubic', first_conv='conv1.0'),
     'resnetaa50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetaa50_a1h-4cf422b3.pth',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0,
-        interpolation='bicubic', first_conv='conv1.0'),
+        test_input_size=(3, 288, 288), test_crop_pct=1.0, interpolation='bicubic'),
     'resnetaa50d': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
