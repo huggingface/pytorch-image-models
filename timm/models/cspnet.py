@@ -45,14 +45,18 @@ default_cfgs = {
     'cspresnet50w': _cfg(url=''),
     'cspresnext50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnext50_ra_224-648b4713.pth',
-        input_size=(3, 224, 224), pool_size=(7, 7), crop_pct=0.875  # FIXME I trained this at 224x224, not 256 like ref impl
     ),
     'cspdarknet53': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspdarknet53_ra_256-d05c7c21.pth'),
 
     'darknet17': _cfg(url=''),
     'darknet21': _cfg(url=''),
-    'darknet53': _cfg(url=''),
+    'sedarknet21': _cfg(url=''),
+    'darknet53': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknet53_256_c2ns-3aeff817.pth',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0, interpolation='bicubic'
+    ),
+    'darknetaa53': _cfg(url=''),
 
     'cs2darknet_m': _cfg(
         url=''),
