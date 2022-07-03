@@ -58,13 +58,13 @@ default_cfgs = {
     ),
     'darknetaa53': _cfg(url=''),
 
-    'cs2darknet_m': _cfg(
+    'cs3darknet_m': _cfg(
         url=''),
-    'cs2darknet_l': _cfg(
+    'cs3darknet_l': _cfg(
         url=''),
-    'cs2darknet_f_m': _cfg(
+    'cs3darknet_focus_m': _cfg(
         url=''),
-    'cs2darknet_f_l': _cfg(
+    'cs3darknet_focus_l': _cfg(
         url=''),
 }
 
@@ -185,7 +185,7 @@ model_cfgs = dict(
         ),
     ),
 
-    cs2darknet_m=dict(
+    cs3darknet_m=dict(
         stem=dict(out_chs=(24, 48), kernel_size=3, stride=2, pool=''),
         stage=dict(
             out_chs=(96, 192, 384, 768),
@@ -196,20 +196,7 @@ model_cfgs = dict(
             avg_down=False,
         ),
     ),
-
-    cs2darknet_f_m=dict(
-        stem=dict(out_chs=48, kernel_size=6, stride=2, padding=2, pool=''),
-        stage=dict(
-            out_chs=(96, 192, 384, 768),
-            depth=(2, 4, 6, 2),
-            stride=(2,) * 4,
-            bottle_ratio=(1.,) * 4,
-            block_ratio=(0.5,) * 4,
-            avg_down=False,
-        ),
-    ),
-
-    cs2darknet_l=dict(
+    cs3darknet_l=dict(
         stem=dict(out_chs=(32, 64), kernel_size=3, stride=2, pool=''),
         stage=dict(
             out_chs=(128, 256, 512, 1024),
@@ -221,7 +208,18 @@ model_cfgs = dict(
         ),
     ),
 
-    cs2darknet_f_l=dict(
+    cs3darknet_focus_m=dict(
+        stem=dict(out_chs=48, kernel_size=6, stride=2, padding=2, pool=''),
+        stage=dict(
+            out_chs=(96, 192, 384, 768),
+            depth=(2, 4, 6, 2),
+            stride=(2,) * 4,
+            bottle_ratio=(1.,) * 4,
+            block_ratio=(0.5,) * 4,
+            avg_down=False,
+        ),
+    ),
+    cs3darknet_focus_l=dict(
         stem=dict(out_chs=64, kernel_size=6, stride=2, padding=2, pool=''),
         stage=dict(
             out_chs=(128, 256, 512, 1024),
@@ -438,9 +436,9 @@ class CrossStage(nn.Module):
         return out
 
 
-class CrossStage2(nn.Module):
-    """Cross Stage v2.
-    Similar to CrossStage, but with one transition conv for the concat output.
+class CrossStage3(nn.Module):
+    """Cross Stage 3.
+    Similar to CrossStage, but with only one transition conv for the output.
     """
     def __init__(
             self,
@@ -461,7 +459,7 @@ class CrossStage2(nn.Module):
             block_fn=ResBottleneck,
             **block_kwargs
     ):
-        super(CrossStage2, self).__init__()
+        super(CrossStage3, self).__init__()
         first_dilation = first_dilation or dilation
         down_chs = out_chs if down_growth else in_chs  # grow downsample channels to output channels
         self.exp_chs = exp_chs = int(round(out_chs * exp_ratio))
@@ -696,8 +694,12 @@ def _init_weights(module, name, zero_init_last=False):
 
 
 def _create_cspnet(variant, pretrained=False, **kwargs):
-    # NOTE: DarkNet is one of few models with stride==1 features w/ 6 out_indices [0..5]
-    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4, 5) if 'darknet' in variant else (0, 1, 2, 3, 4))
+    if variant.startswith('darknet') or variant.startswith('cspdarknet'):
+        # NOTE: DarkNet is one of few models with stride==1 features w/ 6 out_indices [0..5]
+        default_out_indices = (0, 1, 2, 3, 4, 5)
+    else:
+        default_out_indices = (0, 1, 2, 3, 4)
+    out_indices = kwargs.pop('out_indices', default_out_indices)
     return build_model_with_cfg(
         CspNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
@@ -757,24 +759,24 @@ def darknetaa53(pretrained=False, **kwargs):
 
 
 @register_model
-def cs2darknet_m(pretrained=False, **kwargs):
+def cs3darknet_m(pretrained=False, **kwargs):
     return _create_cspnet(
-        'cs2darknet_m', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage2, act_layer='silu', **kwargs)
+        'cs3darknet_m', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage3, act_layer='silu', **kwargs)
 
 
 @register_model
-def cs2darknet_l(pretrained=False, **kwargs):
+def cs3darknet_l(pretrained=False, **kwargs):
     return _create_cspnet(
-        'cs2darknet_l', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage2, act_layer='silu', **kwargs)
+        'cs3darknet_l', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage3, act_layer='silu', **kwargs)
 
 
 @register_model
-def cs2darknet_f_m(pretrained=False, **kwargs):
+def cs3darknet_focus_m(pretrained=False, **kwargs):
     return _create_cspnet(
-        'cs2darknet_f_m', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage2, act_layer='silu', **kwargs)
+        'cs3darknet_focus_m', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage3, act_layer='silu', **kwargs)
 
 
 @register_model
-def cs2darknet_f_l(pretrained=False, **kwargs):
+def cs3darknet_focus_l(pretrained=False, **kwargs):
     return _create_cspnet(
-        'cs2darknet_f_l', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage2, act_layer='silu', **kwargs)
+        'cs3darknet_focus_l', pretrained=pretrained, block_fn=DarkBlock, stage_fn=CrossStage3, act_layer='silu', **kwargs)
