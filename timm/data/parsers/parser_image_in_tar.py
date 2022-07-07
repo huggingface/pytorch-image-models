@@ -9,20 +9,20 @@ Labels are based on the combined folder and/or tar name structure.
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-import os
-import tarfile
-import pickle
 import logging
-import numpy as np
+import os
+import pickle
+import tarfile
 from glob import glob
-from typing import List, Dict
+from typing import List, Tuple, Dict, Set, Optional, Union
+
+import numpy as np
 
 from timm.utils.misc import natural_key
 
-from .parser import Parser
 from .class_map import load_class_map
-from .constants import IMG_EXTENSIONS
-
+from .img_extensions import get_img_extensions
+from .parser import Parser
 
 _logger = logging.getLogger(__name__)
 CACHE_FILENAME_SUFFIX = '_tarinfos.pickle'
@@ -39,7 +39,7 @@ class TarState:
         self.tf = None
 
 
-def _extract_tarinfo(tf: tarfile.TarFile, parent_info: Dict, extensions=IMG_EXTENSIONS):
+def _extract_tarinfo(tf: tarfile.TarFile, parent_info: Dict, extensions: Set[str]):
     sample_count = 0
     for i, ti in enumerate(tf):
         if not ti.isfile():
@@ -60,7 +60,14 @@ def _extract_tarinfo(tf: tarfile.TarFile, parent_info: Dict, extensions=IMG_EXTE
     return sample_count
 
 
-def extract_tarinfos(root, class_name_to_idx=None, cache_tarinfo=None, extensions=IMG_EXTENSIONS, sort=True):
+def extract_tarinfos(
+        root,
+        class_name_to_idx: Optional[Dict] = None,
+        cache_tarinfo: Optional[bool] = None,
+        extensions: Optional[Union[List, Tuple, Set]] = None,
+        sort: bool = True
+):
+    extensions = get_img_extensions(as_set=True) if not extensions else set(extensions)
     root_is_tar = False
     if os.path.isfile(root):
         assert os.path.splitext(root)[-1].lower() == '.tar'
@@ -176,8 +183,8 @@ class ParserImageInTar(Parser):
         self.samples, self.targets, self.class_name_to_idx, tarfiles = extract_tarinfos(
             self.root,
             class_name_to_idx=class_name_to_idx,
-            cache_tarinfo=cache_tarinfo,
-            extensions=IMG_EXTENSIONS)
+            cache_tarinfo=cache_tarinfo
+        )
         self.class_idx_to_name = {v: k for k, v in self.class_name_to_idx.items()}
         if len(tarfiles) == 1 and tarfiles[0][0] is None:
             self.root_is_tar = True

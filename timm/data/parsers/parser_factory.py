@@ -1,7 +1,6 @@
 import os
 
 from .parser_image_folder import ParserImageFolder
-from .parser_image_tar import ParserImageTar
 from .parser_image_in_tar import ParserImageInTar
 
 
