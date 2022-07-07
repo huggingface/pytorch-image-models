@@ -6,23 +6,22 @@ An inference and train step benchmark script for timm models.
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import os
 import csv
 import json
-import time
 import logging
-import torch
-import torch.nn as nn
-import torch.nn.parallel
+import time
 from collections import OrderedDict
 from contextlib import suppress
 from functools import partial
 
+import torch
+import torch.nn as nn
+import torch.nn.parallel
+
+from timm.data import resolve_data_config
 from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
-from timm.data import resolve_data_config
 from timm.utils import setup_default_logging, set_jit_fuser
-
 
 has_apex = False
 try:
