@@ -57,30 +57,35 @@ default_cfgs = {
     'sedarknet21': _cfg(url=''),
     'darknet53': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknet53_256_c2ns-3aeff817.pth',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0, interpolation='bicubic'
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0,
     ),
     'darknetaa53': _cfg(url=''),
 
     'cs3darknet_s': _cfg(
-        url=''),
+        url='', interpolation='bicubic'),
     'cs3darknet_m': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_m_c2ns-43f06604.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95,
+    ),
     'cs3darknet_l': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_l_c2ns-16220c5d.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_x': _cfg(
         url=''),
 
     'cs3darknet_focus_s': _cfg(
-        url=''),
+        url='', interpolation='bicubic'),
     'cs3darknet_focus_m': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_m_c2ns-e23bed41.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_focus_l': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_l_c2ns-65ef8888.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_focus_x': _cfg(
-        url=''),
+        url='', interpolation='bicubic'),
 
     'cs3sedarknet_xdw': _cfg(
-        url=''),
+        url='', interpolation='bicubic'),
 }
 
 
