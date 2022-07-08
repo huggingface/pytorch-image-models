@@ -6,15 +6,35 @@ on the folder hierarchy, just leaf folders by default.
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import os
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from timm.utils.misc import natural_key
 
-from .parser import Parser
 from .class_map import load_class_map
-from .constants import IMG_EXTENSIONS
+from .img_extensions import get_img_extensions
+from .parser import Parser
 
 
-def find_images_and_targets(folder, types=IMG_EXTENSIONS, class_to_idx=None, leaf_name_only=True, sort=True):
+def find_images_and_targets(
+        folder: str,
+        types: Optional[Union[List, Tuple, Set]] = None,
+        class_to_idx: Optional[Dict] = None,
+        leaf_name_only: bool = True,
+        sort: bool = True
+):
+    """ Walk folder recursively to discover images and map them to classes by folder names.
+
+    Args:
+        folder: root of folder to recrusively search
+        types: types (file extensions) to search for in path
+        class_to_idx: specify mapping for class (folder name) to class index if set
+        leaf_name_only: use only leaf-name of folder walk for class names
+        sort: re-sort found images by name (for consistent ordering)
+
+    Returns:
+        A list of image and target tuples, class_to_idx mapping
+    """
+    types = get_img_extensions(as_set=True) if not types else set(types)
     labels = []
     filenames = []
     for root, subdirs, files in os.walk(folder, topdown=False, followlinks=True):
@@ -51,7 +71,8 @@ class ParserImageFolder(Parser):
         self.samples, self.class_to_idx = find_images_and_targets(root, class_to_idx=class_to_idx)
         if len(self.samples) == 0:
             raise RuntimeError(
-                f'Found 0 images in subfolders of {root}. Supported image extensions are {", ".join(IMG_EXTENSIONS)}')
+                f'Found 0 images in subfolders of {root}. '
+                f'Supported image extensions are {", ".join(get_img_extensions())}')
 
     def __getitem__(self, index):
         path, target = self.samples[index]

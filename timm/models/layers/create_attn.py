@@ -22,7 +22,7 @@ def get_attn(attn_type):
     if isinstance(attn_type, torch.nn.Module):
         return attn_type
     module_cls = None
-    if attn_type is not None:
+    if attn_type:
         if isinstance(attn_type, str):
             attn_type = attn_type.lower()
             # Lightweight attention modules (channel and/or coarse spatial).

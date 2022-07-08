@@ -36,7 +36,7 @@ class TestTimePoolHead(nn.Module):
         return x.view(x.size(0), -1)
 
 
-def apply_test_time_pool(model, config, use_test_size=True):
+def apply_test_time_pool(model, config, use_test_size=False):
     test_time_pool = False
     if not hasattr(model, 'default_cfg') or not model.default_cfg:
         return model, False

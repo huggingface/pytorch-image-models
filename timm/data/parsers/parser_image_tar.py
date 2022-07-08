@@ -8,13 +8,15 @@ Hacked together by / Copyright 2020 Ross Wightman
 import os
 import tarfile
 
-from .parser import Parser
-from .class_map import load_class_map
-from .constants import IMG_EXTENSIONS
 from timm.utils.misc import natural_key
+
+from .class_map import load_class_map
+from .img_extensions import get_img_extensions
+from .parser import Parser
 
 
 def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
+    extensions = get_img_extensions(as_set=True)
     files = []
     labels = []
     for ti in tarfile.getmembers():
@@ -23,7 +25,7 @@ def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
         dirname, basename = os.path.split(ti.path)
         label = os.path.basename(dirname)
         ext = os.path.splitext(basename)[1]
-        if ext.lower() in IMG_EXTENSIONS:
+        if ext.lower() in extensions:
             files.append(ti)
             labels.append(label)
     if class_to_idx is None:
