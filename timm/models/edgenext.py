@@ -46,10 +46,13 @@ default_cfgs = dict(
     #     url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_small.pth"),
     edgenext_small=_cfg(  # USI weights
         url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.1/edgenext_small_usi.pth",
-        crop_pct=0.95
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
     ),
 
-    edgenext_small_rw=_cfg(),
+    edgenext_small_rw=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/edgenext_small_rw-sw-b00041bb.pth',
+        test_input_size=(3, 320, 320), test_crop_pct=1.0,
+    ),
 )
 
 
