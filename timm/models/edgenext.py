@@ -39,9 +39,11 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = dict(
     edgenext_xx_small=_cfg(
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_xx_small.pth"),
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_xx_small.pth",
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
     edgenext_x_small=_cfg(
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_x_small.pth"),
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_x_small.pth",
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
     # edgenext_small=_cfg(
     #     url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_small.pth"),
     edgenext_small=_cfg(  # USI weights
