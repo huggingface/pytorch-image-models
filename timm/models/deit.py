@@ -10,6 +10,8 @@ Modifications copyright 2021, Ross Wightman
 """
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
+from functools import partial
+
 import torch
 from torch import nn as nn
 
@@ -177,7 +179,7 @@ def _create_deit(variant, pretrained=False, distilled=False, **kwargs):
     model_cls = VisionTransformerDistilled if distilled else VisionTransformer
     model = build_model_with_cfg(
         model_cls, variant, pretrained,
-        pretrained_filter_fn=checkpoint_filter_fn,
+        pretrained_filter_fn=partial(checkpoint_filter_fn, adapt_layer_scale=True),
         **kwargs)
     return model
 
