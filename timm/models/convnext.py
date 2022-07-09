@@ -108,8 +108,17 @@ class LayerNorm2d(nn.LayerNorm):
 
     def forward(self, x) -> torch.Tensor:
         if _is_contiguous(x):
+            # still faster than going to alternate implementation
+            # call contiguous at the end, because otherwise the rest of the model is computed in channels-last
             return F.layer_norm(
-                x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
+                x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2).contiguous()
+        elif x.is_contiguous(memory_format=torch.channels_last):
+            x = x.permute(0,2,3,1)
+            # trick nvfuser into picking up layer norm, even though it's a single op
+            # it's a slight pessimization (~.2%) if nvfuser is not enabled
+            x = F.layer_norm(
+                x, self.normalized_shape, self.weight, self.bias, self.eps) * 1.
+            return x.permute(0, 3, 1, 2)
         else:
             s, u = torch.var_mean(x, dim=1, unbiased=False, keepdim=True)
             x = (x - u) * torch.rsqrt(s + self.eps)
