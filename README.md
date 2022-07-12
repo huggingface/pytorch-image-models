@@ -383,6 +383,7 @@ A full version of the list below with source links can be found in the [document
 * DenseNet - https://arxiv.org/abs/1608.06993
 * DLA - https://arxiv.org/abs/1707.06484
 * DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
+* EdgeNeXt - https://arxiv.org/abs/2206.10589
 * EfficientNet (MBConvNet Family)
     * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
     * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
