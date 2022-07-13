@@ -26,7 +26,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import DropPath, trunc_normal_, to_2tuple, ConvMlp
+from .layers import DropPath, trunc_normal_, to_2tuple, ConvMlp, GroupNorm1
 from .registry import register_model
 
 
@@ -78,15 +78,6 @@ class PatchEmbed(nn.Module):
         x = self.proj(x)
         x = self.norm(x)
         return x
-
-
-class GroupNorm1(nn.GroupNorm):
-    """ Group Normalization with 1 group.
-    Input: tensor in shape [B, C, H, W]
-    """
-
-    def __init__(self, num_channels, **kwargs):
-        super().__init__(1, num_channels, **kwargs)
 
 
 class Pooling(nn.Module):

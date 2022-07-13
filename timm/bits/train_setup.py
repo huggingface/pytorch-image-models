@@ -5,6 +5,7 @@ import logging
 import torch
 import torch.nn as nn
 
+from timm.models.layers import convert_sync_batchnorm
 from timm.optim import create_optimizer_v2
 from timm.utils import ModelEmaV2
 
@@ -65,7 +66,7 @@ def setup_model_and_optimizer(
     dev_env.to_device(model)
 
     if use_syncbn and dev_env.distributed:
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model = convert_sync_batchnorm(model)
         if dev_env.primary:
             _logger.info(
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '

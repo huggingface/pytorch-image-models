@@ -6,23 +6,22 @@ An inference and train step benchmark script for timm models.
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import os
 import csv
 import json
-import time
 import logging
-import torch
-import torch.nn as nn
-import torch.nn.parallel
+import time
 from collections import OrderedDict
 from contextlib import suppress
 from functools import partial
 
+import torch
+import torch.nn as nn
+import torch.nn.parallel
+
+from timm.data import resolve_data_config
 from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
-from timm.data import resolve_data_config
 from timm.utils import setup_default_logging, set_jit_fuser
-
 
 has_apex = False
 try:
@@ -51,6 +50,12 @@ except ImportError as e:
     FlopCountAnalysis = None
     has_fvcore_profiling = False
 
+try:
+    from functorch.compile import memory_efficient_fusion
+    has_functorch = True
+except ImportError as e:
+    has_functorch = False
+
 
 torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('validate')
@@ -65,6 +70,8 @@ parser.add_argument('--bench', default='both', type=str,
                     help="Benchmark mode. One of 'inference', 'train', 'both'. Defaults to 'both'")
 parser.add_argument('--detail', action='store_true', default=False,
                     help='Provide train fwd/bwd/opt breakdown detail if True. Defaults to False')
+parser.add_argument('--no-retry', action='store_true', default=False,
+                    help='Do not decay batch size and retry on error.')
 parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
                     help='Output csv file for validation results (summary)')
 parser.add_argument('--num-warm-iter', default=10, type=int,
@@ -95,10 +102,13 @@ parser.add_argument('--amp', action='store_true', default=False,
                     help='use PyTorch Native AMP for mixed precision training. Overrides --precision arg.')
 parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
-parser.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+scripting_group = parser.add_mutually_exclusive_group()
+scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
+                    help='convert model torchscript for inference')
+scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
+                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
 
 
 # train optimizer parameters
@@ -160,10 +170,9 @@ def resolve_precision(precision: str):
 
 
 def profile_deepspeed(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
-    macs, _ = get_model_profile(
+    _, macs, _ = get_model_profile(
         model=model,
-        input_res=(batch_size,) + input_size,  # input shape or input to the input_constructor
-        input_constructor=None,  # if specified, a constructor taking input_res is used as input to the model
+        input_shape=(batch_size,) + input_size,  # input shape/resolution
         print_profile=detailed,  # prints the model graph with the measured profile attached to each module
         detailed=detailed,  # print the detailed profile
         warm_up=10,  # the number of warm-ups before measuring the time of each module
@@ -188,8 +197,19 @@ def profile_fvcore(model, input_size=(3, 224, 224), batch_size=1, detailed=False
 
 class BenchmarkRunner:
     def __init__(
-            self, model_name, detail=False, device='cuda', torchscript=False, precision='float32',
-            fuser='', num_warm_iter=10, num_bench_iter=50, use_train_size=False, **kwargs):
+            self,
+            model_name,
+            detail=False,
+            device='cuda',
+            torchscript=False,
+            aot_autograd=False,
+            precision='float32',
+            fuser='',
+            num_warm_iter=10,
+            num_bench_iter=50,
+            use_train_size=False,
+            **kwargs
+    ):
         self.model_name = model_name
         self.detail = detail
         self.device = device
@@ -216,14 +236,18 @@ class BenchmarkRunner:
         self.num_classes = self.model.num_classes
         self.param_count = count_params(self.model)
         _logger.info('Model %s created, param count: %d' % (model_name, self.param_count))
+
+        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
         self.scripted = False
         if torchscript:
             self.model = torch.jit.script(self.model)
             self.scripted = True
-
-        data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
+
+        if aot_autograd:
+            assert has_functorch, "functorch is needed for --aot-autograd"
+            self.model = memory_efficient_fusion(self.model)
 
         self.example_inputs = None
         self.num_warm_iter = num_warm_iter
@@ -243,7 +267,13 @@ class BenchmarkRunner:
 
 class InferenceBenchmarkRunner(BenchmarkRunner):
 
-    def __init__(self, model_name, device='cuda', torchscript=False, **kwargs):
+    def __init__(
+            self,
+            model_name,
+            device='cuda',
+            torchscript=False,
+            **kwargs
+    ):
         super().__init__(model_name=model_name, device=device, torchscript=torchscript, **kwargs)
         self.model.eval()
 
@@ -312,7 +342,13 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
 
 class TrainBenchmarkRunner(BenchmarkRunner):
 
-    def __init__(self, model_name, device='cuda', torchscript=False, **kwargs):
+    def __init__(
+            self,
+            model_name,
+            device='cuda',
+            torchscript=False,
+            **kwargs
+    ):
         super().__init__(model_name=model_name, device=device, torchscript=torchscript, **kwargs)
         self.model.train()
 
@@ -479,7 +515,7 @@ def decay_batch_exp(batch_size, factor=0.5, divisor=16):
     return max(0, int(out_batch_size))
 
 
-def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
+def _try_run(model_name, bench_fn, bench_kwargs, initial_batch_size, no_batch_size_retry=False):
     batch_size = initial_batch_size
     results = dict()
     error_str = 'Unknown'
@@ -494,8 +530,11 @@ def _try_run(model_name, bench_fn, initial_batch_size, bench_kwargs):
             if 'channels_last' in error_str:
                 _logger.error(f'{model_name} not supported in channels_last, skipping.')
                 break
-            _logger.warning(f'"{error_str}" while running benchmark. Reducing batch size to {batch_size} for retry.')
+            _logger.error(f'"{error_str}" while running benchmark.')
+            if no_batch_size_retry:
+                break
         batch_size = decay_batch_exp(batch_size)
+        _logger.warning(f'Reducing batch size to {batch_size} for retry.')
     results['error'] = error_str
     return results
 
@@ -537,7 +576,13 @@ def benchmark(args):
 
     model_results = OrderedDict(model=model)
     for prefix, bench_fn in zip(prefixes, bench_fns):
-        run_results = _try_run(model, bench_fn, initial_batch_size=batch_size, bench_kwargs=bench_kwargs)
+        run_results = _try_run(
+            model,
+            bench_fn,
+            bench_kwargs=bench_kwargs,
+            initial_batch_size=batch_size,
+            no_batch_size_retry=args.no_retry,
+        )
         if prefix and 'error' not in run_results:
             run_results = {'_'.join([prefix, k]): v for k, v in run_results.items()}
         model_results.update(run_results)

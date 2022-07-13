@@ -36,27 +36,46 @@ _HPARAMS_DEFAULT = dict(
     img_mean=_FILL,
 )
 
-_RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+# Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in
+# favor of the Image.Resampling enum. The top-level resampling attributes will be
+# removed in Pillow 10.
+if hasattr(Image, "Resampling"):
+    _RANDOM_INTERPOLATION = (Image.Resampling.BILINEAR, Image.Resampling.BICUBIC)
+    _DEFAULT_INTERPOLATION = Image.Resampling.BICUBIC
+
+    _pil_interpolation_to_str = {
+        Image.Resampling.NEAREST: 'nearest',
+        Image.Resampling.BILINEAR: 'bilinear',
+        Image.Resampling.BICUBIC: 'bicubic',
+        Image.Resampling.BOX: 'box',
+        Image.Resampling.HAMMING: 'hamming',
+        Image.Resampling.LANCZOS: 'lanczos',
+    }
+else:
+    _RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
+    _DEFAULT_INTERPOLATION = Image.BICUBIC
+
+    _pil_interpolation_to_str = {
+        Image.NEAREST: 'nearest',
+        Image.BILINEAR: 'bilinear',
+        Image.BICUBIC: 'bicubic',
+        Image.BOX: 'box',
+        Image.HAMMING: 'hamming',
+        Image.LANCZOS: 'lanczos',
+    }
+
+_str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
 
 
 def _pil_interp(method):
-    def _convert(m):
-        if method == 'bicubic':
-            return Image.BICUBIC
-        elif method == 'lanczos':
-            return Image.LANCZOS
-        elif method == 'hamming':
-            return Image.HAMMING
-        else:
-            return Image.BILINEAR
     if isinstance(method, (list, tuple)):
-        return [_convert(m) if isinstance(m, str) else m for m in method]
+        return [_str_to_pil_interpolation(m) if isinstance(m, str) else m for m in method]
     else:
-        return _convert(method) if isinstance(method, str) else method
+        return _str_to_pil_interpolation(method) if isinstance(method, str) else method
 
 
 def _interpolation(kwargs):
-    interpolation = kwargs.pop('resample', Image.BILINEAR)
+    interpolation = kwargs.pop('resample', _DEFAULT_INTERPOLATION)
     if isinstance(interpolation, (list, tuple)):
         return random.choice(interpolation)
     else:

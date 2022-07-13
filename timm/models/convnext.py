@@ -17,9 +17,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_module
 from .helpers import named_apply, build_model_with_cfg, checkpoint_seq
-from .layers import trunc_normal_, ClassifierHead, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp
+from .layers import trunc_normal_, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp, LayerNorm2d, create_conv2d
 from .registry import register_model
 
 
@@ -44,6 +43,7 @@ default_cfgs = dict(
     convnext_large=_cfg(url="https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth"),
 
     convnext_nano_hnf=_cfg(url=''),
+    convnext_nano_ols=_cfg(url=''),
     convnext_tiny_hnf=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_tiny_hnf_a2h-ab7e9df2.pth',
         crop_pct=0.95),
@@ -88,35 +88,6 @@ default_cfgs = dict(
 )
 
 
-def _is_contiguous(tensor: torch.Tensor) -> bool:
-    # jit is oh so lovely :/
-    # if torch.jit.is_tracing():
-    #     return True
-    if torch.jit.is_scripting():
-        return tensor.is_contiguous()
-    else:
-        return tensor.is_contiguous(memory_format=torch.contiguous_format)
-
-
-@register_notrace_module
-class LayerNorm2d(nn.LayerNorm):
-    r""" LayerNorm for channels_first tensors with 2d spatial dimensions (ie N, C, H, W).
-    """
-
-    def __init__(self, normalized_shape, eps=1e-6):
-        super().__init__(normalized_shape, eps=eps)
-
-    def forward(self, x) -> torch.Tensor:
-        if _is_contiguous(x):
-            return F.layer_norm(
-                x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
-        else:
-            s, u = torch.var_mean(x, dim=1, unbiased=False, keepdim=True)
-            x = (x - u) * torch.rsqrt(s + self.eps)
-            x = x * self.weight[:, None, None] + self.bias[:, None, None]
-            return x
-
-
 class ConvNeXtBlock(nn.Module):
     """ ConvNeXt Block
     There are two equivalent implementations:
@@ -133,16 +104,30 @@ class ConvNeXtBlock(nn.Module):
         ls_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
 
-    def __init__(self, dim, drop_path=0., ls_init_value=1e-6, conv_mlp=False, mlp_ratio=4, norm_layer=None):
+    def __init__(
+            self,
+            dim,
+            dim_out=None,
+            stride=1,
+            mlp_ratio=4,
+            conv_mlp=False,
+            conv_bias=True,
+            ls_init_value=1e-6,
+            norm_layer=None,
+            act_layer=nn.GELU,
+            drop_path=0.,
+    ):
         super().__init__()
+        dim_out = dim_out or dim
         if not norm_layer:
             norm_layer = partial(LayerNorm2d, eps=1e-6) if conv_mlp else partial(nn.LayerNorm, eps=1e-6)
         mlp_layer = ConvMlp if conv_mlp else Mlp
         self.use_conv_mlp = conv_mlp
-        self.conv_dw = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)  # depthwise conv
-        self.norm = norm_layer(dim)
-        self.mlp = mlp_layer(dim, int(mlp_ratio * dim), act_layer=nn.GELU)
-        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim)) if ls_init_value > 0 else None
+
+        self.conv_dw = create_conv2d(dim, dim_out, kernel_size=7, stride=stride, depthwise=True, bias=conv_bias)
+        self.norm = norm_layer(dim_out)
+        self.mlp = mlp_layer(dim_out, int(mlp_ratio * dim_out), act_layer=act_layer)
+        self.gamma = nn.Parameter(ls_init_value * torch.ones(dim_out)) if ls_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -158,6 +143,7 @@ class ConvNeXtBlock(nn.Module):
             x = x.permute(0, 3, 1, 2)
         if self.gamma is not None:
             x = x.mul(self.gamma.reshape(1, -1, 1, 1))
+
         x = self.drop_path(x) + shortcut
         return x
 
@@ -165,25 +151,44 @@ class ConvNeXtBlock(nn.Module):
 class ConvNeXtStage(nn.Module):
 
     def __init__(
-            self, in_chs, out_chs, stride=2, depth=2, dp_rates=None, ls_init_value=1.0, conv_mlp=False,
-            norm_layer=None, cl_norm_layer=None, cross_stage=False):
+            self,
+            in_chs,
+            out_chs,
+            stride=2,
+            depth=2,
+            drop_path_rates=None,
+            ls_init_value=1.0,
+            conv_mlp=False,
+            conv_bias=True,
+            norm_layer=None,
+            norm_layer_cl=None
+    ):
         super().__init__()
         self.grad_checkpointing = False
 
         if in_chs != out_chs or stride > 1:
             self.downsample = nn.Sequential(
                 norm_layer(in_chs),
-                nn.Conv2d(in_chs, out_chs, kernel_size=stride, stride=stride),
+                nn.Conv2d(in_chs, out_chs, kernel_size=stride, stride=stride, bias=conv_bias),
             )
+            in_chs = out_chs
         else:
             self.downsample = nn.Identity()
 
-        dp_rates = dp_rates or [0.] * depth
-        self.blocks = nn.Sequential(*[ConvNeXtBlock(
-            dim=out_chs, drop_path=dp_rates[j], ls_init_value=ls_init_value, conv_mlp=conv_mlp,
-            norm_layer=norm_layer if conv_mlp else cl_norm_layer)
-            for j in range(depth)]
-        )
+        drop_path_rates = drop_path_rates or [0.] * depth
+        stage_blocks = []
+        for i in range(depth):
+            stage_blocks.append(ConvNeXtBlock(
+                dim=in_chs,
+                dim_out=out_chs,
+                drop_path=drop_path_rates[i],
+                ls_init_value=ls_init_value,
+                conv_mlp=conv_mlp,
+                conv_bias=conv_bias,
+                norm_layer=norm_layer if conv_mlp else norm_layer_cl
+            ))
+            in_chs = out_chs
+        self.blocks = nn.Sequential(*stage_blocks)
 
     def forward(self, x):
         x = self.downsample(x)
@@ -210,41 +215,56 @@ class ConvNeXt(nn.Module):
     """
 
     def __init__(
-            self, in_chans=3, num_classes=1000, global_pool='avg', output_stride=32, patch_size=4,
-            depths=(3, 3, 9, 3), dims=(96, 192, 384, 768),  ls_init_value=1e-6, conv_mlp=False, stem_type='patch',
-            head_init_scale=1., head_norm_first=False, norm_layer=None, drop_rate=0., drop_path_rate=0.,
+            self,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='avg',
+            output_stride=32,
+            depths=(3, 3, 9, 3),
+            dims=(96, 192, 384, 768),
+            ls_init_value=1e-6,
+            stem_type='patch',
+            stem_kernel_size=4,
+            stem_stride=4,
+            head_init_scale=1.,
+            head_norm_first=False,
+            conv_mlp=False,
+            conv_bias=True,
+            norm_layer=None,
+            drop_rate=0.,
+            drop_path_rate=0.,
     ):
         super().__init__()
         assert output_stride == 32
         if norm_layer is None:
             norm_layer = partial(LayerNorm2d, eps=1e-6)
-            cl_norm_layer = norm_layer if conv_mlp else partial(nn.LayerNorm, eps=1e-6)
+            norm_layer_cl = norm_layer if conv_mlp else partial(nn.LayerNorm, eps=1e-6)
         else:
             assert conv_mlp,\
                 'If a norm_layer is specified, conv MLP must be used so all norm expect rank-4, channels-first input'
-            cl_norm_layer = norm_layer
+            norm_layer_cl = norm_layer
 
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.feature_info = []
 
-        # NOTE: this stem is a minimal form of ViT PatchEmbed, as used in SwinTransformer w/ patch_size = 4
+        assert stem_type in ('patch', 'overlap')
         if stem_type == 'patch':
+            assert stem_kernel_size == stem_stride
+            # NOTE: this stem is a minimal form of ViT PatchEmbed, as used in SwinTransformer w/ patch_size = 4
             self.stem = nn.Sequential(
-                nn.Conv2d(in_chans, dims[0], kernel_size=patch_size, stride=patch_size),
+                nn.Conv2d(in_chans, dims[0], kernel_size=stem_kernel_size, stride=stem_stride, bias=conv_bias),
                 norm_layer(dims[0])
             )
-            curr_stride = patch_size
-            prev_chs = dims[0]
         else:
             self.stem = nn.Sequential(
-                nn.Conv2d(in_chans, 32, kernel_size=3, stride=2, padding=1),
-                norm_layer(32),
-                nn.GELU(),
-                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.Conv2d(
+                    in_chans, dims[0], kernel_size=stem_kernel_size, stride=stem_stride,
+                    padding=stem_kernel_size // 2, bias=conv_bias),
+                norm_layer(dims[0]),
             )
-            curr_stride = 2
-            prev_chs = 64
+        prev_chs = dims[0]
+        curr_stride = stem_stride
 
         self.stages = nn.Sequential()
         dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
@@ -256,16 +276,23 @@ class ConvNeXt(nn.Module):
             curr_stride *= stride
             out_chs = dims[i]
             stages.append(ConvNeXtStage(
-                prev_chs, out_chs, stride=stride,
-                depth=depths[i], dp_rates=dp_rates[i], ls_init_value=ls_init_value, conv_mlp=conv_mlp,
-                norm_layer=norm_layer, cl_norm_layer=cl_norm_layer)
-            )
+                prev_chs,
+                out_chs,
+                stride=stride,
+                depth=depths[i],
+                drop_path_rates=dp_rates[i],
+                ls_init_value=ls_init_value,
+                conv_mlp=conv_mlp,
+                conv_bias=conv_bias,
+                norm_layer=norm_layer,
+                norm_layer_cl=norm_layer_cl
+            ))
             prev_chs = out_chs
             # NOTE feature_info use currently assumes stage 0 == stride 1, rest are stride 2
             self.feature_info += [dict(num_chs=prev_chs, reduction=curr_stride, module=f'stages.{i}')]
         self.stages = nn.Sequential(*stages)
-
         self.num_features = prev_chs
+
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default ConvNeXt ordering (pretrained FB weights)
         self.norm_pre = norm_layer(self.num_features) if head_norm_first else nn.Identity()
@@ -327,10 +354,11 @@ class ConvNeXt(nn.Module):
 def _init_weights(module, name=None, head_init_scale=1.0):
     if isinstance(module, nn.Conv2d):
         trunc_normal_(module.weight, std=.02)
-        nn.init.constant_(module.bias, 0)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
     elif isinstance(module, nn.Linear):
         trunc_normal_(module.weight, std=.02)
-        nn.init.constant_(module.bias, 0)
+        nn.init.zeros_(module.bias)
         if name and 'head.' in name:
             module.weight.data.mul_(head_init_scale)
             module.bias.data.mul_(head_init_scale)
@@ -371,14 +399,25 @@ def _create_convnext(variant, pretrained=False, **kwargs):
 
 @register_model
 def convnext_nano_hnf(pretrained=False, **kwargs):
-    model_args = dict(depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), head_norm_first=True, conv_mlp=True, **kwargs)
+    model_args = dict(
+        depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_nano_hnf', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
+def convnext_nano_ols(pretrained=False, **kwargs):
+    model_args = dict(
+        depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), head_norm_first=True, conv_mlp=True,
+        conv_bias=False, stem_type='overlap', stem_kernel_size=9, **kwargs)
+    model = _create_convnext('convnext_nano_ols', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
 def convnext_tiny_hnf(pretrained=False, **kwargs):
-    model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
+    model_args = dict(
+        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
     return model
 
@@ -386,7 +425,7 @@ def convnext_tiny_hnf(pretrained=False, **kwargs):
 @register_model
 def convnext_tiny_hnfd(pretrained=False, **kwargs):
     model_args = dict(
-        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, stem_type='dual', **kwargs)
+        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
     return model
 

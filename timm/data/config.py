@@ -107,11 +107,15 @@ def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, v
         new_config['std'] = default_cfg['std']
 
     # resolve default crop percentage
-    new_config['crop_pct'] = DEFAULT_CROP_PCT
+    crop_pct = DEFAULT_CROP_PCT
     if 'crop_pct' in args and args['crop_pct'] is not None:
-        new_config['crop_pct'] = args['crop_pct']
-    elif 'crop_pct' in default_cfg:
-        new_config['crop_pct'] = default_cfg['crop_pct']
+        crop_pct = args['crop_pct']
+    else:
+        if use_test_size and 'test_crop_pct' in default_cfg:
+            crop_pct = default_cfg['test_crop_pct']
+        elif 'crop_pct' in default_cfg:
+            crop_pct = default_cfg['crop_pct']
+    new_config['crop_pct'] = crop_pct
 
     if getattr(args, 'mixup', 0) > 0 \
             or getattr(args, 'cutmix', 0) > 0. \

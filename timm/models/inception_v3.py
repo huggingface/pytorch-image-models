@@ -428,7 +428,7 @@ class InceptionV3Aux(InceptionV3):
 
 
 def _create_inception_v3(variant, pretrained=False, **kwargs):
-    pretrained_cfg = resolve_pretrained_cfg(variant, kwargs=kwargs)
+    pretrained_cfg = resolve_pretrained_cfg(variant, pretrained_cfg=kwargs.pop('pretrained_cfg', None))
     aux_logits = kwargs.pop('aux_logits', False)
     if aux_logits:
         assert not kwargs.pop('features_only', False)

@@ -35,6 +35,16 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = {
     # ResNet and Wide ResNet
+    'resnet10t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet10t_176_c3-f3215ab1.pth',
+        input_size=(3, 176, 176), pool_size=(6, 6),
+        test_crop_pct=0.95, test_input_size=(3, 224, 224),
+        first_conv='conv1.0'),
+    'resnet14t': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet14t_176_c3-c4ed2c37.pth',
+        input_size=(3, 176, 176), pool_size=(6, 6),
+        test_crop_pct=0.95, test_input_size=(3, 224, 224),
+        first_conv='conv1.0'),
     'resnet18': _cfg(url='https://download.pytorch.org/models/resnet18-5c106cde.pth'),
     'resnet18d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet18d_ra2-48a79e06.pth',
@@ -262,6 +272,9 @@ default_cfgs = {
     'resnetblur101d': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
+    'resnetaa50': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetaa50_a1h-4cf422b3.pth',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0, interpolation='bicubic'),
     'resnetaa50d': _cfg(
         url='',
         interpolation='bicubic', first_conv='conv1.0'),
@@ -721,6 +734,24 @@ class ResNet(nn.Module):
 
 def _create_resnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(ResNet, variant, pretrained, **kwargs)
+
+
+@register_model
+def resnet10t(pretrained=False, **kwargs):
+    """Constructs a ResNet-10-T model.
+    """
+    model_args = dict(
+        block=BasicBlock, layers=[1, 1, 1, 1], stem_width=32, stem_type='deep_tiered', avg_down=True, **kwargs)
+    return _create_resnet('resnet10t', pretrained, **model_args)
+
+
+@register_model
+def resnet14t(pretrained=False, **kwargs):
+    """Constructs a ResNet-14-T model.
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[1, 1, 1, 1], stem_width=32, stem_type='deep_tiered', avg_down=True, **kwargs)
+    return _create_resnet('resnet14t', pretrained, **model_args)
 
 
 @register_model
@@ -1434,6 +1465,14 @@ def resnetblur101d(pretrained=False, **kwargs):
         block=Bottleneck, layers=[3, 4, 23, 3], aa_layer=BlurPool2d,
         stem_width=32, stem_type='deep', avg_down=True, **kwargs)
     return _create_resnet('resnetblur101d', pretrained, **model_args)
+
+
+@register_model
+def resnetaa50(pretrained=False, **kwargs):
+    """Constructs a ResNet-50 model with avgpool anti-aliasing
+    """
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], aa_layer=nn.AvgPool2d, **kwargs)
+    return _create_resnet('resnetaa50', pretrained, **model_args)
 
 
 @register_model

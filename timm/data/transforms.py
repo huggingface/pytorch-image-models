@@ -2,7 +2,6 @@ import torch
 import torchvision.transforms.functional as F
 from torchvision.transforms import InterpolationMode
 
-from PIL import Image
 import warnings
 import math
 import random

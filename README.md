@@ -13,15 +13,49 @@
 
 ## Sponsors
 
-A big thank you to my [GitHub Sponsors](https://github.com/sponsors/rwightman) for their support!
-
-In addition to the sponsors at the link above, I've received hardware and/or cloud resources from
+Thanks to the following for hardware support:
+* TPU Research Cloud (TRC) (https://sites.research.google/trc/about/)
 * Nvidia (https://www.nvidia.com/en-us/)
-* TFRC (https://www.tensorflow.org/tfrc)
 
-I'm fortunate to be able to dedicate significant time and money of my own supporting this and other open source projects. However, as the projects increase in scope, outside support is needed to continue with the current trajectory of cloud services, hardware, and electricity costs.
+And a big thanks to all GitHub sponsors who helped with some of my costs before I joined Hugging Face.
 
 ## What's New
+
+### July 8, 2022
+More models, more fixes
+* Official research models (w/ weights) added:
+  * EdgeNeXt from (https://github.com/mmaaz60/EdgeNeXt)
+  * MobileViT-V2 from (https://github.com/apple/ml-cvnets)
+  * DeiT III (Revenge of the ViT) from (https://github.com/facebookresearch/deit)
+* My own models:
+  * Small `ResNet` defs added by request with 1 block repeats for both basic and bottleneck (resnet10 and resnet14)
+  * `CspNet` refactored with dataclass config, simplified CrossStage3 (`cs3`) option. These are closer to YOLO-v5+ backbone defs.
+  * More relative position vit fiddling. Two `srelpos` (shared relative position) models trained, and a medium w/ class token.
+  * Add an alternate downsample mode to EdgeNeXt and train a `small` model. Better than original small, but not their new USI trained weights.
+* My own model weight results (all ImageNet-1k training)
+  * `resnet10t` - 66.5 @ 176, 68.3 @ 224
+  * `resnet14t` - 71.3 @ 176, 72.3 @ 224
+  * `resnetaa50` - 80.6 @ 224 , 81.6 @ 288
+  * `darknet53` -  80.0 @ 256, 80.5 @ 288
+  * `cs3darknet_m` - 77.0 @ 256, 77.6 @ 288
+  * `cs3darknet_focus_m` - 76.7 @ 256, 77.3 @ 288
+  * `cs3darknet_l` - 80.4 @ 256, 80.9 @ 288
+  * `cs3darknet_focus_l` - 80.3 @ 256, 80.9 @ 288
+  * `vit_srelpos_small_patch16_224` - 81.1 @ 224, 82.1 @ 320
+  * `vit_srelpos_medium_patch16_224` - 82.3 @ 224, 83.1 @ 320
+  * `vit_relpos_small_patch16_cls_224` - 82.6 @ 224, 83.6 @ 320
+  * `edgnext_small_rw` - 79.6 @ 224, 80.4 @ 320
+* `cs3`, `darknet`, and `vit_*relpos` weights above all trained on TPU thanks to TRC program! Rest trained on overheating GPUs.
+* Hugging Face Hub support fixes verified, demo notebook TBA
+* Pretrained weights / configs can be loaded externally (ie from local disk) w/ support for head adaptation.
+* Add support to change image extensions scanned by `timm` datasets/parsers. See (https://github.com/rwightman/pytorch-image-models/pull/1274#issuecomment-1178303103)
+* Default ConvNeXt LayerNorm impl to use `F.layer_norm(x.permute(0, 2, 3, 1), ...).permute(0, 3, 1, 2)` via `LayerNorm2d` in all cases. 
+  * a bit slower than previous custom impl on some hardware (ie Ampere w/ CL), but overall fewer regressions across wider HW / PyTorch version ranges. 
+  * previous impl exists as `LayerNormExp2d` in `models/layers/norm.py`
+* Numerous bug fixes
+* Currently testing for imminent PyPi 0.6.x release
+* LeViT pretraining of larger models still a WIP, they don't train well / easily without distillation. Time to add distill support (finally)?
+* ImageNet-22k weight training + finetune ongoing, work on multi-weight support (slowly) chugging along (there are a LOT of weights, sigh) ...
 
 ### May 13, 2022
 * Official Swin-V2 models and weights added from (https://github.com/microsoft/Swin-Transformer). Cleaned up to support torchscript.
@@ -349,6 +383,7 @@ A full version of the list below with source links can be found in the [document
 * DenseNet - https://arxiv.org/abs/1608.06993
 * DLA - https://arxiv.org/abs/1707.06484
 * DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
+* EdgeNeXt - https://arxiv.org/abs/2206.10589
 * EfficientNet (MBConvNet Family)
     * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
     * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665

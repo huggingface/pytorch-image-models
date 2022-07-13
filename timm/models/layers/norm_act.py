@@ -1,6 +1,6 @@
 """ Normalization + Activation Layers
 """
-from typing import Union, List
+from typing import Union, List, Optional, Any
 
 import torch
 from torch import nn as nn
@@ -18,10 +18,29 @@ class BatchNormAct2d(nn.BatchNorm2d):
     instead of composing it as a .bn member.
     """
     def __init__(
-            self, num_features, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True,
-            apply_act=True, act_layer=nn.ReLU, inplace=True, drop_layer=None):
-        super(BatchNormAct2d, self).__init__(
-            num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
+            self,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            apply_act=True,
+            act_layer=nn.ReLU,
+            inplace=True,
+            drop_layer=None,
+            device=None,
+            dtype=None
+    ):
+        try:
+            factory_kwargs = {'device': device, 'dtype': dtype}
+            super(BatchNormAct2d, self).__init__(
+                num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats,
+                **factory_kwargs
+            )
+        except TypeError:
+            # NOTE for backwards compat with old PyTorch w/o factory device/dtype support
+            super(BatchNormAct2d, self).__init__(
+                num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         act_layer = get_act_layer(act_layer)  # string -> nn.Module
         if act_layer is not None and apply_act:
@@ -79,6 +98,62 @@ class BatchNormAct2d(nn.BatchNorm2d):
         x = self.drop(x)
         x = self.act(x)
         return x
+
+
+class SyncBatchNormAct(nn.SyncBatchNorm):
+    # Thanks to Selim Seferbekov (https://github.com/rwightman/pytorch-image-models/issues/1254)
+    # This is a quick workaround to support SyncBatchNorm for timm BatchNormAct2d layers
+    # but ONLY when used in conjunction with the timm conversion function below.
+    # Do not create this module directly or use the PyTorch conversion function.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = super().forward(x)  # SyncBN doesn't work with torchscript anyways, so this is fine
+        if hasattr(self, "drop"):
+            x = self.drop(x)
+        if hasattr(self, "act"):
+            x = self.act(x)
+        return x
+
+
+def convert_sync_batchnorm(module, process_group=None):
+    # convert both BatchNorm and BatchNormAct layers to Synchronized variants
+    module_output = module
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+        if isinstance(module, BatchNormAct2d):
+            # convert timm norm + act layer
+            module_output = SyncBatchNormAct(
+                module.num_features,
+                module.eps,
+                module.momentum,
+                module.affine,
+                module.track_running_stats,
+                process_group=process_group,
+            )
+            # set act and drop attr from the original module
+            module_output.act = module.act
+            module_output.drop = module.drop
+        else:
+            # convert standard BatchNorm layers
+            module_output = torch.nn.SyncBatchNorm(
+                module.num_features,
+                module.eps,
+                module.momentum,
+                module.affine,
+                module.track_running_stats,
+                process_group,
+            )
+        if module.affine:
+            with torch.no_grad():
+                module_output.weight = module.weight
+                module_output.bias = module.bias
+        module_output.running_mean = module.running_mean
+        module_output.running_var = module.running_var
+        module_output.num_batches_tracked = module.num_batches_tracked
+        if hasattr(module, "qconfig"):
+            module_output.qconfig = module.qconfig
+    for name, child in module.named_children():
+        module_output.add_module(name, convert_sync_batchnorm(child, process_group))
+    del module
+    return module_output
 
 
 def group_norm_tpu(x, w, b, groups: int = 32, eps: float = 1e-5, diff_sqm: bool = False, flatten: bool = False):

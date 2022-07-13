@@ -2,6 +2,7 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+import functools
 from torch import nn as nn
 
 from .create_conv2d import create_conv2d
@@ -40,12 +41,26 @@ class ConvNormAct(nn.Module):
 ConvBnAct = ConvNormAct
 
 
+def create_aa(aa_layer, channels, stride=2, enable=True):
+    if not aa_layer or not enable:
+        return nn.Identity()
+    if isinstance(aa_layer, functools.partial):
+        if issubclass(aa_layer.func, nn.AvgPool2d):
+            return aa_layer()
+        else:
+            return aa_layer(channels)
+    elif issubclass(aa_layer, nn.AvgPool2d):
+        return aa_layer(stride)
+    else:
+        return aa_layer(channels=channels, stride=stride)
+
+
 class ConvNormActAa(nn.Module):
     def __init__(
             self, in_channels, out_channels, kernel_size=1, stride=1, padding='', dilation=1, groups=1,
             bias=False, apply_act=True, norm_layer=nn.BatchNorm2d, act_layer=nn.ReLU, aa_layer=None, drop_layer=None):
         super(ConvNormActAa, self).__init__()
-        use_aa = aa_layer is not None
+        use_aa = aa_layer is not None and stride == 2
 
         self.conv = create_conv2d(
             in_channels, out_channels, kernel_size, stride=1 if use_aa else stride,
@@ -56,7 +71,7 @@ class ConvNormActAa(nn.Module):
         # NOTE for backwards (weight) compatibility, norm layer name remains `.bn`
         norm_kwargs = dict(drop_layer=drop_layer) if drop_layer is not None else {}
         self.bn = norm_act_layer(out_channels, apply_act=apply_act, **norm_kwargs)
-        self.aa = aa_layer(channels=out_channels) if stride == 2 and use_aa else nn.Identity()
+        self.aa = create_aa(aa_layer, out_channels, stride=stride, enable=use_aa)
 
     @property
     def in_channels(self):
