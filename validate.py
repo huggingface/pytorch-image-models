@@ -22,7 +22,8 @@ from contextlib import suppress
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
-from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser
+from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser,\
+    decay_batch_step, check_batch_size_retry
 
 has_apex = False
 try:
@@ -122,6 +123,8 @@ parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
                     help='Real labels JSON file for imagenet evaluation')
 parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
                     help='Valid label indices txt file for validation of partial label space')
+parser.add_argument('--retry', default=False, action='store_true',
+                    help='Enable batch size decay & retry for single model validation')
 
 
 def validate(args):
@@ -303,18 +306,19 @@ def _try_run(args, initial_batch_size):
     batch_size = initial_batch_size
     results = OrderedDict()
     error_str = 'Unknown'
-    while batch_size >= 1:
-        args.batch_size = batch_size
-        torch.cuda.empty_cache()
+    while batch_size:
+        args.batch_size = batch_size * args.num_gpu  # multiply by num-gpu for DataParallel case
         try:
+            torch.cuda.empty_cache()
             results = validate(args)
             return results
         except RuntimeError as e:
             error_str = str(e)
-            if 'channels_last' in error_str:
+            _logger.error(f'"{error_str}" while running validation.')
+            if not check_batch_size_retry(error_str):
                 break
-            _logger.warning(f'"{error_str}" while running validation. Reducing batch size to {batch_size} for retry.')
-        batch_size = batch_size // 2
+        batch_size = decay_batch_step(batch_size)
+        _logger.warning(f'Reducing batch size to {batch_size} for retry.')
     results['error'] = error_str
     _logger.error(f'{args.model} failed to validate ({error_str}).')
     return results
@@ -368,7 +372,10 @@ def main():
         if len(results):
             write_results(results_file, results)
     else:
-        results = validate(args)
+        if args.retry:
+            results = _try_run(args, args.batch_size)
+        else:
+            results = validate(args)
     # output results in JSON to stdout w/ delimiter for runner script
     print(f'--result\n{json.dumps(results, indent=4)}')
 
