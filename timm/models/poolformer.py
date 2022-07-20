@@ -117,8 +117,8 @@ class PoolFormerBlock(nn.Module):
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         if layer_scale_init_value:
-            self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
-            self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
+            self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim))
+            self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim))
         else:
             self.layer_scale_1 = None
             self.layer_scale_2 = None

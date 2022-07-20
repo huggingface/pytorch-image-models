@@ -230,8 +230,8 @@ class ClassAttentionBlock(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
 
         if eta is not None:  # LayerScale Initialization (no layerscale when None)
-            self.gamma1 = nn.Parameter(eta * torch.ones(dim), requires_grad=True)
-            self.gamma2 = nn.Parameter(eta * torch.ones(dim), requires_grad=True)
+            self.gamma1 = nn.Parameter(eta * torch.ones(dim))
+            self.gamma2 = nn.Parameter(eta * torch.ones(dim))
         else:
             self.gamma1, self.gamma2 = 1.0, 1.0
 
@@ -308,9 +308,9 @@ class XCABlock(nn.Module):
         self.norm2 = norm_layer(dim)
         self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
 
-        self.gamma1 = nn.Parameter(eta * torch.ones(dim), requires_grad=True)
-        self.gamma3 = nn.Parameter(eta * torch.ones(dim), requires_grad=True)
-        self.gamma2 = nn.Parameter(eta * torch.ones(dim), requires_grad=True)
+        self.gamma1 = nn.Parameter(eta * torch.ones(dim))
+        self.gamma3 = nn.Parameter(eta * torch.ones(dim))
+        self.gamma2 = nn.Parameter(eta * torch.ones(dim))
 
     def forward(self, x, H: int, W: int):
         x = x + self.drop_path(self.gamma1 * self.attn(self.norm1(x)))
