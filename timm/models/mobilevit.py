@@ -34,7 +34,7 @@ def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
         'crop_pct': 0.9, 'interpolation': 'bicubic',
-        'mean': (0, 0, 0), 'std': (1, 1, 1),
+        'mean': (0., 0., 0.), 'std': (1., 1., 1.),
         'first_conv': 'stem.conv', 'classifier': 'head.fc',
         'fixed_input_size': False,
         **kwargs

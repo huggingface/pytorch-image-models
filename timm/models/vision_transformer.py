@@ -163,12 +163,12 @@ default_cfgs = {
     # ViT ImageNet-21K-P pretraining by MILL
     'vit_base_patch16_224_miil_in21k': _cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/vit_base_patch16_224_in21k_miil.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
+        mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
     ),
     'vit_base_patch16_224_miil': _cfg(
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm'
             '/vit_base_patch16_224_1k_miil_84_4.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear',
+        mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear',
     ),
 
     'vit_base_patch16_rpn_224': _cfg(
