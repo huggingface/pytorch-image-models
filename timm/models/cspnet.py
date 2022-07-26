@@ -97,9 +97,11 @@ default_cfgs = {
         url='', interpolation='bicubic'),
 
     'cs3edgenet_x': _cfg(
-        url='', interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3edgenet_x_c2-2e1610a9.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'cs3se_edgenet_x': _cfg(
-        url='', interpolation='bicubic'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3se_edgenet_x_c2ns-76f8e3ac.pth',
+        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
 }
 
 
