@@ -42,11 +42,15 @@ default_cfgs = dict(
     convnext_base=_cfg(url="https://dl.fbaipublicfiles.com/convnext/convnext_base_1k_224_ema.pth"),
     convnext_large=_cfg(url="https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth"),
 
+    # timm specific variants
+    convnext_nano=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_nano_d1h-7eb4bdea.pth',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
     convnext_nano_hnf=_cfg(url=''),
     convnext_nano_ols=_cfg(url=''),
     convnext_tiny_hnf=_cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_tiny_hnf_a2h-ab7e9df2.pth',
-        crop_pct=0.95),
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     convnext_tiny_in22ft1k=_cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_1k_224.pth'),
@@ -411,7 +415,17 @@ def _create_convnext(variant, pretrained=False, **kwargs):
 
 
 @register_model
+def convnext_nano(pretrained=False, **kwargs):
+    # timm nano variant with standard stem and head
+    model_args = dict(
+        depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), conv_mlp=True, **kwargs)
+    model = _create_convnext('convnext_nano', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
 def convnext_nano_hnf(pretrained=False, **kwargs):
+    # experimental nano variant with normalization before pooling in head (head norm first)
     model_args = dict(
         depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_nano_hnf', pretrained=pretrained, **model_args)
@@ -420,23 +434,17 @@ def convnext_nano_hnf(pretrained=False, **kwargs):
 
 @register_model
 def convnext_nano_ols(pretrained=False, **kwargs):
+    # experimental nano variant with overlapping conv stem
     model_args = dict(
-        depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), head_norm_first=True, conv_mlp=True,
-        conv_bias=False, stem_type='overlap', stem_kernel_size=9, **kwargs)
+        depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), conv_mlp=True,
+        stem_type='overlap', stem_kernel_size=9, **kwargs)
     model = _create_convnext('convnext_nano_ols', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
 def convnext_tiny_hnf(pretrained=False, **kwargs):
-    model_args = dict(
-        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
-    model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
-    return model
-
-
-@register_model
-def convnext_tiny_hnfd(pretrained=False, **kwargs):
+    # experimental tiny variant with norm before pooling in head (head norm first)
     model_args = dict(
         depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True, **kwargs)
     model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **model_args)
