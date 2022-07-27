@@ -31,6 +31,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `cs3sedarknet_x` - 82.2 @ 256, 82.7 @ 288
   * `cs3edgenet_x` - 82.2 @ 256, 82.7 @ 288
   * `cs3se_edgenet_x` - 82.8 @ 256, 83.5 @ 320
+* `cs3*` weights above all trained on TPU w/ `bits_and_tpu` branch. Thanks to TRC program! 
 * Add output_stride=8 and 16 support to ConvNeXt (dilation)
 * deit3 models not being able to resize pos_emb fixed
 * Version 0.6.7 PyPi release (/w above bug fixes and new weighs since 0.6.5)
