@@ -104,7 +104,7 @@ default_cfgs = {
 @register_notrace_module  # reason: FX can't symbolically trace torch.arange in forward method
 class PositionalEncodingFourier(nn.Module):
     """
-    Positional encoding relying on a fourier kernel matching the one used in the "Attention is all of Need" paper.
+    Positional encoding relying on a fourier kernel matching the one used in the "Attention is all you Need" paper.
     Based on the official XCiT code
         - https://github.com/facebookresearch/xcit/blob/master/xcit.py
     """
