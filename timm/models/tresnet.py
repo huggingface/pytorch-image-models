@@ -21,7 +21,7 @@ def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
-        'mean': (0, 0, 0), 'std': (1, 1, 1),
+        'mean': (0., 0., 0.), 'std': (1., 1., 1.),
         'first_conv': 'body.conv1.0', 'classifier': 'head.fc',
         **kwargs
     }

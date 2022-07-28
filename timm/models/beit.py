@@ -182,8 +182,8 @@ class Block(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
         if init_values:
-            self.gamma_1 = nn.Parameter(init_values * torch.ones(dim), requires_grad=True)
-            self.gamma_2 = nn.Parameter(init_values * torch.ones(dim), requires_grad=True)
+            self.gamma_1 = nn.Parameter(init_values * torch.ones(dim))
+            self.gamma_2 = nn.Parameter(init_values * torch.ones(dim))
         else:
             self.gamma_1, self.gamma_2 = None, None
 

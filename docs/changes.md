@@ -1,5 +1,81 @@
 # Recent Changes
 
+### July 27, 2022
+* All runtime benchmark and validation result csv files are up-to-date!
+* A few more weights & model defs added:
+  * `darknetaa53` -  79.8 @ 256, 80.5 @ 288
+  * `convnext_nano` - 80.8 @ 224, 81.5 @ 288
+  * `cs3sedarknet_l` - 81.2 @ 256, 81.8 @ 288
+  * `cs3darknet_x` - 81.8 @ 256, 82.2 @ 288
+  * `cs3sedarknet_x` - 82.2 @ 256, 82.7 @ 288
+  * `cs3edgenet_x` - 82.2 @ 256, 82.7 @ 288
+  * `cs3se_edgenet_x` - 82.8 @ 256, 83.5 @ 320
+* `cs3*` weights above all trained on TPU w/ `bits_and_tpu` branch. Thanks to TRC program!
+* Add output_stride=8 and 16 support to ConvNeXt (dilation)
+* deit3 models not being able to resize pos_emb fixed
+* Version 0.6.7 PyPi release (/w above bug fixes and new weighs since 0.6.5)
+
+### July 8, 2022
+More models, more fixes
+* Official research models (w/ weights) added:
+  * EdgeNeXt from (https://github.com/mmaaz60/EdgeNeXt)
+  * MobileViT-V2 from (https://github.com/apple/ml-cvnets)
+  * DeiT III (Revenge of the ViT) from (https://github.com/facebookresearch/deit)
+* My own models:
+  * Small `ResNet` defs added by request with 1 block repeats for both basic and bottleneck (resnet10 and resnet14)
+  * `CspNet` refactored with dataclass config, simplified CrossStage3 (`cs3`) option. These are closer to YOLO-v5+ backbone defs.
+  * More relative position vit fiddling. Two `srelpos` (shared relative position) models trained, and a medium w/ class token.
+  * Add an alternate downsample mode to EdgeNeXt and train a `small` model. Better than original small, but not their new USI trained weights.
+* My own model weight results (all ImageNet-1k training)
+  * `resnet10t` - 66.5 @ 176, 68.3 @ 224
+  * `resnet14t` - 71.3 @ 176, 72.3 @ 224
+  * `resnetaa50` - 80.6 @ 224 , 81.6 @ 288
+  * `darknet53` -  80.0 @ 256, 80.5 @ 288
+  * `cs3darknet_m` - 77.0 @ 256, 77.6 @ 288
+  * `cs3darknet_focus_m` - 76.7 @ 256, 77.3 @ 288
+  * `cs3darknet_l` - 80.4 @ 256, 80.9 @ 288
+  * `cs3darknet_focus_l` - 80.3 @ 256, 80.9 @ 288
+  * `vit_srelpos_small_patch16_224` - 81.1 @ 224, 82.1 @ 320
+  * `vit_srelpos_medium_patch16_224` - 82.3 @ 224, 83.1 @ 320
+  * `vit_relpos_small_patch16_cls_224` - 82.6 @ 224, 83.6 @ 320
+  * `edgnext_small_rw` - 79.6 @ 224, 80.4 @ 320
+* `cs3`, `darknet`, and `vit_*relpos` weights above all trained on TPU thanks to TRC program! Rest trained on overheating GPUs.
+* Hugging Face Hub support fixes verified, demo notebook TBA
+* Pretrained weights / configs can be loaded externally (ie from local disk) w/ support for head adaptation.
+* Add support to change image extensions scanned by `timm` datasets/parsers. See (https://github.com/rwightman/pytorch-image-models/pull/1274#issuecomment-1178303103)
+* Default ConvNeXt LayerNorm impl to use `F.layer_norm(x.permute(0, 2, 3, 1), ...).permute(0, 3, 1, 2)` via `LayerNorm2d` in all cases. 
+  * a bit slower than previous custom impl on some hardware (ie Ampere w/ CL), but overall fewer regressions across wider HW / PyTorch version ranges. 
+  * previous impl exists as `LayerNormExp2d` in `models/layers/norm.py`
+* Numerous bug fixes
+* Currently testing for imminent PyPi 0.6.x release
+* LeViT pretraining of larger models still a WIP, they don't train well / easily without distillation. Time to add distill support (finally)?
+* ImageNet-22k weight training + finetune ongoing, work on multi-weight support (slowly) chugging along (there are a LOT of weights, sigh) ...
+
+### May 13, 2022
+* Official Swin-V2 models and weights added from (https://github.com/microsoft/Swin-Transformer). Cleaned up to support torchscript.
+* Some refactoring for existing `timm` Swin-V2-CR impl, will likely do a bit more to bring parts closer to official and decide whether to merge some aspects.
+* More Vision Transformer relative position / residual post-norm experiments (all trained on TPU thanks to TRC program)
+  * `vit_relpos_small_patch16_224` - 81.5 @ 224, 82.5 @ 320 -- rel pos, layer scale, no class token, avg pool
+  * `vit_relpos_medium_patch16_rpn_224` - 82.3 @ 224, 83.1 @ 320 -- rel pos + res-post-norm, no class token, avg pool
+  * `vit_relpos_medium_patch16_224` - 82.5 @ 224, 83.3 @ 320 -- rel pos, layer scale, no class token, avg pool
+  * `vit_relpos_base_patch16_gapcls_224` - 82.8 @ 224, 83.9 @ 320 -- rel pos, layer scale, class token, avg pool (by mistake)
+* Bring 512 dim, 8-head 'medium' ViT model variant back to life (after using in a pre DeiT 'small' model for first ViT impl back in 2020)
+* Add ViT relative position support for switching btw existing impl and some additions in official Swin-V2 impl for future trials
+* Sequencer2D impl (https://arxiv.org/abs/2205.01972), added via PR from author (https://github.com/okojoalg)
+
+### May 2, 2022
+* Vision Transformer experiments adding Relative Position (Swin-V2 log-coord) (`vision_transformer_relpos.py`) and Residual Post-Norm branches (from Swin-V2) (`vision_transformer*.py`)
+  * `vit_relpos_base_patch32_plus_rpn_256` - 79.5 @ 256, 80.6 @ 320 -- rel pos + extended width + res-post-norm, no class token, avg pool
+  * `vit_relpos_base_patch16_224` - 82.5 @ 224, 83.6 @ 320 -- rel pos, layer scale, no class token, avg pool
+  * `vit_base_patch16_rpn_224` - 82.3 @ 224 -- rel pos + res-post-norm, no class token, avg pool
+* Vision Transformer refactor to remove representation layer that was only used in initial vit and rarely used since with newer pretrain (ie `How to Train Your ViT`)
+* `vit_*` models support removal of class token, use of global average pool, use of fc_norm (ala beit, mae).
+
+### April 22, 2022
+* `timm` models are now officially supported in [fast.ai](https://www.fast.ai/)! Just in time for the new Practical Deep Learning course. `timmdocs` documentation link updated to [timm.fast.ai](http://timm.fast.ai/).
+* Two more model weights added in the TPU trained [series](https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-tpu-weights). Some In22k pretrain still in progress.
+  * `seresnext101d_32x8d` - 83.69 @ 224, 84.35 @ 288
+  * `seresnextaa101d_32x8d` (anti-aliased w/ AvgPool2d) - 83.85 @ 224, 84.57 @ 288
 
 ### March 23, 2022
 * Add `ParallelBlock` and `LayerScale` option to base vit models to support model configs in [Three things everyone should know about ViT](https://arxiv.org/abs/2203.09795)
@@ -96,35 +172,3 @@
   * SGDP and AdamP still won't work with PyTorch XLA but others should (have yet to test Adabelief, Adafactor, Adahessian myself).
 * EfficientNet-V2 XL TF ported weights added, but they don't validate well in PyTorch (L is better). The pre-processing for the V2 TF training is a bit diff and the fine-tuned 21k -> 1k weights are very sensitive and less robust than the 1k weights.
 * Added PyTorch trained EfficientNet-V2 'Tiny' w/ GlobalContext attn weights. Only .1-.2 top-1 better than the SE so more of a curiosity for those interested.
-  
-### July 12, 2021
-* Add XCiT models from [official facebook impl](https://github.com/facebookresearch/xcit). Contributed by [Alexander Soare](https://github.com/alexander-soare)
-
-### July 5-9, 2021
-* Add `efficientnetv2_rw_t` weights, a custom 'tiny' 13.6M param variant that is a bit better than (non NoisyStudent) B3 models. Both faster and better accuracy (at same or lower res)
-  * top-1 82.34 @ 288x288 and 82.54 @ 320x320
-* Add [SAM pretrained](https://arxiv.org/abs/2106.01548) in1k weight for ViT B/16 (`vit_base_patch16_sam_224`) and B/32 (`vit_base_patch32_sam_224`)  models.
-* Add 'Aggregating Nested Transformer' (NesT) w/ weights converted from official [Flax impl](https://github.com/google-research/nested-transformer). Contributed by [Alexander Soare](https://github.com/alexander-soare).
-  * `jx_nest_base` - 83.534, `jx_nest_small` - 83.120, `jx_nest_tiny` - 81.426
-
-### June 23, 2021
-* Reproduce gMLP model training, `gmlp_s16_224` trained to 79.6 top-1, matching [paper](https://arxiv.org/abs/2105.08050). Hparams for this and other recent MLP training [here](https://gist.github.com/rwightman/d6c264a9001f9167e06c209f630b2cc6)
-
-### June 20, 2021
-* Release Vision Transformer 'AugReg' weights from [How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers](https://arxiv.org/abs/2106.10270)
-  * .npz weight loading support added, can load any of the 50K+ weights from the [AugReg series](https://console.cloud.google.com/storage/browser/vit_models/augreg)
-  * See [example notebook](https://colab.research.google.com/github/google-research/vision_transformer/blob/master/vit_jax_augreg.ipynb) from [official impl](https://github.com/google-research/vision_transformer/) for navigating the augreg weights
-  * Replaced all default weights w/ best AugReg variant (if possible). All AugReg 21k classifiers work.
-    * Highlights: `vit_large_patch16_384` (87.1 top-1), `vit_large_r50_s32_384` (86.2 top-1), `vit_base_patch16_384` (86.0 top-1)
-  * `vit_deit_*` renamed to just `deit_*`
-  * Remove my old small model, replace with DeiT compatible small w/ AugReg weights
-* Add 1st training of my `gmixer_24_224` MLP /w GLU, 78.1 top-1 w/ 25M params.
-* Add weights from official ResMLP release (https://github.com/facebookresearch/deit)
-* Add `eca_nfnet_l2` weights from my 'lightweight' series. 84.7 top-1 at 384x384.
-* Add distilled BiT 50x1 student and 152x2 Teacher weights from  [Knowledge distillation: A good teacher is patient and consistent](https://arxiv.org/abs/2106.05237)
-* NFNets and ResNetV2-BiT models work w/ Pytorch XLA now
-  * weight standardization uses F.batch_norm instead of std_mean (std_mean wasn't lowered)
-  * eps values adjusted, will be slight differences but should be quite close
-* Improve test coverage and classifier interface of non-conv (vision transformer and mlp) models
-* Cleanup a few classifier / flatten details for models w/ conv classifiers or early global pool
-* Please report any regressions, this PR touched quite a few models.

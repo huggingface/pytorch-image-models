@@ -23,7 +23,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg, named_apply, MATCH_PREV_GROUP
-from .layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, create_attn, create_act_layer, make_divisible
+from .layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, get_attn, create_act_layer, make_divisible
 from .registry import register_model
 
 
@@ -57,9 +57,10 @@ default_cfgs = {
     'sedarknet21': _cfg(url=''),
     'darknet53': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknet53_256_c2ns-3aeff817.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0,
-    ),
-    'darknetaa53': _cfg(url=''),
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'darknetaa53': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknetaa53_c2ns-5c28ec8a.pth',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'cs3darknet_s': _cfg(
         url='', interpolation='bicubic'),
@@ -71,7 +72,8 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_l_c2ns-16220c5d.pth',
         interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'cs3darknet_x': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_x_c2ns-4e4490aa.pth',
+        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'cs3darknet_focus_s': _cfg(
         url='', interpolation='bicubic'),
@@ -84,8 +86,22 @@ default_cfgs = {
     'cs3darknet_focus_x': _cfg(
         url='', interpolation='bicubic'),
 
+    'cs3sedarknet_l': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_l_c2ns-e8d1dc13.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'cs3sedarknet_x': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_x_c2ns-b4d0abc0.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
     'cs3sedarknet_xdw': _cfg(
         url='', interpolation='bicubic'),
+
+    'cs3edgenet_x': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3edgenet_x_c2-2e1610a9.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'cs3se_edgenet_x': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3se_edgenet_x_c2ns-76f8e3ac.pth',
+        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
 }
 
 
@@ -119,6 +135,7 @@ class CspStagesCfg:
     bottle_ratio: Union[float, Tuple[float, ...]] = 1.  # bottleneck-ratio of blocks in stage
     avg_down: Union[bool, Tuple[bool, ...]] = False
     attn_layer: Optional[Union[str, Tuple[str, ...]]] = None
+    attn_kwargs: Optional[Union[Dict, Tuple[Dict]]] = None
     stage_type: Union[str, Tuple[str]] = 'csp'  # stage type ('csp', 'cs2', 'dark')
     block_type: Union[str, Tuple[str]] = 'bottle'  # blocks type for stages ('bottle', 'dark')
 
@@ -136,6 +153,7 @@ class CspStagesCfg:
         self.bottle_ratio = _pad_arg(self.bottle_ratio, n)
         self.avg_down = _pad_arg(self.avg_down, n)
         self.attn_layer = _pad_arg(self.attn_layer, n)
+        self.attn_kwargs = _pad_arg(self.attn_kwargs, n)
         self.stage_type = _pad_arg(self.stage_type, n)
         self.block_type = _pad_arg(self.block_type, n)
 
@@ -149,12 +167,22 @@ class CspModelCfg:
     stem: CspStemCfg
     stages: CspStagesCfg
     zero_init_last: bool = True  # zero init last weight (usually bn) in residual path
-    act_layer: str = 'relu'
+    act_layer: str = 'leaky_relu'
     norm_layer: str = 'batchnorm'
     aa_layer: Optional[str] = None  # FIXME support string factory for this
 
 
-def _cs3darknet_cfg(width_multiplier=1.0, depth_multiplier=1.0, avg_down=False, act_layer='silu', focus=False):
+def _cs3_cfg(
+        width_multiplier=1.0,
+        depth_multiplier=1.0,
+        avg_down=False,
+        act_layer='silu',
+        focus=False,
+        attn_layer=None,
+        attn_kwargs=None,
+        bottle_ratio=1.0,
+        block_type='dark',
+):
     if focus:
         stem_cfg = CspStemCfg(
             out_chs=make_divisible(64 * width_multiplier),
@@ -169,11 +197,13 @@ def _cs3darknet_cfg(width_multiplier=1.0, depth_multiplier=1.0, avg_down=False, 
             out_chs=tuple([make_divisible(c * width_multiplier) for c in (128, 256, 512, 1024)]),
             depth=tuple([int(d * depth_multiplier) for d in (3, 6, 9, 3)]),
             stride=2,
-            bottle_ratio=1.,
+            bottle_ratio=bottle_ratio,
             block_ratio=0.5,
             avg_down=avg_down,
+            attn_layer=attn_layer,
+            attn_kwargs=attn_kwargs,
             stage_type='cs3',
-            block_type='dark',
+            block_type=block_type,
         ),
         act_layer=act_layer,
     )
@@ -201,7 +231,7 @@ model_cfgs = dict(
             bottle_ratio=0.5,
             block_ratio=1.,
             cross_linear=True,
-        )
+        ),
     ),
     cspresnet50w=CspModelCfg(
         stem=CspStemCfg(out_chs=(32, 32, 64), kernel_size=3, stride=4, pool='max'),
@@ -213,7 +243,7 @@ model_cfgs = dict(
             bottle_ratio=0.25,
             block_ratio=0.5,
             cross_linear=True,
-        )
+        ),
     ),
     cspresnext50=CspModelCfg(
         stem=CspStemCfg(out_chs=64, kernel_size=7, stride=4, pool='max'),
@@ -226,7 +256,7 @@ model_cfgs = dict(
             bottle_ratio=1.,
             block_ratio=0.5,
             cross_linear=True,
-        )
+        ),
     ),
     cspdarknet53=CspModelCfg(
         stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
@@ -240,7 +270,6 @@ model_cfgs = dict(
             down_growth=True,
             block_type='dark',
         ),
-        act_layer='leaky_relu',
     ),
     darknet17=CspModelCfg(
         stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
@@ -253,7 +282,6 @@ model_cfgs = dict(
             stage_type='dark',
             block_type='dark',
         ),
-        act_layer='leaky_relu',
     ),
     darknet21=CspModelCfg(
         stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
@@ -267,7 +295,6 @@ model_cfgs = dict(
             block_type='dark',
 
         ),
-        act_layer='leaky_relu',
     ),
     sedarknet21=CspModelCfg(
         stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
@@ -282,7 +309,6 @@ model_cfgs = dict(
             block_type='dark',
 
         ),
-        act_layer='leaky_relu',
     ),
     darknet53=CspModelCfg(
         stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
@@ -295,7 +321,6 @@ model_cfgs = dict(
             stage_type='dark',
             block_type='dark',
         ),
-        act_layer='leaky_relu',
     ),
     darknetaa53=CspModelCfg(
         stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
@@ -309,18 +334,20 @@ model_cfgs = dict(
             stage_type='dark',
             block_type='dark',
         ),
-        act_layer='leaky_relu',
     ),
 
-    cs3darknet_s=_cs3darknet_cfg(width_multiplier=0.5, depth_multiplier=0.5),
-    cs3darknet_m=_cs3darknet_cfg(width_multiplier=0.75, depth_multiplier=0.67),
-    cs3darknet_l=_cs3darknet_cfg(),
-    cs3darknet_x=_cs3darknet_cfg(width_multiplier=1.25, depth_multiplier=1.33),
+    cs3darknet_s=_cs3_cfg(width_multiplier=0.5, depth_multiplier=0.5),
+    cs3darknet_m=_cs3_cfg(width_multiplier=0.75, depth_multiplier=0.67),
+    cs3darknet_l=_cs3_cfg(),
+    cs3darknet_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33),
 
-    cs3darknet_focus_s=_cs3darknet_cfg(width_multiplier=0.5, depth_multiplier=0.5, focus=True),
-    cs3darknet_focus_m=_cs3darknet_cfg(width_multiplier=0.75, depth_multiplier=0.67, focus=True),
-    cs3darknet_focus_l=_cs3darknet_cfg(focus=True),
-    cs3darknet_focus_x=_cs3darknet_cfg(width_multiplier=1.25, depth_multiplier=1.33, focus=True),
+    cs3darknet_focus_s=_cs3_cfg(width_multiplier=0.5, depth_multiplier=0.5, focus=True),
+    cs3darknet_focus_m=_cs3_cfg(width_multiplier=0.75, depth_multiplier=0.67, focus=True),
+    cs3darknet_focus_l=_cs3_cfg(focus=True),
+    cs3darknet_focus_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33, focus=True),
+
+    cs3sedarknet_l=_cs3_cfg(attn_layer='se', attn_kwargs=dict(rd_ratio=.25)),
+    cs3sedarknet_x=_cs3_cfg(attn_layer='se', width_multiplier=1.25, depth_multiplier=1.33),
 
     cs3sedarknet_xdw=CspModelCfg(
         stem=CspStemCfg(out_chs=(32, 64), kernel_size=3, stride=2, pool=''),
@@ -333,7 +360,13 @@ model_cfgs = dict(
             block_ratio=0.5,
             attn_layer='se',
         ),
+        act_layer='silu',
     ),
+
+    cs3edgenet_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33, bottle_ratio=1.5, block_type='edge'),
+    cs3se_edgenet_x=_cs3_cfg(
+        width_multiplier=1.25, depth_multiplier=1.33, bottle_ratio=1.5, block_type='edge',
+        attn_layer='se', attn_kwargs=dict(rd_ratio=.25)),
 )
 
 
@@ -352,21 +385,22 @@ class BottleneckBlock(nn.Module):
             norm_layer=nn.BatchNorm2d,
             attn_last=False,
             attn_layer=None,
-            aa_layer=None,
             drop_block=None,
             drop_path=0.
     ):
         super(BottleneckBlock, self).__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
+        attn_last = attn_layer is not None and attn_last
+        attn_first = attn_layer is not None and not attn_last
 
         self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
-        self.conv2 = ConvNormActAa(
+        self.conv2 = ConvNormAct(
             mid_chs, mid_chs, kernel_size=3, dilation=dilation, groups=groups,
-            aa_layer=aa_layer, drop_layer=drop_block, **ckwargs)
-        self.attn2 = create_attn(attn_layer, channels=mid_chs) if not attn_last else None
+            drop_layer=drop_block, **ckwargs)
+        self.attn2 = attn_layer(mid_chs, act_layer=act_layer) if attn_first else nn.Identity()
         self.conv3 = ConvNormAct(mid_chs, out_chs, kernel_size=1, apply_act=False, **ckwargs)
-        self.attn3 = create_attn(attn_layer, channels=out_chs) if attn_last else None
+        self.attn3 = attn_layer(out_chs, act_layer=act_layer) if attn_last else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path else nn.Identity()
         self.act3 = create_act_layer(act_layer)
 
@@ -377,11 +411,9 @@ class BottleneckBlock(nn.Module):
         shortcut = x
         x = self.conv1(x)
         x = self.conv2(x)
-        if self.attn2 is not None:
-            x = self.attn2(x)
+        x = self.attn2(x)
         x = self.conv3(x)
-        if self.attn3 is not None:
-            x = self.attn3(x)
+        x = self.attn3(x)
         x = self.drop_path(x) + shortcut
         # FIXME partial shortcut needed if first block handled as per original, not used for my current impl
         #x[:, :shortcut.size(1)] += shortcut
@@ -403,18 +435,18 @@ class DarkBlock(nn.Module):
             act_layer=nn.ReLU,
             norm_layer=nn.BatchNorm2d,
             attn_layer=None,
-            aa_layer=None,
             drop_block=None,
             drop_path=0.
     ):
         super(DarkBlock, self).__init__()
         mid_chs = int(round(out_chs * bottle_ratio))
         ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
+
         self.conv1 = ConvNormAct(in_chs, mid_chs, kernel_size=1, **ckwargs)
-        self.conv2 = ConvNormActAa(
+        self.attn = attn_layer(mid_chs, act_layer=act_layer) if attn_layer is not None else nn.Identity()
+        self.conv2 = ConvNormAct(
             mid_chs, out_chs, kernel_size=3, dilation=dilation, groups=groups,
-            aa_layer=aa_layer, drop_layer=drop_block, **ckwargs)
-        self.attn = create_attn(attn_layer, channels=out_chs, act_layer=act_layer)
+            drop_layer=drop_block, **ckwargs)
         self.drop_path = DropPath(drop_path) if drop_path else nn.Identity()
 
     def zero_init_last(self):
@@ -423,9 +455,48 @@ class DarkBlock(nn.Module):
     def forward(self, x):
         shortcut = x
         x = self.conv1(x)
+        x = self.attn(x)
         x = self.conv2(x)
-        if self.attn is not None:
-            x = self.attn(x)
+        x = self.drop_path(x) + shortcut
+        return x
+
+
+class EdgeBlock(nn.Module):
+    """ EdgeResidual / Fused-MBConv / MobileNetV1-like 3x3 + 1x1 block (w/ activated output)
+    """
+
+    def __init__(
+            self,
+            in_chs,
+            out_chs,
+            dilation=1,
+            bottle_ratio=0.5,
+            groups=1,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            drop_block=None,
+            drop_path=0.
+    ):
+        super(EdgeBlock, self).__init__()
+        mid_chs = int(round(out_chs * bottle_ratio))
+        ckwargs = dict(act_layer=act_layer, norm_layer=norm_layer)
+
+        self.conv1 = ConvNormAct(
+            in_chs, mid_chs, kernel_size=3, dilation=dilation, groups=groups,
+            drop_layer=drop_block, **ckwargs)
+        self.attn = attn_layer(mid_chs, act_layer=act_layer) if attn_layer is not None else nn.Identity()
+        self.conv2 = ConvNormAct(mid_chs, out_chs, kernel_size=1, **ckwargs)
+        self.drop_path = DropPath(drop_path) if drop_path else nn.Identity()
+
+    def zero_init_last(self):
+        nn.init.zeros_(self.conv2.bn.weight)
+
+    def forward(self, x):
+        shortcut = x
+        x = self.conv1(x)
+        x = self.attn(x)
+        x = self.conv2(x)
         x = self.drop_path(x) + shortcut
         return x
 
@@ -457,6 +528,7 @@ class CrossStage(nn.Module):
         self.expand_chs = exp_chs = int(round(out_chs * expand_ratio))
         block_out_chs = int(round(out_chs * block_ratio))
         conv_kwargs = dict(act_layer=block_kwargs.get('act_layer'), norm_layer=block_kwargs.get('norm_layer'))
+        aa_layer = block_kwargs.pop('aa_layer', None)
 
         if stride != 1 or first_dilation != dilation:
             if avg_down:
@@ -467,7 +539,7 @@ class CrossStage(nn.Module):
             else:
                 self.conv_down = ConvNormActAa(
                     in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
-                    aa_layer=block_kwargs.get('aa_layer', None), **conv_kwargs)
+                    aa_layer=aa_layer, **conv_kwargs)
             prev_chs = down_chs
         else:
             self.conv_down = nn.Identity()
@@ -535,6 +607,7 @@ class CrossStage3(nn.Module):
         self.expand_chs = exp_chs = int(round(out_chs * expand_ratio))
         block_out_chs = int(round(out_chs * block_ratio))
         conv_kwargs = dict(act_layer=block_kwargs.get('act_layer'), norm_layer=block_kwargs.get('norm_layer'))
+        aa_layer = block_kwargs.pop('aa_layer', None)
 
         if stride != 1 or first_dilation != dilation:
             if avg_down:
@@ -545,7 +618,7 @@ class CrossStage3(nn.Module):
             else:
                 self.conv_down = ConvNormActAa(
                     in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
-                    aa_layer=block_kwargs.get('aa_layer', None), **conv_kwargs)
+                    aa_layer=aa_layer, **conv_kwargs)
             prev_chs = down_chs
         else:
             self.conv_down = None
@@ -602,6 +675,7 @@ class DarkStage(nn.Module):
         super(DarkStage, self).__init__()
         first_dilation = first_dilation or dilation
         conv_kwargs = dict(act_layer=block_kwargs.get('act_layer'), norm_layer=block_kwargs.get('norm_layer'))
+        aa_layer = block_kwargs.pop('aa_layer', None)
 
         if avg_down:
             self.conv_down = nn.Sequential(
@@ -611,7 +685,7 @@ class DarkStage(nn.Module):
         else:
             self.conv_down = ConvNormActAa(
                 in_chs, out_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
-                aa_layer=block_kwargs.get('aa_layer', None), **conv_kwargs)
+                aa_layer=aa_layer, **conv_kwargs)
 
         prev_chs = out_chs
         block_out_chs = int(round(out_chs * block_ratio))
@@ -688,7 +762,8 @@ def create_csp_stem(
     return stem, feature_info
 
 
-def _get_stage_fn(stage_type: str, stage_args):
+def _get_stage_fn(stage_args):
+    stage_type = stage_args.pop('stage_type')
     assert stage_type in ('dark', 'csp', 'cs3')
     if stage_type == 'dark':
         stage_args.pop('expand_ratio', None)
@@ -702,12 +777,25 @@ def _get_stage_fn(stage_type: str, stage_args):
     return stage_fn, stage_args
 
 
-def _get_block_fn(stage_type: str, stage_args):
-    assert stage_type in ('dark', 'bottle')
-    if stage_type == 'dark':
+def _get_block_fn(stage_args):
+    block_type = stage_args.pop('block_type')
+    assert block_type in ('dark', 'edge', 'bottle')
+    if block_type == 'dark':
         return DarkBlock, stage_args
+    elif block_type == 'edge':
+        return EdgeBlock, stage_args
     else:
         return BottleneckBlock, stage_args
+
+
+def _get_attn_fn(stage_args):
+    attn_layer = stage_args.pop('attn_layer')
+    attn_kwargs = stage_args.pop('attn_kwargs', None) or {}
+    if attn_layer is not None:
+        attn_layer = get_attn(attn_layer)
+        if attn_kwargs:
+            attn_layer = partial(attn_layer, **attn_kwargs)
+    return attn_layer, stage_args
 
 
 def create_csp_stages(
@@ -724,7 +812,6 @@ def create_csp_stages(
     block_kwargs = dict(
         act_layer=cfg.act_layer,
         norm_layer=cfg.norm_layer,
-        aa_layer=cfg.aa_layer
     )
 
     dilation = 1
@@ -734,8 +821,9 @@ def create_csp_stages(
     feature_info = []
     stages = []
     for stage_idx, stage_args in enumerate(stage_args):
-        stage_fn, stage_args = _get_stage_fn(stage_args.pop('stage_type'), stage_args)
-        block_fn, stage_args = _get_block_fn(stage_args.pop('block_type'), stage_args)
+        stage_fn, stage_args = _get_stage_fn(stage_args)
+        block_fn, stage_args = _get_block_fn(stage_args)
+        attn_fn, stage_args = _get_attn_fn(stage_args)
         stride = stage_args.pop('stride')
         if stride != 1 and prev_feat:
             feature_info.append(prev_feat)
@@ -752,6 +840,8 @@ def create_csp_stages(
             first_dilation=first_dilation,
             dilation=dilation,
             block_fn=block_fn,
+            aa_layer=cfg.aa_layer,
+            attn_layer=attn_fn,  # will be passed through stage as block_kwargs
             **block_kwargs,
         )]
         prev_chs = stage_args['out_chs']
@@ -969,5 +1059,25 @@ def cs3darknet_focus_x(pretrained=False, **kwargs):
 
 
 @register_model
+def cs3sedarknet_l(pretrained=False, **kwargs):
+    return _create_cspnet('cs3sedarknet_l', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def cs3sedarknet_x(pretrained=False, **kwargs):
+    return _create_cspnet('cs3sedarknet_x', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def cs3sedarknet_xdw(pretrained=False, **kwargs):
     return _create_cspnet('cs3sedarknet_xdw', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def cs3edgenet_x(pretrained=False, **kwargs):
+    return _create_cspnet('cs3edgenet_x', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def cs3se_edgenet_x(pretrained=False, **kwargs):
+    return _create_cspnet('cs3se_edgenet_x', pretrained=pretrained, **kwargs)

@@ -41,10 +41,10 @@ default_cfgs = {
         interpolation='bicubic',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
     'mobilenetv3_large_100_miil': _cfg(
-        interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
+        interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_1k_miil_78_0.pth'),
     'mobilenetv3_large_100_miil_in21k': _cfg(
-        interpolation='bilinear', mean=(0, 0, 0), std=(1, 1, 1),
+        interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.),
         url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
 
     'mobilenetv3_small_050': _cfg(

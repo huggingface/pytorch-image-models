@@ -1003,7 +1003,7 @@ def tv_resnext50_32x4d(pretrained=False, **kwargs):
 
 
 @register_model
-def ig_resnext101_32x8d(pretrained=True, **kwargs):
+def ig_resnext101_32x8d(pretrained=False, **kwargs):
     """Constructs a ResNeXt-101 32x8 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
@@ -1014,7 +1014,7 @@ def ig_resnext101_32x8d(pretrained=True, **kwargs):
 
 
 @register_model
-def ig_resnext101_32x16d(pretrained=True, **kwargs):
+def ig_resnext101_32x16d(pretrained=False, **kwargs):
     """Constructs a ResNeXt-101 32x16 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
@@ -1025,7 +1025,7 @@ def ig_resnext101_32x16d(pretrained=True, **kwargs):
 
 
 @register_model
-def ig_resnext101_32x32d(pretrained=True, **kwargs):
+def ig_resnext101_32x32d(pretrained=False, **kwargs):
     """Constructs a ResNeXt-101 32x32 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
@@ -1036,7 +1036,7 @@ def ig_resnext101_32x32d(pretrained=True, **kwargs):
 
 
 @register_model
-def ig_resnext101_32x48d(pretrained=True, **kwargs):
+def ig_resnext101_32x48d(pretrained=False, **kwargs):
     """Constructs a ResNeXt-101 32x48 model pre-trained on weakly-supervised data
     and finetuned on ImageNet from Figure 5 in
     `"Exploring the Limits of Weakly Supervised Pretraining" <https://arxiv.org/abs/1805.00932>`_
@@ -1047,7 +1047,7 @@ def ig_resnext101_32x48d(pretrained=True, **kwargs):
 
 
 @register_model
-def ssl_resnet18(pretrained=True, **kwargs):
+def ssl_resnet18(pretrained=False, **kwargs):
     """Constructs a semi-supervised ResNet-18 model pre-trained on YFCC100M dataset and finetuned on ImageNet
     `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
     Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
@@ -1057,7 +1057,7 @@ def ssl_resnet18(pretrained=True, **kwargs):
 
 
 @register_model
-def ssl_resnet50(pretrained=True, **kwargs):
+def ssl_resnet50(pretrained=False, **kwargs):
     """Constructs a semi-supervised ResNet-50 model pre-trained on YFCC100M dataset and finetuned on ImageNet
     `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
     Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
@@ -1067,7 +1067,7 @@ def ssl_resnet50(pretrained=True, **kwargs):
 
 
 @register_model
-def ssl_resnext50_32x4d(pretrained=True, **kwargs):
+def ssl_resnext50_32x4d(pretrained=False, **kwargs):
     """Constructs a semi-supervised ResNeXt-50 32x4 model pre-trained on YFCC100M dataset and finetuned on ImageNet
     `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
     Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
@@ -1077,7 +1077,7 @@ def ssl_resnext50_32x4d(pretrained=True, **kwargs):
 
 
 @register_model
-def ssl_resnext101_32x4d(pretrained=True, **kwargs):
+def ssl_resnext101_32x4d(pretrained=False, **kwargs):
     """Constructs a semi-supervised ResNeXt-101 32x4 model pre-trained on YFCC100M dataset and finetuned on ImageNet
     `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
     Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
@@ -1087,7 +1087,7 @@ def ssl_resnext101_32x4d(pretrained=True, **kwargs):
 
 
 @register_model
-def ssl_resnext101_32x8d(pretrained=True, **kwargs):
+def ssl_resnext101_32x8d(pretrained=False, **kwargs):
     """Constructs a semi-supervised ResNeXt-101 32x8 model pre-trained on YFCC100M dataset and finetuned on ImageNet
     `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
     Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
@@ -1097,7 +1097,7 @@ def ssl_resnext101_32x8d(pretrained=True, **kwargs):
 
 
 @register_model
-def ssl_resnext101_32x16d(pretrained=True, **kwargs):
+def ssl_resnext101_32x16d(pretrained=False, **kwargs):
     """Constructs a semi-supervised ResNeXt-101 32x16 model pre-trained on YFCC100M dataset and finetuned on ImageNet
     `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
     Weights from https://github.com/facebookresearch/semi-supervised-ImageNet1K-models/
@@ -1107,7 +1107,7 @@ def ssl_resnext101_32x16d(pretrained=True, **kwargs):
 
 
 @register_model
-def swsl_resnet18(pretrained=True, **kwargs):
+def swsl_resnet18(pretrained=False, **kwargs):
     """Constructs a semi-weakly supervised Resnet-18 model pre-trained on 1B weakly supervised
        image dataset and finetuned on ImageNet.
        `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
@@ -1118,7 +1118,7 @@ def swsl_resnet18(pretrained=True, **kwargs):
 
 
 @register_model
-def swsl_resnet50(pretrained=True, **kwargs):
+def swsl_resnet50(pretrained=False, **kwargs):
     """Constructs a semi-weakly supervised ResNet-50 model pre-trained on 1B weakly supervised
        image dataset and finetuned on ImageNet.
        `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
@@ -1129,7 +1129,7 @@ def swsl_resnet50(pretrained=True, **kwargs):
 
 
 @register_model
-def swsl_resnext50_32x4d(pretrained=True, **kwargs):
+def swsl_resnext50_32x4d(pretrained=False, **kwargs):
     """Constructs a semi-weakly supervised ResNeXt-50 32x4 model pre-trained on 1B weakly supervised
        image dataset and finetuned on ImageNet.
        `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
@@ -1140,7 +1140,7 @@ def swsl_resnext50_32x4d(pretrained=True, **kwargs):
 
 
 @register_model
-def swsl_resnext101_32x4d(pretrained=True, **kwargs):
+def swsl_resnext101_32x4d(pretrained=False, **kwargs):
     """Constructs a semi-weakly supervised ResNeXt-101 32x4 model pre-trained on 1B weakly supervised
        image dataset and finetuned on ImageNet.
        `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
@@ -1151,7 +1151,7 @@ def swsl_resnext101_32x4d(pretrained=True, **kwargs):
 
 
 @register_model
-def swsl_resnext101_32x8d(pretrained=True, **kwargs):
+def swsl_resnext101_32x8d(pretrained=False, **kwargs):
     """Constructs a semi-weakly supervised ResNeXt-101 32x8 model pre-trained on 1B weakly supervised
        image dataset and finetuned on ImageNet.
        `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
@@ -1162,7 +1162,7 @@ def swsl_resnext101_32x8d(pretrained=True, **kwargs):
 
 
 @register_model
-def swsl_resnext101_32x16d(pretrained=True, **kwargs):
+def swsl_resnext101_32x16d(pretrained=False, **kwargs):
     """Constructs a semi-weakly supervised ResNeXt-101 32x16 model pre-trained on 1B weakly supervised
        image dataset and finetuned on ImageNet.
        `"Billion-scale Semi-Supervised Learning for Image Classification" <https://arxiv.org/abs/1905.00546>`_
