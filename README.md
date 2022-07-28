@@ -21,6 +21,9 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### July 28, 2022
+* Add freshly minted DeiT-III Medium (width=512, depth=12, num_heads=8) model weights. Thanks [Hugo Touvron](https://github.com/TouvronHugo)!
+
 ### July 27, 2022
 * All runtime benchmark and validation result csv files are finally up-to-date!
 * A few more weights & model defs added:
