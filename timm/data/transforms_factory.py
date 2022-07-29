@@ -145,6 +145,7 @@ def transforms_imagenet_eval(
             scale_size = tuple([int(x / crop_pct) for x in img_size])
     else:
         scale_size = int(math.floor(img_size / crop_pct))
+        scale_size = (scale_size, scale_size)
 
     tfl = [
         transforms.Resize(scale_size, interpolation=str_to_interp_mode(interpolation)),
