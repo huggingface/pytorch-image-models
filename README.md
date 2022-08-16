@@ -20,6 +20,12 @@ Thanks to the following for hardware support:
 And a big thanks to all GitHub sponsors who helped with some of my costs before I joined Hugging Face.
 
 ## What's New
+
+### Aug 15, 2022
+* ConvNeXt atto weights added
+  * `convnext_atto` - 75.7 @ 224, 77.0 @ 288
+  * `convnext_atto_ols` - 75.9  @ 224, 77.2 @ 288
+
 ### Aug 5, 2022
 * More custom ConvNeXt smaller model defs with weights 
   * `convnext_femto` - 77.5 @ 224, 78.7 @ 288
