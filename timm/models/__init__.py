@@ -13,6 +13,7 @@ from .densenet import *
 from .dla import *
 from .dpn import *
 from .edgenext import *
+from .efficientformer import *
 from .efficientnet import *
 from .ghostnet import *
 from .gluon_resnet import *
