@@ -32,6 +32,7 @@ from .nfnet import *
 from .pit import *
 from .pnasnet import *
 from .poolformer import *
+from .pvt_v2 import *
 from .regnet import *
 from .res2net import *
 from .resnest import *
