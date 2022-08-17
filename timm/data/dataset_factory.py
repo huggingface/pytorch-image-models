@@ -122,12 +122,14 @@ def create_dataset(
         elif name == 'imagenet':
             if split in _EVAL_SYNONYM:
                 split = 'val'
+            torch_kwargs.pop("download")
             ds = ImageNet(split=split, **torch_kwargs)
         elif name == 'image_folder' or name == 'folder':
             # in case torchvision ImageFolder is preferred over timm ImageDataset for some reason
             if search_split and os.path.isdir(root):
                 # look for split specific sub-folder in root
                 root = _search_split(root, split)
+            torch_kwargs.pop("download")
             ds = ImageFolder(root, **kwargs)
         else:
             assert False, f"Unknown torchvision dataset {name}"
