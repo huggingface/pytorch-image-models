@@ -209,8 +209,7 @@ class WindowAttentionGlobal(nn.Module):
 
     def forward(self, x, q_global: Optional[torch.Tensor] = None):
         B, N, C = x.shape
-        if self.use_global:
-            _assert(q_global is not None, 'q_global must be passed in global mode')
+        if self.use_global and q_global is not None:
             _assert(x.shape[-1] == q_global.shape[-1], 'x and q_global seq lengths should be equal')
 
             kv = self.qkv(x)

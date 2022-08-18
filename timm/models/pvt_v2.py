@@ -286,7 +286,6 @@ class PyramidVisionTransformerV2(nn.Module):
         self.num_classes = num_classes
         assert global_pool in ('avg', '')
         self.global_pool = global_pool
-        self.img_size = to_2tuple(img_size) if img_size is not None else None
         self.depths = depths
         num_stages = len(depths)
         mlp_ratios = to_ntuple(num_stages)(mlp_ratios)
@@ -324,7 +323,8 @@ class PyramidVisionTransformerV2(nn.Module):
             cur += depths[i]
 
         # classification head
-        self.head = nn.Linear(embed_dims[3], num_classes) if num_classes > 0 else nn.Identity()
+        self.num_features = embed_dims[-1]
+        self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
 

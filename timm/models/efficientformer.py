@@ -26,7 +26,7 @@ from .registry import register_model
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None, 'fixed_input_size': True,
         'crop_pct': .95, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.conv1', 'classifier': 'head',
