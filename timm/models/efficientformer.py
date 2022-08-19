@@ -449,13 +449,12 @@ class EfficientFormer(nn.Module):
     def get_classifier(self):
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-        if self.dist:
-            self.head_dist = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head_dist = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):

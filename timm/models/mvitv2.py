@@ -850,7 +850,7 @@ class MultiScaleVit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^stem',  # stem and embed
+            stem=r'^patch_embed',  # stem and embed
             blocks=[(r'^stages\.(\d+)', None), (r'^norm', (99999,))]
         )
         return matcher
@@ -862,7 +862,7 @@ class MultiScaleVit(nn.Module):
 
     @torch.jit.ignore
     def get_classifier(self):
-        return self.head
+        return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes

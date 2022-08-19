@@ -351,7 +351,7 @@ class PyramidVisionTransformerV2(nn.Module):
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^patch_embed',  # stem and embed
-            blocks=[(r'^stages\.(\d+)', None), (r'^norm', (99999,))]
+            blocks=r'^stages\.(\d+)'
         )
         return matcher
 
