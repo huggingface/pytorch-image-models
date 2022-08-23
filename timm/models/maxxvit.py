@@ -1544,7 +1544,7 @@ class MaxxVit(nn.Module):
         return x
 
 
-def _create_coatnet(variant, cfg_variant=None, pretrained=False, **kwargs):
+def _create_maxxvit(variant, cfg_variant=None, pretrained=False, **kwargs):
     return build_model_with_cfg(
         MaxxVit, variant, pretrained,
         model_cfg=model_cfgs[variant] if not cfg_variant else model_cfgs[cfg_variant],
@@ -1554,139 +1554,139 @@ def _create_coatnet(variant, cfg_variant=None, pretrained=False, **kwargs):
 
 @register_model
 def coatnet_pico_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_pico_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_pico_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_nano_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_nano_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_nano_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_0_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_0_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_0_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_1_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_1_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_1_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_2_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_2_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_2_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_bn_0_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_bn_0_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_bn_0_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_rmlp_nano_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_rmlp_nano_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_rmlp_nano_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_rmlp_0_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_rmlp_0_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_rmlp_0_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_rmlp_1_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_rmlp_1_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_rmlp_1_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_nano_cc_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_nano_cc_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_nano_cc_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnext_nano_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnext_nano_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnext_nano_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_0_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_0_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_0_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_1_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_1_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_1_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_2_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_2_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_2_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_3_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_3_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_3_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_4_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_4_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_4_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def coatnet_5_224(pretrained=False, **kwargs):
-    return _create_coatnet('coatnet_5_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('coatnet_5_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_pico_rw_256(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_pico_rw_256', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_pico_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_nano_rw_256(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_nano_rw_256', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_tiny_rw_224(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_tiny_rw_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_tiny_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_tiny_rw_256(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_tiny_rw_256', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_tiny_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_tiny_cm_256(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_tiny_cm_256', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_tiny_cm_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxxvit_nano_rw_256(pretrained=False, **kwargs):
-    return _create_coatnet('maxxvit_nano_rw_256', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxxvit_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_tiny_224(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_tiny_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_tiny_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_small_224(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_small_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_small_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_base_224(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_base_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_base_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_large_224(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_large_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_large_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
 def maxvit_xlarge_224(pretrained=False, **kwargs):
-    return _create_coatnet('maxvit_xlarge_224', pretrained=pretrained, **kwargs)
+    return _create_maxxvit('maxvit_xlarge_224', pretrained=pretrained, **kwargs)
