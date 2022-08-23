@@ -226,6 +226,7 @@ class LayerNormAct2d(nn.LayerNorm):
             self.act = act_layer(**act_args)
         else:
             self.act = nn.Identity()
+        self._fast_norm = is_fast_norm()
 
     def forward(self, x):
         x = x.permute(0, 2, 3, 1)

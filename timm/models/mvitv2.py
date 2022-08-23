@@ -24,6 +24,7 @@ import torch.utils.checkpoint as checkpoint
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .fx_features import register_notrace_function
 from .helpers import build_model_with_cfg
 from .layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tuple
 from .registry import register_model
@@ -35,7 +36,8 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
         'crop_pct': .9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head', 'fixed_input_size': True,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
+        'fixed_input_size': True,
         **kwargs
     }
 
@@ -169,6 +171,7 @@ class PatchEmbed(nn.Module):
         return x.flatten(2).transpose(1, 2), x.shape[-2:]
 
 
+@register_notrace_function
 def reshape_pre_pool(
         x,
         feat_size: List[int],
@@ -183,6 +186,7 @@ def reshape_pre_pool(
     return x, cls_tok
 
 
+@register_notrace_function
 def reshape_post_pool(
         x,
         num_heads: int,
@@ -196,6 +200,7 @@ def reshape_post_pool(
     return x, feat_size
 
 
+@register_notrace_function
 def cal_rel_pos_type(
         attn: torch.Tensor,
         q: torch.Tensor,
