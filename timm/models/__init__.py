@@ -25,6 +25,7 @@ from .inception_resnet_v2 import *
 from .inception_v3 import *
 from .inception_v4 import *
 from .levit import *
+from .maxxvit import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
