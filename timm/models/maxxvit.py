@@ -94,6 +94,7 @@ default_cfgs = {
     'coatnet_rmlp_0_rw_224': _cfg(url=''),
     'coatnet_rmlp_1_rw_224': _cfg(
         url=''),
+    'coatnet_nano_cc_224': _cfg(url=''),
     'coatnext_nano_rw_224': _cfg(url=''),
 
     # Trying to be like the CoAtNet paper configs
@@ -105,12 +106,12 @@ default_cfgs = {
     'coatnet_5_224': _cfg(url=''),
 
     # Experimental configs
-    'maxvit_pico_rw_256': _cfg(url='', input_size=(3, 256, 256)),
-    'maxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256)),
+    'maxvit_pico_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxvit_tiny_rw_224': _cfg(url=''),
-    'maxvit_tiny_rw_256': _cfg(url='', input_size=(3, 256, 256)),
-    'maxvit_tiny_cm_256': _cfg(url='', input_size=(3, 256, 256)),
-    'maxxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256)),
+    'maxvit_tiny_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxvit_tiny_cm_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 
     # Trying to be like the MaxViT paper configs
     'maxvit_tiny_224': _cfg(url=''),
@@ -1052,7 +1053,6 @@ class PartitionAttention(nn.Module):
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def _partition_attn(self, x):
-        C = x.shape[-1]
         img_size = x.shape[1:3]
         if self.partition_block:
             partitioned = window_partition(x, self.partition_size)
@@ -1415,6 +1415,7 @@ class Stem(nn.Module):
         self.norm1 = norm_act_layer(out_chs[0])
         self.conv2 = create_conv2d(out_chs[0], out_chs[1], kernel_size, stride=1)
 
+    @torch.jit.ignore
     def init_weights(self, scheme=''):
         named_apply(partial(_init_conv, scheme=scheme), self)
 
