@@ -108,7 +108,7 @@ default_cfgs = {
     # Experimental configs
     'maxvit_pico_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxvit_nano_rw_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_nano_rw_256_sw-3e790ce3.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_nano_rw_256_sw-fb127241.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxvit_tiny_rw_224': _cfg(url=''),
     'maxvit_tiny_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
