@@ -1,8 +1,7 @@
 ---
 name: Feature request
-about: Suggest an idea for this project. Issues are for reporting bugs or requesting
-  features, the discussion forum is available for asking questions or seeking help
-  from the community.
+about: Suggest an idea for this project. Hparam requests, training help are not feature requests.
+  The discussion forum is available for asking questions or seeking help from the community.
 title: "[FEATURE] Feature title..."
 labels: enhancement
 assignees: ''
