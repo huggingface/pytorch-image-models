@@ -1,4 +1,16 @@
 """ Normalization + Activation Layers
+
+Provides Norm+Act fns for standard PyTorch norm layers such as
+* BatchNorm
+* GroupNorm
+* LayerNorm
+
+This allows swapping with alternative layers that are natively both norm + act such as
+* EvoNorm (evo_norm.py)
+* FilterResponseNorm (filter_response_norm.py)
+* InplaceABN (inplace_abn.py)
+
+Hacked together by / Copyright 2022 Ross Wightman
 """
 from typing import Union, List, Optional, Any
 
