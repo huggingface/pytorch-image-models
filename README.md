@@ -33,6 +33,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `maxvit_nano_rw_256` - 82.9 @ 256  (T)
   * `coatnet_rmlp_1_rw_224` - 83.4 @ 224, 84 @ 320  (T)
   * `coatnet_1_rw_224` - 83.6 @ 224 (G) 
+  * (T) = TPU trained with `bits_and_tpu` branch training code, (G) = GPU trained
 * GCVit (weights adapted from https://github.com/NVlabs/GCVit, code 100% `timm` re-write for license purposes)
 * MViT-V2 (multi-scale vit, adapted from https://github.com/facebookresearch/mvit)
 * EfficientFormer (adapted from https://github.com/snap-research/EfficientFormer)
