@@ -129,7 +129,7 @@ class MaxxVitTransformerCfg:
     dim_head: int = 32
     expand_ratio: float = 4.0
     expand_first: bool = True
-    shortcut_bias: bool = True,
+    shortcut_bias: bool = True
     attn_bias: bool = True
     attn_drop: float = 0.
     proj_drop: float = 0.
