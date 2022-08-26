@@ -145,4 +145,10 @@ def create_act_layer(name: Union[nn.Module, str], inplace=None, **kwargs):
     act_layer = get_act_layer(name)
     if act_layer is None:
         return None
-    return act_layer(**kwargs) if inplace is None else act_layer(inplace=inplace, **kwargs)
+    if inplace is None:
+        return act_layer(**kwargs)
+    try:
+        return act_layer(inplace=inplace, **kwargs)
+    except TypeError:
+        # recover if act layer doesn't have inplace arg
+        return act_layer(**kwargs)

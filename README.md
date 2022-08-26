@@ -21,6 +21,20 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### Aug 15, 2022
+* ConvNeXt atto weights added
+  * `convnext_atto` - 75.7 @ 224, 77.0 @ 288
+  * `convnext_atto_ols` - 75.9  @ 224, 77.2 @ 288
+
+### Aug 5, 2022
+* More custom ConvNeXt smaller model defs with weights 
+  * `convnext_femto` - 77.5 @ 224, 78.7 @ 288
+  * `convnext_femto_ols` - 77.9  @ 224, 78.9 @ 288
+  * `convnext_pico` - 79.5 @ 224, 80.4 @ 288
+  * `convnext_pico_ols` - 79.5 @ 224, 80.5 @ 288
+  * `convnext_nano_ols` - 80.9 @ 224, 81.6 @ 288
+* Updated EdgeNeXt to improve ONNX export, add new base variant and weights from original (https://github.com/mmaaz60/EdgeNeXt)
+
 ### July 28, 2022
 * Add freshly minted DeiT-III Medium (width=512, depth=12, num_heads=8) model weights. Thanks [Hugo Touvron](https://github.com/TouvronHugo)!
 
