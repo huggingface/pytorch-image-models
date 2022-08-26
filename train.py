@@ -33,7 +33,7 @@ from timm.data import create_dataset, create_loader, resolve_data_config, Mixup,
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, \
     LabelSmoothingCrossEntropy
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, \
-    convert_splitbn_model, convert_sync_batchnorm, model_parameters
+    convert_splitbn_model, convert_sync_batchnorm, model_parameters, set_fast_norm
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler
 from timm.utils import ApexScaler, NativeScaler
@@ -135,6 +135,8 @@ scripting_group.add_argument('--aot-autograd', default=False, action='store_true
                     help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
 group.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+group.add_argument('--fast-norm', default=False, action='store_true',
+                    help='enable experimental fast-norm')
 group.add_argument('--grad-checkpointing', action='store_true', default=False,
                     help='Enable gradient checkpointing through model blocks/stages')
 
@@ -395,6 +397,8 @@ def main():
 
     if args.fuser:
         utils.set_jit_fuser(args.fuser)
+    if args.fast_norm:
+        set_fast_norm()
 
     model = create_model(
         args.model,
