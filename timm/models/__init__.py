@@ -13,7 +13,9 @@ from .densenet import *
 from .dla import *
 from .dpn import *
 from .edgenext import *
+from .efficientformer import *
 from .efficientnet import *
+from .gcvit import *
 from .ghostnet import *
 from .gluon_resnet import *
 from .gluon_xception import *
@@ -23,15 +25,18 @@ from .inception_resnet_v2 import *
 from .inception_v3 import *
 from .inception_v4 import *
 from .levit import *
+from .maxxvit import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
+from .mvitv2 import *
 from .nasnet import *
 from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
 from .poolformer import *
+from .pvt_v2 import *
 from .regnet import *
 from .res2net import *
 from .resnest import *
@@ -64,5 +69,6 @@ from .helpers import load_checkpoint, resume_checkpoint, model_parameters
 from .layers import TestTimePoolHead, apply_test_time_pool
 from .layers import convert_splitbn_model, convert_sync_batchnorm
 from .layers import is_scriptable, is_exportable, set_scriptable, set_exportable, is_no_jit, set_no_jit
+from .layers import set_fast_norm
 from .registry import register_model, model_entrypoint, list_models, is_model, list_modules, is_model_in_modules,\
     is_model_pretrained, get_pretrained_cfg, has_pretrained_cfg_key, is_pretrained_cfg_key, get_pretrained_cfg_value

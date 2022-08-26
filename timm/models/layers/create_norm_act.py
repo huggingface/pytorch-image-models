@@ -18,6 +18,7 @@ _NORM_ACT_MAP = dict(
     batchnorm=BatchNormAct2d,
     batchnorm2d=BatchNormAct2d,
     groupnorm=GroupNormAct,
+    groupnorm1=functools.partial(GroupNormAct, num_groups=1),
     layernorm=LayerNormAct,
     layernorm2d=LayerNormAct2d,
     evonormb0=EvoNorm2dB0,
@@ -72,6 +73,8 @@ def get_norm_act_layer(norm_layer, act_layer=None):
             norm_act_layer = BatchNormAct2d
         elif type_name.startswith('groupnorm'):
             norm_act_layer = GroupNormAct
+        elif type_name.startswith('groupnorm1'):
+            norm_act_layer = functools.partial(GroupNormAct, num_groups=1)
         elif type_name.startswith('layernorm2d'):
             norm_act_layer = LayerNormAct2d
         elif type_name.startswith('layernorm'):

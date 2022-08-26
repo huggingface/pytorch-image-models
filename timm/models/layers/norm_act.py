@@ -1,4 +1,16 @@
 """ Normalization + Activation Layers
+
+Provides Norm+Act fns for standard PyTorch norm layers such as
+* BatchNorm
+* GroupNorm
+* LayerNorm
+
+This allows swapping with alternative layers that are natively both norm + act such as
+* EvoNorm (evo_norm.py)
+* FilterResponseNorm (filter_response_norm.py)
+* InplaceABN (inplace_abn.py)
+
+Hacked together by / Copyright 2022 Ross Wightman
 """
 from typing import Union, List, Optional, Any
 
@@ -6,8 +18,9 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-from .trace_utils import _assert
 from .create_act import get_act_layer
+from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm
+from .trace_utils import _assert
 
 
 class BatchNormAct2d(nn.BatchNorm2d):
@@ -177,9 +190,13 @@ class GroupNormAct(nn.GroupNorm):
             self.act = act_layer(**act_args)
         else:
             self.act = nn.Identity()
+        self._fast_norm = is_fast_norm()
 
     def forward(self, x):
-        x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        if self._fast_norm:
+            x = fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        else:
+            x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
         x = self.drop(x)
         x = self.act(x)
         return x
@@ -197,9 +214,13 @@ class LayerNormAct(nn.LayerNorm):
             self.act = act_layer(**act_args)
         else:
             self.act = nn.Identity()
+        self._fast_norm = is_fast_norm()
 
     def forward(self, x):
-        x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        if self._fast_norm:
+            x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        else:
+            x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = self.drop(x)
         x = self.act(x)
         return x
@@ -217,10 +238,15 @@ class LayerNormAct2d(nn.LayerNorm):
             self.act = act_layer(**act_args)
         else:
             self.act = nn.Identity()
+        self._fast_norm = is_fast_norm()
 
     def forward(self, x):
-        x = F.layer_norm(
-            x.permute(0, 2, 3, 1), self.normalized_shape, self.weight, self.bias, self.eps).permute(0, 3, 1, 2)
+        x = x.permute(0, 2, 3, 1)
+        if self._fast_norm:
+            x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        else:
+            x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        x = x.permute(0, 3, 1, 2)
         x = self.drop(x)
         x = self.act(x)
         return x

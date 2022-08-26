@@ -21,6 +21,26 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### Aug 26, 2022
+* CoAtNet (https://arxiv.org/abs/2106.04803) and MaxVit (https://arxiv.org/abs/2204.01697) `timm` original models
+  * both found in [`maxxvit.py`](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/maxxvit.py) model def, contains numerous experiments outside scope of original papers
+  * an unfinished Tensorflow version from MaxVit authors can be found https://github.com/google-research/maxvit
+* Initial CoAtNet and MaxVit timm pretrained weights (working on more):
+  * `coatnet_nano_rw_224` - 81.7 @ 224  (T)
+  * `coatnet_rmlp_nano_rw_224` - 82.0 @ 224, 82.8 @ 320 (T)
+  * `coatnet_0_rw_224` - 82.4  (T)  -- NOTE timm '0' coatnets have 2 more 3rd stage blocks
+  * `coatnet_bn_0_rw_224` - 82.4  (T)
+  * `maxvit_nano_rw_256` - 82.9 @ 256  (T)
+  * `coatnet_rmlp_1_rw_224` - 83.4 @ 224, 84 @ 320  (T)
+  * `coatnet_1_rw_224` - 83.6 @ 224 (G) 
+  * (T) = TPU trained with `bits_and_tpu` branch training code, (G) = GPU trained
+* GCVit (weights adapted from https://github.com/NVlabs/GCVit, code 100% `timm` re-write for license purposes)
+* MViT-V2 (multi-scale vit, adapted from https://github.com/facebookresearch/mvit)
+* EfficientFormer (adapted from https://github.com/snap-research/EfficientFormer)
+* PyramidVisionTransformer-V2 (adapted from https://github.com/whai362/PVT)
+* 'Fast Norm' support for LayerNorm and GroupNorm that avoids float32 upcast w/ AMP (uses APEX LN if available for further boost)
+
+
 ### Aug 15, 2022
 * ConvNeXt atto weights added
   * `convnext_atto` - 75.7 @ 224, 77.0 @ 288
@@ -229,6 +249,7 @@ A full version of the list below with source links can be found in the [document
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
+* CoAtNet (Convolution and Attention) - https://arxiv.org/abs/2106.04803
 * ConvNeXt - https://arxiv.org/abs/2201.03545
 * ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
@@ -238,6 +259,7 @@ A full version of the list below with source links can be found in the [document
 * DLA - https://arxiv.org/abs/1707.06484
 * DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
 * EdgeNeXt - https://arxiv.org/abs/2206.10589
+* EfficientFormer - https://arxiv.org/abs/2206.01191
 * EfficientNet (MBConvNet Family)
     * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
     * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
@@ -259,6 +281,7 @@ A full version of the list below with source links can be found in the [document
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
 * LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
+* MaxViT (Multi-Axis Vision Transformer) - https://arxiv.org/abs/2204.01697
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
   * FBNet-V3 - https://arxiv.org/abs/2006.02049
@@ -266,6 +289,7 @@ A full version of the list below with source links can be found in the [document
   * LCNet - https://arxiv.org/abs/2109.15099
 * MobileViT - https://arxiv.org/abs/2110.02178
 * MobileViT-V2 - https://arxiv.org/abs/2206.02680
+* MViT-V2 (Improved Multiscale Vision Transformer) - https://arxiv.org/abs/2112.01526
 * NASNet-A - https://arxiv.org/abs/1707.07012
 * NesT - https://arxiv.org/abs/2105.12723
 * NFNet-F - https://arxiv.org/abs/2102.06171
@@ -273,6 +297,7 @@ A full version of the list below with source links can be found in the [document
 * PNasNet - https://arxiv.org/abs/1712.00559
 * PoolFormer (MetaFormer) - https://arxiv.org/abs/2111.11418
 * Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
+* PVT-V2 (Improved Pyramid Vision Transformer) - https://arxiv.org/abs/2106.13797
 * RegNet - https://arxiv.org/abs/2003.13678
 * RegNetZ - https://arxiv.org/abs/2103.06877
 * RepVGG - https://arxiv.org/abs/2101.03697
