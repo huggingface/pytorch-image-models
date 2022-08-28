@@ -57,6 +57,8 @@ default_cfgs = dict(
     mvitv2_huge_in21k=_cfg(
         url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_H_in21k.pyth',
         num_classes=19168),
+
+    mvitv2_small_cls=_cfg(url=''),
 )
 
 
