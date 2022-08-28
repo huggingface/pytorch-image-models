@@ -272,6 +272,7 @@ A full version of the list below with source links can be found in the [document
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
+* GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
 * GhostNet - https://arxiv.org/abs/1911.11907
 * gMLP - https://arxiv.org/abs/2105.08050
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
