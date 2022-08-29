@@ -21,6 +21,10 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### Aug 29, 2022
+* MaxVit window size scales with img_size by default. Add new RelPosMlp MaxViT weight that leverages this:
+  * `maxvit_rmlp_nano_rw_256` - 83.0 @ 256, 83.6 @ 320  (T)
+
 ### Aug 26, 2022
 * CoAtNet (https://arxiv.org/abs/2106.04803) and MaxVit (https://arxiv.org/abs/2204.01697) `timm` original models
   * both found in [`maxxvit.py`](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/maxxvit.py) model def, contains numerous experiments outside scope of original papers
