@@ -2,4 +2,4 @@ blank_issues_enabled: false
 contact_links:
   - name: Community Discussions
     url: https://github.com/rwightman/pytorch-image-models/discussions
-    about: Issues are for features and bugs. Questions can be asked in Discussions.
+    about: Hparam request in issues will be ignored! Issues are for features and bugs. Questions can be asked in Discussions.

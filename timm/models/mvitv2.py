@@ -57,6 +57,8 @@ default_cfgs = dict(
     mvitv2_huge_in21k=_cfg(
         url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_H_in21k.pyth',
         num_classes=19168),
+
+    mvitv2_small_cls=_cfg(url=''),
 )
 
 
@@ -134,6 +136,11 @@ model_cfgs = dict(
         embed_dim=144,
         num_heads=2,
         expand_attn=False,
+    ),
+
+    mvitv2_small_cls=MultiScaleVitCfg(
+        depths=(1, 2, 11, 2),
+        use_cls_token=True,
     ),
 )
 
@@ -641,7 +648,7 @@ class MultiScaleBlock(nn.Module):
         if self.shortcut_pool_attn is None:
             return x
         if self.has_cls_token:
-            cls_tok, x = x[:, :, :1, :], x[:, :, 1:, :]
+            cls_tok, x = x[:, :1, :], x[:, 1:, :]
         else:
             cls_tok = None
         B, L, C = x.shape
@@ -650,7 +657,7 @@ class MultiScaleBlock(nn.Module):
         x = self.shortcut_pool_attn(x)
         x = x.reshape(B, C, -1).transpose(1, 2)
         if cls_tok is not None:
-            x = torch.cat((cls_tok, x), dim=2)
+            x = torch.cat((cls_tok, x), dim=1)
         return x
 
     def forward(self, x, feat_size: List[int]):
@@ -996,3 +1003,8 @@ def mvitv2_large(pretrained=False, **kwargs):
 # @register_model
 # def mvitv2_huge_in21k(pretrained=False, **kwargs):
 #     return _create_mvitv2('mvitv2_huge_in21k', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mvitv2_small_cls(pretrained=False, **kwargs):
+    return _create_mvitv2('mvitv2_small_cls', pretrained=pretrained, **kwargs)
