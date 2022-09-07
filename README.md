@@ -21,6 +21,14 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### Sept 7, 2022
+* Hugging Face [`timm` docs](https://huggingface.co/docs/hub/timm) home now exists, look for more here in the future
+* Add BEiT-v2 weights for base and large 224x224 models from https://github.com/microsoft/unilm/tree/master/beit2
+* Add more weights in `maxxvit` series incl a `pico` (7.5M params, 1.9 GMACs), two `tiny` variants:
+  * `maxvit_rmlp_pico_rw_256` - 80.5 @ 256, 81.3 @ 320  (T)
+  * `maxvit_tiny_rw_224` - 83.5 @ 224 (G)
+  * `maxvit_rmlp_tiny_rw_256` - 84.2 @ 256, 84.8 @ 320 (T)
+
 ### Aug 29, 2022
 * MaxVit window size scales with img_size by default. Add new RelPosMlp MaxViT weight that leverages this:
   * `maxvit_rmlp_nano_rw_256` - 83.0 @ 256, 83.6 @ 320  (T)
@@ -406,6 +414,8 @@ Model validation results can be found in the [documentation](https://rwightman.g
 ## Getting Started (Documentation)
 
 My current [documentation](https://rwightman.github.io/pytorch-image-models/) for `timm` covers the basics.
+
+Hugging Face [`timm` docs](https://huggingface.co/docs/hub/timm) will be the documentation focus going forward and will eventually replace the `github.io` docs above.
 
 [Getting Started with PyTorch Image Models (timm): A Practitioner’s Guide](https://towardsdatascience.com/getting-started-with-pytorch-image-models-timm-a-practitioners-guide-4e77b4bf9055) by [Chris Hughes](https://github.com/Chris-hughes10) is an extensive blog post covering many aspects of `timm` in detail.
 
