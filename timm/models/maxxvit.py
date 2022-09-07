@@ -121,6 +121,9 @@ default_cfgs = {
     'maxvit_rmlp_nano_rw_256': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_nano_rw_256_sw-c17bb0d6.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxvit_rmlp_tiny_rw_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_tiny_rw_256_sw-2da819a5.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxvit_tiny_pm_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 
@@ -511,6 +514,13 @@ model_cfgs = dict(
     maxvit_rmlp_nano_rw_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
         depths=(1, 2, 3, 1),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        **_rw_max_cfg(rel_pos_type='mlp'),
+    ),
+    maxvit_rmlp_tiny_rw_256=MaxxVitCfg(
+        embed_dim=(64, 128, 256, 512),
+        depths=(2, 2, 5, 2),
         block_type=('M',) * 4,
         stem_width=(32, 64),
         **_rw_max_cfg(rel_pos_type='mlp'),
@@ -1719,6 +1729,11 @@ def maxvit_rmlp_pico_rw_256(pretrained=False, **kwargs):
 @register_model
 def maxvit_rmlp_nano_rw_256(pretrained=False, **kwargs):
     return _create_maxxvit('maxvit_rmlp_nano_rw_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_tiny_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
