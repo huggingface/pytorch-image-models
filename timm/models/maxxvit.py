@@ -82,6 +82,7 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/coatnet_1_rw_224_sw-5cae1ea8.pth'
     ),
     'coatnet_2_rw_224': _cfg(url=''),
+    'coatnet_3_rw_224': _cfg(url=''),
 
     # Highly experimental configs
     'coatnet_bn_0_rw_224': _cfg(
@@ -94,6 +95,8 @@ default_cfgs = {
     'coatnet_rmlp_0_rw_224': _cfg(url=''),
     'coatnet_rmlp_1_rw_224': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/coatnet_rmlp_1_rw_224_sw-9051e6c3.pth'),
+    'coatnet_rmlp_2_rw_224': _cfg(url=''),
+    'coatnet_rmlp_3_rw_224': _cfg(url=''),
     'coatnet_nano_cc_224': _cfg(url=''),
     'coatnext_nano_rw_224': _cfg(url=''),
 
@@ -122,10 +125,19 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_nano_rw_256_sw-c17bb0d6.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxvit_rmlp_tiny_rw_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_tiny_rw_256_sw-2da819a5.pth',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_tiny_rw_256_sw-bbef0ff5.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxvit_rmlp_small_rw_224': _cfg(
+        url=''),
+    'maxvit_rmlp_small_rw_256': _cfg(
+        url='',
+        input_size=(3, 256, 256), pool_size=(8, 8)),
+
     'maxvit_tiny_pm_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+
     'maxxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxxvit_tiny_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxxvit_small_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 
     # Trying to be like the MaxViT paper configs
     'maxvit_tiny_224': _cfg(url=''),
@@ -182,7 +194,7 @@ class MaxxVitConvCfg:
     attn_layer: str = 'se'
     attn_act_layer: str = 'silu'
     attn_ratio: float = 0.25
-    init_values: Optional[float] = 1e-5  # for ConvNeXt block
+    init_values: Optional[float] = 1e-6  # for ConvNeXt block, ignored by MBConv
     act_layer: str = 'gelu'
     norm_layer: str = ''
     norm_layer_cl: str = ''
@@ -218,10 +230,12 @@ def _rw_coat_cfg(
         pool_type='avg2',
         conv_output_bias=False,
         conv_attn_early=False,
+        conv_attn_act_layer='relu',
         conv_norm_layer='',
         transformer_shortcut_bias=True,
         transformer_norm_layer='layernorm2d',
         transformer_norm_layer_cl='layernorm',
+        init_values=None,
         rel_pos_type='bias',
         rel_pos_dim=512,
 ):
@@ -246,7 +260,7 @@ def _rw_coat_cfg(
             expand_output=False,
             output_bias=conv_output_bias,
             attn_early=conv_attn_early,
-            attn_act_layer='relu',
+            attn_act_layer=conv_attn_act_layer,
             act_layer='silu',
             norm_layer=conv_norm_layer,
         ),
@@ -254,6 +268,7 @@ def _rw_coat_cfg(
             expand_first=False,
             shortcut_bias=transformer_shortcut_bias,
             pool_type=pool_type,
+            init_values=init_values,
             norm_layer=transformer_norm_layer,
             norm_layer_cl=transformer_norm_layer_cl,
             rel_pos_type=rel_pos_type,
@@ -272,6 +287,7 @@ def _rw_max_cfg(
         transformer_norm_layer_cl='layernorm',
         window_size=None,
         dim_head=32,
+        init_values=None,
         rel_pos_type='bias',
         rel_pos_dim=512,
 ):
@@ -296,6 +312,7 @@ def _rw_max_cfg(
             pool_type=pool_type,
             dim_head=dim_head,
             window_size=window_size,
+            init_values=init_values,
             norm_layer=transformer_norm_layer,
             norm_layer_cl=transformer_norm_layer_cl,
             rel_pos_type=rel_pos_type,
@@ -312,7 +329,8 @@ def _next_cfg(
         transformer_norm_layer='layernorm2d',
         transformer_norm_layer_cl='layernorm',
         window_size=None,
-        rel_pos_type='bias',
+        init_values=1e-6,
+        rel_pos_type='mlp',  # MLP by default for maxxvit
         rel_pos_dim=512,
 ):
     # For experimental models with convnext instead of mbconv
@@ -322,6 +340,7 @@ def _next_cfg(
             stride_mode=stride_mode,
             pool_type=pool_type,
             expand_output=False,
+            init_values=init_values,
             norm_layer=conv_norm_layer,
             norm_layer_cl=conv_norm_layer_cl,
         ),
@@ -329,6 +348,7 @@ def _next_cfg(
             expand_first=False,
             pool_type=pool_type,
             window_size=window_size,
+            init_values=init_values,
             norm_layer=transformer_norm_layer,
             norm_layer_cl=transformer_norm_layer_cl,
             rel_pos_type=rel_pos_type,
@@ -381,7 +401,21 @@ model_cfgs = dict(
         embed_dim=(128, 256, 512, 1024),
         depths=(2, 6, 14, 2),
         stem_width=(64, 128),
-        **_rw_coat_cfg(stride_mode='dw'),
+        **_rw_coat_cfg(
+            stride_mode='dw',
+            conv_attn_act_layer='silu',
+            init_values=1e-6,
+        ),
+    ),
+    coatnet_3_rw_224=MaxxVitCfg(
+        embed_dim=(192, 384, 768, 1536),
+        depths=(2, 6, 14, 2),
+        stem_width=(96, 192),
+        **_rw_coat_cfg(
+            stride_mode='dw',
+            conv_attn_act_layer='silu',
+            init_values=1e-6,
+        ),
     ),
 
     # Highly experimental configs
@@ -428,6 +462,29 @@ model_cfgs = dict(
             rel_pos_dim=384,  # was supposed to be 512, woops
         ),
     ),
+    coatnet_rmlp_2_rw_224=MaxxVitCfg(
+        embed_dim=(128, 256, 512, 1024),
+        depths=(2, 6, 14, 2),
+        stem_width=(64, 128),
+        **_rw_coat_cfg(
+            stride_mode='dw',
+            conv_attn_act_layer='silu',
+            init_values=1e-6,
+            rel_pos_type='mlp'
+        ),
+    ),
+    coatnet_rmlp_3_rw_224=MaxxVitCfg(
+        embed_dim=(192, 384, 768, 1536),
+        depths=(2, 6, 14, 2),
+        stem_width=(96, 192),
+        **_rw_coat_cfg(
+            stride_mode='dw',
+            conv_attn_act_layer='silu',
+            init_values=1e-6,
+            rel_pos_type='mlp'
+        ),
+    ),
+
     coatnet_nano_cc_224=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
         depths=(3, 4, 6, 3),
@@ -504,6 +561,7 @@ model_cfgs = dict(
         stem_width=(32, 64),
         **_rw_max_cfg(),
     ),
+
     maxvit_rmlp_pico_rw_256=MaxxVitCfg(
         embed_dim=(32, 64, 128, 256),
         depths=(2, 2, 5, 2),
@@ -525,6 +583,27 @@ model_cfgs = dict(
         stem_width=(32, 64),
         **_rw_max_cfg(rel_pos_type='mlp'),
     ),
+    maxvit_rmlp_small_rw_224=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 2, 5, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        **_rw_max_cfg(
+            rel_pos_type='mlp',
+            init_values=1e-6,
+        ),
+    ),
+    maxvit_rmlp_small_rw_256=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 2, 5, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        **_rw_max_cfg(
+            rel_pos_type='mlp',
+            init_values=1e-6,
+        ),
+    ),
+
     maxvit_tiny_pm_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
         depths=(2, 2, 5, 2),
@@ -532,12 +611,27 @@ model_cfgs = dict(
         stem_width=(32, 64),
         **_rw_max_cfg(),
     ),
+
     maxxvit_nano_rw_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
         depths=(1, 2, 3, 1),
         block_type=('M',) * 4,
         stem_width=(32, 64),
         weight_init='normal',
+        **_next_cfg(),
+    ),
+    maxxvit_tiny_rw_256=MaxxVitCfg(
+        embed_dim=(64, 128, 256, 512),
+        depths=(2, 2, 5, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        **_next_cfg(),
+    ),
+    maxxvit_small_rw_256=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 2, 5, 2),
+        block_type=('M',) * 4,
+        stem_width=(48, 96),
         **_next_cfg(),
     ),
 
@@ -1642,6 +1736,11 @@ def coatnet_2_rw_224(pretrained=False, **kwargs):
 
 
 @register_model
+def coatnet_3_rw_224(pretrained=False, **kwargs):
+    return _create_maxxvit('coatnet_3_rw_224', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def coatnet_bn_0_rw_224(pretrained=False, **kwargs):
     return _create_maxxvit('coatnet_bn_0_rw_224', pretrained=pretrained, **kwargs)
 
@@ -1659,6 +1758,16 @@ def coatnet_rmlp_0_rw_224(pretrained=False, **kwargs):
 @register_model
 def coatnet_rmlp_1_rw_224(pretrained=False, **kwargs):
     return _create_maxxvit('coatnet_rmlp_1_rw_224', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def coatnet_rmlp_2_rw_224(pretrained=False, **kwargs):
+    return _create_maxxvit('coatnet_rmlp_2_rw_224', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def coatnet_rmlp_3_rw_224(pretrained=False, **kwargs):
+    return _create_maxxvit('coatnet_rmlp_3_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -1737,6 +1846,16 @@ def maxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs):
 
 
 @register_model
+def maxvit_rmlp_small_rw_224(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_small_rw_224', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxvit_rmlp_small_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_small_rw_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
 def maxvit_tiny_pm_256(pretrained=False, **kwargs):
     return _create_maxxvit('maxvit_tiny_pm_256', pretrained=pretrained, **kwargs)
 
@@ -1744,6 +1863,16 @@ def maxvit_tiny_pm_256(pretrained=False, **kwargs):
 @register_model
 def maxxvit_nano_rw_256(pretrained=False, **kwargs):
     return _create_maxxvit('maxxvit_nano_rw_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxxvit_tiny_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxxvit_tiny_rw_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxxvit_small_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxxvit_small_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
