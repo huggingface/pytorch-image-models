@@ -10,13 +10,17 @@ def create_parser(name, root, split='train', **kwargs):
     prefix = ''
     if len(name) > 1:
         prefix = name[0]
-    name = name[-1]
+    name = "/".join(name[1:])
 
     # FIXME improve the selection right now just tfds prefix or fallback path, will need options to
     # explicitly select other options shortly
     if prefix == 'tfds':
         from .parser_tfds import ParserTfds  # defer tensorflow import
         parser = ParserTfds(root, name, split=split, **kwargs)
+    elif prefix == 'wds':
+        from .parser_wds import ParserWebdataset
+        kwargs.pop('download', False)
+        parser = ParserWebdataset(root, name, split=split, **kwargs)
     else:
         assert os.path.exists(root)
         # default fallback path (backwards compat), use image tar if root is a .tar file, otherwise image folder

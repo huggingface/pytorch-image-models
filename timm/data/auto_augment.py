@@ -36,12 +36,42 @@ _HPARAMS_DEFAULT = dict(
     img_mean=_FILL,
 )
 
+# Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in
+# favor of the Image.Resampling enum. The top-level resampling attributes will be
+# removed in Pillow 10.
 if hasattr(Image, "Resampling"):
     _RANDOM_INTERPOLATION = (Image.Resampling.BILINEAR, Image.Resampling.BICUBIC)
     _DEFAULT_INTERPOLATION = Image.Resampling.BICUBIC
+
+    _pil_interpolation_to_str = {
+        Image.Resampling.NEAREST: 'nearest',
+        Image.Resampling.BILINEAR: 'bilinear',
+        Image.Resampling.BICUBIC: 'bicubic',
+        Image.Resampling.BOX: 'box',
+        Image.Resampling.HAMMING: 'hamming',
+        Image.Resampling.LANCZOS: 'lanczos',
+    }
 else:
     _RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
     _DEFAULT_INTERPOLATION = Image.BICUBIC
+
+    _pil_interpolation_to_str = {
+        Image.NEAREST: 'nearest',
+        Image.BILINEAR: 'bilinear',
+        Image.BICUBIC: 'bicubic',
+        Image.BOX: 'box',
+        Image.HAMMING: 'hamming',
+        Image.LANCZOS: 'lanczos',
+    }
+
+_str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
+
+
+def _pil_interp(method):
+    if isinstance(method, (list, tuple)):
+        return [_str_to_pil_interpolation(m) if isinstance(m, str) else m for m in method]
+    else:
+        return _str_to_pil_interpolation(method) if isinstance(method, str) else method
 
 
 def _interpolation(kwargs):
@@ -329,7 +359,7 @@ class AugmentOp:
         self.hparams = hparams.copy()
         self.kwargs = dict(
             fillcolor=hparams['img_mean'] if 'img_mean' in hparams else _FILL,
-            resample=hparams['interpolation'] if 'interpolation' in hparams else _RANDOM_INTERPOLATION,
+            resample=_pil_interp(hparams['interpolation']) if 'interpolation' in hparams else _RANDOM_INTERPOLATION,
         )
 
         # If magnitude_std is > 0, we introduce some randomness

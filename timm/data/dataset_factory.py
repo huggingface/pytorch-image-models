@@ -69,6 +69,7 @@ def create_dataset(
       * folder - default, timm folder (or tar) based ImageDataset
       * torch - torchvision based datasets
       * TFDS - Tensorflow-datasets wrapper in IterabeDataset interface via IterableImageDataset
+      * WDS - Webdataset
       * all - any of the above
 
     Args:
@@ -134,6 +135,10 @@ def create_dataset(
         ds = IterableImageDataset(
             root, parser=name, split=split, is_training=is_training,
             download=download, batch_size=batch_size, repeats=repeats, **kwargs)
+    elif name.startswith('wds/'):
+        ds = IterableImageDataset(
+            root, parser=name, split=split, is_training=is_training,
+            batch_size=batch_size, repeats=repeats, **kwargs)
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future
         if search_split and os.path.isdir(root):

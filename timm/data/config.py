@@ -1,8 +1,51 @@
 import logging
+from dataclasses import dataclass
+from typing import Tuple, Optional, Union
+
 from .constants import *
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AugCfg:
+    scale_range: Tuple[float, float] = (0.08, 1.0)
+    ratio_range: Tuple[float, float] = (3 / 4, 4 / 3)
+    hflip_prob: float = 0.5
+    vflip_prob: float = 0.
+
+    color_jitter: float = 0.4
+    auto_augment: Optional[str] = None
+
+    re_prob: float = 0.
+    re_mode: str = 'const'
+    re_count: int = 1
+
+    num_aug_splits: int = 0
+
+
+@dataclass
+class PreprocessCfg:
+    input_size: Tuple[int, int, int] = (3, 224, 224)
+    mean: Tuple[float, ...] = IMAGENET_DEFAULT_MEAN
+    std: Tuple[float, ...] = IMAGENET_DEFAULT_STD
+    interpolation: str = 'bilinear'
+    crop_pct: float = 0.875
+    aug: AugCfg = None
+
+
+@dataclass
+class MixupCfg:
+    prob: float = 1.0
+    switch_prob: float = 0.5
+    mixup_alpha: float = 1.
+    cutmix_alpha: float = 0.
+    cutmix_minmax: Optional[Tuple[float, float]] = None
+    mode: str = 'batch'
+    correct_lam: bool = True
+    label_smoothing: float = 0.1
+    num_classes: int = 0
 
 
 def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, verbose=False):
@@ -73,6 +116,14 @@ def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, v
         elif 'crop_pct' in default_cfg:
             crop_pct = default_cfg['crop_pct']
     new_config['crop_pct'] = crop_pct
+
+    if getattr(args, 'mixup', 0) > 0 \
+            or getattr(args, 'cutmix', 0) > 0. \
+            or getattr(args, 'cutmix_minmax', None) is not None:
+        new_config['mixup'] = dict(
+        mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
+        prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
+        label_smoothing=args.smoothing, num_classes=args.num_classes)
 
     if verbose:
         _logger.info('Data processing configuration for current model + dataset:')

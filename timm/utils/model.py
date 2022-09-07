@@ -7,14 +7,16 @@ import fnmatch
 import torch
 from torchvision.ops.misc import FrozenBatchNorm2d
 
-from .model_ema import ModelEma
+
+_SUB_MODULE_ATTR = ('module', 'model')
 
 
-def unwrap_model(model):
-    if isinstance(model, ModelEma):
-        return unwrap_model(model.ema)
-    else:
-        return model.module if hasattr(model, 'module') else model
+def unwrap_model(model, recursive=True):
+    for attr in _SUB_MODULE_ATTR:
+        sub_module = getattr(model, attr, None)
+        if sub_module is not None:
+            return unwrap_model(sub_module) if recursive else sub_module
+    return model
 
 
 def get_state_dict(model, unwrap_fn=unwrap_model):

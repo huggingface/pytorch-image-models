@@ -829,11 +829,7 @@ def checkpoint_filter_fn(state_dict, model):
 def _create_swin_transformer_v2_cr(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    model = build_model_with_cfg(
-        SwinTransformerV2Cr, variant, pretrained,
-        pretrained_filter_fn=checkpoint_filter_fn,
-        **kwargs
-    )
+    model = build_model_with_cfg(SwinTransformerV2Cr, variant, pretrained, **kwargs)
     return model
 
 

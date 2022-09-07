@@ -1,11 +1,7 @@
 import torch
 import torchvision.transforms.functional as F
-try:
-    from torchvision.transforms.functional import InterpolationMode
-    has_interpolation_mode = True
-except ImportError:
-    has_interpolation_mode = False
-from PIL import Image
+from torchvision.transforms import InterpolationMode
+
 import warnings
 import math
 import random
@@ -35,65 +31,40 @@ class ToTensor:
         return torch.from_numpy(np_img).to(dtype=self.dtype)
 
 
-# Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in
-# favor of the Image.Resampling enum. The top-level resampling attributes will be
-# removed in Pillow 10.
-if hasattr(Image, "Resampling"):
-    _pil_interpolation_to_str = {
-        Image.Resampling.NEAREST: 'nearest',
-        Image.Resampling.BILINEAR: 'bilinear',
-        Image.Resampling.BICUBIC: 'bicubic',
-        Image.Resampling.BOX: 'box',
-        Image.Resampling.HAMMING: 'hamming',
-        Image.Resampling.LANCZOS: 'lanczos',
-    }
-else:
-    _pil_interpolation_to_str = {
-        Image.NEAREST: 'nearest',
-        Image.BILINEAR: 'bilinear',
-        Image.BICUBIC: 'bicubic',
-        Image.BOX: 'box',
-        Image.HAMMING: 'hamming',
-        Image.LANCZOS: 'lanczos',
-    }
+class ToTensorNormalize:
 
-_str_to_pil_interpolation = {b: a for a, b in _pil_interpolation_to_str.items()}
+    def __init__(self, mean, std, dtype=torch.float32, device=torch.device('cpu')):
+        self.dtype = dtype
+        mean = torch.as_tensor(mean, dtype=dtype, device=device)
+        std = torch.as_tensor(std, dtype=dtype, device=device)
+        if (std == 0).any():
+            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(dtype))
+        if mean.ndim == 1:
+            mean = mean.view(-1, 1, 1)
+        if std.ndim == 1:
+            std = std.view(-1, 1, 1)
+        self.mean = mean
+        self.std = std
 
-
-if has_interpolation_mode:
-    _torch_interpolation_to_str = {
-        InterpolationMode.NEAREST: 'nearest',
-        InterpolationMode.BILINEAR: 'bilinear',
-        InterpolationMode.BICUBIC: 'bicubic',
-        InterpolationMode.BOX: 'box',
-        InterpolationMode.HAMMING: 'hamming',
-        InterpolationMode.LANCZOS: 'lanczos',
-    }
-    _str_to_torch_interpolation = {b: a for a, b in _torch_interpolation_to_str.items()}
-else:
-    _pil_interpolation_to_torch = {}
-    _torch_interpolation_to_str = {}
+    def __call__(self, pil_img):
+        mode_to_nptype = {'I': np.int32, 'I;16': np.int16, 'F': np.float32}
+        img = torch.from_numpy(
+            np.array(pil_img, mode_to_nptype.get(pil_img.mode, np.uint8))
+        )
+        if pil_img.mode == '1':
+            img = 255 * img
+        img = img.view(pil_img.size[1], pil_img.size[0], len(pil_img.getbands()))
+        img = img.permute((2, 0, 1))
+        if isinstance(img, torch.ByteTensor):
+            img = img.to(self.dtype)
+            img.sub_(self.mean * 255.).div_(self.std * 255.)
+        else:
+            img = img.to(self.dtype)
+            img.sub_(self.mean).div_(self.std)
+        return img
 
 
-def str_to_pil_interp(mode_str):
-    return _str_to_pil_interpolation[mode_str]
-
-
-def str_to_interp_mode(mode_str):
-    if has_interpolation_mode:
-        return _str_to_torch_interpolation[mode_str]
-    else:
-        return _str_to_pil_interpolation[mode_str]
-
-
-def interp_mode_to_str(mode):
-    if has_interpolation_mode:
-        return _torch_interpolation_to_str[mode]
-    else:
-        return _pil_interpolation_to_str[mode]
-
-
-_RANDOM_INTERPOLATION = (str_to_interp_mode('bilinear'), str_to_interp_mode('bicubic'))
+_RANDOM_INTERPOLATION = (InterpolationMode.BILINEAR, InterpolationMode.BICUBIC)
 
 
 class RandomResizedCropAndInterpolation:
@@ -123,7 +94,7 @@ class RandomResizedCropAndInterpolation:
         if interpolation == 'random':
             self.interpolation = _RANDOM_INTERPOLATION
         else:
-            self.interpolation = str_to_interp_mode(interpolation)
+            self.interpolation = InterpolationMode(interpolation)
         self.scale = scale
         self.ratio = ratio
 
@@ -187,11 +158,13 @@ class RandomResizedCropAndInterpolation:
 
     def __repr__(self):
         if isinstance(self.interpolation, (tuple, list)):
-            interpolate_str = ' '.join([interp_mode_to_str(x) for x in self.interpolation])
+            interpolate_str = ' '.join([x.value for x in self.interpolation])
         else:
-            interpolate_str = interp_mode_to_str(self.interpolation)
+            interpolate_str = self.interpolation.value
         format_string = self.__class__.__name__ + '(size={0}'.format(self.size)
         format_string += ', scale={0}'.format(tuple(round(s, 4) for s in self.scale))
         format_string += ', ratio={0}'.format(tuple(round(r, 4) for r in self.ratio))
         format_string += ', interpolation={0})'.format(interpolate_str)
         return format_string
+
+

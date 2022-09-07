@@ -169,6 +169,31 @@ def convert_sync_batchnorm(module, process_group=None):
     return module_output
 
 
+def group_norm_tpu(x, w, b, groups: int = 32, eps: float = 1e-5, diff_sqm: bool = False, flatten: bool = False):
+    # This is a workaround for some odd behaviour running on PyTorch XLA w/ TPUs.
+    x_shape = x.shape
+    x_dtype = x.dtype
+    if flatten:
+        norm_shape = (x_shape[0], groups, -1)
+        reduce_dim = -1
+    else:
+        norm_shape = (x_shape[0], groups, x_shape[1] // groups) + x_shape[2:]
+        reduce_dim = tuple(range(2, x.ndim + 1))
+    affine_shape = (1, -1) + (1,) * (x.ndim - 2)
+    x = x.reshape(norm_shape)
+    # x = x.to(torch.float32)  # for testing w/ AMP
+    xm = x.mean(dim=reduce_dim, keepdim=True)
+    if diff_sqm:
+        # difference of squared mean and mean squared, faster on TPU
+        var = (x.square().mean(dim=reduce_dim, keepdim=True) - xm.square()).clamp(0)
+    else:
+        var = (x - xm).square().mean(dim=reduce_dim, keepdim=True)
+    x = (x - xm.expand(norm_shape)) / var.add(eps).sqrt().expand(norm_shape)
+    x = x.reshape(x_shape) * w.view(affine_shape) + b.view(affine_shape)
+    # x = x.to(x_dtype)  # for testing w/ AMP
+    return x
+
+
 def _num_groups(num_channels, num_groups, group_size):
     if group_size:
         assert num_channels % group_size == 0
@@ -193,10 +218,13 @@ class GroupNormAct(nn.GroupNorm):
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):
-        if self._fast_norm:
-            x = fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        if False:  # FIXME TPU temporary while resolving some performance issues
+            x = group_norm_tpu(x, self.weight, self.bias, self.num_groups, self.eps)
         else:
-            x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+            if self._fast_norm:
+                x = fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+            else:
+                x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
         x = self.drop(x)
         x = self.act(x)
         return x
