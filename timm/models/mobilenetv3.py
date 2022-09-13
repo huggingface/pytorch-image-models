@@ -42,10 +42,10 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth'),
     'mobilenetv3_large_100_miil': _cfg(
         interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.),
-        url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_1k_miil_78_0.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/mobilenetv3_large_100_1k_miil_78_0-66471c13.pth'),
     'mobilenetv3_large_100_miil_in21k': _cfg(
-        interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.),
-        url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mobilenetv3_large_100_in21k_miil.pth', num_classes=11221),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/mobilenetv3_large_100_in21k_miil-d71cc17b.pth',
+        interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=11221),
 
     'mobilenetv3_small_050': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_050_lambc-4b7bbe87.pth',
