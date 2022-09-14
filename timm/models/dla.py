@@ -41,7 +41,7 @@ default_cfgs = {
     'dla102': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dla102-21f57b54.pth'),
     'dla102x': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dla102x-7ec0aa2a.pth'),
     'dla102x2': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dla102x2-ac4239c4.pth'),
-    'dla169': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dla169-7c767967.pthh'),
+    'dla169': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dla169-7c767967.pth'),
     'dla60_res2net': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-res2net/res2net_dla60_4s-d88db7f9.pth'),
     'dla60_res2next': _cfg(
