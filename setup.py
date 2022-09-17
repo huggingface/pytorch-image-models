@@ -25,13 +25,15 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'Topic :: Software Development',
@@ -40,9 +42,10 @@ setup(
     ],
 
     # Note that this is a string of words separated by whitespace, not a list.
-    keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet',
+    keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet resnet vision transformer vit',
     packages=find_packages(exclude=['convert', 'tests', 'results']),
     include_package_data=True,
-    install_requires=['torch >= 1.4', 'torchvision'],
+    install_requires=['torch >= 1.7', 'torchvision', 'pyyaml', 'huggingface_hub'],
     python_requires='>=3.6',
 )
+
