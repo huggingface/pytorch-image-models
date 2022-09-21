@@ -201,7 +201,7 @@ More models, more fixes
   * `semnasnet_075` - 73
   * `fbnetv3_b/d/g` - 79.1 / 79.7 / 82.0
 * TinyNet models added by [rsomani95](https://github.com/rsomani95)
-* LCNet added via MobileNetV3 architecture
+* [LCNet](https://github.com/PaddlePaddle/PaddleClas/blob/release/2.4/docs/en/models/PP-LCNet_en.md) added via MobileNetV3 architecture
 
 ### Nov 22, 2021
 * A number of updated weights anew new model defs
