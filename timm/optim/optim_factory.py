@@ -15,6 +15,7 @@ from .adabelief import AdaBelief
 from .adafactor import Adafactor
 from .adahessian import Adahessian
 from .adamp import AdamP
+from .adan import Adan
 from .lamb import Lamb
 from .lars import Lars
 from .lookahead import Lookahead
@@ -285,6 +286,10 @@ def create_optimizer_v2(
         optimizer = optim.Adagrad(parameters, **opt_args)
     elif opt_lower == 'adafactor':
         optimizer = Adafactor(parameters, **opt_args)
+    elif opt_lower == 'adanp':
+        optimizer = Adan(parameters, no_prox=False, **opt_args)
+    elif opt_lower == 'adanw':
+        optimizer = Adan(parameters, no_prox=True, **opt_args)
     elif opt_lower == 'lamb':
         optimizer = Lamb(parameters, **opt_args)
     elif opt_lower == 'lambc':
