@@ -134,7 +134,7 @@ def _resolve_pretrained_source(pretrained_cfg):
         elif pretrained_url:
             load_from = 'url'
             pretrained_loc = pretrained_url
-        elif hf_hub_id and has_hf_hub(necessary=False):
+        elif hf_hub_id and has_hf_hub(necessary=True):
             # hf-hub available as alternate weight source in default_cfg
             load_from = 'hf-hub'
             pretrained_loc = hf_hub_id
