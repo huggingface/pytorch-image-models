@@ -101,7 +101,16 @@ class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
     Extract feature map from CNN, flatten, project to embedding dim.
     """
-    def __init__(self, backbone, img_size=224, patch_size=1, feature_size=None, in_chans=3, embed_dim=768):
+    def __init__(
+            self,
+            backbone,
+            img_size=224,
+            patch_size=1,
+            feature_size=None,
+            in_chans=3,
+            embed_dim=768,
+            bias=True,
+    ):
         super().__init__()
         assert isinstance(backbone, nn.Module)
         img_size = to_2tuple(img_size)
@@ -130,7 +139,7 @@ class HybridEmbed(nn.Module):
         assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
         self.grid_size = (feature_size[0] // patch_size[0], feature_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
-        self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
 
     def forward(self, x):
         x = self.backbone(x)

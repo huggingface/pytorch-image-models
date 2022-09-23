@@ -13,6 +13,7 @@ except ImportError:
     from torch.hub import _get_torch_home as get_dir
 
 from timm import __version__
+
 try:
     from huggingface_hub import HfApi, HfFolder, Repository, hf_hub_download, hf_hub_url
     hf_hub_download = partial(hf_hub_download, library_name="timm", library_version=__version__)
@@ -55,7 +56,7 @@ def download_cached_file(url, check_hash=True, progress=False):
 
 def has_hf_hub(necessary=False):
     if not _has_hf_hub and necessary:
-        # if no HF Hub module installed and it is necessary to continue, raise error
+        # if no HF Hub module installed, and it is necessary to continue, raise error
         raise RuntimeError(
             'Hugging Face hub model specified but package not installed. Run `pip install huggingface_hub`.')
     return _has_hf_hub
@@ -78,7 +79,7 @@ def load_cfg_from_json(json_file: Union[str, os.PathLike]):
 
 def _download_from_hf(model_id: str, filename: str):
     hf_model_id, hf_revision = hf_split(model_id)
-    return hf_hub_download(hf_model_id, filename, revision=hf_revision, cache_dir=get_cache_dir('hf'))
+    return hf_hub_download(hf_model_id, filename, revision=hf_revision)
 
 
 def load_model_config_from_hf(model_id: str):
@@ -91,9 +92,9 @@ def load_model_config_from_hf(model_id: str):
     return pretrained_cfg, model_name
 
 
-def load_state_dict_from_hf(model_id: str):
+def load_state_dict_from_hf(model_id: str, filename: str = 'pytorch_model.bin'):
     assert has_hf_hub(True)
-    cached_file = _download_from_hf(model_id, 'pytorch_model.bin')
+    cached_file = _download_from_hf(model_id, filename)
     state_dict = torch.load(cached_file, map_location='cpu')
     return state_dict
 
