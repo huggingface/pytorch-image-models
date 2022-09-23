@@ -134,6 +134,10 @@ def create_dataset(
         ds = IterableImageDataset(
             root, parser=name, split=split, is_training=is_training,
             download=download, batch_size=batch_size, repeats=repeats, **kwargs)
+    elif name.startswith('hfds/'):
+        # NOTE right now, HF datasets default arrow format is a random-access Dataset,
+        # There will be a IterableDataset variant too, TBD
+        ds = ImageDataset(root, parser=name, split=split, **kwargs)
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future
         if search_split and os.path.isdir(root):

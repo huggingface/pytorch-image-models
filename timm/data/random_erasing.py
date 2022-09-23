@@ -7,6 +7,7 @@ Hacked together by / Copyright 2019, Ross Wightman
 """
 import random
 import math
+
 import torch
 
 
@@ -44,8 +45,17 @@ class RandomErasing:
 
     def __init__(
             self,
-            probability=0.5, min_area=0.02, max_area=1/3, min_aspect=0.3, max_aspect=None,
-            mode='const', min_count=1, max_count=None, num_splits=0, device='cuda'):
+            probability=0.5,
+            min_area=0.02,
+            max_area=1/3,
+            min_aspect=0.3,
+            max_aspect=None,
+            mode='const',
+            min_count=1,
+            max_count=None,
+            num_splits=0,
+            device='cuda',
+    ):
         self.probability = probability
         self.min_area = min_area
         self.max_area = max_area
@@ -81,8 +91,12 @@ class RandomErasing:
                     top = random.randint(0, img_h - h)
                     left = random.randint(0, img_w - w)
                     img[:, top:top + h, left:left + w] = _get_pixels(
-                        self.per_pixel, self.rand_color, (chan, h, w),
-                        dtype=dtype, device=self.device)
+                        self.per_pixel,
+                        self.rand_color,
+                        (chan, h, w),
+                        dtype=dtype,
+                        device=self.device,
+                    )
                     break
 
     def __call__(self, input):

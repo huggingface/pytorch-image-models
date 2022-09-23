@@ -86,9 +86,9 @@ class ParserTfds(Parser):
             repeats=0,
             seed=42,
             input_name='image',
-            input_image='RGB',
+            input_img_mode='RGB',
             target_name='label',
-            target_image='',
+            target_img_mode='',
             prefetch_size=None,
             shuffle_size=None,
             max_threadpool_size=None
@@ -105,9 +105,9 @@ class ParserTfds(Parser):
             repeats: iterate through (repeat) the dataset this many times per iteration (once if 0 or 1)
             seed: common seed for shard shuffle across all distributed/worker instances
             input_name: name of Feature to return as data (input)
-            input_image: image mode if input is an image (currently PIL mode string)
+            input_img_mode: image mode if input is an image (currently PIL mode string)
             target_name: name of Feature to return as target (label)
-            target_image: image mode if target is an image (currently PIL mode string)
+            target_img_mode: image mode if target is an image (currently PIL mode string)
             prefetch_size: override default tf.data prefetch buffer size
             shuffle_size: override default tf.data shuffle buffer size
             max_threadpool_size: override default threadpool size for tf.data
@@ -130,9 +130,9 @@ class ParserTfds(Parser):
 
         # TFDS builder and split information
         self.input_name = input_name  # FIXME support tuples / lists of inputs and targets and full range of Feature
-        self.input_image = input_image
+        self.input_img_mode = input_img_mode
         self.target_name = target_name
-        self.target_image = target_image
+        self.target_img_mode = target_img_mode
         self.builder = tfds.builder(name, data_dir=root)
         # NOTE: the tfds command line app can be used download & prepare datasets if you don't enable download flag
         if download:
@@ -249,11 +249,11 @@ class ParserTfds(Parser):
         example_count = 0
         for example in self.ds:
             input_data = example[self.input_name]
-            if self.input_image:
-                input_data = Image.fromarray(input_data, mode=self.input_image)
+            if self.input_img_mode:
+                input_data = Image.fromarray(input_data, mode=self.input_img_mode)
             target_data = example[self.target_name]
-            if self.target_image:
-                target_data = Image.fromarray(target_data, mode=self.target_image)
+            if self.target_img_mode:
+                target_data = Image.fromarray(target_data, mode=self.target_img_mode)
             yield input_data, target_data
             example_count += 1
             if self.is_training and example_count >= target_example_count:

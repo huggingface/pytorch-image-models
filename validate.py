@@ -19,6 +19,7 @@ import torch.nn as nn
 import torch.nn.parallel
 from collections import OrderedDict
 from contextlib import suppress
+from functools import partial
 
 from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models, set_fast_norm
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
@@ -45,7 +46,6 @@ try:
 except ImportError as e:
     has_functorch = False
 
-torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('validate')
 
 
@@ -100,6 +100,8 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--channels-last', action='store_true', default=False,
                     help='Use channels_last memory layout')
+parser.add_argument('--device', default='cuda', type=str,
+                    help="Device (accelerator) to use.")
 parser.add_argument('--amp', action='store_true', default=False,
                     help='Use AMP mixed precision. Defaults to Apex, fallback to native Torch AMP.')
 parser.add_argument('--apex-amp', action='store_true', default=False,
@@ -133,6 +135,13 @@ def validate(args):
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
+
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+
+    device = torch.device(args.device)
+
     amp_autocast = suppress  # do nothing
     if args.amp:
         if has_native_amp:
@@ -143,15 +152,17 @@ def validate(args):
             _logger.warning("Neither APEX or Native Torch AMP is available.")
     assert not args.apex_amp or not args.native_amp, "Only one AMP mode should be set."
     if args.native_amp:
-        amp_autocast = torch.cuda.amp.autocast
+        amp_autocast = partial(torch.autocast, device_type=device.type)
         _logger.info('Validating in mixed precision with native PyTorch AMP.')
     elif args.apex_amp:
+        assert device.type == 'cuda'
         _logger.info('Validating in mixed precision with NVIDIA APEX AMP.')
     else:
         _logger.info('Validating in float32. AMP not enabled.')
 
     if args.fuser:
         set_jit_fuser(args.fuser)
+
     if args.fast_norm:
         set_fast_norm()
 
@@ -162,7 +173,8 @@ def validate(args):
         num_classes=args.num_classes,
         in_chans=3,
         global_pool=args.gp,
-        scriptable=args.torchscript)
+        scriptable=args.torchscript,
+    )
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes
@@ -177,7 +189,7 @@ def validate(args):
         vars(args),
         model=model,
         use_test_size=not args.use_train_size,
-        verbose=True
+        verbose=True,
     )
     test_time_pool = False
     if args.test_pool:
@@ -186,11 +198,12 @@ def validate(args):
     if args.torchscript:
         torch.jit.optimized_execution(True)
         model = torch.jit.script(model)
+
     if args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)
 
-    model = model.cuda()
+    model = model.to(device)
     if args.apex_amp:
         model = amp.initialize(model, opt_level='O1')
 
@@ -200,11 +213,16 @@ def validate(args):
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
 
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(device)
 
     dataset = create_dataset(
-        root=args.data, name=args.dataset, split=args.split,
-        download=args.dataset_download, load_bytes=args.tf_preprocessing, class_map=args.class_map)
+        root=args.data,
+        name=args.dataset,
+        split=args.split,
+        download=args.dataset_download,
+        load_bytes=args.tf_preprocessing,
+        class_map=args.class_map,
+    )
 
     if args.valid_labels:
         with open(args.valid_labels, 'r') as f:
@@ -230,7 +248,9 @@ def validate(args):
         num_workers=args.workers,
         crop_pct=crop_pct,
         pin_memory=args.pin_mem,
-        tf_preprocessing=args.tf_preprocessing)
+        device=device,
+        tf_preprocessing=args.tf_preprocessing,
+    )
 
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -240,7 +260,7 @@ def validate(args):
     model.eval()
     with torch.no_grad():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
-        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).cuda()
+        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device)
         if args.channels_last:
             input = input.contiguous(memory_format=torch.channels_last)
         with amp_autocast():
@@ -249,8 +269,8 @@ def validate(args):
         end = time.time()
         for batch_idx, (input, target) in enumerate(loader):
             if args.no_prefetcher:
-                target = target.cuda()
-                input = input.cuda()
+                target = target.to(device)
+                input = input.to(device)
             if args.channels_last:
                 input = input.contiguous(memory_format=torch.channels_last)
 
@@ -282,9 +302,15 @@ def validate(args):
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
                     'Acc@1: {top1.val:>7.3f} ({top1.avg:>7.3f})  '
                     'Acc@5: {top5.val:>7.3f} ({top5.avg:>7.3f})'.format(
-                        batch_idx, len(loader), batch_time=batch_time,
+                        batch_idx,
+                        len(loader),
+                        batch_time=batch_time,
                         rate_avg=input.size(0) / batch_time.avg,
-                        loss=losses, top1=top1, top5=top5))
+                        loss=losses,
+                        top1=top1,
+                        top5=top5
+                    )
+                )
 
     if real_labels is not None:
         # real labels mode replaces topk values at the end
@@ -298,7 +324,8 @@ def validate(args):
         param_count=round(param_count / 1e6, 2),
         img_size=data_config['input_size'][-1],
         crop_pct=crop_pct,
-        interpolation=data_config['interpolation'])
+        interpolation=data_config['interpolation'],
+    )
 
     _logger.info(' * Acc@1 {:.3f} ({:.3f}) Acc@5 {:.3f} ({:.3f})'.format(
        results['top1'], results['top1_err'], results['top5'], results['top5_err']))
@@ -313,7 +340,8 @@ def _try_run(args, initial_batch_size):
     while batch_size:
         args.batch_size = batch_size * args.num_gpu  # multiply by num-gpu for DataParallel case
         try:
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available() and 'cuda' in args.device:
+                torch.cuda.empty_cache()
             results = validate(args)
             return results
         except RuntimeError as e:
