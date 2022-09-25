@@ -1216,7 +1216,8 @@ def vit_base_patch32_224_clip_laion2b(pretrained=False, **kwargs):
     """ ViT-B/32
     Pretrained weights from CLIP image tower trained on LAION-2B image-text pairs.
     """
-    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, **kwargs)
+    model_kwargs = dict(
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
     model = _create_vision_transformer('vit_base_patch32_224_clip_laion2b', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -1226,7 +1227,8 @@ def vit_large_patch14_224_clip_laion2b(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/14)
     Pretrained weights from CLIP image tower trained on LAION-2B image-text pairs.
     """
-    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True, **kwargs)
+    model_kwargs = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
     model = _create_vision_transformer('vit_large_patch14_224_clip_laion2b', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -1236,7 +1238,8 @@ def vit_huge_patch14_224_clip_laion2b(pretrained=False, **kwargs):
     """ ViT-Huge model (ViT-H/14) from original paper (https://arxiv.org/abs/2010.11929).
     Pretrained weights from CLIP image tower trained on LAION-2B image-text pairs.
     """
-    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True, **kwargs)
+    model_kwargs = dict(
+        patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
     model = _create_vision_transformer('vit_huge_patch14_224_clip_laion2b', pretrained=pretrained, **model_kwargs)
     return model
 
@@ -1247,6 +1250,7 @@ def vit_giant_patch14_224_clip_laion2b(pretrained=False, **kwargs):
     Pretrained weights from CLIP image tower trained on LAION-2B image-text pairs.
     """
     model_kwargs = dict(
-        patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16, pre_norm=True, **kwargs)
+        patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16,
+        pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
     model = _create_vision_transformer('vit_giant_patch14_224_clip_laion2b', pretrained=pretrained, **model_kwargs)
     return model
