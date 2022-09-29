@@ -60,6 +60,7 @@ def create_dataset(
         is_training=False,
         download=False,
         batch_size=None,
+        seed=42,
         repeats=0,
         **kwargs
 ):
@@ -68,7 +69,9 @@ def create_dataset(
     In parenthesis after each arg are the type of dataset supported for each arg, one of:
       * folder - default, timm folder (or tar) based ImageDataset
       * torch - torchvision based datasets
+      * HFDS - Hugging Face Datasets
       * TFDS - Tensorflow-datasets wrapper in IterabeDataset interface via IterableImageDataset
+      * WDS - Webdataset
       * all - any of the above
 
     Args:
@@ -79,11 +82,12 @@ def create_dataset(
             `imagenet/` instead of `/imagenet/val`, etc on cmd line / config. (folder, torch/folder)
         class_map: specify class -> index mapping via text file or dict (folder)
         load_bytes: load data, return images as undecoded bytes (folder)
-        download: download dataset if not present and supported (TFDS, torch)
+        download: download dataset if not present and supported (HFDS, TFDS, torch)
         is_training: create dataset in train mode, this is different from the split.
-            For Iterable / TDFS it enables shuffle, ignored for other datasets. (TFDS)
-        batch_size: batch size hint for (TFDS)
-        repeats: dataset repeats per iteration i.e. epoch (TFDS)
+            For Iterable / TDFS it enables shuffle, ignored for other datasets. (TFDS, WDS)
+        batch_size: batch size hint for (TFDS, WDS)
+        seed: seed for iterable datasets (TFDS, WDS)
+        repeats: dataset repeats per iteration i.e. epoch (TFDS, WDS)
         **kwargs: other args to pass to dataset
 
     Returns:
@@ -130,14 +134,33 @@ def create_dataset(
             ds = ImageFolder(root, **kwargs)
         else:
             assert False, f"Unknown torchvision dataset {name}"
-    elif name.startswith('tfds/'):
-        ds = IterableImageDataset(
-            root, parser=name, split=split, is_training=is_training,
-            download=download, batch_size=batch_size, repeats=repeats, **kwargs)
     elif name.startswith('hfds/'):
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
         ds = ImageDataset(root, parser=name, split=split, **kwargs)
+    elif name.startswith('tfds/'):
+        ds = IterableImageDataset(
+            root,
+            parser=name,
+            split=split,
+            is_training=is_training,
+            download=download,
+            batch_size=batch_size,
+            repeats=repeats,
+            seed=seed,
+            **kwargs
+        )
+    elif name.startswith('wds/'):
+        ds = IterableImageDataset(
+            root,
+            parser=name,
+            split=split,
+            is_training=is_training,
+            batch_size=batch_size,
+            repeats=repeats,
+            seed=seed,
+            **kwargs
+        )
     else:
         # FIXME support more advance split cfg for ImageFolder/Tar datasets in the future
         if search_split and os.path.isdir(root):

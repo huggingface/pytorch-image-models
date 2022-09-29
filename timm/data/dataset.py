@@ -89,6 +89,7 @@ class IterableImageDataset(data.IterableDataset):
             split='train',
             is_training=False,
             batch_size=None,
+            seed=42,
             repeats=0,
             download=False,
             transform=None,
@@ -102,6 +103,7 @@ class IterableImageDataset(data.IterableDataset):
                 split=split,
                 is_training=is_training,
                 batch_size=batch_size,
+                seed=seed,
                 repeats=repeats,
                 download=download,
             )
@@ -124,6 +126,11 @@ class IterableImageDataset(data.IterableDataset):
             return len(self.parser)
         else:
             return 0
+
+    def set_epoch(self, count):
+        # TFDS and WDS need external epoch count for deterministic cross process shuffle
+        if hasattr(self.parser, 'set_epoch'):
+            self.parser.set_epoch(count)
 
     def filename(self, index, basename=False, absolute=False):
         assert False, 'Filename lookup by index not supported, use filenames().'

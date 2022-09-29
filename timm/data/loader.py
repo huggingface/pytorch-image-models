@@ -5,6 +5,7 @@ https://github.com/NVIDIA/apex/commit/d5e2bb4bdeedd27b1dfaf5bb2b24d6c000dee9be#d
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
+import logging
 import random
 from contextlib import suppress
 from functools import partial
@@ -20,6 +21,9 @@ from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .distributed_sampler import OrderedDistributedSampler, RepeatAugSampler
 from .random_erasing import RandomErasing
 from .mixup import FastCollateMixup
+
+
+_logger = logging.getLogger(__name__)
 
 
 def fast_collate(batch):
@@ -57,11 +61,13 @@ def fast_collate(batch):
         assert False
 
 
-def expand_to_chs(x, n):
+def adapt_to_chs(x, n):
     if not isinstance(x, (tuple, list)):
         x = tuple(repeat(x, n))
-    elif len(x) == 1:
-        x = x * n
+    elif len(x) != n:
+        x_mean = np.mean(x).item()
+        x = (x_mean,) * n
+        _logger.warning(f'Pretrained mean/std different shape than model, using avg value {x}.')
     else:
         assert len(x) == n, 'normalization stats must match image channels'
     return x
@@ -83,8 +89,8 @@ class PrefetchLoader:
             re_count=1,
             re_num_splits=0):
 
-        mean = expand_to_chs(mean, channels)
-        std = expand_to_chs(std, channels)
+        mean = adapt_to_chs(mean, channels)
+        std = adapt_to_chs(std, channels)
         normalization_shape = (1, channels, 1, 1)
 
         self.loader = loader

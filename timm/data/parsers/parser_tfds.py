@@ -7,6 +7,8 @@ https://www.tensorflow.org/datasets/catalog/overview#image_classification
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
+import os
+
 import torch
 import torch.distributed as dist
 from PIL import Image
@@ -30,12 +32,14 @@ except ImportError as e:
     print(e)
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
     exit(1)
+
 from .parser import Parser
+from .shared_count import SharedCount
 
 
-MAX_TP_SIZE = 8  # maximum TF threadpool size, only doing jpeg decodes and queuing activities
-SHUFFLE_SIZE = 8192  # examples to shuffle in DS queue
-PREFETCH_SIZE = 2048  # examples to prefetch
+MAX_TP_SIZE = os.environ.get('TFDS_TP_SIZE', 8)  # maximum TF threadpool size, for jpeg decodes and queuing activities
+SHUFFLE_SIZE = os.environ.get('TFDS_SHUFFLE_SIZE', 8192)  # examples to shuffle in DS queue
+PREFETCH_SIZE = os.environ.get('TFDS_PREFETCH_SIZE', 2048)  # examples to prefetch
 
 
 def even_split_indices(split, n, num_examples):
@@ -154,6 +158,14 @@ class ParserTfds(Parser):
         self.worker_seed = 0  # seed unique to each work instance
         self.subsplit = None  # set when data is distributed across workers using sub-splits
         self.ds = None  # initialized lazily on each dataloader worker process
+        self.init_count = 0  # number of ds TF data pipeline initializations
+        self.epoch_count = SharedCount()
+        # FIXME need to determine if reinit_each_iter is necessary. I'm don't completely trust behaviour
+        #  of `shuffle_reshuffle_each_iteration` when there are multiple workers / nodes across epochs
+        self.reinit_each_iter = self.is_training
+
+    def set_epoch(self, count):
+        self.epoch_count.value = count
 
     def _lazy_init(self):
         """ Lazily initialize the dataset.
@@ -211,11 +223,15 @@ class ParserTfds(Parser):
                 num_replicas_in_sync=self.dist_num_replicas  # FIXME does this arg have any impact?
             )
         read_config = tfds.ReadConfig(
-            shuffle_seed=self.common_seed,
+            shuffle_seed=self.common_seed + self.epoch_count.value,
             shuffle_reshuffle_each_iteration=True,
-            input_context=input_context)
+            input_context=input_context,
+        )
         ds = self.builder.as_dataset(
-            split=self.subsplit or self.split, shuffle_files=self.is_training, read_config=read_config)
+            split=self.subsplit or self.split,
+            shuffle_files=self.is_training,
+            read_config=read_config,
+        )
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
         options = tf.data.Options()
         thread_member = 'threading' if hasattr(options, 'threading') else 'experimental_threading'
@@ -230,9 +246,10 @@ class ParserTfds(Parser):
             ds = ds.shuffle(min(self.num_examples, self.shuffle_size) // self.global_num_workers, seed=self.worker_seed)
         ds = ds.prefetch(min(self.num_examples // self.global_num_workers, self.prefetch_size))
         self.ds = tfds.as_numpy(ds)
+        self.init_count += 1
 
     def __iter__(self):
-        if self.ds is None:
+        if self.ds is None or self.reinit_each_iter:
             self._lazy_init()
 
         # Compute a rounded up sample count that is used to:

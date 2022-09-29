@@ -14,12 +14,16 @@ def create_parser(name, root, split='train', **kwargs):
 
     # FIXME improve the selection right now just tfds prefix or fallback path, will need options to
     # explicitly select other options shortly
-    if prefix == 'tfds':
-        from .parser_tfds import ParserTfds  # defer tensorflow import
-        parser = ParserTfds(root, name, split=split, **kwargs)
-    elif prefix == 'hfds':
+    if prefix == 'hfds':
         from .parser_hfds import ParserHfds  # defer tensorflow import
         parser = ParserHfds(root, name, split=split, **kwargs)
+    elif prefix == 'tfds':
+        from .parser_tfds import ParserTfds  # defer tensorflow import
+        parser = ParserTfds(root, name, split=split, **kwargs)
+    elif prefix == 'wds':
+        from .parser_wds import ParserWds
+        kwargs.pop('download', False)
+        parser = ParserWds(root, name, split=split, **kwargs)
     else:
         assert os.path.exists(root)
         # default fallback path (backwards compat), use image tar if root is a .tar file, otherwise image folder

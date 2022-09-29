@@ -111,7 +111,9 @@ group.add_argument('--num-classes', type=int, default=None, metavar='N',
 group.add_argument('--gp', default=None, type=str, metavar='POOL',
                     help='Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.')
 group.add_argument('--img-size', type=int, default=None, metavar='N',
-                    help='Image patch size (default: None => model default)')
+                    help='Image size (default: None => model default)')
+group.add_argument('--in-chans', type=int, default=None, metavar='N',
+                    help='Image input channels (default: None => 3)')
 group.add_argument('--input-size', default=None, nargs=3, type=int,
                     metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 group.add_argument('--crop-pct', default=None, type=float,
@@ -394,9 +396,16 @@ def main():
     if args.fast_norm:
         set_fast_norm()
 
+    in_chans = 3
+    if args.in_chans is not None:
+        in_chans = args.in_chanes
+    elif args.input_size is not None:
+        in_chans = args.input_size[0]
+
     model = create_model(
         args.model,
         pretrained=args.pretrained,
+        in_chans=in_chans,
         num_classes=args.num_classes,
         drop_rate=args.drop,
         drop_path_rate=args.drop_path,
@@ -537,7 +546,8 @@ def main():
         class_map=args.class_map,
         download=args.dataset_download,
         batch_size=args.batch_size,
-        repeats=args.epoch_repeats
+        seed=args.seed,
+        repeats=args.epoch_repeats,
     )
 
     dataset_eval = create_dataset(
@@ -547,7 +557,7 @@ def main():
         is_training=False,
         class_map=args.class_map,
         download=args.dataset_download,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
     )
 
     # setup mixup / cutmix
@@ -610,6 +620,10 @@ def main():
         worker_seeding=args.worker_seeding,
     )
 
+    eval_workers = args.workers
+    if args.distributed and ('tfds' in args.dataset or 'wds' in args.dataset):
+        # FIXME reduces validation padding issues when using TFDS, WDS w/ workers and distributed training
+        eval_workers = min(2, args.workers)
     loader_eval = create_loader(
         dataset_eval,
         input_size=data_config['input_size'],
@@ -619,7 +633,7 @@ def main():
         interpolation=data_config['interpolation'],
         mean=data_config['mean'],
         std=data_config['std'],
-        num_workers=args.workers,
+        num_workers=eval_workers,
         distributed=args.distributed,
         crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
@@ -679,7 +693,9 @@ def main():
 
     try:
         for epoch in range(start_epoch, num_epochs):
-            if args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
+            if hasattr(dataset_train, 'set_epoch'):
+                dataset_train.set_epoch(epoch)
+            elif args.distributed and hasattr(loader_train.sampler, 'set_epoch'):
                 loader_train.sampler.set_epoch(epoch)
 
             train_metrics = train_one_epoch(
