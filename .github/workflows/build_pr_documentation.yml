@@ -13,5 +13,6 @@ jobs:
     with:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
-      package: timm
+      package: pytorch-image-models
+      package_name: timm
       repo_owner: rwightman
