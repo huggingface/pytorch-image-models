@@ -16,4 +16,4 @@ jobs:
       package: pytorch-image-models
       package_name: timm
       repo_owner: rwightman
-      path_to_docs: hfdocs/source
+      path_to_docs: pytorch-image-models/hfdocs/source
