@@ -192,7 +192,7 @@ default_cfgs = {
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=1024),
     'vit_giant_patch14_224_clip_laion2b': _cfg(
-        hf_hub_id='CLIP-ViT-g-14-laion2B-s12B-b42K',
+        hf_hub_id='laion/CLIP-ViT-g-14-laion2B-s12B-b42K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=1024),
 
