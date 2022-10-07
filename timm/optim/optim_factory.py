@@ -193,7 +193,8 @@ def create_optimizer_v2(
         filter_bias_and_bn: bool = True,
         layer_decay: Optional[float] = None,
         param_group_fn: Optional[Callable] = None,
-        **kwargs):
+        **kwargs,
+):
     """ Create an optimizer.
 
     TODO currently the model is passed in and all parameters are selected for optimization.

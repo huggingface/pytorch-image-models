@@ -1,9 +1,11 @@
-from typing import Dict, Any
+import abc
+from abc import ABC
+from typing import Any, Dict, Optional
 
 import torch
 
 
-class Scheduler:
+class Scheduler(ABC):
     """ Parameter Scheduler Base Class
     A scheduler base class that can be used to schedule any optimizer parameter groups.
 
@@ -22,15 +24,18 @@ class Scheduler:
      * https://github.com/allenai/allennlp/tree/master/allennlp/training/learning_rate_schedulers
     """
 
-    def __init__(self,
-                 optimizer: torch.optim.Optimizer,
-                 param_group_field: str,
-                 noise_range_t=None,
-                 noise_type='normal',
-                 noise_pct=0.67,
-                 noise_std=1.0,
-                 noise_seed=None,
-                 initialize: bool = True) -> None:
+    def __init__(
+            self,
+            optimizer: torch.optim.Optimizer,
+            param_group_field: str,
+            t_in_epochs: bool = True,
+            noise_range_t=None,
+            noise_type='normal',
+            noise_pct=0.67,
+            noise_std=1.0,
+            noise_seed=None,
+            initialize: bool = True,
+    ) -> None:
         self.optimizer = optimizer
         self.param_group_field = param_group_field
         self._initial_param_group_field = f"initial_{param_group_field}"
@@ -45,6 +50,7 @@ class Scheduler:
                     raise KeyError(f"{self._initial_param_group_field} missing from param_groups[{i}]")
         self.base_values = [group[self._initial_param_group_field] for group in self.optimizer.param_groups]
         self.metric = None  # any point to having this for all?
+        self.t_in_epochs = t_in_epochs
         self.noise_range_t = noise_range_t
         self.noise_pct = noise_pct
         self.noise_type = noise_type
@@ -58,22 +64,26 @@ class Scheduler:
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.__dict__.update(state_dict)
 
-    def get_epoch_values(self, epoch: int):
-        return None
+    @abc.abstractmethod
+    def _get_lr(self, t: int) -> float:
+        pass
 
-    def get_update_values(self, num_updates: int):
-        return None
+    def _get_values(self, t: int, on_epoch: bool = True) -> Optional[float]:
+        proceed = (on_epoch and self.t_in_epochs) or (not on_epoch and not self.t_in_epochs)
+        if not proceed:
+            return None
+        return self._get_lr(t)
 
     def step(self, epoch: int, metric: float = None) -> None:
         self.metric = metric
-        values = self.get_epoch_values(epoch)
+        values = self._get_values(epoch, on_epoch=True)
         if values is not None:
             values = self._add_noise(values, epoch)
             self.update_groups(values)
 
     def step_update(self, num_updates: int, metric: float = None):
         self.metric = metric
-        values = self.get_update_values(num_updates)
+        values = self._get_values(num_updates, on_epoch=False)
         if values is not None:
             values = self._add_noise(values, num_updates)
             self.update_groups(values)

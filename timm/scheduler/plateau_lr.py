@@ -12,24 +12,25 @@ from .scheduler import Scheduler
 class PlateauLRScheduler(Scheduler):
     """Decay the LR by a factor every time the validation loss plateaus."""
 
-    def __init__(self,
-                 optimizer,
-                 decay_rate=0.1,
-                 patience_t=10,
-                 verbose=True,
-                 threshold=1e-4,
-                 cooldown_t=0,
-                 warmup_t=0,
-                 warmup_lr_init=0,
-                 lr_min=0,
-                 mode='max',
-                 noise_range_t=None,
-                 noise_type='normal',
-                 noise_pct=0.67,
-                 noise_std=1.0,
-                 noise_seed=None,
-                 initialize=True,
-                 ):
+    def __init__(
+            self,
+            optimizer,
+            decay_rate=0.1,
+            patience_t=10,
+            verbose=True,
+            threshold=1e-4,
+            cooldown_t=0,
+            warmup_t=0,
+            warmup_lr_init=0,
+            lr_min=0,
+            mode='max',
+            noise_range_t=None,
+            noise_type='normal',
+            noise_pct=0.67,
+            noise_std=1.0,
+            noise_seed=None,
+            initialize=True,
+    ):
         super().__init__(
             optimizer,
             'lr',
@@ -89,6 +90,9 @@ class PlateauLRScheduler(Scheduler):
             if self._is_apply_noise(epoch):
                 self._apply_noise(epoch)
 
+    def step_update(self, num_updates: int, metric: float = None):
+        return None
+
     def _apply_noise(self, epoch):
         noise = self._calculate_noise(epoch)
 
@@ -101,3 +105,6 @@ class PlateauLRScheduler(Scheduler):
             new_lr = old_lr + old_lr * noise
             param_group['lr'] = new_lr
         self.restore_lr = restore_lr
+
+    def _get_lr(self, t: int) -> float:
+        assert False, 'should not be called as step is overridden'
