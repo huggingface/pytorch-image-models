@@ -95,10 +95,13 @@ default_cfgs = {
     'coatnet_rmlp_0_rw_224': _cfg(url=''),
     'coatnet_rmlp_1_rw_224': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/coatnet_rmlp_1_rw_224_sw-9051e6c3.pth'),
-    'coatnet_rmlp_2_rw_224': _cfg(url=''),
+    'coatnet_rmlp_2_rw_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/coatnet_rmlp_2_rw_224_sw-5ccfac55.pth'),
     'coatnet_rmlp_3_rw_224': _cfg(url=''),
     'coatnet_nano_cc_224': _cfg(url=''),
-    'coatnext_nano_rw_224': _cfg(url=''),
+    'coatnext_nano_rw_224': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/coatnext_nano_rw_224_ad-22cb71c2.pth',
+        crop_pct=0.9),
 
     # Trying to be like the CoAtNet paper configs
     'coatnet_0_224': _cfg(url=''),
@@ -128,16 +131,22 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_tiny_rw_256_sw-bbef0ff5.pth',
         input_size=(3, 256, 256), pool_size=(8, 8)),
     'maxvit_rmlp_small_rw_224': _cfg(
-        url=''),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth',
+        crop_pct=0.9,
+    ),
     'maxvit_rmlp_small_rw_256': _cfg(
         url='',
         input_size=(3, 256, 256), pool_size=(8, 8)),
 
     'maxvit_tiny_pm_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 
-    'maxxvit_nano_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
-    'maxxvit_tiny_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
-    'maxxvit_small_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxxvit_rmlp_nano_rw_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxxvit_rmlp_nano_rw_256_sw-0325d459.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxxvit_rmlp_tiny_rw_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxxvit_rmlp_small_rw_256': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-maxx/maxxvit_rmlp_small_rw_256_sw-37e217ff.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8)),
 
     # Trying to be like the MaxViT paper configs
     'maxvit_tiny_224': _cfg(url=''),
@@ -334,13 +343,14 @@ def _next_cfg(
         rel_pos_dim=512,
 ):
     # For experimental models with convnext instead of mbconv
+    init_values = to_2tuple(init_values)
     return dict(
         conv_cfg=MaxxVitConvCfg(
             block_type='convnext',
             stride_mode=stride_mode,
             pool_type=pool_type,
             expand_output=False,
-            init_values=init_values,
+            init_values=init_values[0],
             norm_layer=conv_norm_layer,
             norm_layer_cl=conv_norm_layer_cl,
         ),
@@ -348,7 +358,7 @@ def _next_cfg(
             expand_first=False,
             pool_type=pool_type,
             window_size=window_size,
-            init_values=init_values,
+            init_values=init_values[1],
             norm_layer=transformer_norm_layer,
             norm_layer_cl=transformer_norm_layer_cl,
             rel_pos_type=rel_pos_type,
@@ -497,7 +507,10 @@ model_cfgs = dict(
         depths=(3, 4, 6, 3),
         stem_width=(32, 64),
         weight_init='normal',
-        **_next_cfg(),
+        **_next_cfg(
+            rel_pos_type='bias',
+            init_values=(1e-5, None)
+        ),
     ),
 
     # Trying to be like the CoAtNet paper configs
@@ -612,7 +625,7 @@ model_cfgs = dict(
         **_rw_max_cfg(),
     ),
 
-    maxxvit_nano_rw_256=MaxxVitCfg(
+    maxxvit_rmlp_nano_rw_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
         depths=(1, 2, 3, 1),
         block_type=('M',) * 4,
@@ -620,14 +633,14 @@ model_cfgs = dict(
         weight_init='normal',
         **_next_cfg(),
     ),
-    maxxvit_tiny_rw_256=MaxxVitCfg(
+    maxxvit_rmlp_tiny_rw_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
         depths=(2, 2, 5, 2),
         block_type=('M',) * 4,
         stem_width=(32, 64),
         **_next_cfg(),
     ),
-    maxxvit_small_rw_256=MaxxVitCfg(
+    maxxvit_rmlp_small_rw_256=MaxxVitCfg(
         embed_dim=(96, 192, 384, 768),
         depths=(2, 2, 5, 2),
         block_type=('M',) * 4,
@@ -1861,18 +1874,18 @@ def maxvit_tiny_pm_256(pretrained=False, **kwargs):
 
 
 @register_model
-def maxxvit_nano_rw_256(pretrained=False, **kwargs):
-    return _create_maxxvit('maxxvit_nano_rw_256', pretrained=pretrained, **kwargs)
+def maxxvit_rmlp_nano_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxxvit_rmlp_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvit_tiny_rw_256(pretrained=False, **kwargs):
-    return _create_maxxvit('maxxvit_tiny_rw_256', pretrained=pretrained, **kwargs)
+def maxxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxxvit_rmlp_tiny_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvit_small_rw_256(pretrained=False, **kwargs):
-    return _create_maxxvit('maxxvit_small_rw_256', pretrained=pretrained, **kwargs)
+def maxxvit_rmlp_small_rw_256(pretrained=False, **kwargs):
+    return _create_maxxvit('maxxvit_rmlp_small_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
