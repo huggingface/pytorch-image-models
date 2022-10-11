@@ -4,6 +4,7 @@ Hacked together by / Copyright 2019, Ross Wightman
 """
 import io
 import logging
+from typing import Optional
 
 import torch
 import torch.utils.data as data
@@ -131,6 +132,14 @@ class IterableImageDataset(data.IterableDataset):
         # TFDS and WDS need external epoch count for deterministic cross process shuffle
         if hasattr(self.parser, 'set_epoch'):
             self.parser.set_epoch(count)
+
+    def set_loader_cfg(
+            self,
+            num_workers: Optional[int] = None,
+    ):
+        # TFDS and WDS readers need # workers for correct # samples estimate before loader processes created
+        if hasattr(self.parser, 'set_loader_cfg'):
+            self.parser.set_loader_cfg(num_workers=num_workers)
 
     def filename(self, index, basename=False, absolute=False):
         assert False, 'Filename lookup by index not supported, use filenames().'

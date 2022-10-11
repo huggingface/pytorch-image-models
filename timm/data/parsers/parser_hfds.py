@@ -49,7 +49,7 @@ class ParserHfds(Parser):
 
         self.class_to_idx = get_class_labels(self.dataset.info)
         self.split_info = self.dataset.info.splits[split]
-        self.num_examples = self.split_info.num_examples
+        self.num_samples = self.split_info.num_examples
 
     def __getitem__(self, index):
         item = self.dataset[index]

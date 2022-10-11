@@ -16,12 +16,12 @@ import torch
 import torch.utils.data
 import numpy as np
 
-from .transforms_factory import create_transform
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from .dataset import IterableImageDataset
 from .distributed_sampler import OrderedDistributedSampler, RepeatAugSampler
 from .random_erasing import RandomErasing
 from .mixup import FastCollateMixup
-
+from .transforms_factory import create_transform
 
 _logger = logging.getLogger(__name__)
 
@@ -247,6 +247,11 @@ def create_loader(
         re_num_splits=re_num_splits,
         separate=num_aug_splits > 0,
     )
+
+    if isinstance(dataset, IterableImageDataset):
+        # give Iterable datasets early knowledge of num_workers so that sample estimates
+        # are correct before worker processes are launched
+        dataset.set_loader_cfg(num_workers=num_workers)
 
     sampler = None
     if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):

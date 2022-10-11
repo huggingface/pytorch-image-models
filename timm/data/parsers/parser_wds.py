@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from functools import partial
 from itertools import islice
-from typing import Dict, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
 import torch.distributed as dist
@@ -345,6 +345,16 @@ class ParserWds(Parser):
     def set_epoch(self, count):
         self.epoch_count.value = count
 
+    def set_loader_cfg(
+            self,
+            num_workers: Optional[int] = None,
+    ):
+        if self.ds is not None:
+            return
+        if num_workers is not None:
+            self.num_workers = num_workers
+            self.global_num_workers = self.dist_num_replicas * self.num_workers
+
     def _lazy_init(self):
         """ Lazily initialize worker (in worker processes)
         """
@@ -396,25 +406,27 @@ class ParserWds(Parser):
             for s in src:
                 yield s
 
+    def _num_samples_per_worker(self):
+        num_worker_samples = self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
+        if self.is_training or self.dist_num_replicas > 1:
+            num_worker_samples = math.ceil(num_worker_samples)
+        if self.is_training and self.batch_size is not None:
+            num_worker_samples = math.ceil(num_worker_samples / self.batch_size) * self.batch_size
+        return int(num_worker_samples)
+
     def __iter__(self):
         if self.ds is None:
             self._lazy_init()
 
-        if self.is_training:
-            num_worker_samples = math.floor(self.num_samples / self.global_num_workers)
-            if self.batch_size is not None:
-                num_worker_samples = (num_worker_samples // self.batch_size) * self.batch_size
+        num_worker_samples = self._num_samples_per_worker()
+        if self.is_training or self.dist_num_replicas > 1:
+            # NOTE: doing distributed validation w/ WDS is messy, hard to meet constraints that
+            # same # of batches needed across all replicas w/ seeing each sample once.
+            # with_epoch() is simple but could miss a shard's worth of samples in some workers,
+            # and duplicate in others. Best to keep num DL workers low and a divisor of #val shards.
             ds = self.ds.with_epoch(num_worker_samples)
         else:
-            if self.dist_num_replicas > 1:
-                # doing distributed validation w/ WDS is messy, hard to meet constraints that
-                # same # of batches needed across all replicas w/ seeing each sample once.
-                # with_epoch() is simple but could miss a shard's worth of samples in some workers,
-                # and duplicate in others. Best to keep num DL workers low and a divisor of #val shards.
-                num_worker_samples = math.ceil(self.num_samples / self.global_num_workers)
-                ds = self.ds.with_epoch(num_worker_samples)
-            else:
-                ds = self.ds
+            ds = self.ds
 
         i = 0
         _logger.info(f'start {i}, {self.worker_id}')  # FIXME temporary debug
@@ -424,7 +436,8 @@ class ParserWds(Parser):
         _logger.info(f'end {i}, {self.worker_id}')  # FIXME temporary debug
 
     def __len__(self):
-        return math.ceil(max(1, self.repeats) * self.num_samples / self.dist_num_replicas)
+        num_samples = self._num_samples_per_worker() * self.num_workers
+        return num_samples
 
     def _filename(self, index, basename=False, absolute=False):
         assert False, "Not supported"  # no random access to examples
