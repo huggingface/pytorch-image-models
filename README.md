@@ -28,7 +28,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `maxvit_rmlp_small_rw_224` - 84.5 @ 224, 85.1 @ 320 (G)
   * `maxxvit_rmlp_small_rw_256` - 84.6 @ 256, 84.9 @ 288 (G) -- could be trained better, hparams need tuning (uses ConvNeXt block, no BN)
   * `coatnet_rmlp_2_rw_224` - 84.6 @ 224, 85 @ 320  (T)
-  * NOTE: official MaxVit weights (in1k) have been released https://github.com/google-research/maxvit, some extra work needed to port and adapt since my impl was in parallel and has a few small differences
+  * NOTE: official MaxVit weights (in1k) have been released at https://github.com/google-research/maxvit -- some extra work is needed to port and adapt since my impl was created independently of theirs and has a few small differences + the whole TF same padding fun.
   
 ### Sept 23, 2022
 * LAION-2B CLIP image towers supported as pretrained backbones for fine-tune or features (no classifier)
