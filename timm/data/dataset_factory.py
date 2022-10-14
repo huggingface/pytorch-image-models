@@ -137,11 +137,11 @@ def create_dataset(
     elif name.startswith('hfds/'):
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
-        ds = ImageDataset(root, parser=name, split=split, **kwargs)
+        ds = ImageDataset(root, reader=name, split=split, **kwargs)
     elif name.startswith('tfds/'):
         ds = IterableImageDataset(
             root,
-            parser=name,
+            reader=name,
             split=split,
             is_training=is_training,
             download=download,
@@ -153,7 +153,7 @@ def create_dataset(
     elif name.startswith('wds/'):
         ds = IterableImageDataset(
             root,
-            parser=name,
+            reader=name,
             split=split,
             is_training=is_training,
             batch_size=batch_size,
@@ -166,5 +166,5 @@ def create_dataset(
         if search_split and os.path.isdir(root):
             # look for split specific sub-folder in root
             root = _search_split(root, split)
-        ds = ImageDataset(root, parser=name, class_map=class_map, load_bytes=load_bytes, **kwargs)
+        ds = ImageDataset(root, reader=name, class_map=class_map, load_bytes=load_bytes, **kwargs)
     return ds

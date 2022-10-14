@@ -1,4 +1,4 @@
-""" Dataset parser interface for webdataset
+""" Dataset reader for webdataset
 
 Hacked together by / Copyright 2022 Ross Wightman
 """
@@ -29,7 +29,7 @@ except ImportError:
     wds = None
     expand_urls = None
 
-from .parser import Parser
+from .reader import Reader
 from .shared_count import SharedCount
 
 _logger = logging.getLogger(__name__)
@@ -280,7 +280,7 @@ class ResampledShards2(IterableDataset):
             yield dict(url=self.urls[index])
 
 
-class ParserWds(Parser):
+class ReaderWds(Reader):
     def __init__(
             self,
             root,

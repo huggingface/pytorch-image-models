@@ -1,4 +1,5 @@
-""" Dataset parser interface that wraps Hugging Face datasets
+""" Dataset reader that wraps Hugging Face datasets
+
 Hacked together by / Copyright 2022 Ross Wightman
 """
 import io
@@ -12,7 +13,7 @@ try:
 except ImportError as e:
     print("Please install Hugging Face datasets package `pip install datasets`.")
     exit(1)
-from .parser import Parser
+from .reader import Reader
 
 
 def get_class_labels(info):
@@ -23,7 +24,7 @@ def get_class_labels(info):
     return class_to_idx
 
 
-class ParserHfds(Parser):
+class ReaderHfds(Reader):
 
     def __init__(
             self,

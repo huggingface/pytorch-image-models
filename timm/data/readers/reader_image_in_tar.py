@@ -1,6 +1,6 @@
-""" A dataset parser that reads tarfile based datasets
+""" A dataset reader that reads tarfile based datasets
 
-This parser can read and extract image samples from:
+This reader can extract image samples from:
 * a single tar of image files
 * a folder of multiple tarfiles containing imagefiles
 * a tar of tars containing image files
@@ -22,7 +22,7 @@ from timm.utils.misc import natural_key
 
 from .class_map import load_class_map
 from .img_extensions import get_img_extensions
-from .parser import Parser
+from .reader import Reader
 
 _logger = logging.getLogger(__name__)
 CACHE_FILENAME_SUFFIX = '_tarinfos.pickle'
@@ -169,8 +169,8 @@ def extract_tarinfos(
     return samples, targets, class_name_to_idx, tarfiles
 
 
-class ParserImageInTar(Parser):
-    """ Multi-tarfile dataset parser where there is one .tar file per class
+class ReaderImageInTar(Reader):
+    """ Multi-tarfile dataset reader where there is one .tar file per class
     """
 
     def __init__(self, root, class_map='', cache_tarfiles=True, cache_tarinfo=None):

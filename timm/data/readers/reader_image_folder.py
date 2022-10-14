@@ -1,6 +1,6 @@
-""" A dataset parser that reads images from folders
+""" A dataset reader that extracts images from folders
 
-Folders are scannerd recursively to find image files. Labels are based
+Folders are scanned recursively to find image files. Labels are based
 on the folder hierarchy, just leaf folders by default.
 
 Hacked together by / Copyright 2020 Ross Wightman
@@ -12,7 +12,7 @@ from timm.utils.misc import natural_key
 
 from .class_map import load_class_map
 from .img_extensions import get_img_extensions
-from .parser import Parser
+from .reader import Reader
 
 
 def find_images_and_targets(
@@ -56,7 +56,7 @@ def find_images_and_targets(
     return images_and_targets, class_to_idx
 
 
-class ParserImageFolder(Parser):
+class ReaderImageFolder(Reader):
 
     def __init__(
             self,

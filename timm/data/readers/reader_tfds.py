@@ -1,4 +1,4 @@
-""" Dataset parser interface that wraps TFDS datasets
+""" Dataset reader that wraps TFDS datasets
 
 Wraps many (most?) TFDS image-classification datasets
 from https://github.com/tensorflow/datasets
@@ -34,7 +34,7 @@ except ImportError as e:
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
     exit(1)
 
-from .parser import Parser
+from .reader import Reader
 from .shared_count import SharedCount
 
 
@@ -56,7 +56,7 @@ def get_class_labels(info):
     return class_to_idx
 
 
-class ParserTfds(Parser):
+class ReaderTfds(Reader):
     """ Wrap Tensorflow Datasets for use in PyTorch
 
     There several things to be aware of:
