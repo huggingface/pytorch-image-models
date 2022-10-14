@@ -228,7 +228,7 @@ if wds is not None:
                 seed = pytorch_worker_seed() + epoch
             else:
                 seed = self.seed + epoch
-            _logger.info(f'shuffle seed: {self.seed}, {seed}, epoch: {epoch}')  # FIXME temporary
+            # _logger.info(f'shuffle seed: {self.seed}, {seed}, epoch: {epoch}')  # FIXME temporary
             rng = random.Random(seed)
             return _shuffle(src, self.bufsize, self.initial, rng)
 
@@ -429,11 +429,11 @@ class ReaderWds(Reader):
             ds = self.ds
 
         i = 0
-        _logger.info(f'start {i}, {self.worker_id}')  # FIXME temporary debug
+        # _logger.info(f'start {i}, {self.worker_id}')  # FIXME temporary debug
         for sample in ds:
             yield sample[self.image_key], sample[self.target_key]
             i += 1
-        _logger.info(f'end {i}, {self.worker_id}')  # FIXME temporary debug
+        # _logger.info(f'end {i}, {self.worker_id}')  # FIXME temporary debug
 
     def __len__(self):
         num_samples = self._num_samples_per_worker() * self.num_workers
