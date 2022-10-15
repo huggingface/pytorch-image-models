@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 
-class Parser:
+class Reader:
     def __init__(self):
         pass
 

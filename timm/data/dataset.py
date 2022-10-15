@@ -2,14 +2,15 @@
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
-import torch.utils.data as data
-import os
-import torch
+import io
 import logging
+from typing import Optional
 
+import torch
+import torch.utils.data as data
 from PIL import Image
 
-from .parsers import create_parser
+from .readers import create_reader
 
 _logger = logging.getLogger(__name__)
 
@@ -22,48 +23,62 @@ class ImageDataset(data.Dataset):
     def __init__(
             self,
             root,
-            parser=None,
+            reader=None,
+            split='train',
             class_map=None,
             load_bytes=False,
+            img_mode='RGB',
             transform=None,
             target_transform=None,
     ):
-        if parser is None or isinstance(parser, str):
-            parser = create_parser(parser or '', root=root, class_map=class_map)
-        self.parser = parser
+        if reader is None or isinstance(reader, str):
+            reader = create_reader(
+                reader or '',
+                root=root,
+                split=split,
+                class_map=class_map
+            )
+        self.reader = reader
         self.load_bytes = load_bytes
+        self.img_mode = img_mode
         self.transform = transform
         self.target_transform = target_transform
         self._consecutive_errors = 0
 
     def __getitem__(self, index):
-        img, target = self.parser[index]
+        img, target = self.reader[index]
+
         try:
-            img = img.read() if self.load_bytes else Image.open(img).convert('RGB')
+            img = img.read() if self.load_bytes else Image.open(img)
         except Exception as e:
-            _logger.warning(f'Skipped sample (index {index}, file {self.parser.filename(index)}). {str(e)}')
+            _logger.warning(f'Skipped sample (index {index}, file {self.reader.filename(index)}). {str(e)}')
             self._consecutive_errors += 1
             if self._consecutive_errors < _ERROR_RETRY:
-                return self.__getitem__((index + 1) % len(self.parser))
+                return self.__getitem__((index + 1) % len(self.reader))
             else:
                 raise e
         self._consecutive_errors = 0
+
+        if self.img_mode and not self.load_bytes:
+            img = img.convert(self.img_mode)
         if self.transform is not None:
             img = self.transform(img)
+
         if target is None:
             target = -1
         elif self.target_transform is not None:
             target = self.target_transform(target)
+
         return img, target
 
     def __len__(self):
-        return len(self.parser)
+        return len(self.reader)
 
     def filename(self, index, basename=False, absolute=False):
-        return self.parser.filename(index, basename, absolute)
+        return self.reader.filename(index, basename, absolute)
 
     def filenames(self, basename=False, absolute=False):
-        return self.parser.filenames(basename, absolute)
+        return self.reader.filenames(basename, absolute)
 
 
 class IterableImageDataset(data.IterableDataset):
@@ -71,28 +86,36 @@ class IterableImageDataset(data.IterableDataset):
     def __init__(
             self,
             root,
-            parser=None,
+            reader=None,
             split='train',
             is_training=False,
             batch_size=None,
+            seed=42,
             repeats=0,
             download=False,
             transform=None,
             target_transform=None,
     ):
-        assert parser is not None
-        if isinstance(parser, str):
-            self.parser = create_parser(
-                parser, root=root, split=split, is_training=is_training,
-                batch_size=batch_size, repeats=repeats, download=download)
+        assert reader is not None
+        if isinstance(reader, str):
+            self.reader = create_reader(
+                reader,
+                root=root,
+                split=split,
+                is_training=is_training,
+                batch_size=batch_size,
+                seed=seed,
+                repeats=repeats,
+                download=download,
+            )
         else:
-            self.parser = parser
+            self.reader = reader
         self.transform = transform
         self.target_transform = target_transform
         self._consecutive_errors = 0
 
     def __iter__(self):
-        for img, target in self.parser:
+        for img, target in self.reader:
             if self.transform is not None:
                 img = self.transform(img)
             if self.target_transform is not None:
@@ -100,16 +123,29 @@ class IterableImageDataset(data.IterableDataset):
             yield img, target
 
     def __len__(self):
-        if hasattr(self.parser, '__len__'):
-            return len(self.parser)
+        if hasattr(self.reader, '__len__'):
+            return len(self.reader)
         else:
             return 0
+
+    def set_epoch(self, count):
+        # TFDS and WDS need external epoch count for deterministic cross process shuffle
+        if hasattr(self.reader, 'set_epoch'):
+            self.reader.set_epoch(count)
+
+    def set_loader_cfg(
+            self,
+            num_workers: Optional[int] = None,
+    ):
+        # TFDS and WDS readers need # workers for correct # samples estimate before loader processes created
+        if hasattr(self.reader, 'set_loader_cfg'):
+            self.reader.set_loader_cfg(num_workers=num_workers)
 
     def filename(self, index, basename=False, absolute=False):
         assert False, 'Filename lookup by index not supported, use filenames().'
 
     def filenames(self, basename=False, absolute=False):
-        return self.parser.filenames(basename, absolute)
+        return self.reader.filenames(basename, absolute)
 
 
 class AugMixDataset(torch.utils.data.Dataset):

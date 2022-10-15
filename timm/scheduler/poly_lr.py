@@ -21,28 +21,36 @@ class PolyLRScheduler(Scheduler):
     k-decay option based on `k-decay: A New Method For Learning Rate Schedule` - https://arxiv.org/abs/2004.05909
     """
 
-    def __init__(self,
-                 optimizer: torch.optim.Optimizer,
-                 t_initial: int,
-                 power: float = 0.5,
-                 lr_min: float = 0.,
-                 cycle_mul: float = 1.,
-                 cycle_decay: float = 1.,
-                 cycle_limit: int = 1,
-                 warmup_t=0,
-                 warmup_lr_init=0,
-                 warmup_prefix=False,
-                 t_in_epochs=True,
-                 noise_range_t=None,
-                 noise_pct=0.67,
-                 noise_std=1.0,
-                 noise_seed=42,
-                 k_decay=1.0,
-                 initialize=True) -> None:
+    def __init__(
+            self,
+            optimizer: torch.optim.Optimizer,
+            t_initial: int,
+            power: float = 0.5,
+            lr_min: float = 0.,
+            cycle_mul: float = 1.,
+            cycle_decay: float = 1.,
+            cycle_limit: int = 1,
+            warmup_t=0,
+            warmup_lr_init=0,
+            warmup_prefix=False,
+            t_in_epochs=True,
+            noise_range_t=None,
+            noise_pct=0.67,
+            noise_std=1.0,
+            noise_seed=42,
+            k_decay=1.0,
+            initialize=True,
+    ) -> None:
         super().__init__(
-            optimizer, param_group_field="lr",
-            noise_range_t=noise_range_t, noise_pct=noise_pct, noise_std=noise_std, noise_seed=noise_seed,
-            initialize=initialize)
+            optimizer,
+            param_group_field="lr",
+            t_in_epochs=t_in_epochs,
+            noise_range_t=noise_range_t,
+            noise_pct=noise_pct,
+            noise_std=noise_std,
+            noise_seed=noise_seed,
+            initialize=initialize
+        )
 
         assert t_initial > 0
         assert lr_min >= 0
@@ -58,7 +66,6 @@ class PolyLRScheduler(Scheduler):
         self.warmup_t = warmup_t
         self.warmup_lr_init = warmup_lr_init
         self.warmup_prefix = warmup_prefix
-        self.t_in_epochs = t_in_epochs
         self.k_decay = k_decay
         if self.warmup_t:
             self.warmup_steps = [(v - warmup_lr_init) / self.warmup_t for v in self.base_values]
@@ -95,18 +102,6 @@ class PolyLRScheduler(Scheduler):
                 lrs = [self.lr_min for _ in self.base_values]
 
         return lrs
-
-    def get_epoch_values(self, epoch: int):
-        if self.t_in_epochs:
-            return self._get_lr(epoch)
-        else:
-            return None
-
-    def get_update_values(self, num_updates: int):
-        if not self.t_in_epochs:
-            return self._get_lr(num_updates)
-        else:
-            return None
 
     def get_cycle_length(self, cycles=0):
         cycles = max(1, cycles or self.cycle_limit)

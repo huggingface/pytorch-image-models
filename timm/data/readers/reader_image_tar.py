@@ -1,6 +1,6 @@
-""" A dataset parser that reads single tarfile based datasets
+""" A dataset reader that reads single tarfile based datasets
 
-This parser can read datasets consisting if a single tarfile containing images.
+This reader can read datasets consisting if a single tarfile containing images.
 I am planning to deprecated it in favour of ParerImageInTar.
 
 Hacked together by / Copyright 2020 Ross Wightman
@@ -12,7 +12,7 @@ from timm.utils.misc import natural_key
 
 from .class_map import load_class_map
 from .img_extensions import get_img_extensions
-from .parser import Parser
+from .reader import Reader
 
 
 def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
@@ -38,9 +38,9 @@ def extract_tarinfo(tarfile, class_to_idx=None, sort=True):
     return tarinfo_and_targets, class_to_idx
 
 
-class ParserImageTar(Parser):
+class ReaderImageTar(Reader):
     """ Single tarfile dataset where classes are mapped to folders within tar
-    NOTE: This class is being deprecated in favour of the more capable ParserImageInTar that can
+    NOTE: This class is being deprecated in favour of the more capable ReaderImageInTar that can
     operate on folders of tars or tars in tars.
     """
     def __init__(self, root, class_map=''):

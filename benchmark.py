@@ -57,7 +57,9 @@ except ImportError as e:
     has_functorch = False
 
 
-torch.backends.cudnn.benchmark = True
+if torch.cuda.is_available():
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('validate')
 
 
@@ -216,7 +218,7 @@ class BenchmarkRunner:
         self.device = device
         self.use_amp, self.model_dtype, self.data_dtype = resolve_precision(precision)
         self.channels_last = kwargs.pop('channels_last', False)
-        self.amp_autocast = torch.cuda.amp.autocast if self.use_amp else suppress
+        self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=torch.float16) if self.use_amp else suppress
 
         if fuser:
             set_jit_fuser(fuser)
