@@ -21,6 +21,20 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### Oct 15, 2022
+* Train and validation script enhancements
+* Non-GPU (ie CPU) device support
+* SLURM compatibility for train script
+* HF datasets support (via ReaderHfds)
+* TFDS/WDS dataloading improvements (sample padding/wrap for distributed use fixed wrt sample count estimate)
+* in_chans !=3 support for scripts / loader
+* Adan optimizer
+* Can enable per-step LR scheduling via args
+* Dataset 'parsers' renamed to 'readers', more descriptive of purpose
+* AMP args changed, APEX via `--amp-impl apex`, bfloat16 supportedf via `--amp-dtype bfloat16`
+* main branch switched to 0.7.x version, 0.6x forked for stable release of weight only adds
+* master -> main branch rename
+
 ### Oct 10, 2022
 * More weights in `maxxvit` series, incl first ConvNeXt block based `coatnext` and `maxxvit` experiments:
   * `coatnext_nano_rw_224` - 82.0 @ 224 (G) -- (uses ConvNeXt conv block, no BatchNorm)
