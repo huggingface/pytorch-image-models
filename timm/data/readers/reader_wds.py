@@ -34,7 +34,7 @@ from .shared_count import SharedCount
 
 _logger = logging.getLogger(__name__)
 
-SHUFFLE_SIZE = os.environ.get('WDS_SHUFFLE_SIZE', 8192)
+SHUFFLE_SIZE = int(os.environ.get('WDS_SHUFFLE_SIZE', 8192))
 
 
 def _load_info(root, basename='info'):

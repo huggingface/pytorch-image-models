@@ -38,9 +38,9 @@ from .reader import Reader
 from .shared_count import SharedCount
 
 
-MAX_TP_SIZE = os.environ.get('TFDS_TP_SIZE', 8)  # maximum TF threadpool size, for jpeg decodes and queuing activities
-SHUFFLE_SIZE = os.environ.get('TFDS_SHUFFLE_SIZE', 8192)  # samples to shuffle in DS queue
-PREFETCH_SIZE = os.environ.get('TFDS_PREFETCH_SIZE', 2048)  # samples to prefetch
+MAX_TP_SIZE = int(os.environ.get('TFDS_TP_SIZE', 8))  # maximum TF threadpool size, for jpeg decodes and queuing activities
+SHUFFLE_SIZE = int(os.environ.get('TFDS_SHUFFLE_SIZE', 8192))  # samples to shuffle in DS queue
+PREFETCH_SIZE = int(os.environ.get('TFDS_PREFETCH_SIZE', 2048))  # samples to prefetch
 
 
 def even_split_indices(split, n, num_samples):
