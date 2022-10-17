@@ -85,7 +85,7 @@ class AsymmetricLossSingleLabel(nn.Module):
         log_preds = log_preds * asymmetric_w
 
         if self.eps > 0:  # label smoothing
-            self.targets_classes.mul_(1 - self.eps).add_(self.eps / num_classes)
+            self.targets_classes = self.targets_classes.mul(1 - self.eps).add(self.eps / num_classes)
 
         # loss calculation
         loss = - self.targets_classes.mul(log_preds)
