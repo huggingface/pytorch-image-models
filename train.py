@@ -714,7 +714,7 @@ def main():
     elif resume_epoch is not None:
         start_epoch = resume_epoch
     if lr_scheduler is not None and start_epoch > 0:
-        if args.step_on_updates:
+        if args.sched_on_updates:
             lr_scheduler.step_update(start_epoch * updates_per_epoch)
         else:
             lr_scheduler.step(start_epoch)
