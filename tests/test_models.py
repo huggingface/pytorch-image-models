@@ -13,8 +13,7 @@ except ImportError:
     has_fx_feature_extraction = False
 
 import timm
-from timm import list_models, create_model, set_scriptable, has_pretrained_cfg_key, is_pretrained_cfg_key, \
-    get_pretrained_cfg_value
+from timm import list_models, create_model, set_scriptable, get_pretrained_cfg_value
 from timm.models.fx_features import _leaf_modules, _autowrap_functions    
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):

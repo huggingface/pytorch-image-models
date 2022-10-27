@@ -27,24 +27,23 @@ def _cfg(url='', **kwargs):
 default_cfgs = {
     # original PyTorch weights, ported from Tensorflow but modified
     'inception_v3': _cfg(
-        url='https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth',
-        has_aux=True),  # checkpoint has aux logit layer weights
+        # NOTE checkpoint has aux logit layer weights
+        url='https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth'),
     # my port of Tensorflow SLIM weights (http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz)
     'tf_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_inception_v3-e0069de4.pth',
-        num_classes=1000, has_aux=False, label_offset=1),
+        num_classes=1000, label_offset=1),
     # my port of Tensorflow adversarially trained Inception V3 from
     # http://download.tensorflow.org/models/adv_inception_v3_2017_08_18.tar.gz
     'adv_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/adv_inception_v3-9e27bd63.pth',
-        num_classes=1000, has_aux=False, label_offset=1),
+        num_classes=1000, label_offset=1),
     # from gluon pretrained models, best performing in terms of accuracy/loss metrics
     # https://gluon-cv.mxnet.io/model_zoo/classification.html
     'gluon_inception_v3': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gluon_inception_v3-9f746940.pth',
         mean=IMAGENET_DEFAULT_MEAN,  # also works well with inception defaults
         std=IMAGENET_DEFAULT_STD,  # also works well with inception defaults
-        has_aux=False,
     )
 }
 
@@ -433,10 +432,10 @@ def _create_inception_v3(variant, pretrained=False, **kwargs):
     if aux_logits:
         assert not kwargs.pop('features_only', False)
         model_cls = InceptionV3Aux
-        load_strict = pretrained_cfg['has_aux']
+        load_strict = variant == 'inception_v3'
     else:
         model_cls = InceptionV3
-        load_strict = not pretrained_cfg['has_aux']
+        load_strict = variant != 'inception_v3'
 
     return build_model_with_cfg(
         model_cls, variant, pretrained,

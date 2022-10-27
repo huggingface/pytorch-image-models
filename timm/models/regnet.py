@@ -76,6 +76,9 @@ model_cfgs = dict(
     regnety_120=RegNetCfg(w0=168, wa=73.36, wm=2.37, group_size=112, depth=19, se_ratio=0.25),
     regnety_160=RegNetCfg(w0=200, wa=106.23, wm=2.48, group_size=112, depth=18, se_ratio=0.25),
     regnety_320=RegNetCfg(w0=232, wa=115.89, wm=2.53, group_size=232, depth=20, se_ratio=0.25),
+    regnety_640=RegNetCfg(w0=352, wa=147.48, wm=2.4, group_size=328, depth=20, se_ratio=0.25),
+    regnety_1280=RegNetCfg(w0=456, wa=160.83, wm=2.52, group_size=264, depth=27, se_ratio=0.25),
+    regnety_2560=RegNetCfg(w0=640, wa=124.47, wm=2.04, group_size=848, depth=27, se_ratio=0.25),
 
     # Experimental
     regnety_040s_gn=RegNetCfg(
@@ -150,7 +153,12 @@ default_cfgs = dict(
     regnety_160=_cfg(
         url='https://dl.fbaipublicfiles.com/deit/regnety_160-a5fe301d.pth',  # from Facebook DeiT GitHub repository
         crop_pct=1.0, test_input_size=(3, 288, 288)),
-    regnety_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'),
+    regnety_320=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'
+    ),
+    regnety_640=_cfg(url=''),
+    regnety_1280=_cfg(url=''),
+    regnety_2560=_cfg(url=''),
 
     regnety_040s_gn=_cfg(url=''),
     regnetv_040=_cfg(
@@ -508,6 +516,34 @@ def _init_weights(module, name='', zero_init_last=False):
 
 def _filter_fn(state_dict):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
+    if 'classy_state_dict' in state_dict:
+        import re
+        state_dict = state_dict['classy_state_dict']['base_model']['model']
+        out = {}
+        for k, v in state_dict['trunk'].items():
+            k = k.replace('_feature_blocks.conv1.stem.0', 'stem.conv')
+            k = k.replace('_feature_blocks.conv1.stem.1', 'stem.bn')
+            k = re.sub(
+                r'^_feature_blocks.res\d.block(\d)-(\d+)',
+                lambda x: f's{int(x.group(1))}.b{int(x.group(2)) + 1}', k)
+            k = re.sub(r's(\d)\.b(\d+)\.bn', r's\1.b\2.downsample.bn', k)
+            k = k.replace('proj', 'downsample.conv')
+            k = k.replace('f.a.0', 'conv1.conv')
+            k = k.replace('f.a.1', 'conv1.bn')
+            k = k.replace('f.b.0', 'conv2.conv')
+            k = k.replace('f.b.1', 'conv2.bn')
+            k = k.replace('f.c', 'conv3.conv')
+            k = k.replace('f.final_bn', 'conv3.bn')
+            k = k.replace('f.se.excitation.0', 'se.fc1')
+            k = k.replace('f.se.excitation.2', 'se.fc2')
+            out[k] = v
+        for k, v in state_dict['heads'].items():
+            if 'projection_head' in k or 'prototypes' in k:
+                continue
+            k = k.replace('0.clf.0', 'head.fc')
+            out[k] = v
+        return out
+
     if 'model' in state_dict:
         # For DeiT trained regnety_160 pretraiend model
         state_dict = state_dict['model']
@@ -664,6 +700,24 @@ def regnety_160(pretrained=False, **kwargs):
 def regnety_320(pretrained=False, **kwargs):
     """RegNetY-32GF"""
     return _create_regnet('regnety_320', pretrained, **kwargs)
+
+
+@register_model
+def regnety_640(pretrained=False, **kwargs):
+    """RegNetY-64GF"""
+    return _create_regnet('regnety_640', pretrained, **kwargs)
+
+
+@register_model
+def regnety_1280(pretrained=False, **kwargs):
+    """RegNetY-128GF"""
+    return _create_regnet('regnety_1280', pretrained, **kwargs)
+
+
+@register_model
+def regnety_2560(pretrained=False, **kwargs):
+    """RegNetY-256GF"""
+    return _create_regnet('regnety_2560', pretrained, **kwargs)
 
 
 @register_model
