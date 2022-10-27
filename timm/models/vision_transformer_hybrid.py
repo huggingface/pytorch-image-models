@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from ._pretrained import generate_defaults
 from .layers import StdConv2dSame, StdConv2d, to_2tuple
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
@@ -38,52 +39,49 @@ def _cfg(url='', **kwargs):
     }
 
 
-default_cfgs = {
+default_cfgs = generate_defaults({
     # hybrid in-1k models (weights from official JAX impl where they exist)
-    'vit_tiny_r_s16_p8_224': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/'
-            'R_Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+    'vit_tiny_r_s16_p8_224.in21ft1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/R_Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+        custom_load=True,
         first_conv='patch_embed.backbone.conv'),
-    'vit_tiny_r_s16_p8_384': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/'
-            'R_Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
-        first_conv='patch_embed.backbone.conv', input_size=(3, 384, 384), crop_pct=1.0),
-    'vit_small_r26_s32_224': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/'
-            'R26_S_32-i21k-300ep-lr_0.001-aug_light0-wd_0.03-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+    'vit_tiny_r_s16_p8_384.in21ft1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/R_Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
+        first_conv='patch_embed.backbone.conv', input_size=(3, 384, 384), crop_pct=1.0, custom_load=True),
+    'vit_small_r26_s32_224.in21ft1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/R26_S_32-i21k-300ep-lr_0.001-aug_light0-wd_0.03-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+        custom_load=True,
     ),
-    'vit_small_r26_s32_384': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/'
-            'R26_S_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
-        input_size=(3, 384, 384), crop_pct=1.0),
+    'vit_small_r26_s32_384.in21ft1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/R26_S_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
+        input_size=(3, 384, 384), crop_pct=1.0, custom_load=True),
     'vit_base_r26_s32_224': _cfg(),
     'vit_base_r50_s16_224': _cfg(),
-    'vit_base_r50_s16_384': _cfg(
+    'vit_base_r50_s16_384.in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_384-9fd3c705.pth',
         input_size=(3, 384, 384), crop_pct=1.0),
-    'vit_large_r50_s32_224': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/'
-            'R50_L_32-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_224.npz'
+    'vit_large_r50_s32_224.in21ft1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/R50_L_32-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        custom_load=True,
     ),
-    'vit_large_r50_s32_384': _cfg(
-        url='https://storage.googleapis.com/vit_models/augreg/'
-            'R50_L_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_384.npz',
-        input_size=(3, 384, 384), crop_pct=1.0
+    'vit_large_r50_s32_384.in21ft1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/R50_L_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_384.npz',
+        input_size=(3, 384, 384), crop_pct=1.0, custom_load=True,
     ),
 
     # hybrid in-21k models (weights from official Google JAX impl where they exist)
-    'vit_tiny_r_s16_p8_224_in21k': _cfg(
+    'vit_tiny_r_s16_p8_224.in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R_Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz',
-        num_classes=21843, crop_pct=0.9, first_conv='patch_embed.backbone.conv'),
-    'vit_small_r26_s32_224_in21k': _cfg(
+        num_classes=21843, crop_pct=0.9, first_conv='patch_embed.backbone.conv', custom_load=True),
+    'vit_small_r26_s32_224.in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R26_S_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.03-do_0.0-sd_0.0.npz',
-        num_classes=21843, crop_pct=0.9),
-    'vit_base_r50_s16_224_in21k': _cfg(
+        num_classes=21843, crop_pct=0.9, custom_load=True),
+    'vit_base_r50_s16_224.in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_224_in21k-6f7c7740.pth',
         num_classes=21843, crop_pct=0.9),
-    'vit_large_r50_s32_224_in21k': _cfg(
+    'vit_large_r50_s32_224.in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R50_L_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0.npz',
-        num_classes=21843, crop_pct=0.9),
+        num_classes=21843, crop_pct=0.9, custom_load=True),
 
     # hybrid models (using timm resnet backbones)
     'vit_small_resnet26d_224': _cfg(
@@ -94,7 +92,7 @@ default_cfgs = {
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
     'vit_base_resnet50d_224': _cfg(
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
-}
+})
 
 
 class HybridEmbed(nn.Module):
@@ -249,12 +247,6 @@ def vit_base_r50_s16_384(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_resnet50_384(pretrained=False, **kwargs):
-    # DEPRECATED this is forwarding to model def above for backwards compatibility
-    return vit_base_r50_s16_384(pretrained=pretrained, **kwargs)
-
-
-@register_model
 def vit_large_r50_s32_224(pretrained=False, **kwargs):
     """ R50+ViT-L/S32 hybrid.
     """
@@ -273,57 +265,6 @@ def vit_large_r50_s32_384(pretrained=False, **kwargs):
     model_kwargs = dict(embed_dim=1024, depth=24, num_heads=16, **kwargs)
     model = _create_vision_transformer_hybrid(
         'vit_large_r50_s32_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_tiny_r_s16_p8_224_in21k(pretrained=False, **kwargs):
-    """ R+ViT-Ti/S16 w/ 8x8 patch hybrid.  ImageNet-21k.
-    """
-    backbone = _resnetv2(layers=(), **kwargs)
-    model_kwargs = dict(patch_size=8, embed_dim=192, depth=12, num_heads=3, **kwargs)
-    model = _create_vision_transformer_hybrid(
-        'vit_tiny_r_s16_p8_224_in21k', backbone=backbone, pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_small_r26_s32_224_in21k(pretrained=False, **kwargs):
-    """ R26+ViT-S/S32 hybrid. ImageNet-21k.
-    """
-    backbone = _resnetv2((2, 2, 2, 2), **kwargs)
-    model_kwargs = dict(embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer_hybrid(
-        'vit_small_r26_s32_224_in21k', backbone=backbone, pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_base_r50_s16_224_in21k(pretrained=False, **kwargs):
-    """ R50+ViT-B/16 hybrid model from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    """
-    backbone = _resnetv2(layers=(3, 4, 9), **kwargs)
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer_hybrid(
-        'vit_base_r50_s16_224_in21k', backbone=backbone, pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_base_resnet50_224_in21k(pretrained=False, **kwargs):
-    # DEPRECATED this is forwarding to model def above for backwards compatibility
-    return vit_base_r50_s16_224_in21k(pretrained=pretrained, **kwargs)
-
-
-@register_model
-def vit_large_r50_s32_224_in21k(pretrained=False, **kwargs):
-    """ R50+ViT-L/S32 hybrid. ImageNet-21k.
-    """
-    backbone = _resnetv2((3, 4, 6, 3), **kwargs)
-    model_kwargs = dict(embed_dim=1024, depth=24, num_heads=16, **kwargs)
-    model = _create_vision_transformer_hybrid(
-        'vit_large_r50_s32_224_in21k', backbone=backbone, pretrained=pretrained, **model_kwargs)
     return model
 
 
