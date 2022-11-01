@@ -158,7 +158,7 @@ def _resolve_pretrained_source(pretrained_cfg):
             # hf-hub available as alternate weight source in default_cfg
             load_from = 'hf-hub'
             pretrained_loc = hf_hub_id
-    if load_from == 'hf-hub' and 'hf_hub_filename' in pretrained_cfg:
+    if load_from == 'hf-hub' and pretrained_cfg.get('hf_hub_filename', None):
         # if a filename override is set, return tuple for location w/ (hub_id, filename)
         pretrained_loc = pretrained_loc, pretrained_cfg['hf_hub_filename']
     return load_from, pretrained_loc
