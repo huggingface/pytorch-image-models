@@ -15,6 +15,7 @@
 
 Thanks to the following for hardware support:
 * TPU Research Cloud (TRC) (https://sites.research.google/trc/about/)
+  * TPU support can be found on the [`bits_and_tpu`](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/) branch, w/ some setup help [here](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/timm/bits)
 * Nvidia (https://www.nvidia.com/en-us/)
 
 And a big thanks to all GitHub sponsors who helped with some of my costs before I joined Hugging Face.
