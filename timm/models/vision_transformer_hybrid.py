@@ -55,6 +55,7 @@ default_cfgs = generate_defaults({
     'vit_small_r26_s32_384.augreg_in21k_ft_1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R26_S_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
         input_size=(3, 384, 384), crop_pct=1.0, custom_load=True),
+    'vit_base_r26_s32_224.untrained': _cfg(),
     'vit_base_r50_s16_384.v1_in21k_ft_1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_384-9fd3c705.pth',
         input_size=(3, 384, 384), crop_pct=1.0),
