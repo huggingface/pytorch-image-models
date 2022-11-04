@@ -407,7 +407,7 @@ def main():
 
     in_chans = 3
     if args.in_chans is not None:
-        in_chans = args.in_chanes
+        in_chans = args.in_chans
     elif args.input_size is not None:
         in_chans = args.input_size[0]
 
