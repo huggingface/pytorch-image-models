@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   build:
-    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@main
+    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@use_hf_hub
     with:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
@@ -17,3 +17,6 @@ jobs:
       package_name: timm
       repo_owner: rwightman
       path_to_docs: pytorch-image-models/hfdocs/source
+    secrets:
+      token: ${{ secrets.HF_DOC_PUSH }}
+      comment_bot_token: ${{ secrets.HUGGINGFACE_PUSH }}
