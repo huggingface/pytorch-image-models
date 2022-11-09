@@ -785,7 +785,7 @@ default_cfgs = generate_defaults({
         hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_base_patch16_clip_384.laion2b_ft_in1k': _cfg(
-        #hf_hub_id='timm/vit_base_patch16_clip_384.laion2b_ft_in1k',
+        hf_hub_id='timm/vit_base_patch16_clip_384.laion2b_ft_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 384, 384)),
     'vit_base_patch32_clip_448.laion2b_ft_in1k': _cfg(
         hf_hub_id='timm/vit_base_patch32_clip_448.laion2b_ft_in1k',
@@ -859,6 +859,9 @@ default_cfgs = generate_defaults({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch16_clip_224.openai_ft_in1k': _cfg(
         hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in1k',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
+    'vit_base_patch16_clip_384.openai_ft_in1k': _cfg(
+        hf_hub_id='timm/vit_base_patch16_clip_384.openai_ft_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_large_patch14_clip_224.openai_ft_in1k': _cfg(
         hf_hub_id='timm/vit_large_patch14_clip_224.openai_ft_in1k',
@@ -1172,6 +1175,16 @@ def vit_base_patch16_clip_224(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_clip_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_base_patch16_clip_384(pretrained=False, **kwargs):
+    """ ViT-B/16 CLIP image tower @ 384x384
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
+    model = _create_vision_transformer('vit_base_patch16_clip_384', pretrained=pretrained, **model_kwargs)
     return model
 
 
