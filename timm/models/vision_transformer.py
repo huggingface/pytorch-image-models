@@ -835,7 +835,7 @@ default_cfgs = generate_defaults({
         hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in12k',
+        hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_large_patch14_clip_224.laion2b_ft_in12k': _cfg(
         hf_hub_id='timm/vit_large_patch14_clip_224.laion2b_ft_in12k',
