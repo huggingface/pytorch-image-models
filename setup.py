@@ -45,7 +45,7 @@ setup(
     keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet resnet vision transformer vit',
     packages=find_packages(exclude=['convert', 'tests', 'results']),
     include_package_data=True,
-    install_requires=['torch >= 1.7', 'torchvision', 'pyyaml', 'huggingface_hub'],
+    install_requires=['torch >= 1.7', 'torchvision', 'pyyaml', 'huggingface_hub<=0.10.1'],
     python_requires='>=3.6',
 )
 
