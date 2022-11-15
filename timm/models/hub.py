@@ -130,25 +130,28 @@ def push_to_hf_hub(
     revision=None,
     model_config=None,
 ):
+    if isinstance(use_auth_token, str):
+        token = use_auth_token
+    else:
+        token = HfFolder.get_token()
+    if token is None:
+        raise ValueError(
+            "You must login to the Hugging Face hub on this computer by typing `huggingface-cli login` and "
+            "entering your credentials to use `use_auth_token=True`. Alternatively, you can pass your own "
+            "token as the `use_auth_token` argument."
+        )
+
     if repo_namespace_or_url:
         repo_owner, repo_name = repo_namespace_or_url.rstrip('/').split('/')[-2:]
     else:
-        if isinstance(use_auth_token, str):
-            token = use_auth_token
-        else:
-            token = HfFolder.get_token()
-
-        if token is None:
-            raise ValueError(
-                "You must login to the Hugging Face hub on this computer by typing `transformers-cli login` and "
-                "entering your credentials to use `use_auth_token=True`. Alternatively, you can pass your own "
-                "token as the `use_auth_token` argument."
-            )
-
         repo_owner = HfApi().whoami(token)['name']
         repo_name = Path(local_dir).name
 
-    repo_url = f'https://huggingface.co/{repo_owner}/{repo_name}'
+    repo_id = f'{repo_owner}/{repo_name}'
+    repo_url = f'https://huggingface.co/{repo_id}'
+
+    # Create repo if doesn't exist yet
+    HfApi().create_repo(repo_id, token=use_auth_token, exist_ok=True)
 
     repo = Repository(
         local_dir,
