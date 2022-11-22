@@ -56,6 +56,13 @@ try:
 except ImportError as e:
     has_functorch = False
 
+try:
+    import torch._dynamo
+    has_dynamo = True
+except ImportError:
+    has_dynamo = False
+    pass
+
 
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -106,13 +113,19 @@ parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+parser.add_argument('--dynamo-backend', default=None, type=str,
+                    help="Select dynamo backend. Default: None")
+parser.add_argument('--fast-norm', default=False, action='store_true',
+                    help='enable experimental fast-norm')
+
+# codegen (model compilation) options
 scripting_group = parser.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
+                             help='convert model torchscript for inference')
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
-                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
-scripting_group.add_argument('--fast-norm', default=False, action='store_true',
-                    help='enable experimental fast-norm')
+                             help="Enable AOT Autograd optimization.")
+scripting_group.add_argument('--dynamo', default=False, action='store_true',
+                             help="Enable Dynamo optimization.")
 
 # train optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -206,6 +219,8 @@ class BenchmarkRunner:
             device='cuda',
             torchscript=False,
             aot_autograd=False,
+            dynamo=False,
+            dynamo_backend=None,
             precision='float32',
             fuser='',
             num_warm_iter=10,
@@ -241,14 +256,21 @@ class BenchmarkRunner:
         _logger.info('Model %s created, param count: %d' % (model_name, self.param_count))
 
         data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
+        self.input_size = data_config['input_size']
+        self.batch_size = kwargs.pop('batch_size', 256)
+
         self.scripted = False
         if torchscript:
             self.model = torch.jit.script(self.model)
             self.scripted = True
-        self.input_size = data_config['input_size']
-        self.batch_size = kwargs.pop('batch_size', 256)
-
-        if aot_autograd:
+        elif dynamo:
+            assert has_dynamo, "torch._dynamo is needed for --dynamo"
+            torch._dynamo.reset()
+            if dynamo_backend is not None:
+                self.model = torch._dynamo.optimize(dynamo_backend)(self.model)
+            else:
+                self.model = torch._dynamo.optimize()(self.model)
+        elif aot_autograd:
             assert has_functorch, "functorch is needed for --aot-autograd"
             self.model = memory_efficient_fusion(self.model)
 

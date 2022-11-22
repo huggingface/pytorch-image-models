@@ -22,12 +22,13 @@ Hacked together by / Copyright 2020 Ross Wightman
 # limitations under the License.
 # ==============================================================================
 """ImageNet preprocessing for MnasNet."""
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import numpy as np
 
 IMAGE_SIZE = 224
 CROP_PADDING = 32
 
+tf.compat.v1.disable_eager_execution()
 
 def distorted_bounding_box_crop(image_bytes,
                                 bbox,

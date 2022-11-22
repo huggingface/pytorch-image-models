@@ -66,6 +66,13 @@ try:
 except ImportError as e:
     has_functorch = False
 
+try:
+    import torch._dynamo
+    has_dynamo = True
+except ImportError:
+    has_dynamo = False
+    pass
+
 
 _logger = logging.getLogger('train')
 
@@ -130,17 +137,22 @@ group.add_argument('-vb', '--validation-batch-size', type=int, default=None, met
                     help='Validation batch size override (default: None)')
 group.add_argument('--channels-last', action='store_true', default=False,
                     help='Use channels_last memory layout')
-scripting_group = group.add_mutually_exclusive_group()
-scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='torch.jit.script the full model')
-scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
-                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
 group.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
-group.add_argument('--fast-norm', default=False, action='store_true',
-                    help='enable experimental fast-norm')
 group.add_argument('--grad-checkpointing', action='store_true', default=False,
                     help='Enable gradient checkpointing through model blocks/stages')
+group.add_argument('--fast-norm', default=False, action='store_true',
+                    help='enable experimental fast-norm')
+parser.add_argument('--dynamo-backend', default=None, type=str,
+                    help="Select dynamo backend. Default: None")
+
+scripting_group = group.add_mutually_exclusive_group()
+scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
+                             help='torch.jit.script the full model')
+scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
+                             help="Enable AOT Autograd support.")
+scripting_group.add_argument('--dynamo', default=False, action='store_true',
+                             help="Enable Dynamo optimization.")
 
 # Optimizer parameters
 group = parser.add_argument_group('Optimizer parameters')
@@ -473,10 +485,16 @@ def main():
         assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
         assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
         model = torch.jit.script(model)
-
-    if args.aot_autograd:
+    elif args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)
+    elif args.dynamo:
+        # FIXME dynamo might need move below DDP wrapping? TBD
+        assert has_dynamo, "torch._dynamo is needed for --dynamo"
+        if args.dynamo_backend is not None:
+            model = torch._dynamo.optimize(args.dynamo_backend)(model)
+        else:
+            model = torch._dynamo.optimize()(model)
 
     if args.lr is None:
         global_batch_size = args.batch_size * args.world_size

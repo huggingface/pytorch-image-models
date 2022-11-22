@@ -46,6 +46,13 @@ try:
 except ImportError as e:
     has_functorch = False
 
+try:
+    import torch._dynamo
+    has_dynamo = True
+except ImportError:
+    has_dynamo = False
+    pass
+
 _logger = logging.getLogger('validate')
 
 
@@ -72,6 +79,8 @@ parser.add_argument('--use-train-size', action='store_true', default=False,
                     help='force use of train input size, even when test size is specified in pretrained cfg')
 parser.add_argument('--crop-pct', default=None, type=float,
                     metavar='N', help='Input image center crop pct')
+parser.add_argument('--crop-mode', default=None, type=str,
+                    metavar='N', help='Input image crop mode (squash, border, center). Model default if None.')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
@@ -112,15 +121,21 @@ parser.add_argument('--tf-preprocessing', action='store_true', default=False,
                     help='Use Tensorflow preprocessing pipeline (require CPU TF installed')
 parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
-scripting_group = parser.add_mutually_exclusive_group()
-scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='torch.jit.script the full model')
-scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
-                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
+parser.add_argument('--dynamo-backend', default=None, type=str,
+                    help="Select dynamo backend. Default: None")
+
+scripting_group = parser.add_mutually_exclusive_group()
+scripting_group.add_argument('--torchscript', default=False, action='store_true',
+                             help='torch.jit.script the full model')
+scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
+                             help="Enable AOT Autograd support.")
+scripting_group.add_argument('--dynamo', default=False, action='store_true',
+                             help="Enable Dynamo optimization.")
+
 parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
                     help='Output csv file for validation results (summary)')
 parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
@@ -196,20 +211,26 @@ def validate(args):
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config)
 
-    if args.torchscript:
-        torch.jit.optimized_execution(True)
-        model = torch.jit.script(model)
-
-    if args.aot_autograd:
-        assert has_functorch, "functorch is needed for --aot-autograd"
-        model = memory_efficient_fusion(model)
-
     model = model.to(device)
-    if use_amp == 'apex':
-        model = amp.initialize(model, opt_level='O1')
-
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
+
+    if args.torchscript:
+        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
+        model = torch.jit.script(model)
+    elif args.aot_autograd:
+        assert has_functorch, "functorch is needed for --aot-autograd"
+        model = memory_efficient_fusion(model)
+    elif args.dynamo:
+        assert has_dynamo, "torch._dynamo is needed for --dynamo"
+        torch._dynamo.reset()
+        if args.dynamo_backend is not None:
+            model = torch._dynamo.optimize(args.dynamo_backend)(model)
+        else:
+            model = torch._dynamo.optimize()(model)
+
+    if use_amp == 'apex':
+        model = amp.initialize(model, opt_level='O1')
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
@@ -248,6 +269,7 @@ def validate(args):
         std=data_config['std'],
         num_workers=args.workers,
         crop_pct=crop_pct,
+        crop_mode=data_config['crop_mode'],
         pin_memory=args.pin_mem,
         device=device,
         tf_preprocessing=args.tf_preprocessing,
@@ -376,7 +398,7 @@ def main():
             model_cfgs = [(n, '') for n in model_names]
         elif not is_model(args.model):
             # model name doesn't exist, try as wildcard filter
-            model_names = list_models(args.model)
+            model_names = list_models(args.model, pretrained=True)
             model_cfgs = [(n, '') for n in model_names]
 
         if not model_cfgs and os.path.isfile(args.model):
