@@ -32,7 +32,7 @@ import torch.utils.checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD,\
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from .helpers import build_model_with_cfg, resolve_pretrained_cfg, named_apply, adapt_input_conv, checkpoint_seq
+from .helpers import build_model_with_cfg, named_apply, adapt_input_conv, checkpoint_seq
 from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
 from ._pretrained import generate_defaults
 from .registry import register_model
@@ -795,13 +795,15 @@ default_cfgs = generate_defaults({
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0),
     'vit_large_patch14_clip_336.laion2b_ft_in1k': _cfg(
         hf_hub_id='timm/vit_large_patch14_clip_336.laion2b_ft_in1k',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, input_size=(3, 336, 336)),
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
     'vit_huge_patch14_clip_224.laion2b_ft_in1k': _cfg(
         hf_hub_id='timm/vit_huge_patch14_clip_224.laion2b_ft_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_huge_patch14_clip_336.laion2b_ft_in1k': _cfg(
         hf_hub_id='',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 336, 336)),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.laion2b_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k_in1k',
@@ -823,13 +825,15 @@ default_cfgs = generate_defaults({
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0),
     'vit_large_patch14_clip_336.laion2b_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/vit_large_patch14_clip_336.laion2b_ft_in12k_in1k',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, input_size=(3, 336, 336)),
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
     'vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 336, 336)),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.laion2b_ft_in12k': _cfg(
         hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
@@ -879,12 +883,16 @@ default_cfgs = generate_defaults({
     'vit_large_patch14_clip_224.openai_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/vit_large_patch14_clip_224.openai_ft_in12k_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
+    'vit_large_patch14_clip_336.openai_ft_in12k_in1k': _cfg(
+        hf_hub_id='timm/vit_large_patch14_clip_336.openai_ft_in12k_in1k',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.openai_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
+        hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.openai_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in12k',
+        hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_large_patch14_clip_224.openai_ft_in12k': _cfg(
         hf_hub_id='timm/vit_large_patch14_clip_224.openai_ft_in12k',
