@@ -25,7 +25,7 @@ class PretrainedCfg:
     interpolation: str = 'bicubic'
     crop_pct: float = 0.875
     test_crop_pct: Optional[float] = None
-    crop_type: str = 'pct'
+    crop_mode: str = 'center'
     mean: Tuple[float, ...] = (0.485, 0.456, 0.406)
     std: Tuple[float, ...] = (0.229, 0.224, 0.225)
 

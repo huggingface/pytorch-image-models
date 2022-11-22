@@ -5,9 +5,15 @@ from .constants import *
 _logger = logging.getLogger(__name__)
 
 
-def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, verbose=False):
+def resolve_data_config(
+        args,
+        default_cfg=None,
+        model=None,
+        use_test_size=False,
+        verbose=False
+):
     new_config = {}
-    default_cfg = default_cfg
+    default_cfg = default_cfg or {}
     if not default_cfg and model is not None and hasattr(model, 'default_cfg'):
         default_cfg = model.default_cfg
 
@@ -63,7 +69,7 @@ def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, v
     elif default_cfg.get('std', None):
         new_config['std'] = default_cfg['std']
 
-    # resolve default crop percentage
+    # resolve default inference crop
     crop_pct = DEFAULT_CROP_PCT
     if args.get('crop_pct', None):
         crop_pct = args['crop_pct']
@@ -73,6 +79,14 @@ def resolve_data_config(args, default_cfg={}, model=None, use_test_size=False, v
         elif default_cfg.get('crop_pct', None):
             crop_pct = default_cfg['crop_pct']
     new_config['crop_pct'] = crop_pct
+
+    # resolve default crop percentage
+    crop_mode = DEFAULT_CROP_MODE
+    if args.get('crop_mode', None):
+        crop_mode = args['crop_mode']
+    elif default_cfg.get('crop_mode', None):
+        crop_mode = default_cfg['crop_mode']
+    new_config['crop_mode'] = crop_mode
 
     if verbose:
         _logger.info('Data processing configuration for current model + dataset:')
