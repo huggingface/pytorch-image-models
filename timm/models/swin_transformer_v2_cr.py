@@ -194,9 +194,16 @@ class WindowMultiHeadAttention(nn.Module):
     def _make_pair_wise_relative_positions(self) -> None:
         """Method initializes the pair-wise relative positions to compute the positional biases."""
         device = self.logit_scale.device
-        coordinates = torch.stack(torch.meshgrid([
-            torch.arange(self.window_size[0], device=device),
-            torch.arange(self.window_size[1], device=device)]), dim=0).flatten(1)
+        coordinates = torch.stack(
+            torch.meshgrid(
+                [
+                    torch.arange(self.window_size[0], device=device),
+                    torch.arange(self.window_size[1], device=device),
+                ],
+                indexing='ij',
+            ),
+            dim=0,
+        ).flatten(1)
         relative_coordinates = coordinates[:, :, None] - coordinates[:, None, :]
         relative_coordinates = relative_coordinates.permute(1, 2, 0).reshape(-1, 2).float()
         relative_coordinates_log = torch.sign(relative_coordinates) * torch.log(
