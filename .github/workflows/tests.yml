@@ -15,7 +15,7 @@ jobs:
     name: Run tests on ${{ matrix.os }} with Python ${{ matrix.python }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]
         python: ['3.9']
         torch: ['1.13.0']
         torchvision: ['0.14.0']
@@ -34,6 +34,9 @@ jobs:
     - name: Install torch on mac
       if: startsWith(matrix.os, 'macOS')
       run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
+    - name: Install torch on Windows
+      if: startsWith(matrix.os, 'windows')
+      run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
     - name: Install torch on ubuntu
       if: startsWith(matrix.os, 'ubuntu')
       run: |
@@ -42,11 +45,18 @@ jobs:
         sudo apt install -y google-perftools
     - name: Install requirements
       run: |
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git@v1.1.0
-    - name: Run tests
+        pip install -r requirements.txt
+        pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git
+    - name: Run tests on Windows
+      if: startsWith(matrix.os, 'windows')
+      env:
+        PYTHONDONTWRITEBYTECODE: 1
+      run: |
+        pytest -vv tests
+    - name: Run tests on Linux / Mac
+      if: ${{ !startsWith(matrix.os, 'windows') }}
       env:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
+        PYTHONDONTWRITEBYTECODE: 1
       run: |
-        export PYTHONDONTWRITEBYTECODE=1
-        pytest -vv --forked --durations=0 ./tests
+        pytest -vv --forked --durations=0 tests
