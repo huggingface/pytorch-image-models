@@ -131,7 +131,12 @@ def create_dataset(
             elif split in _EVAL_SYNONYM:
                 split = 'val'
             ds = Places365(split=split, **torch_kwargs)
+        elif name == 'qmnist':
+            assert has_qmnist, 'Please update to a newer PyTorch and torchvision for QMNIST dataset.'
+            use_train = split in _TRAIN_SYNONYM
+            ds = QMNIST(train=use_train, **torch_kwargs)
         elif name == 'imagenet':
+            assert has_imagenet, 'Please update to a newer PyTorch and torchvision for ImageNet dataset.'
             if split in _EVAL_SYNONYM:
                 split = 'val'
             ds = ImageNet(split=split, **torch_kwargs)
