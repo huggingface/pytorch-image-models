@@ -15,8 +15,8 @@ jobs:
     name: Run tests on ${{ matrix.os }} with Python ${{ matrix.python }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ['3.9']
+        os: [ubuntu-latest, macOS-12]
+        python: ['3.10']
         torch: ['1.13.0']
         torchvision: ['0.14.0']
     runs-on: ${{ matrix.os }}
