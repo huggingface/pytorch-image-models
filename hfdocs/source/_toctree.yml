@@ -1,6 +1,30 @@
 - sections: 
   - local: index
-    title: Pytorch Image Models (timm)
+    title: Home
+  - local: quickstart
+    title: Quickstart
+  - local: installation
+    title: Installation
+  title: Get started
+- sections:
+  - local: inference
+    title: Using Pretrained Models for Inference
+  - local: training_script
+    title: Training With The Official Training Script
+  - local: hf_hub
+    title: Share and Load Models from the Hugging Face Hub
+  title: Tutorials
+- sections:
+  - local: reference/models
+    title: Models
+  - local: reference/augmentation
+    title: Augmentation
+  - local: reference/data
+    title: Data
+  - local: reference/optimization
+    title: Optimization
+  title: Reference
+- sections:
   - local: models
     title: Model Summaries
   - local: results
@@ -145,5 +169,4 @@
         title: Wide ResNet
       - local: models/xception
         title: Xception
-  title: Get started
-
+  title: Legacy Docs
