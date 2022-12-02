@@ -66,12 +66,7 @@ try:
 except ImportError as e:
     has_functorch = False
 
-try:
-    import torch._dynamo
-    has_dynamo = True
-except ImportError:
-    has_dynamo = False
-    pass
+has_compile = hasattr(torch, 'compile')
 
 
 _logger = logging.getLogger('train')
@@ -88,10 +83,12 @@ parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # Dataset parameters
 group = parser.add_argument_group('Dataset parameters')
 # Keep this argument outside of the dataset group because it is positional.
-parser.add_argument('data_dir', metavar='DIR',
-                    help='path to dataset')
-group.add_argument('--dataset', '-d', metavar='NAME', default='',
-                    help='dataset type (default: ImageFolder/ImageTar if empty)')
+parser.add_argument('data', nargs='?', metavar='DIR', const=None,
+                    help='path to dataset (positional is *deprecated*, use --data-dir)')
+parser.add_argument('--data-dir', metavar='DIR',
+                    help='path to dataset (root dir)')
+parser.add_argument('--dataset', metavar='NAME', default='',
+                    help='dataset type + name ("<type>/<name>") (default: ImageFolder or ImageTar if empty)')
 group.add_argument('--train-split', metavar='NAME', default='train',
                     help='dataset train split (default: train)')
 group.add_argument('--val-split', metavar='NAME', default='validation',
@@ -143,16 +140,14 @@ group.add_argument('--grad-checkpointing', action='store_true', default=False,
                     help='Enable gradient checkpointing through model blocks/stages')
 group.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
-parser.add_argument('--dynamo-backend', default=None, type=str,
-                    help="Select dynamo backend. Default: None")
 
 scripting_group = group.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
                              help='torch.jit.script the full model')
+scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
+                             help="Enable compilation w/ specified backend (default: inductor).")
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
                              help="Enable AOT Autograd support.")
-scripting_group.add_argument('--dynamo', default=False, action='store_true',
-                             help="Enable Dynamo optimization.")
 
 # Optimizer parameters
 group = parser.add_argument_group('Optimizer parameters')
@@ -377,6 +372,8 @@ def main():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
 
+    if args.data and not args.data_dir:
+        args.data_dir = args.data
     args.prefetcher = not args.no_prefetcher
     device = utils.init_distributed_device(args)
     if args.distributed:
@@ -485,18 +482,16 @@ def main():
         assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
         assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
         model = torch.jit.script(model)
+    elif args.torchcompile:
+        # FIXME dynamo might need move below DDP wrapping? TBD
+        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
+        torch._dynamo.reset()
+        model = torch.compile(model, backend=args.torchcompile)
     elif args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)
-    elif args.dynamo:
-        # FIXME dynamo might need move below DDP wrapping? TBD
-        assert has_dynamo, "torch._dynamo is needed for --dynamo"
-        if args.dynamo_backend is not None:
-            model = torch._dynamo.optimize(args.dynamo_backend)(model)
-        else:
-            model = torch._dynamo.optimize()(model)
 
-    if args.lr is None:
+    if not args.lr:
         global_batch_size = args.batch_size * args.world_size
         batch_ratio = global_batch_size / args.lr_base_size
         if not args.lr_base_scale:

@@ -8,6 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 import os
 import time
 import argparse
+import json
 import logging
 from contextlib import suppress
 from functools import partial
@@ -41,11 +42,7 @@ try:
 except ImportError as e:
     has_functorch = False
 
-try:
-    import torch._dynamo
-    has_dynamo = True
-except ImportError:
-    has_dynamo = False
+has_compile = hasattr(torch, 'compile')
 
 
 _FMT_EXT = {
@@ -60,14 +57,16 @@ _logger = logging.getLogger('inference')
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Inference')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--dataset', '-d', metavar='NAME', default='',
-                    help='dataset type (default: ImageFolder/ImageTar if empty)')
+parser.add_argument('data', nargs='?', metavar='DIR', const=None,
+                    help='path to dataset (*deprecated*, use --data-dir)')
+parser.add_argument('--data-dir', metavar='DIR',
+                    help='path to dataset (root dir)')
+parser.add_argument('--dataset', metavar='NAME', default='',
+                    help='dataset type + name ("<type>/<name>") (default: ImageFolder or ImageTar if empty)')
 parser.add_argument('--split', metavar='NAME', default='validation',
                     help='dataset split (default: validation)')
-parser.add_argument('--model', '-m', metavar='MODEL', default='dpn92',
-                    help='model architecture (default: dpn92)')
+parser.add_argument('--model', '-m', metavar='MODEL', default='resnet50',
+                    help='model architecture (default: resnet50)')
 parser.add_argument('-j', '--workers', default=2, type=int, metavar='N',
                     help='number of data loading workers (default: 2)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -112,16 +111,14 @@ parser.add_argument('--amp-dtype', default='float16', type=str,
                     help='lower precision AMP dtype (default: float16)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
-parser.add_argument('--dynamo-backend', default=None, type=str,
-                    help="Select dynamo backend. Default: None")
 
 scripting_group = parser.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', default=False, action='store_true',
                              help='torch.jit.script the full model')
+scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
+                             help="Enable compilation w/ specified backend (default: inductor).")
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
                              help="Enable AOT Autograd support.")
-scripting_group.add_argument('--dynamo', default=False, action='store_true',
-                             help="Enable Dynamo optimization.")
 
 parser.add_argument('--results-dir',type=str, default=None,
                     help='folder for output results')
@@ -160,7 +157,6 @@ def main():
     device = torch.device(args.device)
 
     # resolve AMP arguments based on PyTorch / Apex availability
-    use_amp = None
     amp_autocast = suppress
     if args.amp:
         assert has_native_amp, 'Please update PyTorch to a version with native AMP (or use APEX).'
@@ -201,22 +197,20 @@ def main():
 
     if args.torchscript:
         model = torch.jit.script(model)
+    elif args.torchcompile:
+        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
+        torch._dynamo.reset()
+        model = torch.compile(model, backend=args.torchcompile)
     elif args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)
-    elif args.dynamo:
-        assert has_dynamo, "torch._dynamo is needed for --dynamo"
-        torch._dynamo.reset()
-        if args.dynamo_backend is not None:
-            model = torch._dynamo.optimize(args.dynamo_backend)(model)
-        else:
-            model = torch._dynamo.optimize()(model)
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
 
+    root_dir = args.data or args.data_dir
     dataset = create_dataset(
-        root=args.data,
+        root=root_dir,
         name=args.dataset,
         split=args.split,
         class_map=args.class_map,
@@ -303,6 +297,9 @@ def main():
 
     for fmt in args.results_format:
         save_results(df, results_filename, fmt)
+
+    print(f'--result')
+    print(json.dumps(dict(filename=results_filename)))
 
 
 def save_results(df, results_filename, results_format='csv', filename_col='filename'):
