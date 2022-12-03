@@ -575,7 +575,7 @@ def build_model_with_cfg(
     )
 
     # FIXME converting back to dict, PretrainedCfg use should be propagated further, but not into model
-    pretrained_cfg = dataclasses.asdict(pretrained_cfg)
+    pretrained_cfg = pretrained_cfg.to_dict()
 
     _update_default_kwargs(pretrained_cfg, kwargs, kwargs_filter)
 

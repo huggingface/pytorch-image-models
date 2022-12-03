@@ -21,7 +21,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import named_apply, build_model_with_cfg, checkpoint_seq
 from .layers import trunc_normal_, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp, LayerNorm2d, LayerNorm, \
     create_conv2d, get_act_layer, make_divisible, to_ntuple
-from ._pretrained import generate_defaults
+from ._pretrained import generate_default_cfgs
 from .registry import register_model
 
 
@@ -373,7 +373,7 @@ def _cfg(url='', **kwargs):
     }
 
 
-default_cfgs = generate_defaults({
+default_cfgs = generate_default_cfgs({
     # timm specific variants
     'convnext_atto.timm_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_atto_d2-01bb0f51.pth',

@@ -7,7 +7,7 @@ import re
 import sys
 from collections import defaultdict, deque
 from copy import deepcopy
-from typing import Optional, Tuple
+from typing import List, Optional, Union, Tuple
 
 from ._pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
 
@@ -84,7 +84,7 @@ def _natural_key(string_):
 
 
 def list_models(
-        filter: str = '',
+        filter: Union[str, List[str]] = '',
         module: str = '',
         pretrained=False,
         exclude_filters: str = '',
@@ -114,7 +114,12 @@ def list_models(
     else:
         all_models = _model_entrypoints.keys()
 
-    # FIXME wildcard filter tag as well as model arch name
+    if include_tags:
+        # expand model names to include names w/ pretrained tags
+        models_with_tags = []
+        for m in all_models:
+            models_with_tags.extend(_model_with_tags[m])
+        all_models = models_with_tags
 
     if filter:
         models = []
@@ -134,13 +139,6 @@ def list_models(
             if len(exclude_models):
                 models = set(models).difference(exclude_models)
 
-    if include_tags:
-        # expand model names to include names w/ pretrained tags
-        models_with_tags = []
-        for m in models:
-            models_with_tags.extend(_model_with_tags[m])
-        models = models_with_tags
-
     if pretrained:
         models = _model_has_pretrained.intersection(models)
 
@@ -148,6 +146,18 @@ def list_models(
         models = set(_model_pretrained_cfgs).intersection(models)
 
     return list(sorted(models, key=_natural_key))
+
+
+def list_pretrained(
+        filter: Union[str, List[str]] = '',
+        exclude_filters: str = '',
+):
+    return list_models(
+        filter=filter,
+        pretrained=True,
+        exclude_filters=exclude_filters,
+        include_tags=True,
+    )
 
 
 def is_model(model_name):
