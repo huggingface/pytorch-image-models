@@ -54,7 +54,7 @@ from .layers import Mlp, ConvMlp, DropPath, ClassifierHead, trunc_normal_tf_, La
 from .layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d
 from .layers import SelectAdaptivePool2d, create_pool2d
 from .layers import to_2tuple, extend_tuple, make_divisible, _assert
-from ._pretrained import generate_defaults
+from ._pretrained import generate_default_cfgs
 from .registry import register_model
 from .vision_transformer_relpos import RelPosMlp, RelPosBias  # FIXME move these to common location
 
@@ -1859,7 +1859,7 @@ def _cfg(url='', **kwargs):
     }
 
 
-default_cfgs = generate_defaults({
+default_cfgs = generate_default_cfgs({
     # Fiddling with configs / defaults / still pretraining
     'coatnet_pico_rw_224': _cfg(url=''),
     'coatnet_nano_rw_224': _cfg(
@@ -1941,86 +1941,67 @@ default_cfgs = generate_defaults({
     'maxxvit_rmlp_large_rw_224': _cfg(url=''),
 
 
-    # Trying to be like the MaxViT paper configs
+    # MaxViT models ported from official Tensorflow impl
     'maxvit_tiny_tf_224.in1k': _cfg(
-        url='',
-        #file='maxvit_tiny_tf_224_in1k.pth',
+        hf_hub_id='timm/maxvit_tiny_tf_224.in1k',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     'maxvit_tiny_tf_384.in1k': _cfg(
-        url='',
-        #file='maxvit_tiny_tf_384_in1k.pth',
+        hf_hub_id='timm/maxvit_tiny_tf_384.in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
     'maxvit_tiny_tf_512.in1k': _cfg(
-        url='',
-        #file='maxvit_tiny_tf_512_in1k.pth',
+        hf_hub_id='timm/maxvit_tiny_tf_512.in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
     'maxvit_small_tf_224.in1k': _cfg(
-        url='',
-        #file='maxvit_small_tf_224_in1k.pth',
+        hf_hub_id='timm/maxvit_small_tf_224.in1k',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     'maxvit_small_tf_384.in1k': _cfg(
-        url='',
-        #file='maxvit_small_tf_384_in1k.pth',
+        hf_hub_id='timm/maxvit_small_tf_384.in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
     'maxvit_small_tf_512.in1k': _cfg(
-        url='',
-        #file='maxvit_small_tf_512_in1k.pth',
+        hf_hub_id='timm/maxvit_small_tf_512.in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
     'maxvit_base_tf_224.in1k': _cfg(
-        url='',
-        #file='maxvit_base_tf_224_in1k.pth',
+        hf_hub_id='timm/maxvit_base_tf_224.in1k',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     'maxvit_base_tf_384.in1k': _cfg(
-        url='',
-        #file='maxvit_base_tf_384_in1k.pth',
+        hf_hub_id='timm/maxvit_base_tf_384.in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
     'maxvit_base_tf_512.in1k': _cfg(
-        url='',
-        #file='maxvit_base_tf_512_in1k.pth',
+        hf_hub_id='timm/maxvit_base_tf_512.in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
     'maxvit_large_tf_224.in1k': _cfg(
-        url='',
-        #file='maxvit_large_tf_224_in1k.pth',
+        hf_hub_id='timm/maxvit_large_tf_224.in1k',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     'maxvit_large_tf_384.in1k': _cfg(
-        url='',
-        #file='maxvit_large_tf_384_in1k.pth',
+        hf_hub_id='timm/maxvit_large_tf_384.in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
     'maxvit_large_tf_512.in1k': _cfg(
-        url='',
-        #file='maxvit_large_tf_512_in1k.pth',
+        hf_hub_id='timm/maxvit_large_tf_512.in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
 
     'maxvit_base_tf_224.in21k': _cfg(
-        url='',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'maxvit_base_tf_384.in21k_ft1k': _cfg(
-        url='',
-        #file='maxvit_base_tf_384_in21k_ft_in1k.pth',
+        url=''),
+    'maxvit_base_tf_384.in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/maxvit_base_tf_384.in21k_ft_in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
-    'maxvit_base_tf_512.in21k_ft1k': _cfg(
-        url='',
-        #file='maxvit_base_tf_512_in21k_ft_in1k.pth',
+    'maxvit_base_tf_512.in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/maxvit_base_tf_512.in21k_ft_in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
     'maxvit_large_tf_224.in21k': _cfg(
         url=''),
-    'maxvit_large_tf_384.in21k_ft1k': _cfg(
-        url='',
-        #file='maxvit_large_tf_384_in21k_ft_in1k.pth',
+    'maxvit_large_tf_384.in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/maxvit_large_tf_384.in21k_ft_in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
-    'maxvit_large_tf_512.in21k_ft1k': _cfg(
-        url='',
-        #file='maxvit_large_tf_512_in21k_ft_in1k.pth',
+    'maxvit_large_tf_512.in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/maxvit_large_tf_512.in21k_ft_in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
     'maxvit_xlarge_tf_224.in21k': _cfg(
         url=''),
-    'maxvit_xlarge_tf_384.in21k_ft1k': _cfg(
-        url='',
-        #file='maxvit_xlarge_tf_384_in21k_ft_in1k.pth',
+    'maxvit_xlarge_tf_384.in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/maxvit_xlarge_tf_384.in21k_ft_in1k',
         input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash'),
-    'maxvit_xlarge_tf_512.in21k_ft1k': _cfg(
-        url='',
-        #file='maxvit_xlarge_tf_512_in21k_ft_in1k.pth',
+    'maxvit_xlarge_tf_512.in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/maxvit_xlarge_tf_512.in21k_ft_in1k',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
 })
 
