@@ -15,7 +15,7 @@ except ImportError:
     from torch.hub import _get_torch_home as get_dir
 
 from timm import __version__
-from timm.models._pretrained import filter_pretrained_cfg
+from timm.models.pretrained import filter_pretrained_cfg
 
 try:
     from huggingface_hub import (

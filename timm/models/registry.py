@@ -9,7 +9,7 @@ from collections import defaultdict, deque
 from copy import deepcopy
 from typing import List, Optional, Union, Tuple
 
-from ._pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
+from .pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
 
 __all__ = [
     'list_models', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',

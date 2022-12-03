@@ -54,7 +54,7 @@ from .layers import Mlp, ConvMlp, DropPath, ClassifierHead, trunc_normal_tf_, La
 from .layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d
 from .layers import SelectAdaptivePool2d, create_pool2d
 from .layers import to_2tuple, extend_tuple, make_divisible, _assert
-from ._pretrained import generate_default_cfgs
+from .pretrained import generate_default_cfgs
 from .registry import register_model
 from .vision_transformer_relpos import RelPosMlp, RelPosBias  # FIXME move these to common location
 

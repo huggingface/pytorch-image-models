@@ -18,7 +18,7 @@ import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 from torch.utils.checkpoint import checkpoint
 
-from ._pretrained import PretrainedCfg
+from .pretrained import PretrainedCfg
 from .features import FeatureListNet, FeatureDictNet, FeatureHookNet
 from .fx_features import FeatureGraphNet
 from .hub import has_hf_hub, download_cached_file, load_state_dict_from_hf
