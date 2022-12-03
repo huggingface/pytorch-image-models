@@ -805,12 +805,6 @@ default_cfgs = generate_default_cfgs({
     'vit_base_patch32_clip_224.laion2b_ft_in1k': _cfg(
         hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
-    'vit_base_patch32_clip_384.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_384.laion2b_ft_in1k',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 384, 384)),
-    'vit_base_patch32_clip_448.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_448.laion2b_ft_in1k',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 448, 448)),
     'vit_base_patch16_clip_224.laion2b_ft_in1k': _cfg(
         hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
@@ -865,7 +859,7 @@ default_cfgs = generate_default_cfgs({
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
+        #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
         hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in12k',
@@ -924,7 +918,7 @@ default_cfgs = generate_default_cfgs({
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.openai_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
+        #hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.openai_ft_in12k': _cfg(
         hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in12k',
