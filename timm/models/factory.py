@@ -2,7 +2,7 @@ import os
 from typing import Any, Dict, Optional, Union
 from urllib.parse import urlsplit
 
-from ._pretrained import PretrainedCfg, split_model_name_tag
+from .pretrained import PretrainedCfg, split_model_name_tag
 from .helpers import load_checkpoint
 from .hub import load_model_config_from_hf
 from .layers import set_layer_config

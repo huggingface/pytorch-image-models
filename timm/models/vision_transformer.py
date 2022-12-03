@@ -34,7 +34,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCE
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from .helpers import build_model_with_cfg, named_apply, adapt_input_conv, checkpoint_seq
 from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
-from ._pretrained import generate_default_cfgs
+from .pretrained import generate_default_cfgs
 from .registry import register_model
 
 _logger = logging.getLogger(__name__)
