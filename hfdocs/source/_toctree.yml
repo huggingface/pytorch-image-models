@@ -148,8 +148,6 @@
 - sections:
   - local: reference/models
     title: Models
-  - local: reference/augmentation
-    title: Augmentation
   - local: reference/data
     title: Data
   - local: reference/optimization
