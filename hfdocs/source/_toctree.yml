@@ -147,7 +147,7 @@
         title: Wide ResNet
       - local: models/xception
         title: Xception
-  title: Available Models
+  title: Model Pages
 - sections:
   - local: reference/models
     title: Models
