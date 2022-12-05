@@ -23,7 +23,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 # Dec 5, 2022
 
-* Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`)
+* Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`). Install with `pip install --pre timm`
   * vision_transformer, maxvit, convnext are the first three model impl w/ support
   * model names are changing with this (previous _21k, etc. fn will merge), still sorting out deprecation handling
   * bugs are likely, but I need feedback so please try it out
