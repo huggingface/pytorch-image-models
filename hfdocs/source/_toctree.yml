@@ -9,36 +9,14 @@
 - sections:
   - local: inference
     title: Using Pretrained Models for Inference
+  - local: feature_extraction
+    title: Using Pretrained Models as Feature Extractors
   - local: training_script
     title: Training With The Official Training Script
   - local: hf_hub
     title: Share and Load Models from the Hugging Face Hub
   title: Tutorials
 - sections:
-  - local: reference/models
-    title: Models
-  - local: reference/augmentation
-    title: Augmentation
-  - local: reference/data
-    title: Data
-  - local: reference/optimization
-    title: Optimization
-  title: Reference
-- sections:
-  - local: models
-    title: Model Summaries
-  - local: results
-    title: Results
-  - local: scripts
-    title: Scripts
-  - local: training_hparam_examples
-    title: Training Examples
-  - local: feature_extraction
-    title: Feature Extraction
-  - local: changes
-    title: Recent Changes
-  - local: archived_changes
-    title: Archived Changes
   - local: model_pages
     title: Model Pages
     isExpanded: false
@@ -169,4 +147,28 @@
         title: Wide ResNet
       - local: models/xception
         title: Xception
+  title: Available Models
+- sections:
+  - local: reference/models
+    title: Models
+  - local: reference/augmentation
+    title: Augmentation
+  - local: reference/data
+    title: Data
+  - local: reference/optimization
+    title: Optimization
+  title: Reference
+- sections:
+  - local: models
+    title: Model Summaries
+  - local: results
+    title: Results
+  - local: scripts
+    title: Scripts
+  - local: training_hparam_examples
+    title: Training Examples
+  - local: changes
+    title: Recent Changes
+  - local: archived_changes
+    title: Archived Changes
   title: Legacy Docs
