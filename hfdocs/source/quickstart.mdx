@@ -1,3 +1,49 @@
 # Quickstart
 
-TODO
+## Load a Pretrained Model
+
+Pretrained models can be loaded using `timm.create_model`
+
+```py
+>>> import timm
+
+>>> m = timm.create_model('mobilenetv3_large_100', pretrained=True)
+>>> m.eval()
+```
+
+## List Models with Pretrained Weights
+
+```py
+>>> import timm
+>>> from pprint import pprint
+>>> model_names = timm.list_models(pretrained=True)
+>>> pprint(model_names)
+[
+    'adv_inception_v3',
+    'cspdarknet53',
+    'cspresnext50',
+    'densenet121',
+    'densenet161',
+    'densenet169',
+    'densenet201',
+    'densenetblur121d',
+    'dla34',
+    'dla46_c',
+]
+```
+
+## List Model Architectures by Wildcard
+
+```py
+>>> import timm
+>>> from pprint import pprint
+>>> model_names = timm.list_models('*resne*t*')
+>>> pprint(model_names)
+[
+    'cspresnet50',
+    'cspresnet50d',
+    'cspresnet50w',
+    'cspresnext50',
+    ...
+]
+```
