@@ -55,6 +55,7 @@ from .tresnet import *
 from .twins import *
 from .vgg import *
 from .visformer import *
+from .vision_gnn import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
 from .vision_transformer_relpos import *

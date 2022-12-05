@@ -109,3 +109,6 @@ output/
 *.gz
 Untitled.ipynb
 Testing notebook.ipynb
+
+# MacOS
+*.DS_Store
