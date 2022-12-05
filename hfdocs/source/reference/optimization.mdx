@@ -1,12 +1,44 @@
 # Optimization
 
+This page contains the API reference documentation for optimization-related tools (optimizers, learning rate schedulers, etc) included in `timm`.
+
 ## Optimizers
 
+### Factory functions
+
 [[autodoc]] timm.optim.optim_factory.create_optimizer
+[[autodoc]] timm.optim.optim_factory.create_optimizer_v2
+
+### Optimizer Classes
+
+[[autodoc]] timm.optim.adabelief.AdaBelief
+[[autodoc]] timm.optim.adafactor.Adafactor
+[[autodoc]] timm.optim.adahessian.Adahessian
+[[autodoc]] timm.optim.adamp.AdamP
+[[autodoc]] timm.optim.adamw.AdamW
+[[autodoc]] timm.optim.lamb.Lamb
+[[autodoc]] timm.optim.lars.Lars
+[[autodoc]] timm.optim.lookahead.Lookahead
+[[autodoc]] timm.optim.madgrad.MADGRAD
+[[autodoc]] timm.optim.nadam.Nadam
+[[autodoc]] timm.optim.nvnovograd.NvNovoGrad
+[[autodoc]] timm.optim.radam.RAdam
+[[autodoc]] timm.optim.rmsprop_tf.RMSpropTF
+[[autodoc]] timm.optim.sgdp.SGDP
+
 
 ## Schedulers
 
+### Factory functions
+
+[[autodoc]] timm.scheduler.scheduler_factory.create_scheduler
+[[autodoc]] timm.scheduler.scheduler_factory.create_scheduler_v2
+
+### Scheduler Classes
+
 [[autodoc]] timm.scheduler.cosine_lr.CosineLRScheduler
+[[autodoc]] timm.scheduler.multistep_lr.MultiStepLRScheduler
+[[autodoc]] timm.scheduler.plateau_lr.PlateauLRScheduler
+[[autodoc]] timm.scheduler.poly_lr.PolyLRScheduler
 [[autodoc]] timm.scheduler.step_lr.StepLRScheduler
 [[autodoc]] timm.scheduler.tanh_lr.TanhLRScheduler
-[[autodoc]] timm.scheduler.plateau_lr.PlateauLRScheduler
