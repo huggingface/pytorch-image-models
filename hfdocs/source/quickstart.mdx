@@ -22,7 +22,7 @@ Here, we load the pretrained `mobilenetv3_large_100` model.
 ```
 
 <Tip>
-**Note:** The returned PyTorch model is set to `train` mode by default, so you must call `.eval()` on it if you plan to use it for inference.
+    Note: The returned PyTorch model is set to train mode by default, so you must call .eval() on it if you plan to use it for inference.
 </Tip>
 
 ## List Models with Pretrained Weights
@@ -92,7 +92,7 @@ torch.Size([1, 960, 7, 7])
 
 ## Image Augmentation
 
-To transform images into valid inputs for a model, you can use `timm.data.create_transform`, providing the desired `input_size` that the model expects.
+To transform images into valid inputs for a model, you can use [`timm.data.create_transform`], providing the desired `input_size` that the model expects.
 
 This will return a generic transform that uses reasonable defaults.
 
@@ -125,7 +125,7 @@ To figure out which transformations were used for a given pretrained model, we c
  'architecture': 'mobilenetv3_large_100'}
 ```
 
-We can then resolve only the data related configuration by using `timm.data.resolve_data_config`.
+We can then resolve only the data related configuration by using [`timm.data.resolve_data_config`].
 
 ```py
 >>> timm.data.resolve_data_config(model.pretrained_cfg)
