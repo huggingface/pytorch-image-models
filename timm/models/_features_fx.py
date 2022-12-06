@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Union, Type
 import torch
 from torch import nn
 
-from .features import _get_feature_info
+from ._features import _get_feature_info
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor as _create_feature_extractor
@@ -15,9 +15,9 @@ except ImportError:
     has_fx_feature_extraction = False
 
 # Layers we went to treat as leaf modules
-from .layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame
-from .layers.non_local_attn import BilinearAttnTransform
-from .layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
+from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame
+from timm.layers.non_local_attn import BilinearAttnTransform
+from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 
 # NOTE: By default, any modules from timm.models.layers that we want to treat as leaf modules go here
 # BUT modules from timm.models should use the registration mechanism below
@@ -29,7 +29,7 @@ _leaf_modules = {
 }
 
 try:
-    from .layers import InplaceAbn
+    from timm.layers import InplaceAbn
     _leaf_modules.add(InplaceAbn)
 except ImportError:
     pass

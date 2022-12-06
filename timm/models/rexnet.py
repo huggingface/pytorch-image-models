@@ -10,16 +10,20 @@ Changes for timm, feature extraction, and rounded channel variant hacked togethe
 Copyright 2020 Ross Wightman
 """
 
-import torch
-import torch.nn as nn
 from functools import partial
 from math import ceil
 
+import torch
+import torch.nn as nn
+
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath, make_divisible, SEModule
-from .registry import register_model
-from .efficientnet_builder import efficientnet_init_weights
+from timm.layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath, make_divisible, SEModule
+from ._builder import build_model_with_cfg
+from ._efficientnet_builder import efficientnet_init_weights
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['ReXNetV1']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url=''):

@@ -12,20 +12,18 @@ Reference impl via darknet cfg files at https://github.com/WongKinYiu/CrossStage
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-import collections.abc
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, named_apply, MATCH_PREV_GROUP
-from .layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, get_attn, create_act_layer, make_divisible
-from .registry import register_model
-
+from timm.layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, get_attn, create_act_layer, make_divisible
+from ._builder import build_model_with_cfg
+from ._manipulate import named_apply, MATCH_PREV_GROUP
+from ._registry import register_model
 
 __all__ = ['CspNet']  # model_registry will add each entrypoint fn to this
 

@@ -24,10 +24,12 @@ import torch.utils.checkpoint as checkpoint
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg
-from .layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tuple
-from .registry import register_model
+from timm.layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tuple
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_function
+from ._registry import register_model
+
+__all__ = ['MultiScaleVit', 'MultiScaleVitCfg']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

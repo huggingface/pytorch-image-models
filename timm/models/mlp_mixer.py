@@ -39,16 +39,18 @@ A thank you to paper authors for releasing code and weights.
 Hacked together by / Copyright 2021 Ross Wightman
 """
 import math
-from copy import deepcopy
 from functools import partial
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
-from .layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
+from ._builder import build_model_with_cfg
+from ._manipulate import named_apply, checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['MixerBlock']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

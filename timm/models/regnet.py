@@ -23,10 +23,13 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
-from .layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
-from .layers import get_act_layer, get_norm_act_layer, create_conv2d
-from .registry import register_model
+from timm.layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
+from timm.layers import get_act_layer, get_norm_act_layer, create_conv2d
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq, named_apply
+from ._registry import register_model
+
+__all__ = ['RegNet', 'RegNetCfg']  # model_registry will add each entrypoint fn to this
 
 
 @dataclass

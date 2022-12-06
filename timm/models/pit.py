@@ -13,7 +13,6 @@ Modifications for timm by / Copyright 2020 Ross Wightman
 
 import math
 import re
-from copy import deepcopy
 from functools import partial
 from typing import Tuple
 
@@ -21,10 +20,13 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import trunc_normal_, to_2tuple
-from .registry import register_model
+from timm.layers import trunc_normal_, to_2tuple
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 from .vision_transformer import Block
+
+
+__all__ = ['PoolingVisionTransformer']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

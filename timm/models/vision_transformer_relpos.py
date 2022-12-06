@@ -4,11 +4,9 @@ NOTE: these models are experimental / WIP, expect changes
 
 Hacked together by / Copyright 2022, Ross Wightman
 """
-import math
 import logging
+import math
 from functools import partial
-from collections import OrderedDict
-from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import torch
@@ -16,10 +14,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, resolve_pretrained_cfg, named_apply
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, to_2tuple
-from .registry import register_model
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._registry import register_model
+
+__all__ = ['VisionTransformerRelPos']  # model_registry will add each entrypoint fn to this
 
 _logger = logging.getLogger(__name__)
 

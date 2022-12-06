@@ -15,13 +15,15 @@ from typing import List
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .registry import register_model
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath,\
+from timm.layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath, \
     create_attn, create_norm_act_layer, get_norm_act_layer
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['VovNet']  # model_registry will add each entrypoint fn to this
 
 
 # model cfgs adapted from https://github.com/youngwanLEE/vovnet-detectron2 &

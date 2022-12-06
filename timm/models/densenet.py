@@ -4,7 +4,6 @@ fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
 import re
 from collections import OrderedDict
-from functools import partial
 
 import torch
 import torch.nn as nn
@@ -13,9 +12,10 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, MATCH_PREV_GROUP
-from .layers import BatchNormAct2d, create_norm_act_layer, BlurPool2d, create_classifier
-from .registry import register_model
+from timm.layers import BatchNormAct2d, create_norm_act_layer, BlurPool2d, create_classifier
+from ._builder import build_model_with_cfg
+from ._manipulate import MATCH_PREV_GROUP
+from ._registry import register_model
 
 __all__ = ['DenseNet']
 

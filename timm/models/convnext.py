@@ -18,12 +18,12 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import named_apply, build_model_with_cfg, checkpoint_seq
-from .layers import trunc_normal_, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp, LayerNorm2d, LayerNorm, \
+from timm.layers import trunc_normal_, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp, LayerNorm2d, LayerNorm, \
     create_conv2d, get_act_layer, make_divisible, to_ntuple
-from .pretrained import generate_default_cfgs
-from .registry import register_model
-
+from ._builder import build_model_with_cfg
+from ._manipulate import named_apply, checkpoint_seq
+from ._pretrained import generate_default_cfgs
+from ._registry import register_model
 
 __all__ = ['ConvNeXt']  # model_registry will add each entrypoint fn to this
 

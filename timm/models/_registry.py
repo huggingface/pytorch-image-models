@@ -9,7 +9,7 @@ from collections import defaultdict, deque
 from copy import deepcopy
 from typing import List, Optional, Union, Tuple
 
-from .pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
+from ._pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
 
 __all__ = [
     'list_models', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
@@ -167,10 +167,12 @@ def is_model(model_name):
     return arch_name in _model_entrypoints
 
 
-def model_entrypoint(model_name):
+def model_entrypoint(model_name, module_filter: Optional[str] = None):
     """Fetch a model entrypoint for specified model name
     """
     arch_name = get_arch_name(model_name)
+    if module_filter and arch_name not in _module_to_models.get(module_filter, {}):
+        raise RuntimeError(f'Model ({model_name} not found in module {module_filter}.')
     return _model_entrypoints[arch_name]
 
 

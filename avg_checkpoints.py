@@ -16,7 +16,7 @@ import argparse
 import os
 import glob
 import hashlib
-from timm.models.helpers import load_state_dict
+from timm.models import load_state_dict
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Averager')
 parser.add_argument('--input', default='', type=str, metavar='PATH',

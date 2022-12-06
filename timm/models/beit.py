@@ -46,12 +46,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
-from .registry import register_model
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 from .vision_transformer import checkpoint_filter_fn
 
+__all__ = ['Beit']
 
 def _cfg(url='', **kwargs):
     return {

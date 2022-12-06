@@ -19,10 +19,10 @@ for some einops/einsum fun
 
 Hacked together by / Copyright 2020, Ross Wightman
 """
-import math
 import logging
-from functools import partial
+import math
 from collections import OrderedDict
+from functools import partial
 from typing import Optional
 
 import torch
@@ -30,12 +30,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD,\
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from .helpers import build_model_with_cfg, named_apply, adapt_input_conv, checkpoint_seq
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
-from .pretrained import generate_default_cfgs
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
+from ._builder import build_model_with_cfg
+from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
+from ._pretrained import generate_default_cfgs
+from ._registry import register_model
+
+
+__all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to this
+
 
 _logger = logging.getLogger(__name__)
 
