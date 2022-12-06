@@ -10,7 +10,7 @@ pip install timm
 
 ## Load a Pretrained Model
 
-Pretrained models can be loaded using `timm.create_model`.
+Pretrained models can be loaded using [`create_model`].
 
 Here, we load the pretrained `mobilenetv3_large_100` model.
 
@@ -27,7 +27,7 @@ Here, we load the pretrained `mobilenetv3_large_100` model.
 
 ## List Models with Pretrained Weights
 
-To list models packaged with `timm`, you can use `timm.list_models`. If you specify `pretrained=True`, this function will only return model names that have associated pretrained weights available. 
+To list models packaged with `timm`, you can use [`list_models`]. If you specify `pretrained=True`, this function will only return model names that have associated pretrained weights available. 
 
 ```py
 >>> import timm
@@ -136,7 +136,7 @@ We can then resolve only the data related configuration by using `timm.data.reso
  'crop_pct': 0.875}
 ```
 
-We can pass this data config to timm.data.create_transform to initialize the model's associated transform.
+We can pass this data config to [`timm.data.create_transform`] to initialize the model's associated transform.
 
 ```py
 >>> data_cfg = timm.data.resolve_data_config(model.pretrained_cfg)
