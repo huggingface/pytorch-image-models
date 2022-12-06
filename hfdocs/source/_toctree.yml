@@ -7,14 +7,12 @@
     title: Installation
   title: Get started
 - sections:
-  - local: inference
-    title: Using Pretrained Models for Inference
   - local: feature_extraction
     title: Using Pretrained Models as Feature Extractors
   - local: training_script
     title: Training With The Official Training Script
   - local: hf_hub
-    title: Share and Load Models from the Hugging Face Hub
+    title: Share and Load Models from the 🤗 Hugging Face Hub
   title: Tutorials
 - sections:
   - local: models/adversarial-inception-v3
