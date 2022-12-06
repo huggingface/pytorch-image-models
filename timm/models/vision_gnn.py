@@ -114,7 +114,6 @@ class DeepGCN(torch.nn.Module):
         super(DeepGCN, self).__init__()
         self.num_classes = num_classes
         self.in_chans = in_chans
-        print(opt)
         k = opt.k
         act_layer = nn.GELU
         norm = opt.norm
@@ -168,9 +167,16 @@ class DeepGCN(torch.nn.Module):
                     m.bias.data.zero_()
                     m.bias.requires_grad = True
 
+    def _get_pos_embed(self, pos_embed, H, W):
+        if pos_embed is None or (H == pos_embed.size(-2) and W == pos_embed.size(-1)):
+            return pos_embed
+        else:
+            return F.interpolate(pos_embed, size=(H, W), mode="bicubic")
+
     def forward(self, inputs):
-        x = self.stem(inputs) + self.pos_embed
+        x = self.stem(inputs)
         B, C, H, W = x.shape
+        x = x + self._get_pos_embed(self.pos_embed, H, W)
         for i in range(len(self.backbone)):
             x = self.backbone[i](x)
 
