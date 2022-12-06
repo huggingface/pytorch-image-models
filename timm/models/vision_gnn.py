@@ -22,6 +22,7 @@ def _cfg(url='', **kwargs):
         'crop_pct': .9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'min_input_size': (3, 224, 224),
         **kwargs
     }
 
