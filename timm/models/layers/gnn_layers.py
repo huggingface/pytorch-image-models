@@ -247,13 +247,15 @@ class Grapher(nn.Module):
             nn.BatchNorm2d(in_channels),
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.relative_pos = None
         if relative_pos:
             relative_pos_tensor = get_2d_relative_pos_embed(in_channels,
                     int(n**0.5)).unsqueeze(0).unsqueeze(1)
             relative_pos_tensor = F.interpolate(
                     relative_pos_tensor, size=(n, n//(r*r)), mode='bicubic', align_corners=False)
-            self.relative_pos = nn.Parameter(-relative_pos_tensor.squeeze(1), requires_grad=False)
+            # self.relative_pos = nn.Parameter(-relative_pos_tensor.squeeze(1))
+            self.register_buffer('relative_pos', -relative_pos_tensor.squeeze(1))
+        else:
+            self.relative_pos = None
 
     def _get_relative_pos(self, relative_pos, H, W):
         if relative_pos is None or H * W == self.n:
