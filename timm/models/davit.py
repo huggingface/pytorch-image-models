@@ -502,13 +502,32 @@ class DaViT(nn.Module):
     
     
     def forward_features_full(self, x):
-        x, size = self.patch_embeds[0](x, (x.size(2), x.size(3)))
+        #x, size = self.patch_embeds[0](x, (x.size(2), x.size(3)))
+        size: Tuple[int, int] = (x.size(2), x.size(3))
         features = [x]
         sizes = [size]
-        branches = [0]
+        #branches = [0]
+        
+        
+        
+        for patch_layer, blocks in itertools.izip(self.patch_embeds, self.main_blocks):
+            features[-1], sizes[-1] = patch_layer(features[-1], sizes[-1])
+            
+            for layer in enumerate(blocks):
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    features[-1], sizes[-1] = checkpoint.checkpoint(layer, features[-1], sizes[-1])
+                else:
+                    features[-1], sizes[-1] = layer(features[-1], sizes[-1])
+                
+            
+            features.append(features[-1])
+            sizes.append(sizes[-1])
+            
+        '''
+        
 
         for block_index, block_param in enumerate(self.architecture):
-            '''
+            
             branch_ids = sorted(set(block_param))
             for branch_id in branch_ids:
                 if branch_id not in branches:
@@ -516,7 +535,7 @@ class DaViT(nn.Module):
                     features.append(x)
                     sizes.append(size)
                     branches.append(branch_id)
-            '''
+            
             
             block_index : int = block_index
             
@@ -534,7 +553,7 @@ class DaViT(nn.Module):
                     features[branch_id], _ = checkpoint.checkpoint(self.main_blocks[block_index][layer_index], features[branch_id], sizes[branch_id])
                 else:
                     features[branch_id], _ = self.main_blocks[block_index][layer_index](features[branch_id], sizes[branch_id])
-        '''
+        
         # pyramid feature norm logic, no weights for these extra norm layers from pretrained classification model
         outs = []
         for i in range(self.num_stages):
