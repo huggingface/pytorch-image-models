@@ -130,18 +130,15 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
     ),
     'eva_giant_patch14_336.clip_ft_in1k': _cfg(
-        hf_hub_id='BAAI/EVA',
-        hf_hub_filename='eva_clip_vis_enc_sz336_ftcls_89p4.pt',
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_clip_vis_enc_sz336_ftcls_89p4.pt',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 336, 336)),
     'eva_giant_patch14_336.m30m_ft_in22k_in1k': _cfg(
-        hf_hub_id='BAAI/EVA',
-        hf_hub_filename='eva_21k_1k_336px_psz14_ema_89p6.pt',
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_21k_1k_336px_psz14_ema_89p6.pt',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
         input_size=(3, 336, 336)),
     'eva_giant_patch14_560.m30m_ft_in22k_in1k': _cfg(
-        hf_hub_id='BAAI/EVA',
-        hf_hub_filename='eva_21k_1k_560px_psz14_ema_89p7.pt',
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_21k_1k_560px_psz14_ema_89p7.pt',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
         input_size=(3, 560, 560)),
 })
@@ -537,6 +534,7 @@ def beitv2_large_patch16_224_in22k(pretrained=False, **kwargs):
     return model
 
 
+@register_model
 def eva_giant_patch14_224(pretrained=False, **kwargs):
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_kwargs = dict(
