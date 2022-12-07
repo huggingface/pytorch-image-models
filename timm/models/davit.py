@@ -37,7 +37,7 @@ __all__ = ['DaViT']
 
 class MySequential(nn.Sequential):
     def forward(self, inputs : Tuple[Tensor, Tuple[int, int]]):
-        for module in self._modules.values():
+        for module in self:
             #if type(inputs) == tuple:
             inputs = module(*inputs)
             #else:
