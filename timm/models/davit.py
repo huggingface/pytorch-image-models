@@ -36,7 +36,7 @@ from .registry import register_model
 __all__ = ['DaViT']
 
 class MySequential(nn.Sequential):
-    def forward(self, inputs : Tuple[Tensor, Tensor]):
+    def forward(self, inputs : Tuple[Tensor, Tuple[int, int]]):
         for module in self._modules.values():
             #if type(inputs) == tuple:
             inputs = module(*inputs)
