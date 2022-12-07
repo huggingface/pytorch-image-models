@@ -21,7 +21,7 @@ from .fast_norm import is_fast_norm, set_fast_norm, fast_group_norm, fast_layer_
 from .filter_response_norm import FilterResponseNormTlu2d, FilterResponseNormAct2d
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
-from .gnn_layers import Grapher
+from .gnn_layers import DyGraphConv2d
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
 from .inplace_abn import InplaceAbn
 from .linear import Linear
