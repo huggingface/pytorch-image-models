@@ -4,9 +4,9 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
+from timm.models.fx_features import register_notrace_module
 from .drop import DropPath
 from .pos_embed import build_sincos2d_pos_embed
-from .fx_features import register_notrace_module
 
 
 def pairwise_distance(x, y):
