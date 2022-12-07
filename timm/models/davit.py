@@ -542,7 +542,6 @@ def checkpoint_filter_fn(state_dict, model):
         state_dict = state_dict['state_dict']
     
     out_dict = {}
-    import re
     for k, v in state_dict.items():
     
         k = k.replace('head.', 'head.fc.')
