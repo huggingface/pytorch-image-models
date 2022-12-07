@@ -508,7 +508,7 @@ class DaViT(nn.Module):
 
         for block_index, block_param in enumerate(self.architecture):
             #branch_ids = sorted(set(block_param))
-            branch_ids = [block_index]
+            branch_ids = block_index
             for branch_id in branch_ids:
                 if branch_id not in branches:
                     x, size = self.patch_embeds[branch_id](features[-1], sizes[-1])
