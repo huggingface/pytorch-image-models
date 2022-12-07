@@ -22,7 +22,16 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 ## What's New
 
 # Dec 6, 2022
-* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain from https://github.com/baaivision/EVA
+* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
+  * original source: https://github.com/baaivision/EVA
+  * paper: https://arxiv.org/abs/2211.07636
+
+| model                                    |   top1 |   param_count |   gmac |   macts | hub                                     |
+|:-----------------------------------------|-------:|--------------:|-------:|--------:|:----------------------------------------|
+| eva_giant_patch14_560.m30m_ft_in22k_in1k |   89.8 |        1014.4 | 1906.8 |  2577.2 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_giant_patch14_336.m30m_ft_in22k_in1k |   89.6 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_giant_patch14_336.clip_ft_in1k       |   89.4 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_giant_patch14_224.clip_ft_in1k       |   89.1 |        1012.6 |  267.2 |   192.6 | [link](https://huggingface.co/BAAI/EVA) |
 
 # Dec 5, 2022
 
