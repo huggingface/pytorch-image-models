@@ -506,7 +506,9 @@ class DaViT(nn.Module):
         features = [x]
         sizes = [size]
         branches = [0]
-
+        
+        block_index : int
+        
         for block_index, block_param in enumerate(self.architecture):
             '''
             branch_ids = sorted(set(block_param))
@@ -518,7 +520,7 @@ class DaViT(nn.Module):
                     branches.append(branch_id)
             '''
             
-            block_index : int
+            
             
             if block_index not in branches:
                     x, size = self.patch_embeds[block_index](features[-1], sizes[-1])
@@ -526,10 +528,11 @@ class DaViT(nn.Module):
                     sizes.append(size)
                     branches.append(branch_id)
             
-
+            layer_index : int
+            branch_id : int
+            
             for layer_index, branch_id in enumerate(block_param):
-                layer_index : int
-                branch_id : int
+                
                 if self.grad_checkpointing and not torch.jit.is_scripting():
                     features[branch_id], _ = checkpoint.checkpoint(self.main_blocks[block_index][layer_index], features[branch_id], sizes[branch_id])
                 else:
