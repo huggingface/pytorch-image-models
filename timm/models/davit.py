@@ -510,7 +510,7 @@ class DaViT(nn.Module):
         
         
         
-        for patch_layer, blocks in itertools.izip(self.patch_embeds, self.main_blocks):
+        for patch_layer, blocks in zip(self.patch_embeds, self.main_blocks):
             features[-1], sizes[-1] = patch_layer(features[-1], sizes[-1])
             
             for layer in enumerate(blocks):
