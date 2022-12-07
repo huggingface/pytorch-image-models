@@ -34,16 +34,18 @@ from .registry import register_model
 
 
 __all__ = ['DaViT']
-
+'''
 class MySequential(nn.Sequential):
-    def forward(self, inputs : Tuple):
+    def forward(self, *inputs):
         for module in self._modules.values():
             if type(inputs) == tuple:
                 inputs = module(*inputs)
             else:
                 inputs = module(inputs)
         return inputs
+
 '''
+
 class MySequential(nn.Sequential):
     @overload
     def forward(self, inputs : Tensor):
@@ -57,9 +59,9 @@ class MySequential(nn.Sequential):
                 inputs = module(*inputs)
         return inputs
 
-'''
+
 class ConvPosEnc(nn.Module):
-    def __init__(self, dim, k=3, act=False, normtype=False):
+    def __init__(self, dim : int, k : int=3, act : bool=False, normtype : str='none'):
         super(ConvPosEnc, self).__init__()
         self.proj = nn.Conv2d(dim,
                               dim,
