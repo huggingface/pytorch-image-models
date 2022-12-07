@@ -21,6 +21,9 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+# Dec 6, 2022
+* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain from https://github.com/baaivision/EVA
+
 # Dec 5, 2022
 
 * Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`). Install with `pip install --pre timm`
