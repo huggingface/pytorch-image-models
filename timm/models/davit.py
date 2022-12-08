@@ -450,10 +450,10 @@ class DaViT(nn.Module):
             
             self.stages.add_module(f'stage_{stage_id}', stage)
             
-            self.feature_info += dict(
+            self.feature_info += [dict(
                 num_chs=self.embed_dims[stage_id],
                 reduction = 2,
-                module=f'stages.stage_{stage_id}')#.{depths[stage_id] - 1}.{len(attention_types) - 1}.mlp.drop2')]
+                module=f'stages.stage_{stage_id}')]#.{depths[stage_id] - 1}.{len(attention_types) - 1}.mlp.drop2')]
 
 
         self.norms = norm_layer(self.num_features)
