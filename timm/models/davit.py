@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from .helpers import build_model_with_cfg
-from .data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, ClassifierHead, Mlp
 from .features import FeatureInfo
 from collections import OrderedDict
