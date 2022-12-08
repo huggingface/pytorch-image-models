@@ -27,7 +27,9 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'swinv2_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'davit*',
+
+    'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'davit*', 'eva_*'
+
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -39,7 +41,7 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*', 'swin*huge*',
         'swin*giant*']
-    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*', 'swin*giant*']
+    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*', 'swin*giant*', 'eva_giant*']
 else:
     EXCLUDE_FILTERS = []
     NON_STD_EXCLUDE_FILTERS = ['vit_gi*']

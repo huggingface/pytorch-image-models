@@ -21,6 +21,18 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+# Dec 6, 2022
+* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
+  * original source: https://github.com/baaivision/EVA
+  * paper: https://arxiv.org/abs/2211.07636
+
+| model                                    |   top1 |   param_count |   gmac |   macts | hub                                     |
+|:-----------------------------------------|-------:|--------------:|-------:|--------:|:----------------------------------------|
+| eva_giant_patch14_560.m30m_ft_in22k_in1k |   89.8 |        1014.4 | 1906.8 |  2577.2 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_giant_patch14_336.m30m_ft_in22k_in1k |   89.6 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_giant_patch14_336.clip_ft_in1k       |   89.4 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_giant_patch14_224.clip_ft_in1k       |   89.1 |        1012.6 |  267.2 |   192.6 | [link](https://huggingface.co/BAAI/EVA) |
+
 # Dec 5, 2022
 
 * Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`). Install with `pip install --pre timm`
@@ -376,6 +388,7 @@ A full version of the list below with source links can be found in the [document
     * MobileNet-V2 - https://arxiv.org/abs/1801.04381
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
+* EVA - https://arxiv.org/abs/2211.07636
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
 * GhostNet - https://arxiv.org/abs/1911.11907
 * gMLP - https://arxiv.org/abs/2105.08050
