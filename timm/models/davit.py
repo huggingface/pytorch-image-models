@@ -36,7 +36,7 @@ __all__ = ['DaViT']
 
 class MySequential(nn.Sequential):
 
-    def __init__(*args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(MySequential, self).__init__(*args, **kwargs)
 
 
