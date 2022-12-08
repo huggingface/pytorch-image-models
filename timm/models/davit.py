@@ -439,7 +439,7 @@ class DaViT(nn.Module):
             ])
             
             self.stages.add_module(f'stage_{stage_id}', stage)
-            self.feature_info += [dict(num_chs=self.embed_dims[item], reduction=2, module=f'stages.stage_{stage_id}')]
+            self.feature_info += [dict(num_chs=self.embed_dims[stage_id], reduction=2, module=f'stages.stage_{stage_id}')]
 
         self.norms = norm_layer(self.num_features)
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
