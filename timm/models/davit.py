@@ -33,6 +33,13 @@ from .registry import register_model
 
 __all__ = ['DaViT']
 
+
+class MySequential(nn.Sequential):
+    def forward(self, inputs : Tensor, size : Tuple[int, int]]):
+        for module in self._modules.values():
+            inputs = module(inputs, size)
+        return inputs
+
 class ConvPosEnc(nn.Module):
     def __init__(self, dim : int, k : int=3, act : bool=False, normtype : str='none'):
 
@@ -411,8 +418,8 @@ class DaViT(nn.Module):
         for stage_id, stage_param in enumerate(self.architecture):
             layer_offset_id = len(list(itertools.chain(*self.architecture[:stage_id])))
 
-            stage = nn.Sequential(*[
-                nn.Sequential(*[
+            stage = MySequential(*[
+                Sequential(*[
                     ChannelBlock(
                         dim=self.embed_dims[item],
                         num_heads=self.num_heads[item],
