@@ -549,7 +549,7 @@ def _create_davit(variant, pretrained=False, **kwargs):
     model_cls = DaViT
     features_only = False
     kwargs_filter = None
-    if model_kwargs.pop('features_only', False):
+    if kwargs.pop('features_only', False):
         model_cls = DaViTFeatures
         kwargs_filter = ('num_classes', 'global_pool')
         features_only = True
