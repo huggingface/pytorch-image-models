@@ -540,7 +540,7 @@ def checkpoint_filter_fn(state_dict, model):
     
     
 def _create_davit(variant, pretrained=False, **kwargs):
-    default_out_indices = dict(i for i, _ in enumerate(kwargs.get('depths', (1, 1, 3, 1))))
+    default_out_indices = tuple(i for i, _ in enumerate(kwargs.get('depths', (1, 1, 3, 1))))
     out_indices = kwargs.pop('out_indices', default_out_indices)
     model = build_model_with_cfg(
         DaViT,
