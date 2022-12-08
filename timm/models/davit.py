@@ -341,7 +341,7 @@ class SpatialBlock(nn.Module):
         x = self.cpe[1](x, size)
         if self.ffn:
             x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x : Tensor, size
+        return x, size
 
 
 
