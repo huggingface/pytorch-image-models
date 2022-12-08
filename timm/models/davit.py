@@ -28,7 +28,7 @@ from .layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, Cl
 from .features import FeatureInfo
 from collections import OrderedDict
 import torch.utils.checkpoint as checkpoint
-from .pretrained import generate_default_cfgs
+from .pretrained import generate_default_cfgs, pretrained_cfg_for_features
 from .registry import register_model
 
 
