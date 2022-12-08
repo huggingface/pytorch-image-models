@@ -399,7 +399,7 @@ class DaViT(nn.Module):
         self.num_features = embed_dims[-1]
         self.drop_rate=drop_rate
         self.grad_checkpointing = False
-        self._features_only = kwargs.get(features_only, False)
+        self._features_only = kwargs.get('features_only', False)
         self.feature_info = []
 
         self.patch_embeds = nn.ModuleList([
