@@ -382,7 +382,7 @@ class DaViT(nn.Module):
         attn_drop_rate=0.,
         img_size=224,
         num_classes=1000,
-        global_pool='avg'
+        global_pool='avg',
         features_only = False
     ):
         super().__init__()
