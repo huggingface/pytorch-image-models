@@ -441,7 +441,7 @@ class DaViT(nn.Module):
                 ) for layer_id, item in enumerate(block_param)
             ])
             
-            self.main_blocks.add_module(f'block.{block_id}', block)
+            self.main_blocks.add_module(f'block', block)
             
             self.feature_info += [dict(num_chs=self.embed_dims[block_id], reduction = 2, module=f'block.{block_id}')]
         #self.main_blocks = nn.ModuleList(main_blocks)
