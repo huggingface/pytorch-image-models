@@ -494,9 +494,7 @@ class DaViT(nn.Module):
         for patch_layer, stage in zip(self.patch_embeds, self.main_blocks):
             features[-1], sizes[-1] = patch_layer(features[-1], sizes[-1])
             for _, block in enumerate(stage):
-                print(block)
                 for _, layer in enumerate(block):
-                    print(layer)
                     if self.grad_checkpointing and not torch.jit.is_scripting():
                         features[-1], sizes[-1] = checkpoint.checkpoint(layer, features[-1], sizes[-1])
                     else:
