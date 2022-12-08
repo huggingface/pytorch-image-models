@@ -38,6 +38,8 @@ class MySequential(nn.Sequential):
 
     def forward(self, inputs : Tensor, size : Tuple[int, int]):
         for module in self:
+            inputs : Tensor
+            size : Tuple[int, int]
             (inputs, size) = module(inputs, size)
         return inputs
 
