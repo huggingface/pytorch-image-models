@@ -477,7 +477,7 @@ class DaViT(nn.Module):
         features = [x]
         sizes = [size]
         
-        for patch_layer, stage in enumerate(zip(self.patch_embeds, self.stages)):
+        for patch_layer, stage in zip(self.patch_embeds, self.stages):
             features[-1], sizes[-1] = patch_layer(features[-1], sizes[-1])
             for _, block in enumerate(stage):
                 for _, layer in enumerate(block):
