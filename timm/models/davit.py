@@ -660,7 +660,7 @@ def _create_davit(variant, pretrained=False, **kwargs):
     out_indices = (i for i, _ in enumerate(kwargs.get('depths', (1, 1, 3, 1))))
     feature_cfg = {'out_indices', out_indices}
     model = build_model_with_cfg(DaViT, variant, pretrained,
-    pretrained_filter_fn=checkpoint_filter_fn, feature_cfg=feature_cfg **kwargs)
+    pretrained_filter_fn=checkpoint_filter_fn, feature_cfg=feature_cfg, **kwargs)
     return model
 
 
