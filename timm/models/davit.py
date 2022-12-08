@@ -443,7 +443,7 @@ class DaViT(nn.Module):
             
             self.main_blocks.append(block)
             
-            self.feature_info += [dict(num_ch=self.embed_dims[block_id], reduction = 2, module=f'block.{block_id}')]
+            self.feature_info += [dict(num_chs=self.embed_dims[block_id], reduction = 2, module=f'block.{block_id}')]
         #self.main_blocks = nn.ModuleList(main_blocks)
         
         '''
