@@ -22,13 +22,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from .helpers import build_model_with_cfg
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, ClassifierHead, Mlp
 from .features import FeatureInfo
 from collections import OrderedDict
 import torch.utils.checkpoint as checkpoint
-from .pretrained import generate_default_cfgs, pretrained_cfg_for_features
+from .pretrained import generate_default_cfgs
 from .registry import register_model
 
 
