@@ -410,12 +410,12 @@ class DaViT(nn.Module):
             for i in range(self.num_stages)])
 
         #main_blocks = []
-        self.stages = nn.Sequential()
-        for stage_id, stage_param in enumerate(self.architecture):
-            layer_offset_id = len(list(itertools.chain(*self.architecture[:stage_id])))
+        self.main_blocks = nn.ModuleList()
+        for block_id, block_param in enumerate(self.architecture):
+            layer_offset_id = len(list(itertools.chain(*self.architecture[:block_id])))
 
-            stage = nn.Sequential(
-                nn.Sequential(
+            block = nn.ModuleList([
+                nn.ModuleList([
                     ChannelBlock(
                         dim=self.embed_dims[item],
                         num_heads=self.num_heads[item],
@@ -437,13 +437,13 @@ class DaViT(nn.Module):
                         cpe_act=cpe_act,
                         window_size=window_size,
                     ) if attention_type == 'spatial' else None
-                    for attention_id, attention_type in enumerate(attention_types)
-                ) for layer_id, item in enumerate(stage_param)
-            )
+                    for attention_id, attention_type in enumerate(attention_types)]
+                ) for layer_id, item in enumerate(block_param)
+            ])
             
-            self.main_blocks.append(stage)
+            self.main_blocks.append(block)
             
-            self.feature_info += [dict(num_ch=self.embed_dims[stage_id], reduction = 2, module=f'stage.{stage_id}')]
+            self.feature_info += [dict(num_ch=self.embed_dims[block_id], reduction = 2, module=f'block.{block_id}')]
         #self.main_blocks = nn.ModuleList(main_blocks)
         
         '''
