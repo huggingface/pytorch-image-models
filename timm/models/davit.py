@@ -607,7 +607,7 @@ class DaViT(nn.Module):
         outs = []
         for i, out in enumerate(x):
             H, W = sizes[i]
-            outs.append(x.view(-1, H, W, self.embed_dims[i]).permute(0, 3, 1, 2).contiguous())
+            outs.append(out.view(-1, H, W, self.embed_dims[i]).permute(0, 3, 1, 2).contiguous())
         
         return outs
     
