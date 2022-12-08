@@ -477,7 +477,7 @@ class DaViT(nn.Module):
     def features_only(self):
         return self._features_only
         
-    @value.setter
+    @features_only.setter
     def features_only(self, new_value):
         self._features_only = new_value
         self.forward = _get_forward_fn()
