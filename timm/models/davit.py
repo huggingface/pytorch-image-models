@@ -14,7 +14,7 @@ DaViT model defs and weights adapted from https://github.com/dingmyu/davit, orig
 
 import itertools
 
-from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, overload, Tuple, TypeVar, Union
+from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, overload, Tuple, TypeVar, Union, List
 
 
 
