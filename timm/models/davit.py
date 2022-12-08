@@ -458,7 +458,7 @@ class DaViT(nn.Module):
         self.apply(self._init_weights)
         
         
-        self._update_forward_fn()
+        self.forward = self._get_forward_fn()
         '''
         if self._features_only == True:
             self.forward = self.forward_features_full
