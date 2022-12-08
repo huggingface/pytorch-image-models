@@ -33,16 +33,6 @@ from .registry import register_model
 
 __all__ = ['DaViT']
 
-
-class MySequential(nn.Sequential):
-
-    def forward(self, inputs : Tensor, size : Tuple[int, int]):
-        for module in self:
-            output = module(inputs, size)
-            inputs : Tensor = output[0]
-            size : Tuple[int, int] = output[1]
-        return inputs, size
-
 class ConvPosEnc(nn.Module):
     def __init__(self, dim : int, k : int=3, act : bool=False, normtype : str='none'):
 
@@ -113,7 +103,7 @@ class PatchEmbed(nn.Module):
             self.norm = nn.LayerNorm(in_chans)
 
 
-    def forward(self, x : Tensor, size: Tuple[int, int]):
+    def forward(self, x, size: Tuple[int, int]):
         H, W = size
         dim = len(x.shape)
         if dim == 3:
@@ -187,7 +177,7 @@ class ChannelBlock(nn.Module):
                 act_layer=act_layer)
 
 
-    def forward(self, x : Tensor, size: Tuple[int, int]):
+    def forward(self, x, size: Tuple[int, int]):
         x = self.cpe[0](x, size)
         cur = self.norm1(x)
         cur = self.attn(cur)
@@ -312,7 +302,7 @@ class SpatialBlock(nn.Module):
                 act_layer=act_layer)
 
 
-    def forward(self, x : Tensor, size: Tuple[int, int]):
+    def forward(self, x, size: Tuple[int, int]):
 
         H, W = size
         B, L, C = x.shape
@@ -421,8 +411,8 @@ class DaViT(nn.Module):
         for stage_id, stage_param in enumerate(self.architecture):
             layer_offset_id = len(list(itertools.chain(*self.architecture[:stage_id])))
 
-            stage = MySequential(*[
-                MySequential(*[
+            stage = nn.ModuleList([
+                nn.ModuleList([
                     ChannelBlock(
                         dim=self.embed_dims[item],
                         num_heads=self.num_heads[item],
@@ -453,7 +443,7 @@ class DaViT(nn.Module):
             self.feature_info += [dict(
                 num_chs=self.embed_dims[stage_id],
                 reduction = 2,
-                module=f'stages.stage_{stage_id}')]#.{depths[stage_id] - 1}.{len(attention_types) - 1}.mlp.drop2')]
+                module=f'stages.stage_{stage_id}.{depths[stage_id] - 1}.{len(attention_types) - 1}.mlp')]
 
 
         self.norms = norm_layer(self.num_features)
@@ -492,8 +482,8 @@ class DaViT(nn.Module):
         
         for patch_layer, stage in zip(self.patch_embeds, self.stages):
             features[-1], sizes[-1] = patch_layer(features[-1], sizes[-1])
-            for block in stage:
-                for layer in block:
+            for _, block in enumerate(stage):
+                for _, layer in enumerate(block):
                     if self.grad_checkpointing and not torch.jit.is_scripting():
                         features[-1], sizes[-1] = checkpoint.checkpoint(layer, features[-1], sizes[-1])
                     else:
