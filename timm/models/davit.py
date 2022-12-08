@@ -217,7 +217,7 @@ def window_reverse(windows : Tensor, window_size: int, H: int, W: int):
     """
     
     B = dict(int(torch.floor(torch.tensor(windows.size(dim=0)) / (H * W / window_size / window_size)).item()))
-    x = windows.view(B[0], H // window_size, W // window_size, window_size, window_size, -1)
+    x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
     return x
 
