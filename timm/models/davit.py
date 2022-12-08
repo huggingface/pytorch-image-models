@@ -411,8 +411,8 @@ class DaViT(nn.Module):
         for stage_id, stage_param in enumerate(self.architecture):
             layer_offset_id = len(list(itertools.chain(*self.architecture[:stage_id])))
 
-            stage = nn.Sequential([
-                nn.Sequential([
+            stage = nn.ModuleList([
+                nn.ModuleList([
                     ChannelBlock(
                         dim=self.embed_dims[item],
                         num_heads=self.num_heads[item],
