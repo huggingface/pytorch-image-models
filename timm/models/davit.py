@@ -414,8 +414,8 @@ class DaViT(nn.Module):
         for stage_id, stage_param in enumerate(self.architecture):
             layer_offset_id = len(list(itertools.chain(*self.architecture[:stage_id])))
 
-            stage = nn.Sequential([
-                nn.Sequential([
+            stage = nn.Sequential(
+                nn.Sequential(
                     ChannelBlock(
                         dim=self.embed_dims[item],
                         num_heads=self.num_heads[item],
@@ -437,9 +437,9 @@ class DaViT(nn.Module):
                         cpe_act=cpe_act,
                         window_size=window_size,
                     ) if attention_type == 'spatial' else None
-                    for attention_id, attention_type in enumerate(attention_types)]
+                    for attention_id, attention_type in enumerate(attention_types)
                 ) for layer_id, item in enumerate(stage_param)
-            ])
+            )
             
             self.main_blocks.append(stage)
             
