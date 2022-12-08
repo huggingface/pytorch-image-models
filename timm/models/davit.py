@@ -600,7 +600,7 @@ class DaViT(nn.Module):
         
         
         # non-normalized pyramid features + corresponding sizes
-        return features[1:], sizes[:-1]
+        return features, sizes
     
     def forward_pyramid_features(self, x):
         x, sizes = self.forward_network(x)
