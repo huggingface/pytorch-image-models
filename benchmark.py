@@ -56,6 +56,7 @@ try:
 except ImportError as e:
     has_functorch = False
 
+has_compile = hasattr(torch, 'compile')
 
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -74,12 +75,16 @@ parser.add_argument('--detail', action='store_true', default=False,
                     help='Provide train fwd/bwd/opt breakdown detail if True. Defaults to False')
 parser.add_argument('--no-retry', action='store_true', default=False,
                     help='Do not decay batch size and retry on error.')
-parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
+parser.add_argument('--results-file', default='', type=str,
                     help='Output csv file for validation results (summary)')
+parser.add_argument('--results-format', default='csv', type=str,
+                    help='Format for results file one of (csv, json) (default: csv).')
 parser.add_argument('--num-warm-iter', default=10, type=int,
-                    metavar='N', help='Number of warmup iterations (default: 10)')
+                    help='Number of warmup iterations (default: 10)')
 parser.add_argument('--num-bench-iter', default=40, type=int,
-                    metavar='N', help='Number of benchmark iterations (default: 40)')
+                    help='Number of benchmark iterations (default: 40)')
+parser.add_argument('--device', default='cuda', type=str,
+                    help="device to run benchmark on")
 
 # common inference / train args
 parser.add_argument('--model', '-m', metavar='NAME', default='resnet50',
@@ -106,13 +111,18 @@ parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+parser.add_argument('--fast-norm', default=False, action='store_true',
+                    help='enable experimental fast-norm')
+
+# codegen (model compilation) options
 scripting_group = parser.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
+                             help='convert model torchscript for inference')
+scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
+                             help="Enable compilation w/ specified backend (default: inductor).")
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
-                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
-scripting_group.add_argument('--fast-norm', default=False, action='store_true',
-                    help='enable experimental fast-norm')
+                             help="Enable AOT Autograd optimization.")
+
 
 # train optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -205,6 +215,7 @@ class BenchmarkRunner:
             detail=False,
             device='cuda',
             torchscript=False,
+            torchcompile=None,
             aot_autograd=False,
             precision='float32',
             fuser='',
@@ -241,16 +252,22 @@ class BenchmarkRunner:
         _logger.info('Model %s created, param count: %d' % (model_name, self.param_count))
 
         data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
-        self.scripted = False
-        if torchscript:
-            self.model = torch.jit.script(self.model)
-            self.scripted = True
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
 
-        if aot_autograd:
+        self.compiled = False
+        if torchscript:
+            self.model = torch.jit.script(self.model)
+            self.compiled = True
+        elif torchcompile:
+            assert has_compile, 'A version of torch w/ torch.compile() is required, possibly a nightly.'
+            torch._dynamo.reset()
+            self.model = torch.compile(self.model, backend=torchcompile)
+            self.compiled = True
+        elif aot_autograd:
             assert has_functorch, "functorch is needed for --aot-autograd"
             self.model = memory_efficient_fusion(self.model)
+            self.compiled = True
 
         self.example_inputs = None
         self.num_warm_iter = num_warm_iter
@@ -322,7 +339,7 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             param_count=round(self.param_count / 1e6, 2),
         )
 
-        retries = 0 if self.scripted else 2  # skip profiling if model is scripted
+        retries = 0 if self.compiled else 2  # skip profiling if model is scripted
         while retries:
             retries -= 1
             try:
@@ -620,7 +637,6 @@ def main():
         model_cfgs = [(n, None) for n in model_names]
 
     if len(model_cfgs):
-        results_file = args.results_file or './benchmark.csv'
         _logger.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         results = []
         try:
@@ -641,22 +657,30 @@ def main():
             sort_key = 'infer_gmacs'
         results = filter(lambda x: sort_key in x, results)
         results = sorted(results, key=lambda x: x[sort_key], reverse=True)
-        if len(results):
-            write_results(results_file, results)
     else:
         results = benchmark(args)
+
+    if args.results_file:
+        write_results(args.results_file, results, format=args.results_format)
 
     # output results in JSON to stdout w/ delimiter for runner script
     print(f'--result\n{json.dumps(results, indent=4)}')
 
 
-def write_results(results_file, results):
+def write_results(results_file, results, format='csv'):
     with open(results_file, mode='w') as cf:
-        dw = csv.DictWriter(cf, fieldnames=results[0].keys())
-        dw.writeheader()
-        for r in results:
-            dw.writerow(r)
-        cf.flush()
+        if format == 'json':
+            json.dump(results, cf, indent=4)
+        else:
+            if not isinstance(results, (list, tuple)):
+                results = [results]
+            if not results:
+                return
+            dw = csv.DictWriter(cf, fieldnames=results[0].keys())
+            dw.writeheader()
+            for r in results:
+                dw.writerow(r)
+            cf.flush()
 
 
 if __name__ == '__main__':

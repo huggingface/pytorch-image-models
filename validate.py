@@ -26,12 +26,11 @@ from timm.data import create_dataset, create_loader, resolve_data_config, RealLa
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser,\
     decay_batch_step, check_batch_size_retry
 
-has_apex = False
 try:
     from apex import amp
     has_apex = True
 except ImportError:
-    pass
+    has_apex = False
 
 has_native_amp = False
 try:
@@ -46,14 +45,18 @@ try:
 except ImportError as e:
     has_functorch = False
 
+has_compile = hasattr(torch, 'compile')
+
 _logger = logging.getLogger('validate')
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--dataset', '-d', metavar='NAME', default='',
-                    help='dataset type (default: ImageFolder/ImageTar if empty)')
+parser.add_argument('data', nargs='?', metavar='DIR', const=None,
+                    help='path to dataset (*deprecated*, use --data-dir)')
+parser.add_argument('--data-dir', metavar='DIR',
+                    help='path to dataset (root dir)')
+parser.add_argument('--dataset', metavar='NAME', default='',
+                    help='dataset type + name ("<type>/<name>") (default: ImageFolder or ImageTar if empty)')
 parser.add_argument('--split', metavar='NAME', default='validation',
                     help='dataset split (default: validation)')
 parser.add_argument('--dataset-download', action='store_true', default=False,
@@ -72,6 +75,8 @@ parser.add_argument('--use-train-size', action='store_true', default=False,
                     help='force use of train input size, even when test size is specified in pretrained cfg')
 parser.add_argument('--crop-pct', default=None, type=float,
                     metavar='N', help='Input image center crop pct')
+parser.add_argument('--crop-mode', default=None, type=str,
+                    metavar='N', help='Input image crop mode (squash, border, center). Model default if None.')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
@@ -112,17 +117,23 @@ parser.add_argument('--tf-preprocessing', action='store_true', default=False,
                     help='Use Tensorflow preprocessing pipeline (require CPU TF installed')
 parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
-scripting_group = parser.add_mutually_exclusive_group()
-scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='torch.jit.script the full model')
-scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
-                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
+
+scripting_group = parser.add_mutually_exclusive_group()
+scripting_group.add_argument('--torchscript', default=False, action='store_true',
+                             help='torch.jit.script the full model')
+scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
+                             help="Enable compilation w/ specified backend (default: inductor).")
+scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
+                             help="Enable AOT Autograd support.")
+
 parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
                     help='Output csv file for validation results (summary)')
+parser.add_argument('--results-format', default='csv', type=str,
+                    help='Format for results file one of (csv, json) (default: csv).')
 parser.add_argument('--real-labels', default='', type=str, metavar='FILENAME',
                     help='Real labels JSON file for imagenet evaluation')
 parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
@@ -196,20 +207,23 @@ def validate(args):
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config)
 
-    if args.torchscript:
-        torch.jit.optimized_execution(True)
-        model = torch.jit.script(model)
+    model = model.to(device)
+    if args.channels_last:
+        model = model.to(memory_format=torch.channels_last)
 
-    if args.aot_autograd:
+    if args.torchscript:
+        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
+        model = torch.jit.script(model)
+    elif args.torchcompile:
+        assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
+        torch._dynamo.reset()
+        model = torch.compile(model, backend=args.torchcompile)
+    elif args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)
 
-    model = model.to(device)
     if use_amp == 'apex':
         model = amp.initialize(model, opt_level='O1')
-
-    if args.channels_last:
-        model = model.to(memory_format=torch.channels_last)
 
     if args.num_gpu > 1:
         model = torch.nn.DataParallel(model, device_ids=list(range(args.num_gpu)))
@@ -248,6 +262,7 @@ def validate(args):
         std=data_config['std'],
         num_workers=args.workers,
         crop_pct=crop_pct,
+        crop_mode=data_config['crop_mode'],
         pin_memory=args.pin_mem,
         device=device,
         tf_preprocessing=args.tf_preprocessing,
@@ -376,7 +391,7 @@ def main():
             model_cfgs = [(n, '') for n in model_names]
         elif not is_model(args.model):
             # model name doesn't exist, try as wildcard filter
-            model_names = list_models(args.model)
+            model_names = list_models(args.model, pretrained=True)
             model_cfgs = [(n, '') for n in model_names]
 
         if not model_cfgs and os.path.isfile(args.model):
@@ -385,7 +400,6 @@ def main():
             model_cfgs = [(n, None) for n in model_names if n]
 
     if len(model_cfgs):
-        results_file = args.results_file or './results-all.csv'
         _logger.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         results = []
         try:
@@ -402,24 +416,34 @@ def main():
         except KeyboardInterrupt as e:
             pass
         results = sorted(results, key=lambda x: x['top1'], reverse=True)
-        if len(results):
-            write_results(results_file, results)
     else:
         if args.retry:
             results = _try_run(args, args.batch_size)
         else:
             results = validate(args)
+
+    if args.results_file:
+        write_results(args.results_file, results, format=args.results_format)
+
     # output results in JSON to stdout w/ delimiter for runner script
     print(f'--result\n{json.dumps(results, indent=4)}')
 
 
-def write_results(results_file, results):
+def write_results(results_file, results, format='csv'):
     with open(results_file, mode='w') as cf:
-        dw = csv.DictWriter(cf, fieldnames=results[0].keys())
-        dw.writeheader()
-        for r in results:
-            dw.writerow(r)
-        cf.flush()
+        if format == 'json':
+            json.dump(results, cf, indent=4)
+        else:
+            if not isinstance(results, (list, tuple)):
+                results = [results]
+            if not results:
+                return
+            dw = csv.DictWriter(cf, fieldnames=results[0].keys())
+            dw.writeheader()
+            for r in results:
+                dw.writerow(r)
+            cf.flush()
+
 
 
 if __name__ == '__main__':

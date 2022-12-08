@@ -143,3 +143,17 @@ class GELU(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.gelu(input)
+
+
+def gelu_tanh(x: torch.Tensor, inplace: bool = False) -> torch.Tensor:
+    return F.gelu(x, approximate='tanh')
+
+
+class GELUTanh(nn.Module):
+    """Applies the Gaussian Error Linear Units function (w/ dummy inplace arg)
+    """
+    def __init__(self, inplace: bool = False):
+        super(GELUTanh, self).__init__()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.gelu(input, approximate='tanh')

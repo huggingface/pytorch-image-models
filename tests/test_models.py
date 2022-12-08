@@ -13,8 +13,7 @@ except ImportError:
     has_fx_feature_extraction = False
 
 import timm
-from timm import list_models, create_model, set_scriptable, has_pretrained_cfg_key, is_pretrained_cfg_key, \
-    get_pretrained_cfg_value
+from timm import list_models, create_model, set_scriptable, get_pretrained_cfg_value
 from timm.models.fx_features import _leaf_modules, _autowrap_functions    
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
@@ -28,7 +27,7 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'swinv2_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'pvig_*',
+    'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'eva_*', 'pvig_*'
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -40,7 +39,7 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*', 'swin*huge*',
         'swin*giant*']
-    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*', 'swin*giant*']
+    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*', 'swin*giant*', 'eva_giant*']
 else:
     EXCLUDE_FILTERS = []
     NON_STD_EXCLUDE_FILTERS = ['vit_gi*']
@@ -270,7 +269,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*', 'ghostnet*', 'pvig*',  # hopefully fix at some point
+    'dla*', 'hrnet*', 'ghostnet*', 'pvig_*',  # hopefully fix at some point
     'vit_large_*', 'vit_huge_*', 'vit_gi*',
 ]
 
@@ -377,6 +376,7 @@ if not _IS_MAC:
             'vit_large*',
             'vit_base_patch8*',
             'xcit_large*',
+            'pvig_*',
         ]
 
 

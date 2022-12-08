@@ -57,52 +57,52 @@ default_cfgs = {
     # pretrained on imagenet21k, finetuned on imagenet1k
     'resnetv2_50x1_bitm': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R50x1-ILSVRC2012.npz',
-        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, custom_load=True),
     'resnetv2_50x3_bitm': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R50x3-ILSVRC2012.npz',
-        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, custom_load=True),
     'resnetv2_101x1_bitm': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R101x1-ILSVRC2012.npz',
-        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, custom_load=True),
     'resnetv2_101x3_bitm': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R101x3-ILSVRC2012.npz',
-        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, custom_load=True),
     'resnetv2_152x2_bitm': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R152x2-ILSVRC2012.npz',
-        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0),
+        input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, custom_load=True),
     'resnetv2_152x4_bitm': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R152x4-ILSVRC2012.npz',
-        input_size=(3, 480, 480), pool_size=(15, 15), crop_pct=1.0),  # only one at 480x480?
+        input_size=(3, 480, 480), pool_size=(15, 15), crop_pct=1.0, custom_load=True),  # only one at 480x480?
 
     # trained on imagenet-21k
     'resnetv2_50x1_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R50x1.npz',
-        num_classes=21843),
+        num_classes=21843, custom_load=True),
     'resnetv2_50x3_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R50x3.npz',
-        num_classes=21843),
+        num_classes=21843, custom_load=True),
     'resnetv2_101x1_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R101x1.npz',
-        num_classes=21843),
+        num_classes=21843, custom_load=True),
     'resnetv2_101x3_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R101x3.npz',
-        num_classes=21843),
+        num_classes=21843, custom_load=True),
     'resnetv2_152x2_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R152x2.npz',
-        num_classes=21843),
+        num_classes=21843, custom_load=True),
     'resnetv2_152x4_bitm_in21k': _cfg(
         url='https://storage.googleapis.com/bit_models/BiT-M-R152x4.npz',
-        num_classes=21843),
+        num_classes=21843, custom_load=True),
 
     'resnetv2_50x1_bit_distilled': _cfg(
         url='https://storage.googleapis.com/bit_models/distill/R50x1_224.npz',
-        interpolation='bicubic'),
+        interpolation='bicubic', custom_load=True),
     'resnetv2_152x2_bit_teacher': _cfg(
         url='https://storage.googleapis.com/bit_models/distill/R152x2_T_224.npz',
-        interpolation='bicubic'),
+        interpolation='bicubic', custom_load=True),
     'resnetv2_152x2_bit_teacher_384': _cfg(
         url='https://storage.googleapis.com/bit_models/distill/R152x2_T_384.npz',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic'),
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, interpolation='bicubic', custom_load=True),
 
     'resnetv2_50': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetv2_50_a1h-000cdf49.pth',
@@ -507,8 +507,8 @@ def _create_resnetv2(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         ResNetV2, variant, pretrained,
         feature_cfg=feature_cfg,
-        pretrained_custom_load='_bit' in variant,
-        **kwargs)
+        **kwargs,
+    )
 
 
 def _create_resnetv2_bit(variant, pretrained=False, **kwargs):

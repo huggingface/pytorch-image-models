@@ -211,6 +211,7 @@ def create_loader(
         num_workers=1,
         distributed=False,
         crop_pct=None,
+        crop_mode=None,
         collate_fn=None,
         pin_memory=False,
         fp16=False,  # deprecated, use img_dtype
@@ -240,6 +241,7 @@ def create_loader(
         mean=mean,
         std=std,
         crop_pct=crop_pct,
+        crop_mode=crop_mode,
         tf_preprocessing=tf_preprocessing,
         re_prob=re_prob,
         re_mode=re_mode,

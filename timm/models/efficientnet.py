@@ -366,11 +366,11 @@ default_cfgs = {
     'tf_efficientnetv2_m': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_m-cc09e0cd.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'tf_efficientnetv2_l': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_l-d664b728.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
 
     'tf_efficientnetv2_s_in21ft1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_s_21ft1k-d7dafa41.pth',
@@ -379,15 +379,15 @@ default_cfgs = {
     'tf_efficientnetv2_m_in21ft1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_m_21ft1k-bf41664a.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'tf_efficientnetv2_l_in21ft1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_l_21ft1k-60127a9d.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'tf_efficientnetv2_xl_in21ft1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_xl_in21ft1k-06c35c48.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
 
     'tf_efficientnetv2_s_in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_s_21k-6337ad01.pth',
@@ -396,15 +396,15 @@ default_cfgs = {
     'tf_efficientnetv2_m_in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_m_21k-361418a2.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
-        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'tf_efficientnetv2_l_in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_l_21k-91a19ec9.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
-        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'tf_efficientnetv2_xl_in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_xl_in21k-fd7e8abf.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
-        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
+        input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
 
     'tf_efficientnetv2_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_b0-c7cc451f.pth',
