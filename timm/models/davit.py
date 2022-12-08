@@ -482,7 +482,7 @@ class DaViT(nn.Module):
         else:
             return self.forward_classification
     '''
-    
+    @torch.jit.ignore
     def _update_forward_fn(self):
         if self._features_only == True:
             self.forward = self.forward_features_full
