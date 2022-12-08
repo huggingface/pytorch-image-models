@@ -384,7 +384,7 @@ class DaViT(nn.Module):
         num_classes=1000,
         global_pool='avg'#,
         #features_only = False
-    ):
+    **kwargs):
         super().__init__()
 
         architecture = [[index] * item for index, item in enumerate(depths)]
