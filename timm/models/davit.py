@@ -38,7 +38,7 @@ class MySequential(nn.Sequential):
 
     def forward(self, inputs : Tensor, size : Tuple[int, int]):
         for module in self:
-            inputs, size = module(inputs, size)
+            (inputs, size) = module(inputs, size)
         return inputs
 
 class ConvPosEnc(nn.Module):
