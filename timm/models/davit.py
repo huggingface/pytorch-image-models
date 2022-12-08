@@ -41,7 +41,7 @@ class MySequential(nn.Sequential):
             output = module(inputs, size)
             inputs : Tensor = output[0]
             size : Tuple[int, int] = output[1]
-        return inputs
+        return inputs, size
 
 class ConvPosEnc(nn.Module):
     def __init__(self, dim : int, k : int=3, act : bool=False, normtype : str='none'):
