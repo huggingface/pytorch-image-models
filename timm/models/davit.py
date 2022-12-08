@@ -409,7 +409,8 @@ class DaViT(nn.Module):
                        overlapped=overlapped_patch)
             for i in range(self.num_stages)])
 
-        main_blocks = []
+        #main_blocks = []
+        self.main_blocks = nn.ModuleList()
         for block_id, block_param in enumerate(self.architecture):
             layer_offset_id = len(list(itertools.chain(*self.architecture[:block_id])))
 
@@ -440,10 +441,10 @@ class DaViT(nn.Module):
                 ) for layer_id, item in enumerate(block_param)
             ])
             
-            main_blocks.add_module(f'block.{block_id}', block)
+            self.main_blocks.add_module(f'block.{block_id}', block)
             
             self.feature_info += [dict(num_ch=self.embed_dims[block_id], reduction = 2, module=f'block.{block_id}')]
-        self.main_blocks = nn.ModuleList(main_blocks)
+        #self.main_blocks = nn.ModuleList(main_blocks)
         
         '''
         # layer norms for pyramid feature extraction
