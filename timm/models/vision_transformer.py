@@ -933,6 +933,25 @@ default_cfgs = generate_default_cfgs({
     'vit_small_patch16_36x1_224': _cfg(url=''),
     'vit_small_patch16_18x2_224': _cfg(url=''),
     'vit_base_patch16_18x2_224': _cfg(url=''),
+
+    # EVA fine-tuned weights from MAE style MIM - EVA-CLIP target pretrain
+    # https://github.com/baaivision/EVA/blob/7ecf2c0a370d97967e86d047d7af9188f78d2df3/eva/README.md#eva-l-learning-better-mim-representations-from-eva-clip
+    'eva_large_patch14_196.in22k_ft_in22k_in1k': _cfg(
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_196px_21k_to_1k_ft_88p6.pt',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 196, 196), crop_pct=1.0),
+    'eva_large_patch14_336.in22k_ft_in22k_in1k': _cfg(
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_336px_21k_to_1k_ft_89p2.pt',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 336, 336), crop_pct=1.0, crop_mode='squash'),
+    'eva_large_patch14_196.in22k_ft_in1k': _cfg(
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_196px_1k_ft_88p0.pt',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 196, 196), crop_pct=1.0),
+    'eva_large_patch14_336.in22k_ft_in1k': _cfg(
+        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_336px_1k_ft_88p65.pt',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 336, 336), crop_pct=1.0, crop_mode='squash'),
 })
 
 
@@ -1353,4 +1372,22 @@ def vit_base_patch16_18x2_224(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=18, num_heads=12, init_values=1e-5, block_fn=ParallelBlock, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_18x2_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def eva_large_patch14_196(pretrained=False, **kwargs):
+    """ EVA-large model https://arxiv.org/abs/2211.07636 /via MAE MIM pretrain"""
+    model_kwargs = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg', **kwargs)
+    model = _create_vision_transformer('eva_large_patch14_196', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def eva_large_patch14_336(pretrained=False, **kwargs):
+    """ EVA-large model https://arxiv.org/abs/2211.07636 via MAE MIM pretrain"""
+    model_kwargs = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg', **kwargs)
+    model = _create_vision_transformer('eva_large_patch14_336', pretrained=pretrained, **model_kwargs)
     return model

@@ -21,6 +21,17 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+# Dec 8, 2022
+* Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
+  * original source: https://github.com/baaivision/EVA
+
+| model                                     | top1 | param_count |  gmac | macts | hub                                     |
+|:------------------------------------------|-----:|------------:|------:|------:|:----------------------------------------|
+| eva_large_patch14_336.in22k_ft_in22k_in1k | 89.2 |       304.5 | 191.1 | 270.2 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_large_patch14_336.in22k_ft_in1k       | 88.7 |       304.5 | 191.1 | 270.2 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_large_patch14_196.in22k_ft_in22k_in1k | 88.6 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_large_patch14_196.in22k_ft_in1k       | 87.9 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
+
 # Dec 6, 2022
 * Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
   * original source: https://github.com/baaivision/EVA
