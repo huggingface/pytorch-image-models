@@ -21,14 +21,14 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
-# Survey: Feedback Appreciated
+### Survey: Feedback Appreciated
 
 For a few months now, `timm` has been part of the Hugging Face ecosystem. Yearly, we survey users of our tools to see what we could do better, what we need to continue doing, or what we need to stop doing. 
 
 If you have a couple of minutes and want to participate in shaping the future of the ecosystem, please share your thoughts:
 [**hf.co/oss-survey**](https://hf.co/oss-survey)
 
-# Dec 8, 2022
+### Dec 8, 2022
 * Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
   * original source: https://github.com/baaivision/EVA
 
@@ -39,7 +39,7 @@ If you have a couple of minutes and want to participate in shaping the future of
 | eva_large_patch14_196.in22k_ft_in22k_in1k | 88.6 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
 | eva_large_patch14_196.in22k_ft_in1k       | 87.9 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
 
-# Dec 6, 2022
+### Dec 6, 2022
 * Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
   * original source: https://github.com/baaivision/EVA
   * paper: https://arxiv.org/abs/2211.07636
@@ -51,7 +51,7 @@ If you have a couple of minutes and want to participate in shaping the future of
 | eva_giant_patch14_336.clip_ft_in1k       |   89.4 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
 | eva_giant_patch14_224.clip_ft_in1k       |   89.1 |        1012.6 |  267.2 |   192.6 | [link](https://huggingface.co/BAAI/EVA) |
 
-# Dec 5, 2022
+### Dec 5, 2022
 
 * Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`). Install with `pip install --pre timm`
   * vision_transformer, maxvit, convnext are the first three model impl w/ support
