@@ -31,6 +31,9 @@ except ImportError:
 
 _logger = logging.getLogger(__name__)
 
+__all__ = ['get_cache_dir', 'download_cached_file', 'has_hf_hub', 'hf_split', 'load_model_config_from_hf',
+           'load_state_dict_from_hf', 'save_for_hf', 'push_to_hf_hub']
+
 
 def get_cache_dir(child_dir=''):
     """

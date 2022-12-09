@@ -12,7 +12,7 @@ from typing import List, Optional, Union, Tuple
 from ._pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
 
 __all__ = [
-    'list_models', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
+    'list_models', 'list_pretrained', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
     'get_pretrained_cfg_value', 'is_model_pretrained', 'get_arch_name']
 
 _module_to_models = defaultdict(set)  # dict of sets to check membership of model in module

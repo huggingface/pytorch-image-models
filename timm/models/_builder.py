@@ -23,6 +23,10 @@ _DOWNLOAD_PROGRESS = False
 _CHECK_HASH = False
 
 
+__all__ = ['set_pretrained_download_progress', 'set_pretrained_check_hash', 'load_custom_pretrained', 'load_pretrained',
+           'pretrained_cfg_for_features', 'resolve_pretrained_cfg', 'build_model_with_cfg']
+
+
 def _resolve_pretrained_source(pretrained_cfg):
     cfg_source = pretrained_cfg.get('source', '')
     pretrained_url = pretrained_cfg.get('url', None)

@@ -5,6 +5,8 @@ from torch import nn as nn
 
 from timm.layers import Conv2dSame, BatchNormAct2d, Linear
 
+__all__ = ['extract_layer', 'set_layer', 'adapt_model_from_string', 'adapt_model_from_file']
+
 
 def extract_layer(model, layer):
     layer = layer.split('.')

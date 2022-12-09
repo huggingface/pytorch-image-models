@@ -17,6 +17,9 @@ import torch
 import torch.nn as nn
 
 
+__all__ = ['FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet']
+
+
 class FeatureInfo:
 
     def __init__(self, feature_info: List[Dict], out_indices: Tuple[int]):

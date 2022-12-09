@@ -9,6 +9,9 @@ from ._hub import load_model_config_from_hf
 from ._registry import is_model, model_entrypoint
 
 
+__all__ = ['parse_model_name', 'safe_model_name', 'create_model']
+
+
 def parse_model_name(model_name):
     if model_name.startswith('hf_hub'):
         # NOTE for backwards compat, deprecate hf_hub use

@@ -12,6 +12,8 @@ import timm.models._builder
 
 _logger = logging.getLogger(__name__)
 
+__all__ = ['clean_state_dict', 'load_state_dict', 'load_checkpoint', 'remap_checkpoint', 'resume_checkpoint']
+
 
 def clean_state_dict(state_dict):
     # 'clean' checkpoint by removing .module prefix from state dict if it exists from parallel training

@@ -35,6 +35,10 @@ except ImportError:
     pass
 
 
+__all__ = ['register_notrace_module', 'register_notrace_function', 'create_feature_extractor',
+           'FeatureGraphNet', 'GraphExtractNet']
+
+
 def register_notrace_module(module: Type[nn.Module]):
     """
     Any module not under timm.models.layers should get this decorator if we don't want to trace through it.

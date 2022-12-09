@@ -9,6 +9,9 @@ import torch
 from torch import nn as nn
 from torch.utils.checkpoint import checkpoint
 
+__all__ = ['model_parameters', 'named_apply', 'named_modules', 'named_modules_with_params', 'adapt_input_conv',
+           'group_with_matcher', 'group_modules', 'group_parameters', 'flatten_modules', 'checkpoint_seq']
+
 
 def model_parameters(model, exclude_head=False):
     if exclude_head:
