@@ -81,9 +81,11 @@ parser.add_argument('--results-file', default='', type=str,
 parser.add_argument('--results-format', default='csv', type=str,
                     help='Format for results file one of (csv, json) (default: csv).')
 parser.add_argument('--num-warm-iter', default=10, type=int,
-                    metavar='N', help='Number of warmup iterations (default: 10)')
+                    help='Number of warmup iterations (default: 10)')
 parser.add_argument('--num-bench-iter', default=40, type=int,
-                    metavar='N', help='Number of benchmark iterations (default: 40)')
+                    help='Number of benchmark iterations (default: 40)')
+parser.add_argument('--device', default='cuda', type=str,
+                    help="device to run benchmark on")
 
 # common inference / train args
 parser.add_argument('--model', '-m', metavar='NAME', default='resnet50',

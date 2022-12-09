@@ -296,9 +296,9 @@ def validate(args):
             with amp_autocast():
                 output = model(input)
 
-            if valid_labels is not None:
-                output = output[:, valid_labels]
-            loss = criterion(output, target)
+                if valid_labels is not None:
+                    output = output[:, valid_labels]
+                loss = criterion(output, target)
 
             if real_labels is not None:
                 real_labels.add_result(output)
