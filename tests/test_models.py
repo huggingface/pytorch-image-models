@@ -27,7 +27,9 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'swinv2_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
+
     'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'eva_*'
+
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
