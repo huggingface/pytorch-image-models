@@ -21,6 +21,13 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+# Survey: Feedback Appreciated
+
+For a few months now, `timm` has been part of the Hugging Face ecosystem. Yearly, we survey users of our tools to see what we could do better, what we need to continue doing, or what we need to stop doing. 
+
+If you have a couple of minutes and want to participate in shaping the future of the ecosystem, please share your thoughts:
+[**hf.co/oss-survey**](https://hf.co/oss-survey)
+
 # Dec 8, 2022
 * Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
   * original source: https://github.com/baaivision/EVA
