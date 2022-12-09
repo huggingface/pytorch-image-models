@@ -67,7 +67,7 @@ class ConvPosEnc(nn.Module):
         
 
 # reason: dim in control sequence
-# FIXME reimplement in a way that allows tracing
+# FIXME reimplement to allow tracing
 @register_notrace_module
 class PatchEmbed(nn.Module):
     """ Size-agnostic implementation of 2D image to patch embedding,
