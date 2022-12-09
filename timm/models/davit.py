@@ -100,10 +100,10 @@ class PatchEmbed(nn.Module):
                 padding=to_2tuple(pad))
             self.norm = nn.LayerNorm(in_chans)
 
-@register_notrace_function # reason: dim in control sequence
+    @register_notrace_function # reason: dim in control sequence
     def forward(self, x : Tensor, size: Tuple[int, int]):
         H, W = size
-        dim = len(x.shape)
+        dim = x.dim()
         if dim == 3:
             B, HW, C = x.shape
             x = self.norm(x)
