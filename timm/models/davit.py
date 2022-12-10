@@ -26,7 +26,7 @@ import torch.utils.checkpoint as checkpoint
 
 from .features import FeatureInfo
 from .fx_features import register_notrace_function, register_notrace_module
-from .helpers import build_model_with_cfg, checkpoint_seq pretrained_cfg_for_features
+from .helpers import build_model_with_cfg, pretrained_cfg_for_features
 from .layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, ClassifierHead, Mlp
 from .pretrained import generate_default_cfgs
 from .registry import register_model
