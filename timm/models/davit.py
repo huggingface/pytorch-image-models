@@ -417,7 +417,7 @@ class DaViTStage(nn.Module):
         
         def forward(self, x : Tensor, size: Tuple[int, int]):
             x, size = self.patch_embed(x, size)
-            for block in self.blocks
+            for block in self.blocks:
                 for layer in block:
                     if self.grad_checkpointing and not torch.jit.is_scripting():
                         x, size = checkpoint.checkpoint(layer, x, size)
