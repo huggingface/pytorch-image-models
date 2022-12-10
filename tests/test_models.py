@@ -40,7 +40,7 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*', 'swin*huge*',
-        'swin*giant*']
+        'swin*giant*', 'davit*giant', 'davit*huge']
     NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*', 'swin*giant*', 'eva_giant*']
 else:
     EXCLUDE_FILTERS = []
@@ -271,7 +271,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*', 'ghostnet*',  # hopefully fix at some point
+    'dla*', 'hrnet*', 'ghostnet*', 'davit*'  # hopefully fix at some point
     'vit_large_*', 'vit_huge_*', 'vit_gi*',
 ]
 
