@@ -61,11 +61,13 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from .helpers import build_model_with_cfg
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
-from .pretrained import generate_default_cfgs
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._pretrained import generate_default_cfgs
+from ._registry import register_model
 from .vision_transformer import checkpoint_filter_fn
+
+__all__ = ['Beit']
 
 
 def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:

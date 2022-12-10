@@ -6,13 +6,12 @@ Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang198
 
 Modified for torchscript compat, and consistency with timm by Ross Wightman
 """
-import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import SplitAttn
-from .registry import register_model
+from timm.layers import SplitAttn
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 from .resnet import ResNet
 
 

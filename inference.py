@@ -5,11 +5,11 @@ An example inference script that outputs top-k class ids for images in a folder 
 
 Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
-import os
-import time
 import argparse
 import json
 import logging
+import os
+import time
 from contextlib import suppress
 from functools import partial
 
@@ -17,11 +17,10 @@ import numpy as np
 import pandas as pd
 import torch
 
-from timm.models import create_model, apply_test_time_pool, load_checkpoint
 from timm.data import create_dataset, create_loader, resolve_data_config
+from timm.layers import apply_test_time_pool
+from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser
-
-
 
 try:
     from apex import amp

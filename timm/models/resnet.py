@@ -15,9 +15,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, create_classifier
-from .registry import register_model
+from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, \
+    create_classifier
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model, model_entrypoint
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
 
@@ -675,6 +677,11 @@ class ResNet(nn.Module):
 
         self.init_weights(zero_init_last=zero_init_last)
 
+    @staticmethod
+    def from_pretrained(model_name: str, load_weights=True, **kwargs) -> 'ResNet':
+        entry_fn = model_entrypoint(model_name, 'resnet')
+        return entry_fn(pretrained=not load_weights, **kwargs)
+
     @torch.jit.ignore
     def init_weights(self, zero_init_last=True):
         for n, m in self.named_modules():
@@ -822,7 +829,7 @@ def resnet50(pretrained=False, **kwargs):
 
 
 @register_model
-def resnet50d(pretrained=False, **kwargs):
+def resnet50d(pretrained=False, **kwargs) -> ResNet:
     """Constructs a ResNet-50-D model.
     """
     model_args = dict(

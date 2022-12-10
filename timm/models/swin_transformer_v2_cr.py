@@ -29,7 +29,6 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from copy import deepcopy
 from typing import Tuple, Optional, List, Union, Any, Type
 
 import torch
@@ -38,11 +37,13 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg, named_apply
-from .layers import DropPath, Mlp, to_2tuple, _assert
-from .registry import register_model
+from timm.layers import DropPath, Mlp, to_2tuple, _assert
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_function
+from ._manipulate import named_apply
+from ._registry import register_model
 
+__all__ = ['SwinTransformerV2Cr']  # model_registry will add each entrypoint fn to this
 
 _logger = logging.getLogger(__name__)
 

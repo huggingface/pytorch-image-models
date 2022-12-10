@@ -16,11 +16,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .features import FeatureInfo
-from .helpers import build_model_with_cfg, pretrained_cfg_for_features
-from .layers import create_classifier
-from .registry import register_model
+from timm.layers import create_classifier
+from ._builder import build_model_with_cfg, pretrained_cfg_for_features
+from ._features import FeatureInfo
+from ._registry import register_model
 from .resnet import BasicBlock, Bottleneck  # leveraging ResNet blocks w/ additional features like SE
+
+__all__ = ['HighResolutionNet', 'HighResolutionNetFeatures']  # model_registry will add each entrypoint fn to this
 
 _BN_MOMENTUM = 0.1
 _logger = logging.getLogger(__name__)

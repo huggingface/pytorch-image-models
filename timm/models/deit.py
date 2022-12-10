@@ -17,9 +17,11 @@ from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
 
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .registry import register_model
+__all__ = ['VisionTransformerDistilled']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

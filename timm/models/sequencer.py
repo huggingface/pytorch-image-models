@@ -6,7 +6,6 @@ Paper: `Sequencer: Deep LSTM for Image Classification` - https://arxiv.org/pdf/2
 #  Copyright (c) 2022. Yuki Tatsunami
 #  Licensed under the Apache License, Version 2.0 (the "License");
 
-
 import math
 from functools import partial
 from typing import Tuple
@@ -15,9 +14,12 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
-from .helpers import build_model_with_cfg, named_apply
-from .layers import lecun_normal_, DropPath, Mlp, PatchEmbed as TimmPatchEmbed
-from .registry import register_model
+from timm.layers import lecun_normal_, DropPath, Mlp, PatchEmbed as TimmPatchEmbed
+from ._builder import build_model_with_cfg
+from ._manipulate import named_apply
+from ._registry import register_model
+
+__all__ = ['Sequencer2D']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

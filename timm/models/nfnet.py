@@ -16,21 +16,23 @@ Status:
 
 Hacked together by / copyright Ross Wightman, 2021.
 """
-import math
-from dataclasses import dataclass, field
 from collections import OrderedDict
-from typing import Tuple, Optional
+from dataclasses import dataclass
 from functools import partial
+from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_module
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .registry import register_model
-from .layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame,\
+from timm.layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame, \
     get_act_layer, get_act_fn, get_attn, make_divisible
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['NormFreeNet', 'NfCfg']  # model_registry will add each entrypoint fn to this
 
 
 def _dcfg(url='', **kwargs):

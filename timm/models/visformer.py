@@ -6,17 +6,15 @@ From original at https://github.com/danczs/Visformer
 
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
 """
-from copy import deepcopy
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier
-from .registry import register_model
-
+from timm.layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
 
 __all__ = ['Visformer']
 
