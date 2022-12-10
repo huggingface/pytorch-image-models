@@ -579,7 +579,7 @@ class DaViT(nn.Module):
     def forward_features(self, x):
         #x, sizes = self.forward_network(x)
         size: Tuple[int, int] = (x.size(2), x.size(3))
-        x, size = stages(x, size)
+        x, size = self.stages(x, size)
         
         # take final feature and norm
         x = self.norms(x)
