@@ -35,10 +35,10 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 __all__ = ['DaViT']
 
 class SequentialWithSize(nn.Sequential):
-    def forward(self, x : Tensor, size: Tuple[int, int]):
+    def forward(self, x: Tensor, size: Tuple[int, int]):
         for module in self:
-            output = module(inputs, size)
-            inputs : Tensor = output[0]
+            output = module(x, size)
+            x : Tensor = output[0]
             size : Tuple[int, int] = output[1]
         return x, size
 
