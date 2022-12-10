@@ -36,7 +36,7 @@ __all__ = ['DaViT']
 
 class SequentialWithSize(nn.Sequential):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(SequentialWithSize, self).__init__(*args, **kwargs)
 
     def forward(self, x: Tensor, size: Tuple[int, int]):
         for module in self._modules.values():
