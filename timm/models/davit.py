@@ -435,11 +435,17 @@ class DaViTStage(nn.Module):
         self.blocks = SequentialWithSize(*stage_blocks)
         
     def forward(self, x : Tensor, size: Tuple[int, int]):
-        x : Tensor, size: Tuple[int, int] = self.patch_embed(x, size)
+        x, size = self.patch_embed(x, size)
+        x : Tensor = x
+        size : Tuple[int, int] = size
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x : Tensor, size: Tuple[int, int] = checkpoint_seq(self.blocks, x, size)
+            x, size = checkpoint_seq(self.blocks, x, size)
         else:
-            x : Tensor, size: Tuple[int, int] = self.blocks(x, size)
+            x, size = self.blocks(x, size)
+            
+        x : Tensor = x
+        size : Tuple[int, int] = size    
+        
         return x, size
 
 
