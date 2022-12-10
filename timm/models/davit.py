@@ -419,7 +419,7 @@ class DaViTStage(nn.Module):
                         cpe_act=cpe_act
                     ))
             
-            stage_blocks.append(nn.ModuleList(dual_attention_block))
+            stage_blocks.append(SequentialWithSize(*dual_attention_block))
             
         self.blocks = SequentialWithSize(*stage_blocks)
         
