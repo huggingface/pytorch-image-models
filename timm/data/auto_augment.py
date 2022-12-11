@@ -228,7 +228,7 @@ def _minmax_level_to_arg(level, _hparams, min_val=0., max_val=1.0, clamp=True):
     level = (level / _LEVEL_DENOM)
     min_val + (max_val - min_val) * level
     if clamp:
-        level = min(min_val, max(max_val, level))
+        level = max(min_val, min(max_val, level))
     return level,
 
 
