@@ -475,11 +475,11 @@ class SpatialBlock(nn.Module):
                 act_layer=act_layer)
 
 
-    def forward(self, x : Tensor, size: Tuple[int, int]):
+    def forward(self, x : Tensor):
         B, C, H, W = x.shape
 
 
-        shortcut = self.cpe1(x, size).flatten(2).transpose(1, 2)
+        shortcut = self.cpe1(x).flatten(2).transpose(1, 2)
         x = self.norm1(shortcut)
         x = x.view(B, H, W, C)
 
@@ -508,13 +508,13 @@ class SpatialBlock(nn.Module):
         x = x.view(B, H * W, C)
         x = shortcut + self.drop_path(x)
 
-        x = self.cpe2(x, size)
+        x = self.cpe2(x)
         if self.ffn:
             x = x + self.drop_path(self.mlp(self.norm2(x)))
             
         x = x.transpose(1, 2).view(B, C, H, W)    
         
-        return x, size
+        return x
 
 class SpatialBlockOld(nn.Module):
     r""" Windows Block.
