@@ -271,7 +271,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*', 'ghostnet*', 'davit*'  # hopefully fix at some point
+    'dla*', 'hrnet*', 'ghostnet*'  # hopefully fix at some point
     'vit_large_*', 'vit_huge_*', 'vit_gi*',
 ]
 
