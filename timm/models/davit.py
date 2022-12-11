@@ -872,7 +872,7 @@ def _create_davit(variant, pretrained=False, **kwargs):
     out_indices = kwargs.pop('out_indices', default_out_indices)
 
     model = build_model_with_cfg(
-        model_cls,
+        DaViT,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
