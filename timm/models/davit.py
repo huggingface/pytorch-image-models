@@ -122,7 +122,7 @@ class PatchEmbedOld(nn.Module):
             x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         return x
 
-@register_notrace_module
+
 class PatchEmbed(nn.Module):
     """ Size-agnostic implementation of 2D image to patch embedding,
         allowing input size to be adjusted during model forward operation
@@ -168,9 +168,9 @@ class PatchEmbed(nn.Module):
         print(self.patch_size[1] - W % self.patch_size[1])
         print(self.patch_size[0] - H % self.patch_size[0])
         
-        x = F.pad(x, (0, self.patch_size[1] - W % self.patch_size[1]))
+        x = F.pad(x, (0, (self.patch_size[1] - W % self.patch_size[1]) % self.patch_size[1]))
         
-        x = F.pad(x, (0, 0, 0, self.patch_size[0] - H % self.patch_size[0]))
+        x = F.pad(x, (0, 0, 0, (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]))
 
         x = self.proj(x)
 
