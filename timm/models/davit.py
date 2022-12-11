@@ -819,7 +819,7 @@ class DaViT(nn.Module):
     def forward_features(self, x):
         x = self.forward_network(x)
         # take final feature and norm
-        x = self.norms(x[-1])
+        x = self.norms(x[-1].permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         #H, W = sizes[-1]
         #x = x.view(-1, H, W, self.embed_dims[-1]).permute(0, 3, 1, 2).contiguous()
         return x
