@@ -17,12 +17,13 @@ from .clip_grad import dispatch_clip_grad
 class ApexScaler:
     state_dict_key = "amp"
 
-    def __call__(self, loss, optimizer, clip_grad=None, clip_mode='norm', parameters=None, create_graph=False):
+    def __call__(self, loss, optimizer, clip_grad=None, clip_mode='norm', parameters=None, create_graph=False, batch_idx=0, iters_to_accumulate=1):
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward(create_graph=create_graph)
-        if clip_grad is not None:
-            dispatch_clip_grad(amp.master_params(optimizer), clip_grad, mode=clip_mode)
-        optimizer.step()
+        if (batch_idx + 1) % iters_to_accumulate == 0:
+            if clip_grad is not None:
+                dispatch_clip_grad(amp.master_params(optimizer), clip_grad, mode=clip_mode)
+            optimizer.step()
 
     def state_dict(self):
         if 'state_dict' in amp.__dict__:
@@ -39,14 +40,17 @@ class NativeScaler:
     def __init__(self):
         self._scaler = torch.cuda.amp.GradScaler()
 
-    def __call__(self, loss, optimizer, clip_grad=None, clip_mode='norm', parameters=None, create_graph=False):
+    def __call__(self, loss, optimizer, clip_grad=None, clip_mode='norm', parameters=None, create_graph=False,
+                 batch_idx=0, iters_to_accumulate=1):
         self._scaler.scale(loss).backward(create_graph=create_graph)
-        if clip_grad is not None:
-            assert parameters is not None
-            self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
-            dispatch_clip_grad(parameters, clip_grad, mode=clip_mode)
-        self._scaler.step(optimizer)
-        self._scaler.update()
+        if (batch_idx + 1) % iters_to_accumulate == 0:
+            if clip_grad is not None:
+                assert parameters is not None
+                self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
+                dispatch_clip_grad(parameters, clip_grad, mode=clip_mode)
+            self._scaler.step(optimizer)
+            self._scaler.update()
+            optimizer.zero_grad()
 
     def state_dict(self):
         return self._scaler.state_dict()
