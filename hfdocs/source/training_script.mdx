@@ -19,7 +19,24 @@ To train an SE-ResNet34 on ImageNet, locally distributed, 4 GPUs, one process pe
     It is recommended to use PyTorch 1.9+ w/ PyTorch native AMP and DDP instead of APEX AMP. --amp defaults to native AMP as of timm ver 0.4.3.  --apex-amp will force use of APEX components if they are installed.
 </Tip>
 
-## Training Script Examples
+
+## Validation / Inference Scripts
+
+Validation and inference scripts are similar in usage. One outputs metrics on a validation set and the other outputs topk class ids in a csv. Specify the folder containing validation images, not the base as in training script. 
+
+To validate with the model's pretrained weights (if they exist):
+
+```bash
+python validate.py /imagenet/validation/ --model seresnext26_32x4d --pretrained
+```
+
+To run inference from a checkpoint:
+
+```bash
+python inference.py /imagenet/validation/ --model mobilenetv3_large_100 --checkpoint ./output/train/model_best.pth.tar
+```
+
+## Training Examples
 
 ### EfficientNet-B2 with RandAugment - 80.4 top-1, 95.1 top-5
 
@@ -81,20 +98,4 @@ These params will also work well for SE-ResNeXt-50 and SK-ResNeXt-50 and likely 
 
 ```bash
 ./distributed_train.sh 8 /imagenet --model resnext50_32x4d --lr 0.6 --warmup-epochs 5 --epochs 240 --weight-decay 1e-4 --sched cosine --reprob 0.4 --recount 3 --remode pixel --aa rand-m7-mstd0.5-inc1 -b 192 -j 6 --amp --dist-bn reduce
-```
-
-## Validation / Inference Scripts
-
-Validation and inference scripts are similar in usage. One outputs metrics on a validation set and the other outputs topk class ids in a csv. Specify the folder containing validation images, not the base as in training script. 
-
-To validate with the model's pretrained weights (if they exist):
-
-```bash
-python validate.py /imagenet/validation/ --model seresnext26_32x4d --pretrained
-```
-
-To run inference from a checkpoint:
-
-```bash
-python inference.py /imagenet/validation/ --model mobilenetv3_large_100 --checkpoint ./output/train/model_best.pth.tar
 ```
