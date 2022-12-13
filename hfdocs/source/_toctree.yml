@@ -15,6 +15,10 @@
     title: Share and Load Models from the 🤗 Hugging Face Hub
   title: Tutorials
 - sections:
+  - local: models
+    title: Model Summaries
+  - local: results
+    title: Results
   - local: models/adversarial-inception-v3
     title: Adversarial Inception v3
   - local: models/advprop
@@ -153,15 +157,4 @@
   - local: reference/schedulers
     title: Learning Rate Schedulers
   title: Reference
-- sections:
-  - local: models
-    title: Model Summaries
-  - local: results
-    title: Results
-  - local: training_hparam_examples
-    title: Training Examples
-  - local: changes
-    title: Recent Changes
-  - local: archived_changes
-    title: Archived Changes
-  title: Legacy Docs
+
