@@ -42,15 +42,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .efficientnet_blocks import SqueezeExcite
-from .efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights,\
+from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, GroupNormAct
+from ._builder import build_model_with_cfg, pretrained_cfg_for_features
+from ._efficientnet_blocks import SqueezeExcite
+from ._efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
-from .features import FeatureInfo, FeatureHooks
-from .helpers import build_model_with_cfg, pretrained_cfg_for_features, checkpoint_seq
-from .layers import create_conv2d, create_classifier, get_norm_act_layer, EvoNorm2dS0, GroupNormAct
-from .registry import register_model
+from ._features import FeatureInfo, FeatureHooks
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
 
 __all__ = ['EfficientNet', 'EfficientNetFeatures']
 

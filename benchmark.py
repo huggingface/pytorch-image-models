@@ -19,7 +19,8 @@ import torch.nn as nn
 import torch.nn.parallel
 
 from timm.data import resolve_data_config
-from timm.models import create_model, is_model, list_models, set_fast_norm
+from timm.layers import set_fast_norm
+from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
 from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry
 

@@ -7,17 +7,18 @@ The official mindspore code is released and available at
 https://gitee.com/mindspore/mindspore/tree/master/model_zoo/research/cv/TNT
 """
 import math
+
 import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models.helpers import build_model_with_cfg
-from timm.models.layers import Mlp, DropPath, trunc_normal_
-from timm.models.layers.helpers import to_2tuple
-from timm.models.layers import _assert
-from timm.models.registry import register_model
-from timm.models.vision_transformer import resize_pos_embed
+from timm.layers import Mlp, DropPath, trunc_normal_, _assert, to_2tuple
+from ._builder import build_model_with_cfg
+from ._registry import register_model
+from .vision_transformer import resize_pos_embed
+
+__all__ = ['TNT']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

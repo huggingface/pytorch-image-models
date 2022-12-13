@@ -21,10 +21,12 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg, named_apply
-from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, to_ntuple, trunc_normal_, _assert
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_function
+from ._registry import register_model
+
+__all__ = ['SwinTransformerV2']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

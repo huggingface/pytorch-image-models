@@ -14,8 +14,8 @@ from functools import partial
 
 import torch.nn as nn
 
-from .efficientnet_blocks import *
-from .layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible
+from ._efficientnet_blocks import *
+from timm.layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible
 
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights",
            'resolve_bn_args', 'resolve_act_layer', 'round_channels', 'BN_MOMENTUM_TF_DEFAULT', 'BN_EPS_TF_DEFAULT']

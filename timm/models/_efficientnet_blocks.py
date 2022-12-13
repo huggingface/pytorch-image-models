@@ -2,13 +2,12 @@
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
-import math
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from .layers import create_conv2d, DropPath, make_divisible, create_act_layer, get_norm_act_layer
+from timm.layers import create_conv2d, DropPath, make_divisible, create_act_layer, get_norm_act_layer
 
 __all__ = [
     'SqueezeExcite', 'ConvBnAct', 'DepthwiseSeparableConv', 'InvertedResidual', 'CondConvResidual', 'EdgeResidual']

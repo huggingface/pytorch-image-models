@@ -19,12 +19,14 @@ import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .vision_transformer import _cfg, Mlp
-from .registry import register_model
-from .layers import DropPath, trunc_normal_, to_2tuple
+from timm.layers import DropPath, trunc_normal_, to_2tuple
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._registry import register_model
 from .cait import ClassAttn
-from .fx_features import register_notrace_module
+from .vision_transformer import Mlp
+
+__all__ = ['XCiT']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

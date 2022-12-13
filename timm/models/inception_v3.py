@@ -8,9 +8,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, resolve_pretrained_cfg, flatten_modules
-from .registry import register_model
-from .layers import trunc_normal_, create_classifier, Linear
+from timm.layers import trunc_normal_, create_classifier, Linear
+from ._builder import build_model_with_cfg
+from ._builder import resolve_pretrained_cfg
+from ._manipulate import flatten_modules
+from ._registry import register_model
+
+__all__ = ['InceptionV3', 'InceptionV3Aux']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

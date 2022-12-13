@@ -8,22 +8,24 @@ canonical PyTorch, standard Python style, and good performance. Repurpose as you
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import os
 import csv
 import glob
 import json
-import time
 import logging
-import torch
-import torch.nn as nn
-import torch.nn.parallel
+import os
+import time
 from collections import OrderedDict
 from contextlib import suppress
 from functools import partial
 
-from timm.models import create_model, apply_test_time_pool, load_checkpoint, is_model, list_models, set_fast_norm
+import torch
+import torch.nn as nn
+import torch.nn.parallel
+
 from timm.data import create_dataset, create_loader, resolve_data_config, RealLabelsImagenet
-from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser,\
+from timm.layers import apply_test_time_pool, set_fast_norm
+from timm.models import create_model, load_checkpoint, is_model, list_models
+from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser, \
     decay_batch_step, check_batch_size_retry
 
 try:
@@ -294,9 +296,9 @@ def validate(args):
             with amp_autocast():
                 output = model(input)
 
-            if valid_labels is not None:
-                output = output[:, valid_labels]
-            loss = criterion(output, target)
+                if valid_labels is not None:
+                    output = output[:, valid_labels]
+                loss = criterion(output, target)
 
             if real_labels is not None:
                 real_labels.add_result(output)
