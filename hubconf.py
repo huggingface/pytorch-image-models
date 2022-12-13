@@ -1,4 +1,3 @@
 dependencies = ['torch']
-from timm.models import registry
-
-globals().update(registry._model_entrypoints)
+import timm
+globals().update(timm.models._registry._model_entrypoints)

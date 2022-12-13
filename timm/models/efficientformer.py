@@ -18,9 +18,11 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import DropPath, trunc_normal_, to_2tuple, Mlp
-from .registry import register_model
+from timm.layers import DropPath, trunc_normal_, to_2tuple, Mlp
+from ._builder import build_model_with_cfg
+from ._registry import register_model
+
+__all__ = ['EfficientFormer']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

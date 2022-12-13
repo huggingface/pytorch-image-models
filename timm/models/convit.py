@@ -22,20 +22,20 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 '''
 
+from functools import partial
+
 import torch
 import torch.nn as nn
-from functools import partial
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import DropPath, to_2tuple, trunc_normal_, PatchEmbed, Mlp
-from .registry import register_model
+from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._registry import register_model
 from .vision_transformer_hybrid import HybridEmbed
-from .fx_features import register_notrace_module
 
-import torch
-import torch.nn as nn
+
+__all__ = ['ConViT']
 
 
 def _cfg(url='', **kwargs):

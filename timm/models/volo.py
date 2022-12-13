@@ -20,17 +20,19 @@ Modifications and additions for timm by / Copyright 2022, Ross Wightman
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-import numpy as np
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_
-from timm.models.registry import register_model
-from timm.models.helpers import build_model_with_cfg
+from timm.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._registry import register_model
+
+__all__ = ['VOLO']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

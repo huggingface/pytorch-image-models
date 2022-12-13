@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from timm.models.helpers import group_parameters
+from timm.models import group_parameters
 
 from .adabelief import AdaBelief
 from .adafactor import Adafactor

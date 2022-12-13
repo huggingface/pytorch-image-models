@@ -10,11 +10,11 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from .helpers import build_model_with_cfg
-from .layers import SpaceToDepthModule, BlurPool2d, InplaceAbn, ClassifierHead, SEModule
-from .registry import register_model
+from timm.layers import SpaceToDepthModule, BlurPool2d, InplaceAbn, ClassifierHead, SEModule
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 
-__all__ = ['tresnet_m', 'tresnet_l', 'tresnet_xl']
+__all__ = ['TResNet']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

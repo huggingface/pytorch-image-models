@@ -14,7 +14,7 @@ except ImportError:
 
 import timm
 from timm import list_models, create_model, set_scriptable, get_pretrained_cfg_value
-from timm.models.fx_features import _leaf_modules, _autowrap_functions    
+from timm.models._features_fx import _leaf_modules, _autowrap_functions
 
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests

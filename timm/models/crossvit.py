@@ -24,21 +24,22 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 Modifed from Timm. https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 
 """
+from functools import partial
+from typing import List
 from typing import Tuple
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.hub
-from functools import partial
-from typing import List
+import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg
-from .layers import DropPath, to_2tuple, trunc_normal_, _assert
-from .registry import register_model
-from .vision_transformer import Mlp, Block
+from timm.layers import DropPath, to_2tuple, trunc_normal_, _assert
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_function
+from ._registry import register_model
+from .vision_transformer import Block
+
+__all__ = ['CrossViT']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

@@ -59,6 +59,7 @@ def transforms_imagenet_train(
         re_count=1,
         re_num_splits=0,
         separate=False,
+        force_color_jitter=False,
 ):
     """
     If separate==True, the transforms are returned as a tuple of 3 separate transforms
@@ -77,8 +78,12 @@ def transforms_imagenet_train(
         primary_tfl += [transforms.RandomVerticalFlip(p=vflip)]
 
     secondary_tfl = []
+    disable_color_jitter = False
     if auto_augment:
         assert isinstance(auto_augment, str)
+        # color jitter is typically disabled if AA/RA on,
+        # this allows override without breaking old hparm cfgs
+        disable_color_jitter = not (force_color_jitter or '3a' in auto_augment)
         if isinstance(img_size, (tuple, list)):
             img_size_min = min(img_size)
         else:
@@ -96,8 +101,9 @@ def transforms_imagenet_train(
             secondary_tfl += [augment_and_mix_transform(auto_augment, aa_params)]
         else:
             secondary_tfl += [auto_augment_transform(auto_augment, aa_params)]
-    elif color_jitter is not None:
-        # color jitter is enabled when not using AA
+
+    if color_jitter is not None and not disable_color_jitter:
+        # color jitter is enabled when not using AA or when forced
         if isinstance(color_jitter, (list, tuple)):
             # color jitter should be a 3-tuple/list if spec brightness/contrast/saturation
             # or 4 if also augmenting hue

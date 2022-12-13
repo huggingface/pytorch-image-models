@@ -23,8 +23,6 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # Modified from
 # https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 # Copyright 2020 Ross Wightman, Apache-2.0 License
-import itertools
-from copy import deepcopy
 from functools import partial
 from typing import Dict
 
@@ -32,10 +30,12 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import to_ntuple, get_act_layer
-from .vision_transformer import trunc_normal_
-from .registry import register_model
+from timm.layers import to_ntuple, get_act_layer, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['LevitDistilled']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

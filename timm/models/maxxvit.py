@@ -45,17 +45,17 @@ from typing import Callable, Optional, Union, Tuple, List
 
 import torch
 from torch import nn
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq, named_apply
-from .fx_features import register_notrace_function
-from .layers import Mlp, ConvMlp, DropPath, ClassifierHead, trunc_normal_tf_, LayerNorm2d, LayerNorm
-from .layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d
-from .layers import SelectAdaptivePool2d, create_pool2d
-from .layers import to_2tuple, extend_tuple, make_divisible, _assert
-from .pretrained import generate_default_cfgs
-from .registry import register_model
+from timm.layers import Mlp, ConvMlp, DropPath, ClassifierHead, trunc_normal_tf_, LayerNorm
+from timm.layers import SelectAdaptivePool2d, create_pool2d
+from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d
+from timm.layers import to_2tuple, extend_tuple, make_divisible, _assert
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_function
+from ._manipulate import named_apply, checkpoint_seq
+from ._pretrained import generate_default_cfgs
+from ._registry import register_model
 from .vision_transformer_relpos import RelPosMlp, RelPosBias  # FIXME move these to common location
 
 __all__ = ['MaxxVitCfg', 'MaxxVitConvCfg', 'MaxxVitTransformerCfg', 'MaxxVit']
