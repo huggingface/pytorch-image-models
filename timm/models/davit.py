@@ -21,9 +21,9 @@ from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, to_2tuple, trunc_normal_, ClassifierHead, Mlp
+from ._builder import build_model_with_cfg
 from ._features import FeatureInfo
 from ._features_fx import register_notrace_function
-from ._helpers import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._pretrained import generate_default_cfgs
 from ._registry import register_model
