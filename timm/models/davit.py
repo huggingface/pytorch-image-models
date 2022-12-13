@@ -28,7 +28,6 @@ from ._manipulate import checkpoint_seq
 from ._pretrained import generate_default_cfgs
 from ._registry import register_model
 
-
 __all__ = ['DaViT']
 
 
