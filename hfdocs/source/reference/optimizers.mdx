@@ -1,6 +1,6 @@
 # Optimization
 
-This page contains the API reference documentation for optimization-related tools (optimizers, learning rate schedulers, etc) included in `timm`.
+This page contains the API reference documentation for learning rate optimizers included in `timm`.
 
 ## Optimizers
 
@@ -25,20 +25,3 @@ This page contains the API reference documentation for optimization-related tool
 [[autodoc]] timm.optim.radam.RAdam
 [[autodoc]] timm.optim.rmsprop_tf.RMSpropTF
 [[autodoc]] timm.optim.sgdp.SGDP
-
-
-## Schedulers
-
-### Factory functions
-
-[[autodoc]] timm.scheduler.scheduler_factory.create_scheduler
-[[autodoc]] timm.scheduler.scheduler_factory.create_scheduler_v2
-
-### Scheduler Classes
-
-[[autodoc]] timm.scheduler.cosine_lr.CosineLRScheduler
-[[autodoc]] timm.scheduler.multistep_lr.MultiStepLRScheduler
-[[autodoc]] timm.scheduler.plateau_lr.PlateauLRScheduler
-[[autodoc]] timm.scheduler.poly_lr.PolyLRScheduler
-[[autodoc]] timm.scheduler.step_lr.StepLRScheduler
-[[autodoc]] timm.scheduler.tanh_lr.TanhLRScheduler

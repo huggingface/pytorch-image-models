@@ -148,16 +148,16 @@
     title: Models
   - local: reference/data
     title: Data
-  - local: reference/optimization
-    title: Optimization
+  - local: reference/optimizers
+    title: Optimizers
+  - local: reference/schedulers
+    title: Learning Rate Schedulers
   title: Reference
 - sections:
   - local: models
     title: Model Summaries
   - local: results
     title: Results
-  - local: scripts
-    title: Scripts
   - local: training_hparam_examples
     title: Training Examples
   - local: changes
