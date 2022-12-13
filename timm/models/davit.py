@@ -12,8 +12,6 @@ DaViT model defs and weights adapted from https://github.com/dingmyu/davit, orig
 # All rights reserved.
 # This source code is licensed under the MIT license
 
-# FIXME remove unused imports
-
 import itertools
 
 import torch
