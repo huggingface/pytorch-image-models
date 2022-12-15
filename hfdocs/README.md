@@ -10,5 +10,5 @@ pip install watchdog black
 ## Preview the Docs Locally
 
 ```
-doc-builder preview pytorch-image-models hfdocs/source --not_python_module
+doc-builder preview timm hfdocs/source
 ```
