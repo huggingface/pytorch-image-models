@@ -19,6 +19,7 @@ class PretrainedCfg:
 
     source: Optional[str] = None  # source of cfg / weight location used (url, file, hf-hub)
     architecture: Optional[str] = None  # architecture variant can be set when not implicit
+    tag: Optional[str] = None  # pretrained tag of source
     custom_load: bool = False  # use custom model specific model.load_pretrained() (ie for npz files)
 
     # input / data config

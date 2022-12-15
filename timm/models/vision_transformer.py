@@ -711,10 +711,10 @@ default_cfgs = generate_default_cfgs({
 
 
     # patch models, imagenet21k (weights from official Google JAX impl)
-    'vit_large_patch32_224.v1_in21k': _cfg(
+    'vit_large_patch32_224.orig_in21k': _cfg(
             url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth',
             num_classes=21843),
-    'vit_huge_patch14_224.v1_in21k': _cfg(
+    'vit_huge_patch14_224.orig_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-H_14.npz',
         hf_hub_id='timm/vit_huge_patch14_224_in21k',
         custom_load=True, num_classes=21843),

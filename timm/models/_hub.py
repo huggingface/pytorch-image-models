@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -65,6 +66,26 @@ def download_cached_file(url, check_hash=True, progress=False):
             hash_prefix = r.group(1) if r else None
         download_url_to_file(url, cached_file, hash_prefix, progress=progress)
     return cached_file
+
+
+def check_cached_file(url, check_hash=True):
+    if isinstance(url, (list, tuple)):
+        url, filename = url
+    else:
+        parts = urlparse(url)
+        filename = os.path.basename(parts.path)
+    cached_file = os.path.join(get_cache_dir(), filename)
+    if os.path.exists(cached_file):
+        if check_hash:
+            r = HASH_REGEX.search(filename)  # r is Optional[Match[str]]
+            hash_prefix = r.group(1) if r else None
+            if hash_prefix:
+                with open(cached_file, 'rb') as f:
+                    hd = hashlib.sha256(f.read()).hexdigest()
+                    if hd[:len(hash_prefix)] != hash_prefix:
+                        return False
+        return True
+    return False
 
 
 def has_hf_hub(necessary=False):
@@ -145,7 +166,9 @@ def save_for_hf(model, save_directory, model_config=None):
     hf_config['architecture'] = pretrained_cfg.pop('architecture')
     hf_config['num_classes'] = model_config.get('num_classes', model.num_classes)
     hf_config['num_features'] = model_config.get('num_features', model.num_features)
-    hf_config['global_pool'] = model_config.get('global_pool', getattr(model, 'global_pool', None))
+    global_pool_type = model_config.get('global_pool', getattr(model, 'global_pool', None))
+    if isinstance(global_pool_type, str) and global_pool_type:
+        hf_config['global_pool'] = global_pool_type
 
     if 'label' in model_config:
         _logger.warning(

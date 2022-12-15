@@ -361,7 +361,6 @@ def _create_convnext(variant, pretrained=False, **kwargs):
     return model
 
 
-
 def _cfg(url='', **kwargs):
     return {
         'url': url,
@@ -375,90 +374,130 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     # timm specific variants
-    'convnext_atto.timm_in1k': _cfg(
+    'convnext_atto.d2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_atto_d2-01bb0f51.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnext_atto_ols.timm_in1k': _cfg(
+    'convnext_atto_ols.a2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_atto_ols_a2-78d1c8f3.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnext_femto.timm_in1k': _cfg(
+    'convnext_femto.d1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_femto_d1-d71d5b4c.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnext_femto_ols.timm_in1k': _cfg(
+    'convnext_femto_ols.d1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_femto_ols_d1-246bf2ed.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnext_pico.timm_in1k': _cfg(
+    'convnext_pico.d1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_pico_d1-10ad7f0d.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnext_pico_ols.timm_in1k': _cfg(
+    'convnext_pico_ols.d1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_pico_ols_d1-611f0ca7.pth',
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_nano.timm_in1k': _cfg(
+    'convnext_nano.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_nano.d1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_nano_d1h-7eb4bdea.pth',
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_nano_ols.timm_in1k': _cfg(
+    'convnext_nano_ols.d1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_nano_ols_d1h-ae424a9a.pth',
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_tiny_hnf.timm_in1k': _cfg(
+    'convnext_tiny_hnf.a2h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_tiny_hnf_a2h-ab7e9df2.pth',
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'convnext_nano.in12k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, num_classes=11821),
 
     'convnext_tiny.fb_in1k': _cfg(
         url="https://dl.fbaipublicfiles.com/convnext/convnext_tiny_1k_224_ema.pth",
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_small.fb_in1k': _cfg(
         url="https://dl.fbaipublicfiles.com/convnext/convnext_small_1k_224_ema.pth",
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_base.fb_in1k': _cfg(
         url="https://dl.fbaipublicfiles.com/convnext/convnext_base_1k_224_ema.pth",
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_large.fb_in1k': _cfg(
         url="https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth",
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_xlarge.untrained': _cfg(),
 
     'convnext_tiny.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_1k_224.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_small.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_small_22k_1k_224.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_base.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_1k_224.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_large.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_1k_224.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_xlarge.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_1k_224_ema.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'convnext_tiny.fb_in22k_ft_in1k_384': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_1k_384.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
-    'convnext_small..fb_in22k_ft_in1k_384': _cfg(
+    'convnext_small.fb_in22k_ft_in1k_384': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_small_22k_1k_384.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'convnext_base.fb_in22k_ft_in1k_384': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_1k_384.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'convnext_large.fb_in22k_ft_in1k_384': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_1k_384.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
     'convnext_xlarge.fb_in22k_ft_in1k_384': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_1k_384_ema.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
 
-    'convnext_tiny_in22k.fb_in22k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_224.pth", num_classes=21841),
-    'convnext_small_in22k.fb_in22k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_small_22k_224.pth", num_classes=21841),
-    'convnext_base_in22k.fb_in22k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_224.pth", num_classes=21841),
-    'convnext_large_in22k.fb_in22k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_224.pth", num_classes=21841),
-    'convnext_xlarge_in22k.fb_in22k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_224.pth", num_classes=21841),
+    'convnext_tiny.fb_in22k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_224.pth",
+        hf_hub_id='timm/',
+        num_classes=21841),
+    'convnext_small.fb_in22k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_small_22k_224.pth",
+        hf_hub_id='timm/',
+        num_classes=21841),
+    'convnext_base.fb_in22k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_224.pth",
+        hf_hub_id='timm/',
+        num_classes=21841),
+    'convnext_large.fb_in22k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_224.pth",
+        hf_hub_id='timm/',
+        num_classes=21841),
+    'convnext_xlarge.fb_in22k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_224.pth",
+        hf_hub_id='timm/',
+        num_classes=21841),
 })
 
 
