@@ -502,7 +502,7 @@ class DaViT(nn.Module):
                 cpe_act = cpe_act
             )
             
-            stages.append(patch_embed
+            stages.append(patch_embed)
             stages.append(stage)
             self.feature_info += [dict(num_chs=self.embed_dims[stage_id], reduction=2, module=f'stages.{stage_id}')]
         
