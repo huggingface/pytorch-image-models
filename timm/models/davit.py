@@ -603,7 +603,7 @@ def _cfg(url='', **kwargs): # not sure how this should be set up
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stages.0.patch_embed.proj', 'classifier': 'head.fc',
+        'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
         **kwargs
     }
 
