@@ -45,9 +45,11 @@ class PretrainedCfg:
     classifier: Optional[str] = None
 
     license: Optional[str] = None
-    source_url: Optional[str] = None
-    paper: Optional[str] = None
-    notes: Optional[str] = None
+    description: Optional[str] = None
+    origin_url: Optional[str] = None
+    paper_name: Optional[str] = None
+    paper_ids: Optional[Union[str, Tuple[str]]] = None
+    notes: Optional[Tuple[str]] = None
 
     @property
     def has_weights(self):
