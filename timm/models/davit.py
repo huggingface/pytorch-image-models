@@ -411,7 +411,7 @@ class DaViTStage(nn.Module):
         self.blocks = nn.Sequential(*stage_blocks)
         
     def forward(self, x : Tensor):
-        x = self.patch_embed(x)
+        #x = self.patch_embed(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
         else:
