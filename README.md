@@ -28,6 +28,17 @@ For a few months now, `timm` has been part of the Hugging Face ecosystem. Yearly
 If you have a couple of minutes and want to participate in shaping the future of the ecosystem, please share your thoughts:
 [**hf.co/oss-survey**](https://hf.co/oss-survey) 🙏
 
+### Dec 23, 2022 🎄☃
+* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
+  * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
+* Many more models updated to multi-weight and downloadable via HF hub now (convnext, efficientnet, mobilenet, vision_transformer*, beit)
+* More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
+* More ImageNet-12k (subset of 22k) pretrain models popping up:
+  * `efficientnet_b5.in12k_ft_in1k` - 85.9 @ 448x448
+  * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 85.5 @ 384x384
+  * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 84.5 @ 256x256
+  * `convnext_nano.in12k_ft_in1k` - 82.9 @ 288x288
+
 ### Dec 8, 2022
 * Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
   * original source: https://github.com/baaivision/EVA
