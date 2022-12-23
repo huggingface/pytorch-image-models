@@ -153,12 +153,21 @@ def load_pretrained(
         state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
         _logger.info(f'Loading pretrained weights from url ({pretrained_loc})')
-        state_dict = load_state_dict_from_url(
-            pretrained_loc,
-            map_location='cpu',
-            progress=_DOWNLOAD_PROGRESS,
-            check_hash=_CHECK_HASH,
-        )
+        if pretrained_cfg.get('custom_load', False):
+            pretrained_loc = download_cached_file(
+                pretrained_loc,
+                progress=_DOWNLOAD_PROGRESS,
+                check_hash=_CHECK_HASH,
+            )
+            model.load_pretrained(pretrained_loc)
+            return
+        else:
+            state_dict = load_state_dict_from_url(
+                pretrained_loc,
+                map_location='cpu',
+                progress=_DOWNLOAD_PROGRESS,
+                check_hash=_CHECK_HASH,
+            )
     elif load_from == 'hf-hub':
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         if isinstance(pretrained_loc, (list, tuple)):
@@ -371,20 +380,14 @@ def build_model_with_cfg(
     # For classification models, check class attr, then kwargs, then default to 1k, otherwise 0 for feats
     num_classes_pretrained = 0 if features else getattr(model, 'num_classes', kwargs.get('num_classes', 1000))
     if pretrained:
-        if pretrained_cfg.get('custom_load', False):
-            load_custom_pretrained(
-                model,
-                pretrained_cfg=pretrained_cfg,
-            )
-        else:
-            load_pretrained(
-                model,
-                pretrained_cfg=pretrained_cfg,
-                num_classes=num_classes_pretrained,
-                in_chans=kwargs.get('in_chans', 3),
-                filter_fn=pretrained_filter_fn,
-                strict=pretrained_strict,
-            )
+        load_pretrained(
+            model,
+            pretrained_cfg=pretrained_cfg,
+            num_classes=num_classes_pretrained,
+            in_chans=kwargs.get('in_chans', 3),
+            filter_fn=pretrained_filter_fn,
+            strict=pretrained_strict,
+        )
 
     # Wrap the model in a feature extraction module if enabled
     if features:

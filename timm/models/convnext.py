@@ -435,6 +435,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_xlarge.untrained': _cfg(),
+    'convnext_xxlarge.untrained': _cfg(),
 
     'convnext_tiny.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_1k_224.pth',
@@ -614,4 +615,11 @@ def convnext_large(pretrained=False, **kwargs):
 def convnext_xlarge(pretrained=False, **kwargs):
     model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], **kwargs)
     model = _create_convnext('convnext_xlarge', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnext_xxlarge(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 4, 30, 3], dims=[384, 768, 1536, 3072], **kwargs)
+    model = _create_convnext('convnext_xxlarge', pretrained=pretrained, **model_args)
     return model

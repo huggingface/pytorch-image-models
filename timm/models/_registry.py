@@ -206,15 +206,21 @@ def is_model_pretrained(model_name):
     return model_name in _model_has_pretrained
 
 
-def get_pretrained_cfg(model_name):
+def get_pretrained_cfg(model_name, allow_unregistered=True):
     if model_name in _model_pretrained_cfgs:
         return deepcopy(_model_pretrained_cfgs[model_name])
-    raise RuntimeError(f'No pretrained config exists for model {model_name}.')
+    arch_name, tag = split_model_name_tag(model_name)
+    if arch_name in _model_default_cfgs:
+        # if model arch exists, but the tag is wrong, error out
+        raise RuntimeError(f'Invalid pretrained tag ({tag}) for {arch_name}.')
+    if allow_unregistered:
+        # if model arch doesn't exist, it has no pretrained_cfg registered, allow a default to be created
+        return None
+    raise RuntimeError(f'Model architecture ({arch_name}) has no pretrained cfg registered.')
 
 
 def get_pretrained_cfg_value(model_name, cfg_key):
     """ Get a specific model default_cfg value by key. None if key doesn't exist.
     """
-    if model_name in _model_pretrained_cfgs:
-        return getattr(_model_pretrained_cfgs[model_name], cfg_key, None)
-    raise RuntimeError(f'No pretrained config exist for model {model_name}.')
+    cfg = get_pretrained_cfg(model_name, allow_unregistered=False)
+    return getattr(cfg, cfg_key, None)

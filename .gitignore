@@ -106,6 +106,16 @@ output/
 *.tar
 *.pth
 *.pt
+*.torch
 *.gz
 Untitled.ipynb
 Testing notebook.ipynb
+
+# Root dir exclusions
+/*.csv
+/*.yaml
+/*.json
+/*.jpg
+/*.png
+/*.zip
+/*.tar.*

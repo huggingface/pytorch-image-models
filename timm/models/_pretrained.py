@@ -65,11 +65,11 @@ class PretrainedCfg:
 
 def filter_pretrained_cfg(cfg, remove_source=False, remove_null=True):
     filtered_cfg = {}
-    keep_none = {'pool_size', 'first_conv', 'classifier'}  # always keep these keys, even if none
+    keep_null = {'pool_size', 'first_conv', 'classifier'}  # always keep these keys, even if none
     for k, v in cfg.items():
         if remove_source and k in {'url', 'file', 'hf_hub_id', 'hf_hub_id', 'hf_hub_filename', 'source'}:
             continue
-        if remove_null and v is None and k not in keep_none:
+        if remove_null and v is None and k not in keep_null:
             continue
         filtered_cfg[k] = v
     return filtered_cfg
