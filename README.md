@@ -35,7 +35,7 @@ If you have a couple of minutes and want to participate in shaping the future of
 * More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
 * More ImageNet-12k (subset of 22k) pretrain models popping up:
   * `efficientnet_b5.in12k_ft_in1k` - 85.9 @ 448x448
-  * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 85.5 @ 384x384
+  * `vit_medium_patch16_gap_384.in12k_ft_in1k` - 85.5 @ 384x384
   * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 84.5 @ 256x256
   * `convnext_nano.in12k_ft_in1k` - 82.9 @ 288x288
 
