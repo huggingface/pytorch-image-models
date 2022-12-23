@@ -6,7 +6,7 @@ from .reader_image_in_tar import ReaderImageInTar
 
 def create_reader(name, root, split='train', **kwargs):
     name = name.lower()
-    name = name.split('/', 2)
+    name = name.split('/', 1)
     prefix = ''
     if len(name) > 1:
         prefix = name[0]

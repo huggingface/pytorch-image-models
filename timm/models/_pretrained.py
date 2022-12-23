@@ -19,6 +19,7 @@ class PretrainedCfg:
 
     source: Optional[str] = None  # source of cfg / weight location used (url, file, hf-hub)
     architecture: Optional[str] = None  # architecture variant can be set when not implicit
+    tag: Optional[str] = None  # pretrained tag of source
     custom_load: bool = False  # use custom model specific model.load_pretrained() (ie for npz files)
 
     # input / data config
@@ -44,9 +45,11 @@ class PretrainedCfg:
     classifier: Optional[str] = None
 
     license: Optional[str] = None
-    source_url: Optional[str] = None
-    paper: Optional[str] = None
-    notes: Optional[str] = None
+    description: Optional[str] = None
+    origin_url: Optional[str] = None
+    paper_name: Optional[str] = None
+    paper_ids: Optional[Union[str, Tuple[str]]] = None
+    notes: Optional[Tuple[str]] = None
 
     @property
     def has_weights(self):
@@ -62,11 +65,11 @@ class PretrainedCfg:
 
 def filter_pretrained_cfg(cfg, remove_source=False, remove_null=True):
     filtered_cfg = {}
-    keep_none = {'pool_size', 'first_conv', 'classifier'}  # always keep these keys, even if none
+    keep_null = {'pool_size', 'first_conv', 'classifier'}  # always keep these keys, even if none
     for k, v in cfg.items():
         if remove_source and k in {'url', 'file', 'hf_hub_id', 'hf_hub_id', 'hf_hub_filename', 'source'}:
             continue
-        if remove_null and v is None and k not in keep_none:
+        if remove_null and v is None and k not in keep_null:
             continue
         filtered_cfg[k] = v
     return filtered_cfg

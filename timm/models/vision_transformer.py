@@ -8,14 +8,18 @@ A PyTorch implement of Vision Transformers as described in:
 `How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers`
     - https://arxiv.org/abs/2106.10270
 
-The official jax code is released and available at https://github.com/google-research/vision_transformer
+`FlexiViT: One Model for All Patch Sizes`
+    - https://arxiv.org/abs/2212.08013
+
+The official jax code is released and available at
+  * https://github.com/google-research/vision_transformer
+  * https://github.com/google-research/big_vision
 
 Acknowledgments:
-* The paper authors for releasing code and weights, thanks!
-* I fixed my class token impl based on Phil Wang's https://github.com/lucidrains/vit-pytorch ... check it out
-for some einops/einsum fun
-* Simple transformer style inspired by Andrej Karpathy's https://github.com/karpathy/minGPT
-* Bert reference code checks against Huggingface Transformers and Tensorflow Bert
+  * The paper authors for releasing code and weights, thanks!
+  * I fixed my class token impl based on Phil Wang's https://github.com/lucidrains/vit-pytorch
+  * Simple transformer style inspired by Andrej Karpathy's https://github.com/karpathy/minGPT
+  * Bert reference code checks against Huggingface Transformers and Tensorflow Bert
 
 Hacked together by / Copyright 2020, Ross Wightman
 """
@@ -23,7 +27,7 @@ import logging
 import math
 from collections import OrderedDict
 from functools import partial
-from typing import Optional
+from typing import Optional, List
 
 import torch
 import torch.nn as nn
@@ -32,7 +36,8 @@ import torch.utils.checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
+    resample_abs_pos_embed
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._pretrained import generate_default_cfgs
@@ -449,6 +454,39 @@ def get_init_weights_vit(mode='jax', head_bias: float = 0.):
         return init_weights_vit_timm
 
 
+def resize_pos_embed(
+        posemb,
+        posemb_new,
+        num_prefix_tokens=1,
+        gs_new=(),
+        interpolation='bicubic',
+        antialias=False,
+):
+    """ Rescale the grid of position embeddings when loading from state_dict.
+
+    *DEPRECATED* This function is being deprecated in favour of resample_abs_pos_embed
+
+    Adapted from:
+        https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
+    """
+    ntok_new = posemb_new.shape[1]
+    if num_prefix_tokens:
+        posemb_prefix, posemb_grid = posemb[:, :num_prefix_tokens], posemb[0, num_prefix_tokens:]
+        ntok_new -= num_prefix_tokens
+    else:
+        posemb_prefix, posemb_grid = posemb[:, :0], posemb[0]
+    gs_old = int(math.sqrt(len(posemb_grid)))
+    if not len(gs_new):  # backwards compatibility
+        gs_new = [int(math.sqrt(ntok_new))] * 2
+    assert len(gs_new) >= 2
+    _logger.info(f'Resized position embedding: {posemb.shape} ({[gs_old, gs_old]}) to {posemb_new.shape} ({gs_new}).')
+    posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
+    posemb_grid = F.interpolate(posemb_grid, size=gs_new, mode=interpolation, antialias=antialias, align_corners=False)
+    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_new[0] * gs_new[1], -1)
+    posemb = torch.cat([posemb_prefix, posemb_grid], dim=1)
+    return posemb
+
+
 @torch.no_grad()
 def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = ''):
     """ Load weights from .npz checkpoints for official Google Brain Flax implementation
@@ -468,8 +506,15 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
         return torch.from_numpy(w)
 
     w = np.load(checkpoint_path)
-    if not prefix and 'opt/target/embedding/kernel' in w:
-        prefix = 'opt/target/'
+    interpolation = 'bilinear'
+    antialias = False
+    big_vision = False
+    if not prefix:
+        if 'opt/target/embedding/kernel' in w:
+            prefix = 'opt/target/'
+        elif 'params/embedding/kernel' in w:
+            prefix = 'params/'
+            big_vision = True
 
     if hasattr(model.patch_embed, 'backbone'):
         # hybrid
@@ -495,17 +540,33 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     else:
         embed_conv_w = adapt_input_conv(
             model.patch_embed.proj.weight.shape[1], _n2p(w[f'{prefix}embedding/kernel']))
+    if embed_conv_w.shape[-2:] != model.patch_embed.proj.weight.shape[-2:]:
+        embed_conv_w = resample_patch_embed(
+            embed_conv_w,
+            model.patch_embed.proj.weight.shape[-2:],
+            interpolation=interpolation,
+            antialias=antialias,
+            verbose=True,
+        )
+
     model.patch_embed.proj.weight.copy_(embed_conv_w)
     model.patch_embed.proj.bias.copy_(_n2p(w[f'{prefix}embedding/bias']))
     if model.cls_token is not None:
         model.cls_token.copy_(_n2p(w[f'{prefix}cls'], t=False))
-    pos_embed_w = _n2p(w[f'{prefix}Transformer/posembed_input/pos_embedding'], t=False)
+    if big_vision:
+        pos_embed_w = _n2p(w[f'{prefix}pos_embedding'], t=False)
+    else:
+        pos_embed_w = _n2p(w[f'{prefix}Transformer/posembed_input/pos_embedding'], t=False)
     if pos_embed_w.shape != model.pos_embed.shape:
-        pos_embed_w = resize_pos_embed(  # resize pos embedding when different size from pretrained weights
+        old_shape = pos_embed_w.shape
+        num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
+        pos_embed_w = resample_abs_pos_embed(  # resize pos embedding when different size from pretrained weights
             pos_embed_w,
-            model.pos_embed,
-            getattr(model, 'num_prefix_tokens', 1),
-            model.patch_embed.grid_size
+            new_size=model.patch_embed.grid_size,
+            num_prefix_tokens=num_prefix_tokens,
+            interpolation=interpolation,
+            antialias=antialias,
+            verbose=True,
         )
     model.pos_embed.copy_(pos_embed_w)
     model.norm.weight.copy_(_n2p(w[f'{prefix}Transformer/encoder_norm/scale']))
@@ -517,9 +578,10 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     # if isinstance(getattr(model.pre_logits, 'fc', None), nn.Linear) and f'{prefix}pre_logits/bias' in w:
     #     model.pre_logits.fc.weight.copy_(_n2p(w[f'{prefix}pre_logits/kernel']))
     #     model.pre_logits.fc.bias.copy_(_n2p(w[f'{prefix}pre_logits/bias']))
+    mha_sub, b_sub, ln1_sub = (0, 0, 1) if big_vision else (1, 3, 2)
     for i, block in enumerate(model.blocks.children()):
         block_prefix = f'{prefix}Transformer/encoderblock_{i}/'
-        mha_prefix = block_prefix + 'MultiHeadDotProductAttention_1/'
+        mha_prefix = block_prefix + f'MultiHeadDotProductAttention_{mha_sub}/'
         block.norm1.weight.copy_(_n2p(w[f'{block_prefix}LayerNorm_0/scale']))
         block.norm1.bias.copy_(_n2p(w[f'{block_prefix}LayerNorm_0/bias']))
         block.attn.qkv.weight.copy_(torch.cat([
@@ -529,32 +591,10 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
         block.attn.proj.weight.copy_(_n2p(w[f'{mha_prefix}out/kernel']).flatten(1))
         block.attn.proj.bias.copy_(_n2p(w[f'{mha_prefix}out/bias']))
         for r in range(2):
-            getattr(block.mlp, f'fc{r + 1}').weight.copy_(_n2p(w[f'{block_prefix}MlpBlock_3/Dense_{r}/kernel']))
-            getattr(block.mlp, f'fc{r + 1}').bias.copy_(_n2p(w[f'{block_prefix}MlpBlock_3/Dense_{r}/bias']))
-        block.norm2.weight.copy_(_n2p(w[f'{block_prefix}LayerNorm_2/scale']))
-        block.norm2.bias.copy_(_n2p(w[f'{block_prefix}LayerNorm_2/bias']))
-
-
-def resize_pos_embed(posemb, posemb_new, num_prefix_tokens=1, gs_new=()):
-    # Rescale the grid of position embeddings when loading from state_dict. Adapted from
-    # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
-    _logger.info('Resized position embedding: %s to %s', posemb.shape, posemb_new.shape)
-    ntok_new = posemb_new.shape[1]
-    if num_prefix_tokens:
-        posemb_prefix, posemb_grid = posemb[:, :num_prefix_tokens], posemb[0, num_prefix_tokens:]
-        ntok_new -= num_prefix_tokens
-    else:
-        posemb_prefix, posemb_grid = posemb[:, :0], posemb[0]
-    gs_old = int(math.sqrt(len(posemb_grid)))
-    if not len(gs_new):  # backwards compatibility
-        gs_new = [int(math.sqrt(ntok_new))] * 2
-    assert len(gs_new) >= 2
-    _logger.info('Position embedding grid-size from %s to %s', [gs_old, gs_old], gs_new)
-    posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
-    posemb_grid = F.interpolate(posemb_grid, size=gs_new, mode='bicubic', align_corners=False)
-    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_new[0] * gs_new[1], -1)
-    posemb = torch.cat([posemb_prefix, posemb_grid], dim=1)
-    return posemb
+            getattr(block.mlp, f'fc{r + 1}').weight.copy_(_n2p(w[f'{block_prefix}MlpBlock_{b_sub}/Dense_{r}/kernel']))
+            getattr(block.mlp, f'fc{r + 1}').bias.copy_(_n2p(w[f'{block_prefix}MlpBlock_{b_sub}/Dense_{r}/bias']))
+        block.norm2.weight.copy_(_n2p(w[f'{block_prefix}LayerNorm_{ln1_sub}/scale']))
+        block.norm2.bias.copy_(_n2p(w[f'{block_prefix}LayerNorm_{ln1_sub}/bias']))
 
 
 def _convert_openai_clip(state_dict, model):
@@ -591,7 +631,13 @@ def _convert_openai_clip(state_dict, model):
     return out_dict
 
 
-def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
+def checkpoint_filter_fn(
+        state_dict,
+        model,
+        adapt_layer_scale=False,
+        interpolation='bicubic',
+        antialias=True,
+):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
     import re
     out_dict = {}
@@ -603,17 +649,30 @@ def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
         return _convert_openai_clip(state_dict, model)
 
     for k, v in state_dict.items():
-        if 'patch_embed.proj.weight' in k and len(v.shape) < 4:
-            # For old models that I trained prior to conv based patchification
+        if 'patch_embed.proj.weight' in k:
             O, I, H, W = model.patch_embed.proj.weight.shape
-            v = v.reshape(O, -1, H, W)
+            if len(v.shape) < 4:
+                # For old models that I trained prior to conv based patchification
+                O, I, H, W = model.patch_embed.proj.weight.shape
+                v = v.reshape(O, -1, H, W)
+            if v.shape[-1] != W or v.shape[-2] != H:
+                v = resample_patch_embed(
+                    v,
+                    (H, W),
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
         elif k == 'pos_embed' and v.shape[1] != model.pos_embed.shape[1]:
             # To resize pos embedding when using model at different size from pretrained weights
-            v = resize_pos_embed(
+            num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
+            v = resample_abs_pos_embed(
                 v,
-                model.pos_embed,
-                0 if getattr(model, 'no_embed_class') else getattr(model, 'num_prefix_tokens', 1),
-                model.patch_embed.grid_size
+                new_size=model.patch_embed.grid_size,
+                num_prefix_tokens=num_prefix_tokens,
+                interpolation=interpolation,
+                antialias=antialias,
+                verbose=True,
             )
         elif adapt_layer_scale and 'gamma_' in k:
             # remap layer-scale gamma into sub-module (deit3 models)
@@ -641,67 +700,101 @@ default_cfgs = generate_default_cfgs({
     # How to train your ViT (augreg) weights, pretrained on 21k FT on in1k
     'vit_tiny_patch16_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_tiny_patch16_384.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
     'vit_small_patch32_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_small_patch32_384.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
     'vit_small_patch16_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_small_patch16_384.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
     'vit_base_patch32_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_32-i21k-300ep-lr_0.001-aug_medium1-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_base_patch32_384.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_32-i21k-300ep-lr_0.001-aug_light1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
     'vit_base_patch16_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_base_patch16_384.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
     'vit_base_patch8_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_8-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_large_patch16_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_large_patch16_384.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
 
     # re-finetuned augreg 21k FT on in1k weights
     'vit_base_patch16_224.augreg2_in21k_ft_in1k': _cfg(
-        file='b16_augreg-a-8.pth'),
-    'vit_base_patch16_384.augreg2_in21k_ft_in1k': _cfg(
-        url=''),
+        hf_hub_id='timm/'),
+    'vit_base_patch16_384.augreg2_in21k_ft_in1k': _cfg(),
     'vit_base_patch8_224.augreg2_in21k_ft_in1k': _cfg(
-        url=''),
+        hf_hub_id='timm/'),
 
     # patch models (weights from official Google JAX impl) pretrained on in21k FT on in1k
     'vit_base_patch16_224.orig_in21k_ft_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_p16_224-80ecf9dd.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_p16_224-80ecf9dd.pth',
+        hf_hub_id='timm/'),
     'vit_base_patch16_384.orig_in21k_ft_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_p16_384-83fb41ba.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_p16_384-83fb41ba.pth',
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0),
     'vit_large_patch32_384.orig_in21k_ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_p32_384-9b920ba8.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=1.0),
 
-    # How to train your ViT (augreg) weights trained on in1k
+    # How to train your ViT (augreg) weights trained on in1k only
+    'vit_small_patch16_224.augreg_in1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/S_16-i1k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        hf_hub_id='timm/',
+        custom_load=True),
+    'vit_small_patch16_384.augreg_in1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/S_16-i1k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_384.npz',
+        hf_hub_id='timm/',
+        custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
+    'vit_base_patch32_224.augreg_in1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/B_32-i1k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        hf_hub_id='timm/',
+        custom_load=True),
+    'vit_base_patch32_384.augreg_in1k': _cfg(
+        url='https://storage.googleapis.com/vit_models/augreg/B_32-i1k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_384.npz',
+        hf_hub_id='timm/',
+        custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
     'vit_base_patch16_224.augreg_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_16-i1k-300ep-lr_0.001-aug_strong2-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_224.npz',
+        hf_hub_id='timm/',
         custom_load=True),
     'vit_base_patch16_384.augreg_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_16-i1k-300ep-lr_0.001-aug_strong2-wd_0.1-do_0.1-sd_0.1--imagenet2012-steps_20k-lr_0.01-res_384.npz',
+        hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
 
     'vit_large_patch14_224.untrained': _cfg(url=''),
@@ -711,77 +804,94 @@ default_cfgs = generate_default_cfgs({
 
 
     # patch models, imagenet21k (weights from official Google JAX impl)
-    'vit_large_patch32_224.v1_in21k': _cfg(
-            url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth',
-            num_classes=21843),
-    'vit_huge_patch14_224.v1_in21k': _cfg(
+    'vit_large_patch32_224.orig_in21k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth',
+        hf_hub_id='timm/',
+        num_classes=21843),
+    'vit_huge_patch14_224.orig_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-H_14.npz',
-        hf_hub_id='timm/vit_huge_patch14_224_in21k',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
 
     # How to train your ViT (augreg) weights, pretrained on in21k
     'vit_tiny_patch16_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
     'vit_small_patch32_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
     'vit_small_patch16_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
     'vit_base_patch32_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_32-i21k-300ep-lr_0.001-aug_medium1-wd_0.03-do_0.0-sd_0.0.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
     'vit_base_patch16_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
     'vit_base_patch8_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/B_8-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
     'vit_large_patch16_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.1-sd_0.1.npz',
+        hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
 
     # SAM trained models (https://arxiv.org/abs/2106.01548)
     'vit_base_patch32_224.sam': _cfg(
-        url='https://storage.googleapis.com/vit_models/sam/ViT-B_32.npz', custom_load=True),
+        url='https://storage.googleapis.com/vit_models/sam/ViT-B_32.npz', custom_load=True,
+        hf_hub_id='timm/'),
     'vit_base_patch16_224.sam': _cfg(
-        url='https://storage.googleapis.com/vit_models/sam/ViT-B_16.npz', custom_load=True),
+        url='https://storage.googleapis.com/vit_models/sam/ViT-B_16.npz', custom_load=True,
+        hf_hub_id='timm/'),
 
     # DINO pretrained - https://arxiv.org/abs/2104.14294 (no classifier head, for fine-tune only)
     'vit_small_patch16_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     'vit_small_patch8_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_deitsmall8_pretrain/dino_deitsmall8_pretrain.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     'vit_base_patch16_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     'vit_base_patch8_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_vitbase8_pretrain/dino_vitbase8_pretrain.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 
 
     # ViT ImageNet-21K-P pretraining by MILL
     'vit_base_patch16_224_miil.in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/vit_base_patch16_224_in21k_miil-887286df.pth',
+        hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear', num_classes=11221),
     'vit_base_patch16_224_miil.in21k_ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/vit_base_patch16_224_1k_miil_84_4-2deb18e3.pth',
+        hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear'),
 
     # custom timm variants
     'vit_base_patch16_rpn_224.in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_base_patch16_rpn_224-sw-3b07e89d.pth'),
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_base_patch16_rpn_224-sw-3b07e89d.pth',
+        hf_hub_id='timm/'),
     'vit_medium_patch16_gap_240.in12k': _cfg(
-        hf_hub_id='timm/vit_medium_patch16_gap_240.in12k',
+        hf_hub_id='timm/',
         input_size=(3, 240, 240), crop_pct=0.95, num_classes=11821),
     'vit_medium_patch16_gap_256.in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_medium_patch16_gap_256.in12k_ft_in1k',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_gap_384.in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_medium_patch16_gap_384.in12k_ft_in1k',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=0.95, crop_mode='squash'),
     'vit_base_patch16_gap_224': _cfg(),
 
@@ -808,24 +918,24 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
 
     'vit_base_patch32_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch16_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_base_patch16_clip_384.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_384.laion2b_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
     'vit_large_patch14_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.laion2b_ft_in1k',
+        hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0),
     'vit_large_patch14_clip_336.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_336.laion2b_ft_in1k',
+        hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
     'vit_huge_patch14_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_huge_patch14_clip_224.laion2b_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_huge_patch14_clip_336.laion2b_ft_in1k': _cfg(
         hf_hub_id='',
@@ -833,33 +943,33 @@ default_cfgs = generate_default_cfgs({
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch32_clip_384.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_384.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 384, 384)),
     'vit_base_patch32_clip_448.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_448.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, input_size=(3, 448, 448)),
     'vit_base_patch16_clip_224.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=0.95),
     'vit_base_patch16_clip_384.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_384.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
     'vit_large_patch14_clip_224.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0),
     'vit_large_patch14_clip_336.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_336.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
     'vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
@@ -867,58 +977,58 @@ default_cfgs = generate_default_cfgs({
         #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.laion2b_ft_in12k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_large_patch14_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.laion2b_ft_in12k',
+        hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=11821),
     'vit_huge_patch14_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_huge_patch14_clip_224.laion2b_ft_in12k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
 
     'vit_base_patch32_clip_224.openai': _cfg(
-        hf_hub_id='timm/clip_vit_base_patch32_224.openai',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.openai': _cfg(
-        hf_hub_id='timm/clip_vit_base_patch16_224.openai',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_large_patch14_clip_224.openai': _cfg(
-        hf_hub_id='timm/clip_vit_large_patch14_224.openai',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch32_clip_224.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch16_clip_224.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch16_clip_384.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_384.openai_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
     'vit_large_patch14_clip_224.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.openai_ft_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
 
     'vit_base_patch32_clip_224.openai_ft_in12k_in1k': _cfg(
         #hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch32_clip_384.openai_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_384.openai_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=0.95, input_size=(3, 384, 384), crop_mode='squash'),
     'vit_base_patch16_clip_224.openai_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=0.95),
     'vit_base_patch16_clip_384.openai_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_384.openai_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=0.95, input_size=(3, 384, 384), crop_mode='squash'),
     'vit_large_patch14_clip_224.openai_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.openai_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
     'vit_large_patch14_clip_336.openai_ft_in12k_in1k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_336.openai_ft_in12k_in1k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
@@ -926,10 +1036,10 @@ default_cfgs = generate_default_cfgs({
         #hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.openai_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.openai_ft_in12k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_large_patch14_clip_224.openai_ft_in12k': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.openai_ft_in12k',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
 
     # experimental (may be removed)
@@ -942,21 +1052,81 @@ default_cfgs = generate_default_cfgs({
     # EVA fine-tuned weights from MAE style MIM - EVA-CLIP target pretrain
     # https://github.com/baaivision/EVA/blob/7ecf2c0a370d97967e86d047d7af9188f78d2df3/eva/README.md#eva-l-learning-better-mim-representations-from-eva-clip
     'eva_large_patch14_196.in22k_ft_in22k_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_196px_21k_to_1k_ft_88p6.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_196px_21k_to_1k_ft_88p6.pt',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 196, 196), crop_pct=1.0),
     'eva_large_patch14_336.in22k_ft_in22k_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_336px_21k_to_1k_ft_89p2.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_336px_21k_to_1k_ft_89p2.pt',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 336, 336), crop_pct=1.0, crop_mode='squash'),
     'eva_large_patch14_196.in22k_ft_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_196px_1k_ft_88p0.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_196px_1k_ft_88p0.pt',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 196, 196), crop_pct=1.0),
     'eva_large_patch14_336.in22k_ft_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_336px_1k_ft_88p65.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_l_psz14_336px_1k_ft_88p65.pt',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 336, 336), crop_pct=1.0, crop_mode='squash'),
+
+    'flexivit_small.1200ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_s_i1k.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_small.600ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_s_i1k_600ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_small.300ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_s_i1k_300ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+
+    'flexivit_base.1200ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_b_i1k.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_base.600ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_b_i1k_600ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_base.300ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_b_i1k_300ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_base.1000ep_in21k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_b_i21k_1000ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95, num_classes=21843),
+    'flexivit_base.300ep_in21k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_b_i21k_300ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95, num_classes=21843),
+
+    'flexivit_large.1200ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_l_i1k.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_large.600ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_l_i1k_600ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+    'flexivit_large.300ep_in1k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/flexivit_l_i1k_300ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95),
+
+    'flexivit_base.patch16_in21k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/vit_b16_i21k_300ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95, num_classes=21843),
+    'flexivit_base.patch30_in21k': _cfg(
+        url='https://storage.googleapis.com/big_vision/flexivit/vit_b30_i21k_300ep.npz', custom_load=True,
+        hf_hub_id='timm/',
+        input_size=(3, 240, 240), crop_pct=0.95, num_classes=21843),
 })
 
 
@@ -964,9 +1134,16 @@ def _create_vision_transformer(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
+    if 'flexi' in variant:
+        # FIXME Google FlexiViT pretrained models have a strong preference for bilinear patch / embed
+        # interpolation, other pretrained models resize better w/ anti-aliased bicubic interpolation.
+        _filter_fn = partial(checkpoint_filter_fn, interpolation='bilinear', antialias=False)
+    else:
+        _filter_fn = checkpoint_filter_fn
+
     return build_model_with_cfg(
         VisionTransformer, variant, pretrained,
-        pretrained_filter_fn=checkpoint_filter_fn,
+        pretrained_filter_fn=_filter_fn,
         **kwargs,
     )
 
@@ -1395,4 +1572,31 @@ def eva_large_patch14_336(pretrained=False, **kwargs):
     model_kwargs = dict(
         patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg', **kwargs)
     model = _create_vision_transformer('eva_large_patch14_336', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def flexivit_small(pretrained=False, **kwargs):
+    """ FlexiViT-Small
+    """
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, no_embed_class=True, **kwargs)
+    model = _create_vision_transformer('flexivit_small', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def flexivit_base(pretrained=False, **kwargs):
+    """ FlexiViT-Base
+    """
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, no_embed_class=True, **kwargs)
+    model = _create_vision_transformer('flexivit_base', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def flexivit_large(pretrained=False, **kwargs):
+    """ FlexiViT-Large
+    """
+    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, no_embed_class=True, **kwargs)
+    model = _create_vision_transformer('flexivit_large', pretrained=pretrained, **model_kwargs)
     return model

@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from .helpers import to_2tuple
-from .pos_embed import apply_rot_embed, RotaryEmbedding
+from .pos_embed_sincos import apply_rot_embed, RotaryEmbedding
 from .weight_init import trunc_normal_
 
 

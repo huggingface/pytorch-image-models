@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -67,6 +68,26 @@ def download_cached_file(url, check_hash=True, progress=False):
     return cached_file
 
 
+def check_cached_file(url, check_hash=True):
+    if isinstance(url, (list, tuple)):
+        url, filename = url
+    else:
+        parts = urlparse(url)
+        filename = os.path.basename(parts.path)
+    cached_file = os.path.join(get_cache_dir(), filename)
+    if os.path.exists(cached_file):
+        if check_hash:
+            r = HASH_REGEX.search(filename)  # r is Optional[Match[str]]
+            hash_prefix = r.group(1) if r else None
+            if hash_prefix:
+                with open(cached_file, 'rb') as f:
+                    hd = hashlib.sha256(f.read()).hexdigest()
+                    if hd[:len(hash_prefix)] != hash_prefix:
+                        return False
+        return True
+    return False
+
+
 def has_hf_hub(necessary=False):
     if not _has_hf_hub and necessary:
         # if no HF Hub module installed, and it is necessary to continue, raise error
@@ -90,14 +111,14 @@ def load_cfg_from_json(json_file: Union[str, os.PathLike]):
     return json.loads(text)
 
 
-def _download_from_hf(model_id: str, filename: str):
+def download_from_hf(model_id: str, filename: str):
     hf_model_id, hf_revision = hf_split(model_id)
     return hf_hub_download(hf_model_id, filename, revision=hf_revision)
 
 
 def load_model_config_from_hf(model_id: str):
     assert has_hf_hub(True)
-    cached_file = _download_from_hf(model_id, 'config.json')
+    cached_file = download_from_hf(model_id, 'config.json')
 
     hf_config = load_cfg_from_json(cached_file)
     if 'pretrained_cfg' not in hf_config:
@@ -124,34 +145,28 @@ def load_model_config_from_hf(model_id: str):
 
 def load_state_dict_from_hf(model_id: str, filename: str = 'pytorch_model.bin'):
     assert has_hf_hub(True)
-    cached_file = _download_from_hf(model_id, filename)
+    cached_file = download_from_hf(model_id, filename)
     state_dict = torch.load(cached_file, map_location='cpu')
     return state_dict
 
 
-def save_for_hf(model, save_directory, model_config=None):
-    assert has_hf_hub(True)
+def save_config_for_hf(model, config_path, model_config=None):
     model_config = model_config or {}
-    save_directory = Path(save_directory)
-    save_directory.mkdir(exist_ok=True, parents=True)
-
-    weights_path = save_directory / 'pytorch_model.bin'
-    torch.save(model.state_dict(), weights_path)
-
-    config_path = save_directory / 'config.json'
     hf_config = {}
     pretrained_cfg = filter_pretrained_cfg(model.pretrained_cfg, remove_source=True, remove_null=True)
     # set some values at root config level
     hf_config['architecture'] = pretrained_cfg.pop('architecture')
     hf_config['num_classes'] = model_config.get('num_classes', model.num_classes)
     hf_config['num_features'] = model_config.get('num_features', model.num_features)
-    hf_config['global_pool'] = model_config.get('global_pool', getattr(model, 'global_pool', None))
+    global_pool_type = model_config.get('global_pool', getattr(model, 'global_pool', None))
+    if isinstance(global_pool_type, str) and global_pool_type:
+        hf_config['global_pool'] = global_pool_type
 
-    if 'label' in model_config:
+    if 'labels' in model_config:
         _logger.warning(
-            "'label' as a config field for timm models is deprecated. Please use 'label_name' and 'display_name'. "
+            "'labels' as a config field for timm models is deprecated. Please use 'label_name' and 'display_name'. "
             "Using provided 'label' field as 'label_name'.")
-        model_config['label_name'] = model_config.pop('label')
+        model_config['label_name'] = model_config.pop('labels')
 
     label_name = model_config.pop('label_name', None)
     if label_name:
@@ -171,6 +186,18 @@ def save_for_hf(model, save_directory, model_config=None):
 
     with config_path.open('w') as f:
         json.dump(hf_config, f, indent=2)
+
+
+def save_for_hf(model, save_directory, model_config=None):
+    assert has_hf_hub(True)
+    save_directory = Path(save_directory)
+    save_directory.mkdir(exist_ok=True, parents=True)
+
+    weights_path = save_directory / 'pytorch_model.bin'
+    torch.save(model.state_dict(), weights_path)
+
+    config_path = save_directory / 'config.json'
+    save_config_for_hf(model, config_path, model_config=model_config)
 
 
 def push_to_hf_hub(
