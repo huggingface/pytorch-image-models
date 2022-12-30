@@ -51,9 +51,21 @@ class Bottle2neck(nn.Module):
     expansion = 4
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None,
-            cardinality=1, base_width=26, scale=4, dilation=1, first_dilation=None,
-            act_layer=nn.ReLU, norm_layer=None, attn_layer=None, **_):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            cardinality=1,
+            base_width=26,
+            scale=4,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=None,
+            attn_layer=None,
+            **_,
+    ):
         super(Bottle2neck, self).__init__()
         self.scale = scale
         self.is_first = stride > 1 or downsample is not None
@@ -89,7 +101,8 @@ class Bottle2neck(nn.Module):
         self.downsample = downsample
 
     def zero_init_last(self):
-        nn.init.zeros_(self.bn3.weight)
+        if getattr(self.bn3, 'weight', None) is not None:
+            nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
         shortcut = x

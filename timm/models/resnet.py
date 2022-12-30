@@ -337,9 +337,23 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
-            reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            cardinality=1,
+            base_width=64,
+            reduce_first=1,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            aa_layer=None,
+            drop_block=None,
+            drop_path=None,
+    ):
         super(BasicBlock, self).__init__()
 
         assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
@@ -370,7 +384,8 @@ class BasicBlock(nn.Module):
         self.drop_path = drop_path
 
     def zero_init_last(self):
-        nn.init.zeros_(self.bn2.weight)
+        if getattr(self.bn2, 'weight', None) is not None:
+            nn.init.zeros_(self.bn2.weight)
 
     def forward(self, x):
         shortcut = x
@@ -402,9 +417,23 @@ class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
-            reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            cardinality=1,
+            base_width=64,
+            reduce_first=1,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            aa_layer=None,
+            drop_block=None,
+            drop_path=None,
+    ):
         super(Bottleneck, self).__init__()
 
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
@@ -437,7 +466,8 @@ class Bottleneck(nn.Module):
         self.drop_path = drop_path
 
     def zero_init_last(self):
-        nn.init.zeros_(self.bn3.weight)
+        if getattr(self.bn3, 'weight', None) is not None:
+            nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
         shortcut = x
@@ -508,8 +538,18 @@ def drop_blocks(drop_prob=0.):
 
 
 def make_blocks(
-        block_fn, channels, block_repeats, inplanes, reduce_first=1, output_stride=32,
-        down_kernel_size=1, avg_down=False, drop_block_rate=0., drop_path_rate=0., **kwargs):
+        block_fn,
+        channels,
+        block_repeats,
+        inplanes,
+        reduce_first=1,
+        output_stride=32,
+        down_kernel_size=1,
+        avg_down=False,
+        drop_block_rate=0.,
+        drop_path_rate=0.,
+        **kwargs,
+):
     stages = []
     feature_info = []
     net_num_blocks = sum(block_repeats)
@@ -528,8 +568,14 @@ def make_blocks(
         downsample = None
         if stride != 1 or inplanes != planes * block_fn.expansion:
             down_kwargs = dict(
-                in_channels=inplanes, out_channels=planes * block_fn.expansion, kernel_size=down_kernel_size,
-                stride=stride, dilation=dilation, first_dilation=prev_dilation, norm_layer=kwargs.get('norm_layer'))
+                in_channels=inplanes,
+                out_channels=planes * block_fn.expansion,
+                kernel_size=down_kernel_size,
+                stride=stride,
+                dilation=dilation,
+                first_dilation=prev_dilation,
+                norm_layer=kwargs.get('norm_layer'),
+            )
             downsample = downsample_avg(**down_kwargs) if avg_down else downsample_conv(**down_kwargs)
 
         block_kwargs = dict(reduce_first=reduce_first, dilation=dilation, drop_block=db, **kwargs)
@@ -609,10 +655,30 @@ class ResNet(nn.Module):
     """
 
     def __init__(
-            self, block, layers, num_classes=1000, in_chans=3, output_stride=32, global_pool='avg',
-            cardinality=1, base_width=64, stem_width=64, stem_type='', replace_stem_pool=False, block_reduce_first=1,
-            down_kernel_size=1, avg_down=False, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None,
-            drop_rate=0.0, drop_path_rate=0., drop_block_rate=0., zero_init_last=True, block_args=None):
+            self,
+            block,
+            layers,
+            num_classes=1000,
+            in_chans=3,
+            output_stride=32,
+            global_pool='avg',
+            cardinality=1,
+            base_width=64,
+            stem_width=64,
+            stem_type='',
+            replace_stem_pool=False,
+            block_reduce_first=1,
+            down_kernel_size=1,
+            avg_down=False,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            aa_layer=None,
+            drop_rate=0.0,
+            drop_path_rate=0.,
+            drop_block_rate=0.,
+            zero_init_last=True,
+            block_args=None,
+    ):
         super(ResNet, self).__init__()
         block_args = block_args or dict()
         assert output_stride in (8, 16, 32)
@@ -663,10 +729,23 @@ class ResNet(nn.Module):
         # Feature Blocks
         channels = [64, 128, 256, 512]
         stage_modules, stage_feature_info = make_blocks(
-            block, channels, layers, inplanes, cardinality=cardinality, base_width=base_width,
-            output_stride=output_stride, reduce_first=block_reduce_first, avg_down=avg_down,
-            down_kernel_size=down_kernel_size, act_layer=act_layer, norm_layer=norm_layer, aa_layer=aa_layer,
-            drop_block_rate=drop_block_rate, drop_path_rate=drop_path_rate, **block_args)
+            block,
+            channels,
+            layers,
+            inplanes,
+            cardinality=cardinality,
+            base_width=base_width,
+            output_stride=output_stride,
+            reduce_first=block_reduce_first,
+            avg_down=avg_down,
+            down_kernel_size=down_kernel_size,
+            act_layer=act_layer,
+            norm_layer=norm_layer,
+            aa_layer=aa_layer,
+            drop_block_rate=drop_block_rate,
+            drop_path_rate=drop_path_rate,
+            **block_args,
+        )
         for stage in stage_modules:
             self.add_module(*stage)  # layer1, layer2, etc
         self.feature_info.extend(stage_feature_info)
@@ -687,9 +766,6 @@ class ResNet(nn.Module):
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
         if zero_init_last:
             for m in self.modules():
                 if hasattr(m, 'zero_init_last'):

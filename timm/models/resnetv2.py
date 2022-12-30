@@ -155,8 +155,20 @@ class PreActBottleneck(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs=None, bottle_ratio=0.25, stride=1, dilation=1, first_dilation=None, groups=1,
-            act_layer=None, conv_layer=None, norm_layer=None, proj_layer=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs=None,
+            bottle_ratio=0.25,
+            stride=1,
+            dilation=1,
+            first_dilation=None,
+            groups=1,
+            act_layer=None,
+            conv_layer=None,
+            norm_layer=None,
+            proj_layer=None,
+            drop_path_rate=0.,
+    ):
         super().__init__()
         first_dilation = first_dilation or dilation
         conv_layer = conv_layer or StdConv2d
@@ -202,8 +214,20 @@ class Bottleneck(nn.Module):
     """Non Pre-activation bottleneck block, equiv to V1.5/V1b Bottleneck. Used for ViT.
     """
     def __init__(
-            self, in_chs, out_chs=None, bottle_ratio=0.25, stride=1, dilation=1, first_dilation=None, groups=1,
-            act_layer=None, conv_layer=None, norm_layer=None, proj_layer=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs=None,
+            bottle_ratio=0.25,
+            stride=1,
+            dilation=1,
+            first_dilation=None,
+            groups=1,
+            act_layer=None,
+            conv_layer=None,
+            norm_layer=None,
+            proj_layer=None,
+            drop_path_rate=0.,
+    ):
         super().__init__()
         first_dilation = first_dilation or dilation
         act_layer = act_layer or nn.ReLU
@@ -229,7 +253,8 @@ class Bottleneck(nn.Module):
         self.act3 = act_layer(inplace=True)
 
     def zero_init_last(self):
-        nn.init.zeros_(self.norm3.weight)
+        if getattr(self.norm3, 'weight', None) is not None:
+            nn.init.zeros_(self.norm3.weight)
 
     def forward(self, x):
         # shortcut branch
@@ -283,9 +308,22 @@ class DownsampleAvg(nn.Module):
 class ResNetStage(nn.Module):
     """ResNet Stage."""
     def __init__(
-            self, in_chs, out_chs, stride, dilation, depth, bottle_ratio=0.25, groups=1,
-            avg_down=False, block_dpr=None, block_fn=PreActBottleneck,
-            act_layer=None, conv_layer=None, norm_layer=None, **block_kwargs):
+            self,
+            in_chs,
+            out_chs,
+            stride,
+            dilation,
+            depth,
+            bottle_ratio=0.25,
+            groups=1,
+            avg_down=False,
+            block_dpr=None,
+            block_fn=PreActBottleneck,
+            act_layer=None,
+            conv_layer=None,
+            norm_layer=None,
+            **block_kwargs,
+    ):
         super(ResNetStage, self).__init__()
         first_dilation = 1 if dilation in (1, 2) else 2
         layer_kwargs = dict(act_layer=act_layer, conv_layer=conv_layer, norm_layer=norm_layer)
@@ -313,8 +351,13 @@ def is_stem_deep(stem_type):
 
 
 def create_resnetv2_stem(
-        in_chs, out_chs=64, stem_type='', preact=True,
-        conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32)):
+        in_chs,
+        out_chs=64,
+        stem_type='',
+        preact=True,
+        conv_layer=StdConv2d,
+        norm_layer=partial(GroupNormAct, num_groups=32),
+):
     stem = OrderedDict()
     assert stem_type in ('', 'fixed', 'same', 'deep', 'deep_fixed', 'deep_same', 'tiered')
 
@@ -357,11 +400,25 @@ class ResNetV2(nn.Module):
     """
 
     def __init__(
-            self, layers, channels=(256, 512, 1024, 2048),
-            num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-            width_factor=1, stem_chs=64, stem_type='', avg_down=False, preact=True,
-            act_layer=nn.ReLU, conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32),
-            drop_rate=0., drop_path_rate=0., zero_init_last=False):
+            self,
+            layers,
+            channels=(256, 512, 1024, 2048),
+            num_classes=1000,
+            in_chans=3,
+            global_pool='avg',
+            output_stride=32,
+            width_factor=1,
+            stem_chs=64,
+            stem_type='',
+            avg_down=False,
+            preact=True,
+            act_layer=nn.ReLU,
+            conv_layer=StdConv2d,
+            norm_layer=partial(GroupNormAct, num_groups=32),
+            drop_rate=0.,
+            drop_path_rate=0.,
+            zero_init_last=False,
+    ):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -387,8 +444,18 @@ class ResNetV2(nn.Module):
                 dilation *= stride
                 stride = 1
             stage = ResNetStage(
-                prev_chs, out_chs, stride=stride, dilation=dilation, depth=d, avg_down=avg_down,
-                act_layer=act_layer, conv_layer=conv_layer, norm_layer=norm_layer, block_dpr=bdpr, block_fn=block_fn)
+                prev_chs,
+                out_chs,
+                stride=stride,
+                dilation=dilation,
+                depth=d,
+                avg_down=avg_down,
+                act_layer=act_layer,
+                conv_layer=conv_layer,
+                norm_layer=norm_layer,
+                block_dpr=bdpr,
+                block_fn=block_fn,
+            )
             prev_chs = out_chs
             curr_stride *= stride
             self.feature_info += [dict(num_chs=prev_chs, reduction=curr_stride, module=f'stages.{stage_idx}')]

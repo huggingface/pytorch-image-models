@@ -57,10 +57,27 @@ class ResNestBottleneck(nn.Module):
     expansion = 4
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None,
-            radix=1, cardinality=1, base_width=64, avd=False, avd_first=False, is_first=False,
-            reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            radix=1,
+            cardinality=1,
+            base_width=64,
+            avd=False,
+            avd_first=False,
+            is_first=False,
+            reduce_first=1,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            aa_layer=None,
+            drop_block=None,
+            drop_path=None,
+    ):
         super(ResNestBottleneck, self).__init__()
         assert reduce_first == 1  # not supported
         assert attn_layer is None  # not supported
@@ -103,7 +120,8 @@ class ResNestBottleneck(nn.Module):
         self.downsample = downsample
 
     def zero_init_last(self):
-        nn.init.zeros_(self.bn3.weight)
+        if getattr(self.bn3, 'weight', None) is not None:
+            nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
         shortcut = x
