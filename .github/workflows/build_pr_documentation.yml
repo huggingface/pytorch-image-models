@@ -9,7 +9,6 @@ concurrency:
 
 jobs:
   build:
-    # TODO - switch back to main branch before merging
     uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@main
     with:
       commit_sha: ${{ github.event.pull_request.head.sha }}
