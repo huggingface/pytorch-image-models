@@ -1,16 +1,29 @@
 """ ConvNeXt
 
-Paper: `A ConvNet for the 2020s` - https://arxiv.org/pdf/2201.03545.pdf
+Papers:
+* `A ConvNet for the 2020s` - https://arxiv.org/pdf/2201.03545.pdf
+* `ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://arxiv.org/abs/2301.00808
 
-Original code and weights from https://github.com/facebookresearch/ConvNeXt, original copyright below
+Original code and weights from:
+* https://github.com/facebookresearch/ConvNeXt, original copyright below
+* https://github.com/facebookresearch/ConvNeXt-V2, original copyright below
 
-Model defs atto, femto, pico, nano and _ols / _hnf variants are timm specific.
+Model defs atto, femto, pico, nano and _ols / _hnf variants are timm originals.
 
 Modifications and additions for timm hacked together by / Copyright 2022, Ross Wightman
 """
+# ConvNeXt
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 # This source code is licensed under the MIT license
+
+# ConvNeXt-V2
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree (Attribution-NonCommercial 4.0 International (CC BY-NC 4.0))
+# No code was used directly from ConvNeXt-V2, however the weights are CC BY-NC 4.0 so beware if using commercially.
+
 from collections import OrderedDict
 from functools import partial
 
@@ -18,8 +31,8 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, SelectAdaptivePool2d, DropPath, ConvMlp, Mlp, LayerNorm2d, LayerNorm, \
-    create_conv2d, get_act_layer, make_divisible, to_ntuple
+from timm.layers import trunc_normal_, SelectAdaptivePool2d, DropPath, Mlp, GlobalResponseNormMlp, \
+    LayerNorm2d, LayerNorm, create_conv2d, get_act_layer, make_divisible, to_ntuple
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq
 from ._pretrained import generate_default_cfgs
@@ -54,6 +67,7 @@ class ConvNeXtBlock(nn.Module):
             mlp_ratio=4,
             conv_mlp=False,
             conv_bias=True,
+            use_grn=False,
             ls_init_value=1e-6,
             act_layer='gelu',
             norm_layer=None,
@@ -64,14 +78,13 @@ class ConvNeXtBlock(nn.Module):
         act_layer = get_act_layer(act_layer)
         if not norm_layer:
             norm_layer = LayerNorm2d if conv_mlp else LayerNorm
-        mlp_layer = ConvMlp if conv_mlp else Mlp
+        mlp_layer = partial(GlobalResponseNormMlp if use_grn else Mlp, use_conv=conv_mlp)
         self.use_conv_mlp = conv_mlp
-
         self.conv_dw = create_conv2d(
             in_chs, out_chs, kernel_size=kernel_size, stride=stride, dilation=dilation, depthwise=True, bias=conv_bias)
         self.norm = norm_layer(out_chs)
         self.mlp = mlp_layer(out_chs, int(mlp_ratio * out_chs), act_layer=act_layer)
-        self.gamma = nn.Parameter(ls_init_value * torch.ones(out_chs)) if ls_init_value > 0 else None
+        self.gamma = nn.Parameter(ls_init_value * torch.ones(out_chs)) if ls_init_value is not None else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
@@ -106,6 +119,7 @@ class ConvNeXtStage(nn.Module):
             ls_init_value=1.0,
             conv_mlp=False,
             conv_bias=True,
+            use_grn=False,
             act_layer='gelu',
             norm_layer=None,
             norm_layer_cl=None
@@ -138,6 +152,7 @@ class ConvNeXtStage(nn.Module):
                 ls_init_value=ls_init_value,
                 conv_mlp=conv_mlp,
                 conv_bias=conv_bias,
+                use_grn=use_grn,
                 act_layer=act_layer,
                 norm_layer=norm_layer if conv_mlp else norm_layer_cl
             ))
@@ -184,6 +199,7 @@ class ConvNeXt(nn.Module):
             head_norm_first=False,
             conv_mlp=False,
             conv_bias=True,
+            use_grn=False,
             act_layer='gelu',
             norm_layer=None,
             drop_rate=0.,
@@ -247,6 +263,7 @@ class ConvNeXt(nn.Module):
                 ls_init_value=ls_init_value,
                 conv_mlp=conv_mlp,
                 conv_bias=conv_bias,
+                use_grn=use_grn,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
                 norm_layer_cl=norm_layer_cl
@@ -259,10 +276,11 @@ class ConvNeXt(nn.Module):
 
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default ConvNeXt ordering (pretrained FB weights)
+        self.head_norm_first = head_norm_first
         self.norm_pre = norm_layer(self.num_features) if head_norm_first else nn.Identity()
         self.head = nn.Sequential(OrderedDict([
                 ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
-                ('norm', nn.Identity() if head_norm_first else norm_layer(self.num_features)),
+                ('norm', nn.Identity() if head_norm_first or num_classes == 0 else norm_layer(self.num_features)),
                 ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
                 ('drop', nn.Dropout(self.drop_rate)),
                 ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())]))
@@ -293,7 +311,14 @@ class ConvNeXt(nn.Module):
         if global_pool is not None:
             self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
-        self.head.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        if num_classes == 0:
+            self.head.norm = nn.Identity()
+            self.head.fc = nn.Identity()
+        else:
+            if not self.head_norm_first:
+                norm_layer = type(self.stem[-1])  # obtain type from stem norm
+                self.head.norm = norm_layer(self.num_features)
+            self.head.fc = nn.Linear(self.num_features, num_classes)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -342,6 +367,10 @@ def checkpoint_filter_fn(state_dict, model):
         k = re.sub(r'downsample_layers.([0-9]+).([0-9]+)', r'stages.\1.downsample.\2', k)
         k = k.replace('dwconv', 'conv_dw')
         k = k.replace('pwconv', 'mlp.fc')
+        if 'grn' in k:
+            k = k.replace('grn.beta', 'mlp.grn.bias')
+            k = k.replace('grn.gamma', 'mlp.grn.weight')
+            v = v.reshape(v.shape[-1])
         k = k.replace('head.', 'head.fc.')
         if k.startswith('norm.'):
             k = k.replace('norm', 'head.norm')
@@ -499,6 +528,149 @@ default_cfgs = generate_default_cfgs({
         url="https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_224.pth",
         hf_hub_id='timm/',
         num_classes=21841),
+
+    'convnextv2_nano.fcmae_ft_in22k_in1k': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_nano_22k_224_ema.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_nano.fcmae_ft_in22k_in1k_384': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_nano_22k_384_ema.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_tiny.fcmae_ft_in22k_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_tiny_22k_224_ema.pt",
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_tiny.fcmae_ft_in22k_in1k_384': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_tiny_22k_384_ema.pt",
+        # hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_base.fcmae_ft_in22k_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_base_22k_224_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_base.fcmae_ft_in22k_in1k_384': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_base_22k_384_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_large.fcmae_ft_in22k_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_large_22k_224_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_large.fcmae_ft_in22k_in1k_384': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_large_22k_384_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_huge.fcmae_ft_in22k_in1k_384': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_huge_22k_384_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_huge.fcmae_ft_in22k_in1k_512': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_huge_22k_512_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        crop_pct=0.95, input_size=(3, 512, 512), test_input_size=(3, 576, 576), test_crop_pct=1.0, crop_mode='squash'),
+
+    'convnextv2_atto.fcmae_ft_in1k': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_atto_1k_224_ema.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'convnextv2_femto.fcmae_ft_in1k': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_femto_1k_224_ema.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'convnextv2_pico.fcmae_ft_in1k': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_pico_1k_224_ema.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'convnextv2_nano.fcmae_ft_in1k': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_nano_1k_224_ema.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_tiny.fcmae_ft_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_tiny_1k_224_ema.pt",
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_base.fcmae_ft_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_base_1k_224_ema.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_large.fcmae_ft_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_large_1k_224_ema.pt",
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnextv2_huge.fcmae_ft_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_huge_1k_224_ema.pt",
+        # hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'convnextv2_atto.fcmae': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_atto_1k_224_fcmae.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_femto.fcmae': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_femto_1k_224_fcmae.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_pico.fcmae': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_pico_1k_224_fcmae.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_nano.fcmae': _cfg(
+        url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_nano_1k_224_fcmae.pt',
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_tiny.fcmae': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_tiny_1k_224_fcmae.pt",
+        #hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_base.fcmae': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_base_1k_224_fcmae.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_large.fcmae': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_large_1k_224_fcmae.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+    'convnextv2_huge.fcmae': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_huge_1k_224_fcmae.pt",
+        #hf_hub_id='timm/'
+        license='cc-by-nc-4.0',
+        num_classes=0,
+    ),
+
+    'convnextv2_small.untrained': _cfg(),
 })
 
 
@@ -622,4 +794,76 @@ def convnext_xlarge(pretrained=False, **kwargs):
 def convnext_xxlarge(pretrained=False, **kwargs):
     model_args = dict(depths=[3, 4, 30, 3], dims=[384, 768, 1536, 3072], **kwargs)
     model = _create_convnext('convnext_xxlarge', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_atto(pretrained=False, **kwargs):
+    # timm femto variant (NOTE: still tweaking depths, will vary between 3-4M param, current is 3.7M
+    model_args = dict(
+        depths=(2, 2, 6, 2), dims=(40, 80, 160, 320), use_grn=True, ls_init_value=None, conv_mlp=True, **kwargs)
+    model = _create_convnext('convnextv2_atto', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_femto(pretrained=False, **kwargs):
+    # timm femto variant
+    model_args = dict(
+        depths=(2, 2, 6, 2), dims=(48, 96, 192, 384), use_grn=True, ls_init_value=None, conv_mlp=True, **kwargs)
+    model = _create_convnext('convnextv2_femto', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_pico(pretrained=False, **kwargs):
+    # timm pico variant
+    model_args = dict(
+        depths=(2, 2, 6, 2), dims=(64, 128, 256, 512), use_grn=True, ls_init_value=None, conv_mlp=True, **kwargs)
+    model = _create_convnext('convnextv2_pico', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_nano(pretrained=False, **kwargs):
+    # timm nano variant with standard stem and head
+    model_args = dict(
+        depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), use_grn=True, ls_init_value=None, conv_mlp=True, **kwargs)
+    model = _create_convnext('convnextv2_nano', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_tiny(pretrained=False, **kwargs):
+    model_args = dict(
+        depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), use_grn=True, ls_init_value=None, **kwargs)
+    model = _create_convnext('convnextv2_tiny', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_small(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], use_grn=True, ls_init_value=None, **kwargs)
+    model = _create_convnext('convnextv2_small', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_base(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], use_grn=True, ls_init_value=None, **kwargs)
+    model = _create_convnext('convnextv2_base', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_large(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], use_grn=True, ls_init_value=None, **kwargs)
+    model = _create_convnext('convnextv2_large', pretrained=pretrained, **model_args)
+    return model
+
+
+@register_model
+def convnextv2_huge(pretrained=False, **kwargs):
+    model_args = dict(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], use_grn=True, ls_init_value=None, **kwargs)
+    model = _create_convnext('convnextv2_huge', pretrained=pretrained, **model_args)
     return model
