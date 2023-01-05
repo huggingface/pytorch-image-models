@@ -129,7 +129,7 @@ def test_model_backward(model_name, batch_size):
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -191,7 +191,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs_non_std(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -304,7 +304,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
 
 
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""

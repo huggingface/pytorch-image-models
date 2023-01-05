@@ -2,7 +2,20 @@
 
 Papers:
 * `A ConvNet for the 2020s` - https://arxiv.org/pdf/2201.03545.pdf
+@Article{liu2022convnet,
+  author  = {Zhuang Liu and Hanzi Mao and Chao-Yuan Wu and Christoph Feichtenhofer and Trevor Darrell and Saining Xie},
+  title   = {A ConvNet for the 2020s},
+  journal = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year    = {2022},
+}
+
 * `ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://arxiv.org/abs/2301.00808
+@article{Woo2023ConvNeXtV2,
+  title={ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders},
+  author={Sanghyun Woo, Shoubhik Debnath, Ronghang Hu, Xinlei Chen, Zhuang Liu, In So Kweon and Saining Xie},
+  year={2023},
+  journal={arXiv preprint arXiv:2301.00808},
+}
 
 Original code and weights from:
 * https://github.com/facebookresearch/ConvNeXt, original copyright below
@@ -401,6 +414,20 @@ def _cfg(url='', **kwargs):
     }
 
 
+def _cfgv2(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.0', 'classifier': 'head.fc',
+        'license': 'cc-by-nc-4.0', 'paper_ids': 'arXiv:2301.00808',
+        'paper_name': 'ConvNeXt-V2: Co-designing and Scaling ConvNets with Masked Autoencoders',
+        'origin_url': 'https://github.com/facebookresearch/ConvNeXt-V2',
+        **kwargs
+    }
+
+
 default_cfgs = generate_default_cfgs({
     # timm specific variants
     'convnext_atto.d2_in1k': _cfg(
@@ -529,146 +556,112 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         num_classes=21841),
 
-    'convnextv2_nano.fcmae_ft_in22k_in1k': _cfg(
+    'convnextv2_nano.fcmae_ft_in22k_in1k': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_nano_22k_224_ema.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_nano.fcmae_ft_in22k_in1k_384': _cfg(
+    'convnextv2_nano.fcmae_ft_in22k_in1k_384': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_nano_22k_384_ema.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
-    'convnextv2_tiny.fcmae_ft_in22k_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_tiny.fcmae_ft_in22k_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_tiny_22k_224_ema.pt",
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_tiny.fcmae_ft_in22k_in1k_384': _cfg(
+    'convnextv2_tiny.fcmae_ft_in22k_in1k_384': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_tiny_22k_384_ema.pt",
-        # hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
-    'convnextv2_base.fcmae_ft_in22k_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_base.fcmae_ft_in22k_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_base_22k_224_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_base.fcmae_ft_in22k_in1k_384': _cfg(
+    'convnextv2_base.fcmae_ft_in22k_in1k_384': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_base_22k_384_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
-    'convnextv2_large.fcmae_ft_in22k_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_large.fcmae_ft_in22k_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_large_22k_224_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_large.fcmae_ft_in22k_in1k_384': _cfg(
+    'convnextv2_large.fcmae_ft_in22k_in1k_384': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_large_22k_384_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
-    'convnextv2_huge.fcmae_ft_in22k_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_huge.fcmae_ft_in22k_in1k_384': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_huge_22k_384_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        crop_pct=0.95, input_size=(3, 384, 384), test_input_size=(3, 416, 416), test_crop_pct=1.0, crop_mode='squash'),
-    'convnextv2_huge.fcmae_ft_in22k_in1k_512': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
+    'convnextv2_huge.fcmae_ft_in22k_in1k_512': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im22k/convnextv2_huge_22k_512_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        crop_pct=0.95, input_size=(3, 512, 512), test_input_size=(3, 576, 576), test_crop_pct=1.0, crop_mode='squash'),
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512), pool_size=(15, 15), crop_pct=1.0, crop_mode='squash'),
 
-    'convnextv2_atto.fcmae_ft_in1k': _cfg(
+    'convnextv2_atto.fcmae_ft_in1k': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_atto_1k_224_ema.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnextv2_femto.fcmae_ft_in1k': _cfg(
+    'convnextv2_femto.fcmae_ft_in1k': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_femto_1k_224_ema.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnextv2_pico.fcmae_ft_in1k': _cfg(
+    'convnextv2_pico.fcmae_ft_in1k': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_pico_1k_224_ema.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'convnextv2_nano.fcmae_ft_in1k': _cfg(
+    'convnextv2_nano.fcmae_ft_in1k': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_nano_1k_224_ema.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_tiny.fcmae_ft_in1k': _cfg(
+    'convnextv2_tiny.fcmae_ft_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_tiny_1k_224_ema.pt",
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_base.fcmae_ft_in1k': _cfg(
+    'convnextv2_base.fcmae_ft_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_base_1k_224_ema.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_large.fcmae_ft_in1k': _cfg(
+    'convnextv2_large.fcmae_ft_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_large_1k_224_ema.pt",
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnextv2_huge.fcmae_ft_in1k': _cfg(
+    'convnextv2_huge.fcmae_ft_in1k': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_huge_1k_224_ema.pt",
-        # hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
-    'convnextv2_atto.fcmae': _cfg(
+    'convnextv2_atto.fcmae': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_atto_1k_224_fcmae.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_femto.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_femto.fcmae': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_femto_1k_224_fcmae.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_pico.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_pico.fcmae': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_pico_1k_224_fcmae.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_nano.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_nano.fcmae': _cfgv2(
         url='https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_nano_1k_224_fcmae.pt',
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_tiny.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_tiny.fcmae': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_tiny_1k_224_fcmae.pt",
-        #hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_base.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_base.fcmae': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_base_1k_224_fcmae.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_large.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_large.fcmae': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_large_1k_224_fcmae.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
-    'convnextv2_huge.fcmae': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'convnextv2_huge.fcmae': _cfgv2(
         url="https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_huge_1k_224_fcmae.pt",
-        #hf_hub_id='timm/'
-        license='cc-by-nc-4.0',
-        num_classes=0,
-    ),
+        hf_hub_id='timm/',
+        num_classes=0),
 
     'convnextv2_small.untrained': _cfg(),
 })
