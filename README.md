@@ -28,6 +28,11 @@ For a few months now, `timm` has been part of the Hugging Face ecosystem. Yearly
 If you have a couple of minutes and want to participate in shaping the future of the ecosystem, please share your thoughts:
 [**hf.co/oss-survey**](https://hf.co/oss-survey) 🙏
 
+### Jan 5, 2023
+* ConvNeXt-V2 models and weights added to existing `convnext.py`
+  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](http://arxiv.org/abs/2301.00808)
+  * Reference impl: https://github.com/facebookresearch/ConvNeXt-V2 (NOTE: weights currently CC-BY-NC)
+
 ### Dec 23, 2022 🎄☃
 * Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
   * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
@@ -396,6 +401,7 @@ A full version of the list below with source links can be found in the [document
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
 * CoAtNet (Convolution and Attention) - https://arxiv.org/abs/2106.04803
 * ConvNeXt - https://arxiv.org/abs/2201.03545
+* ConvNeXt-V2 - http://arxiv.org/abs/2301.00808
 * ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT - https://arxiv.org/abs/2012.12877
@@ -418,6 +424,7 @@ A full version of the list below with source links can be found in the [document
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
 * EVA - https://arxiv.org/abs/2211.07636
+* FlexiViT - https://arxiv.org/abs/2212.08013
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
 * GhostNet - https://arxiv.org/abs/1911.11907
 * gMLP - https://arxiv.org/abs/2105.08050
