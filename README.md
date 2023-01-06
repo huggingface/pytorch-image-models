@@ -341,46 +341,6 @@ More models, more fixes
 * TinyNet models added by [rsomani95](https://github.com/rsomani95)
 * LCNet added via MobileNetV3 architecture
 
-### Nov 22, 2021
-* A number of updated weights anew new model defs
-  * `eca_halonext26ts` - 79.5 @ 256
-  * `resnet50_gn` (new) - 80.1 @ 224, 81.3 @ 288
-  * `resnet50` - 80.7 @ 224, 80.9 @ 288 (trained at 176, not replacing current a1 weights as default since these don't scale as well to higher res, [weights](https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1h2_176-001a1197.pth))
-  * `resnext50_32x4d` - 81.1 @ 224, 82.0 @ 288
-  * `sebotnet33ts_256` (new) - 81.2 @ 224
-  * `lamhalobotnet50ts_256` - 81.5 @ 256
-  * `halonet50ts` - 81.7 @ 256
-  * `halo2botnet50ts_256` - 82.0 @ 256
-  * `resnet101` - 82.0 @ 224, 82.8 @ 288
-  * `resnetv2_101` (new) - 82.1 @ 224, 83.0 @ 288
-  * `resnet152` - 82.8 @ 224, 83.5 @ 288
-  * `regnetz_d8` (new) - 83.5 @ 256, 84.0 @ 320
-  * `regnetz_e8` (new) - 84.5 @ 256, 85.0 @ 320
-* `vit_base_patch8_224` (85.8 top-1) & `in21k` variant weights added thanks [Martins Bruveris](https://github.com/martinsbruveris)
-* Groundwork in for FX feature extraction thanks to [Alexander Soare](https://github.com/alexander-soare)
-  * models updated for tracing compatibility (almost full support with some distlled transformer exceptions)
-
-### Oct 19, 2021
-* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used. Model weights and some more details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-rsb-weights)
-* BCE loss and Repeated Augmentation support for RSB paper
-* 4 series of ResNet based attention model experiments being added (implemented across byobnet.py/byoanet.py). These include all sorts of attention, from channel attn like SE, ECA to 2D QKV self-attention layers such as Halo, Bottlneck, Lambda. Details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
-* Working implementations of the following 2D self-attention modules (likely to be differences from paper or eventual official impl):
-  * Halo (https://arxiv.org/abs/2103.12731)
-  * Bottleneck Transformer (https://arxiv.org/abs/2101.11605)
-  * LambdaNetworks (https://arxiv.org/abs/2102.08602)
-* A RegNetZ series of models with some attention experiments (being added to). These do not follow the paper (https://arxiv.org/abs/2103.06877) in any way other than block architecture, details of official models are not available. See more here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
-* ConvMixer (https://openreview.net/forum?id=TVHS5Y4dNvM), CrossVit (https://arxiv.org/abs/2103.14899), and BeiT (https://arxiv.org/abs/2106.08254) architectures + weights added
-* freeze/unfreeze helpers by [Alexander Soare](https://github.com/alexander-soare)
-
-### Aug 18, 2021
-* Optimizer bonanza!
-  * Add LAMB and LARS optimizers, incl trust ratio clipping options. Tweaked to work properly in PyTorch XLA (tested on TPUs w/ `timm bits` [branch](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/timm/bits))
-  * Add MADGRAD from FB research w/ a few tweaks (decoupled decay option, step handling that works with PyTorch XLA)
-  * Some cleanup on all optimizers and factory. No more `.data`, a bit more consistency, unit tests for all!
-  * SGDP and AdamP still won't work with PyTorch XLA but others should (have yet to test Adabelief, Adafactor, Adahessian myself).
-* EfficientNet-V2 XL TF ported weights added, but they don't validate well in PyTorch (L is better). The pre-processing for the V2 TF training is a bit diff and the fine-tuned 21k -> 1k weights are very sensitive and less robust than the 1k weights.
-* Added PyTorch trained EfficientNet-V2 'Tiny' w/ GlobalContext attn weights. Only .1-.2 top-1 better than the SE so more of a curiosity for those interested.
-
 ## Introduction
 
 Py**T**orch **Im**age **M**odels (`timm`) is a collection of image models, layers, utilities, optimizers, schedulers, data-loaders / augmentations, and reference training / validation scripts that aim to pull together a wide variety of SOTA models with ability to reproduce ImageNet training results.
