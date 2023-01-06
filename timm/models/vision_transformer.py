@@ -697,6 +697,13 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
 
+    # re-finetuned augreg 21k FT on in1k weights
+    'vit_base_patch16_224.augreg2_in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/'),
+    'vit_base_patch16_384.augreg2_in21k_ft_in1k': _cfg(),
+    'vit_base_patch8_224.augreg2_in21k_ft_in1k': _cfg(
+        hf_hub_id='timm/'),
+
     # How to train your ViT (augreg) weights, pretrained on 21k FT on in1k
     'vit_tiny_patch16_224.augreg_in21k_ft_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_224.npz',
@@ -751,13 +758,6 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         custom_load=True, input_size=(3, 384, 384), crop_pct=1.0),
 
-    # re-finetuned augreg 21k FT on in1k weights
-    'vit_base_patch16_224.augreg2_in21k_ft_in1k': _cfg(
-        hf_hub_id='timm/'),
-    'vit_base_patch16_384.augreg2_in21k_ft_in1k': _cfg(),
-    'vit_base_patch8_224.augreg2_in21k_ft_in1k': _cfg(
-        hf_hub_id='timm/'),
-
     # patch models (weights from official Google JAX impl) pretrained on in21k FT on in1k
     'vit_base_patch16_224.orig_in21k_ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_p16_224-80ecf9dd.pth',
@@ -801,7 +801,6 @@ default_cfgs = generate_default_cfgs({
     'vit_huge_patch14_224.untrained': _cfg(url=''),
     'vit_giant_patch14_224.untrained': _cfg(url=''),
     'vit_gigantic_patch14_224.untrained': _cfg(url=''),
-
 
     # patch models, imagenet21k (weights from official Google JAX impl)
     'vit_large_patch32_224.orig_in21k': _cfg(
@@ -869,7 +868,6 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 
-
     # ViT ImageNet-21K-P pretraining by MILL
     'vit_base_patch16_224_miil.in21k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/vit_base_patch16_224_in21k_miil-887286df.pth',
@@ -880,7 +878,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear'),
 
-    # custom timm variants
+    # Custom timm variants
     'vit_base_patch16_rpn_224.in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_base_patch16_rpn_224-sw-3b07e89d.pth',
         hf_hub_id='timm/'),
@@ -896,52 +894,6 @@ default_cfgs = generate_default_cfgs({
     'vit_base_patch16_gap_224': _cfg(),
 
     # CLIP pretrained image tower and related fine-tuned weights
-    'vit_base_patch32_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-32-laion2B-s34B-b79K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
-    'vit_base_patch16_clip_224.laion2b': _cfg(
-        #hf_hub_id='laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
-    'vit_large_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-L-14-laion2B-s32B-b82K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=768),
-    'vit_huge_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-H-14-laion2B-s32B-b79K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
-    'vit_giant_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-g-14-laion2B-s12B-b42K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
-
-    'vit_base_patch32_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
-    'vit_base_patch16_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
-    'vit_base_patch16_clip_384.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
-    'vit_large_patch14_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0),
-    'vit_large_patch14_clip_336.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
-        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
-    'vit_huge_patch14_clip_224.laion2b_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
-    'vit_huge_patch14_clip_336.laion2b_ft_in1k': _cfg(
-        hf_hub_id='',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
-
     'vit_base_patch32_clip_224.laion2b_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
@@ -973,45 +925,8 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
-    'vit_base_patch32_clip_224.laion2b_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
-    'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
-    'vit_large_patch14_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=11821),
-    'vit_huge_patch14_clip_224.laion2b_ft_in12k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
-
-    'vit_base_patch32_clip_224.openai': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
-    'vit_base_patch16_clip_224.openai': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
-    'vit_large_patch14_clip_224.openai': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
-
-    'vit_base_patch32_clip_224.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
-    'vit_base_patch16_clip_224.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
-    'vit_base_patch16_clip_384.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
-    'vit_large_patch14_clip_224.openai_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
-
     'vit_base_patch32_clip_224.openai_ft_in12k_in1k': _cfg(
-        #hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k_in1k',
+        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k_in1k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch32_clip_384.openai_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/',
@@ -1032,8 +947,60 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
+    'vit_base_patch32_clip_224.laion2b_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
+    'vit_base_patch16_clip_224.laion2b_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
+    'vit_base_patch16_clip_384.laion2b_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
+    'vit_large_patch14_clip_224.laion2b_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0),
+    'vit_large_patch14_clip_336.laion2b_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
+    'vit_huge_patch14_clip_224.laion2b_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
+    'vit_huge_patch14_clip_336.laion2b_ft_in1k': _cfg(
+        hf_hub_id='',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
+
+    'vit_base_patch32_clip_224.openai_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
+    'vit_base_patch16_clip_224.openai_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
+    'vit_base_patch16_clip_384.openai_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 384, 384), crop_mode='squash'),
+    'vit_large_patch14_clip_224.openai_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
+
+    'vit_base_patch32_clip_224.laion2b_ft_in12k': _cfg(
+        #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
+    'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
+    'vit_large_patch14_clip_224.laion2b_ft_in12k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=11821),
+    'vit_huge_patch14_clip_224.laion2b_ft_in12k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
+
     'vit_base_patch32_clip_224.openai_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
+        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.openai_ft_in12k': _cfg(
         hf_hub_id='timm/',
@@ -1041,6 +1008,37 @@ default_cfgs = generate_default_cfgs({
     'vit_large_patch14_clip_224.openai_ft_in12k': _cfg(
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
+
+    'vit_base_patch32_clip_224.laion2b': _cfg(
+        hf_hub_id='laion/CLIP-ViT-B-32-laion2B-s34B-b79K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_base_patch16_clip_224.laion2b': _cfg(
+        # hf_hub_id='laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.laion2b': _cfg(
+        hf_hub_id='laion/CLIP-ViT-L-14-laion2B-s32B-b82K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=768),
+    'vit_huge_patch14_clip_224.laion2b': _cfg(
+        hf_hub_id='laion/CLIP-ViT-H-14-laion2B-s32B-b79K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
+    'vit_giant_patch14_clip_224.laion2b': _cfg(
+        hf_hub_id='laion/CLIP-ViT-g-14-laion2B-s12B-b42K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
+
+    'vit_base_patch32_clip_224.openai': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_base_patch16_clip_224.openai': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_large_patch14_clip_224.openai': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     # experimental (may be removed)
     'vit_base_patch32_plus_256': _cfg(url='', input_size=(3, 256, 256), crop_pct=0.95),
