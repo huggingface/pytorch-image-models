@@ -167,7 +167,7 @@ class ConvNeXtStage(nn.Module):
                 conv_bias=conv_bias,
                 use_grn=use_grn,
                 act_layer=act_layer,
-                norm_layer=norm_layer if conv_mlp else norm_layer_cl
+                norm_layer=norm_layer if conv_mlp else norm_layer_cl,
             ))
             in_chs = out_chs
         self.blocks = nn.Sequential(*stage_blocks)
@@ -184,16 +184,6 @@ class ConvNeXtStage(nn.Module):
 class ConvNeXt(nn.Module):
     r""" ConvNeXt
         A PyTorch impl of : `A ConvNet for the 2020s`  - https://arxiv.org/pdf/2201.03545.pdf
-
-    Args:
-        in_chans (int): Number of input image channels. Default: 3
-        num_classes (int): Number of classes for classification head. Default: 1000
-        depths (tuple(int)): Number of blocks at each stage. Default: [3, 3, 9, 3]
-        dims (tuple(int)): Feature dimension at each stage. Default: [96, 192, 384, 768]
-        drop_rate (float): Head dropout rate
-        drop_path_rate (float): Stochastic depth rate. Default: 0.
-        ls_init_value (float): Init value for Layer Scale. Default: 1e-6.
-        head_init_scale (float): Init scaling value for classifier weights and biases. Default: 1.
     """
 
     def __init__(
@@ -218,6 +208,28 @@ class ConvNeXt(nn.Module):
             drop_rate=0.,
             drop_path_rate=0.,
     ):
+        """
+        Args:
+            in_chans (int): Number of input image channels (default: 3)
+            num_classes (int): Number of classes for classification head (default: 1000)
+            global_pool (str): Global pooling type (default: 'avg')
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            depths (tuple(int)): Number of blocks at each stage. (default: [3, 3, 9, 3])
+            dims (tuple(int)): Feature dimension at each stage. (default: [96, 192, 384, 768])
+            kernel_sizes (Union[int, List[int]]: Depthwise convolution kernel-sizes for each stage (default: 7)
+            ls_init_value (float): Init value for Layer Scale (default: 1e-6)
+            stem_type (str): Type of stem (default: 'patch')
+            patch_size (int): Stem patch size for patch stem (default: 4)
+            head_init_scale (float): Init scaling value for classifier weights and biases (default: 1)
+            head_norm_first (bool): Apply normalization before global pool + head (default: False)
+            conv_mlp (bool): Use 1x1 conv in MLP, improves speed for small networks w/ chan last (default: False)
+            conv_bias (bool): Use bias layers w/ all convolutions (default: True)
+            use_grn (bool): Use Global Response Norm (ConvNeXt-V2) in MLP (default: False)
+            act_layer (Union[str, nn.Module]): Activation Layer
+            norm_layer (Union[str, nn.Module]): Normalization Layer
+            drop_rate (float): Head dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth rate (default: 0.)
+        """
         super().__init__()
         assert output_stride in (8, 16, 32)
         kernel_sizes = to_ntuple(4)(kernel_sizes)
@@ -279,7 +291,7 @@ class ConvNeXt(nn.Module):
                 use_grn=use_grn,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
-                norm_layer_cl=norm_layer_cl
+                norm_layer_cl=norm_layer_cl,
             ))
             prev_chs = out_chs
             # NOTE feature_info use currently assumes stage 0 == stride 1, rest are stride 2

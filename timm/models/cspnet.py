@@ -12,7 +12,7 @@ Reference impl via darknet cfg files at https://github.com/WongKinYiu/CrossStage
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from functools import partial
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -518,7 +518,7 @@ class CrossStage(nn.Module):
             cross_linear=False,
             block_dpr=None,
             block_fn=BottleneckBlock,
-            **block_kwargs
+            **block_kwargs,
     ):
         super(CrossStage, self).__init__()
         first_dilation = first_dilation or dilation
@@ -558,7 +558,7 @@ class CrossStage(nn.Module):
                 bottle_ratio=bottle_ratio,
                 groups=groups,
                 drop_path=block_dpr[i] if block_dpr is not None else 0.,
-                **block_kwargs
+                **block_kwargs,
             ))
             prev_chs = block_out_chs
 
@@ -597,7 +597,7 @@ class CrossStage3(nn.Module):
             cross_linear=False,
             block_dpr=None,
             block_fn=BottleneckBlock,
-            **block_kwargs
+            **block_kwargs,
     ):
         super(CrossStage3, self).__init__()
         first_dilation = first_dilation or dilation
@@ -635,7 +635,7 @@ class CrossStage3(nn.Module):
                 bottle_ratio=bottle_ratio,
                 groups=groups,
                 drop_path=block_dpr[i] if block_dpr is not None else 0.,
-                **block_kwargs
+                **block_kwargs,
             ))
             prev_chs = block_out_chs
 
@@ -668,7 +668,7 @@ class DarkStage(nn.Module):
             avg_down=False,
             block_fn=BottleneckBlock,
             block_dpr=None,
-            **block_kwargs
+            **block_kwargs,
     ):
         super(DarkStage, self).__init__()
         first_dilation = first_dilation or dilation
@@ -715,7 +715,7 @@ def create_csp_stem(
         padding='',
         act_layer=nn.ReLU,
         norm_layer=nn.BatchNorm2d,
-        aa_layer=None
+        aa_layer=None,
 ):
     stem = nn.Sequential()
     feature_info = []
@@ -738,7 +738,7 @@ def create_csp_stem(
             stride=conv_stride,
             padding=padding if i == 0 else '',
             act_layer=act_layer,
-            norm_layer=norm_layer
+            norm_layer=norm_layer,
         ))
         stem_stride *= conv_stride
         prev_chs = chs
@@ -800,7 +800,7 @@ def create_csp_stages(
         cfg: CspModelCfg,
         drop_path_rate: float,
         output_stride: int,
-        stem_feat: Dict[str, Any]
+        stem_feat: Dict[str, Any],
 ):
     cfg_dict = asdict(cfg.stages)
     num_stages = len(cfg.stages.depth)
@@ -868,12 +868,27 @@ class CspNet(nn.Module):
             global_pool='avg',
             drop_rate=0.,
             drop_path_rate=0.,
-            zero_init_last=True
+            zero_init_last=True,
+            **kwargs,
     ):
+        """
+        Args:
+            cfg (CspModelCfg): Model architecture configuration
+            in_chans (int): Number of input channels (default: 3)
+            num_classes (int): Number of classifier classes (default: 1000)
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            global_pool (str): Global pooling type (default: 'avg')
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            zero_init_last (bool): Zero-init last weight of residual path
+            kwargs (dict): Extra kwargs overlayed onto cfg
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert output_stride in (8, 16, 32)
+
+        cfg = replace(cfg, **kwargs)  # overlay kwargs onto cfg
         layer_args = dict(
             act_layer=cfg.act_layer,
             norm_layer=cfg.norm_layer,

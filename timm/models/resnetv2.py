@@ -37,7 +37,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dB0, EvoNorm2dS0, FilterResponseNormTlu2d, \
-    ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d
+    ClassifierHead, DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq, named_apply, adapt_input_conv
 from ._registry import register_model
@@ -276,8 +276,16 @@ class Bottleneck(nn.Module):
 
 class DownsampleConv(nn.Module):
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=1, first_dilation=None, preact=True,
-            conv_layer=None, norm_layer=None):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=1,
+            first_dilation=None,
+            preact=True,
+            conv_layer=None,
+            norm_layer=None,
+    ):
         super(DownsampleConv, self).__init__()
         self.conv = conv_layer(in_chs, out_chs, 1, stride=stride)
         self.norm = nn.Identity() if preact else norm_layer(out_chs, apply_act=False)
@@ -288,8 +296,16 @@ class DownsampleConv(nn.Module):
 
 class DownsampleAvg(nn.Module):
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=1, first_dilation=None,
-            preact=True, conv_layer=None, norm_layer=None):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=1,
+            first_dilation=None,
+            preact=True,
+            conv_layer=None,
+            norm_layer=None,
+    ):
         """ AvgPool Downsampling as in 'D' ResNet variants. This is not in RegNet space but I might experiment."""
         super(DownsampleAvg, self).__init__()
         avg_stride = stride if dilation == 1 else 1
@@ -334,9 +350,18 @@ class ResNetStage(nn.Module):
             drop_path_rate = block_dpr[block_idx] if block_dpr else 0.
             stride = stride if block_idx == 0 else 1
             self.blocks.add_module(str(block_idx), block_fn(
-                prev_chs, out_chs, stride=stride, dilation=dilation, bottle_ratio=bottle_ratio, groups=groups,
-                first_dilation=first_dilation, proj_layer=proj_layer, drop_path_rate=drop_path_rate,
-                **layer_kwargs, **block_kwargs))
+                prev_chs,
+                out_chs,
+                stride=stride,
+                dilation=dilation,
+                bottle_ratio=bottle_ratio,
+                groups=groups,
+                first_dilation=first_dilation,
+                proj_layer=proj_layer,
+                drop_path_rate=drop_path_rate,
+                **layer_kwargs,
+                **block_kwargs,
+            ))
             prev_chs = out_chs
             first_dilation = dilation
             proj_layer = None
@@ -413,21 +438,49 @@ class ResNetV2(nn.Module):
             avg_down=False,
             preact=True,
             act_layer=nn.ReLU,
-            conv_layer=StdConv2d,
             norm_layer=partial(GroupNormAct, num_groups=32),
+            conv_layer=StdConv2d,
             drop_rate=0.,
             drop_path_rate=0.,
             zero_init_last=False,
     ):
+        """
+        Args:
+            layers (List[int]) : number of layers in each block
+            channels (List[int]) : number of channels in each block:
+            num_classes (int): number of classification classes (default 1000)
+            in_chans (int): number of input (color) channels. (default 3)
+            global_pool (str): Global pooling type. One of 'avg', 'max', 'avgmax', 'catavgmax' (default 'avg')
+            output_stride (int): output stride of the network, 32, 16, or 8. (default 32)
+            width_factor (int): channel (width) multiplication factor
+            stem_chs (int): stem width (default: 64)
+            stem_type (str): stem type (default: '' == 7x7)
+            avg_down (bool): average pooling in residual downsampling (default: False)
+            preact (bool): pre-activiation (default: True)
+            act_layer (Union[str, nn.Module]): activation layer
+            norm_layer (Union[str, nn.Module]): normalization layer
+            conv_layer (nn.Module): convolution module
+            drop_rate: classifier dropout rate (default: 0.)
+            drop_path_rate: stochastic depth rate (default: 0.)
+            zero_init_last: zero-init last weight in residual path (default: False)
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         wf = width_factor
+        norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
+        act_layer = get_act_layer(act_layer)
 
         self.feature_info = []
         stem_chs = make_div(stem_chs * wf)
         self.stem = create_resnetv2_stem(
-            in_chans, stem_chs, stem_type, preact, conv_layer=conv_layer, norm_layer=norm_layer)
+            in_chans,
+            stem_chs,
+            stem_type,
+            preact,
+            conv_layer=conv_layer,
+            norm_layer=norm_layer,
+        )
         stem_feat = ('stem.conv3' if is_stem_deep(stem_type) else 'stem.conv') if preact else 'stem.norm'
         self.feature_info.append(dict(num_chs=stem_chs, reduction=2, module=stem_feat))
 
