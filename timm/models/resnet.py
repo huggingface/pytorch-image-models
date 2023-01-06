@@ -16,7 +16,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, \
-    create_classifier
+    get_act_layer, get_norm_layer, create_classifier
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, model_entrypoint
@@ -500,7 +500,14 @@ class Bottleneck(nn.Module):
 
 
 def downsample_conv(
-        in_channels, out_channels, kernel_size, stride=1, dilation=1, first_dilation=None, norm_layer=None):
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        dilation=1,
+        first_dilation=None,
+        norm_layer=None,
+):
     norm_layer = norm_layer or nn.BatchNorm2d
     kernel_size = 1 if stride == 1 and dilation == 1 else kernel_size
     first_dilation = (first_dilation or dilation) if kernel_size > 1 else 1
@@ -514,7 +521,14 @@ def downsample_conv(
 
 
 def downsample_avg(
-        in_channels, out_channels, kernel_size, stride=1, dilation=1, first_dilation=None, norm_layer=None):
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        dilation=1,
+        first_dilation=None,
+        norm_layer=None,
+):
     norm_layer = norm_layer or nn.BatchNorm2d
     avg_stride = stride if dilation == 1 else 1
     if stride == 1 and dilation == 1:
@@ -627,31 +641,6 @@ class ResNet(nn.Module):
 
     SENet-154 - 3 layer deep 3x3 stem (same as v1c-v1s), stem_width = 64, cardinality=64,
         reduction by 2 on width of first bottleneck convolution, 3x3 downsample convs after first block
-
-    Parameters
-    ----------
-    block : Block, class for the residual block. Options are BasicBlockGl, BottleneckGl.
-    layers : list of int, number of layers in each block
-    num_classes : int, default 1000, number of classification classes.
-    in_chans : int, default 3, number of input (color) channels.
-    output_stride : int, default 32, output stride of the network, 32, 16, or 8.
-    global_pool : str, Global pooling type. One of 'avg', 'max', 'avgmax', 'catavgmax'
-    cardinality : int, default 1, number of convolution groups for 3x3 conv in Bottleneck.
-    base_width : int, default 64, factor determining bottleneck channels. `planes * base_width / 64 * cardinality`
-    stem_width : int, default 64, number of channels in stem convolutions
-    stem_type : str, default ''
-        The type of stem:
-          * '', default - a single 7x7 conv with a width of stem_width
-          * 'deep' - three 3x3 convolution layers of widths stem_width, stem_width, stem_width * 2
-          * 'deep_tiered' - three 3x3 conv layers of widths stem_width//4 * 3, stem_width, stem_width * 2
-    block_reduce_first : int, default 1
-        Reduction factor for first convolution output width of residual blocks, 1 for all archs except senets, where 2
-    down_kernel_size : int, default 1, kernel size of residual block downsample path, 1x1 for most, 3x3 for senets
-    avg_down : bool, default False, use average pooling for projection skip connection between stages/downsample.
-    act_layer : nn.Module, activation layer
-    norm_layer : nn.Module, normalization layer
-    aa_layer : nn.Module, anti-aliasing layer
-    drop_rate : float, default 0. Dropout probability before classifier, for training
     """
 
     def __init__(
@@ -679,12 +668,45 @@ class ResNet(nn.Module):
             zero_init_last=True,
             block_args=None,
     ):
+        """
+        Args:
+            block (nn.Module): class for the residual block. Options are BasicBlock, Bottleneck.
+            layers (List[int]) : number of layers in each block
+            num_classes (int): number of classification classes (default 1000)
+            in_chans (int): number of input (color) channels. (default 3)
+            output_stride (int): output stride of the network, 32, 16, or 8. (default 32)
+            global_pool (str): Global pooling type. One of 'avg', 'max', 'avgmax', 'catavgmax' (default 'avg')
+            cardinality (int): number of convolution groups for 3x3 conv in Bottleneck. (default 1)
+            base_width (int): bottleneck channels factor. `planes * base_width / 64 * cardinality` (default 64)
+            stem_width (int): number of channels in stem convolutions (default 64)
+            stem_type (str): The type of stem (default ''):
+                * '', default - a single 7x7 conv with a width of stem_width
+                * 'deep' - three 3x3 convolution layers of widths stem_width, stem_width, stem_width * 2
+                * 'deep_tiered' - three 3x3 conv layers of widths stem_width//4 * 3, stem_width, stem_width * 2
+            replace_stem_pool (bool): replace stem max-pooling layer with a 3x3 stride-2 convolution
+            block_reduce_first (int): Reduction factor for first convolution output width of residual blocks,
+                1 for all archs except senets, where 2 (default 1)
+            down_kernel_size (int): kernel size of residual block downsample path,
+                1x1 for most, 3x3 for senets (default: 1)
+            avg_down (bool): use avg pooling for projection skip connection between stages/downsample (default False)
+            act_layer (str, nn.Module): activation layer
+            norm_layer (str, nn.Module): normalization layer
+            aa_layer (nn.Module): anti-aliasing layer
+            drop_rate (float): Dropout probability before classifier, for training (default 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default 0.)
+            drop_block_rate (float): Drop block rate (default 0.)
+            zero_init_last (bool): zero-init the last weight in residual path (usually last BN affine weight)
+            block_args (dict): Extra kwargs to pass through to block module
+        """
         super(ResNet, self).__init__()
         block_args = block_args or dict()
         assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
+
+        act_layer = get_act_layer(act_layer)
+        norm_layer = get_norm_layer(norm_layer)
 
         # Stem
         deep_stem = 'deep' in stem_type

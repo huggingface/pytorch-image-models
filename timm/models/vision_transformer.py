@@ -1152,8 +1152,8 @@ def _create_vision_transformer(variant, pretrained=False, **kwargs):
 def vit_tiny_patch16_224(pretrained=False, **kwargs):
     """ ViT-Tiny (Vit-Ti/16)
     """
-    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3, **kwargs)
-    model = _create_vision_transformer('vit_tiny_patch16_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3)
+    model = _create_vision_transformer('vit_tiny_patch16_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1161,8 +1161,8 @@ def vit_tiny_patch16_224(pretrained=False, **kwargs):
 def vit_tiny_patch16_384(pretrained=False, **kwargs):
     """ ViT-Tiny (Vit-Ti/16) @ 384x384.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3, **kwargs)
-    model = _create_vision_transformer('vit_tiny_patch16_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3)
+    model = _create_vision_transformer('vit_tiny_patch16_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1170,8 +1170,8 @@ def vit_tiny_patch16_384(pretrained=False, **kwargs):
 def vit_small_patch32_224(pretrained=False, **kwargs):
     """ ViT-Small (ViT-S/32)
     """
-    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer('vit_small_patch32_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6)
+    model = _create_vision_transformer('vit_small_patch32_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1179,8 +1179,8 @@ def vit_small_patch32_224(pretrained=False, **kwargs):
 def vit_small_patch32_384(pretrained=False, **kwargs):
     """ ViT-Small (ViT-S/32) at 384x384.
     """
-    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer('vit_small_patch32_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=384, depth=12, num_heads=6)
+    model = _create_vision_transformer('vit_small_patch32_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1188,8 +1188,8 @@ def vit_small_patch32_384(pretrained=False, **kwargs):
 def vit_small_patch16_224(pretrained=False, **kwargs):
     """ ViT-Small (ViT-S/16)
     """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer('vit_small_patch16_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6)
+    model = _create_vision_transformer('vit_small_patch16_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1197,8 +1197,8 @@ def vit_small_patch16_224(pretrained=False, **kwargs):
 def vit_small_patch16_384(pretrained=False, **kwargs):
     """ ViT-Small (ViT-S/16)
     """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer('vit_small_patch16_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6)
+    model = _create_vision_transformer('vit_small_patch16_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1206,8 +1206,8 @@ def vit_small_patch16_384(pretrained=False, **kwargs):
 def vit_small_patch8_224(pretrained=False, **kwargs):
     """ ViT-Small (ViT-S/8)
     """
-    model_kwargs = dict(patch_size=8, embed_dim=384, depth=12, num_heads=6, **kwargs)
-    model = _create_vision_transformer('vit_small_patch8_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=8, embed_dim=384, depth=12, num_heads=6)
+    model = _create_vision_transformer('vit_small_patch8_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1216,8 +1216,8 @@ def vit_base_patch32_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer('vit_base_patch32_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12)
+    model = _create_vision_transformer('vit_base_patch32_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1226,8 +1226,8 @@ def vit_base_patch32_384(pretrained=False, **kwargs):
     """ ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer('vit_base_patch32_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12)
+    model = _create_vision_transformer('vit_base_patch32_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1236,8 +1236,8 @@ def vit_base_patch16_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12)
+    model = _create_vision_transformer('vit_base_patch16_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1246,8 +1246,8 @@ def vit_base_patch16_384(pretrained=False, **kwargs):
     """ ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12)
+    model = _create_vision_transformer('vit_base_patch16_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1256,8 +1256,8 @@ def vit_base_patch8_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/8) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=8, embed_dim=768, depth=12, num_heads=12, **kwargs)
-    model = _create_vision_transformer('vit_base_patch8_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=8, embed_dim=768, depth=12, num_heads=12)
+    model = _create_vision_transformer('vit_base_patch8_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1265,8 +1265,8 @@ def vit_base_patch8_224(pretrained=False, **kwargs):
 def vit_large_patch32_224(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929). No pretrained weights.
     """
-    model_kwargs = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_large_patch32_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16)
+    model = _create_vision_transformer('vit_large_patch32_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1275,8 +1275,8 @@ def vit_large_patch32_384(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_large_patch32_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16)
+    model = _create_vision_transformer('vit_large_patch32_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1285,8 +1285,8 @@ def vit_large_patch16_224(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_large_patch16_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16)
+    model = _create_vision_transformer('vit_large_patch16_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1295,8 +1295,8 @@ def vit_large_patch16_384(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_large_patch16_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16)
+    model = _create_vision_transformer('vit_large_patch16_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1304,8 +1304,8 @@ def vit_large_patch16_384(pretrained=False, **kwargs):
 def vit_large_patch14_224(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/14)
     """
-    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_large_patch14_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16)
+    model = _create_vision_transformer('vit_large_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1313,8 +1313,8 @@ def vit_large_patch14_224(pretrained=False, **kwargs):
 def vit_huge_patch14_224(pretrained=False, **kwargs):
     """ ViT-Huge model (ViT-H/14) from original paper (https://arxiv.org/abs/2010.11929).
     """
-    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_huge_patch14_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16)
+    model = _create_vision_transformer('vit_huge_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1322,8 +1322,8 @@ def vit_huge_patch14_224(pretrained=False, **kwargs):
 def vit_giant_patch14_224(pretrained=False, **kwargs):
     """ ViT-Giant (little-g) model (ViT-g/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
     """
-    model_kwargs = dict(patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_giant_patch14_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16)
+    model = _create_vision_transformer('vit_giant_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1331,8 +1331,9 @@ def vit_giant_patch14_224(pretrained=False, **kwargs):
 def vit_gigantic_patch14_224(pretrained=False, **kwargs):
     """ ViT-Gigantic (big-G) model (ViT-G/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
     """
-    model_kwargs = dict(patch_size=14, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16, **kwargs)
-    model = _create_vision_transformer('vit_gigantic_patch14_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16)
+    model = _create_vision_transformer(
+        'vit_gigantic_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1341,8 +1342,9 @@ def vit_base_patch16_224_miil(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
-    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_224_miil', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False)
+    model = _create_vision_transformer(
+        'vit_base_patch16_224_miil', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1352,8 +1354,9 @@ def vit_medium_patch16_gap_240(pretrained=False, **kwargs):
     """
     model_kwargs = dict(
         patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=False,
-        global_pool=kwargs.get('global_pool', 'avg'), qkv_bias=False, init_values=1e-6, fc_norm=False, **kwargs)
-    model = _create_vision_transformer('vit_medium_patch16_gap_240', pretrained=pretrained, **model_kwargs)
+        global_pool='avg', qkv_bias=False, init_values=1e-6, fc_norm=False)
+    model = _create_vision_transformer(
+        'vit_medium_patch16_gap_240', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1363,8 +1366,9 @@ def vit_medium_patch16_gap_256(pretrained=False, **kwargs):
     """
     model_kwargs = dict(
         patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=False,
-        global_pool=kwargs.get('global_pool', 'avg'), qkv_bias=False, init_values=1e-6, fc_norm=False, **kwargs)
-    model = _create_vision_transformer('vit_medium_patch16_gap_256', pretrained=pretrained, **model_kwargs)
+        global_pool='avg', qkv_bias=False, init_values=1e-6, fc_norm=False)
+    model = _create_vision_transformer(
+        'vit_medium_patch16_gap_256', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1374,8 +1378,9 @@ def vit_medium_patch16_gap_384(pretrained=False, **kwargs):
     """
     model_kwargs = dict(
         patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=False,
-        global_pool=kwargs.get('global_pool', 'avg'), qkv_bias=False, init_values=1e-6, fc_norm=False, **kwargs)
-    model = _create_vision_transformer('vit_medium_patch16_gap_384', pretrained=pretrained, **model_kwargs)
+        global_pool='avg', qkv_bias=False, init_values=1e-6, fc_norm=False)
+    model = _create_vision_transformer(
+        'vit_medium_patch16_gap_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1384,9 +1389,9 @@ def vit_base_patch16_gap_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/o class token, w/ avg-pool @ 256x256
     """
     model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=16, class_token=False,
-        global_pool=kwargs.get('global_pool', 'avg'), fc_norm=False, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_gap_224', pretrained=pretrained, **model_kwargs)
+        patch_size=16, embed_dim=768, depth=12, num_heads=16, class_token=False, global_pool='avg', fc_norm=False)
+    model = _create_vision_transformer(
+        'vit_base_patch16_gap_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1395,8 +1400,9 @@ def vit_base_patch32_clip_224(pretrained=False, **kwargs):
     """ ViT-B/32 CLIP image tower @ 224x224
     """
     model_kwargs = dict(
-        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_base_patch32_clip_224', pretrained=pretrained, **model_kwargs)
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch32_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1405,8 +1411,9 @@ def vit_base_patch32_clip_384(pretrained=False, **kwargs):
     """ ViT-B/32 CLIP image tower @ 384x384
     """
     model_kwargs = dict(
-        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_base_patch32_clip_384', pretrained=pretrained, **model_kwargs)
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch32_clip_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1415,8 +1422,9 @@ def vit_base_patch32_clip_448(pretrained=False, **kwargs):
     """ ViT-B/32 CLIP image tower @ 448x448
     """
     model_kwargs = dict(
-        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_base_patch32_clip_448', pretrained=pretrained, **model_kwargs)
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch32_clip_448', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1424,9 +1432,9 @@ def vit_base_patch32_clip_448(pretrained=False, **kwargs):
 def vit_base_patch16_clip_224(pretrained=False, **kwargs):
     """ ViT-B/16 CLIP image tower
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_clip_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch16_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1434,9 +1442,9 @@ def vit_base_patch16_clip_224(pretrained=False, **kwargs):
 def vit_base_patch16_clip_384(pretrained=False, **kwargs):
     """ ViT-B/16 CLIP image tower @ 384x384
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_clip_384', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch16_clip_384', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1444,9 +1452,9 @@ def vit_base_patch16_clip_384(pretrained=False, **kwargs):
 def vit_large_patch14_clip_224(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/14) CLIP image tower
     """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_large_patch14_clip_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_large_patch14_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1454,9 +1462,9 @@ def vit_large_patch14_clip_224(pretrained=False, **kwargs):
 def vit_large_patch14_clip_336(pretrained=False, **kwargs):
     """ ViT-Large model (ViT-L/14) CLIP image tower @ 336x336
     """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_large_patch14_clip_336', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_large_patch14_clip_336', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1464,9 +1472,9 @@ def vit_large_patch14_clip_336(pretrained=False, **kwargs):
 def vit_huge_patch14_clip_224(pretrained=False, **kwargs):
     """ ViT-Huge model (ViT-H/14) CLIP image tower.
     """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_huge_patch14_clip_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_huge_patch14_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1474,9 +1482,9 @@ def vit_huge_patch14_clip_224(pretrained=False, **kwargs):
 def vit_huge_patch14_clip_336(pretrained=False, **kwargs):
     """ ViT-Huge model (ViT-H/14) CLIP image tower @ 336x336
     """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_huge_patch14_clip_336', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_huge_patch14_clip_336', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1486,9 +1494,9 @@ def vit_giant_patch14_clip_224(pretrained=False, **kwargs):
     Pretrained weights from CLIP image tower.
     """
     model_kwargs = dict(
-        patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16,
-        pre_norm=True, norm_layer=nn.LayerNorm, **kwargs)
-    model = _create_vision_transformer('vit_giant_patch14_clip_224', pretrained=pretrained, **model_kwargs)
+        patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_giant_patch14_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1498,8 +1506,9 @@ def vit_giant_patch14_clip_224(pretrained=False, **kwargs):
 def vit_base_patch32_plus_256(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/32+)
     """
-    model_kwargs = dict(patch_size=32, embed_dim=896, depth=12, num_heads=14, init_values=1e-5, **kwargs)
-    model = _create_vision_transformer('vit_base_patch32_plus_256', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=32, embed_dim=896, depth=12, num_heads=14, init_values=1e-5)
+    model = _create_vision_transformer(
+        'vit_base_patch32_plus_256', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1507,8 +1516,9 @@ def vit_base_patch32_plus_256(pretrained=False, **kwargs):
 def vit_base_patch16_plus_240(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16+)
     """
-    model_kwargs = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14, init_values=1e-5, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_plus_240', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14, init_values=1e-5)
+    model = _create_vision_transformer(
+        'vit_base_patch16_plus_240', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1517,9 +1527,10 @@ def vit_base_patch16_rpn_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ residual post-norm
     """
     model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, init_values=1e-5, class_token=False,
-        block_fn=ResPostBlock, global_pool=kwargs.pop('global_pool', 'avg'), **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, init_values=1e-5,
+        class_token=False, block_fn=ResPostBlock, global_pool='avg')
+    model = _create_vision_transformer(
+        'vit_base_patch16_rpn_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1529,8 +1540,9 @@ def vit_small_patch16_36x1_224(pretrained=False, **kwargs):
     Based on `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
     Paper focuses on 24x2 + 48x1 for 'Small' width but those are extremely slow.
     """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=36, num_heads=6, init_values=1e-5, **kwargs)
-    model = _create_vision_transformer('vit_small_patch16_36x1_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=36, num_heads=6, init_values=1e-5)
+    model = _create_vision_transformer(
+        'vit_small_patch16_36x1_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1541,8 +1553,9 @@ def vit_small_patch16_18x2_224(pretrained=False, **kwargs):
     Paper focuses on 24x2 + 48x1 for 'Small' width but those are extremely slow.
     """
     model_kwargs = dict(
-        patch_size=16, embed_dim=384, depth=18, num_heads=6, init_values=1e-5, block_fn=ParallelBlock, **kwargs)
-    model = _create_vision_transformer('vit_small_patch16_18x2_224', pretrained=pretrained, **model_kwargs)
+        patch_size=16, embed_dim=384, depth=18, num_heads=6, init_values=1e-5, block_fn=ParallelBlock)
+    model = _create_vision_transformer(
+        'vit_small_patch16_18x2_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1551,27 +1564,26 @@ def vit_base_patch16_18x2_224(pretrained=False, **kwargs):
     """ ViT-Base w/ LayerScale + 18 x 2 (36 block parallel) config. Experimental, may remove.
     Based on `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=18, num_heads=12, init_values=1e-5, block_fn=ParallelBlock, **kwargs)
-    model = _create_vision_transformer('vit_base_patch16_18x2_224', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=18, num_heads=12, init_values=1e-5, block_fn=ParallelBlock)
+    model = _create_vision_transformer(
+        'vit_base_patch16_18x2_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
 @register_model
 def eva_large_patch14_196(pretrained=False, **kwargs):
     """ EVA-large model https://arxiv.org/abs/2211.07636 /via MAE MIM pretrain"""
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg', **kwargs)
-    model = _create_vision_transformer('eva_large_patch14_196', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg')
+    model = _create_vision_transformer(
+        'eva_large_patch14_196', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
 @register_model
 def eva_large_patch14_336(pretrained=False, **kwargs):
     """ EVA-large model https://arxiv.org/abs/2211.07636 via MAE MIM pretrain"""
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg', **kwargs)
-    model = _create_vision_transformer('eva_large_patch14_336', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg')
+    model = _create_vision_transformer('eva_large_patch14_336', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1579,8 +1591,8 @@ def eva_large_patch14_336(pretrained=False, **kwargs):
 def flexivit_small(pretrained=False, **kwargs):
     """ FlexiViT-Small
     """
-    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, no_embed_class=True, **kwargs)
-    model = _create_vision_transformer('flexivit_small', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, no_embed_class=True)
+    model = _create_vision_transformer('flexivit_small', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1588,8 +1600,8 @@ def flexivit_small(pretrained=False, **kwargs):
 def flexivit_base(pretrained=False, **kwargs):
     """ FlexiViT-Base
     """
-    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, no_embed_class=True, **kwargs)
-    model = _create_vision_transformer('flexivit_base', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, no_embed_class=True)
+    model = _create_vision_transformer('flexivit_base', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
 
 
@@ -1597,6 +1609,6 @@ def flexivit_base(pretrained=False, **kwargs):
 def flexivit_large(pretrained=False, **kwargs):
     """ FlexiViT-Large
     """
-    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, no_embed_class=True, **kwargs)
-    model = _create_vision_transformer('flexivit_large', pretrained=pretrained, **model_kwargs)
+    model_kwargs = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, no_embed_class=True)
+    model = _create_vision_transformer('flexivit_large', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
