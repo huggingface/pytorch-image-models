@@ -21,12 +21,14 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
-### 🤗 Survey: Feedback Appreciated 🤗
+* ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
+* Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
-For a few months now, `timm` has been part of the Hugging Face ecosystem. Yearly, we survey users of our tools to see what we could do better, what we need to continue doing, or what we need to stop doing. 
-
-If you have a couple of minutes and want to participate in shaping the future of the ecosystem, please share your thoughts:
-[**hf.co/oss-survey**](https://hf.co/oss-survey) 🙏
+### Jan 6, 2023
+* Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
+  * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
+  * `train.py /imagenet --model vit_base_patch16_clip_224 --amp --model-kwargs img_size=240 patch_size=12`
+* Cleanup some popular models to better support arg passthrough / merge with model configs, more to go. 
 
 ### Jan 5, 2023
 * ConvNeXt-V2 models and weights added to existing `convnext.py`
