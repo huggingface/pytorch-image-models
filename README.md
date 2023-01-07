@@ -27,7 +27,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 ### Jan 6, 2023
 * Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
   * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
-  * `train.py /imagenet --model vit_base_patch16_clip_224 --amp --model-kwargs img_size=240 patch_size=12`
+  * `train.py /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
 * Cleanup some popular models to better support arg passthrough / merge with model configs, more to go. 
 
 ### Jan 5, 2023
