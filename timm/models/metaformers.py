@@ -601,7 +601,7 @@ class MetaFormer(nn.Module):
                 res_scale_init_value=res_scale_init_values[i],
                 ) for j in range(depths[i])]
             )
-            self.stages.append(stage)
+            stages.append(stage)
             cur += depths[i]
         
         self.stages = nn.Sequential(zip(*downsample_layers, *stages))
