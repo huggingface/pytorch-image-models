@@ -38,7 +38,7 @@ __all__ = ['MetaFormer']
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 1.0, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'classifier': 'head',
         **kwargs
