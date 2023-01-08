@@ -627,10 +627,11 @@ class MetaFormer(nn.Module):
         return {'norm'}
 
     def forward_features(self, x):
-        for i in range(self.num_stage):
-            x = self.downsample_layers[i](x)
-            x = self.stages[i](x)
-        return self.norm(x.mean([1, 2])) # (B, H, W, C) -> (B, C)
+        x = self.stages(x)
+        x = x.mean([1,2]) # TODO use adaptive pool instead of mean
+        x = self.norm(x)
+        # (B, H, W, C) -> (B, C)
+        return x 
 
     def forward(self, x):
         x = self.forward_features(x)
