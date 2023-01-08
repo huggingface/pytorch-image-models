@@ -156,8 +156,8 @@ def res2net50_26w_4s(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=26, block_args=dict(scale=4), **kwargs)
-    return _create_res2net('res2net50_26w_4s', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=26, block_args=dict(scale=4))
+    return _create_res2net('res2net50_26w_4s', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -167,8 +167,8 @@ def res2net101_26w_4s(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 23, 3], base_width=26, block_args=dict(scale=4), **kwargs)
-    return _create_res2net('res2net101_26w_4s', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 23, 3], base_width=26, block_args=dict(scale=4))
+    return _create_res2net('res2net101_26w_4s', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -178,8 +178,8 @@ def res2net50_26w_6s(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=26, block_args=dict(scale=6), **kwargs)
-    return _create_res2net('res2net50_26w_6s', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=26, block_args=dict(scale=6))
+    return _create_res2net('res2net50_26w_6s', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -189,8 +189,8 @@ def res2net50_26w_8s(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=26, block_args=dict(scale=8), **kwargs)
-    return _create_res2net('res2net50_26w_8s', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=26, block_args=dict(scale=8))
+    return _create_res2net('res2net50_26w_8s', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -200,8 +200,8 @@ def res2net50_48w_2s(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=48, block_args=dict(scale=2), **kwargs)
-    return _create_res2net('res2net50_48w_2s', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=48, block_args=dict(scale=2))
+    return _create_res2net('res2net50_48w_2s', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -211,8 +211,8 @@ def res2net50_14w_8s(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=14, block_args=dict(scale=8), **kwargs)
-    return _create_res2net('res2net50_14w_8s', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=14, block_args=dict(scale=8))
+    return _create_res2net('res2net50_14w_8s', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -222,5 +222,5 @@ def res2next50(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model_args = dict(
-        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=4, cardinality=8, block_args=dict(scale=4), **kwargs)
-    return _create_res2net('res2next50', pretrained, **model_args)
+        block=Bottle2neck, layers=[3, 4, 6, 3], base_width=4, cardinality=8, block_args=dict(scale=4))
+    return _create_res2net('res2next50', pretrained, **dict(model_args, **kwargs))
