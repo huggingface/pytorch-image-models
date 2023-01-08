@@ -419,7 +419,7 @@ class Mlp(nn.Module):
     """ MLP as used in MetaFormer models, eg Transformer, MLP-Mixer, PoolFormer, MetaFormer baslines and related networks.
     Mostly copied from timm.
     """
-    def __init__(self, dim, mlp_ratio=4, out_features=None, act_layer=StarReLU, drop=0., bias=False, **kwargs):
+    def __init__(self, dim, mlp_ratio=4, out_features=None, act_layer=StarReLU, drop=0., bias=False):
         super().__init__()
         in_features = dim
         out_features = out_features or in_features
