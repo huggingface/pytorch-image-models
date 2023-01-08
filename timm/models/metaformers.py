@@ -317,7 +317,7 @@ class RandomMixing(nn.Module):
         x = x.reshape(B, H, W, C)
         return x
 
-'''
+
 class LayerNormGeneral(nn.Module):
     r""" General LayerNorm for different situations.
 
@@ -416,7 +416,7 @@ class LayerNormGeneral(nn.Module):
         if self.use_bias:
             x = x + self.bias
         return x
-
+'''
 class SepConv(nn.Module):
     r"""
     Inverted separable convolution from MobileNetV2: https://arxiv.org/abs/1801.04381.
