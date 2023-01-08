@@ -596,7 +596,7 @@ DOWNSAMPLE_LAYERS_FOUR_STAGES = [partial(Downsampling,
             )] + \
             [partial(Downsampling,
                 kernel_size=3, stride=2, padding=1, 
-                pre_norm=partial(LayerNormGeneral, bias=False, eps=1e-6), pre_permute=True
+                pre_norm=partial(LayerNormGeneral, bias=False, eps=1e-6), pre_permute=False
             )]*3
 
 
