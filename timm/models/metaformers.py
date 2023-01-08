@@ -231,7 +231,6 @@ class Downsampling(nn.Module):
         pre_norm=None, post_norm=None, pre_permute = False):
         super().__init__()
         self.pre_norm = pre_norm(in_channels) if pre_norm else nn.Identity()
-        self.pre_permute = pre_permute
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, 
                               stride=stride, padding=padding)
         self.post_norm = post_norm(out_channels) if post_norm else nn.Identity()
