@@ -356,8 +356,8 @@ class LayerNormGeneral(nn.Module):
         self.normalized_dim = normalized_dim
         self.use_scale = scale
         self.use_bias = bias
-        self.weight = nn.Parameter(torch.ones(affine_shape)) if scale else torch.ones(affine_shape)
-        self.bias = nn.Parameter(torch.zeros(affine_shape)) if bias else torch.zeros(affine_shape)
+        self.weight = nn.Parameter(torch.ones(affine_shape)) if scale else 1
+        self.bias = nn.Parameter(torch.zeros(affine_shape)) if bias else 0
         self.eps = eps
 
     def forward(self, x):
