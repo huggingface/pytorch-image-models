@@ -735,6 +735,7 @@ class MetaFormer(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
+        print(x.shape)
         x = self.forward_head(x)
         return x
 
