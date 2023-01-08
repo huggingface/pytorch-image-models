@@ -721,7 +721,7 @@ class MetaFormer(nn.Module):
         if pre_logits:
             return x
         
-        x = x.mean([1,2]) # TODO use adaptive pool instead of mean
+        x = x.mean([-1,-2]) # TODO use adaptive pool instead of mean
         x = self.norm(x)
         # (B, H, W, C) -> (B, C)
         x = self.head(x)
