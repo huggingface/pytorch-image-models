@@ -17,6 +17,7 @@ MetaFormer baselines including IdentityFormer, RandFormer, PoolFormerV2,
 ConvFormer and CAFormer.
 Some implementations are modified from timm (https://github.com/rwightman/pytorch-image-models).
 """
+from collections import OrderedDict
 from functools import partial
 import torch
 import torch.nn as nn
