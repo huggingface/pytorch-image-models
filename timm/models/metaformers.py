@@ -414,7 +414,7 @@ class LayerNormGeneral(nn.Module):
             x = x * self.weight
         if self.use_bias:
             x = x + self.bias
-        return 
+        return x
 
 class SepConv(nn.Module):
     r"""
