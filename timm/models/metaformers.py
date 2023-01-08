@@ -21,7 +21,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 from timm.layers import trunc_normal_, DropPath
-from timm.models.registry import register_model
+from ._registry import register_model
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers.helpers import to_2tuple
 
