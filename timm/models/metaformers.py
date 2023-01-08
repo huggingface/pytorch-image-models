@@ -710,7 +710,7 @@ class MetaFormer(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = forward_head(x)
+        x = self.forward_head(x)
         return x
 
 def checkpoint_filter_fn(state_dict, model):
