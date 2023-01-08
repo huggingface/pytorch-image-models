@@ -20,10 +20,10 @@ Some implementations are modified from timm (https://github.com/rwightman/pytorc
 from functools import partial
 import torch
 import torch.nn as nn
-from timm.models.layers import trunc_normal_, DropPath
+from timm.layers import trunc_normal_, DropPath
 from timm.models.registry import register_model
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models.layers.helpers import to_2tuple
+from timm.layers.helpers import to_2tuple
 
 
 def _cfg(url='', **kwargs):
