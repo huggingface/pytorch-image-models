@@ -178,21 +178,21 @@ class DualPathBlock(nn.Module):
 class DPN(nn.Module):
     def __init__(
             self,
-            num_classes=1000,
-            in_chans=3,
-            output_stride=32,
-            global_pool='avg',
             k_sec=(3, 4, 20, 3),
             inc_sec=(16, 32, 24, 128),
             k_r=96,
             groups=32,
+            num_classes=1000,
+            in_chans=3,
+            output_stride=32,
+            global_pool='avg',
             small=False,
             num_init_features=64,
             b=False,
             drop_rate=0.,
             norm_layer='batchnorm2d',
             act_layer='relu',
-            fc_act_layer=nn.ELU,
+            fc_act_layer='elu',
     ):
         super(DPN, self).__init__()
         self.num_classes = num_classes

@@ -1298,7 +1298,7 @@ def ecaresnet50d_pruned(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
         block_args=dict(attn_layer='eca'))
-    return _create_resnet('ecaresnet50d_pruned', pretrained, pruned=True, **model_args)
+    return _create_resnet('ecaresnet50d_pruned', pretrained, pruned=True, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -1340,7 +1340,7 @@ def ecaresnet101d_pruned(pretrained=False, **kwargs):
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 23, 3], stem_width=32, stem_type='deep', avg_down=True,
         block_args=dict(attn_layer='eca'))
-    return _create_resnet('ecaresnet101d_pruned', pretrained, pruned=True, **model_args)
+    return _create_resnet('ecaresnet101d_pruned', pretrained, pruned=True, **dict(model_args, **kwargs))
 
 
 @register_model
