@@ -38,7 +38,7 @@ An ImageNet test set of 10,000 images sampled from new images roughly 10 years a
 
 ### ImageNet-Adversarial - [`results-imagenet-a.csv`](results-imagenet-a.csv)
 
-A collection of 7500 images covering 200 of the 1000 ImageNet classes. Images are naturally occuring adversarial examples that confuse typical ImageNet classifiers. This is a challenging dataset, your typical ResNet-50 will score 0% top-1.
+A collection of 7500 images covering 200 of the 1000 ImageNet classes. Images are naturally occurring adversarial examples that confuse typical ImageNet classifiers. This is a challenging dataset, your typical ResNet-50 will score 0% top-1.
 
 For clean validation with same 200 classes, see [`results-imagenet-a-clean.csv`](results-imagenet-a-clean.csv) 
 
