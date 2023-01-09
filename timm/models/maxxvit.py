@@ -1882,7 +1882,7 @@ default_cfgs = generate_default_cfgs({
     'maxvit_rmlp_small_rw_256': _cfg(
         url='',
         input_size=(3, 256, 256), pool_size=(8, 8)),
-    'maxvit_rmlp_base_rw_2244': _cfg(
+    'maxvit_rmlp_base_rw_224': _cfg(
         url='',
     ),
     'maxvit_rmlp_base_rw_384': _cfg(
