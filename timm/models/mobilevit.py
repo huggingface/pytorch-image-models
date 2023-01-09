@@ -266,9 +266,16 @@ class MobileVitBlock(nn.Module):
 
         self.transformer = nn.Sequential(*[
             TransformerBlock(
-                transformer_dim, mlp_ratio=mlp_ratio, num_heads=num_heads, qkv_bias=True,
-                attn_drop=attn_drop, drop=drop, drop_path=drop_path_rate,
-                act_layer=layers.act, norm_layer=transformer_norm_layer)
+                transformer_dim,
+                mlp_ratio=mlp_ratio,
+                num_heads=num_heads,
+                qkv_bias=True,
+                attn_drop=attn_drop,
+                drop=drop,
+                drop_path=drop_path_rate,
+                act_layer=layers.act,
+                norm_layer=transformer_norm_layer,
+            )
             for _ in range(transformer_depth)
         ])
         self.norm = transformer_norm_layer(transformer_dim)

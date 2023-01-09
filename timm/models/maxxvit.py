@@ -1680,6 +1680,26 @@ model_cfgs = dict(
             init_values=1e-6,
         ),
     ),
+    maxvit_rmlp_base_rw_224=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 6, 14, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        head_hidden_size=768,
+        **_rw_max_cfg(
+            rel_pos_type='mlp',
+        ),
+    ),
+    maxvit_rmlp_base_rw_384=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 6, 14, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        head_hidden_size=768,
+        **_rw_max_cfg(
+            rel_pos_type='mlp',
+        ),
+    ),
 
     maxvit_tiny_pm_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
@@ -1862,6 +1882,12 @@ default_cfgs = generate_default_cfgs({
     'maxvit_rmlp_small_rw_256': _cfg(
         url='',
         input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxvit_rmlp_base_rw_2244': _cfg(
+        url='',
+    ),
+    'maxvit_rmlp_base_rw_384': _cfg(
+        url='',
+        input_size=(3, 384, 384), pool_size=(12, 12)),
 
     'maxvit_tiny_pm_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 
@@ -2089,6 +2115,16 @@ def maxvit_rmlp_small_rw_224(pretrained=False, **kwargs):
 @register_model
 def maxvit_rmlp_small_rw_256(pretrained=False, **kwargs):
     return _create_maxxvit('maxvit_rmlp_small_rw_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxvit_rmlp_base_rw_224(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_base_rw_224', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxvit_rmlp_base_rw_384(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_base_rw_384', pretrained=pretrained, **kwargs)
 
 
 @register_model
