@@ -15,6 +15,7 @@ from .dpn import *
 from .edgenext import *
 from .efficientformer import *
 from .efficientnet import *
+from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
 from .gluon_resnet import *
