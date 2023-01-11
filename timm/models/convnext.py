@@ -478,8 +478,20 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_tiny_hnf_a2h-ab7e9df2.pth',
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_tiny.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_small.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'convnext_nano.in12k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, num_classes=11821),
+    'convnext_tiny.in12k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, num_classes=11821),
+    'convnext_small.in12k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, num_classes=11821),
 

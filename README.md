@@ -24,6 +24,12 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### Jan 11, 2023
+* Update ConvNeXt ImageNet-12k pretrain series w/ two new fine-tuned weights (and pre FT `.in12k` tags)
+  * `convnext_nano.in12k_ft_in1k` - 82.3 @ 224, 82.9 @ 288  (previously released)
+  * `convnext_tiny.in12k_ft_in1k` - 84.2 @ 224, 84.5 @ 288
+  * `convnext_small.in12k_ft_in1k` - 85.2 @ 224, 85.3 @ 288
+
 ### Jan 6, 2023
 * Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
   * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
