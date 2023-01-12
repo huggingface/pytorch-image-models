@@ -731,6 +731,10 @@ class MetaFormer(nn.Module):
 
     def reset_classifier(self, num_classes=0, global_pool=None):
         
+        if global_pool is not None:
+            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            
+        
         if num_classes == 0:
             self.head = nn.Identity()
             self.norm = nn.Identity()
