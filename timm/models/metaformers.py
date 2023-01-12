@@ -749,6 +749,7 @@ class MetaFormer(nn.Module):
             return x
         
         x = self.global_pool(x)
+        x = x.flatten()
         x = self.norm(x)
         # (B, H, W, C) -> (B, C)
         x = self.head(x)
