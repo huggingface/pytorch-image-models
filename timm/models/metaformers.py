@@ -779,6 +779,7 @@ def checkpoint_filter_fn(state_dict, model):
     for k, v in state_dict.items():
         
         k = re.sub(r'downsample_layers.([0-9]+)', r'stages.\1.downsample', k)
+        k = re.sub(r'([0-9]+).([0-9]+)', r'stages.\1.blocks.\2', k)
         out_dict[k] = v
     return out_dict
 
