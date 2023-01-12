@@ -1,3 +1,13 @@
+
+
+"""
+
+MetaFormer baselines including IdentityFormer, RandFormer, PoolFormerV2,
+ConvFormer and CAFormer.
+
+original copyright below
+"""
+
 # Copyright 2022 Garena Online Private Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,12 +21,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""
-MetaFormer baselines including IdentityFormer, RandFormer, PoolFormerV2,
-ConvFormer and CAFormer.
-Some implementations are modified from timm (https://github.com/rwightman/pytorch-image-models).
-"""
 from collections import OrderedDict
 from functools import partial
 import torch
@@ -712,10 +716,27 @@ class MetaFormer(nn.Module):
             trunc_normal_(m.weight, std=.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
+    
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        print("not implemented")
 
     @torch.jit.ignore
-    def no_weight_decay(self):
-        return {'norm'}
+    def get_classifier(self):
+        return self.head.fc
+
+    def reset_classifier(self, num_classes=0, global_pool=None):
+        if global_pool is not None:
+            self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+        if num_classes == 0:
+            self.head.norm = nn.Identity()
+            self.head.fc = nn.Identity()
+        else:
+            if not self.head_norm_first:
+                norm_layer = type(self.stem[-1])  # obtain type from stem norm
+                self.head.norm = norm_layer(self.num_features)
+            self.head.fc = nn.Linear(self.num_features, num_classes)
     
     def forward_head(self, x, pre_logits: bool = False):
         if pre_logits:
