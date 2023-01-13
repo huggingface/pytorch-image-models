@@ -10,7 +10,8 @@ from torchvision import transforms
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
-from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, ToNumpy
+from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation,\
+    ResizeKeepRatio, CenterCropOrPad, ToNumpy
 from timm.data.random_erasing import RandomErasing
 
 
@@ -58,6 +59,7 @@ def transforms_imagenet_train(
         re_count=1,
         re_num_splits=0,
         separate=False,
+        force_color_jitter=False,
 ):
     """
     If separate==True, the transforms are returned as a tuple of 3 separate transforms
@@ -76,8 +78,12 @@ def transforms_imagenet_train(
         primary_tfl += [transforms.RandomVerticalFlip(p=vflip)]
 
     secondary_tfl = []
+    disable_color_jitter = False
     if auto_augment:
         assert isinstance(auto_augment, str)
+        # color jitter is typically disabled if AA/RA on,
+        # this allows override without breaking old hparm cfgs
+        disable_color_jitter = not (force_color_jitter or '3a' in auto_augment)
         if isinstance(img_size, (tuple, list)):
             img_size_min = min(img_size)
         else:
@@ -95,8 +101,9 @@ def transforms_imagenet_train(
             secondary_tfl += [augment_and_mix_transform(auto_augment, aa_params)]
         else:
             secondary_tfl += [auto_augment_transform(auto_augment, aa_params)]
-    elif color_jitter is not None:
-        # color jitter is enabled when not using AA
+
+    if color_jitter is not None and not disable_color_jitter:
+        # color jitter is enabled when not using AA or when forced
         if isinstance(color_jitter, (list, tuple)):
             # color jitter should be a 3-tuple/list if spec brightness/contrast/saturation
             # or 4 if also augmenting hue
@@ -130,26 +137,49 @@ def transforms_imagenet_train(
 def transforms_imagenet_eval(
         img_size=224,
         crop_pct=None,
+        crop_mode=None,
         interpolation='bilinear',
         use_prefetcher=False,
         mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD):
+        std=IMAGENET_DEFAULT_STD
+):
     crop_pct = crop_pct or DEFAULT_CROP_PCT
 
     if isinstance(img_size, (tuple, list)):
         assert len(img_size) == 2
-        if img_size[-1] == img_size[-2]:
-            # fall-back to older behaviour so Resize scales to shortest edge if target is square
-            scale_size = int(math.floor(img_size[0] / crop_pct))
-        else:
-            scale_size = tuple([int(x / crop_pct) for x in img_size])
+        scale_size = tuple([math.floor(x / crop_pct) for x in img_size])
     else:
-        scale_size = int(math.floor(img_size / crop_pct))
+        scale_size = math.floor(img_size / crop_pct)
+        scale_size = (scale_size, scale_size)
 
-    tfl = [
-        transforms.Resize(scale_size, interpolation=str_to_interp_mode(interpolation)),
-        transforms.CenterCrop(img_size),
-    ]
+    if crop_mode == 'squash':
+        # squash mode scales each edge to 1/pct of target, then crops
+        # aspect ratio is not preserved, no img lost if crop_pct == 1.0
+        tfl = [
+            transforms.Resize(scale_size, interpolation=str_to_interp_mode(interpolation)),
+            transforms.CenterCrop(img_size),
+        ]
+    elif crop_mode == 'border':
+        # scale the longest edge of image to 1/pct of target edge, add borders to pad, then crop
+        # no image lost if crop_pct == 1.0
+        fill = [round(255 * v) for v in mean]
+        tfl = [
+            ResizeKeepRatio(scale_size, interpolation=interpolation, longest=1.0),
+            CenterCropOrPad(img_size, fill=fill),
+        ]
+    else:
+        # default crop model is center
+        # aspect ratio is preserved, crops center within image, no borders are added, image is lost
+        if scale_size[0] == scale_size[1]:
+            # simple case, use torchvision built-in Resize w/ shortest edge mode (scalar size arg)
+            tfl = [
+                transforms.Resize(scale_size[0], interpolation=str_to_interp_mode(interpolation))
+            ]
+        else:
+            # resize shortest edge to matching target dim for non-square target
+            tfl = [ResizeKeepRatio(scale_size)]
+        tfl += [transforms.CenterCrop(img_size)]
+
     if use_prefetcher:
         # prefetcher and collate will handle tensor conversion and norm
         tfl += [ToNumpy()]
@@ -157,8 +187,9 @@ def transforms_imagenet_eval(
         tfl += [
             transforms.ToTensor(),
             transforms.Normalize(
-                     mean=torch.tensor(mean),
-                     std=torch.tensor(std))
+                mean=torch.tensor(mean),
+                std=torch.tensor(std),
+            )
         ]
 
     return transforms.Compose(tfl)
@@ -183,6 +214,7 @@ def create_transform(
         re_count=1,
         re_num_splits=0,
         crop_pct=None,
+        crop_mode=None,
         tf_preprocessing=False,
         separate=False):
 
@@ -204,7 +236,8 @@ def create_transform(
                 interpolation=interpolation,
                 use_prefetcher=use_prefetcher,
                 mean=mean,
-                std=std)
+                std=std,
+            )
         elif is_training:
             transform = transforms_imagenet_train(
                 img_size,
@@ -222,7 +255,8 @@ def create_transform(
                 re_mode=re_mode,
                 re_count=re_count,
                 re_num_splits=re_num_splits,
-                separate=separate)
+                separate=separate,
+            )
         else:
             assert not separate, "Separate transforms not supported for validation preprocessing"
             transform = transforms_imagenet_eval(
@@ -231,6 +265,8 @@ def create_transform(
                 use_prefetcher=use_prefetcher,
                 mean=mean,
                 std=std,
-                crop_pct=crop_pct)
+                crop_pct=crop_pct,
+                crop_mode=crop_mode,
+            )
 
     return transform

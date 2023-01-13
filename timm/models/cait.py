@@ -8,17 +8,16 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 """
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
-from copy import deepcopy
 from functools import partial
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
-from .registry import register_model
-
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
 
 __all__ = ['Cait', 'ClassAttn', 'LayerScaleBlockClassAttn', 'LayerScaleBlock', 'TalkingHeadAttn']
 
@@ -122,8 +121,8 @@ class LayerScaleBlockClassAttn(nn.Module):
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = mlp_block(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-        self.gamma_1 = nn.Parameter(init_values * torch.ones((dim)), requires_grad=True)
-        self.gamma_2 = nn.Parameter(init_values * torch.ones((dim)), requires_grad=True)
+        self.gamma_1 = nn.Parameter(init_values * torch.ones(dim))
+        self.gamma_2 = nn.Parameter(init_values * torch.ones(dim))
 
     def forward(self, x, x_cls):
         u = torch.cat((x_cls, x), dim=1)
@@ -189,8 +188,8 @@ class LayerScaleBlock(nn.Module):
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = mlp_block(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
-        self.gamma_1 = nn.Parameter(init_values * torch.ones((dim)), requires_grad=True)
-        self.gamma_2 = nn.Parameter(init_values * torch.ones((dim)), requires_grad=True)
+        self.gamma_1 = nn.Parameter(init_values * torch.ones(dim))
+        self.gamma_2 = nn.Parameter(init_values * torch.ones(dim))
 
     def forward(self, x):
         x = x + self.drop_path(self.gamma_1 * self.attn(self.norm1(x)))

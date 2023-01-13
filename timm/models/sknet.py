@@ -13,9 +13,9 @@ import math
 from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import SelectiveKernel, ConvNormAct, ConvNormActAa, create_attn
-from .registry import register_model
+from timm.layers import SelectiveKernel, ConvNormAct, create_attn
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 from .resnet import ResNet
 
 
@@ -47,9 +47,24 @@ class SelectiveKernelBasic(nn.Module):
     expansion = 1
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64,
-            sk_kwargs=None, reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d, attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            cardinality=1,
+            base_width=64,
+            sk_kwargs=None,
+            reduce_first=1,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            aa_layer=None,
+            drop_block=None,
+            drop_path=None,
+    ):
         super(SelectiveKernelBasic, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
@@ -71,7 +86,8 @@ class SelectiveKernelBasic(nn.Module):
         self.drop_path = drop_path
 
     def zero_init_last(self):
-        nn.init.zeros_(self.conv2.bn.weight)
+        if getattr(self.conv2.bn, 'weight', None) is not None:
+            nn.init.zeros_(self.conv2.bn.weight)
 
     def forward(self, x):
         shortcut = x
@@ -92,9 +108,24 @@ class SelectiveKernelBottleneck(nn.Module):
     expansion = 4
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None, cardinality=1, base_width=64, sk_kwargs=None,
-            reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            cardinality=1,
+            base_width=64,
+            sk_kwargs=None,
+            reduce_first=1,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            aa_layer=None,
+            drop_block=None,
+            drop_path=None,
+    ):
         super(SelectiveKernelBottleneck, self).__init__()
 
         sk_kwargs = sk_kwargs or {}
@@ -115,7 +146,8 @@ class SelectiveKernelBottleneck(nn.Module):
         self.drop_path = drop_path
 
     def zero_init_last(self):
-        nn.init.zeros_(self.conv3.bn.weight)
+        if getattr(self.conv3.bn, 'weight', None) is not None:
+            nn.init.zeros_(self.conv3.bn.weight)
 
     def forward(self, x):
         shortcut = x

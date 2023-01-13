@@ -39,16 +39,18 @@ A thank you to paper authors for releasing code and weights.
 Hacked together by / Copyright 2021 Ross Wightman
 """
 import math
-from copy import deepcopy
 from functools import partial
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
-from .layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, GluMlp, GatedMlp, DropPath, lecun_normal_, to_2tuple
+from ._builder import build_model_with_cfg
+from ._manipulate import named_apply, checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['MixerBlock']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):
@@ -84,12 +86,12 @@ default_cfgs = dict(
 
     # Mixer ImageNet-21K-P pretraining
     mixer_b16_224_miil_in21k=_cfg(
-        url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil_in21k.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/mixer_b16_224_miil_in21k-2a558a71.pth',
+        mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear', num_classes=11221,
     ),
     mixer_b16_224_miil=_cfg(
-        url='https://miil-public-eu.oss-eu-central-1.aliyuncs.com/model-zoo/ImageNet_21K_P/models/timm/mixer_b16_224_miil.pth',
-        mean=(0, 0, 0), std=(1, 1, 1), crop_pct=0.875, interpolation='bilinear',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/mixer_b16_224_miil-9229a591.pth',
+        mean=(0., 0., 0.), std=(1., 1., 1.), crop_pct=0.875, interpolation='bilinear',
     ),
 
     gmixer_12_224=_cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),

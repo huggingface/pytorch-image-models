@@ -17,19 +17,20 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from functools import partial
 from typing import Optional
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_function
-from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
-from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, to_ntuple, trunc_normal_, _assert
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, to_ntuple, trunc_normal_, _assert
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_function
+from ._manipulate import checkpoint_seq, named_apply
+from ._registry import register_model
 from .vision_transformer import checkpoint_filter_fn, get_init_weights_vit
 
+__all__ = ['SwinTransformer']  # model_registry will add each entrypoint fn to this
 
 _logger = logging.getLogger(__name__)
 
@@ -87,13 +88,13 @@ default_cfgs = {
         num_classes=21841),
 
     'swin_s3_tiny_224': _cfg(
-        url='https://github.com/silent-chen/AutoFormerV2-model-zoo/releases/download/v1.0.0/S3-T.pth'
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/s3_t-1d53f6a8.pth'
     ),
     'swin_s3_small_224': _cfg(
-        url='https://github.com/silent-chen/AutoFormerV2-model-zoo/releases/download/v1.0.0/S3-S.pth'
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/s3_s-3bb4c69d.pth'
     ),
     'swin_s3_base_224': _cfg(
-        url='https://github.com/silent-chen/AutoFormerV2-model-zoo/releases/download/v1.0.0/S3-B.pth'
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/s3_b-a1e95db4.pth'
     )
 }
 

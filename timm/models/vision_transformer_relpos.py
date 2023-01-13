@@ -4,197 +4,24 @@ NOTE: these models are experimental / WIP, expect changes
 
 Hacked together by / Copyright 2022, Ross Wightman
 """
-import math
 import logging
+import math
 from functools import partial
-from collections import OrderedDict
 from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, named_apply
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, to_2tuple
-from .registry import register_model
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias
+from ._builder import build_model_with_cfg
+from ._pretrained import generate_default_cfgs
+from ._registry import register_model
+
+__all__ = ['VisionTransformerRelPos']  # model_registry will add each entrypoint fn to this
 
 _logger = logging.getLogger(__name__)
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'vit_relpos_base_patch32_plus_rpn_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_replos_base_patch32_plus_rpn_256-sw-dd486f51.pth',
-        input_size=(3, 256, 256)),
-    'vit_relpos_base_patch16_plus_240': _cfg(url='', input_size=(3, 240, 240)),
-
-    'vit_relpos_small_patch16_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_small_patch16_224-sw-ec2778b4.pth'),
-    'vit_relpos_medium_patch16_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_224-sw-11c174af.pth'),
-    'vit_relpos_base_patch16_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_base_patch16_224-sw-49049aed.pth'),
-
-    'vit_relpos_base_patch16_cls_224': _cfg(
-        url=''),
-    'vit_relpos_base_patch16_gapcls_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_base_patch16_gapcls_224-sw-1a341d6c.pth'),
-
-    'vit_relpos_small_patch16_rpn_224': _cfg(url=''),
-    'vit_relpos_medium_patch16_rpn_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_rpn_224-sw-5d2befd8.pth'),
-    'vit_relpos_base_patch16_rpn_224': _cfg(url=''),
-}
-
-
-def gen_relative_position_index(win_size: Tuple[int, int], class_token: int = 0) -> torch.Tensor:
-    # cut and paste w/ modifications from swin / beit codebase
-    # cls to token & token 2 cls & cls to cls
-    # get pair-wise relative position index for each token inside the window
-    window_area = win_size[0] * win_size[1]
-    coords = torch.stack(torch.meshgrid([torch.arange(win_size[0]), torch.arange(win_size[1])])).flatten(1)  # 2, Wh, Ww
-    relative_coords = coords[:, :, None] - coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
-    relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
-    relative_coords[:, :, 0] += win_size[0] - 1  # shift to start from 0
-    relative_coords[:, :, 1] += win_size[1] - 1
-    relative_coords[:, :, 0] *= 2 * win_size[1] - 1
-    if class_token:
-        num_relative_distance = (2 * win_size[0] - 1) * (2 * win_size[1] - 1) + 3
-        relative_position_index = torch.zeros(size=(window_area + 1,) * 2, dtype=relative_coords.dtype)
-        relative_position_index[1:, 1:] = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-        relative_position_index[0, 0:] = num_relative_distance - 3
-        relative_position_index[0:, 0] = num_relative_distance - 2
-        relative_position_index[0, 0] = num_relative_distance - 1
-    else:
-        relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-    return relative_position_index
-
-
-def gen_relative_log_coords(
-        win_size: Tuple[int, int],
-        pretrained_win_size: Tuple[int, int] = (0, 0),
-        mode='swin'
-):
-    # as per official swin-v2 impl, supporting timm swin-v2-cr coords as well
-    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0], dtype=torch.float32)
-    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1], dtype=torch.float32)
-    relative_coords_table = torch.stack(torch.meshgrid([relative_coords_h, relative_coords_w]))
-    relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous()  # 2*Wh-1, 2*Ww-1, 2
-    if mode == 'swin':
-        if pretrained_win_size[0] > 0:
-            relative_coords_table[:, :, 0] /= (pretrained_win_size[0] - 1)
-            relative_coords_table[:, :, 1] /= (pretrained_win_size[1] - 1)
-        else:
-            relative_coords_table[:, :, 0] /= (win_size[0] - 1)
-            relative_coords_table[:, :, 1] /= (win_size[1] - 1)
-        relative_coords_table *= 8  # normalize to -8, 8
-        scale = math.log2(8)
-    else:
-        # FIXME we should support a form of normalization (to -1/1) for this mode?
-        scale = math.log2(math.e)
-    relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
-        1.0 + relative_coords_table.abs()) / scale
-    return relative_coords_table
-
-
-class RelPosMlp(nn.Module):
-    def __init__(
-            self,
-            window_size,
-            num_heads=8,
-            hidden_dim=128,
-            class_token=False,
-            mode='cr',
-            pretrained_window_size=(0, 0)
-    ):
-        super().__init__()
-        self.window_size = window_size
-        self.window_area = self.window_size[0] * self.window_size[1]
-        self.class_token = 1 if class_token else 0
-        self.num_heads = num_heads
-        self.bias_shape = (self.window_area,) * 2 + (num_heads,)
-        self.apply_sigmoid = mode == 'swin'
-
-        mlp_bias = (True, False) if mode == 'swin' else True
-        self.mlp = Mlp(
-            2,  # x, y
-            hidden_features=hidden_dim,
-            out_features=num_heads,
-            act_layer=nn.ReLU,
-            bias=mlp_bias,
-            drop=(0.125, 0.)
-        )
-
-        self.register_buffer(
-            "relative_position_index",
-            gen_relative_position_index(window_size),
-            persistent=False)
-
-        # get relative_coords_table
-        self.register_buffer(
-            "rel_coords_log",
-            gen_relative_log_coords(window_size, pretrained_window_size, mode=mode),
-            persistent=False)
-
-    def get_bias(self) -> torch.Tensor:
-        relative_position_bias = self.mlp(self.rel_coords_log)
-        if self.relative_position_index is not None:
-            relative_position_bias = relative_position_bias.view(-1, self.num_heads)[
-                self.relative_position_index.view(-1)]  # Wh*Ww,Wh*Ww,nH
-            relative_position_bias = relative_position_bias.view(self.bias_shape)
-        relative_position_bias = relative_position_bias.permute(2, 0, 1)
-        if self.apply_sigmoid:
-            relative_position_bias = 16 * torch.sigmoid(relative_position_bias)
-        if self.class_token:
-            relative_position_bias = F.pad(relative_position_bias, [self.class_token, 0, self.class_token, 0])
-        return relative_position_bias.unsqueeze(0).contiguous()
-
-    def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
-        return attn + self.get_bias()
-
-
-class RelPosBias(nn.Module):
-
-    def __init__(self, window_size, num_heads, class_token=False):
-        super().__init__()
-        self.window_size = window_size
-        self.window_area = window_size[0] * window_size[1]
-        self.class_token = 1 if class_token else 0
-        self.bias_shape = (self.window_area + self.class_token,) * 2 + (num_heads,)
-
-        num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3 * self.class_token
-        self.relative_position_bias_table = nn.Parameter(torch.zeros(num_relative_distance, num_heads))
-        self.register_buffer(
-            "relative_position_index",
-            gen_relative_position_index(self.window_size, class_token=self.class_token),
-            persistent=False,
-        )
-
-        self.init_weights()
-
-    def init_weights(self):
-        trunc_normal_(self.relative_position_bias_table, std=.02)
-
-    def get_bias(self) -> torch.Tensor:
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
-        # win_h * win_w, win_h * win_w, num_heads
-        relative_position_bias = relative_position_bias.view(self.bias_shape).permute(2, 0, 1)
-        return relative_position_bias.unsqueeze(0).contiguous()
-
-    def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
-        return attn + self.get_bias()
 
 
 class RelPosAttention(nn.Module):
@@ -306,11 +133,32 @@ class VisionTransformerRelPos(nn.Module):
     """
 
     def __init__(
-            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='avg',
-            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, init_values=1e-6,
-            class_token=False, fc_norm=False, rel_pos_type='mlp', shared_rel_pos=False, rel_pos_dim=None,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., weight_init='skip',
-            embed_layer=PatchEmbed, norm_layer=None, act_layer=None, block_fn=RelPosBlock):
+            self,
+            img_size=224,
+            patch_size=16,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='avg',
+            embed_dim=768,
+            depth=12,
+            num_heads=12,
+            mlp_ratio=4.,
+            qkv_bias=True,
+            init_values=1e-6,
+            class_token=False,
+            fc_norm=False,
+            rel_pos_type='mlp',
+            rel_pos_dim=None,
+            shared_rel_pos=False,
+            drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.,
+            weight_init='skip',
+            embed_layer=PatchEmbed,
+            norm_layer=None,
+            act_layer=None,
+            block_fn=RelPosBlock
+    ):
         """
         Args:
             img_size (int, tuple): input image size
@@ -345,19 +193,22 @@ class VisionTransformerRelPos(nn.Module):
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.num_tokens = 1 if class_token else 0
+        self.num_prefix_tokens = 1 if class_token else 0
         self.grad_checkpointing = False
 
         self.patch_embed = embed_layer(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         feat_size = self.patch_embed.grid_size
 
-        rel_pos_args = dict(window_size=feat_size, class_token=class_token)
+        rel_pos_args = dict(window_size=feat_size, prefix_tokens=self.num_prefix_tokens)
         if rel_pos_type.startswith('mlp'):
             if rel_pos_dim:
                 rel_pos_args['hidden_dim'] = rel_pos_dim
+            # FIXME experimenting with different relpos log coord configs
             if 'swin' in rel_pos_type:
                 rel_pos_args['mode'] = 'swin'
+            elif 'rw' in rel_pos_type:
+                rel_pos_args['mode'] = 'rw'
             rel_pos_cls = partial(RelPosMlp, **rel_pos_args)
         else:
             rel_pos_cls = partial(RelPosBias, **rel_pos_args)
@@ -367,7 +218,7 @@ class VisionTransformerRelPos(nn.Module):
             # NOTE shared rel pos currently mutually exclusive w/ per-block, but could support both...
             rel_pos_cls = None
 
-        self.cls_token = nn.Parameter(torch.zeros(1, self.num_tokens, embed_dim)) if self.num_tokens else None
+        self.cls_token = nn.Parameter(torch.zeros(1, self.num_prefix_tokens, embed_dim)) if class_token else None
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
@@ -434,7 +285,7 @@ class VisionTransformerRelPos(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
-            x = x[:, self.num_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
         return x if pre_logits else self.head(x)
 
@@ -450,6 +301,57 @@ def _create_vision_transformer_relpos(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(VisionTransformerRelPos, variant, pretrained, **kwargs)
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'vit_relpos_base_patch32_plus_rpn_256.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_replos_base_patch32_plus_rpn_256-sw-dd486f51.pth',
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256)),
+    'vit_relpos_base_patch16_plus_240.untrained': _cfg(url='', input_size=(3, 240, 240)),
+
+    'vit_relpos_small_patch16_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_small_patch16_224-sw-ec2778b4.pth',
+        hf_hub_id='timm/'),
+    'vit_relpos_medium_patch16_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_224-sw-11c174af.pth',
+        hf_hub_id='timm/'),
+    'vit_relpos_base_patch16_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_base_patch16_224-sw-49049aed.pth',
+        hf_hub_id='timm/'),
+
+    'vit_srelpos_small_patch16_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_srelpos_small_patch16_224-sw-6cdb8849.pth',
+        hf_hub_id='timm/'),
+    'vit_srelpos_medium_patch16_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_srelpos_medium_patch16_224-sw-ad702b8c.pth',
+        hf_hub_id='timm/'),
+
+    'vit_relpos_medium_patch16_cls_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_cls_224-sw-cfe8e259.pth',
+        hf_hub_id='timm/'),
+    'vit_relpos_base_patch16_cls_224.untrained': _cfg(),
+    'vit_relpos_base_patch16_clsgap_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_base_patch16_gapcls_224-sw-1a341d6c.pth',
+        hf_hub_id='timm/'),
+
+    'vit_relpos_small_patch16_rpn_224.untrained': _cfg(),
+    'vit_relpos_medium_patch16_rpn_224.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/vit_relpos_medium_patch16_rpn_224-sw-5d2befd8.pth',
+        hf_hub_id='timm/'),
+    'vit_relpos_base_patch16_rpn_224.untrained': _cfg(),
+})
 
 
 @register_model
@@ -503,6 +405,41 @@ def vit_relpos_base_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
+def vit_srelpos_small_patch16_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=False,
+        rel_pos_dim=384, shared_rel_pos=True, **kwargs)
+    model = _create_vision_transformer_relpos('vit_srelpos_small_patch16_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_srelpos_medium_patch16_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=False,
+        rel_pos_dim=512, shared_rel_pos=True, **kwargs)
+    model = _create_vision_transformer_relpos(
+        'vit_srelpos_medium_patch16_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
+def vit_relpos_medium_patch16_cls_224(pretrained=False, **kwargs):
+    """ ViT-Base (ViT-M/16) w/ relative log-coord position, class token present
+    """
+    model_kwargs = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=False,
+        rel_pos_dim=256, class_token=True, global_pool='token', **kwargs)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_medium_patch16_cls_224', pretrained=pretrained, **model_kwargs)
+    return model
+
+
+@register_model
 def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
     """
@@ -514,14 +451,14 @@ def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_base_patch16_gapcls_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_clsgap_224(pretrained=False, **kwargs):
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
     NOTE this config is a bit of a mistake, class token was enabled but global avg-pool w/ fc-norm was not disabled
     Leaving here for comparisons w/ a future re-train as it performs quite well.
     """
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, fc_norm=True, class_token=True, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_gapcls_224', pretrained=pretrained, **model_kwargs)
+    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_clsgap_224', pretrained=pretrained, **model_kwargs)
     return model
 
 

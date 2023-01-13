@@ -1,0 +1,160 @@
+- sections: 
+  - local: index
+    title: Home
+  - local: quickstart
+    title: Quickstart
+  - local: installation
+    title: Installation
+  title: Get started
+- sections:
+  - local: feature_extraction
+    title: Using Pretrained Models as Feature Extractors
+  - local: training_script
+    title: Training With The Official Training Script
+  - local: hf_hub
+    title: Share and Load Models from the 🤗 Hugging Face Hub
+  title: Tutorials
+- sections:
+  - local: models
+    title: Model Summaries
+  - local: results
+    title: Results
+  - local: models/adversarial-inception-v3
+    title: Adversarial Inception v3
+  - local: models/advprop
+    title: AdvProp (EfficientNet)
+  - local: models/big-transfer
+    title: Big Transfer (BiT)
+  - local: models/csp-darknet
+    title: CSP-DarkNet
+  - local: models/csp-resnet
+    title: CSP-ResNet
+  - local: models/csp-resnext
+    title: CSP-ResNeXt
+  - local: models/densenet
+    title: DenseNet
+  - local: models/dla
+    title: Deep Layer Aggregation
+  - local: models/dpn
+    title: Dual Path Network (DPN)
+  - local: models/ecaresnet
+    title: ECA-ResNet
+  - local: models/efficientnet
+    title: EfficientNet
+  - local: models/efficientnet-pruned
+    title: EfficientNet (Knapsack Pruned)
+  - local: models/ensemble-adversarial
+    title: Ensemble Adversarial Inception ResNet v2
+  - local: models/ese-vovnet
+    title: ESE-VoVNet
+  - local: models/fbnet
+    title: FBNet
+  - local: models/gloun-inception-v3
+    title: (Gluon) Inception v3
+  - local: models/gloun-resnet
+    title: (Gluon) ResNet
+  - local: models/gloun-resnext
+    title: (Gluon) ResNeXt
+  - local: models/gloun-senet
+    title: (Gluon) SENet
+  - local: models/gloun-seresnext
+    title: (Gluon) SE-ResNeXt
+  - local: models/gloun-xception
+    title: (Gluon) Xception
+  - local: models/hrnet
+    title: HRNet
+  - local: models/ig-resnext
+    title: Instagram ResNeXt WSL
+  - local: models/inception-resnet-v2
+    title: Inception ResNet v2
+  - local: models/inception-v3
+    title: Inception v3
+  - local: models/inception-v4
+    title: Inception v4
+  - local: models/legacy-se-resnet
+    title: (Legacy) SE-ResNet
+  - local: models/legacy-se-resnext
+    title: (Legacy) SE-ResNeXt
+  - local: models/legacy-senet
+    title: (Legacy) SENet
+  - local: models/mixnet
+    title: MixNet
+  - local: models/mnasnet
+    title: MnasNet
+  - local: models/mobilenet-v2
+    title: MobileNet v2
+  - local: models/mobilenet-v3
+    title: MobileNet v3
+  - local: models/nasnet
+    title: NASNet
+  - local: models/noisy-student
+    title: Noisy Student (EfficientNet)
+  - local: models/pnasnet
+    title: PNASNet
+  - local: models/regnetx
+    title: RegNetX
+  - local: models/regnety
+    title: RegNetY
+  - local: models/res2net
+    title: Res2Net
+  - local: models/res2next
+    title: Res2NeXt
+  - local: models/resnest
+    title: ResNeSt
+  - local: models/resnet
+    title: ResNet
+  - local: models/resnet-d
+    title: ResNet-D
+  - local: models/resnext
+    title: ResNeXt
+  - local: models/rexnet
+    title: RexNet
+  - local: models/se-resnet
+    title: SE-ResNet
+  - local: models/selecsls
+    title: SelecSLS
+  - local: models/seresnext
+    title: SE-ResNeXt
+  - local: models/skresnet
+    title: SK-ResNet
+  - local: models/skresnext
+    title: SK-ResNeXt
+  - local: models/spnasnet
+    title: SPNASNet
+  - local: models/ssl-resnet
+    title: SSL ResNet
+  - local: models/swsl-resnet
+    title: SWSL ResNet
+  - local: models/swsl-resnext
+    title: SWSL ResNeXt
+  - local: models/tf-efficientnet
+    title: (Tensorflow) EfficientNet
+  - local: models/tf-efficientnet-condconv
+    title: (Tensorflow) EfficientNet CondConv
+  - local: models/tf-efficientnet-lite
+    title: (Tensorflow) EfficientNet Lite
+  - local: models/tf-inception-v3
+    title: (Tensorflow) Inception v3
+  - local: models/tf-mixnet
+    title: (Tensorflow) MixNet
+  - local: models/tf-mobilenet-v3
+    title: (Tensorflow) MobileNet v3
+  - local: models/tresnet
+    title: TResNet
+  - local: models/wide-resnet
+    title: Wide ResNet
+  - local: models/xception
+    title: Xception
+  title: Model Pages
+  isExpanded: false
+- sections:
+  - local: reference/models
+    title: Models
+  - local: reference/data
+    title: Data
+  - local: reference/optimizers
+    title: Optimizers
+  - local: reference/schedulers
+    title: Learning Rate Schedulers
+  title: Reference
+

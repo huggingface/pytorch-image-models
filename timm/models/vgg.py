@@ -5,21 +5,19 @@ timm functionality.
 
 Copyright 2021 Ross Wightman
 """
+from typing import Union, List, Dict, Any, cast
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union, List, Dict, Any, cast
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .fx_features import register_notrace_module
-from .layers import ClassifierHead
-from .registry import register_model
+from timm.layers import ClassifierHead
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._registry import register_model
 
-__all__ = [
-    'VGG', 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn',
-    'vgg19_bn', 'vgg19',
-]
+__all__ = ['VGG']
 
 
 def _cfg(url='', **kwargs):

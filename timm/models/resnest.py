@@ -6,13 +6,12 @@ Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang198
 
 Modified for torchscript compat, and consistency with timm by Ross Wightman
 """
-import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import SplitAttn
-from .registry import register_model
+from timm.layers import SplitAttn
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 from .resnet import ResNet
 
 
@@ -58,10 +57,27 @@ class ResNestBottleneck(nn.Module):
     expansion = 4
 
     def __init__(
-            self, inplanes, planes, stride=1, downsample=None,
-            radix=1, cardinality=1, base_width=64, avd=False, avd_first=False, is_first=False,
-            reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+            self,
+            inplanes,
+            planes,
+            stride=1,
+            downsample=None,
+            radix=1,
+            cardinality=1,
+            base_width=64,
+            avd=False,
+            avd_first=False,
+            is_first=False,
+            reduce_first=1,
+            dilation=1,
+            first_dilation=None,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            attn_layer=None,
+            aa_layer=None,
+            drop_block=None,
+            drop_path=None,
+    ):
         super(ResNestBottleneck, self).__init__()
         assert reduce_first == 1  # not supported
         assert attn_layer is None  # not supported
@@ -104,7 +120,8 @@ class ResNestBottleneck(nn.Module):
         self.downsample = downsample
 
     def zero_init_last(self):
-        nn.init.zeros_(self.bn3.weight)
+        if getattr(self.bn3, 'weight', None) is not None:
+            nn.init.zeros_(self.bn3.weight)
 
     def forward(self, x):
         shortcut = x
@@ -146,8 +163,8 @@ def resnest14d(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[1, 1, 1, 1],
         stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
-        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    return _create_resnest('resnest14d', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=2, avd=True, avd_first=False))
+    return _create_resnest('resnest14d', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -157,8 +174,8 @@ def resnest26d(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[2, 2, 2, 2],
         stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
-        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    return _create_resnest('resnest26d', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=2, avd=True, avd_first=False))
+    return _create_resnest('resnest26d', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -169,8 +186,8 @@ def resnest50d(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[3, 4, 6, 3],
         stem_type='deep', stem_width=32, avg_down=True, base_width=64, cardinality=1,
-        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    return _create_resnest('resnest50d', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=2, avd=True, avd_first=False))
+    return _create_resnest('resnest50d', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -181,8 +198,8 @@ def resnest101e(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[3, 4, 23, 3],
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
-        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    return _create_resnest('resnest101e', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=2, avd=True, avd_first=False))
+    return _create_resnest('resnest101e', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -193,8 +210,8 @@ def resnest200e(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[3, 24, 36, 3],
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
-        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    return _create_resnest('resnest200e', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=2, avd=True, avd_first=False))
+    return _create_resnest('resnest200e', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -205,8 +222,8 @@ def resnest269e(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[3, 30, 48, 8],
         stem_type='deep', stem_width=64, avg_down=True, base_width=64, cardinality=1,
-        block_args=dict(radix=2, avd=True, avd_first=False), **kwargs)
-    return _create_resnest('resnest269e', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=2, avd=True, avd_first=False))
+    return _create_resnest('resnest269e', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -216,8 +233,8 @@ def resnest50d_4s2x40d(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[3, 4, 6, 3],
         stem_type='deep', stem_width=32, avg_down=True, base_width=40, cardinality=2,
-        block_args=dict(radix=4, avd=True, avd_first=True), **kwargs)
-    return _create_resnest('resnest50d_4s2x40d', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=4, avd=True, avd_first=True))
+    return _create_resnest('resnest50d_4s2x40d', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
@@ -227,5 +244,5 @@ def resnest50d_1s4x24d(pretrained=False, **kwargs):
     model_kwargs = dict(
         block=ResNestBottleneck, layers=[3, 4, 6, 3],
         stem_type='deep', stem_width=32, avg_down=True, base_width=24, cardinality=4,
-        block_args=dict(radix=1, avd=True, avd_first=True), **kwargs)
-    return _create_resnest('resnest50d_1s4x24d', pretrained=pretrained, **model_kwargs)
+        block_args=dict(radix=1, avd=True, avd_first=True))
+    return _create_resnest('resnest50d_1s4x24d', pretrained=pretrained, **dict(model_kwargs, **kwargs))

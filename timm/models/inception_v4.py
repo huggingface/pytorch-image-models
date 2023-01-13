@@ -7,9 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg
-from .layers import create_classifier
-from .registry import register_model
+from timm.layers import create_classifier
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 
 __all__ = ['InceptionV4']
 

@@ -16,21 +16,23 @@ Status:
 
 Hacked together by / copyright Ross Wightman, 2021.
 """
-import math
-from dataclasses import dataclass, field
 from collections import OrderedDict
-from typing import Tuple, Optional
+from dataclasses import dataclass, replace
 from functools import partial
+from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_module
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .registry import register_model
-from .layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame,\
+from timm.layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame, \
     get_act_layer, get_act_fn, get_attn, make_divisible
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['NormFreeNet', 'NfCfg']  # model_registry will add each entrypoint fn to this
 
 
 def _dcfg(url='', **kwargs):
@@ -157,11 +159,25 @@ class NfCfg:
 
 
 def _nfres_cfg(
-        depths, channels=(256, 512, 1024, 2048), group_size=None, act_layer='relu', attn_layer=None, attn_kwargs=None):
+        depths,
+        channels=(256, 512, 1024, 2048),
+        group_size=None,
+        act_layer='relu',
+        attn_layer=None,
+        attn_kwargs=None,
+):
     attn_kwargs = attn_kwargs or {}
     cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='7x7_pool', stem_chs=64, bottle_ratio=0.25,
-        group_size=group_size, act_layer=act_layer, attn_layer=attn_layer, attn_kwargs=attn_kwargs)
+        depths=depths,
+        channels=channels,
+        stem_type='7x7_pool',
+        stem_chs=64,
+        bottle_ratio=0.25,
+        group_size=group_size,
+        act_layer=act_layer,
+        attn_layer=attn_layer,
+        attn_kwargs=attn_kwargs,
+    )
     return cfg
 
 
@@ -169,28 +185,70 @@ def _nfreg_cfg(depths, channels=(48, 104, 208, 440)):
     num_features = 1280 * channels[-1] // 440
     attn_kwargs = dict(rd_ratio=0.5)
     cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='3x3', group_size=8, width_factor=0.75, bottle_ratio=2.25,
-        num_features=num_features, reg=True, attn_layer='se', attn_kwargs=attn_kwargs)
+        depths=depths,
+        channels=channels,
+        stem_type='3x3',
+        group_size=8,
+        width_factor=0.75,
+        bottle_ratio=2.25,
+        num_features=num_features,
+        reg=True,
+        attn_layer='se',
+        attn_kwargs=attn_kwargs,
+    )
     return cfg
 
 
 def _nfnet_cfg(
-        depths, channels=(256, 512, 1536, 1536), group_size=128, bottle_ratio=0.5, feat_mult=2.,
-        act_layer='gelu', attn_layer='se', attn_kwargs=None):
+        depths,
+        channels=(256, 512, 1536, 1536),
+        group_size=128,
+        bottle_ratio=0.5,
+        feat_mult=2.,
+        act_layer='gelu',
+        attn_layer='se',
+        attn_kwargs=None,
+):
     num_features = int(channels[-1] * feat_mult)
     attn_kwargs = attn_kwargs if attn_kwargs is not None else dict(rd_ratio=0.5)
     cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=group_size,
-        bottle_ratio=bottle_ratio, extra_conv=True, num_features=num_features, act_layer=act_layer,
-        attn_layer=attn_layer, attn_kwargs=attn_kwargs)
+        depths=depths,
+        channels=channels,
+        stem_type='deep_quad',
+        stem_chs=128,
+        group_size=group_size,
+        bottle_ratio=bottle_ratio,
+        extra_conv=True,
+        num_features=num_features,
+        act_layer=act_layer,
+        attn_layer=attn_layer,
+        attn_kwargs=attn_kwargs,
+    )
     return cfg
 
 
-def _dm_nfnet_cfg(depths, channels=(256, 512, 1536, 1536), act_layer='gelu', skipinit=True):
+def _dm_nfnet_cfg(
+        depths,
+        channels=(256, 512, 1536, 1536),
+        act_layer='gelu',
+        skipinit=True,
+):
     cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=128,
-        bottle_ratio=0.5, extra_conv=True, gamma_in_act=True, same_padding=True, skipinit=skipinit,
-        num_features=int(channels[-1] * 2.0), act_layer=act_layer, attn_layer='se', attn_kwargs=dict(rd_ratio=0.5))
+        depths=depths,
+        channels=channels,
+        stem_type='deep_quad',
+        stem_chs=128,
+        group_size=128,
+        bottle_ratio=0.5,
+        extra_conv=True,
+        gamma_in_act=True,
+        same_padding=True,
+        skipinit=skipinit,
+        num_features=int(channels[-1] * 2.0),
+        act_layer=act_layer,
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.5),
+    )
     return cfg
 
 
@@ -276,7 +334,14 @@ def act_with_gamma(act_type, gamma: float = 1.):
 
 class DownsampleAvg(nn.Module):
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=1, first_dilation=None, conv_layer=ScaledStdConv2d):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=1,
+            first_dilation=None,
+            conv_layer=ScaledStdConv2d,
+    ):
         """ AvgPool Downsampling as in 'D' ResNet variants. Support for dilation."""
         super(DownsampleAvg, self).__init__()
         avg_stride = stride if dilation == 1 else 1
@@ -297,9 +362,26 @@ class NormFreeBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs=None, stride=1, dilation=1, first_dilation=None,
-            alpha=1.0, beta=1.0, bottle_ratio=0.25, group_size=None, ch_div=1, reg=True, extra_conv=False,
-            skipinit=False, attn_layer=None, attn_gain=2.0, act_layer=None, conv_layer=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs=None,
+            stride=1,
+            dilation=1,
+            first_dilation=None,
+            alpha=1.0,
+            beta=1.0,
+            bottle_ratio=0.25,
+            group_size=None,
+            ch_div=1,
+            reg=True,
+            extra_conv=False,
+            skipinit=False,
+            attn_layer=None,
+            attn_gain=2.0,
+            act_layer=None,
+            conv_layer=None,
+            drop_path_rate=0.,
+    ):
         super().__init__()
         first_dilation = first_dilation or dilation
         out_chs = out_chs or in_chs
@@ -314,7 +396,13 @@ class NormFreeBlock(nn.Module):
 
         if in_chs != out_chs or stride != 1 or dilation != first_dilation:
             self.downsample = DownsampleAvg(
-                in_chs, out_chs, stride=stride, dilation=dilation, first_dilation=first_dilation, conv_layer=conv_layer)
+                in_chs,
+                out_chs,
+                stride=stride,
+                dilation=dilation,
+                first_dilation=first_dilation,
+                conv_layer=conv_layer,
+            )
         else:
             self.downsample = None
 
@@ -450,14 +538,33 @@ class NormFreeNet(nn.Module):
             for what it is/does. Approx 8-10% throughput loss.
     """
     def __init__(
-            self, cfg: NfCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-            drop_rate=0., drop_path_rate=0.
+            self,
+            cfg: NfCfg,
+            num_classes=1000,
+            in_chans=3,
+            global_pool='avg',
+            output_stride=32,
+            drop_rate=0.,
+            drop_path_rate=0.,
+            **kwargs,
     ):
+        """
+        Args:
+            cfg (NfCfg): Model architecture configuration
+            num_classes (int): Number of classifier classes (default: 1000)
+            in_chans (int): Number of input channels (default: 3)
+            global_pool (str): Global pooling type (default: 'avg')
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            kwargs (dict): Extra kwargs overlayed onto cfg
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
+        cfg = replace(cfg, **kwargs)
         assert cfg.act_layer in _nonlin_gamma, f"Please add non-linearity constants for activation ({cfg.act_layer})."
         conv_layer = ScaledStdConv2dSame if cfg.same_padding else ScaledStdConv2d
         if cfg.gamma_in_act:
@@ -470,7 +577,12 @@ class NormFreeNet(nn.Module):
 
         stem_chs = make_divisible((cfg.stem_chs or cfg.channels[0]) * cfg.width_factor, cfg.ch_div)
         self.stem, stem_stride, stem_feat = create_stem(
-            in_chans, stem_chs, cfg.stem_type, conv_layer=conv_layer, act_layer=act_layer)
+            in_chans,
+            stem_chs,
+            cfg.stem_type,
+            conv_layer=conv_layer,
+            act_layer=act_layer,
+        )
 
         self.feature_info = [stem_feat]
         drop_path_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]

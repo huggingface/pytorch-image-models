@@ -1,5 +1,77 @@
 # Archived Changes
 
+### Nov 22, 2021
+* A number of updated weights anew new model defs
+  * `eca_halonext26ts` - 79.5 @ 256
+  * `resnet50_gn` (new) - 80.1 @ 224, 81.3 @ 288
+  * `resnet50` - 80.7 @ 224, 80.9 @ 288 (trained at 176, not replacing current a1 weights as default since these don't scale as well to higher res, [weights](https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1h2_176-001a1197.pth))
+  * `resnext50_32x4d` - 81.1 @ 224, 82.0 @ 288
+  * `sebotnet33ts_256` (new) - 81.2 @ 224
+  * `lamhalobotnet50ts_256` - 81.5 @ 256
+  * `halonet50ts` - 81.7 @ 256
+  * `halo2botnet50ts_256` - 82.0 @ 256
+  * `resnet101` - 82.0 @ 224, 82.8 @ 288
+  * `resnetv2_101` (new) - 82.1 @ 224, 83.0 @ 288
+  * `resnet152` - 82.8 @ 224, 83.5 @ 288
+  * `regnetz_d8` (new) - 83.5 @ 256, 84.0 @ 320
+  * `regnetz_e8` (new) - 84.5 @ 256, 85.0 @ 320
+* `vit_base_patch8_224` (85.8 top-1) & `in21k` variant weights added thanks [Martins Bruveris](https://github.com/martinsbruveris)
+* Groundwork in for FX feature extraction thanks to [Alexander Soare](https://github.com/alexander-soare)
+  * models updated for tracing compatibility (almost full support with some distlled transformer exceptions)
+
+### Oct 19, 2021
+* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used. Model weights and some more details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-rsb-weights)
+* BCE loss and Repeated Augmentation support for RSB paper
+* 4 series of ResNet based attention model experiments being added (implemented across byobnet.py/byoanet.py). These include all sorts of attention, from channel attn like SE, ECA to 2D QKV self-attention layers such as Halo, Bottlneck, Lambda. Details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
+* Working implementations of the following 2D self-attention modules (likely to be differences from paper or eventual official impl):
+  * Halo (https://arxiv.org/abs/2103.12731)
+  * Bottleneck Transformer (https://arxiv.org/abs/2101.11605)
+  * LambdaNetworks (https://arxiv.org/abs/2102.08602)
+* A RegNetZ series of models with some attention experiments (being added to). These do not follow the paper (https://arxiv.org/abs/2103.06877) in any way other than block architecture, details of official models are not available. See more here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
+* ConvMixer (https://openreview.net/forum?id=TVHS5Y4dNvM), CrossVit (https://arxiv.org/abs/2103.14899), and BeiT (https://arxiv.org/abs/2106.08254) architectures + weights added
+* freeze/unfreeze helpers by [Alexander Soare](https://github.com/alexander-soare)
+
+### Aug 18, 2021
+* Optimizer bonanza!
+  * Add LAMB and LARS optimizers, incl trust ratio clipping options. Tweaked to work properly in PyTorch XLA (tested on TPUs w/ `timm bits` [branch](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/timm/bits))
+  * Add MADGRAD from FB research w/ a few tweaks (decoupled decay option, step handling that works with PyTorch XLA)
+  * Some cleanup on all optimizers and factory. No more `.data`, a bit more consistency, unit tests for all!
+  * SGDP and AdamP still won't work with PyTorch XLA but others should (have yet to test Adabelief, Adafactor, Adahessian myself).
+* EfficientNet-V2 XL TF ported weights added, but they don't validate well in PyTorch (L is better). The pre-processing for the V2 TF training is a bit diff and the fine-tuned 21k -> 1k weights are very sensitive and less robust than the 1k weights.
+* Added PyTorch trained EfficientNet-V2 'Tiny' w/ GlobalContext attn weights. Only .1-.2 top-1 better than the SE so more of a curiosity for those interested.
+
+### July 12, 2021
+* Add XCiT models from [official facebook impl](https://github.com/facebookresearch/xcit). Contributed by [Alexander Soare](https://github.com/alexander-soare)
+
+### July 5-9, 2021
+* Add `efficientnetv2_rw_t` weights, a custom 'tiny' 13.6M param variant that is a bit better than (non NoisyStudent) B3 models. Both faster and better accuracy (at same or lower res)
+  * top-1 82.34 @ 288x288 and 82.54 @ 320x320
+* Add [SAM pretrained](https://arxiv.org/abs/2106.01548) in1k weight for ViT B/16 (`vit_base_patch16_sam_224`) and B/32 (`vit_base_patch32_sam_224`)  models.
+* Add 'Aggregating Nested Transformer' (NesT) w/ weights converted from official [Flax impl](https://github.com/google-research/nested-transformer). Contributed by [Alexander Soare](https://github.com/alexander-soare).
+  * `jx_nest_base` - 83.534, `jx_nest_small` - 83.120, `jx_nest_tiny` - 81.426
+
+### June 23, 2021
+* Reproduce gMLP model training, `gmlp_s16_224` trained to 79.6 top-1, matching [paper](https://arxiv.org/abs/2105.08050). Hparams for this and other recent MLP training [here](https://gist.github.com/rwightman/d6c264a9001f9167e06c209f630b2cc6)
+
+### June 20, 2021
+* Release Vision Transformer 'AugReg' weights from [How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers](https://arxiv.org/abs/2106.10270)
+  * .npz weight loading support added, can load any of the 50K+ weights from the [AugReg series](https://console.cloud.google.com/storage/browser/vit_models/augreg)
+  * See [example notebook](https://colab.research.google.com/github/google-research/vision_transformer/blob/master/vit_jax_augreg.ipynb) from [official impl](https://github.com/google-research/vision_transformer/) for navigating the augreg weights
+  * Replaced all default weights w/ best AugReg variant (if possible). All AugReg 21k classifiers work.
+    * Highlights: `vit_large_patch16_384` (87.1 top-1), `vit_large_r50_s32_384` (86.2 top-1), `vit_base_patch16_384` (86.0 top-1)
+  * `vit_deit_*` renamed to just `deit_*`
+  * Remove my old small model, replace with DeiT compatible small w/ AugReg weights
+* Add 1st training of my `gmixer_24_224` MLP /w GLU, 78.1 top-1 w/ 25M params.
+* Add weights from official ResMLP release (https://github.com/facebookresearch/deit)
+* Add `eca_nfnet_l2` weights from my 'lightweight' series. 84.7 top-1 at 384x384.
+* Add distilled BiT 50x1 student and 152x2 Teacher weights from  [Knowledge distillation: A good teacher is patient and consistent](https://arxiv.org/abs/2106.05237)
+* NFNets and ResNetV2-BiT models work w/ Pytorch XLA now
+  * weight standardization uses F.batch_norm instead of std_mean (std_mean wasn't lowered)
+  * eps values adjusted, will be slight differences but should be quite close
+* Improve test coverage and classifier interface of non-conv (vision transformer and mlp) models
+* Cleanup a few classifier / flatten details for models w/ conv classifiers or early global pool
+* Please report any regressions, this PR touched quite a few models.
+
 ### June 8, 2021
 * Add first ResMLP weights, trained in PyTorch XLA on TPU-VM w/ my XLA branch. 24 block variant, 79.2 top-1.
 * Add ResNet51-Q model w/ pretrained weights at 82.36 top-1.

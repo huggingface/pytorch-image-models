@@ -8,15 +8,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .helpers import build_model_with_cfg
-from .layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
-from .registry import register_model
+from timm.layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 
 __all__ = ['NASNetALarge']
 
 default_cfgs = {
     'nasnetalarge': {
-        'url': 'http://data.lip6.fr/cadene/pretrainedmodels/nasnetalarge-a1897284.pth',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nasnetalarge-dc4a7b8b.pth',
         'input_size': (3, 331, 331),
         'pool_size': (11, 11),
         'crop_pct': 0.911,

@@ -28,11 +28,19 @@ def set_jit_fuser(fuser):
         torch._C._jit_override_can_fuse_on_cpu(False)
         torch._C._jit_override_can_fuse_on_gpu(True)
         torch._C._jit_set_texpr_fuser_enabled(True)
+        try:
+            torch._C._jit_set_nvfuser_enabled(False)
+        except Exception:
+            pass
     elif fuser == "old" or fuser == "legacy":
         torch._C._jit_set_profiling_executor(False)
         torch._C._jit_set_profiling_mode(False)
         torch._C._jit_override_can_fuse_on_gpu(True)
         torch._C._jit_set_texpr_fuser_enabled(False)
+        try:
+            torch._C._jit_set_nvfuser_enabled(False)
+        except Exception:
+            pass
     elif fuser == "nvfuser" or fuser == "nvf":
         os.environ['PYTORCH_NVFUSER_DISABLE_FALLBACK'] = '1'
         #os.environ['PYTORCH_NVFUSER_DISABLE_FMA'] = '1'

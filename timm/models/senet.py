@@ -19,9 +19,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import create_classifier
-from .registry import register_model
+from timm.layers import create_classifier
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 
 __all__ = ['SENet']
 
@@ -37,8 +37,8 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    'legacy_senet154':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/senet154-c7b49a05.pth'),
+    'legacy_senet154': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_senet154-e9eb9fe6.pth'),
     'legacy_seresnet18': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet18-4bb0ce65.pth',
         interpolation='bicubic'),
@@ -53,10 +53,10 @@ default_cfgs = {
     'legacy_seresnext26_32x4d': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26_32x4d-65ebdb501.pth',
         interpolation='bicubic'),
-    'legacy_seresnext50_32x4d':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext50_32x4d-a260b3a4.pth'),
-    'legacy_seresnext101_32x4d':
-        _cfg(url='http://data.lip6.fr/cadene/pretrainedmodels/se_resnext101_32x4d-3b2fe3d8.pth'),
+    'legacy_seresnext50_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_se_resnext50_32x4d-f3651bad.pth'),
+    'legacy_seresnext101_32x4d': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_se_resnext101_32x4d-37725eac.pth'),
 }
 
 

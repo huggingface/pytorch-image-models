@@ -19,15 +19,15 @@ Modifications and additions for timm by / Copyright 2022, Ross Wightman
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-import copy
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import DropPath, trunc_normal_, to_2tuple, ConvMlp
-from .registry import register_model
+from timm.layers import DropPath, trunc_normal_, to_2tuple, ConvMlp, GroupNorm1
+from ._builder import build_model_with_cfg
+from ._registry import register_model
+
+__all__ = ['PoolFormer']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):
@@ -80,15 +80,6 @@ class PatchEmbed(nn.Module):
         return x
 
 
-class GroupNorm1(nn.GroupNorm):
-    """ Group Normalization with 1 group.
-    Input: tensor in shape [B, C, H, W]
-    """
-
-    def __init__(self, num_channels, **kwargs):
-        super().__init__(1, num_channels, **kwargs)
-
-
 class Pooling(nn.Module):
     def __init__(self, pool_size=3):
         super().__init__()
@@ -126,8 +117,8 @@ class PoolFormerBlock(nn.Module):
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         if layer_scale_init_value:
-            self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
-            self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim), requires_grad=True)
+            self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim))
+            self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim))
         else:
             self.layer_scale_1 = None
             self.layer_scale_2 = None

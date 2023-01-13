@@ -1,0 +1,54 @@
+# Sharing and Loading Models From the Hugging Face Hub
+
+The `timm` library has a built-in integration with the Hugging Face Hub, making it easy to share and load models from the 🤗 Hub.
+
+In this short guide, we'll see how to:
+  1. Share a `timm` model on the Hub
+  2. How to load that model back from the Hub
+
+## Authenticating
+
+First, you'll need to make sure you have the `huggingface_hub` package installed.
+
+```bash
+pip install huggingface_hub
+```
+
+Then, you'll need to authenticate yourself. You can do this by running the following command:
+
+```bash
+huggingface-cli login
+```
+
+Or, if you're using a notebook, you can use the `notebook_login` helper:
+
+```py
+>>> from huggingface_hub import notebook_login
+>>> notebook_login()
+```
+
+## Sharing a Model
+
+```py
+>>> import timm
+>>> model = timm.create_model('resnet18', pretrained=True, num_classes=4)
+```
+
+Here is where you would normally train or fine-tune the model. We'll skip that for the sake of this tutorial.
+
+Let's pretend we've now fine-tuned the model. The next step would be to push it to the Hub! We can do this with the `timm.models.hub.push_to_hf_hub` function.
+
+```py
+>>> model_cfg = dict(labels=['a', 'b', 'c', 'd'])
+>>> timm.models.hub.push_to_hf_hub(model, 'resnet18-random', model_config=model_cfg)
+```
+
+Running the above would push the model to `<your-username>/resnet18-random` on the Hub. You can now share this model with your friends, or use it in your own code!
+
+## Loading a Model
+
+Loading a model from the Hub is as simple as calling `timm.create_model` with the `pretrained` argument set to the name of the model you want to load. In this case, we'll use [`nateraw/resnet18-random`](https://huggingface.co/nateraw/resnet18-random), which is the model we just pushed to the Hub.
+
+```py
+>>> model_reloaded = timm.create_model('hf_hub:nateraw/resnet18-random', pretrained=True)
+```

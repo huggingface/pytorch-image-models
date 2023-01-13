@@ -14,7 +14,7 @@ Weights from original impl have been modified
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import Optional, Union, Callable
 
@@ -23,10 +23,13 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, named_apply, checkpoint_seq
-from .layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
-from .layers import get_act_layer, get_norm_act_layer, create_conv2d
-from .registry import register_model
+from timm.layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
+from timm.layers import get_act_layer, get_norm_act_layer, create_conv2d
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq, named_apply
+from ._registry import register_model
+
+__all__ = ['RegNet', 'RegNetCfg']  # model_registry will add each entrypoint fn to this
 
 
 @dataclass
@@ -76,6 +79,9 @@ model_cfgs = dict(
     regnety_120=RegNetCfg(w0=168, wa=73.36, wm=2.37, group_size=112, depth=19, se_ratio=0.25),
     regnety_160=RegNetCfg(w0=200, wa=106.23, wm=2.48, group_size=112, depth=18, se_ratio=0.25),
     regnety_320=RegNetCfg(w0=232, wa=115.89, wm=2.53, group_size=232, depth=20, se_ratio=0.25),
+    regnety_640=RegNetCfg(w0=352, wa=147.48, wm=2.4, group_size=328, depth=20, se_ratio=0.25),
+    regnety_1280=RegNetCfg(w0=456, wa=160.83, wm=2.52, group_size=264, depth=27, se_ratio=0.25),
+    regnety_2560=RegNetCfg(w0=640, wa=124.47, wm=2.04, group_size=848, depth=27, se_ratio=0.25),
 
     # Experimental
     regnety_040s_gn=RegNetCfg(
@@ -150,7 +156,12 @@ default_cfgs = dict(
     regnety_160=_cfg(
         url='https://dl.fbaipublicfiles.com/deit/regnety_160-a5fe301d.pth',  # from Facebook DeiT GitHub repository
         crop_pct=1.0, test_input_size=(3, 288, 288)),
-    regnety_320=_cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'),
+    regnety_320=_cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-regnet/regnety_320-ba464b29.pth'
+    ),
+    regnety_640=_cfg(url=''),
+    regnety_1280=_cfg(url=''),
+    regnety_2560=_cfg(url=''),
 
     regnety_040s_gn=_cfg(url=''),
     regnetv_040=_cfg(
@@ -226,7 +237,15 @@ def downsample_avg(in_chs, out_chs, kernel_size=1, stride=1, dilation=1, norm_la
 
 
 def create_shortcut(
-        downsample_type, in_chs, out_chs, kernel_size, stride, dilation=(1, 1), norm_layer=None, preact=False):
+        downsample_type,
+        in_chs,
+        out_chs,
+        kernel_size,
+        stride,
+        dilation=(1, 1),
+        norm_layer=None,
+        preact=False,
+):
     assert downsample_type in ('avg', 'conv1x1', '', None)
     if in_chs != out_chs or stride != 1 or dilation[0] != dilation[1]:
         dargs = dict(stride=stride, dilation=dilation[0], norm_layer=norm_layer, preact=preact)
@@ -248,9 +267,21 @@ class Bottleneck(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=(1, 1), bottle_ratio=1, group_size=1, se_ratio=0.25,
-            downsample='conv1x1', linear_out=False, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1,
+            group_size=1,
+            se_ratio=0.25,
+            downsample='conv1x1',
+            linear_out=False,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(Bottleneck, self).__init__()
         act_layer = get_act_layer(act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
@@ -296,9 +327,21 @@ class PreBottleneck(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=(1, 1), bottle_ratio=1, group_size=1, se_ratio=0.25,
-            downsample='conv1x1', linear_out=False, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1,
+            group_size=1,
+            se_ratio=0.25,
+            downsample='conv1x1',
+            linear_out=False,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(PreBottleneck, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
@@ -342,8 +385,16 @@ class RegStage(nn.Module):
     """Stage (sequence of blocks w/ the same output shape)."""
 
     def __init__(
-            self, depth, in_chs, out_chs, stride, dilation,
-            drop_path_rates=None, block_fn=Bottleneck, **block_kwargs):
+            self,
+            depth,
+            in_chs,
+            out_chs,
+            stride,
+            dilation,
+            drop_path_rates=None,
+            block_fn=Bottleneck,
+            **block_kwargs,
+    ):
         super(RegStage, self).__init__()
         self.grad_checkpointing = False
 
@@ -356,8 +407,13 @@ class RegStage(nn.Module):
             name = "b{}".format(i + 1)
             self.add_module(
                 name, block_fn(
-                    block_in_chs, out_chs, stride=block_stride, dilation=block_dilation,
-                    drop_path_rate=dpr, **block_kwargs)
+                    block_in_chs,
+                    out_chs,
+                    stride=block_stride,
+                    dilation=block_dilation,
+                    drop_path_rate=dpr,
+                    **block_kwargs,
+                )
             )
             first_dilation = dilation
 
@@ -378,12 +434,35 @@ class RegNet(nn.Module):
     """
 
     def __init__(
-            self, cfg: RegNetCfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg',
-            drop_rate=0., drop_path_rate=0., zero_init_last=True):
+            self,
+            cfg: RegNetCfg,
+            in_chans=3,
+            num_classes=1000,
+            output_stride=32,
+            global_pool='avg',
+            drop_rate=0.,
+            drop_path_rate=0.,
+            zero_init_last=True,
+            **kwargs,
+    ):
+        """
+
+        Args:
+            cfg (RegNetCfg): Model architecture configuration
+            in_chans (int): Number of input channels (default: 3)
+            num_classes (int): Number of classifier classes (default: 1000)
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            global_pool (str): Global pooling type (default: 'avg')
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            zero_init_last (bool): Zero-init last weight of residual path
+            kwargs (dict): Extra kwargs overlayed onto cfg
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert output_stride in (8, 16, 32)
+        cfg = replace(cfg, **kwargs)  # update cfg with extra passed kwargs
 
         # Construct the stem
         stem_width = cfg.stem_width
@@ -450,8 +529,12 @@ class RegNet(nn.Module):
             dict(zip(arg_names, params)) for params in
             zip(stage_widths, stage_strides, stage_dilations, stage_depths, stage_br, stage_gs, stage_dpr)]
         common_args = dict(
-            downsample=cfg.downsample, se_ratio=cfg.se_ratio, linear_out=cfg.linear_out,
-            act_layer=cfg.act_layer, norm_layer=cfg.norm_layer)
+            downsample=cfg.downsample,
+            se_ratio=cfg.se_ratio,
+            linear_out=cfg.linear_out,
+            act_layer=cfg.act_layer,
+            norm_layer=cfg.norm_layer,
+        )
         return per_stage_args, common_args
 
     @torch.jit.ignore
@@ -507,7 +590,34 @@ def _init_weights(module, name='', zero_init_last=False):
 
 
 def _filter_fn(state_dict):
-    """ convert patch embedding weight from manual patchify + linear proj to conv"""
+    if 'classy_state_dict' in state_dict:
+        import re
+        state_dict = state_dict['classy_state_dict']['base_model']['model']
+        out = {}
+        for k, v in state_dict['trunk'].items():
+            k = k.replace('_feature_blocks.conv1.stem.0', 'stem.conv')
+            k = k.replace('_feature_blocks.conv1.stem.1', 'stem.bn')
+            k = re.sub(
+                r'^_feature_blocks.res\d.block(\d)-(\d+)',
+                lambda x: f's{int(x.group(1))}.b{int(x.group(2)) + 1}', k)
+            k = re.sub(r's(\d)\.b(\d+)\.bn', r's\1.b\2.downsample.bn', k)
+            k = k.replace('proj', 'downsample.conv')
+            k = k.replace('f.a.0', 'conv1.conv')
+            k = k.replace('f.a.1', 'conv1.bn')
+            k = k.replace('f.b.0', 'conv2.conv')
+            k = k.replace('f.b.1', 'conv2.bn')
+            k = k.replace('f.c', 'conv3.conv')
+            k = k.replace('f.final_bn', 'conv3.bn')
+            k = k.replace('f.se.excitation.0', 'se.fc1')
+            k = k.replace('f.se.excitation.2', 'se.fc2')
+            out[k] = v
+        for k, v in state_dict['heads'].items():
+            if 'projection_head' in k or 'prototypes' in k:
+                continue
+            k = k.replace('0.clf.0', 'head.fc')
+            out[k] = v
+        return out
+
     if 'model' in state_dict:
         # For DeiT trained regnety_160 pretraiend model
         state_dict = state_dict['model']
@@ -664,6 +774,24 @@ def regnety_160(pretrained=False, **kwargs):
 def regnety_320(pretrained=False, **kwargs):
     """RegNetY-32GF"""
     return _create_regnet('regnety_320', pretrained, **kwargs)
+
+
+@register_model
+def regnety_640(pretrained=False, **kwargs):
+    """RegNetY-64GF"""
+    return _create_regnet('regnety_640', pretrained, **kwargs)
+
+
+@register_model
+def regnety_1280(pretrained=False, **kwargs):
+    """RegNetY-128GF"""
+    return _create_regnet('regnety_1280', pretrained, **kwargs)
+
+
+@register_model
+def regnety_2560(pretrained=False, **kwargs):
+    """RegNetY-256GF"""
+    return _create_regnet('regnety_2560', pretrained, **kwargs)
 
 
 @register_model

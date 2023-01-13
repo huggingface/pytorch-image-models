@@ -4,7 +4,6 @@ fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
 import re
 from collections import OrderedDict
-from functools import partial
 
 import torch
 import torch.nn as nn
@@ -13,9 +12,10 @@ import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, MATCH_PREV_GROUP
-from .layers import BatchNormAct2d, create_norm_act_layer, BlurPool2d, create_classifier
-from .registry import register_model
+from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
+from ._builder import build_model_with_cfg
+from ._manipulate import MATCH_PREV_GROUP
+from ._registry import register_model
 
 __all__ = ['DenseNet']
 
@@ -115,8 +115,15 @@ class DenseBlock(nn.ModuleDict):
     _version = 2
 
     def __init__(
-            self, num_layers, num_input_features, bn_size, growth_rate, norm_layer=nn.ReLU,
-            drop_rate=0., memory_efficient=False):
+            self,
+            num_layers,
+            num_input_features,
+            bn_size,
+            growth_rate,
+            norm_layer=BatchNormAct2d,
+            drop_rate=0.,
+            memory_efficient=False,
+    ):
         super(DenseBlock, self).__init__()
         for i in range(num_layers):
             layer = DenseLayer(
@@ -138,7 +145,7 @@ class DenseBlock(nn.ModuleDict):
 
 
 class DenseTransition(nn.Sequential):
-    def __init__(self, num_input_features, num_output_features, norm_layer=nn.BatchNorm2d, aa_layer=None):
+    def __init__(self, num_input_features, num_output_features, norm_layer=BatchNormAct2d, aa_layer=None):
         super(DenseTransition, self).__init__()
         self.add_module('norm', norm_layer(num_input_features))
         self.add_module('conv', nn.Conv2d(
@@ -165,12 +172,25 @@ class DenseNet(nn.Module):
     """
 
     def __init__(
-            self, growth_rate=32, block_config=(6, 12, 24, 16), num_classes=1000, in_chans=3, global_pool='avg',
-            bn_size=4, stem_type='', norm_layer=BatchNormAct2d, aa_layer=None, drop_rate=0,
-            memory_efficient=False, aa_stem_only=True):
+            self,
+            growth_rate=32,
+            block_config=(6, 12, 24, 16),
+            num_classes=1000,
+            in_chans=3,
+            global_pool='avg',
+            bn_size=4,
+            stem_type='',
+            act_layer='relu',
+            norm_layer='batchnorm2d',
+            aa_layer=None,
+            drop_rate=0,
+            memory_efficient=False,
+            aa_stem_only=True,
+    ):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         super(DenseNet, self).__init__()
+        norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
 
         # Stem
         deep_stem = 'deep' in stem_type  # 3x3 deep stem
@@ -226,8 +246,11 @@ class DenseNet(nn.Module):
                     dict(num_chs=num_features, reduction=current_stride, module='features.' + module_name)]
                 current_stride *= 2
                 trans = DenseTransition(
-                    num_input_features=num_features, num_output_features=num_features // 2,
-                    norm_layer=norm_layer, aa_layer=transition_aa_layer)
+                    num_input_features=num_features,
+                    num_output_features=num_features // 2,
+                    norm_layer=norm_layer,
+                    aa_layer=transition_aa_layer,
+                )
                 self.features.add_module(f'transition{i + 1}', trans)
                 num_features = num_features // 2
 
@@ -322,8 +345,8 @@ def densenetblur121d(pretrained=False, **kwargs):
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
     model = _create_densenet(
-        'densenetblur121d', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, stem_type='deep',
-        aa_layer=BlurPool2d, **kwargs)
+        'densenetblur121d', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained,
+        stem_type='deep', aa_layer=BlurPool2d, **kwargs)
     return model
 
 
@@ -382,11 +405,9 @@ def densenet264(pretrained=False, **kwargs):
 def densenet264d_iabn(pretrained=False, **kwargs):
     r"""Densenet-264 model with deep stem and Inplace-ABN
     """
-    def norm_act_fn(num_features, **kwargs):
-        return create_norm_act_layer('iabn', num_features, act_layer='leaky_relu', **kwargs)
     model = _create_densenet(
         'densenet264d_iabn', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep',
-        norm_layer=norm_act_fn, pretrained=pretrained, **kwargs)
+        norm_layer='iabn', act_layer='leaky_relu', pretrained=pretrained, **kwargs)
     return model
 
 

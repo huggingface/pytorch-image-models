@@ -13,7 +13,7 @@ import os
 import hashlib
 import shutil
 from collections import OrderedDict
-from timm.models.helpers import load_state_dict
+from timm.models import load_state_dict
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Cleaner')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
