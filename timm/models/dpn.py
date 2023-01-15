@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier
+from timm.layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier, get_norm_act_layer
 from ._builder import build_model_with_cfg
 from ._registry import register_model
 
@@ -33,6 +33,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
+    'dpn48b': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
     'dpn68': _cfg(
         url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
     'dpn68b': _cfg(
@@ -82,7 +83,16 @@ class BnActConv2d(nn.Module):
 
 class DualPathBlock(nn.Module):
     def __init__(
-            self, in_chs, num_1x1_a, num_3x3_b, num_1x1_c, inc, groups, block_type='normal', b=False):
+            self,
+            in_chs,
+            num_1x1_a,
+            num_3x3_b,
+            num_1x1_c,
+            inc,
+            groups,
+            block_type='normal',
+            b=False,
+    ):
         super(DualPathBlock, self).__init__()
         self.num_1x1_c = num_1x1_c
         self.inc = inc
@@ -167,16 +177,31 @@ class DualPathBlock(nn.Module):
 
 class DPN(nn.Module):
     def __init__(
-            self, small=False, num_init_features=64, k_r=96, groups=32, global_pool='avg',
-            b=False, k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128), output_stride=32,
-            num_classes=1000, in_chans=3, drop_rate=0., fc_act_layer=nn.ELU):
+            self,
+            k_sec=(3, 4, 20, 3),
+            inc_sec=(16, 32, 24, 128),
+            k_r=96,
+            groups=32,
+            num_classes=1000,
+            in_chans=3,
+            output_stride=32,
+            global_pool='avg',
+            small=False,
+            num_init_features=64,
+            b=False,
+            drop_rate=0.,
+            norm_layer='batchnorm2d',
+            act_layer='relu',
+            fc_act_layer='elu',
+    ):
         super(DPN, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.b = b
         assert output_stride == 32  # FIXME look into dilation support
-        norm_layer = partial(BatchNormAct2d, eps=.001)
-        fc_norm_layer = partial(BatchNormAct2d, eps=.001, act_layer=fc_act_layer, inplace=False)
+
+        norm_layer = partial(get_norm_act_layer(norm_layer, act_layer=act_layer), eps=.001)
+        fc_norm_layer = partial(get_norm_act_layer(norm_layer, act_layer=fc_act_layer), eps=.001, inplace=False)
         bw_factor = 1 if small else 4
         blocks = OrderedDict()
 
@@ -292,48 +317,56 @@ def _create_dpn(variant, pretrained=False, **kwargs):
 
 
 @register_model
+def dpn48b(pretrained=False, **kwargs):
+    model_kwargs = dict(
+        small=True, num_init_features=10, k_r=128, groups=32,
+        b=True, k_sec=(3, 4, 6, 3), inc_sec=(16, 32, 32, 64), act_layer='silu')
+    return _create_dpn('dpn48b', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+
+
+@register_model
 def dpn68(pretrained=False, **kwargs):
     model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
-        k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64), **kwargs)
-    return _create_dpn('dpn68', pretrained=pretrained, **model_kwargs)
+        k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64))
+    return _create_dpn('dpn68', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
 def dpn68b(pretrained=False, **kwargs):
     model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
-        b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64), **kwargs)
-    return _create_dpn('dpn68b', pretrained=pretrained, **model_kwargs)
+        b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64))
+    return _create_dpn('dpn68b', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
 def dpn92(pretrained=False, **kwargs):
     model_kwargs = dict(
         num_init_features=64, k_r=96, groups=32,
-        k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128), **kwargs)
-    return _create_dpn('dpn92', pretrained=pretrained, **model_kwargs)
+        k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128))
+    return _create_dpn('dpn92', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
 def dpn98(pretrained=False, **kwargs):
     model_kwargs = dict(
         num_init_features=96, k_r=160, groups=40,
-        k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128), **kwargs)
-    return _create_dpn('dpn98', pretrained=pretrained, **model_kwargs)
+        k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128))
+    return _create_dpn('dpn98', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
 def dpn131(pretrained=False, **kwargs):
     model_kwargs = dict(
         num_init_features=128, k_r=160, groups=40,
-        k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128), **kwargs)
-    return _create_dpn('dpn131', pretrained=pretrained, **model_kwargs)
+        k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128))
+    return _create_dpn('dpn131', pretrained=pretrained, **dict(model_kwargs, **kwargs))
 
 
 @register_model
 def dpn107(pretrained=False, **kwargs):
     model_kwargs = dict(
         num_init_features=128, k_r=200, groups=50,
-        k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128), **kwargs)
-    return _create_dpn('dpn107', pretrained=pretrained, **model_kwargs)
+        k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128))
+    return _create_dpn('dpn107', pretrained=pretrained, **dict(model_kwargs, **kwargs))

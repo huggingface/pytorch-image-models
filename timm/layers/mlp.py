@@ -2,25 +2,38 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+from functools import partial
+
 from torch import nn as nn
 
+from .grn import GlobalResponseNorm
 from .helpers import to_2tuple
 
 
 class Mlp(nn.Module):
     """ MLP as used in Vision Transformer, MLP-Mixer and related networks
     """
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, bias=True, drop=0.):
+    def __init__(
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.GELU,
+            bias=True,
+            drop=0.,
+            use_conv=False,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         bias = to_2tuple(bias)
         drop_probs = to_2tuple(drop)
+        linear_layer = partial(nn.Conv2d, kernel_size=1) if use_conv else nn.Linear
 
-        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias[0])
+        self.fc1 = linear_layer(in_features, hidden_features, bias=bias[0])
         self.act = act_layer()
         self.drop1 = nn.Dropout(drop_probs[0])
-        self.fc2 = nn.Linear(hidden_features, out_features, bias=bias[1])
+        self.fc2 = linear_layer(hidden_features, out_features, bias=bias[1])
         self.drop2 = nn.Dropout(drop_probs[1])
 
     def forward(self, x):
@@ -36,18 +49,29 @@ class GluMlp(nn.Module):
     """ MLP w/ GLU style gating
     See: https://arxiv.org/abs/1612.08083, https://arxiv.org/abs/2002.05202
     """
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.Sigmoid, bias=True, drop=0.):
+    def __init__(
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.Sigmoid,
+            bias=True,
+            drop=0.,
+            use_conv=False,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         assert hidden_features % 2 == 0
         bias = to_2tuple(bias)
         drop_probs = to_2tuple(drop)
+        linear_layer = partial(nn.Conv2d, kernel_size=1) if use_conv else nn.Linear
+        self.chunk_dim = 1 if use_conv else -1
 
-        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias[0])
+        self.fc1 = linear_layer(in_features, hidden_features, bias=bias[0])
         self.act = act_layer()
         self.drop1 = nn.Dropout(drop_probs[0])
-        self.fc2 = nn.Linear(hidden_features // 2, out_features, bias=bias[1])
+        self.fc2 = linear_layer(hidden_features // 2, out_features, bias=bias[1])
         self.drop2 = nn.Dropout(drop_probs[1])
 
     def init_weights(self):
@@ -58,7 +82,7 @@ class GluMlp(nn.Module):
 
     def forward(self, x):
         x = self.fc1(x)
-        x, gates = x.chunk(2, dim=-1)
+        x, gates = x.chunk(2, dim=self.chunk_dim)
         x = x * self.act(gates)
         x = self.drop1(x)
         x = self.fc2(x)
@@ -70,8 +94,15 @@ class GatedMlp(nn.Module):
     """ MLP as used in gMLP
     """
     def __init__(
-            self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU,
-            gate_layer=None, bias=True, drop=0.):
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.GELU,
+            gate_layer=None,
+            bias=True,
+            drop=0.,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -104,8 +135,15 @@ class ConvMlp(nn.Module):
     """ MLP using 1x1 convs that keeps spatial dims
     """
     def __init__(
-            self, in_features, hidden_features=None, out_features=None, act_layer=nn.ReLU,
-            norm_layer=None, bias=True, drop=0.):
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.ReLU,
+            norm_layer=None,
+            bias=True,
+            drop=0.,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -123,4 +161,41 @@ class ConvMlp(nn.Module):
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
+        return x
+
+
+class GlobalResponseNormMlp(nn.Module):
+    """ MLP w/ Global Response Norm (see grn.py), nn.Linear or 1x1 Conv2d
+    """
+    def __init__(
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.GELU,
+            bias=True,
+            drop=0.,
+            use_conv=False,
+    ):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        bias = to_2tuple(bias)
+        drop_probs = to_2tuple(drop)
+        linear_layer = partial(nn.Conv2d, kernel_size=1) if use_conv else nn.Linear
+
+        self.fc1 = linear_layer(in_features, hidden_features, bias=bias[0])
+        self.act = act_layer()
+        self.drop1 = nn.Dropout(drop_probs[0])
+        self.grn = GlobalResponseNorm(hidden_features, channels_last=not use_conv)
+        self.fc2 = linear_layer(hidden_features, out_features, bias=bias[1])
+        self.drop2 = nn.Dropout(drop_probs[1])
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop1(x)
+        x = self.grn(x)
+        x = self.fc2(x)
+        x = self.drop2(x)
         return x

@@ -47,16 +47,15 @@ import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, ConvMlp, DropPath, ClassifierHead, trunc_normal_tf_, LayerNorm
-from timm.layers import SelectAdaptivePool2d, create_pool2d
-from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d
-from timm.layers import to_2tuple, extend_tuple, make_divisible, _assert
+from timm.layers import Mlp, ConvMlp, DropPath, ClassifierHead, LayerNorm, SelectAdaptivePool2d
+from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
+from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
+from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint_seq
 from ._pretrained import generate_default_cfgs
 from ._registry import register_model
-from .vision_transformer_relpos import RelPosMlp, RelPosBias  # FIXME move these to common location
 
 __all__ = ['MaxxVitCfg', 'MaxxVitConvCfg', 'MaxxVitTransformerCfg', 'MaxxVit']
 
@@ -1076,93 +1075,6 @@ def cfg_window_size(cfg: MaxxVitTransformerCfg, img_size: Tuple[int, int]):
     return cfg
 
 
-def generate_lookup_tensor(
-        length: int,
-        max_relative_position: Optional[int] = None,
-):
-    """Generate a one_hot lookup tensor to reindex embeddings along one dimension.
-    Args:
-        length: the length to reindex to.
-        max_relative_position: the maximum relative position to consider.
-            Relative position embeddings for distances above this threshold
-            are zeroed out.
-    Returns:
-        a lookup Tensor of size [length, length, vocab_size] that satisfies
-            ret[n,m,v] = 1{m - n + max_relative_position = v}.
-    """
-    if max_relative_position is None:
-        max_relative_position = length - 1
-    # Return the cached lookup tensor, otherwise compute it and cache it.
-    vocab_size = 2 * max_relative_position + 1
-    ret = torch.zeros(length, length, vocab_size)
-    for i in range(length):
-        for x in range(length):
-            v = x - i + max_relative_position
-            if abs(x - i) > max_relative_position:
-                continue
-            ret[i, x, v] = 1
-    return ret
-
-
-def reindex_2d_einsum_lookup(
-        relative_position_tensor,
-        height: int,
-        width: int,
-        height_lookup: torch.Tensor,
-        width_lookup: torch.Tensor,
-) -> torch.Tensor:
-    """Reindex 2d relative position bias with 2 independent einsum lookups.
-    Args:
-        relative_position_tensor: tensor of shape
-            [..., vocab_height, vocab_width, ...].
-        height: height to reindex to.
-        width: width to reindex to.
-        height_lookup: one-hot height lookup
-        width_lookup: one-hot width lookup
-    Returns:
-        reindexed_tensor: a Tensor of shape
-            [..., height * width, height * width, ...]
-    """
-    reindexed_tensor = torch.einsum('nhw,ixh->nixw', relative_position_tensor, height_lookup)
-    reindexed_tensor = torch.einsum('nixw,jyw->nijxy', reindexed_tensor, width_lookup)
-    area = height * width
-    return reindexed_tensor.reshape(relative_position_tensor.shape[0], area, area)
-
-
-class RelPosBiasTf(nn.Module):
-
-    def __init__(self, window_size, num_heads, prefix_tokens=0):
-        super().__init__()
-        assert prefix_tokens <= 1
-        self.window_size = window_size
-        self.window_area = window_size[0] * window_size[1]
-        self.num_heads = num_heads
-
-        vocab_height = 2 * window_size[0] - 1
-        vocab_width = 2 * window_size[1] - 1
-        self.bias_shape = (self.num_heads, vocab_height, vocab_width)
-        self.relative_position_bias_table = nn.Parameter(torch.zeros(self.bias_shape))
-        self.register_buffer('height_lookup', generate_lookup_tensor(window_size[0]), persistent=False)
-        self.register_buffer('width_lookup', generate_lookup_tensor(window_size[1]), persistent=False)
-        self.init_weights()
-
-    def init_weights(self):
-        nn.init.normal_(self.relative_position_bias_table, std=.02)
-
-    def get_bias(self) -> torch.Tensor:
-        # FIXME change to not use one-hot/einsum?
-        return reindex_2d_einsum_lookup(
-            self.relative_position_bias_table,
-            self.window_size[0],
-            self.window_size[1],
-            self.height_lookup,
-            self.width_lookup
-        )
-
-    def forward(self, attn, shared_rel_pos: Optional[torch.Tensor] = None):
-        return attn + self.get_bias()
-
-
 class NormMlpHead(nn.Module):
 
     def __init__(
@@ -1204,6 +1116,26 @@ class NormMlpHead(nn.Module):
         return x
 
 
+def _overlay_kwargs(cfg: MaxxVitCfg, **kwargs):
+    transformer_kwargs = {}
+    conv_kwargs = {}
+    base_kwargs = {}
+    for k, v in kwargs.items():
+        if k.startswith('transformer_'):
+            transformer_kwargs[k.replace('transformer_', '')] = v
+        elif k.startswith('conv_'):
+            conv_kwargs[k.replace('conv_', '')] = v
+        else:
+            base_kwargs[k] = v
+    cfg = replace(
+        cfg,
+        transformer_cfg=replace(cfg.transformer_cfg, **transformer_kwargs),
+        conv_cfg=replace(cfg.conv_cfg, **conv_kwargs),
+        **base_kwargs
+    )
+    return cfg
+
+
 class MaxxVit(nn.Module):
     """ CoaTNet + MaxVit base model.
 
@@ -1218,10 +1150,13 @@ class MaxxVit(nn.Module):
             num_classes: int = 1000,
             global_pool: str = 'avg',
             drop_rate: float = 0.,
-            drop_path_rate: float = 0.
+            drop_path_rate: float = 0.,
+            **kwargs,
     ):
         super().__init__()
         img_size = to_2tuple(img_size)
+        if kwargs:
+            cfg = _overlay_kwargs(cfg, **kwargs)
         transformer_cfg = cfg_window_size(cfg.transformer_cfg, img_size)
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -1745,6 +1680,26 @@ model_cfgs = dict(
             init_values=1e-6,
         ),
     ),
+    maxvit_rmlp_base_rw_224=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 6, 14, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        head_hidden_size=768,
+        **_rw_max_cfg(
+            rel_pos_type='mlp',
+        ),
+    ),
+    maxvit_rmlp_base_rw_384=MaxxVitCfg(
+        embed_dim=(96, 192, 384, 768),
+        depths=(2, 6, 14, 2),
+        block_type=('M',) * 4,
+        stem_width=(32, 64),
+        head_hidden_size=768,
+        **_rw_max_cfg(
+            rel_pos_type='mlp',
+        ),
+    ),
 
     maxvit_tiny_pm_256=MaxxVitCfg(
         embed_dim=(64, 128, 256, 512),
@@ -1927,6 +1882,12 @@ default_cfgs = generate_default_cfgs({
     'maxvit_rmlp_small_rw_256': _cfg(
         url='',
         input_size=(3, 256, 256), pool_size=(8, 8)),
+    'maxvit_rmlp_base_rw_224': _cfg(
+        url='',
+    ),
+    'maxvit_rmlp_base_rw_384': _cfg(
+        url='',
+        input_size=(3, 384, 384), pool_size=(12, 12)),
 
     'maxvit_tiny_pm_256': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8)),
 
@@ -2154,6 +2115,16 @@ def maxvit_rmlp_small_rw_224(pretrained=False, **kwargs):
 @register_model
 def maxvit_rmlp_small_rw_256(pretrained=False, **kwargs):
     return _create_maxxvit('maxvit_rmlp_small_rw_256', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxvit_rmlp_base_rw_224(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_base_rw_224', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def maxvit_rmlp_base_rw_384(pretrained=False, **kwargs):
+    return _create_maxxvit('maxvit_rmlp_base_rw_384', pretrained=pretrained, **kwargs)
 
 
 @register_model

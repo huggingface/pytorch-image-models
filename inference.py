@@ -20,7 +20,7 @@ import torch
 from timm.data import create_dataset, create_loader, resolve_data_config
 from timm.layers import apply_test_time_pool
 from timm.models import create_model
-from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser
+from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
 
 try:
     from apex import amp
@@ -72,6 +72,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
+parser.add_argument('--in-chans', type=int, default=None, metavar='N',
+                    help='Image input channels (default: None => 3)')
 parser.add_argument('--input-size', default=None, nargs=3, type=int,
                     metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 parser.add_argument('--use-train-size', action='store_true', default=False,
@@ -110,6 +112,7 @@ parser.add_argument('--amp-dtype', default='float16', type=str,
                     help='lower precision AMP dtype (default: float16)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
 
 scripting_group = parser.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', default=False, action='store_true',
@@ -170,12 +173,19 @@ def main():
         set_jit_fuser(args.fuser)
 
     # create model
+    in_chans = 3
+    if args.in_chans is not None:
+        in_chans = args.in_chans
+    elif args.input_size is not None:
+        in_chans = args.input_size[0]
+
     model = create_model(
         args.model,
         num_classes=args.num_classes,
-        in_chans=3,
+        in_chans=in_chans,
         pretrained=args.pretrained,
         checkpoint_path=args.checkpoint,
+        **args.model_kwargs,
     )
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'

@@ -1,6 +1,7 @@
 from .activations import *
 from .adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
+from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
 from .blur_pool import BlurPool2d
 from .classifier import ClassifierHead, create_classifier
 from .cond_conv2d import CondConv2d, get_condconv_initializer
@@ -25,13 +26,18 @@ from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible,
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
-from .mlp import Mlp, GluMlp, GatedMlp, ConvMlp
+from .mlp import Mlp, GluMlp, GatedMlp, ConvMlp, GlobalResponseNormMlp
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
 from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d
-from .norm_act import BatchNormAct2d, GroupNormAct, convert_sync_batchnorm
+from .norm_act import BatchNormAct2d, GroupNormAct, GroupNorm1Act, LayerNormAct, LayerNormAct2d,\
+    SyncBatchNormAct, convert_sync_batchnorm, FrozenBatchNormAct2d, freeze_batch_norm_2d, unfreeze_batch_norm_2d
 from .padding import get_padding, get_same_padding, pad_same
-from .patch_embed import PatchEmbed
+from .patch_embed import PatchEmbed, resample_patch_embed
 from .pool2d_same import AvgPool2dSame, create_pool2d
+from .pos_embed import resample_abs_pos_embed
+from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_position_index, gen_relative_log_coords
+from .pos_embed_sincos import build_sincos2d_pos_embed, build_fourier_pos_embed, build_rotary_pos_embed, \
+    FourierEmbed, RotaryEmbedding
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvNormAct

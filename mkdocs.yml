@@ -44,3 +44,11 @@ markdown_extensions:
 plugins:
   - search
   - awesome-pages
+  - redirects:
+      redirect_maps:
+        'index.md': 'https://huggingface.co/docs/timm/index'
+        'models.md': 'https://huggingface.co/docs/timm/models'
+        'results.md': 'https://huggingface.co/docs/timm/results'
+        'scripts.md': 'https://huggingface.co/docs/timm/training_script'
+        'training_hparam_examples.md': 'https://huggingface.co/docs/timm/training_script#training-examples'
+        'feature_extraction.md': 'https://huggingface.co/docs/timm/feature_extraction'

@@ -1,0 +1,74 @@
+# Installation
+
+Before you start, you'll need to setup your environment and install the appropriate packages. `timm` is tested on **Python 3+**.
+
+## Virtual Environment
+
+You should install `timm` in a [virtual environment](https://docs.python.org/3/library/venv.html) to keep things tidy and avoid dependency conflicts.
+
+1. Create and navigate to your project directory:
+
+   ```bash
+   mkdir ~/my-project
+   cd ~/my-project
+   ```
+
+2. Start a virtual environment inside your directory:
+
+   ```bash
+   python -m venv .env
+   ```
+
+3. Activate and deactivate the virtual environment with the following commands:
+
+   ```bash
+   # Activate the virtual environment
+   source .env/bin/activate
+   
+   # Deactivate the virtual environment
+   source .env/bin/deactivate
+   ```
+`
+Once you've created your virtual environment, you can install `timm` in it.
+
+## Using pip
+
+The most straightforward way to install `timm` is with pip:
+
+```bash
+pip install timm
+```
+
+Alternatively, you can install `timm` from GitHub directly to get the latest, bleeding-edge version:
+
+```bash
+pip install git+https://github.com/rwightman/pytorch-image-models.git
+```
+
+Run the following command to check if `timm` has been properly installed:
+
+```bash
+python -c "from timm import list_models; print(list_models(pretrained=True)[:5])"
+```
+
+This command lists the first five pretrained models available in `timm` (which are sorted alphebetically). You should see the following output:
+
+```python
+['adv_inception_v3', 'bat_resnext26ts', 'beit_base_patch16_224', 'beit_base_patch16_224_in22k', 'beit_base_patch16_384']
+```
+
+## From Source
+
+Building `timm` from source lets you make changes to the code base. To install from the source, clone the repository and install with the following commands:
+
+```bash
+git clone https://github.com/rwightman/pytorch-image-models.git
+cd timm
+pip install -e .
+```
+
+Again, you can check if `timm` was properly installed with the following command:
+
+```bash
+python -c "from timm import list_models; print(list_models(pretrained=True)[:5])"
+```

@@ -21,12 +21,36 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
-### 🤗 Survey: Feedback Appreciated 🤗
+* ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
+* Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
-For a few months now, `timm` has been part of the Hugging Face ecosystem. Yearly, we survey users of our tools to see what we could do better, what we need to continue doing, or what we need to stop doing. 
+### Jan 11, 2023
+* Update ConvNeXt ImageNet-12k pretrain series w/ two new fine-tuned weights (and pre FT `.in12k` tags)
+  * `convnext_nano.in12k_ft_in1k` - 82.3 @ 224, 82.9 @ 288  (previously released)
+  * `convnext_tiny.in12k_ft_in1k` - 84.2 @ 224, 84.5 @ 288
+  * `convnext_small.in12k_ft_in1k` - 85.2 @ 224, 85.3 @ 288
 
-If you have a couple of minutes and want to participate in shaping the future of the ecosystem, please share your thoughts:
-[**hf.co/oss-survey**](https://hf.co/oss-survey) 🙏
+### Jan 6, 2023
+* Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
+  * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
+  * `train.py /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
+* Cleanup some popular models to better support arg passthrough / merge with model configs, more to go. 
+
+### Jan 5, 2023
+* ConvNeXt-V2 models and weights added to existing `convnext.py`
+  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](http://arxiv.org/abs/2301.00808)
+  * Reference impl: https://github.com/facebookresearch/ConvNeXt-V2 (NOTE: weights currently CC-BY-NC)
+
+### Dec 23, 2022 🎄☃
+* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
+  * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
+* Many more models updated to multi-weight and downloadable via HF hub now (convnext, efficientnet, mobilenet, vision_transformer*, beit)
+* More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
+* More ImageNet-12k (subset of 22k) pretrain models popping up:
+  * `efficientnet_b5.in12k_ft_in1k` - 85.9 @ 448x448
+  * `vit_medium_patch16_gap_384.in12k_ft_in1k` - 85.5 @ 384x384
+  * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 84.5 @ 256x256
+  * `convnext_nano.in12k_ft_in1k` - 82.9 @ 288x288
 
 ### Dec 8, 2022
 * Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
@@ -325,46 +349,6 @@ More models, more fixes
 * TinyNet models added by [rsomani95](https://github.com/rsomani95)
 * LCNet added via MobileNetV3 architecture
 
-### Nov 22, 2021
-* A number of updated weights anew new model defs
-  * `eca_halonext26ts` - 79.5 @ 256
-  * `resnet50_gn` (new) - 80.1 @ 224, 81.3 @ 288
-  * `resnet50` - 80.7 @ 224, 80.9 @ 288 (trained at 176, not replacing current a1 weights as default since these don't scale as well to higher res, [weights](https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1h2_176-001a1197.pth))
-  * `resnext50_32x4d` - 81.1 @ 224, 82.0 @ 288
-  * `sebotnet33ts_256` (new) - 81.2 @ 224
-  * `lamhalobotnet50ts_256` - 81.5 @ 256
-  * `halonet50ts` - 81.7 @ 256
-  * `halo2botnet50ts_256` - 82.0 @ 256
-  * `resnet101` - 82.0 @ 224, 82.8 @ 288
-  * `resnetv2_101` (new) - 82.1 @ 224, 83.0 @ 288
-  * `resnet152` - 82.8 @ 224, 83.5 @ 288
-  * `regnetz_d8` (new) - 83.5 @ 256, 84.0 @ 320
-  * `regnetz_e8` (new) - 84.5 @ 256, 85.0 @ 320
-* `vit_base_patch8_224` (85.8 top-1) & `in21k` variant weights added thanks [Martins Bruveris](https://github.com/martinsbruveris)
-* Groundwork in for FX feature extraction thanks to [Alexander Soare](https://github.com/alexander-soare)
-  * models updated for tracing compatibility (almost full support with some distlled transformer exceptions)
-
-### Oct 19, 2021
-* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used. Model weights and some more details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-rsb-weights)
-* BCE loss and Repeated Augmentation support for RSB paper
-* 4 series of ResNet based attention model experiments being added (implemented across byobnet.py/byoanet.py). These include all sorts of attention, from channel attn like SE, ECA to 2D QKV self-attention layers such as Halo, Bottlneck, Lambda. Details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
-* Working implementations of the following 2D self-attention modules (likely to be differences from paper or eventual official impl):
-  * Halo (https://arxiv.org/abs/2103.12731)
-  * Bottleneck Transformer (https://arxiv.org/abs/2101.11605)
-  * LambdaNetworks (https://arxiv.org/abs/2102.08602)
-* A RegNetZ series of models with some attention experiments (being added to). These do not follow the paper (https://arxiv.org/abs/2103.06877) in any way other than block architecture, details of official models are not available. See more here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
-* ConvMixer (https://openreview.net/forum?id=TVHS5Y4dNvM), CrossVit (https://arxiv.org/abs/2103.14899), and BeiT (https://arxiv.org/abs/2106.08254) architectures + weights added
-* freeze/unfreeze helpers by [Alexander Soare](https://github.com/alexander-soare)
-
-### Aug 18, 2021
-* Optimizer bonanza!
-  * Add LAMB and LARS optimizers, incl trust ratio clipping options. Tweaked to work properly in PyTorch XLA (tested on TPUs w/ `timm bits` [branch](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/timm/bits))
-  * Add MADGRAD from FB research w/ a few tweaks (decoupled decay option, step handling that works with PyTorch XLA)
-  * Some cleanup on all optimizers and factory. No more `.data`, a bit more consistency, unit tests for all!
-  * SGDP and AdamP still won't work with PyTorch XLA but others should (have yet to test Adabelief, Adafactor, Adahessian myself).
-* EfficientNet-V2 XL TF ported weights added, but they don't validate well in PyTorch (L is better). The pre-processing for the V2 TF training is a bit diff and the fine-tuned 21k -> 1k weights are very sensitive and less robust than the 1k weights.
-* Added PyTorch trained EfficientNet-V2 'Tiny' w/ GlobalContext attn weights. Only .1-.2 top-1 better than the SE so more of a curiosity for those interested.
-
 ## Introduction
 
 Py**T**orch **Im**age **M**odels (`timm`) is a collection of image models, layers, utilities, optimizers, schedulers, data-loaders / augmentations, and reference training / validation scripts that aim to pull together a wide variety of SOTA models with ability to reproduce ImageNet training results.
@@ -385,6 +369,7 @@ A full version of the list below with source links can be found in the [document
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
 * CoAtNet (Convolution and Attention) - https://arxiv.org/abs/2106.04803
 * ConvNeXt - https://arxiv.org/abs/2201.03545
+* ConvNeXt-V2 - http://arxiv.org/abs/2301.00808
 * ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT - https://arxiv.org/abs/2012.12877
@@ -407,6 +392,7 @@ A full version of the list below with source links can be found in the [document
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
 * EVA - https://arxiv.org/abs/2211.07636
+* FlexiViT - https://arxiv.org/abs/2212.08013
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
 * GhostNet - https://arxiv.org/abs/1911.11907
 * gMLP - https://arxiv.org/abs/2105.08050

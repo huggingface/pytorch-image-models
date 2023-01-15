@@ -741,7 +741,6 @@ class RandAugment:
         self.ops = ops
         self.num_layers = num_layers
         self.choice_weights = choice_weights
-        print(self.ops, self.choice_weights)
 
     def __call__(self, img):
         # no replacement when using weighted choice

@@ -14,7 +14,7 @@ Weights from original impl have been modified
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import Optional, Union, Callable
 
@@ -237,7 +237,15 @@ def downsample_avg(in_chs, out_chs, kernel_size=1, stride=1, dilation=1, norm_la
 
 
 def create_shortcut(
-        downsample_type, in_chs, out_chs, kernel_size, stride, dilation=(1, 1), norm_layer=None, preact=False):
+        downsample_type,
+        in_chs,
+        out_chs,
+        kernel_size,
+        stride,
+        dilation=(1, 1),
+        norm_layer=None,
+        preact=False,
+):
     assert downsample_type in ('avg', 'conv1x1', '', None)
     if in_chs != out_chs or stride != 1 or dilation[0] != dilation[1]:
         dargs = dict(stride=stride, dilation=dilation[0], norm_layer=norm_layer, preact=preact)
@@ -259,9 +267,21 @@ class Bottleneck(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=(1, 1), bottle_ratio=1, group_size=1, se_ratio=0.25,
-            downsample='conv1x1', linear_out=False, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1,
+            group_size=1,
+            se_ratio=0.25,
+            downsample='conv1x1',
+            linear_out=False,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(Bottleneck, self).__init__()
         act_layer = get_act_layer(act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
@@ -307,9 +327,21 @@ class PreBottleneck(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=(1, 1), bottle_ratio=1, group_size=1, se_ratio=0.25,
-            downsample='conv1x1', linear_out=False, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d,
-            drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1,
+            group_size=1,
+            se_ratio=0.25,
+            downsample='conv1x1',
+            linear_out=False,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(PreBottleneck, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
@@ -353,8 +385,16 @@ class RegStage(nn.Module):
     """Stage (sequence of blocks w/ the same output shape)."""
 
     def __init__(
-            self, depth, in_chs, out_chs, stride, dilation,
-            drop_path_rates=None, block_fn=Bottleneck, **block_kwargs):
+            self,
+            depth,
+            in_chs,
+            out_chs,
+            stride,
+            dilation,
+            drop_path_rates=None,
+            block_fn=Bottleneck,
+            **block_kwargs,
+    ):
         super(RegStage, self).__init__()
         self.grad_checkpointing = False
 
@@ -367,8 +407,13 @@ class RegStage(nn.Module):
             name = "b{}".format(i + 1)
             self.add_module(
                 name, block_fn(
-                    block_in_chs, out_chs, stride=block_stride, dilation=block_dilation,
-                    drop_path_rate=dpr, **block_kwargs)
+                    block_in_chs,
+                    out_chs,
+                    stride=block_stride,
+                    dilation=block_dilation,
+                    drop_path_rate=dpr,
+                    **block_kwargs,
+                )
             )
             first_dilation = dilation
 
@@ -389,12 +434,35 @@ class RegNet(nn.Module):
     """
 
     def __init__(
-            self, cfg: RegNetCfg, in_chans=3, num_classes=1000, output_stride=32, global_pool='avg',
-            drop_rate=0., drop_path_rate=0., zero_init_last=True):
+            self,
+            cfg: RegNetCfg,
+            in_chans=3,
+            num_classes=1000,
+            output_stride=32,
+            global_pool='avg',
+            drop_rate=0.,
+            drop_path_rate=0.,
+            zero_init_last=True,
+            **kwargs,
+    ):
+        """
+
+        Args:
+            cfg (RegNetCfg): Model architecture configuration
+            in_chans (int): Number of input channels (default: 3)
+            num_classes (int): Number of classifier classes (default: 1000)
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            global_pool (str): Global pooling type (default: 'avg')
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            zero_init_last (bool): Zero-init last weight of residual path
+            kwargs (dict): Extra kwargs overlayed onto cfg
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert output_stride in (8, 16, 32)
+        cfg = replace(cfg, **kwargs)  # update cfg with extra passed kwargs
 
         # Construct the stem
         stem_width = cfg.stem_width
@@ -461,8 +529,12 @@ class RegNet(nn.Module):
             dict(zip(arg_names, params)) for params in
             zip(stage_widths, stage_strides, stage_dilations, stage_depths, stage_br, stage_gs, stage_dpr)]
         common_args = dict(
-            downsample=cfg.downsample, se_ratio=cfg.se_ratio, linear_out=cfg.linear_out,
-            act_layer=cfg.act_layer, norm_layer=cfg.norm_layer)
+            downsample=cfg.downsample,
+            se_ratio=cfg.se_ratio,
+            linear_out=cfg.linear_out,
+            act_layer=cfg.act_layer,
+            norm_layer=cfg.norm_layer,
+        )
         return per_stage_args, common_args
 
     @torch.jit.ignore
@@ -518,7 +590,6 @@ def _init_weights(module, name='', zero_init_last=False):
 
 
 def _filter_fn(state_dict):
-    """ convert patch embedding weight from manual patchify + linear proj to conv"""
     if 'classy_state_dict' in state_dict:
         import re
         state_dict = state_dict['classy_state_dict']['base_model']['model']

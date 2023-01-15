@@ -218,7 +218,10 @@ def _rep_vgg_bcfg(d=(4, 6, 16, 1), wf=(1., 1., 1., 1.), groups=0):
 
 
 def interleave_blocks(
-        types: Tuple[str, str], d, every: Union[int, List[int]] = 1, first: bool = False, **kwargs
+        types: Tuple[str, str], d,
+        every: Union[int, List[int]] = 1,
+        first: bool = False,
+        **kwargs,
 ) -> Tuple[ByoBlockCfg]:
     """ interleave 2 block types in stack
     """
@@ -962,9 +965,21 @@ class BasicBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), group_size=None, bottle_ratio=1.0,
-            downsample='avg', attn_last=True, linear_out=False, layers: LayerFn = None, drop_block=None,
-            drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=(1, 1),
+            group_size=None,
+            bottle_ratio=1.0,
+            downsample='avg',
+            attn_last=True,
+            linear_out=False,
+            layers: LayerFn = None,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(BasicBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -983,7 +998,7 @@ class BasicBlock(nn.Module):
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
-        if zero_init_last and self.shortcut is not None:
+        if zero_init_last and self.shortcut is not None and getattr(self.conv2_kxk.bn, 'weight', None) is not None:
             nn.init.zeros_(self.conv2_kxk.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -1005,9 +1020,23 @@ class BottleneckBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
-            downsample='avg', attn_last=False, linear_out=False, extra_conv=False, bottle_in=False,
-            layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1.,
+            group_size=None,
+            downsample='avg',
+            attn_last=False,
+            linear_out=False,
+            extra_conv=False,
+            bottle_in=False,
+            layers: LayerFn = None,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(BottleneckBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
@@ -1031,7 +1060,7 @@ class BottleneckBlock(nn.Module):
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
-        if zero_init_last and self.shortcut is not None:
+        if zero_init_last and self.shortcut is not None and getattr(self.conv3_1x1.bn, 'weight', None) is not None:
             nn.init.zeros_(self.conv3_1x1.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -1063,9 +1092,21 @@ class DarkBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-            downsample='avg', attn_last=True, linear_out=False, layers: LayerFn = None, drop_block=None,
-            drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1.0,
+            group_size=None,
+            downsample='avg',
+            attn_last=True,
+            linear_out=False,
+            layers: LayerFn = None,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(DarkBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -1085,7 +1126,7 @@ class DarkBlock(nn.Module):
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
-        if zero_init_last and self.shortcut is not None:
+        if zero_init_last and self.shortcut is not None and getattr(self.conv2_kxk.bn, 'weight', None) is not None:
             nn.init.zeros_(self.conv2_kxk.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -1114,9 +1155,21 @@ class EdgeBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-            downsample='avg', attn_last=False, linear_out=False, layers: LayerFn = None,
-            drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1.0,
+            group_size=None,
+            downsample='avg',
+            attn_last=False,
+            linear_out=False,
+            layers: LayerFn = None,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(EdgeBlock, self).__init__()
         layers = layers or LayerFn()
         mid_chs = make_divisible(out_chs * bottle_ratio)
@@ -1135,7 +1188,7 @@ class EdgeBlock(nn.Module):
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
-        if zero_init_last and self.shortcut is not None:
+        if zero_init_last and self.shortcut is not None and getattr(self.conv2_1x1.bn, 'weight', None) is not None:
             nn.init.zeros_(self.conv2_1x1.bn.weight)
         for attn in (self.attn, self.attn_last):
             if hasattr(attn, 'reset_parameters'):
@@ -1162,8 +1215,19 @@ class RepVggBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1.0, group_size=None,
-            downsample='', layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1.0,
+            group_size=None,
+            downsample='',
+            layers: LayerFn = None,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(RepVggBlock, self).__init__()
         layers = layers or LayerFn()
         groups = num_groups(group_size, in_chs)
@@ -1204,9 +1268,24 @@ class SelfAttnBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=(1, 1), bottle_ratio=1., group_size=None,
-            downsample='avg', extra_conv=False, linear_out=False, bottle_in=False, post_attn_na=True,
-            feat_size=None, layers: LayerFn = None, drop_block=None, drop_path_rate=0.):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=(1, 1),
+            bottle_ratio=1.,
+            group_size=None,
+            downsample='avg',
+            extra_conv=False,
+            linear_out=False,
+            bottle_in=False,
+            post_attn_na=True,
+            feat_size=None,
+            layers: LayerFn = None,
+            drop_block=None,
+            drop_path_rate=0.,
+    ):
         super(SelfAttnBlock, self).__init__()
         assert layers is not None
         mid_chs = make_divisible((in_chs if bottle_in else out_chs) * bottle_ratio)
@@ -1233,7 +1312,7 @@ class SelfAttnBlock(nn.Module):
         self.act = nn.Identity() if linear_out else layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
-        if zero_init_last and self.shortcut is not None:
+        if zero_init_last and self.shortcut is not None and getattr(self.conv3_1x1.bn, 'weight', None) is not None:
             nn.init.zeros_(self.conv3_1x1.bn.weight)
         if hasattr(self.self_attn, 'reset_parameters'):
             self.self_attn.reset_parameters()
@@ -1274,8 +1353,17 @@ def create_block(block: Union[str, nn.Module], **kwargs):
 class Stem(nn.Sequential):
 
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=4, pool='maxpool',
-            num_rep=3, num_act=None, chs_decay=0.5, layers: LayerFn = None):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=4,
+            pool='maxpool',
+            num_rep=3,
+            num_act=None,
+            chs_decay=0.5,
+            layers: LayerFn = None,
+    ):
         super().__init__()
         assert stride in (2, 4)
         layers = layers or LayerFn()
@@ -1319,7 +1407,14 @@ class Stem(nn.Sequential):
         assert curr_stride == stride
 
 
-def create_byob_stem(in_chs, out_chs, stem_type='', pool_type='', feat_prefix='stem', layers: LayerFn = None):
+def create_byob_stem(
+        in_chs,
+        out_chs,
+        stem_type='',
+        pool_type='',
+        feat_prefix='stem',
+        layers: LayerFn = None,
+):
     layers = layers or LayerFn()
     assert stem_type in ('', 'quad', 'quad2', 'tiered', 'deep', 'rep', '7x7', '3x3')
     if 'quad' in stem_type:
@@ -1407,10 +1502,14 @@ def update_block_kwargs(block_kwargs: Dict[str, Any], block_cfg: ByoBlockCfg, mo
 
 
 def create_byob_stages(
-        cfg: ByoModelCfg, drop_path_rate: float, output_stride: int, stem_feat: Dict[str, Any],
+        cfg: ByoModelCfg,
+        drop_path_rate: float,
+        output_stride: int,
+        stem_feat: Dict[str, Any],
         feat_size: Optional[int] = None,
         layers: Optional[LayerFn] = None,
-        block_kwargs_fn: Optional[Callable] = update_block_kwargs):
+        block_kwargs_fn: Optional[Callable] = update_block_kwargs,
+):
 
     layers = layers or LayerFn()
     feature_info = []
@@ -1485,12 +1584,38 @@ class ByobNet(nn.Module):
     Current assumption is that both stem and blocks are in conv-bn-act order (w/ block ending in act).
     """
     def __init__(
-            self, cfg: ByoModelCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-            zero_init_last=True, img_size=None, drop_rate=0., drop_path_rate=0.):
+            self,
+            cfg: ByoModelCfg,
+            num_classes=1000,
+            in_chans=3,
+            global_pool='avg',
+            output_stride=32,
+            img_size=None,
+            drop_rate=0.,
+            drop_path_rate=0.,
+            zero_init_last=True,
+            **kwargs,
+    ):
+        """
+
+        Args:
+            cfg (ByoModelCfg): Model architecture configuration
+            num_classes (int): Number of classifier classes (default: 1000)
+            in_chans (int): Number of input channels (default: 3)
+            global_pool (str): Global pooling type (default: 'avg')
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            img_size (Union[int, Tuple[int]): Image size for fixed image size models (i.e. self-attn)
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            zero_init_last (bool): Zero-init last weight of residual path
+            kwargs (dict): Extra kwargs overlayed onto cfg
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
+
+        cfg = replace(cfg, **kwargs)  # overlay kwargs onto cfg
         layers = get_layer_fns(cfg)
         if cfg.fixed_input_size:
             assert img_size is not None, 'img_size argument is required for fixed input size model'

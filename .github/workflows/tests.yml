@@ -40,9 +40,10 @@ jobs:
     - name: Install torch on ubuntu
       if: startsWith(matrix.os, 'ubuntu')
       run: |
-        pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+        sudo sed -i 's/azure\.//' /etc/apt/sources.list
         sudo apt update
         sudo apt install -y google-perftools
+        pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - name: Install requirements
       run: |
         pip install -r requirements.txt

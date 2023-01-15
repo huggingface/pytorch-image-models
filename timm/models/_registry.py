@@ -7,6 +7,7 @@ import re
 import sys
 from collections import defaultdict, deque
 from copy import deepcopy
+from dataclasses import replace
 from typing import List, Optional, Union, Tuple
 
 from ._pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
@@ -20,7 +21,7 @@ _model_to_module = {}  # mapping of model names to module names
 _model_entrypoints = {}  # mapping of model names to architecture entrypoint fns
 _model_has_pretrained = set()  # set of model names that have pretrained weight url present
 _model_default_cfgs = dict()  # central repo for model arch -> default cfg objects
-_model_pretrained_cfgs = dict()  # central repo for model arch + tag -> pretrained cfgs
+_model_pretrained_cfgs = dict()  # central repo for model arch.tag -> pretrained cfgs
 _model_with_tags = defaultdict(list)  # shortcut to map each model arch to all model + tag names
 
 
@@ -48,24 +49,31 @@ def register_model(fn):
     if hasattr(mod, 'default_cfgs') and model_name in mod.default_cfgs:
         # this will catch all models that have entrypoint matching cfg key, but miss any aliasing
         # entrypoints or non-matching combos
-        cfg = mod.default_cfgs[model_name]
-        if not isinstance(cfg, DefaultCfg):
+        default_cfg = mod.default_cfgs[model_name]
+        if not isinstance(default_cfg, DefaultCfg):
             # new style default cfg dataclass w/ multiple entries per model-arch
-            assert isinstance(cfg, dict)
+            assert isinstance(default_cfg, dict)
             # old style cfg dict per model-arch
-            cfg = PretrainedCfg(**cfg)
-            cfg = DefaultCfg(tags=deque(['']), cfgs={'': cfg})
+            pretrained_cfg = PretrainedCfg(**default_cfg)
+            default_cfg = DefaultCfg(tags=deque(['']), cfgs={'': pretrained_cfg})
 
-        for tag_idx, tag in enumerate(cfg.tags):
+        for tag_idx, tag in enumerate(default_cfg.tags):
             is_default = tag_idx == 0
-            pretrained_cfg = cfg.cfgs[tag]
+            pretrained_cfg = default_cfg.cfgs[tag]
+            model_name_tag = '.'.join([model_name, tag]) if tag else model_name
+            replace_items = dict(architecture=model_name, tag=tag if tag else None)
+            if pretrained_cfg.hf_hub_id and pretrained_cfg.hf_hub_id == 'timm/':
+                # auto-complete hub name w/ architecture.tag
+                replace_items['hf_hub_id'] = pretrained_cfg.hf_hub_id + model_name_tag
+            pretrained_cfg = replace(pretrained_cfg, **replace_items)
+
             if is_default:
                 _model_pretrained_cfgs[model_name] = pretrained_cfg
                 if pretrained_cfg.has_weights:
                     # add tagless entry if it's default and has weights
                     _model_has_pretrained.add(model_name)
+
             if tag:
-                model_name_tag = '.'.join([model_name, tag])
                 _model_pretrained_cfgs[model_name_tag] = pretrained_cfg
                 if pretrained_cfg.has_weights:
                     # add model w/ tag if tag is valid
@@ -74,7 +82,7 @@ def register_model(fn):
             else:
                 _model_with_tags[model_name].append(model_name)  # has empty tag (to slowly remove these instances)
 
-        _model_default_cfgs[model_name] = cfg
+        _model_default_cfgs[model_name] = default_cfg
 
     return fn
 
@@ -198,15 +206,21 @@ def is_model_pretrained(model_name):
     return model_name in _model_has_pretrained
 
 
-def get_pretrained_cfg(model_name):
+def get_pretrained_cfg(model_name, allow_unregistered=True):
     if model_name in _model_pretrained_cfgs:
         return deepcopy(_model_pretrained_cfgs[model_name])
-    raise RuntimeError(f'No pretrained config exists for model {model_name}.')
+    arch_name, tag = split_model_name_tag(model_name)
+    if arch_name in _model_default_cfgs:
+        # if model arch exists, but the tag is wrong, error out
+        raise RuntimeError(f'Invalid pretrained tag ({tag}) for {arch_name}.')
+    if allow_unregistered:
+        # if model arch doesn't exist, it has no pretrained_cfg registered, allow a default to be created
+        return None
+    raise RuntimeError(f'Model architecture ({arch_name}) has no pretrained cfg registered.')
 
 
 def get_pretrained_cfg_value(model_name, cfg_key):
     """ Get a specific model default_cfg value by key. None if key doesn't exist.
     """
-    if model_name in _model_pretrained_cfgs:
-        return getattr(_model_pretrained_cfgs[model_name], cfg_key, None)
-    raise RuntimeError(f'No pretrained config exist for model {model_name}.')
+    cfg = get_pretrained_cfg(model_name, allow_unregistered=False)
+    return getattr(cfg, cfg_key, None)

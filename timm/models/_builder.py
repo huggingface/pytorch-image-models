@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import os
 from copy import deepcopy
 from typing import Optional, Dict, Callable, Any, Tuple
 
@@ -9,7 +10,7 @@ from torch.hub import load_state_dict_from_url
 from timm.models._features import FeatureListNet, FeatureHookNet
 from timm.models._features_fx import FeatureGraphNet
 from timm.models._helpers import load_state_dict
-from timm.models._hub import has_hf_hub, download_cached_file, load_state_dict_from_hf
+from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf
 from timm.models._manipulate import adapt_input_conv
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
@@ -32,6 +33,7 @@ def _resolve_pretrained_source(pretrained_cfg):
     pretrained_url = pretrained_cfg.get('url', None)
     pretrained_file = pretrained_cfg.get('file', None)
     hf_hub_id = pretrained_cfg.get('hf_hub_id', None)
+
     # resolve where to load pretrained weights from
     load_from = ''
     pretrained_loc = ''
@@ -43,15 +45,20 @@ def _resolve_pretrained_source(pretrained_cfg):
     else:
         # default source == timm or unspecified
         if pretrained_file:
+            # file load override is the highest priority if set
             load_from = 'file'
             pretrained_loc = pretrained_file
-        elif pretrained_url:
-            load_from = 'url'
-            pretrained_loc = pretrained_url
-        elif hf_hub_id and has_hf_hub(necessary=True):
-            # hf-hub available as alternate weight source in default_cfg
-            load_from = 'hf-hub'
-            pretrained_loc = hf_hub_id
+        else:
+            # next, HF hub is prioritized unless a valid cached version of weights exists already
+            cached_url_valid = check_cached_file(pretrained_url) if pretrained_url else False
+            if hf_hub_id and has_hf_hub(necessary=True) and not cached_url_valid:
+                # hf-hub available as alternate weight source in default_cfg
+                load_from = 'hf-hub'
+                pretrained_loc = hf_hub_id
+            elif pretrained_url:
+                load_from = 'url'
+                pretrained_loc = pretrained_url
+
     if load_from == 'hf-hub' and pretrained_cfg.get('hf_hub_filename', None):
         # if a filename override is set, return tuple for location w/ (hub_id, filename)
         pretrained_loc = pretrained_loc, pretrained_cfg['hf_hub_filename']
@@ -105,7 +112,7 @@ def load_custom_pretrained(
         pretrained_loc = download_cached_file(
             pretrained_loc,
             check_hash=_CHECK_HASH,
-            progress=_DOWNLOAD_PROGRESS
+            progress=_DOWNLOAD_PROGRESS,
         )
 
     if load_fn is not None:
@@ -146,12 +153,21 @@ def load_pretrained(
         state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
         _logger.info(f'Loading pretrained weights from url ({pretrained_loc})')
-        state_dict = load_state_dict_from_url(
-            pretrained_loc,
-            map_location='cpu',
-            progress=_DOWNLOAD_PROGRESS,
-            check_hash=_CHECK_HASH,
-        )
+        if pretrained_cfg.get('custom_load', False):
+            pretrained_loc = download_cached_file(
+                pretrained_loc,
+                progress=_DOWNLOAD_PROGRESS,
+                check_hash=_CHECK_HASH,
+            )
+            model.load_pretrained(pretrained_loc)
+            return
+        else:
+            state_dict = load_state_dict_from_url(
+                pretrained_loc,
+                map_location='cpu',
+                progress=_DOWNLOAD_PROGRESS,
+                check_hash=_CHECK_HASH,
+            )
     elif load_from == 'hf-hub':
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         if isinstance(pretrained_loc, (list, tuple)):
@@ -364,20 +380,14 @@ def build_model_with_cfg(
     # For classification models, check class attr, then kwargs, then default to 1k, otherwise 0 for feats
     num_classes_pretrained = 0 if features else getattr(model, 'num_classes', kwargs.get('num_classes', 1000))
     if pretrained:
-        if pretrained_cfg.get('custom_load', False):
-            load_custom_pretrained(
-                model,
-                pretrained_cfg=pretrained_cfg,
-            )
-        else:
-            load_pretrained(
-                model,
-                pretrained_cfg=pretrained_cfg,
-                num_classes=num_classes_pretrained,
-                in_chans=kwargs.get('in_chans', 3),
-                filter_fn=pretrained_filter_fn,
-                strict=pretrained_strict,
-            )
+        load_pretrained(
+            model,
+            pretrained_cfg=pretrained_cfg,
+            num_classes=num_classes_pretrained,
+            in_chans=kwargs.get('in_chans', 3),
+            filter_fn=pretrained_filter_fn,
+            strict=pretrained_strict,
+        )
 
     # Wrap the model in a feature extraction module if enabled
     if features:
