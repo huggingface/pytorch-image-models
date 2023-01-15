@@ -43,7 +43,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import trunc_normal_, SelectAdaptivePool2d, DropPath, Mlp, GlobalResponseNormMlp, \
     LayerNorm2d, LayerNorm, create_conv2d, get_act_layer, make_divisible, to_ntuple
 from ._builder import build_model_with_cfg
@@ -705,22 +705,27 @@ default_cfgs = generate_default_cfgs({
     'convnext_base.clip_laion2b': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w-laion2B-s13B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 256, 256), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laion2b_augreg': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w-laion2B-s13B-b82K-augreg',
         hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 256, 256), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laiona': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w-laion_aesthetic-s13B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 256, 256), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laiona_320': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 320, 320), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laiona_augreg_320': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K-augreg',
         hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 320, 320), crop_pct=1.0, num_classes=640),
 })
 
