@@ -216,7 +216,7 @@ cfgs_v2 = generate_default_cfgs({
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_in21k.pth',
         num_classes=21841),
 })
-
+'''
 class Downsampling(nn.Module):
     """
     Downsampling implemented by a layer of convolution.
@@ -255,15 +255,15 @@ class Downsampling(nn.Module):
         self.post_norm = post_norm(out_channels) if post_norm else nn.Identity()
 
     def forward(self, x):
-        print(x.shape)
+        #print(x.shape)
         x = self.pre_norm(x)
-        print(x.shape)
+        #print(x.shape)
         x = self.conv(x)
-        print(x.shape)
+        #print(x.shape)
         x = self.post_norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        print(x.shape)
+        #print(x.shape)
         return x
-'''
+
 class Scale(nn.Module):
     """
     Scale vector by element multiplications.
@@ -363,7 +363,7 @@ class RandomMixing(nn.Module):
         x = x.reshape(B, H, W, C)
         return x
 
-'''
+
 class LayerNormGeneral(nn.Module):
     r""" General LayerNorm for different situations.
 
@@ -462,7 +462,7 @@ class LayerNormGeneral(nn.Module):
         if self.use_bias:
             x = x + self.bias
         return x
-
+'''
 class SepConv(nn.Module):
     r"""
     Inverted separable convolution from MobileNetV2: https://arxiv.org/abs/1801.04381.
