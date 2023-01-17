@@ -614,7 +614,6 @@ class MetaFormerBlock(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         x = x.view(B, H, W, C)
-        print(x.shape)
         x = self.res_scale1(x) + \
             self.layer_scale1(
                 self.drop_path1(
