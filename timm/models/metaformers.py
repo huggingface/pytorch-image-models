@@ -536,6 +536,7 @@ class Mlp(nn.Module):
         self.drop2 = nn.Dropout(drop_probs[1])
 
     def forward(self, x):
+        print(x)
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
