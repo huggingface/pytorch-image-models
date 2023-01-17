@@ -809,11 +809,12 @@ class MetaFormer(nn.Module):
         if pre_logits:
             return x
         
-        x = self.global_pool(x)
-        x = x.squeeze()
-        x = self.norm(x)
+        #x = self.global_pool(x)
+        #x = x.squeeze()
+        #x = self.norm(x)
         # (B, H, W, C) -> (B, C)
-        x = self.head(x)
+        #x = self.head(x)
+        x=self.head(self.norm(x.mean([1, 2])))
         return x
         
     def forward_features(self, x):
