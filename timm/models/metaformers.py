@@ -819,7 +819,10 @@ class MetaFormer(nn.Module):
         
     def forward_features(self, x):
         x = self.patch_embed(x)
-        x = self.stages(x)
+        #x = self.stages(x)
+        for i, stage in enumerate(self.stages):
+            x=stage(x)
+            print(x)
         
         
         return x 
