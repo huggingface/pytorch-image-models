@@ -822,7 +822,7 @@ class MetaFormer(nn.Module):
         #x = self.stages(x)
         for i, stage in enumerate(self.stages):
             x=stage(x)
-            print(x[0][0][0][0])
+            print(x)
         
         
         return x 
