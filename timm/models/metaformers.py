@@ -182,7 +182,7 @@ class RandomMixing(nn.Module):
         B, C, H, W = x.shape
         x = x.reshape(B, H*W, C)
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
-        x = x.reshape(B, H, W, C)
+        x = x.reshape(B, C, H, W)
         return x
 
 
