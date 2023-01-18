@@ -693,7 +693,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 1.0, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 
-        'classifier': 'head', 'first_conv': 'patch_embed.conv',
+        'classifier': 'head.fc', 'first_conv': 'patch_embed.conv',
         **kwargs
     }
 
