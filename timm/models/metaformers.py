@@ -179,7 +179,7 @@ class RandomMixing(nn.Module):
             data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
             requires_grad=False)
     def forward(self, x):
-        B, H, W, C = x.shape
+        B, C, H, W = x.shape
         x = x.reshape(B, H*W, C)
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.reshape(B, H, W, C)
