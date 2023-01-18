@@ -755,114 +755,129 @@ default_cfgs = generate_default_cfgs({
         classifier='head.fc.fc2'),
     'convformer_s18.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_s18.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'convformer_s18.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_s18.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
     'convformer_s36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36.pth',
+        classifier='head.fc.fc2'),
     'convformer_s36.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_s36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'convformer_s36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_s36.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
     'convformer_m36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36.pth',
+        classifier='head.fc.fc2'),
     'convformer_m36.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_m36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'convformer_m36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_m36.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
     'convformer_b36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36.pth',
+        classifier='head.fc.fc2'),
     'convformer_b36.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_b36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'convformer_b36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'convformer_b36.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
 
     'caformer_s18.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18.pth',
+        classifier='head.fc.fc2'),
     'caformer_s18.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_s18.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'caformer_s18.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_s18.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_s36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36.pth',
+        classifier='head.fc.fc2'),
     'caformer_s36.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_s36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'caformer_s36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_s36.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_m36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36.pth',
+        classifier='head.fc.fc2'),
     'caformer_m36.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_m36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'caformer_m36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_m36.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_b36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36.pth',
+        classifier='head.fc.fc2'),
     'caformer_b36.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_384.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_b36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_in21ft1k.pth'),
+        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_in21ft1k.pth',
+        classifier='head.fc.fc2'),
     'caformer_b36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_384_in21ft1k.pth',
-        input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384)),
     'caformer_b36.sail_in22k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_in21k.pth',
-        num_classes=21841),
+        classifier='head.fc.fc2', num_classes=21841),
 })
 
 
