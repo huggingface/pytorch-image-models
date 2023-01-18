@@ -175,12 +175,16 @@ class Attention(nn.Module):
 class RandomMixing(nn.Module):
     def __init__(self, num_tokens=196, **kwargs):
         super().__init__()
+        '''
         self.random_matrix = nn.parameter.Parameter(
             data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
             requires_grad=False)
+        '''
+        self.random_matrix = torch.softmax(torch.rand(num_tokens, num_tokens)
     def forward(self, x):
         B, H, W, C = x.shape
         x = x.reshape(B, H*W, C)
+        # FIXME change to work with arbitrary input sizes
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.reshape(B, H, W, C)
         return x
