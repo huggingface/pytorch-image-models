@@ -180,7 +180,6 @@ class RandomMixing(nn.Module):
             requires_grad=False)
     def forward(self, x):
         B, C, H, W = x.shape
-        print(H*W)
         x = x.reshape(B, H*W, C)
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.reshape(B, C, H, W)
