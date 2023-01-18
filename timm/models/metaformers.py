@@ -784,7 +784,7 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 384, 384)),
     'convformer_b36.sail_in22k_ft_in1k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_in21ft1k.pth'),
-    'convformer_b36_384.sail_in22k_ft_in1k_384': _cfg(
+    'convformer_b36.sail_in22k_ft_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_384_in21ft1k.pth',
         input_size=(3, 384, 384)),
     'convformer_b36.sail_in22k': _cfg(
