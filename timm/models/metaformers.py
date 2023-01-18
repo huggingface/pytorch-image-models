@@ -180,7 +180,7 @@ class RandomMixing(nn.Module):
             data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
             requires_grad=False)
         '''
-        self.random_matrix = torch.softmax(torch.rand(num_tokens, num_tokens))
+        self.random_matrix = torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1)
     def forward(self, x):
         B, H, W, C = x.shape
         x = x.reshape(B, H*W, C)
