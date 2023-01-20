@@ -453,7 +453,7 @@ class MetaFormerBlock(nn.Module):
                 self.drop_path2(
                     self.mlp(self.norm2(
                             x.permute(0, 3, 1, 2)
-                        ).permute(0, 2, 3, 1)
+                        )#.permute(0, 2, 3, 1)
                     )
                 )
             )
