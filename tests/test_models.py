@@ -27,8 +27,9 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'swinv2_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'eva_*', 'flexivit*'
+    'eva_*', 'flexivit*'
 ]
+#'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', '
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -53,7 +54,7 @@ MAX_JIT_SIZE = 320
 TARGET_FFEAT_SIZE = 96
 MAX_FFEAT_SIZE = 256
 TARGET_FWD_FX_SIZE = 128
-MAX_FWD_FX_SIZE = 224
+MAX_FWD_FX_SIZE = 256
 TARGET_BWD_FX_SIZE = 128
 MAX_BWD_FX_SIZE = 224
 
