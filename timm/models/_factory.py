@@ -46,27 +46,59 @@ def create_model(
         no_jit: Optional[bool] = None,
         **kwargs,
 ):
-    """Create a model
+    """Create a model.
 
     Lookup model's entrypoint function and pass relevant args to create a new model.
 
-    **kwargs will be passed through entrypoint fn to timm.models.build_model_with_cfg()
-    and then the model class __init__(). kwargs values set to None are pruned before passing.
+    <Tip>
+        **kwargs will be passed through entrypoint fn to ``timm.models.build_model_with_cfg()``
+        and then the model class __init__(). kwargs values set to None are pruned before passing.
+    </Tip>
 
     Args:
-        model_name (str): name of model to instantiate
-        pretrained (bool): load pretrained ImageNet-1k weights if true
-        pretrained_cfg (Union[str, dict, PretrainedCfg]): pass in external pretrained_cfg for model
-        pretrained_cfg_overlay (dict): replace key-values in base pretrained_cfg with these
-        checkpoint_path (str): path of checkpoint to load _after_ the model is initialized
-        scriptable (bool): set layer config so that model is jit scriptable (not working for all models yet)
-        exportable (bool): set layer config so that model is traceable / ONNX exportable (not fully impl/obeyed yet)
-        no_jit (bool): set layer config so that model doesn't utilize jit scripted layers (so far activations only)
+        model_name (str):
+            Name of model to instantiate.
+        pretrained (`bool`, *optional*, defaults to `False`):
+            If set to `True`, load pretrained ImageNet-1k weights.
+        pretrained_cfg (Union[str, dict, PretrainedCfg], *optional*):
+            Pass in an external pretrained_cfg for model.
+        pretrained_cfg_overlay (dict, *optional*):
+            Replace key-values in base pretrained_cfg with these.
+        checkpoint_path (str, *optional*):
+            Path of checkpoint to load _after_ the model is initialized.
+        scriptable (bool, *optional*):
+            Set layer config so that model is jit scriptable (not working for all models yet).
+        exportable (bool, *optional*):
+            Set layer config so that model is traceable / ONNX exportable (not fully impl/obeyed yet).
+        no_jit (bool, *optional*):
+            Set layer config so that model doesn't utilize jit scripted layers (so far activations only).
 
-    Keyword Args:
-        drop_rate (float): dropout rate for training (default: 0.0)
-        global_pool (str): global pool type (default: 'avg')
-        **: other kwargs are consumed by builder or model __init__()
+    **Keyword Args**:
+
+        - **drop_rate** (float, *optional*, defaults to `0.0`):
+            Dropout rate for training.
+        - **global_pool** (str, *optional*, defaults to `'avg'`):
+            Global pooling type.
+        - All other kwargs are consumed by builder or model ``__init__()``.
+
+    Example:
+
+    ```py
+    >>> from timm import create_model
+
+    >>> # Create a MobileNetV3-Large model with no pretrained weights.
+    >>> model = create_model('mobilenetv3_large_100')
+
+    >>> # Create a MobileNetV3-Large model with pretrained weights.
+    >>> model = create_model('mobilenetv3_large_100', pretrained=True)
+    >>> model.num_classes
+    1000
+
+    >>> # Create a MobileNetV3-Large model with pretrained weights and a new head with 10 classes.
+    >>> model = create_model('mobilenetv3_large_100', pretrained=True, num_classes=10)
+    >>> model.num_classes
+    10
+    ```
     """
     # Parameters that aren't supported by all models or are intended to only override model defaults if set
     # should default to None in command line args/cfg. Remove them if they are present and not set so that
