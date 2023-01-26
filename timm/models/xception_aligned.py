@@ -216,7 +216,7 @@ class XceptionAligned(nn.Module):
             num_chs=self.num_features, reduction=curr_stride, module='blocks.' + str(len(self.blocks) - 1))]
         self.act = act_layer(inplace=True) if preact else nn.Identity()
         self.head = ClassifierHead(
-            in_chs=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            in_features=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

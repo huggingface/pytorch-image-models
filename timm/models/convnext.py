@@ -500,6 +500,13 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
+    'convnext_tiny.in12k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+       input_size=(3, 384, 384), pool_size=(12, 12),  crop_pct=1.0, crop_mode='squash'),
+    'convnext_small.in12k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,  crop_mode='squash'),
+
     'convnext_nano.in12k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, num_classes=11821),
@@ -706,27 +713,27 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='laion/CLIP-convnext_base_w-laion2B-s13B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 256, 256), crop_pct=1.0, num_classes=640),
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laion2b_augreg': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w-laion2B-s13B-b82K-augreg',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 256, 256), crop_pct=1.0, num_classes=640),
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laiona': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w-laion_aesthetic-s13B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 256, 256), crop_pct=1.0, num_classes=640),
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laiona_320': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 320, 320), crop_pct=1.0, num_classes=640),
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, num_classes=640),
     'convnext_base.clip_laiona_augreg_320': _cfg(
         hf_hub_id='laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K-augreg',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 320, 320), crop_pct=1.0, num_classes=640),
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, num_classes=640),
 })
 
 
