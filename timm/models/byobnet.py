@@ -218,7 +218,10 @@ def _rep_vgg_bcfg(d=(4, 6, 16, 1), wf=(1., 1., 1., 1.), groups=0):
 
 
 def interleave_blocks(
-        types: Tuple[str, str], d, every: Union[int, List[int]] = 1, first: bool = False, **kwargs
+        types: Tuple[str, str], d,
+        every: Union[int, List[int]] = 1,
+        first: bool = False,
+        **kwargs,
 ) -> Tuple[ByoBlockCfg]:
     """ interleave 2 block types in stack
     """
@@ -1587,15 +1590,32 @@ class ByobNet(nn.Module):
             in_chans=3,
             global_pool='avg',
             output_stride=32,
-            zero_init_last=True,
             img_size=None,
             drop_rate=0.,
             drop_path_rate=0.,
+            zero_init_last=True,
+            **kwargs,
     ):
+        """
+
+        Args:
+            cfg (ByoModelCfg): Model architecture configuration
+            num_classes (int): Number of classifier classes (default: 1000)
+            in_chans (int): Number of input channels (default: 3)
+            global_pool (str): Global pooling type (default: 'avg')
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            img_size (Union[int, Tuple[int]): Image size for fixed image size models (i.e. self-attn)
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            zero_init_last (bool): Zero-init last weight of residual path
+            kwargs (dict): Extra kwargs overlayed onto cfg
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
+
+        cfg = replace(cfg, **kwargs)  # overlay kwargs onto cfg
         layers = get_layer_fns(cfg)
         if cfg.fixed_input_size:
             assert img_size is not None, 'img_size argument is required for fixed input size model'

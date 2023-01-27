@@ -209,6 +209,7 @@ def push_to_hf_hub(
     private: bool = False,
     create_pr: bool = False,
     model_config: Optional[dict] = None,
+    model_card: Optional[dict] = None,
 ):
     # Create repo if it doesn't exist yet
     repo_url = create_repo(repo_id, token=token, private=private, exist_ok=True)
@@ -232,9 +233,10 @@ def push_to_hf_hub(
 
         # Add readme if it does not exist
         if not has_readme:
+            model_card = model_card or {}
             model_name = repo_id.split('/')[-1]
             readme_path = Path(tmpdir) / "README.md"
-            readme_text = f'---\ntags:\n- image-classification\n- timm\nlibrary_tag: timm\n---\n# Model card for {model_name}'
+            readme_text = generate_readme(model_card, model_name)
             readme_path.write_text(readme_text)
 
         # Upload model and return
@@ -245,3 +247,51 @@ def push_to_hf_hub(
             create_pr=create_pr,
             commit_message=commit_message,
         )
+
+
+def generate_readme(model_card, model_name):
+    readme_text = "---\n"
+    readme_text += "tags:\n- image-classification\n- timm\n"
+    readme_text += "library_tag: timm\n"
+    readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
+    if 'details' in model_card and 'Dataset' in model_card['details']:
+        readme_text += 'datasets:\n'
+        readme_text += f"- {model_card['details']['Dataset'].lower()}\n"
+        if 'Pretrain Dataset' in model_card['details']:
+            readme_text += f"- {model_card['details']['Pretrain Dataset'].lower()}\n"
+    readme_text += "---\n"
+    readme_text += f"# Model card for {model_name}\n"
+    if 'description' in model_card:
+        readme_text += f"\n{model_card['description']}\n"
+    if 'details' in model_card:
+        readme_text += f"\n## Model Details\n"
+        for k, v in model_card['details'].items():
+            if isinstance(v, (list, tuple)):
+                readme_text += f"- **{k}:**\n"
+                for vi in v:
+                    readme_text += f"  - {vi}\n"
+            elif isinstance(v, dict):
+                readme_text += f"- **{k}:**\n"
+                for ki, vi in v.items():
+                    readme_text += f"  - {ki}: {vi}\n"
+            else:
+                readme_text += f"- **{k}:** {v}\n"
+    if 'usage' in model_card:
+        readme_text += f"\n## Model Usage\n"
+        readme_text += model_card['usage']
+        readme_text += '\n'
+
+    if 'comparison' in model_card:
+        readme_text += f"\n## Model Comparison\n"
+        readme_text += model_card['comparison']
+        readme_text += '\n'
+
+    if 'citation' in model_card:
+        readme_text += f"\n## Citation\n"
+        if not isinstance(model_card['citation'], (list, tuple)):
+            citations = [model_card['citation']]
+        else:
+            citations = model_card['citation']
+        for c in citations:
+            readme_text += f"```bibtex\n{c}\n```\n"
+    return readme_text
