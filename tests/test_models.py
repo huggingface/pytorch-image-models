@@ -29,7 +29,6 @@ NON_STD_FILTERS = [
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'swinv2_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
     'eva_*', 'flexivit*'
 ]
-#'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', '
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
