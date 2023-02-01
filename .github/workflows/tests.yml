@@ -2,9 +2,9 @@ name: Python tests
 
 on:
   push:
-    branches: [ master ]
+    branches: [ 0.6.x ]
   pull_request:
-    branches: [ master ]
+    branches: [ 0.6.x ]
 
 env:
   OMP_NUM_THREADS: 2
@@ -15,10 +15,10 @@ jobs:
     name: Run tests on ${{ matrix.os }} with Python ${{ matrix.python }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest]
-        python: ['3.9']
-        torch: ['1.10.0']
-        torchvision: ['0.11.1']
+        os: [ubuntu-latest]
+        python: ['3.10']
+        torch: ['1.13.1']
+        torchvision: ['0.14.1']
     runs-on: ${{ matrix.os }}
 
     steps:
