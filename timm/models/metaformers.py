@@ -21,6 +21,8 @@ original copyright below
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+
 from collections import OrderedDict
 from functools import partial
 import torch
@@ -62,30 +64,8 @@ class Downsampling(nn.Module):
         x = self.conv(x)
         x = self.post_norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         return x
-'''
-class Downsampling(nn.Module):
-    """
-    Downsampling implemented by a layer of convolution.
-    """
-    def __init__(self, in_channels, out_channels, 
-        kernel_size, stride=1, padding=0, 
-        pre_norm=None, post_norm=None, pre_permute = False):
-        super().__init__()
-        self.pre_norm = pre_norm(in_channels) if pre_norm else nn.Identity()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, 
-                              stride=stride, padding=padding)
-        self.post_norm = post_norm(out_channels) if post_norm else nn.Identity()
 
-    def forward(self, x):
-        print(x.shape)
-        x = self.pre_norm(x)
-        print(x.shape)
-        x = self.conv(x)
-        print(x.shape)
-        x = self.post_norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        print(x.shape)
-        return x
-'''
+
 class Scale(nn.Module):
     """
     Scale vector by element multiplications.
@@ -237,55 +217,7 @@ class LayerNormGeneral(nn.Module):
         x = x * self.weight
         x = x + self.bias
         return x
-'''
-class LayerNormGeneral(nn.Module):
-    r""" General LayerNorm for different situations.
-    Args:
-        affine_shape (int, list or tuple): The shape of affine weight and bias.
-            Usually the affine_shape=C, but in some implementation, like torch.nn.LayerNorm,
-            the affine_shape is the same as normalized_dim by default. 
-            To adapt to different situations, we offer this argument here.
-        normalized_dim (tuple or list): Which dims to compute mean and variance. 
-        scale (bool): Flag indicates whether to use scale or not.
-        bias (bool): Flag indicates whether to use scale or not.
-        We give several examples to show how to specify the arguments.
-        LayerNorm (https://arxiv.org/abs/1607.06450):
-            For input shape of (B, *, C) like (B, N, C) or (B, H, W, C),
-                affine_shape=C, normalized_dim=(-1, ), scale=True, bias=True;
-            For input shape of (B, C, H, W),
-                affine_shape=(C, 1, 1), normalized_dim=(1, ), scale=True, bias=True.
-        Modified LayerNorm (https://arxiv.org/abs/2111.11418)
-            that is idental to partial(torch.nn.GroupNorm, num_groups=1):
-            For input shape of (B, N, C),
-                affine_shape=C, normalized_dim=(1, 2), scale=True, bias=True;
-            For input shape of (B, H, W, C),
-                affine_shape=C, normalized_dim=(1, 2, 3), scale=True, bias=True;
-            For input shape of (B, C, H, W),
-                affine_shape=(C, 1, 1), normalized_dim=(1, 2, 3), scale=True, bias=True.
-        For the several metaformer baslines,
-            IdentityFormer, RandFormer and PoolFormerV2 utilize Modified LayerNorm without bias (bias=False);
-            ConvFormer and CAFormer utilizes LayerNorm without bias (bias=False).
-    """
-    def __init__(self, affine_shape=None, normalized_dim=(-1, ), scale=True, 
-        bias=True, eps=1e-5):
-        super().__init__()
-        self.normalized_dim = normalized_dim
-        self.use_scale = scale
-        self.use_bias = bias
-        self.weight = nn.Parameter(torch.ones(affine_shape)) if scale else None
-        self.bias = nn.Parameter(torch.zeros(affine_shape)) if bias else None
-        self.eps = eps
 
-    def forward(self, x):
-        c = x - x.mean(self.normalized_dim, keepdim=True)
-        s = c.pow(2).mean(self.normalized_dim, keepdim=True)
-        x = c / torch.sqrt(s + self.eps)
-        if self.use_scale:
-            x = x * self.weight
-        if self.use_bias:
-            x = x + self.bias
-        return x
-'''
 class SepConv(nn.Module):
     r"""
     Inverted separable convolution from MobileNetV2: https://arxiv.org/abs/1801.04381.
