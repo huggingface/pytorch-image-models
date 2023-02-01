@@ -39,7 +39,7 @@ Hacked together by / Copyright 2022, Ross Wightman
 
 import math
 from collections import OrderedDict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from functools import partial
 from typing import Callable, Optional, Union, Tuple, List
 
@@ -229,8 +229,8 @@ class MaxxVitCfg:
     block_type: Tuple[Union[str, Tuple[str, ...]], ...] = ('C', 'C', 'T', 'T')
     stem_width: Union[int, Tuple[int, int]] = 64
     stem_bias: bool = True
-    conv_cfg: MaxxVitConvCfg = MaxxVitConvCfg()
-    transformer_cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg()
+    conv_cfg: MaxxVitConvCfg = field(default_factory=MaxxVitConvCfg)
+    transformer_cfg: MaxxVitTransformerCfg = field(default_factory=MaxxVitTransformerCfg)
     weight_init: str = 'vit_eff'
 
 
@@ -1911,3 +1911,4 @@ def maxvit_large_224(pretrained=False, **kwargs):
 @register_model
 def maxvit_xlarge_224(pretrained=False, **kwargs):
     return _create_maxxvit('maxvit_xlarge_224', pretrained=pretrained, **kwargs)
+
