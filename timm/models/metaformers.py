@@ -684,7 +684,7 @@ default_cfgs = generate_default_cfgs({
         classifier='head.fc.fc2'),
     'convformer_s18.sail_in1k_384': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_384.pth',
-        classifier='head.fc.fc2', input_size=(3, 384, 384)),
+        classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(14,14)),
     'convformer_s18.sail_in22k_ft_in1k': _cfg(
         url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_in21ft1k.pth',
         classifier='head.fc.fc2'),
