@@ -43,7 +43,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import trunc_normal_, SelectAdaptivePool2d, DropPath, Mlp, GlobalResponseNormMlp, \
     LayerNorm2d, LayerNorm, create_conv2d, get_act_layer, make_divisible, to_ntuple
 from ._builder import build_model_with_cfg
@@ -205,6 +205,7 @@ class ConvNeXt(nn.Module):
             use_grn=False,
             act_layer='gelu',
             norm_layer=None,
+            norm_eps=None,
             drop_rate=0.,
             drop_path_rate=0.,
     ):
@@ -236,10 +237,15 @@ class ConvNeXt(nn.Module):
         if norm_layer is None:
             norm_layer = LayerNorm2d
             norm_layer_cl = norm_layer if conv_mlp else LayerNorm
+            if norm_eps is not None:
+                norm_layer = partial(norm_layer, eps=norm_eps)
+                norm_layer_cl = partial(norm_layer_cl, eps=norm_eps)
         else:
             assert conv_mlp,\
                 'If a norm_layer is specified, conv MLP must be used so all norm expect rank-4, channels-first input'
             norm_layer_cl = norm_layer
+            if norm_eps is not None:
+                norm_layer_cl = partial(norm_layer_cl, eps=norm_eps)
 
         self.num_classes = num_classes
         self.drop_rate = drop_rate
@@ -250,7 +256,7 @@ class ConvNeXt(nn.Module):
             # NOTE: this stem is a minimal form of ViT PatchEmbed, as used in SwinTransformer w/ patch_size = 4
             self.stem = nn.Sequential(
                 nn.Conv2d(in_chans, dims[0], kernel_size=patch_size, stride=patch_size, bias=conv_bias),
-                norm_layer(dims[0])
+                norm_layer(dims[0]),
             )
             stem_stride = patch_size
         else:
@@ -301,11 +307,10 @@ class ConvNeXt(nn.Module):
 
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default ConvNeXt ordering (pretrained FB weights)
-        self.head_norm_first = head_norm_first
         self.norm_pre = norm_layer(self.num_features) if head_norm_first else nn.Identity()
         self.head = nn.Sequential(OrderedDict([
                 ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
-                ('norm', nn.Identity() if head_norm_first or num_classes == 0 else norm_layer(self.num_features)),
+                ('norm', nn.Identity() if head_norm_first else norm_layer(self.num_features)),
                 ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
                 ('drop', nn.Dropout(self.drop_rate)),
                 ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())]))
@@ -336,14 +341,7 @@ class ConvNeXt(nn.Module):
         if global_pool is not None:
             self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
-        if num_classes == 0:
-            self.head.norm = nn.Identity()
-            self.head.fc = nn.Identity()
-        else:
-            if not self.head_norm_first:
-                norm_layer = type(self.stem[-1])  # obtain type from stem norm
-                self.head.norm = norm_layer(self.num_features)
-            self.head.fc = nn.Linear(self.num_features, num_classes)
+        self.head.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -384,7 +382,15 @@ def checkpoint_filter_fn(state_dict, model):
         return state_dict  # non-FB checkpoint
     if 'model' in state_dict:
         state_dict = state_dict['model']
+
     out_dict = {}
+    if 'visual.trunk.stem.0.weight' in state_dict:
+        out_dict = {k.replace('visual.trunk.', ''): v for k, v in state_dict.items() if k.startswith('visual.trunk.')}
+        if 'visual.head.proj.weight' in state_dict:
+            out_dict['head.fc.weight'] = state_dict['visual.head.proj.weight']
+            out_dict['head.fc.bias'] = torch.zeros(state_dict['visual.head.proj.weight'].shape[0])
+        return out_dict
+
     import re
     for k, v in state_dict.items():
         k = k.replace('downsample_layers.0.', 'stem.')
@@ -403,10 +409,16 @@ def checkpoint_filter_fn(state_dict, model):
             model_shape = model.state_dict()[k].shape
             v = v.reshape(model_shape)
         out_dict[k] = v
+
     return out_dict
 
 
 def _create_convnext(variant, pretrained=False, **kwargs):
+    if kwargs.get('pretrained_cfg', '') == 'fcmae':
+        # NOTE fcmae pretrained weights have no classifier or final norm-layer (`head.norm`)
+        # This is workaround loading with num_classes=0 w/o removing norm-layer.
+        kwargs.setdefault('pretrained_strict', False)
+
     model = build_model_with_cfg(
         ConvNeXt, variant, pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
@@ -481,8 +493,27 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_tiny_hnf_a2h-ab7e9df2.pth',
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_tiny.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_small.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'convnext_tiny.in12k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+       input_size=(3, 384, 384), pool_size=(12, 12),  crop_pct=1.0, crop_mode='squash'),
+    'convnext_small.in12k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,  crop_mode='squash'),
 
     'convnext_nano.in12k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, num_classes=11821),
+    'convnext_tiny.in12k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, num_classes=11821),
+    'convnext_small.in12k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, num_classes=11821),
 
@@ -676,6 +707,33 @@ default_cfgs = generate_default_cfgs({
         num_classes=0),
 
     'convnextv2_small.untrained': _cfg(),
+
+    # CLIP based weights, original image tower weights and fine-tunes
+    'convnext_base.clip_laion2b': _cfg(
+        hf_hub_id='laion/CLIP-convnext_base_w-laion2B-s13B-b82K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=640),
+    'convnext_base.clip_laion2b_augreg': _cfg(
+        hf_hub_id='laion/CLIP-convnext_base_w-laion2B-s13B-b82K-augreg',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=640),
+    'convnext_base.clip_laiona': _cfg(
+        hf_hub_id='laion/CLIP-convnext_base_w-laion_aesthetic-s13B-b82K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=640),
+    'convnext_base.clip_laiona_320': _cfg(
+        hf_hub_id='laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, num_classes=640),
+    'convnext_base.clip_laiona_augreg_320': _cfg(
+        hf_hub_id='laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K-augreg',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, num_classes=640),
 })
 
 

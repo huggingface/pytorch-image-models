@@ -746,86 +746,83 @@ def resnetv2_152x2_bit_teacher_384(pretrained=False, **kwargs):
 
 @register_model
 def resnetv2_50(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50', pretrained=pretrained,
-        layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d, **kwargs)
+    model_args = dict(layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d)
+    return _create_resnetv2('resnetv2_50', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_50d(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50d', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d,
-        stem_type='deep', avg_down=True, **kwargs)
+        stem_type='deep', avg_down=True)
+    return _create_resnetv2('resnetv2_50d', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_50t(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50t', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d,
-        stem_type='tiered', avg_down=True, **kwargs)
+        stem_type='tiered', avg_down=True)
+    return _create_resnetv2('resnetv2_50t', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_101(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_101', pretrained=pretrained,
-        layers=[3, 4, 23, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d, **kwargs)
+    model_args = dict(layers=[3, 4, 23, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d)
+    return _create_resnetv2('resnetv2_101', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_101d(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_101d', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 23, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d,
-        stem_type='deep', avg_down=True, **kwargs)
+        stem_type='deep', avg_down=True)
+    return _create_resnetv2('resnetv2_101d', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_152(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_152', pretrained=pretrained,
-        layers=[3, 8, 36, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d, **kwargs)
+    model_args = dict(layers=[3, 8, 36, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d)
+    return _create_resnetv2('resnetv2_152', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_152d(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_152d', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 8, 36, 3], conv_layer=create_conv2d, norm_layer=BatchNormAct2d,
-        stem_type='deep', avg_down=True, **kwargs)
+        stem_type='deep', avg_down=True)
+    return _create_resnetv2('resnetv2_152d', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 # Experimental configs (may change / be removed)
 
 @register_model
 def resnetv2_50d_gn(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50d_gn', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=GroupNormAct,
-        stem_type='deep', avg_down=True, **kwargs)
+        stem_type='deep', avg_down=True)
+    return _create_resnetv2('resnetv2_50d_gn', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_50d_evob(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50d_evob', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dB0,
-        stem_type='deep', avg_down=True, zero_init_last=True, **kwargs)
+        stem_type='deep', avg_down=True, zero_init_last=True)
+    return _create_resnetv2('resnetv2_50d_evob', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_50d_evos(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50d_evos', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=EvoNorm2dS0,
-        stem_type='deep', avg_down=True, **kwargs)
+        stem_type='deep', avg_down=True)
+    return _create_resnetv2('resnetv2_50d_evos', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def resnetv2_50d_frn(pretrained=False, **kwargs):
-    return _create_resnetv2(
-        'resnetv2_50d_frn', pretrained=pretrained,
+    model_args = dict(
         layers=[3, 4, 6, 3], conv_layer=create_conv2d, norm_layer=FilterResponseNormTlu2d,
-        stem_type='deep', avg_down=True, **kwargs)
+        stem_type='deep', avg_down=True)
+    return _create_resnetv2('resnetv2_50d_frn', pretrained=pretrained, **dict(model_args, **kwargs))

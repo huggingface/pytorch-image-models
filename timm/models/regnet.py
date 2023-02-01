@@ -496,7 +496,7 @@ class RegNet(nn.Module):
             self.final_conv = get_act_layer(cfg.act_layer)() if final_act else nn.Identity()
             self.num_features = prev_width
         self.head = ClassifierHead(
-            in_chs=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            in_features=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
