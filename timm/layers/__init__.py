@@ -3,7 +3,7 @@ from .adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
 from .blur_pool import BlurPool2d
-from .classifier import ClassifierHead, create_classifier
+from .classifier import ClassifierHead, create_classifier, NormMlpClassifierHead
 from .cond_conv2d import CondConv2d, get_condconv_initializer
 from .config import is_exportable, is_scriptable, is_no_jit, set_exportable, set_scriptable, set_no_jit,\
     set_layer_config
