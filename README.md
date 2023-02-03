@@ -1,4 +1,5 @@
-# PyTorch Image Models
+# PyTorch Image Models <a href="https://huggingface.co/spaces/kadirnar/classifyhub"><img src="https://img.shields.io/badge/%20HuggingFace%20-Demo-blue.svg" alt="HuggingFace Spaces"></a>
+
 - [Sponsors](#sponsors)
 - [What's New](#whats-new)
 - [Introduction](#introduction)
