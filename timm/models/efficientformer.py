@@ -20,33 +20,11 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, trunc_normal_, to_2tuple, Mlp
 from ._builder import build_model_with_cfg
+from ._pretrained import generate_default_cfgs
 from ._registry import register_model
 
 __all__ = ['EfficientFormer']  # model_registry will add each entrypoint fn to this
 
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None, 'fixed_input_size': True,
-        'crop_pct': .95, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1', 'classifier': ('head', 'head_dist'),
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    efficientformer_l1=_cfg(
-        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/efficientformer_l1_1000d_224-5b08fab0.pth",
-    ),
-    efficientformer_l3=_cfg(
-        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/efficientformer_l3_300d_224-6816624f.pth",
-    ),
-    efficientformer_l7=_cfg(
-        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/efficientformer_l7_300d_224-e957ab75.pth",
-    ),
-)
 
 EfficientFormer_width = {
     'l1': (48, 96, 224, 448),
@@ -99,7 +77,7 @@ class Attention(torch.nn.Module):
             self.attention_bias_cache = {}  # clear ab cache
 
     def get_attention_biases(self, device: torch.device) -> torch.Tensor:
-        if self.training:
+        if torch.jit.is_tracing() or self.training:
             return self.attention_biases[:, self.attention_bias_idxs]
         else:
             device_key = str(device)
@@ -279,16 +257,17 @@ class MetaBlock2d(nn.Module):
     ):
         super().__init__()
         self.token_mixer = Pooling(pool_size=pool_size)
+        self.ls1 = LayerScale2d(dim, layer_scale_init_value)
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
         self.mlp = ConvMlpWithNorm(
             dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, norm_layer=norm_layer, drop=drop)
-
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.ls1 = LayerScale2d(dim, layer_scale_init_value)
         self.ls2 = LayerScale2d(dim, layer_scale_init_value)
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
-        x = x + self.drop_path(self.ls1(self.token_mixer(x)))
-        x = x + self.drop_path(self.ls2(self.mlp(x)))
+        x = x + self.drop_path1(self.ls1(self.token_mixer(x)))
+        x = x + self.drop_path2(self.ls2(self.mlp(x)))
         return x
 
 
@@ -514,6 +493,30 @@ def _checkpoint_filter_fn(state_dict, model):
     return out_dict
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None, 'fixed_input_size': True,
+        'crop_pct': .95, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv1', 'classifier': ('head', 'head_dist'),
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'efficientformer_l1.snap_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+    ),
+    'efficientformer_l3.snap_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+    ),
+    'efficientformer_l7.snap_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+    ),
+})
+
+
 def _create_efficientformer(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
         EfficientFormer, variant, pretrained,
@@ -524,30 +527,30 @@ def _create_efficientformer(variant, pretrained=False, **kwargs):
 
 @register_model
 def efficientformer_l1(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         depths=EfficientFormer_depth['l1'],
         embed_dims=EfficientFormer_width['l1'],
         num_vit=1,
-        **kwargs)
-    return _create_efficientformer('efficientformer_l1', pretrained=pretrained, **model_kwargs)
+    )
+    return _create_efficientformer('efficientformer_l1', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def efficientformer_l3(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         depths=EfficientFormer_depth['l3'],
         embed_dims=EfficientFormer_width['l3'],
         num_vit=4,
-        **kwargs)
-    return _create_efficientformer('efficientformer_l3', pretrained=pretrained, **model_kwargs)
+    )
+    return _create_efficientformer('efficientformer_l3', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def efficientformer_l7(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         depths=EfficientFormer_depth['l7'],
         embed_dims=EfficientFormer_width['l7'],
         num_vit=8,
-        **kwargs)
-    return _create_efficientformer('efficientformer_l7', pretrained=pretrained, **model_kwargs)
+    )
+    return _create_efficientformer('efficientformer_l7', pretrained=pretrained, **dict(model_args, **kwargs))
 

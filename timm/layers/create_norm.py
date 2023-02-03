@@ -23,9 +23,9 @@ _NORM_MAP = dict(
 _NORM_TYPES = {m for n, m in _NORM_MAP.items()}
 
 
-def create_norm_layer(layer_name, num_features, act_layer=None, apply_act=True, **kwargs):
-    layer = get_norm_layer(layer_name, act_layer=act_layer)
-    layer_instance = layer(num_features, apply_act=apply_act, **kwargs)
+def create_norm_layer(layer_name, num_features, **kwargs):
+    layer = get_norm_layer(layer_name)
+    layer_instance = layer(num_features, **kwargs)
     return layer_instance
 
 
