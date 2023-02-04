@@ -20,6 +20,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, trunc_normal_, to_2tuple, Mlp
 from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
 from ._pretrained import generate_default_cfgs
 from ._registry import register_model
 
@@ -335,7 +336,10 @@ class EfficientFormerStage(nn.Module):
 
     def forward(self, x):
         x = self.downsample(x)
-        x = self.blocks(x)
+        if self.grad_checkpointing:
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
 
 
