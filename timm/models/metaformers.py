@@ -582,7 +582,7 @@ class MetaFormer(nn.Module):
     
     def forward_head(self, x, pre_logits: bool = False):
         # NOTE nn.Sequential in head broken down since can't call head[:-1](x) in torchscript :(
-        x = self.head.global_pool(x.permute(0, 3, 1, 2))
+        x = self.head.global_pool(x)
         x = self.head.flatten(x)
         x = self.head.norm(x)
         return x if pre_logits else self.head.fc(x)
@@ -593,7 +593,7 @@ class MetaFormer(nn.Module):
             x = checkpoint_seq(self.stages, x)
         else:
             x = self.stages(x)
-        x = self.norm_pre(x)
+        x = self.norm_pre(x).permute(0, 3, 1, 2)
         return x 
 
     def forward(self, x):
