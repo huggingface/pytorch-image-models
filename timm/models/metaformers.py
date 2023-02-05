@@ -582,9 +582,9 @@ class MetaFormer(nn.Module):
     
     def forward_head(self, x, pre_logits: bool = False):
         # NOTE nn.Sequential in head broken down since can't call head[:-1](x) in torchscript :(
-        x = self.head.global_pool(x)
-        x = self.head.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.head.global_pool(x.permute(0, 3, 1, 2))
         x = self.head.flatten(x)
+        x = self.head.norm(x.permute(0, 2, 3, 1))
         return x if pre_logits else self.head.fc(x)
         
     def forward_features(self, x):
