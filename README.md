@@ -24,6 +24,24 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### Feb 7, 2023
+* New inference benchmark numbers added in [results](results/) folder.
+* Add convnext LAION CLIP trained weights and initial set of in1k fine-tunes
+  * `convnext_base.clip_laion2b_augreg_ft_in1k` - 86.2% @ 256x256
+  * `convnext_base.clip_laiona_augreg_ft_in1k_384` - 86.5% @ 384x384
+  * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k` - 87.3% @ 256x256
+  * `convnext_large_mlp.` - 87.9% @ 384x384
+* Add DaViT models. Supports `features_only=True`. Adapted from https://github.com/dingmyu/davit by [Fredo](https://github.com/fffffgggg54).
+* Use a common NormMlpClassifierHead across MaxViT, ConvNeXt, DaViT
+* Add EfficientFormer-V2 model, update EfficientFormer, and refactor LeViT (closely related architectures). Weights on HF hub.
+  * New EfficientFormer-V2 arch, significant refactor from original at (https://github.com/snap-research/EfficientFormer). Supports `features_only=True`.
+  * Minor updates to EfficientFormer.
+  * Refactor LeViT models to stages, add `features_only=True` support to new `conv` variants, weight remap required.
+* Move ImageNet meta-data (synsets, indices) from `/results` to `timm/data/_info`.
+* Add ImageNetInfo / DatasetInfo classes to provide labelling for various ImageNet classifier layouts in `timm`
+  * Update `inference.py` to use, try: `python inference.py /folder/to/images --model convnext_small.in12k --label-type detail --topk 5`
+* Ready for 0.8.10 pypi pre-release (final testing).
+
 ### Jan 20, 2023
 * Add two convnext 12k -> 1k fine-tunes at 384x384
   * `convnext_tiny.in12k_ft_in1k_384` - 85.1 @ 384
@@ -571,7 +589,7 @@ Several (less common) features that I often utilize in my projects are included.
 
 ## Results
 
-Model validation results can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/results/) and in the [results tables](results/README.md)
+Model validation results can be found in the [results tables](results/README.md)
 
 ## Getting Started (Documentation)
 
