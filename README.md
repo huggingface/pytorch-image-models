@@ -30,14 +30,14 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `convnext_base.clip_laion2b_augreg_ft_in1k` - 86.2% @ 256x256
   * `convnext_base.clip_laiona_augreg_ft_in1k_384` - 86.5% @ 384x384
   * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k` - 87.3% @ 256x256
-  * `convnext_large_mlp.` - 87.9% @ 384x384
+  * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384` - 87.9% @ 384x384
 * Add DaViT models. Supports `features_only=True`. Adapted from https://github.com/dingmyu/davit by [Fredo](https://github.com/fffffgggg54).
 * Use a common NormMlpClassifierHead across MaxViT, ConvNeXt, DaViT
 * Add EfficientFormer-V2 model, update EfficientFormer, and refactor LeViT (closely related architectures). Weights on HF hub.
   * New EfficientFormer-V2 arch, significant refactor from original at (https://github.com/snap-research/EfficientFormer). Supports `features_only=True`.
   * Minor updates to EfficientFormer.
   * Refactor LeViT models to stages, add `features_only=True` support to new `conv` variants, weight remap required.
-* Move ImageNet meta-data (synsets, indices) from `/results` to `timm/data/_info`.
+* Move ImageNet meta-data (synsets, indices) from `/results` to [`timm/data/_info`](timm/data/_info/).
 * Add ImageNetInfo / DatasetInfo classes to provide labelling for various ImageNet classifier layouts in `timm`
   * Update `inference.py` to use, try: `python inference.py /folder/to/images --model convnext_small.in12k --label-type detail --topk 5`
 * Ready for 0.8.10 pypi pre-release (final testing).
