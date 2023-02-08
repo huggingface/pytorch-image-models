@@ -34,9 +34,11 @@ class PretrainedCfg:
     mean: Tuple[float, ...] = (0.485, 0.456, 0.406)
     std: Tuple[float, ...] = (0.229, 0.224, 0.225)
 
-    # head config
+    # head / classifier config and meta-data
     num_classes: int = 1000
     label_offset: Optional[int] = None
+    label_names: Optional[Tuple[str]] = None
+    label_descriptions: Optional[Dict[str, str]] = None
 
     # model attributes that vary with above or required for pretrained adaptation
     pool_size: Optional[Tuple[int, ...]] = None
