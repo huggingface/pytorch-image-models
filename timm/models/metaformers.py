@@ -589,7 +589,7 @@ class MetaFormer(nn.Module):
             '''
             
             stage = MetaFormerStage(
-                dim,
+                last_dim,
                 dims[i],
                 depth=depths[i],
                 downsample_norm=downsample_norm,
