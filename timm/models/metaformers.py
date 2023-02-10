@@ -332,7 +332,6 @@ class Mlp(nn.Module):
         return x
 
 
-
 class MlpHead(nn.Module):
     """ MLP classification head
     """
@@ -354,7 +353,6 @@ class MlpHead(nn.Module):
         x = self.head_dropout(x)
         x = self.fc2(x)
         return x
-
 
 
 class MetaFormerBlock(nn.Module):
@@ -400,9 +398,6 @@ class MetaFormerBlock(nn.Module):
             if res_scale_init_value else nn.Identity()
         
     def forward(self, x):
-        # [B, H, W, C]
-        #print(x.shape)
-        #x = x.permute(0, 2, 3, 1)
         x = self.res_scale1(x) + \
             self.layer_scale1(
                 self.drop_path1(
@@ -415,11 +410,10 @@ class MetaFormerBlock(nn.Module):
                     self.mlp(self.norm2(x))
                 )
             )
-        #x = x.permute(0, 3, 1, 2)
-        
         return x
 
 class MetaFormerStage(nn.Module):
+    # implementation of a single metaformer stage
     def __init__(
         self,
         in_chs,
@@ -440,6 +434,7 @@ class MetaFormerStage(nn.Module):
 
         self.grad_checkpointing = False
         
+        # don't downsample if in_chs and out_chs are the same
         self.downsample = nn.Identity() if in_chs == out_chs else Downsampling(
             in_chs,
             out_chs,
@@ -465,7 +460,6 @@ class MetaFormerStage(nn.Module):
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
-    
     
     # Permute to channels-first for feature extraction
     def forward(self, x: Tensor):
@@ -532,24 +526,19 @@ class MetaFormer(nn.Module):
         self.head_fn = head_fn
         self.num_features = dims[-1]
         self.drop_rate = drop_rate
+        self.num_stages = len(depths)
         
+        # convert everything to lists if they aren't indexable
         if not isinstance(depths, (list, tuple)):
             depths = [depths] # it means the model has only one stage
         if not isinstance(dims, (list, tuple)):
             dims = [dims]
-
-        self.num_stages = len(depths)
-
         if not isinstance(token_mixers, (list, tuple)):
             token_mixers = [token_mixers] * self.num_stages
-
         if not isinstance(mlps, (list, tuple)):
             mlps = [mlps] * self.num_stages
-
         if not isinstance(norm_layers, (list, tuple)):
             norm_layers = [norm_layers] * self.num_stages
-        
-
         if not isinstance(layer_scale_init_values, (list, tuple)):
             layer_scale_init_values = [layer_scale_init_values] * self.num_stages
         if not isinstance(res_scale_init_values, (list, tuple)):
@@ -559,7 +548,6 @@ class MetaFormer(nn.Module):
         self.feature_info = []
         
         dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
-
         
         self.stem = Stem(
             in_chans,
@@ -571,32 +559,6 @@ class MetaFormer(nn.Module):
         cur = 0
         last_dim = dims[0]
         for i in range(self.num_stages):
-            '''
-            stage = nn.Sequential(OrderedDict([
-                ('downsample', nn.Identity() if i == 0 else Downsampling(
-                    dims[i-1],
-                    dims[i], 
-                    kernel_size=3, 
-                    stride=2, 
-                    padding=1,
-                    norm_layer=downsample_norm,
-                )),
-                ('blocks', nn.Sequential(*[MetaFormerBlock(
-                    dim=dims[i],
-                    token_mixer=token_mixers[i],
-                    mlp=mlps[i],
-                    mlp_fn=mlp_fn,
-                    mlp_act=mlp_act,
-                    mlp_bias=mlp_bias,
-                    norm_layer=norm_layers[i],
-                    drop_path=dp_rates[cur + j],
-                    layer_scale_init_value=layer_scale_init_values[i],
-                    res_scale_init_value=res_scale_init_values[i]
-                    ) for j in range(depths[i])])
-                )])
-            )
-            '''
-            
             stage = MetaFormerStage(
                 last_dim,
                 dims[i],
@@ -631,7 +593,7 @@ class MetaFormer(nn.Module):
                 head = self.head_fn(dims[-1], num_classes)
         else:
             head = nn.Identity()
-
+        
         self.norm_pre = output_norm(self.num_features) if head_norm_first else nn.Identity()
         self.head = nn.Sequential(OrderedDict([
                 ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
