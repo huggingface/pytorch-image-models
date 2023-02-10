@@ -66,8 +66,8 @@ class Stem(nn.Module):
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.norm(x.permute(0, 2, 3, 1))
-        # [B, H, W, C]
+        x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        # [B, C, H, W]
         return x
 
 class Downsampling(nn.Module):
@@ -93,8 +93,8 @@ class Downsampling(nn.Module):
         )
 
     def forward(self, x):
-        x = self.norm(x).permute(0, 3, 1, 2)
-        x = self.conv(x).permute(0, 2, 3, 1)
+        x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.conv(x)
         return x
 
 
@@ -400,7 +400,8 @@ class MetaFormerBlock(nn.Module):
             if res_scale_init_value else nn.Identity()
         
     def forward(self, x):
-        print(x.shape)
+        # [B, H, W, C]
+        #print(x.shape)
         #x = x.permute(0, 2, 3, 1)
         x = self.res_scale1(x) + \
             self.layer_scale1(
@@ -465,12 +466,20 @@ class MetaFormerStage(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
     
+    
+    # Permute to channels-first for feature extraction
     def forward(self, x: Tensor):
-        x = self.downsample(x)
+        
+        # [B, C, H, W] -> [B, H, W, C]
+        x = self.downsample(x).permute(0, 2, 3, 1)
+        
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
+        
+        # [B, H, W, C] -> [B, C, H, W]
+        x = x.permute(0, 3, 1, 2)
         return x
 
 class MetaFormer(nn.Module):
@@ -641,6 +650,8 @@ class MetaFormer(nn.Module):
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
+        for stage in self.stages:
+            stage.set_grad_checkpointing(enable=enable)
 
     @torch.jit.ignore
     def get_classifier(self):
@@ -659,20 +670,20 @@ class MetaFormer(nn.Module):
             head = nn.Identity()
         self.head.fc = head
     
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: Tensor, pre_logits: bool = False):
         # NOTE nn.Sequential in head broken down since can't call head[:-1](x) in torchscript :(
         x = self.head.global_pool(x)
         x = self.head.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         x = self.head.flatten(x)
         return x if pre_logits else self.head.fc(x)
         
-    def forward_features(self, x):
+    def forward_features(self, x: Tensor):
         x = self.stem(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.stages, x)
         else:
             x = self.stages(x)
-        x = self.norm_pre(x).permute(0, 3, 1, 2)
+        x = self.norm_pre(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         return x 
 
     def forward(self, x: Tensor):
