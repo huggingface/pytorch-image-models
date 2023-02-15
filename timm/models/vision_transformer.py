@@ -241,7 +241,6 @@ class ParallelScalingBlock(nn.Module):
         self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
         mlp_hidden_dim = int(mlp_ratio * dim)
         in_proj_out_dim = mlp_hidden_dim + 3 * dim
-        out_proj_in_dim = mlp_hidden_dim + dim
 
         self.in_norm = norm_layer(dim)
         self.in_proj = nn.Linear(dim, in_proj_out_dim, bias=qkv_bias)
