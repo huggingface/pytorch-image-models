@@ -83,8 +83,8 @@ def gen_relative_log_coords(
         pretrained_win_size: Tuple[int, int] = (0, 0),
         mode='swin',
 ):
-    assert mode in ('swin', 'cr', 'rw')
-    # as per official swin-v2 impl, supporting timm specific 'cr' and 'rw' log coords as well
+    assert mode in ('swin', 'cr')
+    # as per official swin-v2 impl, supporting timm specific 'cr' log coords as well
     relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0], dtype=torch.float32)
     relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1], dtype=torch.float32)
     relative_coords_table = torch.stack(torch.meshgrid([relative_coords_h, relative_coords_w]))
@@ -100,18 +100,9 @@ def gen_relative_log_coords(
         relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
             1.0 + relative_coords_table.abs()) / math.log2(8)
     else:
-        if mode == 'rw':
-            # cr w/ window size normalization -> [-1,1] log coords
-            relative_coords_table[:, :, 0] /= (win_size[0] - 1)
-            relative_coords_table[:, :, 1] /= (win_size[1] - 1)
-            relative_coords_table *= 8  # scale to -8, 8
-            relative_coords_table = torch.sign(relative_coords_table) * torch.log2(
-                1.0 + relative_coords_table.abs())
-            relative_coords_table /= math.log2(9)   # -> [-1, 1]
-        else:
-            # mode == 'cr'
-            relative_coords_table = torch.sign(relative_coords_table) * torch.log(
-                1.0 + relative_coords_table.abs())
+        # mode == 'cr'
+        relative_coords_table = torch.sign(relative_coords_table) * torch.log(
+            1.0 + relative_coords_table.abs())
 
     return relative_coords_table
 
@@ -141,10 +132,6 @@ class RelPosMlp(nn.Module):
             self.bias_act = nn.Sigmoid()
             self.bias_gain = 16
             mlp_bias = (True, False)
-        elif mode == 'rw':
-            self.bias_act = nn.Tanh()
-            self.bias_gain = 4
-            mlp_bias = True
         else:
             self.bias_act = nn.Identity()
             self.bias_gain = None

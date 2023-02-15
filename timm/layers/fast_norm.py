@@ -17,6 +17,12 @@ try:
 except ImportError:
     has_apex = False
 
+try:
+    from apex.normalization.fused_layer_norm import fused_rms_norm_affine, fused_rms_norm
+    has_apex_rmsnorm = True
+except ImportError:
+    has_apex_rmsnorm = False
+
 
 # fast (ie lower precision LN) can be disabled with this flag if issues crop up
 _USE_FAST_NORM = False  # defaulting to False for now
@@ -76,3 +82,32 @@ def fast_layer_norm(
 
     with torch.cuda.amp.autocast(enabled=False):
         return F.layer_norm(x, normalized_shape, weight, bias, eps)
+
+
+def rms_norm(
+    x: torch.Tensor,
+    normalized_shape: List[int],
+    weight: Optional[torch.Tensor] = None,
+    eps: float = 1e-5,
+):
+    dims = tuple(i for i in range(-1, -len(normalized_shape) - 1, -1))
+    v = torch.var(x, dim=dims, keepdim=True)
+    x = x * torch.rsqrt(v + eps)
+    if weight is not None:
+        x = x * weight
+    return x
+
+
+def fast_rms_norm(
+    x: torch.Tensor,
+    normalized_shape: List[int],
+    weight: Optional[torch.Tensor] = None,
+    eps: float = 1e-5,
+) -> torch.Tensor:
+    if torch.jit.is_scripting() or not has_apex_rmsnorm:
+        return rms_norm(x, normalized_shape, weight, eps)
+
+    if weight is None:
+        return fused_rms_norm(x, normalized_shape, eps)
+    else:
+        return fused_rms_norm_affine(x, weight, normalized_shape, eps)
