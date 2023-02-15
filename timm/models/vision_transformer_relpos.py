@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
+from torch.jit import Final
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
@@ -25,6 +26,8 @@ _logger = logging.getLogger(__name__)
 
 
 class RelPosAttention(nn.Module):
+    fast_attn: Final[bool]
+
     def __init__(
             self,
             dim,
