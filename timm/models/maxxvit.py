@@ -160,6 +160,7 @@ class Attention2d(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
+        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -175,15 +176,31 @@ class Attention2d(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, 3, self.num_heads, self.dim_head, -1).unbind(1)
 
-        attn = (q.transpose(-2, -1) @ k) * self.scale
-        if self.rel_pos is not None:
-            attn = self.rel_pos(attn)
-        elif shared_rel_pos is not None:
-            attn = attn + shared_rel_pos
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fast_attn:
+            if self.rel_pos is not None:
+                attn_bias = self.rel_pos.get_bias()
+            elif shared_rel_pos is not None:
+                attn_bias = shared_rel_pos
+            else:
+                attn_bias = None
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q.transpose(-1, -2),
+                k.transpose(-1, -2),
+                v.transpose(-1, -2),
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            ).transpose(-1, -2).reshape(B, -1, H, W)
+        else:
+            q = q * self.scale
+            attn = q.transpose(-2, -1) @ k
+            if self.rel_pos is not None:
+                attn = self.rel_pos(attn)
+            elif shared_rel_pos is not None:
+                attn = attn + shared_rel_pos
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
 
-        x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -211,6 +228,7 @@ class AttentionCl(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
+        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
 
         self.qkv = nn.Linear(dim, dim_attn * 3, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -227,15 +245,30 @@ class AttentionCl(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, -1, 3, self.num_heads, self.dim_head).transpose(1, 3).unbind(2)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        if self.rel_pos is not None:
-            attn = self.rel_pos(attn, shared_rel_pos=shared_rel_pos)
-        elif shared_rel_pos is not None:
-            attn = attn + shared_rel_pos
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fast_attn:
+            if self.rel_pos is not None:
+                attn_bias = self.rel_pos.get_bias()
+            elif shared_rel_pos is not None:
+                attn_bias = shared_rel_pos
+            else:
+                attn_bias = None
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            if self.rel_pos is not None:
+                attn = self.rel_pos(attn, shared_rel_pos=shared_rel_pos)
+            elif shared_rel_pos is not None:
+                attn = attn + shared_rel_pos
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        x = (attn @ v).transpose(1, 2).reshape(restore_shape + (-1,))
+        x = x.transpose(1, 2).reshape(restore_shape + (-1,))
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
