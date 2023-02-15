@@ -90,8 +90,16 @@ def rms_norm(
     weight: Optional[torch.Tensor] = None,
     eps: float = 1e-5,
 ):
-    dims = tuple(i for i in range(-1, -len(normalized_shape) - 1, -1))
-    v = torch.var(x, dim=dims, keepdim=True)
+    norm_ndim = len(normalized_shape)
+    if torch.jit.is_scripting():
+        # ndim = len(x.shape)
+        # dims = list(range(ndim - norm_ndim, ndim))  # this doesn't work on pytorch <= 1.13.x
+        # NOTE -ve dims cause torchscript to crash in some cases, out of options to work around
+        assert norm_ndim == 1
+        v = torch.var(x, dim=-1).unsqueeze(-1)  # ts crashes with -ve dim + keepdim=True
+    else:
+        dims = tuple(range(-1, -norm_ndim - 1, -1))
+        v = torch.var(x, dim=dims, keepdim=True)
     x = x * torch.rsqrt(v + eps)
     if weight is not None:
         x = x * weight
@@ -104,10 +112,15 @@ def fast_rms_norm(
     weight: Optional[torch.Tensor] = None,
     eps: float = 1e-5,
 ) -> torch.Tensor:
-    if torch.jit.is_scripting() or not has_apex_rmsnorm:
+    if torch.jit.is_scripting():
+        # this must be by itself, cannot merge with has_apex_rmsnorm
         return rms_norm(x, normalized_shape, weight, eps)
 
-    if weight is None:
-        return fused_rms_norm(x, normalized_shape, eps)
-    else:
-        return fused_rms_norm_affine(x, weight, normalized_shape, eps)
+    if has_apex_rmsnorm:
+        if weight is None:
+            return fused_rms_norm(x, normalized_shape, eps)
+        else:
+            return fused_rms_norm_affine(x, weight, normalized_shape, eps)
+
+    # fallback
+    return rms_norm(x, normalized_shape, weight, eps)

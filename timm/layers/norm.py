@@ -122,6 +122,7 @@ class LayerNormExp2d(nn.LayerNorm):
 class RmsNorm(nn.Module):
     """ RmsNorm w/ fast (apex) norm if available
     """
+    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine']
     normalized_shape: Tuple[int, ...]
     eps: float
     elementwise_affine: bool
