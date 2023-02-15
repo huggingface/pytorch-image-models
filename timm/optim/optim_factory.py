@@ -18,6 +18,7 @@ from .adamp import AdamP
 from .adan import Adan
 from .lamb import Lamb
 from .lars import Lars
+from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
 from .nadam import Nadam
@@ -313,6 +314,8 @@ def create_optimizer_v2(
         optimizer = optim.RMSprop(parameters, alpha=0.9, momentum=momentum, **opt_args)
     elif opt_lower == 'rmsproptf':
         optimizer = RMSpropTF(parameters, alpha=0.9, momentum=momentum, **opt_args)
+    elif opt_lower == 'lion':
+        optimizer = Lion(parameters, **opt_args)
 
     # second order
     elif opt_lower == 'adahessian':
