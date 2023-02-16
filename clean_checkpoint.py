@@ -11,8 +11,8 @@ import torch
 import argparse
 import os
 import hashlib
+import safetensors.torch
 import shutil
-from collections import OrderedDict
 from timm.models import load_state_dict
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Cleaner')
@@ -24,6 +24,8 @@ parser.add_argument('--no-use-ema', dest='no_use_ema', action='store_true',
                     help='use ema version of weights if present')
 parser.add_argument('--clean-aux-bn', dest='clean_aux_bn', action='store_true',
                     help='remove auxiliary batch norm layers (from SplitBN training) from checkpoint')
+parser.add_argument('--safetensors', action='store_true',
+                    help='Save weights using safetensors instead of the default torch way (pickle).')
 
 _TEMP_NAME = './_checkpoint.pth'
 
@@ -35,10 +37,10 @@ def main():
         print("Error: Output filename ({}) already exists.".format(args.output))
         exit(1)
 
-    clean_checkpoint(args.checkpoint, args.output, not args.no_use_ema, args.clean_aux_bn)
+    clean_checkpoint(args.checkpoint, args.output, not args.no_use_ema, args.clean_aux_bn, safe_serialization=args.safetensors)
 
 
-def clean_checkpoint(checkpoint, output='', use_ema=True, clean_aux_bn=False):
+def clean_checkpoint(checkpoint, output='', use_ema=True, clean_aux_bn=False, safe_serialization: bool=False):
     # Load an existing checkpoint to CPU, strip everything but the state_dict and re-save
     if checkpoint and os.path.isfile(checkpoint):
         print("=> Loading checkpoint '{}'".format(checkpoint))
@@ -53,10 +55,13 @@ def clean_checkpoint(checkpoint, output='', use_ema=True, clean_aux_bn=False):
             new_state_dict[name] = v
         print("=> Loaded state_dict from '{}'".format(checkpoint))
 
-        try:
-            torch.save(new_state_dict, _TEMP_NAME, _use_new_zipfile_serialization=False)
-        except:
-            torch.save(new_state_dict, _TEMP_NAME)
+        if safe_serialization:
+            safetensors.torch.save_file(new_state_dict, _TEMP_NAME)
+        else:
+            try:
+                torch.save(new_state_dict, _TEMP_NAME, _use_new_zipfile_serialization=False)
+            except:
+                torch.save(new_state_dict, _TEMP_NAME)
 
         with open(_TEMP_NAME, 'rb') as f:
             sha_hash = hashlib.sha256(f.read()).hexdigest()
@@ -67,7 +72,7 @@ def clean_checkpoint(checkpoint, output='', use_ema=True, clean_aux_bn=False):
         else:
             checkpoint_root = ''
             checkpoint_base = os.path.splitext(checkpoint)[0]
-        final_filename = '-'.join([checkpoint_base, sha_hash[:8]]) + '.pth'
+        final_filename = '-'.join([checkpoint_base, sha_hash[:8]]) + ('.safetensors' if safe_serialization else '.pth')
         shutil.move(_TEMP_NAME, os.path.join(checkpoint_root, final_filename))
         print("=> Saved state_dict to '{}, SHA256: {}'".format(final_filename, sha_hash))
         return final_filename
