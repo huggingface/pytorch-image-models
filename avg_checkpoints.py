@@ -17,21 +17,26 @@ import os
 import glob
 import hashlib
 from timm.models import load_state_dict
+import safetensors.torch
+
+DEFAULT_OUTPUT = "./average.pth"
+DEFAULT_SAFE_OUTPUT = "./average.safetensors"
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Averager')
 parser.add_argument('--input', default='', type=str, metavar='PATH',
                     help='path to base input folder containing checkpoints')
 parser.add_argument('--filter', default='*.pth.tar', type=str, metavar='WILDCARD',
                     help='checkpoint filter (path wildcard)')
-parser.add_argument('--output', default='./averaged.pth', type=str, metavar='PATH',
-                    help='output filename')
+parser.add_argument('--output', default=DEFAULT_OUTPUT, type=str, metavar='PATH',
+                    help=f'Output filename. Defaults to {DEFAULT_SAFE_OUTPUT} when passing --safetensors.')
 parser.add_argument('--no-use-ema', dest='no_use_ema', action='store_true',
                     help='Force not using ema version of weights (if present)')
 parser.add_argument('--no-sort', dest='no_sort', action='store_true',
                     help='Do not sort and select by checkpoint metric, also makes "n" argument irrelevant')
 parser.add_argument('-n', type=int, default=10, metavar='N',
                     help='Number of checkpoints to average')
-
+parser.add_argument('--safetensors', action='store_true',
+                    help='Save weights using safetensors instead of the default torch way (pickle).')
 
 def checkpoint_metric(checkpoint_path):
     if not checkpoint_path or not os.path.isfile(checkpoint_path):
@@ -54,6 +59,15 @@ def main():
     args.use_ema = not args.no_use_ema
     # by default sort by checkpoint metric (if present) and avg top n checkpoints
     args.sort = not args.no_sort
+
+    if args.safetensors and args.output == DEFAULT_OUTPUT:
+        # Default path changes if using safetensors
+        args.output = DEFAULT_SAFE_OUTPUT
+    if args.safetensors and not args.output.endswith(".safetensors"):
+        print(
+            "Warning: saving weights as safetensors but output file extension is not "
+            f"set to '.safetensors': {args.output}"
+        )
 
     if os.path.exists(args.output):
         print("Error: Output filename ({}) already exists.".format(args.output))
@@ -107,10 +121,13 @@ def main():
         v = v.clamp(float32_info.min, float32_info.max)
         final_state_dict[k] = v.to(dtype=torch.float32)
 
-    try:
-        torch.save(final_state_dict, args.output, _use_new_zipfile_serialization=False)
-    except:
-        torch.save(final_state_dict, args.output)
+    if args.safetensors:
+        safetensors.torch.save_file(final_state_dict, args.output)
+    else:
+        try:
+            torch.save(final_state_dict, args.output, _use_new_zipfile_serialization=False)
+        except:
+            torch.save(final_state_dict, args.output)
 
     with open(args.output, 'rb') as f:
         sha_hash = hashlib.sha256(f.read()).hexdigest()
