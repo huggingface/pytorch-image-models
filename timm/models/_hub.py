@@ -167,14 +167,14 @@ def load_state_dict_from_hf(model_id: str, filename: str = HF_WEIGHTS_NAME):
     for safe_filename in _get_safe_alternatives(filename):
         try:
             cached_safe_file = hf_hub_download(repo_id=hf_model_id, filename=safe_filename, revision=hf_revision)
-            _logger.warning(f"[{model_id}] Safe alternative available for '{filename}' (as '{safe_filename}'). Loading weights using safetensors.")
+            _logger.info(f"[{model_id}] Safe alternative available for '{filename}' (as '{safe_filename}'). Loading weights using safetensors.")
             return safetensors.torch.load_file(cached_safe_file, device="cpu")
         except EntryNotFoundError:
             pass
 
     # Otherwise, load using pytorch.load
     cached_file = hf_hub_download(hf_model_id, filename=filename, revision=hf_revision)
-    _logger.warning(f"[{model_id}] Safe alternative not found for '{filename}'. Loading weights using default pytorch.")
+    _logger.info(f"[{model_id}] Safe alternative not found for '{filename}'. Loading weights using default pytorch.")
     return torch.load(cached_file, map_location='cpu')
 
 
