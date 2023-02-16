@@ -48,6 +48,7 @@ from .rexnet import *
 from .selecsls import *
 from .senet import *
 from .sequencer import *
+from .simplenet import *
 from .sknet import *
 from .swin_transformer import *
 from .swin_transformer_v2 import *
