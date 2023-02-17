@@ -24,6 +24,13 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### Feb 16, 2023
+* `safetensor` checkpoint support added
+* Add ideas from 'Scaling Vision Transformers to 22 B. Params' (https://arxiv.org/abs/2302.05442) -- qk norm, RmsNorm, parallel block
+* Add F.scaled_dot_product_attention support (PyTorch 2.0 only) to `vit_*`, `vit_relpos*`, `coatnet` / `maxxvit` (to start)
+* Lion optimizer (w/ multi-tensor option) added (https://arxiv.org/abs/2302.06675)
+* gradient checkpointing works with `features_only=True`
+
 ### Feb 7, 2023
 * New inference benchmark numbers added in [results](results/) folder.
 * Add convnext LAION CLIP trained weights and initial set of in1k fine-tunes
