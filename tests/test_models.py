@@ -27,7 +27,7 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'swinv2_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'coatnet*', 'coatnext*', 'maxvit*', 'maxxvit*', 'eva_*', 'flexivit*'
+    'eva_*', 'flexivit*'
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -38,7 +38,7 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*', 'swin*huge*',
-        'swin*giant*', 'convnextv2_huge*']
+        'swin*giant*', 'convnextv2_huge*', 'maxvit_xlarge*', 'davit_giant', 'davit_huge']
     NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*', 'swin*giant*', 'eva_giant*']
 else:
     EXCLUDE_FILTERS = []
@@ -53,7 +53,7 @@ MAX_JIT_SIZE = 320
 TARGET_FFEAT_SIZE = 96
 MAX_FFEAT_SIZE = 256
 TARGET_FWD_FX_SIZE = 128
-MAX_FWD_FX_SIZE = 224
+MAX_FWD_FX_SIZE = 256
 TARGET_BWD_FX_SIZE = 128
 MAX_BWD_FX_SIZE = 224
 
@@ -269,7 +269,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 EXCLUDE_JIT_FILTERS = [
     '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*', 'ghostnet*',  # hopefully fix at some point
+    'dla*', 'hrnet*', 'ghostnet*'  # hopefully fix at some point
     'vit_large_*', 'vit_huge_*', 'vit_gi*',
 ]
 

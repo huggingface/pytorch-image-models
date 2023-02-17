@@ -41,6 +41,7 @@ from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, GroupNormAct
@@ -211,6 +212,7 @@ class EfficientNetFeatures(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         # Stem
         if not fix_stem:
@@ -241,6 +243,10 @@ class EfficientNetFeatures(nn.Module):
             hooks = self.feature_info.get_dicts(keys=('module', 'hook_type'))
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
 
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
     def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)
         x = self.bn1(x)
@@ -249,7 +255,10 @@ class EfficientNetFeatures(nn.Module):
             if 0 in self._stage_out_idx:
                 features.append(x)  # add stem out
             for i, b in enumerate(self.blocks):
-                x = b(x)
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    x = checkpoint(b, x)
+                else:
+                    x = b(x)
                 if i + 1 in self._stage_out_idx:
                     features.append(x)
             return features

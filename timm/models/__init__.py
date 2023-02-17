@@ -8,12 +8,14 @@ from .convmixer import *
 from .convnext import *
 from .crossvit import *
 from .cspnet import *
+from .davit import *
 from .deit import *
 from .densenet import *
 from .dla import *
 from .dpn import *
 from .edgenext import *
 from .efficientformer import *
+from .efficientformer_v2 import *
 from .efficientnet import *
 from .focalnet import *
 from .gcvit import *

@@ -7,6 +7,7 @@ import os
 from collections import OrderedDict
 
 import torch
+import safetensors.torch
 
 import timm.models._builder
 
@@ -26,7 +27,12 @@ def clean_state_dict(state_dict):
 
 def load_state_dict(checkpoint_path, use_ema=True):
     if checkpoint_path and os.path.isfile(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        # Check if safetensors or not and load weights accordingly
+        if str(checkpoint_path).endswith(".safetensors"):
+            checkpoint = safetensors.torch.load_file(checkpoint_path, device='cpu')
+        else:
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+
         state_dict_key = ''
         if isinstance(checkpoint, dict):
             if use_ema and checkpoint.get('state_dict_ema', None) is not None:
