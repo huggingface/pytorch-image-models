@@ -773,6 +773,16 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=768),
+    'convnext_large_mlp.clip_laion2b_ft_320': _cfg(
+        hf_hub_id='laion/CLIP-convnext_large_d_320.laion2B-s29B-b131K-ft',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, num_classes=768),
+    'convnext_large_mlp.clip_laion2b_ft_soup_320': _cfg(
+        hf_hub_id='laion/CLIP-convnext_large_d_320.laion2B-s29B-b131K-ft-soup',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0, num_classes=768),
 })
 
 
