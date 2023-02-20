@@ -14,12 +14,12 @@ exec(open('timm/version.py').read())
 setup(
     name='timm',
     version=__version__,
-    description='(Unofficial) PyTorch Image Models',
+    description='PyTorch Image Models',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/rwightman/pytorch-image-models',
+    url='https://github.com/huggingface/pytorch-image-models',
     author='Ross Wightman',
-    author_email='hello@rwightman.com',
+    author_email='ross@huggingface.co',
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha
@@ -29,11 +29,11 @@ setup(
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'Topic :: Software Development',
@@ -45,7 +45,7 @@ setup(
     keywords='pytorch pretrained models efficientnet mobilenetv3 mnasnet resnet vision transformer vit',
     packages=find_packages(exclude=['convert', 'tests', 'results']),
     include_package_data=True,
-    install_requires=['torch >= 1.7', 'torchvision', 'pyyaml', 'huggingface_hub'],
-    python_requires='>=3.6',
+    install_requires=['torch >= 1.7', 'torchvision', 'pyyaml', 'huggingface_hub', 'safetensors'],
+    python_requires='>=3.7',
 )
 
