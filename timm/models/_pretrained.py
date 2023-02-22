@@ -93,7 +93,7 @@ class DefaultCfg:
         return tag, self.cfgs[tag]
 
 
-def split_model_name_tag(model_name: str, no_tag=''):
+def split_model_name_tag(model_name: str, no_tag: str = '') -> Tuple[str, str]:
     model_name, *tag_list = model_name.split('.', 1)
     tag = tag_list[0] if tag_list else no_tag
     return model_name, tag
