@@ -73,18 +73,13 @@ There are a LOT of gaps in current documentation relative to the functionality i
 
 # Installation
 
-Create a Python virtual environment using Python 3.10. Inside the environment, install the following test dependencies:
-
-```
-python -m pip install pytest pytest-timeout pytest-xdist pytest-forked expecttest
-```
-
-Install `torch` and `torchvision` using the instructions matching your system as listed on the [PyTorch website](https://pytorch.org/).
+Create a Python virtual environment using Python 3.10. Inside the environment, install torch` and `torchvision` using the instructions matching your system as listed on the [PyTorch website](https://pytorch.org/).
 
 Then install the remaining dependencies:
 
 ```
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt  # for testing
 python -m pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git
 python -m pip install -e .
 ```
