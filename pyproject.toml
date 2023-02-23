@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+addopts = "--cov=timm --cov-report=term-missing"
+
+[tool.coverage.run]
+omit = [
+    "tests/test_*.py",
+]
+
+[tool.black]
+line-length = 120
+target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+skip-string-normalization = true
