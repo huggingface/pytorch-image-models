@@ -9,10 +9,11 @@ markers = [
     "fxbackward: marker for model tests using torch fx (only backward)",
 ]
 
-[tool.coverage.run]
-omit = [
-    "tests/test_*.py",
-]
+# [tool.coverage.run]
+# omit = [
+#     "timm/models/*",
+#     "tests/test_*.py",
+# ]
 
 [tool.black]
 line-length = 120
