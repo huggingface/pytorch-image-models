@@ -19,6 +19,7 @@ jobs:
         python: ['3.10']
         torch: ['1.13.0']
         torchvision: ['0.14.0']
+        testmarkers: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fx']
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -54,10 +55,10 @@ jobs:
         PYTHONDONTWRITEBYTECODE: 1
       run: |
         pytest -vv tests
-    - name: Run tests on Linux / Mac
+    - name: Run '${{ matrix.testmarkers }}' tests on Linux / Mac
       if: ${{ !startsWith(matrix.os, 'windows') }}
       env:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
         PYTHONDONTWRITEBYTECODE: 1
       run: |
-        pytest -vv --forked --durations=0 tests
+        pytest -vv --forked --durations=0 ${{ matrix.testmarker }} tests
