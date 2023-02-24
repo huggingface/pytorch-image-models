@@ -3,4 +3,3 @@ pytest-timeout
 pytest-xdist
 pytest-forked
 expecttest
-pytest-cov

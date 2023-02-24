@@ -1,3 +1,16 @@
+"""Run tests for all models
+
+Tests that run on CI should have a specific marker, e.g. @pytest.mark.base. This
+marker is used to parallelize the CI runs, with one runner for each marker.
+
+If new tests are added, ensure that they use one of the existing markers
+(documented in pyproject.toml > pytest > markers) or that a new marker is added
+for this set of tests. If using a new marker, adjust the test matrix in
+.github/workflows/tests.yml to run tests with this new marker, otherwise the
+tests will be skipped on CI.
+
+"""
+
 import pytest
 import torch
 import platform
@@ -83,6 +96,7 @@ def _get_input_size(model=None, model_name='', target=None):
     return input_size
 
 
+@pytest.mark.base
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
@@ -101,6 +115,7 @@ def test_model_forward(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
+@pytest.mark.base
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
@@ -128,6 +143,7 @@ def test_model_backward(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
+@pytest.mark.cfg
 @pytest.mark.timeout(300)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
@@ -190,6 +206,7 @@ def test_model_default_cfgs(model_name, batch_size):
         assert fc + ".weight" in state_dict.keys(), f'{fc} not in model params'
 
 
+@pytest.mark.cfg
 @pytest.mark.timeout(300)
 @pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
@@ -274,6 +291,7 @@ EXCLUDE_JIT_FILTERS = [
 ]
 
 
+@pytest.mark.torchscript
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize(
     'model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS, name_matches_cfg=True))
@@ -303,6 +321,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     EXCLUDE_FEAT_FILTERS += ['*resnext101_32x32d', '*resnext101_32x16d']
 
 
+@pytest.mark.features
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
@@ -379,6 +398,7 @@ if not _IS_MAC:
         ]
 
 
+    @pytest.mark.fxforward
     @pytest.mark.timeout(120)
     @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FX_FILTERS))
     @pytest.mark.parametrize('batch_size', [1])
@@ -412,6 +432,7 @@ if not _IS_MAC:
         assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
+    @pytest.mark.fxbackward
     @pytest.mark.timeout(120)
     @pytest.mark.parametrize('model_name', list_models(
         exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FX_FILTERS, name_matches_cfg=True))

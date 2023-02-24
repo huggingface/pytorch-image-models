@@ -1,9 +1,11 @@
 [tool.pytest.ini_options]
-addopts = "--cov=timm --cov-report=term-missing"
-
-[tool.coverage.run]
-omit = [
-    "tests/test_*.py",
+markers = [
+    "base: marker for model tests using the basic setup",
+    "cfg: marker for model tests checking the config",
+    "torchscript: marker for model tests using torchscript",
+    "features: marker for model tests checking feature extraction",
+    "fxforward: marker for model tests using torch fx (only forward)",
+    "fxbackward: marker for model tests using torch fx (only backward)",
 ]
 
 [tool.black]
