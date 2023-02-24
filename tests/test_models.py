@@ -398,7 +398,7 @@ if not _IS_MAC:
         ]
 
 
-    @pytest.mark.fx
+    @pytest.mark.fxforward
     @pytest.mark.timeout(120)
     @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FX_FILTERS))
     @pytest.mark.parametrize('batch_size', [1])
@@ -432,7 +432,7 @@ if not _IS_MAC:
         assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
-    @pytest.mark.fx
+    @pytest.mark.fxbackward
     @pytest.mark.timeout(120)
     @pytest.mark.parametrize('model_name', list_models(
         exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FX_FILTERS, name_matches_cfg=True))

@@ -5,7 +5,8 @@ markers = [
     "cfg: marker for model tests checking the config",
     "torchscript: marker for model tests using torchscript",
     "features: marker for model tests checking feature extraction",
-    "fx: marker for model tests using torch fx",
+    "fxforward: marker for model tests using torch fx (only forward)",
+    "fxbackward: marker for model tests using torch fx (only backward)",
 ]
 
 [tool.coverage.run]
