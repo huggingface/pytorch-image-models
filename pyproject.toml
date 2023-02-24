@@ -1,5 +1,4 @@
 [tool.pytest.ini_options]
-addopts = "--cov=timm --cov-report=term-missing"
 markers = [
     "base: marker for model tests using the basic setup",
     "cfg: marker for model tests checking the config",
