@@ -1,8 +1,8 @@
 """
 Poolformer from MetaFormer is Actually What You Need for Vision https://arxiv.org/abs/2111.11418
 
-MetaFormer baselines including IdentityFormer, RandFormer, PoolFormerV2,
-ConvFormer, and CAFormer as per https://arxiv.org/abs/2210.13452
+IdentityFormer, RandFormer, PoolFormerV2, ConvFormer, and CAFormer
+from MetaFormer Baselines for Vision https://arxiv.org/abs/2210.13452
 
 Adapted from https://github.com/sail-sg/metaformer, original copyright below
 """
