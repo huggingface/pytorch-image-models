@@ -1,8 +1,8 @@
 """
 Poolformer from MetaFormer is Actually What You Need for Vision https://arxiv.org/abs/2111.11418
 
-MetaFormer baselines including IdentityFormer, RandFormer, PoolFormerV2,
-ConvFormer, and CAFormer as per https://arxiv.org/abs/2210.13452
+IdentityFormer, RandFormer, PoolFormerV2, ConvFormer, and CAFormer
+from MetaFormer Baselines for Vision https://arxiv.org/abs/2210.13452
 
 Adapted from https://github.com/sail-sg/metaformer, original copyright below
 """
@@ -30,7 +30,7 @@ import torch.nn as nn
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1
+from timm.layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d
 from timm.layers.helpers import to_2tuple
 from ._builder import build_model_with_cfg
 from ._features import FeatureInfo
@@ -66,7 +66,7 @@ class Stem(nn.Module):
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.norm(x)
         # [B, C, H, W]
         return x
 
@@ -93,10 +93,9 @@ class Downsampling(nn.Module):
         )
 
     def forward(self, x):
-        x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.norm(x)
         x = self.conv(x)
         return x
-
 
 class Scale(nn.Module):
     """
@@ -104,11 +103,10 @@ class Scale(nn.Module):
     """
     def __init__(self, dim, init_value=1.0, trainable=True):
         super().__init__()
-        self.scale = nn.Parameter(init_value * torch.ones(dim), requires_grad=trainable)
+        self.scale = nn.Parameter(init_value * torch.ones(dim, 1, 1), requires_grad=trainable)
 
     def forward(self, x):
         return x * self.scale
-        
 
 class SquaredReLU(nn.Module):
     """
@@ -119,7 +117,6 @@ class SquaredReLU(nn.Module):
         self.relu = nn.ReLU(inplace=inplace)
     def forward(self, x):
         return torch.square(self.relu(x))
-
 
 class StarReLU(nn.Module):
     """
@@ -137,12 +134,6 @@ class StarReLU(nn.Module):
             requires_grad=bias_learnable)
     def forward(self, x):
         return self.scale * self.relu(x)**2 + self.bias
-
-class Conv2dChannelsLast(nn.Conv2d):
-    def forward(self, x):
-        x = x.permute(0, 3, 1, 2)
-        return self._conv_forward(x, self.weight, self.bias).permute(0, 2, 3, 1)
-
 
 class Attention(nn.Module):
     """
@@ -169,9 +160,9 @@ class Attention(nn.Module):
 
         
     def forward(self, x):
-        B, H, W, C = x.shape
+        B, C, H, W = x.shape
         N = H * W
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        qkv = self.qkv(x.permute(0, 2, 3, 1)).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -181,8 +172,8 @@ class Attention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
         x = self.proj(x)
         x = self.proj_drop(x)
+        x = x.reshape(B, C, H, W)
         return x
-
 
 class RandomMixing(nn.Module):
     def __init__(self, num_tokens=196, **kwargs):
@@ -192,64 +183,25 @@ class RandomMixing(nn.Module):
             data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
             requires_grad=False)
     def forward(self, x):
-        B, H, W, C = x.shape
+        B, C, H, W = x.shape
         x = x.reshape(B, H*W, C)
         # FIXME change to work with arbitrary input sizes
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
-        x = x.reshape(B, H, W, C)
+        x = x.reshape(B, C, H, W)
         return x
 
+# custom norm modules that disable the bias term, since the original models defs
+# used a custom norm with a weight term but no bias term.
 
-class LayerNormGeneral(nn.Module):
-    r""" General LayerNorm for different situations.
+class GroupNorm1WithoutBias(GroupNorm1):
+    def __init__(self, num_channels, **kwargs):
+        super().__init__(num_channels, **kwargs)
+        self.bias = None
 
-    Args:
-        affine_shape (int, list or tuple): The shape of affine weight and bias.
-            Usually the affine_shape=C, but in some implementation, like torch.nn.LayerNorm,
-            the affine_shape is the same as normalized_dim by default. 
-            To adapt to different situations, we offer this argument here.
-        normalized_dim (tuple or list): Which dims to compute mean and variance. 
-        scale (bool): Flag indicates whether to use scale or not.
-        bias (bool): Flag indicates whether to use scale or not.
-
-        We give several examples to show how to specify the arguments.
-
-        LayerNorm (https://arxiv.org/abs/1607.06450):
-            For input shape of (B, *, C) like (B, N, C) or (B, H, W, C),
-                affine_shape=C, normalized_dim=(-1, ), scale=True, bias=True;
-            For input shape of (B, C, H, W),
-                affine_shape=(C, 1, 1), normalized_dim=(1, ), scale=True, bias=True.
-
-        Modified LayerNorm (https://arxiv.org/abs/2111.11418)
-            that is idental to partial(torch.nn.GroupNorm, num_groups=1):
-            For input shape of (B, N, C),
-                affine_shape=C, normalized_dim=(1, 2), scale=True, bias=True;
-            For input shape of (B, H, W, C),
-                affine_shape=C, normalized_dim=(1, 2, 3), scale=True, bias=True;
-            For input shape of (B, C, H, W),
-                affine_shape=(C, 1, 1), normalized_dim=(1, 2, 3), scale=True, bias=True.
-
-        For the several metaformer baslines,
-            IdentityFormer, RandFormer and PoolFormerV2 utilize Modified LayerNorm without bias (bias=False);
-            ConvFormer and CAFormer utilizes LayerNorm without bias (bias=False).
-    """
-    def __init__(self, affine_shape=None, normalized_dim=(-1, ), scale=True, 
-        bias=True, eps=1e-5):
-        super().__init__()
-        self.normalized_dim = normalized_dim
-        self.use_scale = scale
-        self.use_bias = bias
-        self.weight = nn.Parameter(torch.ones(affine_shape)) if scale else 1
-        self.bias = nn.Parameter(torch.zeros(affine_shape)) if bias else 0
-        self.eps = eps
-
-    def forward(self, x):
-        c = x - x.mean(self.normalized_dim, keepdim=True)
-        s = c.pow(2).mean(self.normalized_dim, keepdim=True)
-        x = c / torch.sqrt(s + self.eps)
-        x = x * self.weight
-        x = x + self.bias
-        return x
+class LayerNorm2dWithoutBias(LayerNorm2d):
+    def __init__(self, num_channels, **kwargs):
+        super().__init__(num_channels, **kwargs)
+        self.bias = None
 
 class SepConv(nn.Module):
     r"""
@@ -260,30 +212,29 @@ class SepConv(nn.Module):
         bias=False, kernel_size=7, padding=3,
         **kwargs, ):
         super().__init__()
-        med_channels = int(expansion_ratio * dim)
-        self.pwconv1 = nn.Linear(dim, med_channels, bias=bias)
+        mid_channels = int(expansion_ratio * dim)
+        #self.pwconv1 = nn.Linear(dim, mid_channels, bias=bias)
+        self.pwconv1 = nn.Conv2d(dim, mid_channels, kernel_size=1, bias=bias)
         self.act1 = act1_layer()
         self.dwconv = nn.Conv2d(
-            med_channels, med_channels, kernel_size=kernel_size,
-            padding=padding, groups=med_channels, bias=bias) # depthwise conv
+            mid_channels, mid_channels, kernel_size=kernel_size,
+            padding=padding, groups=mid_channels, bias=bias) # depthwise conv
         self.act2 = act2_layer()
-        self.pwconv2 = nn.Linear(med_channels, dim, bias=bias)
+        #self.pwconv2 = nn.Linear(mid_channels, dim, bias=bias)
+        self.pwconv2 = nn.Conv2d(mid_channels, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
+        # [B, C, H, W]
         x = self.pwconv1(x)
         x = self.act1(x)
-        x = x.permute(0, 3, 1, 2)
         x = self.dwconv(x)
-        x = x.permute(0, 2, 3, 1)
         x = self.act2(x)
         x = self.pwconv2(x)
         return x
 
-
 class Pooling(nn.Module):
     """
     Implementation of pooling for PoolFormer: https://arxiv.org/abs/2111.11418
-    Modfiled for [B, H, W, C] input
     """
     def __init__(self, pool_size=3, **kwargs):
         super().__init__()
@@ -291,11 +242,8 @@ class Pooling(nn.Module):
             pool_size, stride=1, padding=pool_size//2, count_include_pad=False)
 
     def forward(self, x):
-        y = x.permute(0, 3, 1, 2)
-        y = self.pool(y)
-        y = y.permute(0, 2, 3, 1)
+        y = self.pool(x)
         return y - x
-
 
 class Mlp(nn.Module):
     """ MLP as used in MetaFormer models, eg Transformer, MLP-Mixer, PoolFormer, MetaFormer baslines and related networks.
@@ -307,7 +255,7 @@ class Mlp(nn.Module):
         mlp_ratio=4,
         out_features=None,
         act_layer=StarReLU,
-        mlp_fn=nn.Linear,
+        mlp_fn=partial(nn.Conv2d, kernel_size=1),
         drop=0.,
         bias=False
     ):
@@ -331,12 +279,11 @@ class Mlp(nn.Module):
         x = self.drop2(x)
         return x
 
-
 class MlpHead(nn.Module):
     """ MLP classification head
     """
     def __init__(self, dim, num_classes=1000, mlp_ratio=4, act_layer=SquaredReLU,
-        norm_layer=nn.LayerNorm, head_dropout=0., bias=True):
+        norm_layer=LayerNorm, head_dropout=0., bias=True):
         super().__init__()
         hidden_features = int(mlp_ratio * dim)
         self.fc1 = nn.Linear(dim, hidden_features, bias=bias)
@@ -354,7 +301,6 @@ class MlpHead(nn.Module):
         x = self.fc2(x)
         return x
 
-
 class MetaFormerBlock(nn.Module):
     """
     Implementation of one MetaFormer block.
@@ -364,11 +310,12 @@ class MetaFormerBlock(nn.Module):
         dim,
         token_mixer=nn.Identity,
         mlp=Mlp,
-        mlp_fn=nn.Linear,
+        mlp_fn=nn.Conv2d,
         mlp_act=StarReLU,
         mlp_bias=False,
-        norm_layer=nn.LayerNorm,
-        drop=0., drop_path=0.,
+        norm_layer=LayerNorm2d,
+        drop=0., 
+        drop_path=0.,
         layer_scale_init_value=None,
         res_scale_init_value=None
      ):
@@ -419,13 +366,13 @@ class MetaFormerStage(nn.Module):
         in_chs,
         out_chs,
         depth=2,
-        downsample_norm=partial(LayerNormGeneral, bias=False, eps=1e-6),
+        downsample_norm=LayerNorm2d,
         token_mixer=nn.Identity,
         mlp=Mlp,
         mlp_fn=nn.Linear,
         mlp_act=StarReLU,
         mlp_bias=False,
-        norm_layer=partial(LayerNormGeneral, eps=1e-6, bias=False),
+        norm_layer=LayerNorm2d,
         dp_rates=[0.]*2,
         layer_scale_init_value=None,
         res_scale_init_value=None,
@@ -464,16 +411,15 @@ class MetaFormerStage(nn.Module):
     # Permute to channels-first for feature extraction
     def forward(self, x: Tensor):
         
-        # [B, C, H, W] -> [B, H, W, C]
-        x = self.downsample(x).permute(0, 2, 3, 1)
+        # [B, C, H, W]
+        x = self.downsample(x)
         
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
         
-        # [B, H, W, C] -> [B, C, H, W]
-        x = x.permute(0, 3, 1, 2)
+        # [B, C, H, W]
         return x
 
 class MetaFormer(nn.Module):
@@ -504,18 +450,18 @@ class MetaFormer(nn.Module):
         num_classes=1000, 
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
-        downsample_norm=partial(LayerNormGeneral, bias=False, eps=1e-6),
+        downsample_norm=LayerNorm2dWithoutBias,
         token_mixers=nn.Identity,
         mlps=Mlp,
-        mlp_fn=nn.Linear,
+        mlp_fn=partial(nn.Conv2d, kernel_size=1),
         mlp_act=StarReLU,
         mlp_bias=False,
-        norm_layers=partial(LayerNormGeneral, eps=1e-6, bias=False),
+        norm_layers=GroupNorm1WithoutBias,
         drop_path_rate=0.,
         drop_rate=0.0, 
         layer_scale_init_values=None,
         res_scale_init_values=[None, None, 1.0, 1.0],
-        output_norm=partial(nn.LayerNorm, eps=1e-6), 
+        output_norm=LayerNorm2d, 
         head_norm_first=False,
         head_fn=nn.Linear,
         global_pool = 'avg',
@@ -635,7 +581,7 @@ class MetaFormer(nn.Module):
     def forward_head(self, x: Tensor, pre_logits: bool = False):
         # NOTE nn.Sequential in head broken down since can't call head[:-1](x) in torchscript :(
         x = self.head.global_pool(x)
-        x = self.head.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.head.norm(x)
         x = self.head.flatten(x)
         return x if pre_logits else self.head.fc(x)
         
@@ -645,7 +591,7 @@ class MetaFormer(nn.Module):
             x = checkpoint_seq(self.stages, x)
         else:
             x = self.stages(x)
-        x = self.norm_pre(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.norm_pre(x)
         return x 
 
     def forward(self, x: Tensor):
@@ -679,9 +625,18 @@ def checkpoint_filter_fn(state_dict, model):
         k = k.replace('pre_norm', 'norm')
         k = re.sub(r'^head', 'head.fc', k)
         k = re.sub(r'^norm', 'head.norm', k)
+        
+        if ((("fc1.weight" in k) \
+            or ("fc2.weight" in k)) \
+            and "fc.fc" not in k) \
+            or ("res_scale1.scale" in k) \
+            or ("res_scale2.scale" in k) \
+            or ("pwconv1.weight" in k) \
+            or ("pwconv2.weight" in k):
+            v = v.reshape(*v.shape, 1, 1)
+        
         out_dict[k] = v
     return out_dict
-
 
 def _create_metaformer(variant, pretrained=False, **kwargs):
     default_out_indices = tuple(i for i, _ in enumerate(kwargs.get('depths', (2, 2, 6, 2))))
@@ -696,7 +651,6 @@ def _create_metaformer(variant, pretrained=False, **kwargs):
         **kwargs)
         
     return model
-
 
 def _cfg(url='', **kwargs):
     return {
@@ -900,10 +854,8 @@ def poolformerv1_s12(pretrained=False, **kwargs):
         dims=[64, 128, 320, 512],
         downsample_norm=None,
         token_mixers=Pooling,
-        mlp_fn=partial(Conv2dChannelsLast, kernel_size=1),
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=True),
         layer_scale_init_values=1e-5,
         res_scale_init_values=None,
         **kwargs)
@@ -916,10 +868,8 @@ def poolformerv1_s24(pretrained=False, **kwargs):
         dims=[64, 128, 320, 512],
         downsample_norm=None,
         token_mixers=Pooling,
-        mlp_fn=partial(Conv2dChannelsLast, kernel_size=1),
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=True),
         layer_scale_init_values=1e-5,
         res_scale_init_values=None,
         **kwargs)
@@ -932,10 +882,8 @@ def poolformerv1_s36(pretrained=False, **kwargs):
         dims=[64, 128, 320, 512],
         downsample_norm=None,
         token_mixers=Pooling,
-        mlp_fn=partial(Conv2dChannelsLast, kernel_size=1),
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=True),
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -948,10 +896,8 @@ def poolformerv1_m36(pretrained=False, **kwargs):
         dims=[96, 192, 384, 768],
         downsample_norm=None,
         token_mixers=Pooling,
-        mlp_fn=partial(Conv2dChannelsLast, kernel_size=1),
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=True),
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -964,10 +910,8 @@ def poolformerv1_m48(pretrained=False, **kwargs):
         dims=[96, 192, 384, 768],
         downsample_norm=None,
         token_mixers=Pooling,
-        mlp_fn=partial(Conv2dChannelsLast, kernel_size=1),
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=True),
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -979,7 +923,6 @@ def identityformer_s12(pretrained=False, **kwargs):
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
         token_mixers=nn.Identity,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('identityformer_s12', pretrained=pretrained, **model_kwargs)
 
@@ -989,7 +932,6 @@ def identityformer_s24(pretrained=False, **kwargs):
         depths=[4, 4, 12, 4],
         dims=[64, 128, 320, 512],
         token_mixers=nn.Identity,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('identityformer_s24', pretrained=pretrained, **model_kwargs)
 
@@ -999,7 +941,6 @@ def identityformer_s36(pretrained=False, **kwargs):
         depths=[6, 6, 18, 6],
         dims=[64, 128, 320, 512],
         token_mixers=nn.Identity,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('identityformer_s36', pretrained=pretrained, **model_kwargs)
 
@@ -1009,7 +950,6 @@ def identityformer_m36(pretrained=False, **kwargs):
         depths=[6, 6, 18, 6],
         dims=[96, 192, 384, 768],
         token_mixers=nn.Identity,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('identityformer_m36', pretrained=pretrained, **model_kwargs)
 
@@ -1019,7 +959,6 @@ def identityformer_m48(pretrained=False, **kwargs):
         depths=[8, 8, 24, 8],
         dims=[96, 192, 384, 768],
         token_mixers=nn.Identity,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('identityformer_m48', pretrained=pretrained, **model_kwargs)
 
@@ -1029,7 +968,6 @@ def randformer_s12(pretrained=False, **kwargs):
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
         token_mixers=[nn.Identity, nn.Identity, RandomMixing, partial(RandomMixing, num_tokens=49)],
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('randformer_s12', pretrained=pretrained, **model_kwargs)
 
@@ -1039,7 +977,6 @@ def randformer_s24(pretrained=False, **kwargs):
         depths=[4, 4, 12, 4],
         dims=[64, 128, 320, 512],
         token_mixers=[nn.Identity, nn.Identity, RandomMixing, partial(RandomMixing, num_tokens=49)],
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('randformer_s24', pretrained=pretrained, **model_kwargs)
 
@@ -1049,7 +986,6 @@ def randformer_s36(pretrained=False, **kwargs):
         depths=[6, 6, 18, 6],
         dims=[64, 128, 320, 512],
         token_mixers=[nn.Identity, nn.Identity, RandomMixing, partial(RandomMixing, num_tokens=49)],
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('randformer_s36', pretrained=pretrained, **model_kwargs)
 
@@ -1059,7 +995,6 @@ def randformer_m36(pretrained=False, **kwargs):
         depths=[6, 6, 18, 6],
         dims=[96, 192, 384, 768],
         token_mixers=[nn.Identity, nn.Identity, RandomMixing, partial(RandomMixing, num_tokens=49)],
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('randformer_m36', pretrained=pretrained, **model_kwargs)
 
@@ -1069,7 +1004,6 @@ def randformer_m48(pretrained=False, **kwargs):
         depths=[8, 8, 24, 8],
         dims=[96, 192, 384, 768],
         token_mixers=[nn.Identity, nn.Identity, RandomMixing, partial(RandomMixing, num_tokens=49)],
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('randformer_m48', pretrained=pretrained, **model_kwargs)
 
@@ -1079,7 +1013,6 @@ def poolformerv2_s12(pretrained=False, **kwargs):
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
         token_mixers=Pooling,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('poolformerv2_s12', pretrained=pretrained, **model_kwargs)
 
@@ -1089,7 +1022,6 @@ def poolformerv2_s24(pretrained=False, **kwargs):
         depths=[4, 4, 12, 4],
         dims=[64, 128, 320, 512],
         token_mixers=Pooling,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('poolformerv2_s24', pretrained=pretrained, **model_kwargs)
 
@@ -1101,7 +1033,6 @@ def poolformerv2_s36(pretrained=False, **kwargs):
         depths=[6, 6, 18, 6],
         dims=[64, 128, 320, 512],
         token_mixers=Pooling,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('poolformerv2_s36', pretrained=pretrained, **model_kwargs)
 
@@ -1113,7 +1044,6 @@ def poolformerv2_m36(pretrained=False, **kwargs):
         depths=[6, 6, 18, 6],
         dims=[96, 192, 384, 768],
         token_mixers=Pooling,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('poolformerv2_m36', pretrained=pretrained, **model_kwargs)
 
@@ -1124,7 +1054,6 @@ def poolformerv2_m48(pretrained=False, **kwargs):
         depths=[8, 8, 24, 8],
         dims=[96, 192, 384, 768],
         token_mixers=Pooling,
-        norm_layers=partial(LayerNormGeneral, normalized_dim=(1, 2, 3), eps=1e-6, bias=False),
         **kwargs)
     return _create_metaformer('poolformerv2_m48', pretrained=pretrained, **model_kwargs)
 
