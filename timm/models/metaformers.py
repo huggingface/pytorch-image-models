@@ -414,7 +414,6 @@ class MetaFormerStage(nn.Module):
             x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
-        
         return x
 
 class MetaFormer(nn.Module):
