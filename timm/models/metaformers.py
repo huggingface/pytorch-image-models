@@ -178,14 +178,11 @@ class Attention(nn.Module):
 class RandomMixing(nn.Module):
     def __init__(self, num_tokens=196, **kwargs):
         super().__init__()
-        # FIXME no grad breaks tests
-        self.random_matrix = nn.parameter.Parameter(
-            data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
-            requires_grad=False)
+        self.register_buffer('random_matrix', torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1))
     def forward(self, x):
         B, C, H, W = x.shape
-        x = x.reshape(B, H*W, C)
         # FIXME change to work with arbitrary input sizes
+        x = x.reshape(B, H*W, C)
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.reshape(B, C, H, W)
         return x
@@ -408,7 +405,6 @@ class MetaFormerStage(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
     
-    # Permute to channels-first for feature extraction
     def forward(self, x: Tensor):
         
         # [B, C, H, W]
@@ -419,7 +415,6 @@ class MetaFormerStage(nn.Module):
         else:
             x = self.blocks(x)
         
-        # [B, C, H, W]
         return x
 
 class MetaFormer(nn.Module):
