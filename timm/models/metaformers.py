@@ -27,6 +27,7 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -181,10 +182,9 @@ class RandomMixing(nn.Module):
         self.register_buffer('random_matrix', torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1))
     def forward(self, x):
         B, C, H, W = x.shape
-        # FIXME change to work with arbitrary input sizes
         x = x.reshape(B, H*W, C)
-        #x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
-        x = (x.transpose(-1, -2) @ self.random_matrix.transpose(-1, -2)).transpose(-1, -2)
+        resized_matrix = F.interpolate(self.random_matrix.view(1,1,*self.random_matrix.shape), size=(H*W, H*W)).view(H*W, H*W)
+        x = torch.einsum('mn, bnc -> bmc', resized_matrix, x)
         x = x.reshape(B, C, H, W)
         return x
 
