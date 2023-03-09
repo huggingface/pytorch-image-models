@@ -121,7 +121,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
   * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
   * `train.py /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
-* Cleanup some popular models to better support arg passthrough / merge with model configs, more to go. 
+* Cleanup some popular models to better support arg passthrough / merge with model configs, more to go.
 
 ### Jan 5, 2023
 * ConvNeXt-V2 models and weights added to existing `convnext.py`
@@ -151,7 +151,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 | eva_large_patch14_196.in22k_ft_in1k       | 87.9 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
 
 ### Dec 6, 2022
-* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
+* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`.
   * original source: https://github.com/baaivision/EVA
   * paper: https://arxiv.org/abs/2211.07636
 
@@ -246,7 +246,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `maxxvit_rmlp_small_rw_256` - 84.6 @ 256, 84.9 @ 288 (G) -- could be trained better, hparams need tuning (uses ConvNeXt block, no BN)
   * `coatnet_rmlp_2_rw_224` - 84.6 @ 224, 85 @ 320  (T)
   * NOTE: official MaxVit weights (in1k) have been released at https://github.com/google-research/maxvit -- some extra work is needed to port and adapt since my impl was created independently of theirs and has a few small differences + the whole TF same padding fun.
-  
+
 ### Sept 23, 2022
 * LAION-2B CLIP image towers supported as pretrained backbones for fine-tune or features (no classifier)
   * vit_base_patch32_224_clip_laion2b
@@ -277,7 +277,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `coatnet_bn_0_rw_224` - 82.4  (T)
   * `maxvit_nano_rw_256` - 82.9 @ 256  (T)
   * `coatnet_rmlp_1_rw_224` - 83.4 @ 224, 84 @ 320  (T)
-  * `coatnet_1_rw_224` - 83.6 @ 224 (G) 
+  * `coatnet_1_rw_224` - 83.6 @ 224 (G)
   * (T) = TPU trained with `bits_and_tpu` branch training code, (G) = GPU trained
 * GCVit (weights adapted from https://github.com/NVlabs/GCVit, code 100% `timm` re-write for license purposes)
 * MViT-V2 (multi-scale vit, adapted from https://github.com/facebookresearch/mvit)
@@ -292,7 +292,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `convnext_atto_ols` - 75.9  @ 224, 77.2 @ 288
 
 ### Aug 5, 2022
-* More custom ConvNeXt smaller model defs with weights 
+* More custom ConvNeXt smaller model defs with weights
   * `convnext_femto` - 77.5 @ 224, 78.7 @ 288
   * `convnext_femto_ols` - 77.9  @ 224, 78.9 @ 288
   * `convnext_pico` - 79.5 @ 224, 80.4 @ 288
@@ -313,7 +313,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `cs3sedarknet_x` - 82.2 @ 256, 82.7 @ 288
   * `cs3edgenet_x` - 82.2 @ 256, 82.7 @ 288
   * `cs3se_edgenet_x` - 82.8 @ 256, 83.5 @ 320
-* `cs3*` weights above all trained on TPU w/ `bits_and_tpu` branch. Thanks to TRC program! 
+* `cs3*` weights above all trained on TPU w/ `bits_and_tpu` branch. Thanks to TRC program!
 * Add output_stride=8 and 16 support to ConvNeXt (dilation)
 * deit3 models not being able to resize pos_emb fixed
 * Version 0.6.7 PyPi release (/w above bug fixes and new weighs since 0.6.5)
@@ -346,8 +346,8 @@ More models, more fixes
 * Hugging Face Hub support fixes verified, demo notebook TBA
 * Pretrained weights / configs can be loaded externally (ie from local disk) w/ support for head adaptation.
 * Add support to change image extensions scanned by `timm` datasets/readers. See (https://github.com/rwightman/pytorch-image-models/pull/1274#issuecomment-1178303103)
-* Default ConvNeXt LayerNorm impl to use `F.layer_norm(x.permute(0, 2, 3, 1), ...).permute(0, 3, 1, 2)` via `LayerNorm2d` in all cases. 
-  * a bit slower than previous custom impl on some hardware (ie Ampere w/ CL), but overall fewer regressions across wider HW / PyTorch version ranges. 
+* Default ConvNeXt LayerNorm impl to use `F.layer_norm(x.permute(0, 2, 3, 1), ...).permute(0, 3, 1, 2)` via `LayerNorm2d` in all cases.
+  * a bit slower than previous custom impl on some hardware (ie Ampere w/ CL), but overall fewer regressions across wider HW / PyTorch version ranges.
   * previous impl exists as `LayerNormExp2d` in `models/layers/norm.py`
 * Numerous bug fixes
 * Currently testing for imminent PyPi 0.6.x release
@@ -580,7 +580,7 @@ Several (less common) features that I often utilize in my projects are included.
 * AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
 * AugMix w/ JSD loss (https://arxiv.org/abs/1912.02781), JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
-* DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382) 
+* DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382)
 * DropBlock (https://arxiv.org/abs/1810.12890)
 * Blur Pooling (https://arxiv.org/abs/1904.11486)
 * Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
@@ -617,7 +617,7 @@ The official documentation can be found at https://huggingface.co/docs/hub/timm.
 
 ## Train, Validation, Inference Scripts
 
-The root folder of the repository contains reference train, validation, and inference scripts that work with the included models and other features of this repository. They are adaptable for other datasets and use cases with a little hacking. See [documentation (https://huggingface.co/docs/timm/training_script).
+The root folder of the repository contains reference train, validation, and inference scripts that work with the included models and other features of this repository. They are adaptable for other datasets and use cases with a little hacking. See [documentation](https://huggingface.co/docs/timm/training_script).
 
 ## Awesome PyTorch Resources
 
