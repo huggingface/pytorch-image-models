@@ -50,7 +50,8 @@ class Stem(nn.Module):
     Stem implemented by a layer of convolution.
     Conv2d params constant across all models.
     """
-    def __init__(self,
+    def __init__(
+        self,
         in_channels, 
         out_channels, 
         norm_layer=None, 
@@ -75,7 +76,8 @@ class Downsampling(nn.Module):
     """
     Downsampling implemented by a layer of convolution.
     """
-    def __init__(self,
+    def __init__(
+        self,
         in_channels, 
         out_channels, 
         kernel_size, 
@@ -123,16 +125,20 @@ class StarReLU(nn.Module):
     """
     StarReLU: s * relu(x) ** 2 + b
     """
-    def __init__(self, scale_value=1.0, bias_value=0.0,
-        scale_learnable=True, bias_learnable=True, 
-        mode=None, inplace=False):
+    def __init__(
+        self, 
+        scale_value=1.0, 
+        bias_value=0.0,
+        scale_learnable=True, 
+        bias_learnable=True, 
+        mode=None, 
+        inplace=False
+    ):
         super().__init__()
         self.inplace = inplace
         self.relu = nn.ReLU(inplace=inplace)
-        self.scale = nn.Parameter(scale_value * torch.ones(1),
-            requires_grad=scale_learnable)
-        self.bias = nn.Parameter(bias_value * torch.ones(1),
-            requires_grad=bias_learnable)
+        self.scale = nn.Parameter(scale_value * torch.ones(1), requires_grad=scale_learnable)
+        self.bias = nn.Parameter(bias_value * torch.ones(1), requires_grad=bias_learnable)
     def forward(self, x):
         return self.scale * self.relu(x)**2 + self.bias
 
@@ -141,8 +147,16 @@ class Attention(nn.Module):
     Vanilla self-attention from Transformer: https://arxiv.org/abs/1706.03762.
     Modified from timm.
     """
-    def __init__(self, dim, head_dim=32, num_heads=None, qkv_bias=False,
-        attn_drop=0., proj_drop=0., proj_bias=False, **kwargs):
+    def __init__(
+        self, 
+        dim, 
+        head_dim=32, 
+        num_heads=None, 
+        qkv_bias=False,
+        attn_drop=0., 
+        proj_drop=0., 
+        proj_bias=False
+    ):
         super().__init__()
 
         self.head_dim = head_dim
@@ -215,10 +229,16 @@ class SepConv(nn.Module):
     r"""
     Inverted separable convolution from MobileNetV2: https://arxiv.org/abs/1801.04381.
     """
-    def __init__(self, dim, expansion_ratio=2,
-        act1_layer=StarReLU, act2_layer=nn.Identity, 
-        bias=False, kernel_size=7, padding=3,
-        **kwargs, ):
+    def __init__(
+        self, 
+        dim, 
+        expansion_ratio=2,
+        act1_layer=StarReLU, 
+        act2_layer=nn.Identity, 
+        bias=False, 
+        kernel_size=7, 
+        padding=3
+    ):
         super().__init__()
         mid_channels = int(expansion_ratio * dim)
         #self.pwconv1 = nn.Linear(dim, mid_channels, bias=bias)
@@ -290,8 +310,16 @@ class Mlp(nn.Module):
 class MlpHead(nn.Module):
     """ MLP classification head
     """
-    def __init__(self, dim, num_classes=1000, mlp_ratio=4, act_layer=SquaredReLU,
-        norm_layer=LayerNorm, head_dropout=0., bias=True):
+    def __init__(
+        self, 
+        dim, 
+        num_classes=1000, 
+        mlp_ratio=4, 
+        act_layer=SquaredReLU,
+        norm_layer=LayerNorm, 
+        head_dropout=0., 
+        bias=True
+    ):
         super().__init__()
         hidden_features = int(mlp_ratio * dim)
         self.fc1 = nn.Linear(dim, hidden_features, bias=bias)
@@ -381,6 +409,7 @@ class MetaFormerStage(nn.Module):
         mlp_act=StarReLU,
         mlp_bias=False,
         norm_layer=LayerNorm2d,
+        drop=0.,
         dp_rates=[0.]*2,
         layer_scale_init_value=None,
         res_scale_init_value=None,
@@ -407,6 +436,7 @@ class MetaFormerStage(nn.Module):
             mlp_act=mlp_act,
             mlp_bias=mlp_bias,
             norm_layer=norm_layer,
+            drop=0.,
             drop_path=dp_rates[i],
             layer_scale_init_value=layer_scale_init_value,
             res_scale_init_value=res_scale_init_value
@@ -521,6 +551,7 @@ class MetaFormer(nn.Module):
                 mlp_act=mlp_act,
                 mlp_bias=mlp_bias,
                 norm_layer=norm_layers[i],
+                drop=drop_rate,
                 dp_rates=dp_rates[i],
                 layer_scale_init_value=layer_scale_init_values[i],
                 res_scale_init_value=res_scale_init_values[i],
@@ -604,7 +635,6 @@ class MetaFormer(nn.Module):
         x = self.forward_head(x)
         return x
 
-# FIXME convert to group matcher
 # this works but it's long and breaks backwards compatability with weights from the poolformer-only impl
 def checkpoint_filter_fn(state_dict, model):
     import re
