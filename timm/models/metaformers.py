@@ -155,7 +155,8 @@ class Attention(nn.Module):
         qkv_bias=False,
         attn_drop=0., 
         proj_drop=0., 
-        proj_bias=False
+        proj_bias=False,
+        **kwargs
     ):
         super().__init__()
 
@@ -237,7 +238,8 @@ class SepConv(nn.Module):
         act2_layer=nn.Identity, 
         bias=False, 
         kernel_size=7, 
-        padding=3
+        padding=3,
+        **kwargs
     ):
         super().__init__()
         mid_channels = int(expansion_ratio * dim)
@@ -353,13 +355,14 @@ class MetaFormerBlock(nn.Module):
         drop=0., 
         drop_path=0.,
         layer_scale_init_value=None,
-        res_scale_init_value=None
+        res_scale_init_value=None,
+        **kwargs
      ):
 
         super().__init__()
                 
         self.norm1 = norm_layer(dim)
-        self.token_mixer = token_mixer(dim=dim, drop=drop)
+        self.token_mixer = token_mixer(dim=dim, drop=drop, **kwargs)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.layer_scale1 = Scale(dim=dim, init_value=layer_scale_init_value) \
             if layer_scale_init_value else nn.Identity()
@@ -413,6 +416,7 @@ class MetaFormerStage(nn.Module):
         dp_rates=[0.]*2,
         layer_scale_init_value=None,
         res_scale_init_value=None,
+        **kwargs
     ):
         super().__init__()
 
@@ -439,7 +443,8 @@ class MetaFormerStage(nn.Module):
             drop=0.,
             drop_path=dp_rates[i],
             layer_scale_init_value=layer_scale_init_value,
-            res_scale_init_value=res_scale_init_value
+            res_scale_init_value=res_scale_init_value,
+            **kwargs
             ) for i in range(depth)])
     
     @torch.jit.ignore
@@ -555,6 +560,7 @@ class MetaFormer(nn.Module):
                 dp_rates=dp_rates[i],
                 layer_scale_init_value=layer_scale_init_values[i],
                 res_scale_init_value=res_scale_init_values[i],
+                **kwargs
             )
             
             stages.append(stage)
