@@ -188,7 +188,7 @@ class Attention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
         x = self.proj(x)
         x = self.proj_drop(x)
-        x = x.reshape(B, C, H, W)
+        x = x.permute(0, 3, 1, 2)
         return x
 
 # torchscript doesn't like the interpolation or the **kwargs
@@ -277,7 +277,7 @@ class Pooling(nn.Module):
 
 class Mlp(nn.Module):
     """ MLP as used in MetaFormer models, eg Transformer, MLP-Mixer, PoolFormer, MetaFormer baslines and related networks.
-    Modified from standard timm implementation
+    Modified from standard timm implementation, currently using 1x1 convolution
     """
     def __init__(
         self,
@@ -913,7 +913,7 @@ def poolformerv1_s24(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layer=GroupNorm1,
+        norm_layers=GroupNorm1,
         layer_scale_init_values=1e-5,
         res_scale_init_values=None,
         **kwargs)
@@ -928,7 +928,7 @@ def poolformerv1_s36(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layer=GroupNorm1,
+        norm_layers=GroupNorm1,
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -943,7 +943,7 @@ def poolformerv1_m36(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layer=GroupNorm1,
+        norm_layers=GroupNorm1,
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -958,7 +958,7 @@ def poolformerv1_m48(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
-        norm_layer=GroupNorm1,
+        norm_layers=GroupNorm1,
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
