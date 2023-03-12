@@ -364,10 +364,8 @@ class MetaFormerBlock(nn.Module):
         self.norm1 = norm_layer(dim)
         self.token_mixer = token_mixer(dim=dim, drop=drop, **kwargs)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.layer_scale1 = Scale(dim=dim, init_value=layer_scale_init_value) \
-            if layer_scale_init_value else nn.Identity()
-        self.res_scale1 = Scale(dim=dim, init_value=res_scale_init_value) \
-            if res_scale_init_value else nn.Identity()
+        self.layer_scale1 = Scale(dim=dim, init_value=layer_scale_init_value) if layer_scale_init_value else nn.Identity()
+        self.res_scale1 = Scale(dim=dim, init_value=res_scale_init_value) if res_scale_init_value else nn.Identity()
 
         self.norm2 = norm_layer(dim)
         self.mlp = mlp(
@@ -378,10 +376,8 @@ class MetaFormerBlock(nn.Module):
             bias=mlp_bias
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.layer_scale2 = Scale(dim=dim, init_value=layer_scale_init_value) \
-            if layer_scale_init_value else nn.Identity()
-        self.res_scale2 = Scale(dim=dim, init_value=res_scale_init_value) \
-            if res_scale_init_value else nn.Identity()
+        self.layer_scale2 = Scale(dim=dim, init_value=layer_scale_init_value) if layer_scale_init_value else nn.Identity()
+        self.res_scale2 = Scale(dim=dim, init_value=res_scale_init_value) if res_scale_init_value else nn.Identity()
         
     def forward(self, x):
         x = self.res_scale1(x) + \
@@ -645,8 +641,10 @@ class MetaFormer(nn.Module):
 def checkpoint_filter_fn(state_dict, model):
     import re
     out_dict = {}
+    is_poolformerv1=False
     for k, v in state_dict.items():
-        
+        if("network" in k):
+            is_poolformerv1=True
         k = re.sub(r'layer_scale_([0-9]+)', r'layer_scale\1.scale', k)
         k = k.replace('network.1', 'downsample_layers.1')
         k = k.replace('network.3', 'downsample_layers.2')
@@ -669,9 +667,12 @@ def checkpoint_filter_fn(state_dict, model):
         
         if ((("fc1.weight" in k) \
             or ("fc2.weight" in k)) \
-            and "fc.fc" not in k) \
+            and "fc.fc" not in k \
+            and not is_poolformerv1) \
             or ("res_scale1.scale" in k) \
             or ("res_scale2.scale" in k) \
+            or ("layer_scale1.scale" in k) \
+            or ("layer_scale2.scale" in k) \
             or ("pwconv1.weight" in k) \
             or ("pwconv2.weight" in k):
             v = v.reshape(*v.shape, 1, 1)
@@ -897,6 +898,7 @@ def poolformerv1_s12(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
+        norm_layers=GroupNorm1,
         layer_scale_init_values=1e-5,
         res_scale_init_values=None,
         **kwargs)
@@ -911,6 +913,7 @@ def poolformerv1_s24(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
+        norm_layer=GroupNorm1,
         layer_scale_init_values=1e-5,
         res_scale_init_values=None,
         **kwargs)
@@ -925,6 +928,7 @@ def poolformerv1_s36(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
+        norm_layer=GroupNorm1,
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -939,6 +943,7 @@ def poolformerv1_m36(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
+        norm_layer=GroupNorm1,
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
@@ -953,6 +958,7 @@ def poolformerv1_m48(pretrained=False, **kwargs):
         token_mixers=Pooling,
         mlp_act=nn.GELU,
         mlp_bias=True,
+        norm_layer=GroupNorm1,
         layer_scale_init_values=1e-6,
         res_scale_init_values=None,
         **kwargs)
