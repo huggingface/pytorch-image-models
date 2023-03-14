@@ -1043,7 +1043,7 @@ def validate(
 
             batch_time_m.update(time.time() - end)
             end = time.time()
-            if should_log_to_tensorboard(args):
+            if should_log_to_tensorboard(args) and epoch is not None:
                 #by the updates
                 tensorboard_writer.add_scalar('val/loss', losses_m.val, epoch*last_idx+batch_idx)
                 tensorboard_writer.add_scalar('val/acc1', top1_m.val, epoch*last_idx+batch_idx)
