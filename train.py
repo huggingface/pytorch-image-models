@@ -731,7 +731,7 @@ def main():
                 "You've requested to log metrics to wandb but package not found. "
                 "Metrics not being logged to wandb, try `pip install wandb`")
 
-    if utils.is_primary(args) and args.log_tensorboard:
+    if should_log_to_tensorboard(args):
         if has_tensorboard:
             writer = SummaryWriter(args.log_tensorboard)
         else:
