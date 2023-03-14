@@ -799,6 +799,7 @@ def main():
                 args,
                 amp_autocast=amp_autocast,
                 tensorboard_writer=tensorboard_writer,
+                epoch=epoch,
             )
 
             if model_ema is not None and not args.model_ema_force_cpu:
@@ -812,6 +813,8 @@ def main():
                     args,
                     amp_autocast=amp_autocast,
                     log_suffix=' (EMA)',
+                    tensorboard_writer=tensorboard_writer,
+                    epoch=epoch,
                 )
                 eval_metrics = ema_eval_metrics
 
@@ -989,6 +992,7 @@ def validate(
         amp_autocast=suppress,
         log_suffix='',
         tensorboard_writer=None,
+        epoch=None,
 
 ):
     batch_time_m = utils.AverageMeter()
@@ -1040,9 +1044,10 @@ def validate(
             batch_time_m.update(time.time() - end)
             end = time.time()
             if should_log_to_tensorboard(args):
-                tensorboard_writer.add_scalar('val/loss', losses_m.val, batch_idx)
-                tensorboard_writer.add_scalar('val/acc1', top1_m.val, batch_idx)
-                tensorboard_writer.add_scalar('val/acc5', top5_m.val, batch_idx)
+                #by the updates
+                tensorboard_writer.add_scalar('val/loss', losses_m.val, epoch*last_idx+batch_idx)
+                tensorboard_writer.add_scalar('val/acc1', top1_m.val, epoch*last_idx+batch_idx)
+                tensorboard_writer.add_scalar('val/acc5', top5_m.val, epoch*last_idx+batch_idx)
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 _logger.info(
