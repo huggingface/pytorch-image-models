@@ -798,6 +798,7 @@ def main():
                 validate_loss_fn,
                 args,
                 amp_autocast=amp_autocast,
+                tensorboard_writer=tensorboard_writer,
             )
 
             if model_ema is not None and not args.model_ema_force_cpu:
@@ -922,8 +923,8 @@ def train_one_epoch(
         batch_time_m.update(time.time() - end)
         #write to tensorboard if enabled
         if should_log_to_tensorboard(args):
-            writer.add_scalar('train/loss', losses_m.val, num_updates)
-            writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], num_updates)
+            tensorboard_writer.add_scalar('train/loss', losses_m.val, num_updates)
+            tensorboard_writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], num_updates)
         if last_batch or batch_idx % args.log_interval == 0:
             lrl = [param_group['lr'] for param_group in optimizer.param_groups]
             lr = sum(lrl) / len(lrl)
@@ -986,7 +987,9 @@ def validate(
         args,
         device=torch.device('cuda'),
         amp_autocast=suppress,
-        log_suffix=''
+        log_suffix='',
+        tensorboard_writer=None,
+
 ):
     batch_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
@@ -1037,9 +1040,9 @@ def validate(
             batch_time_m.update(time.time() - end)
             end = time.time()
             if should_log_to_tensorboard(args):
-                writer.add_scalar('val/loss', losses_m.val, batch_idx)
-                writer.add_scalar('val/acc1', top1_m.val, batch_idx)
-                writer.add_scalar('val/acc5', top5_m.val, batch_idx)
+                tensorboard_writer.add_scalar('val/loss', losses_m.val, batch_idx)
+                tensorboard_writer.add_scalar('val/acc1', top1_m.val, batch_idx)
+                tensorboard_writer.add_scalar('val/acc5', top5_m.val, batch_idx)
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 _logger.info(
