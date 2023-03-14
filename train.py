@@ -64,7 +64,12 @@ try:
     has_functorch = True
 except ImportError as e:
     has_functorch = False
-
+#test tensorboard install
+try:
+    from torch.utils.tensorboard import SummaryWriter
+    has_tensorboard = True
+except ImportError as e:
+    has_tensorboard = False
 has_compile = hasattr(torch, 'compile')
 
 
@@ -347,8 +352,8 @@ group.add_argument('--use-multi-epochs-loader', action='store_true', default=Fal
                    help='use the multi-epochs-loader to save time at the beginning of every epoch')
 group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
-
-
+group.add_argument('--log-tensorboard', default='', type=str, metavar='PATH',
+                   help='log training and validation metrics to TensorBoard')
 def _parse_args():
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
@@ -726,6 +731,16 @@ def main():
                 "You've requested to log metrics to wandb but package not found. "
                 "Metrics not being logged to wandb, try `pip install wandb`")
 
+    if utils.is_primary(args) and args.log_tensorboard:
+        if has_tensorboard:
+            writer = SummaryWriter(args.log_tensorboard)
+        else:
+            _logger.warning(
+                "You've requested to log metrics to tensorboard but package not found. "
+                "Metrics not being logged to tensorboard, try `pip install tensorboard`")
+
+
+
     # setup learning rate schedule and starting epoch
     updates_per_epoch = len(loader_train)
     lr_scheduler, num_epochs = create_scheduler_v2(
@@ -809,6 +824,7 @@ def main():
                     lr=sum(lrs) / len(lrs),
                     write_header=best_metric is None,
                     log_wandb=args.log_wandb and has_wandb,
+
                 )
 
             if saver is not None:
@@ -903,6 +919,10 @@ def train_one_epoch(
 
         num_updates += 1
         batch_time_m.update(time.time() - end)
+        #write to tensorboard if enabled
+        if should_log_to_tensorboard(args):
+            writer.add_scalar('train/loss', losses_m.val, num_updates)
+            writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], num_updates)
         if last_batch or batch_idx % args.log_interval == 0:
             lrl = [param_group['lr'] for param_group in optimizer.param_groups]
             lr = sum(lrl) / len(lrl)
@@ -952,6 +972,10 @@ def train_one_epoch(
         optimizer.sync_lookahead()
 
     return OrderedDict([('loss', losses_m.avg)])
+
+
+def should_log_to_tensorboard(args):
+    return args.log_tensorboard and utils.is_primary(args) and has_tensorboard
 
 
 def validate(
@@ -1011,6 +1035,10 @@ def validate(
 
             batch_time_m.update(time.time() - end)
             end = time.time()
+            if should_log_to_tensorboard(args):
+                writer.add_scalar('val/loss', losses_m.val, batch_idx)
+                writer.add_scalar('val/acc1', top1_m.val, batch_idx)
+                writer.add_scalar('val/acc5', top5_m.val, batch_idx)
             if utils.is_primary(args) and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 _logger.info(
