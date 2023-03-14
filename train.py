@@ -733,6 +733,9 @@ def main():
     if should_log_to_tensorboard(args):
         if has_tensorboard:
             tensorboard_writer = SummaryWriter(args.log_tensorboard)
+            #write Hyperparameters to tensorboard
+            tensorboard_writer.add_hparams(vars(args), {})
+
         else:
             _logger.warning(
                 "You've requested to log metrics to tensorboard but package not found. "
