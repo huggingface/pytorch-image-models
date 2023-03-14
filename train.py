@@ -730,10 +730,9 @@ def main():
             _logger.warning(
                 "You've requested to log metrics to wandb but package not found. "
                 "Metrics not being logged to wandb, try `pip install wandb`")
-
     if should_log_to_tensorboard(args):
         if has_tensorboard:
-            writer = SummaryWriter(args.log_tensorboard)
+            tensorboard_writer = SummaryWriter(args.log_tensorboard)
         else:
             _logger.warning(
                 "You've requested to log metrics to tensorboard but package not found. "
@@ -785,6 +784,7 @@ def main():
                 loss_scaler=loss_scaler,
                 model_ema=model_ema,
                 mixup_fn=mixup_fn,
+                tensorboard_writer=tensorboard_writer,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -857,7 +857,8 @@ def train_one_epoch(
         amp_autocast=suppress,
         loss_scaler=None,
         model_ema=None,
-        mixup_fn=None
+        mixup_fn=None,
+        tensorboard_writer=None,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
