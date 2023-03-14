@@ -735,7 +735,9 @@ def main():
         if has_tensorboard:
             tensorboard_writer = SummaryWriter(args.log_tensorboard)
             #write Hyperparameters to tensorboard
-            tensorboard_writer.add_hparams(vars(args), {})
+            #get all args keys that are  one of int, float, str, bool, or torch.Tensor
+            hparams = {k: v for k, v in vars(args).items() if type(v) in [int, float, str, bool, torch.Tensor]}
+            tensorboard_writer.add_hparams(hparams, {})
 
         else:
             _logger.warning(
