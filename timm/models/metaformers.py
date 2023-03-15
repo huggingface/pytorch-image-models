@@ -4,6 +4,10 @@ Poolformer from MetaFormer is Actually What You Need for Vision https://arxiv.or
 IdentityFormer, RandFormer, PoolFormerV2, ConvFormer, and CAFormer
 from MetaFormer Baselines for Vision https://arxiv.org/abs/2210.13452
 
+All implemented models support feature extraction and variable input resolution.
+
+Original implementation by Weihao Yu et al., adapted for timm by Fredo Guan.
+
 Adapted from https://github.com/sail-sg/metaformer, original copyright below
 """
 
@@ -191,6 +195,7 @@ class Attention(nn.Module):
         x = x.permute(0, 3, 1, 2)
         return x
 
+# interpolation is WIP, val at train size still matches paper
 # torchscript doesn't like the interpolation
 @register_notrace_module
 class RandomMixing(nn.Module):
@@ -212,23 +217,7 @@ class RandomMixing(nn.Module):
         x = torch.einsum('mn, bnc -> bmc', resized_matrix, x)
         x = x.transpose(1, 2).reshape(B, C, H, W)
         return x
-'''
-class RandomMixing(nn.Module):
-    def __init__(self, num_tokens=196, **kwargs):
-        super().__init__()
-        # FIXME no grad breaks tests
-        self.random_matrix = nn.parameter.Parameter(
-            data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
-            requires_grad=False)
-    def forward(self, x):
-        B, C, H, W = x.shape
-        #x = x.reshape(B, H*W, C)
-        x = x.flatten(2).transpose(1, 2)
-        # FIXME change to work with arbitrary input sizes
-        x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
-        x = x.transpose(1, 2).reshape(B, C, H, W)
-        return x
-'''
+
 # custom norm modules that disable the bias term, since the original models defs
 # used a custom norm with a weight term but no bias term.
 
@@ -261,14 +250,12 @@ class SepConv(nn.Module):
     ):
         super().__init__()
         mid_channels = int(expansion_ratio * dim)
-        #self.pwconv1 = nn.Linear(dim, mid_channels, bias=bias)
         self.pwconv1 = nn.Conv2d(dim, mid_channels, kernel_size=1, bias=bias)
         self.act1 = act1_layer()
         self.dwconv = nn.Conv2d(
             mid_channels, mid_channels, kernel_size=kernel_size,
             padding=padding, groups=mid_channels, bias=bias) # depthwise conv
         self.act2 = act2_layer()
-        #self.pwconv2 = nn.Linear(mid_channels, dim, bias=bias)
         self.pwconv2 = nn.Conv2d(mid_channels, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
@@ -485,18 +472,22 @@ class MetaFormer(nn.Module):
         in_chans (int): Number of input image channels. Default: 3.
         num_classes (int): Number of classes for classification head. Default: 1000.
         depths (list or tuple): Number of blocks at each stage. Default: [2, 2, 6, 2].
-        dims (int): Feature dimension at each stage. Default: [64, 128, 320, 512].
+        dims (list or tuple): Feature dimension at each stage. Default: [64, 128, 320, 512].
+        downsample_norm (nn.Module): Norm layer used in stem and downsampling layers. Default: LayerNorm2dWithoutBias.
         token_mixers (list, tuple or token_fcn): Token mixer for each stage. Default: nn.Identity.
         mlps (list, tuple or mlp_fcn): Mlp for each stage. Default: Mlp.
-        norm_layers (list, tuple or norm_fcn): Norm layers for each stage. Default: partial(LayerNormGeneral, eps=1e-6, bias=False).
+        mlp_fn (nn.Module): Module used to implement mlp layers. Default: partial(nn.Conv2d, kernel_size=1).
+        mlp_bias (boolean): Enable or disable mlp bias term. Default: False.
+        norm_layers (list, tuple or norm_fcn): Norm layers for each stage. Default: GroupNorm1WithoutBias.
         drop_path_rate (float): Stochastic depth rate. Default: 0.
-        head_dropout (float): dropout for MLP classifier. Default: 0.
+        drop_rate (float): Dropout rate. Default: 0.
         layer_scale_init_values (list, tuple, float or None): Init value for Layer Scale. Default: None.
             None means not use the layer scale. Form: https://arxiv.org/abs/2103.17239.
-        res_scale_init_values (list, tuple, float or None): Init value for Layer Scale. Default: [None, None, 1.0, 1.0].
-            None means not use the layer scale. From: https://arxiv.org/abs/2110.09456.
-        output_norm: norm before classifier head. Default: partial(nn.LayerNorm, eps=1e-6).
+        res_scale_init_values (list, tuple, float or None): Init value for res Scale on residual connections. Default: [None, None, 1.0, 1.0].
+            None means not use the res scale. From: https://arxiv.org/abs/2110.09456.
+        output_norm: norm before classifier head. Default: LayerNorm2d.
         head_fn: classification head. Default: nn.Linear.
+        global_pool: pooling for classifier head. Default: 'avg'.
     """
     def __init__(
         self,
