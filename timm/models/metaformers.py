@@ -202,14 +202,14 @@ class RandomMixing(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
-        #resized_matrix = self.random_matrix.view(1, 1, self.num_tokens, self.num_tokens)
+        resized_matrix = self.random_matrix.view(1, 1, self.num_tokens, self.num_tokens)
         
         resized_matrix = F.interpolate(
             resized_matrix, size=(H*W, H*W), 
             mode = self.interpolation_mode
         ).view(H*W, H*W)
         
-        x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
+        x = torch.einsum('mn, bnc -> bmc', resized_matrix, x)
         x = x.transpose(1, 2).reshape(B, C, H, W)
         return x
 '''
