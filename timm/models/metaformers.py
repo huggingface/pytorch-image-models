@@ -194,7 +194,7 @@ class Attention(nn.Module):
 # torchscript doesn't like the interpolation or the **kwargs
 @register_notrace_module
 class RandomMixing(nn.Module):
-    def __init__(self, num_tokens=196, interpolation_mode = 'bilinear', **kwargs):
+    def __init__(self, num_tokens=196, interpolation_mode = 'bicubic', **kwargs):
         super().__init__()
         self.num_tokens = num_tokens
         self.register_buffer('random_matrix', torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1))
