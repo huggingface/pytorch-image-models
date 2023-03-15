@@ -1113,8 +1113,8 @@ def convformer_s18(pretrained=False, **kwargs):
     model_kwargs = dict(
         depths=[3, 3, 9, 3],
         dims=[64, 128, 320, 512],
-        downsample_norm=LayerNorm2dWithoutBias,
         token_mixers=SepConv,
+        norm_layers=LayerNorm2dWithoutBias,
         head_fn=MlpHead,
         **kwargs)
     return _create_metaformer('convformer_s18', pretrained=pretrained, **model_kwargs)
@@ -1163,8 +1163,8 @@ def caformer_s18(pretrained=False, **kwargs):
     model_kwargs = dict(
         depths=[3, 3, 9, 3],
         dims=[64, 128, 320, 512],
-        downsample_norm=LayerNorm2dWithoutBias,
         token_mixers=[SepConv, SepConv, Attention, Attention],
+        norm_layers=LayerNorm2dWithoutBias,
         head_fn=MlpHead,
         **kwargs)
     return _create_metaformer('caformer_s18', pretrained=pretrained, **model_kwargs)
