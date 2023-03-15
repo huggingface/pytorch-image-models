@@ -209,7 +209,7 @@ class RandomMixing(nn.Module):
             mode = self.interpolation_mode
         ).view(H*W, H*W)
         
-        x = torch.einsum('mn, bnc -> bmc', resized_matrix, x)
+        x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.reshape(B, C, H, W)
         return x
 
