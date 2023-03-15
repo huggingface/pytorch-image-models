@@ -228,7 +228,7 @@ class RandomMixing(nn.Module):
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.transpose(1, 2).reshape(B, C, H, W)
         return x
-''
+'''
 # custom norm modules that disable the bias term, since the original models defs
 # used a custom norm with a weight term but no bias term.
 
