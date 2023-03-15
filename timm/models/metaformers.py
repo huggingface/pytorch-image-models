@@ -213,12 +213,19 @@ class RandomMixing(nn.Module):
         x = x.reshape(B, C, H, W)
         return x
 
-# custom LayerNorm2d that disables the bias term, since the original models defs
+# custom norm modules that disable the bias term, since the original models defs
 # used a custom norm with a weight term but no bias term.
+
+class GroupNorm1WithoutBias(GroupNorm1):
+    def __init__(self, num_channels, **kwargs):
+        super().__init__(num_channels, **kwargs)
+        self.eps=kwargs.get('eps', 1e-6)
+        self.bias = None
 
 class LayerNorm2dWithoutBias(LayerNorm2d):
     def __init__(self, num_channels, **kwargs):
         super().__init__(num_channels, **kwargs)
+        self.eps=kwargs.get('eps', 1e-6)
         self.bias = None
 
 class SepConv(nn.Module):
@@ -481,7 +488,7 @@ class MetaFormer(nn.Module):
         num_classes=1000, 
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
-        downsample_norm=LayerNorm2dWithoutBias,
+        downsample_norm=GroupNorm1WithoutBias,
         token_mixers=nn.Identity,
         mlps=Mlp,
         mlp_fn=partial(nn.Conv2d, kernel_size=1),
@@ -1106,6 +1113,7 @@ def convformer_s18(pretrained=False, **kwargs):
     model_kwargs = dict(
         depths=[3, 3, 9, 3],
         dims=[64, 128, 320, 512],
+        downsample_norm=LayerNorm2dWithoutBias,
         token_mixers=SepConv,
         head_fn=MlpHead,
         **kwargs)
@@ -1155,6 +1163,7 @@ def caformer_s18(pretrained=False, **kwargs):
     model_kwargs = dict(
         depths=[3, 3, 9, 3],
         dims=[64, 128, 320, 512],
+        downsample_norm=LayerNorm2dWithoutBias,
         token_mixers=[SepConv, SepConv, Attention, Attention],
         head_fn=MlpHead,
         **kwargs)
