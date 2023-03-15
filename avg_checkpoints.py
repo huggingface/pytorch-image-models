@@ -17,10 +17,14 @@ import os
 import glob
 import hashlib
 from timm.models import load_state_dict
-import safetensors.torch
+try:
+    import safetensors.torch
+    _has_safetensors = True
+except ImportError:
+    _has_safetensors = False
 
-DEFAULT_OUTPUT = "./average.pth"
-DEFAULT_SAFE_OUTPUT = "./average.safetensors"
+DEFAULT_OUTPUT = "./averaged.pth"
+DEFAULT_SAFE_OUTPUT = "./averaged.safetensors"
 
 parser = argparse.ArgumentParser(description='PyTorch Checkpoint Averager')
 parser.add_argument('--input', default='', type=str, metavar='PATH',
@@ -37,6 +41,7 @@ parser.add_argument('-n', type=int, default=10, metavar='N',
                     help='Number of checkpoints to average')
 parser.add_argument('--safetensors', action='store_true',
                     help='Save weights using safetensors instead of the default torch way (pickle).')
+
 
 def checkpoint_metric(checkpoint_path):
     if not checkpoint_path or not os.path.isfile(checkpoint_path):
@@ -63,14 +68,20 @@ def main():
     if args.safetensors and args.output == DEFAULT_OUTPUT:
         # Default path changes if using safetensors
         args.output = DEFAULT_SAFE_OUTPUT
-    if args.safetensors and not args.output.endswith(".safetensors"):
+
+    output, output_ext = os.path.splitext(args.output)
+    if not output_ext:
+        output_ext = ('.safetensors' if args.safetensors else '.pth')
+    output = output + output_ext
+
+    if args.safetensors and not output_ext == ".safetensors":
         print(
             "Warning: saving weights as safetensors but output file extension is not "
             f"set to '.safetensors': {args.output}"
         )
 
-    if os.path.exists(args.output):
-        print("Error: Output filename ({}) already exists.".format(args.output))
+    if os.path.exists(output):
+        print("Error: Output filename ({}) already exists.".format(output))
         exit(1)
 
     pattern = args.input
@@ -87,22 +98,27 @@ def main():
                 checkpoint_metrics.append((metric, c))
         checkpoint_metrics = list(sorted(checkpoint_metrics))
         checkpoint_metrics = checkpoint_metrics[-args.n:]
-        print("Selected checkpoints:")
-        [print(m, c) for m, c in checkpoint_metrics]
+        if checkpoint_metrics:
+            print("Selected checkpoints:")
+            [print(m, c) for m, c in checkpoint_metrics]
         avg_checkpoints = [c for m, c in checkpoint_metrics]
     else:
         avg_checkpoints = checkpoints
-        print("Selected checkpoints:")
-        [print(c) for c in checkpoints]
+        if avg_checkpoints:
+            print("Selected checkpoints:")
+            [print(c) for c in checkpoints]
+
+    if not avg_checkpoints:
+        print('Error: No checkpoints found to average.')
+        exit(1)
 
     avg_state_dict = {}
     avg_counts = {}
     for c in avg_checkpoints:
         new_state_dict = load_state_dict(c, args.use_ema)
         if not new_state_dict:
-            print("Error: Checkpoint ({}) doesn't exist".format(args.checkpoint))
+            print(f"Error: Checkpoint ({c}) doesn't exist")
             continue
-
         for k, v in new_state_dict.items():
             if k not in avg_state_dict:
                 avg_state_dict[k] = v.clone().to(dtype=torch.float64)
@@ -122,16 +138,14 @@ def main():
         final_state_dict[k] = v.to(dtype=torch.float32)
 
     if args.safetensors:
-        safetensors.torch.save_file(final_state_dict, args.output)
+        assert _has_safetensors, "`pip install safetensors` to use .safetensors"
+        safetensors.torch.save_file(final_state_dict, output)
     else:
-        try:
-            torch.save(final_state_dict, args.output, _use_new_zipfile_serialization=False)
-        except:
-            torch.save(final_state_dict, args.output)
+        torch.save(final_state_dict, output)
 
-    with open(args.output, 'rb') as f:
+    with open(output, 'rb') as f:
         sha_hash = hashlib.sha256(f.read()).hexdigest()
-    print("=> Saved state_dict to '{}, SHA256: {}'".format(args.output, sha_hash))
+    print(f"=> Saved state_dict to '{output}, SHA256: {sha_hash}'")
 
 
 if __name__ == '__main__':

@@ -7,7 +7,11 @@ import os
 from collections import OrderedDict
 
 import torch
-import safetensors.torch
+try:
+    import safetensors.torch
+    _has_safetensors = True
+except ImportError:
+    _has_safetensors = False
 
 import timm.models._builder
 
@@ -29,6 +33,7 @@ def load_state_dict(checkpoint_path, use_ema=True):
     if checkpoint_path and os.path.isfile(checkpoint_path):
         # Check if safetensors or not and load weights accordingly
         if str(checkpoint_path).endswith(".safetensors"):
+            assert _has_safetensors, "`pip install safetensors` to use .safetensors"
             checkpoint = safetensors.torch.load_file(checkpoint_path, device='cpu')
         else:
             checkpoint = torch.load(checkpoint_path, map_location='cpu')
