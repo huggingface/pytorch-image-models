@@ -213,13 +213,8 @@ class RandomMixing(nn.Module):
         x = x.reshape(B, C, H, W)
         return x
 
-# custom norm modules that disable the bias term, since the original models defs
+# custom LayerNorm2d that disables the bias term, since the original models defs
 # used a custom norm with a weight term but no bias term.
-
-class GroupNorm1WithoutBias(GroupNorm1):
-    def __init__(self, num_channels, **kwargs):
-        super().__init__(num_channels, **kwargs)
-        self.bias = None
 
 class LayerNorm2dWithoutBias(LayerNorm2d):
     def __init__(self, num_channels, **kwargs):
@@ -492,7 +487,7 @@ class MetaFormer(nn.Module):
         mlp_fn=partial(nn.Conv2d, kernel_size=1),
         mlp_act=StarReLU,
         mlp_bias=False,
-        norm_layers=GroupNorm1WithoutBias,
+        norm_layers=LayerNorm2dWithoutBias,
         drop_path_rate=0.,
         drop_rate=0.0, 
         layer_scale_init_values=None,
