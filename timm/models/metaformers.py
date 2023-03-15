@@ -222,10 +222,11 @@ class RandomMixing(nn.Module):
             requires_grad=False)
     def forward(self, x):
         B, C, H, W = x.shape
-        x = x.reshape(B, H*W, C)
+        #x = x.reshape(B, H*W, C)
+        x = x.flatten(2).transpose(1, 2)
         # FIXME change to work with arbitrary input sizes
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
-        x = x.reshape(B, C, H, W)
+        x = x.transpose(1, 2).reshape(B, C, H, W)
         return x
 
 # custom norm modules that disable the bias term, since the original models defs
