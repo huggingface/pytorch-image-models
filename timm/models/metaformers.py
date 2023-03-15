@@ -190,7 +190,7 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         x = x.permute(0, 3, 1, 2)
         return x
-
+'''
 # torchscript doesn't like the interpolation or the **kwargs
 @register_notrace_module
 class RandomMixing(nn.Module):
@@ -203,12 +203,27 @@ class RandomMixing(nn.Module):
         B, C, H, W = x.shape
         x = x.reshape(B, H*W, C)
         #resized_matrix = self.random_matrix.view(1, 1, self.num_tokens, self.num_tokens)
-        '''
+        
         resized_matrix = F.interpolate(
             resized_matrix, size=(H*W, H*W), 
             mode = self.interpolation_mode
         ).view(H*W, H*W)
-        '''
+        
+        x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
+        x = x.reshape(B, C, H, W)
+        return x
+'''
+class RandomMixing(nn.Module):
+    def __init__(self, num_tokens=196, **kwargs):
+        super().__init__()
+        # FIXME no grad breaks tests
+        self.random_matrix = nn.parameter.Parameter(
+            data=torch.softmax(torch.rand(num_tokens, num_tokens), dim=-1), 
+            requires_grad=False)
+    def forward(self, x):
+        B, C, H, W = x.shape
+        x = x.reshape(B, H*W, C)
+        # FIXME change to work with arbitrary input sizes
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.reshape(B, C, H, W)
         return x
