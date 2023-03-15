@@ -190,8 +190,8 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         x = x.permute(0, 3, 1, 2)
         return x
-'''
-# torchscript doesn't like the interpolation or the **kwargs
+
+# torchscript doesn't like the interpolation
 @register_notrace_module
 class RandomMixing(nn.Module):
     def __init__(self, num_tokens=196, interpolation_mode = 'bicubic', **kwargs):
@@ -201,7 +201,7 @@ class RandomMixing(nn.Module):
         self.interpolation_mode = interpolation_mode
     def forward(self, x):
         B, C, H, W = x.shape
-        x = x.reshape(B, H*W, C)
+        x = x.flatten(2).transpose(1, 2)
         #resized_matrix = self.random_matrix.view(1, 1, self.num_tokens, self.num_tokens)
         
         resized_matrix = F.interpolate(
@@ -210,7 +210,7 @@ class RandomMixing(nn.Module):
         ).view(H*W, H*W)
         
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
-        x = x.reshape(B, C, H, W)
+        x = x.transpose(1, 2).reshape(B, C, H, W)
         return x
 '''
 class RandomMixing(nn.Module):
@@ -228,7 +228,7 @@ class RandomMixing(nn.Module):
         x = torch.einsum('mn, bnc -> bmc', self.random_matrix, x)
         x = x.transpose(1, 2).reshape(B, C, H, W)
         return x
-
+''
 # custom norm modules that disable the bias term, since the original models defs
 # used a custom norm with a weight term but no bias term.
 
