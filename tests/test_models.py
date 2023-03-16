@@ -146,7 +146,8 @@ def test_model_backward(model_name, batch_size):
 
 @pytest.mark.cfg
 @pytest.mark.timeout(300)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=NON_STD_FILTERS, include_tags=True))
+@pytest.mark.parametrize('model_name', list_models(
+    exclude_filters=EXCLUDE_FILTERS + NON_STD_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
@@ -172,6 +173,8 @@ def test_model_default_cfgs(model_name, batch_size):
         outputs = model.forward_features(input_tensor)
         assert outputs.shape[spatial_axis[0]] == pool_size[0], 'unpooled feature shape != config'
         assert outputs.shape[spatial_axis[1]] == pool_size[1], 'unpooled feature shape != config'
+        if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.VGG)):
+            assert outputs.shape[feat_axis] == model.num_features
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
