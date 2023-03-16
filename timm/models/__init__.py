@@ -72,7 +72,8 @@ from ._builder import build_model_with_cfg, load_pretrained, load_custom_pretrai
 from ._factory import create_model, parse_model_name, safe_model_name
 from ._features import FeatureInfo, FeatureHooks, FeatureHookNet, FeatureListNet, FeatureDictNet
 from ._features_fx import FeatureGraphNet, GraphExtractNet, create_feature_extractor, \
-    register_notrace_module, register_notrace_function
+    register_notrace_module, is_notrace_module, get_notrace_modules, \
+    register_notrace_function, is_notrace_function, get_notrace_functions
 from ._helpers import clean_state_dict, load_state_dict, load_checkpoint, remap_checkpoint, resume_checkpoint
 from ._hub import load_model_config_from_hf, load_state_dict_from_hf, push_to_hf_hub
 from ._manipulate import model_parameters, named_apply, named_modules, named_modules_with_params, \

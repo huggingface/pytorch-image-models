@@ -18,6 +18,7 @@ This impl is/has:
 # Written by Jianwei Yang (jianwyan@microsoft.com)
 # --------------------------------------------------------
 from functools import partial
+from typing import Callable, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -35,15 +36,15 @@ __all__ = ['FocalNet']
 class FocalModulation(nn.Module):
     def __init__(
             self,
-            dim,
+            dim: int,
             focal_window,
-            focal_level,
-            focal_factor=2,
-            bias=True,
-            use_post_norm=False,
-            normalize_modulator=False,
-            proj_drop=0.,
-            norm_layer=LayerNorm2d,
+            focal_level: int,
+            focal_factor: int = 2,
+            bias: bool = True,
+            use_post_norm: bool = False,
+            normalize_modulator: bool = False,
+            proj_drop: float = 0.,
+            norm_layer: Callable = LayerNorm2d,
     ):
         super().__init__()
 
@@ -118,36 +119,38 @@ class LayerScale2d(nn.Module):
 
 
 class FocalNetBlock(nn.Module):
-    r""" Focal Modulation Network Block.
-
-    Args:
-        dim (int): Number of input channels.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        proj_drop (float, optional): Dropout rate. Default: 0.0
-        drop_path (float, optional): Stochastic depth rate. Default: 0.0
-        act_layer (nn.Module, optional): Activation layer. Default: nn.GELU
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
-        focal_level (int): Number of focal levels.
-        focal_window (int): Focal window size at first focal level
-        layerscale_value (float): Initial layerscale value
-        use_post_norm (bool): Whether to use layernorm after modulation
+    """ Focal Modulation Network Block.
     """
 
     def __init__(
             self,
-            dim,
-            mlp_ratio=4.,
-            focal_level=1,
-            focal_window=3,
-            use_post_norm=False,
-            use_post_norm_in_modulation=False,
-            normalize_modulator=False,
-            layerscale_value=1e-4,
-            proj_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=LayerNorm2d,
+            dim: int,
+            mlp_ratio: float = 4.,
+            focal_level: int = 1,
+            focal_window: int = 3,
+            use_post_norm: bool = False,
+            use_post_norm_in_modulation: bool = False,
+            normalize_modulator: bool = False,
+            layerscale_value: float = 1e-4,
+            proj_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Callable = nn.GELU,
+            norm_layer: Callable = LayerNorm2d,
     ):
+        """
+        Args:
+            dim: Number of input channels.
+            mlp_ratio: Ratio of mlp hidden dim to embedding dim.
+            focal_level: Number of focal levels.
+            focal_window: Focal window size at first focal level.
+            use_post_norm: Whether to use layer norm after modulation.
+            use_post_norm_in_modulation: Whether to use layer norm in modulation.
+            layerscale_value: Initial layerscale value.
+            proj_drop: Dropout rate.
+            drop_path: Stochastic depth rate.
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+        """
         super().__init__()
         self.dim = dim
         self.mlp_ratio = mlp_ratio
@@ -197,42 +200,45 @@ class FocalNetBlock(nn.Module):
         return x
 
 
-class BasicLayer(nn.Module):
+class FocalNetStage(nn.Module):
     """ A basic Focal Transformer layer for one stage.
-
-    Args:
-        dim (int): Number of input channels.
-        depth (int): Number of blocks.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        drop (float, optional): Dropout rate. Default: 0.0
-        drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (bool): Downsample layer at start of the layer. Default: True
-        focal_level (int): Number of focal levels
-        focal_window (int): Focal window size at first focal level
-        layerscale_value (float): Initial layerscale value
-        use_post_norm (bool): Whether to use layer norm after modulation
     """
 
     def __init__(
             self,
-            dim,
-            out_dim,
-            depth,
-            mlp_ratio=4.,
-            downsample=True,
-            focal_level=1,
-            focal_window=1,
-            use_overlap_down=False,
-            use_post_norm=False,
-            use_post_norm_in_modulation=False,
-            normalize_modulator=False,
-            layerscale_value=1e-4,
-            proj_drop=0.,
-            drop_path=0.,
-            norm_layer=LayerNorm2d,
+            dim: int,
+            out_dim: int,
+            depth: int,
+            mlp_ratio: float = 4.,
+            downsample: bool = True,
+            focal_level: int = 1,
+            focal_window: int = 1,
+            use_overlap_down: bool = False,
+            use_post_norm: bool = False,
+            use_post_norm_in_modulation: bool = False,
+            normalize_modulator: bool = False,
+            layerscale_value: float = 1e-4,
+            proj_drop: float = 0.,
+            drop_path: float = 0.,
+            norm_layer: Callable = LayerNorm2d,
     ):
-
+        """
+        Args:
+            dim: Number of input channels.
+            out_dim: Number of output channels.
+            depth: Number of blocks.
+            mlp_ratio: Ratio of mlp hidden dim to embedding dim.
+            downsample: Downsample layer at start of the layer.
+            focal_level: Number of focal levels
+            focal_window: Focal window size at first focal level
+            use_overlap_down: User overlapped convolution in downsample layer.
+            use_post_norm: Whether to use layer norm after modulation.
+            use_post_norm_in_modulation: Whether to use layer norm in modulation.
+            layerscale_value: Initial layerscale value
+            proj_drop: Dropout rate for projections.
+            drop_path: Stochastic depth rate.
+            norm_layer: Normalization layer.
+        """
         super().__init__()
         self.dim = dim
         self.depth = depth
@@ -281,22 +287,24 @@ class BasicLayer(nn.Module):
 
 
 class Downsample(nn.Module):
-    r"""
-    Args:
-        in_chs (int): Number of input image channels
-        out_chs (int): Number of linear projection output channels
-        stride (int): Downsample stride. Default: 4.
-        norm_layer (nn.Module, optional): Normalization layer. Default: None
-    """
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride=4,
-            overlap=False,
-            norm_layer=None,
+            in_chs: int,
+            out_chs: int,
+            stride: int = 4,
+            overlap: bool = False,
+            norm_layer: Optional[Callable] = None,
     ):
+        """
+
+        Args:
+            in_chs: Number of input image channels.
+            out_chs: Number of linear projection output channels.
+            stride: Downsample stride.
+            overlap: Use overlapping convolutions if True.
+            norm_layer: Normalization layer.
+        """
         super().__init__()
         self.stride = stride
         padding = 0
@@ -317,49 +325,47 @@ class Downsample(nn.Module):
 
 
 class FocalNet(nn.Module):
-    r""" Focal Modulation Networks (FocalNets)
-
-    Args:
-        in_chans (int): Number of input image channels. Default: 3
-        num_classes (int): Number of classes for classification head. Default: 1000
-        embed_dim (int): Patch embedding dimension. Default: 96
-        depths (tuple(int)): Depth of each Focal Transformer layer.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4
-        focal_levels (list): How many focal levels at all stages. Note that this excludes the finest-grain level.
-            Default: [1, 1, 1, 1]
-        focal_windows (list): The focal window size at all stages. Default: [7, 5, 3, 1]
-        use_overlap_down (bool): Whether to use convolutional embedding.
-        use_post_norm (bool): Whether to use layernorm after modulation (it helps stablize training of large models)
-        layerscale_value (float): Value for layer scale. Default: 1e-4
-        drop_rate (float): Dropout rate. Default: 0
-        drop_path_rate (float): Stochastic depth rate. Default: 0.1
-        norm_layer (nn.Module): Normalization layer. Default: nn.LayerNorm.
-
+    """" Focal Modulation Networks (FocalNets)
     """
 
     def __init__(
             self,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            embed_dim=96,
-            depths=(2, 2, 6, 2),
-            mlp_ratio=4.,
-            focal_levels=(2, 2, 2, 2),
-            focal_windows=(3, 3, 3, 3),
-            use_overlap_down=False,
-            use_post_norm=False,
-            use_post_norm_in_modulation=False,
-            normalize_modulator=False,
-            head_hidden_size=None,
-            head_init_scale=1.0,
-            layerscale_value=None,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            drop_path_rate=0.1,
-            norm_layer=partial(LayerNorm2d, eps=1e-5),
-            **kwargs,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            embed_dim: int = 96,
+            depths: Tuple[int, ...] = (2, 2, 6, 2),
+            mlp_ratio: float = 4.,
+            focal_levels: Tuple[int, ...] = (2, 2, 2, 2),
+            focal_windows: Tuple[int, ...] = (3, 3, 3, 3),
+            use_overlap_down: bool = False,
+            use_post_norm: bool = False,
+            use_post_norm_in_modulation: bool = False,
+            normalize_modulator: bool = False,
+            head_hidden_size: Optional[int] = None,
+            head_init_scale: float = 1.0,
+            layerscale_value: Optional[float] = None,
+            drop_rate: bool = 0.,
+            proj_drop_rate: bool = 0.,
+            drop_path_rate: bool = 0.1,
+            norm_layer: Callable = partial(LayerNorm2d, eps=1e-5),
     ):
+        """
+        Args:
+            in_chans: Number of input image channels.
+            num_classes: Number of classes for classification head.
+            embed_dim: Patch embedding dimension.
+            depths: Depth of each Focal Transformer layer.
+            mlp_ratio: Ratio of mlp hidden dim to embedding dim.
+            focal_levels: How many focal levels at all stages. Note that this excludes the finest-grain level.
+            focal_windows: The focal window size at all stages.
+            use_overlap_down: Whether to use convolutional embedding.
+            use_post_norm: Whether to use layernorm after modulation (it helps stablize training of large models)
+            layerscale_value: Value for layer scale.
+            drop_rate: Dropout rate.
+            drop_path_rate: Stochastic depth rate.
+            norm_layer: Normalization layer.
+        """
         super().__init__()
 
         self.num_layers = len(depths)
@@ -382,7 +388,7 @@ class FocalNet(nn.Module):
         layers = []
         for i_layer in range(self.num_layers):
             out_dim = embed_dim[i_layer]
-            layer = BasicLayer(
+            layer = FocalNetStage(
                 dim=in_dim,
                 out_dim=out_dim,
                 depth=depths[i_layer],
@@ -438,10 +444,10 @@ class FocalNet(nn.Module):
 
     @torch.jit.ignore
     def get_classifier(self):
-        return self.classifier.fc
+        return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool=None):
-        self.classifier.reset(num_classes, global_pool=global_pool)
+        self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -475,7 +481,7 @@ def _init_weights(module, name=None, head_init_scale=1.0):
 def _cfg(url='', **kwargs):
     return {
         'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': .9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.proj', 'classifier': 'head.fc',
@@ -498,19 +504,19 @@ default_cfgs = {
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_base_lrf.pth'),
     "focalnet_large_fl3": _cfg(
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_large_lrf_384.pth',
-        input_size=(3, 384, 384), crop_pct=1.0, num_classes=21842),
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
     "focalnet_large_fl4": _cfg(
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_large_lrf_384_fl4.pth',
-        input_size=(3, 384, 384), crop_pct=1.0, num_classes=21842),
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
     "focalnet_xlarge_fl3": _cfg(
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_xlarge_lrf_384.pth',
-        input_size=(3, 384, 384), crop_pct=1.0, num_classes=21842),
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
     "focalnet_xlarge_fl4": _cfg(
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_xlarge_lrf_384_fl4.pth',
-        input_size=(3, 384, 384), crop_pct=1.0, num_classes=21842),
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
     "focalnet_huge_fl3": _cfg(
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_huge_lrf_224.pth',
-        num_classes=0),
+        num_classes=21842),
     "focalnet_huge_fl4": _cfg(
         url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_huge_lrf_224_fl4.pth',
         num_classes=0),
@@ -533,7 +539,7 @@ def checkpoint_filter_fn(state_dict, model: FocalNet):
             k = re.sub(r'norm([0-9])', r'norm\1_post', k)
         k = k.replace('ln.', 'norm.')
         k = k.replace('head', 'head.fc')
-        if dest_dict[k].shape != v.shape:
+        if k in dest_dict and dest_dict[k].numel() == v.numel() and dest_dict[k].shape != v.shape:
             v = v.reshape(dest_dict[k].shape)
         out_dict[k] = v
     return out_dict

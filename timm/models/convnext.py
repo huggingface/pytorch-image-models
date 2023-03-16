@@ -406,7 +406,7 @@ class ConvNeXt(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes=0, global_pool=None):
-        self.head.reset(num_classes, global_pool=global_pool)
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -415,7 +415,7 @@ class ConvNeXt(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return self.head(x, pre_logits=pre_logits)
+        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)

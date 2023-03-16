@@ -145,13 +145,12 @@ class MobileNetV3(nn.Module):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
+        x = self.flatten(x)
         if pre_logits:
-            return x.flatten(1)
-        else:
-            x = self.flatten(x)
-            if self.drop_rate > 0.:
-                x = F.dropout(x, p=self.drop_rate, training=self.training)
-            return self.classifier(x)
+            return x
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        return self.classifier(x)
 
     def forward(self, x):
         x = self.forward_features(x)
