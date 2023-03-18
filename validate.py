@@ -255,8 +255,7 @@ def validate(args):
 
     if args.valid_labels:
         with open(args.valid_labels, 'r') as f:
-            valid_labels = {int(line.rstrip()) for line in f}
-            valid_labels = [i in valid_labels for i in range(args.num_classes)]
+            valid_labels = [int(line.rstrip()) for line in f]
     else:
         valid_labels = None
 
