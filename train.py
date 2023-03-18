@@ -848,7 +848,7 @@ def main():
 
     if best_metric is not None:
         _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
-    if should_log_to_tensorboard() and tensorboard_writer is not None:
+    if should_log_to_tensorboard(args) and tensorboard_writer is not None:
         tensorboard_writer.close()
 
 
