@@ -74,12 +74,12 @@ from ._features import FeatureInfo, FeatureHooks, FeatureHookNet, FeatureListNet
 from ._features_fx import FeatureGraphNet, GraphExtractNet, create_feature_extractor, \
     register_notrace_module, is_notrace_module, get_notrace_modules, \
     register_notrace_function, is_notrace_function, get_notrace_functions
-from ._helpers import clean_state_dict, load_state_dict, load_checkpoint, remap_checkpoint, resume_checkpoint
+from ._helpers import clean_state_dict, load_state_dict, load_checkpoint, remap_state_dict, resume_checkpoint
 from ._hub import load_model_config_from_hf, load_state_dict_from_hf, push_to_hf_hub
 from ._manipulate import model_parameters, named_apply, named_modules, named_modules_with_params, \
     group_modules, group_parameters, checkpoint_seq, adapt_input_conv
-from ._pretrained import PretrainedCfg, DefaultCfg, \
-    filter_pretrained_cfg, generate_default_cfgs, split_model_name_tag
+from ._pretrained import PretrainedCfg, DefaultCfg, filter_pretrained_cfg
 from ._prune import adapt_model_from_string
-from ._registry import register_model, model_entrypoint, list_models, list_pretrained, is_model, list_modules, \
-    is_model_in_modules, is_model_pretrained, get_pretrained_cfg, get_pretrained_cfg_value
+from ._registry import split_model_name_tag, get_arch_name, generate_default_cfgs, register_model, \
+    register_model_deprecations, model_entrypoint, list_models, list_pretrained, get_deprecated_models, \
+    is_model, list_modules, is_model_in_modules, is_model_pretrained, get_pretrained_cfg, get_pretrained_cfg_value

@@ -63,8 +63,7 @@ from torch.utils.checkpoint import checkpoint
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
 from ._builder import build_model_with_cfg
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 from .vision_transformer import checkpoint_filter_fn
 
 __all__ = ['Beit']

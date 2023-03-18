@@ -41,7 +41,7 @@ from timm.layers import DropPath, Mlp, ClassifierHead, to_2tuple, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['SwinTransformerV2Cr']  # model_registry will add each entrypoint fn to this
 
@@ -748,9 +748,11 @@ def init_weights(module: nn.Module, name: str = ''):
 
 def checkpoint_filter_fn(state_dict, model):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
-    out_dict = {}
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
+    if 'head.fc.weight' in state_dict:
+        return state_dict
+    out_dict = {}
     for k, v in state_dict.items():
         if 'tau' in k:
             # convert old tau based checkpoints -> logit_scale (inverse)
@@ -791,43 +793,46 @@ def _cfg(url='', **kwargs):
     }
 
 
-default_cfgs = {
-    'swinv2_cr_tiny_384': _cfg(
+default_cfgs = generate_default_cfgs({
+    'swinv2_cr_tiny_384.untrained': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_tiny_224': _cfg(
+    'swinv2_cr_tiny_224.untrained': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_tiny_ns_224': _cfg(
+    'swinv2_cr_tiny_ns_224.sw_in1k': _cfg(
+        hf_hub_id='timm/',
         url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_tiny_ns_224-ba8166c6.pth",
         input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_small_384': _cfg(
+    'swinv2_cr_small_384.untrained': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_small_224': _cfg(
+    'swinv2_cr_small_224.sw_in1k': _cfg(
+        hf_hub_id='timm/',
         url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_224-0813c165.pth",
         input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_small_ns_224': _cfg(
+    'swinv2_cr_small_ns_224.sw_in1k': _cfg(
+        hf_hub_id='timm/',
         url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_ns_224_iv-2ce90f8e.pth",
         input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_small_ns_256': _cfg(
+    'swinv2_cr_small_ns_256.untrained': _cfg(
         url="", input_size=(3, 256, 256), crop_pct=1.0, pool_size=(8, 8)),
-    'swinv2_cr_base_384': _cfg(
+    'swinv2_cr_base_384.untrained': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_base_224': _cfg(
+    'swinv2_cr_base_224.untrained': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_base_ns_224': _cfg(
+    'swinv2_cr_base_ns_224.untrained': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_large_384': _cfg(
+    'swinv2_cr_large_384.untrained': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_large_224': _cfg(
+    'swinv2_cr_large_224.untrained': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_huge_384': _cfg(
+    'swinv2_cr_huge_384.untrained': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_huge_224': _cfg(
+    'swinv2_cr_huge_224.untrained': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_giant_384': _cfg(
+    'swinv2_cr_giant_384.untrained': _cfg(
         url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_giant_224': _cfg(
+    'swinv2_cr_giant_224.untrained': _cfg(
         url="", input_size=(3, 224, 224), crop_pct=0.9),
-}
+})
 
 
 @register_model

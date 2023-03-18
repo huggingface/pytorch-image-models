@@ -28,7 +28,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, DropPath, LayerNorm2d, trunc_normal_, ClassifierHead, NormMlpClassifierHead
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['FocalNet']
 
@@ -485,51 +485,51 @@ def _cfg(url='', **kwargs):
         'crop_pct': .9, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.proj', 'classifier': 'head.fc',
-        **kwargs
+        'license': 'mit', **kwargs
     }
 
 
-default_cfgs = {
-    "focalnet_tiny_srf": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_tiny_srf.pth'),
-    "focalnet_small_srf": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_small_srf.pth'),
-    "focalnet_base_srf": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_base_srf.pth'),
-    "focalnet_tiny_lrf": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_tiny_lrf.pth'),
-    "focalnet_small_lrf": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_small_lrf.pth'),
-    "focalnet_base_lrf": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_base_lrf.pth'),
-    "focalnet_large_fl3": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_large_lrf_384.pth',
+default_cfgs = generate_default_cfgs({
+    "focalnet_tiny_srf.ms_in1k": _cfg(
+        hf_hub_id='timm/'),
+    "focalnet_small_srf.ms_in1k": _cfg(
+        hf_hub_id='timm/'),
+    "focalnet_base_srf.ms_in1k": _cfg(
+        hf_hub_id='timm/'),
+    "focalnet_tiny_lrf.ms_in1k": _cfg(
+        hf_hub_id='timm/'),
+    "focalnet_small_lrf.ms_in1k": _cfg(
+        hf_hub_id='timm/'),
+    "focalnet_base_lrf.ms_in1k": _cfg(
+        hf_hub_id='timm/'),
+
+    "focalnet_large_fl3.ms_in22k": _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
-    "focalnet_large_fl4": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_large_lrf_384_fl4.pth',
+    "focalnet_large_fl4.ms_in22k": _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
-    "focalnet_xlarge_fl3": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_xlarge_lrf_384.pth',
+    "focalnet_xlarge_fl3.ms_in22k": _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
-    "focalnet_xlarge_fl4": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_xlarge_lrf_384_fl4.pth',
+    "focalnet_xlarge_fl4.ms_in22k": _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21842),
-    "focalnet_huge_fl3": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_huge_lrf_224.pth',
+    "focalnet_huge_fl3.ms_in22k": _cfg(
+        hf_hub_id='timm/',
         num_classes=21842),
-    "focalnet_huge_fl4": _cfg(
-        url='https://projects4jw.blob.core.windows.net/focalnet/release/classification/focalnet_huge_lrf_224_fl4.pth',
+    "focalnet_huge_fl4.ms_in22k": _cfg(
+        hf_hub_id='timm/',
         num_classes=0),
-}
+})
 
 
 def checkpoint_filter_fn(state_dict, model: FocalNet):
+    state_dict = state_dict.get('model', state_dict)
     if 'stem.proj.weight' in state_dict:
-        return
+        return state_dict
     import re
     out_dict = {}
-    if 'model' in state_dict:
-        state_dict = state_dict['model']
     dest_dict = model.state_dict()
     for k, v in state_dict.items():
         k = re.sub(r'gamma_([0-9])', r'ls\1.gamma', k)

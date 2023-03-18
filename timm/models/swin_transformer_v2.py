@@ -24,7 +24,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['SwinTransformerV2']  # model_registry will add each entrypoint fn to this
 
@@ -425,9 +425,6 @@ class SwinTransformerV2Stage(nn.Module):
             for i in range(depth)])
 
     def forward(self, x):
-        if self.output_nchw:
-            x = x.permute(0, 2, 3, 1)  # NCHW -> NHWC
-
         x = self.downsample(x)
 
         for blk in self.blocks:
@@ -435,9 +432,6 @@ class SwinTransformerV2Stage(nn.Module):
                 x = checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
-
-        if self.output_nchw:
-            x = x.permute(0, 3, 1, 2)  # NHWC -> NCHW
         return x
 
     def _init_respostnorm(self):
@@ -473,7 +467,6 @@ class SwinTransformerV2(nn.Module):
             drop_path_rate: float = 0.1,
             norm_layer: Callable = nn.LayerNorm,
             pretrained_window_sizes: Tuple[int, ...] = (0, 0, 0, 0),
-            output_fmt: str = 'NHWC',
             **kwargs,
     ):
         """
@@ -500,13 +493,11 @@ class SwinTransformerV2(nn.Module):
 
         self.num_classes = num_classes
         assert global_pool in ('', 'avg')
-        assert output_fmt in ('NCHW', 'NHWC')
         self.global_pool = global_pool
-        self.output_fmt = output_fmt
+        self.output_fmt = 'NHWC'
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
-        self.output_nchw = self.output_fmt == 'NCHW'
         self.feature_info = []
 
         if not isinstance(embed_dim, (tuple, list)):
@@ -544,7 +535,6 @@ class SwinTransformerV2(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 pretrained_window_size=pretrained_window_sizes[i],
-                output_nchw=self.output_nchw,
             )]
             in_dim = out_dim
             if i > 0:
@@ -605,14 +595,8 @@ class SwinTransformerV2(nn.Module):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        if self.output_nchw:
-            # patch embed always outputs NHWC, stage layers expect NCHW input if output_nchw = True
-            x = x.permute(0, 3, 1, 2)
         x = self.layers(x)
-        if self.output_nchw:
-            x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        else:
-            x = self.norm(x)
+        x = self.norm(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
@@ -625,10 +609,12 @@ class SwinTransformerV2(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict, model):
-    import re
-    out_dict = {}
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
+    if 'head.fc.weight' in state_dict:
+        return state_dict
+    out_dict = {}
+    import re
     for k, v in state_dict.items():
         if any([n in k for n in ('relative_position_index', 'relative_coords_table')]):
             continue  # skip buffers that should not be persistent
@@ -657,53 +643,66 @@ def _cfg(url='', **kwargs):
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
-        **kwargs
+        'license': 'mit', **kwargs
     }
 
 
-default_cfgs = {
-    'swinv2_tiny_window8_256': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_tiny_patch4_window8_256.pth',
-    ),
-    'swinv2_tiny_window16_256': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_tiny_patch4_window16_256.pth',
-    ),
-    'swinv2_small_window8_256': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_small_patch4_window8_256.pth',
-    ),
-    'swinv2_small_window16_256': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_small_patch4_window16_256.pth',
-    ),
-    'swinv2_base_window8_256': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window8_256.pth',
-    ),
-    'swinv2_base_window16_256': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window16_256.pth',
-    ),
-
-    'swinv2_base_window12_192_22k': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window12_192_22k.pth',
-        num_classes=21841, input_size=(3, 192, 192), pool_size=(6, 6)
-    ),
-    'swinv2_base_window12to16_192to256_22kft1k': _cfg(
+default_cfgs = generate_default_cfgs({
+    'swinv2_base_window12to16_192to256.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window12to16_192to256_22kto1k_ft.pth',
     ),
-    'swinv2_base_window12to24_192to384_22kft1k': _cfg(
+    'swinv2_base_window12to24_192to384.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window12to24_192to384_22kto1k_ft.pth',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
     ),
-    'swinv2_large_window12_192_22k': _cfg(
-        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_large_patch4_window12_192_22k.pth',
-        num_classes=21841, input_size=(3, 192, 192), pool_size=(6, 6)
-    ),
-    'swinv2_large_window12to16_192to256_22kft1k': _cfg(
+    'swinv2_large_window12to16_192to256.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_large_patch4_window12to16_192to256_22kto1k_ft.pth',
     ),
-    'swinv2_large_window12to24_192to384_22kft1k': _cfg(
+    'swinv2_large_window12to24_192to384.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
         url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_large_patch4_window12to24_192to384_22kto1k_ft.pth',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
     ),
-}
+
+    'swinv2_tiny_window8_256.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_tiny_patch4_window8_256.pth',
+    ),
+    'swinv2_tiny_window16_256.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_tiny_patch4_window16_256.pth',
+    ),
+    'swinv2_small_window8_256.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_small_patch4_window8_256.pth',
+    ),
+    'swinv2_small_window16_256.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_small_patch4_window16_256.pth',
+    ),
+    'swinv2_base_window8_256.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window8_256.pth',
+    ),
+    'swinv2_base_window16_256.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window16_256.pth',
+    ),
+
+    'swinv2_base_window12_192.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_base_patch4_window12_192_22k.pth',
+        num_classes=21841, input_size=(3, 192, 192), pool_size=(6, 6)
+    ),
+    'swinv2_large_window12_192.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v2.0.0/swinv2_large_patch4_window12_192_22k.pth',
+        num_classes=21841, input_size=(3, 192, 192), pool_size=(6, 6)
+    ),
+})
 
 
 @register_model
@@ -761,62 +760,72 @@ def swinv2_base_window8_256(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_base_window12_192_22k(pretrained=False, **kwargs):
+def swinv2_base_window12_192(pretrained=False, **kwargs):
     """
     """
     model_kwargs = dict(
         window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window12_192_22k', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2('swinv2_base_window12_192', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def swinv2_base_window12to16_192to256_22kft1k(pretrained=False, **kwargs):
+def swinv2_base_window12to16_192to256(pretrained=False, **kwargs):
     """
     """
     model_kwargs = dict(
         window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32),
         pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
     return _create_swin_transformer_v2(
-        'swinv2_base_window12to16_192to256_22kft1k', pretrained=pretrained, **model_kwargs)
+        'swinv2_base_window12to16_192to256', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def swinv2_base_window12to24_192to384_22kft1k(pretrained=False, **kwargs):
+def swinv2_base_window12to24_192to384(pretrained=False, **kwargs):
     """
     """
     model_kwargs = dict(
         window_size=24, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32),
         pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
     return _create_swin_transformer_v2(
-        'swinv2_base_window12to24_192to384_22kft1k', pretrained=pretrained, **model_kwargs)
+        'swinv2_base_window12to24_192to384', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def swinv2_large_window12_192_22k(pretrained=False, **kwargs):
+def swinv2_large_window12_192(pretrained=False, **kwargs):
     """
     """
     model_kwargs = dict(
         window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer_v2('swinv2_large_window12_192_22k', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2('swinv2_large_window12_192', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def swinv2_large_window12to16_192to256_22kft1k(pretrained=False, **kwargs):
+def swinv2_large_window12to16_192to256(pretrained=False, **kwargs):
     """
     """
     model_kwargs = dict(
         window_size=16, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48),
         pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
     return _create_swin_transformer_v2(
-        'swinv2_large_window12to16_192to256_22kft1k', pretrained=pretrained, **model_kwargs)
+        'swinv2_large_window12to16_192to256', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def swinv2_large_window12to24_192to384_22kft1k(pretrained=False, **kwargs):
+def swinv2_large_window12to24_192to384(pretrained=False, **kwargs):
     """
     """
     model_kwargs = dict(
         window_size=24, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48),
         pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
     return _create_swin_transformer_v2(
-        'swinv2_large_window12to24_192to384_22kft1k', pretrained=pretrained, **model_kwargs)
+        'swinv2_large_window12to24_192to384', pretrained=pretrained, **model_kwargs)
+
+
+register_model_deprecations(__name__, {
+    'swinv2_base_window12_192_22k': 'swinv2_base_window12_192.ms_in22k',
+    'swinv2_base_window12to16_192to256_22kft1k': 'swinv2_base_window12to16_192to256.ms_in22k_ft_in1k',
+    'swinv2_base_window12to24_192to384_22kft1k': 'swinv2_base_window12to24_192to384.ms_in22k_ft_in1k',
+    'swinv2_large_window12_192_22k': 'swinv2_large_window12_192.ms_in22k',
+    'swinv2_large_window12to16_192to256_22kft1k': 'swinv2_large_window12to16_192to256.ms_in22k_ft_in1k',
+    'swinv2_large_window12to24_192to384_22kft1k': 'swinv2_large_window12to24_192to384.ms_in22k_ft_in1k',
+})
