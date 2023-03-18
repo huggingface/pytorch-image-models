@@ -734,9 +734,7 @@ def main():
     if should_log_to_tensorboard(args):
         if has_tensorboard:
             tensorboard_writer = SummaryWriter(args.log_tensorboard)
-            #write Hyperparameters to tensorboard, remove Nones
-            hparams = {k: v for k, v in vars(args).items() if v is not None}
-            tensorboard_writer.add_hparams(hparams, {})
+
 
         else:
             _logger.warning(
