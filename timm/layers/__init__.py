@@ -20,6 +20,7 @@ from .evo_norm import EvoNorm2dB0, EvoNorm2dB1, EvoNorm2dB2,\
     EvoNorm2dS0, EvoNorm2dS0a, EvoNorm2dS1, EvoNorm2dS1a, EvoNorm2dS2, EvoNorm2dS2a
 from .fast_norm import is_fast_norm, set_fast_norm, fast_group_norm, fast_layer_norm
 from .filter_response_norm import FilterResponseNormTlu2d, FilterResponseNormAct2d
+from .format import Format, get_channel_dim, get_spatial_dim, nchw_to, nhwc_to
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple

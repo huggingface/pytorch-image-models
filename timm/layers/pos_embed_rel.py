@@ -15,26 +15,48 @@ from .weight_init import trunc_normal_
 
 def gen_relative_position_index(
         q_size: Tuple[int, int],
-        k_size: Tuple[int, int] = None,
-        class_token: bool = False) -> torch.Tensor:
+        k_size: Optional[Tuple[int, int]] = None,
+        class_token: bool = False,
+) -> torch.Tensor:
     # Adapted with significant modifications from Swin / BeiT codebases
     # get pair-wise relative position index for each token inside the window
-    q_coords = torch.stack(torch.meshgrid([torch.arange(q_size[0]), torch.arange(q_size[1])])).flatten(1)  # 2, Wh, Ww
     if k_size is None:
-        k_coords = q_coords
-        k_size = q_size
+        coords = torch.stack(
+            torch.meshgrid([
+                torch.arange(q_size[0]),
+                torch.arange(q_size[1])
+            ])
+        ).flatten(1)  # 2, Wh, Ww
+        relative_coords = coords[:, :, None] - coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = relative_coords.permute(1, 2, 0)  # Qh*Qw, Kh*Kw, 2
+        num_relative_distance = (2 * q_size[0] - 1) * (2 * q_size[1] - 1) + 3
     else:
-        # different q vs k sizes is a WIP
-        k_coords = torch.stack(torch.meshgrid([torch.arange(k_size[0]), torch.arange(k_size[1])])).flatten(1)
-    relative_coords = q_coords[:, :, None] - k_coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
-    relative_coords = relative_coords.permute(1, 2, 0)  # Wh*Ww, Wh*Ww, 2
+        # FIXME different q vs k sizes is a WIP, need to better offset the two grids?
+        q_coords = torch.stack(
+            torch.meshgrid([
+                torch.arange(q_size[0]),
+                torch.arange(q_size[1])
+            ])
+        ).flatten(1)  # 2, Wh, Ww
+        k_coords = torch.stack(
+            torch.meshgrid([
+                torch.arange(k_size[0]),
+                torch.arange(k_size[1])
+            ])
+        ).flatten(1)
+        relative_coords = q_coords[:, :, None] - k_coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = relative_coords.permute(1, 2, 0)  # Qh*Qw, Kh*Kw, 2
+        # relative_coords[:, :, 0] += max(q_size[0], k_size[0]) - 1  # shift to start from 0
+        # relative_coords[:, :, 1] += max(q_size[1], k_size[1]) - 1
+        # relative_coords[:, :, 0] *= k_size[1] + q_size[1] - 1
+        # relative_position_index = relative_coords.sum(-1)  # Qh*Qw, Kh*Kw
+        num_relative_distance = (q_size[0] + k_size[0] - 1) * (q_size[1] + q_size[1] - 1) + 3
+
     _, relative_position_index = torch.unique(relative_coords.view(-1, 2), return_inverse=True, dim=0)
 
     if class_token:
         # handle cls to token & token 2 cls & cls to cls as per beit for rel pos bias
         # NOTE not intended or tested with MLP log-coords
-        max_size = (max(q_size[0], k_size[0]), max(q_size[1], k_size[1]))
-        num_relative_distance = (2 * max_size[0] - 1) * (2 * max_size[1] - 1) + 3
         relative_position_index = F.pad(relative_position_index, [1, 0, 1, 0])
         relative_position_index[0, 0:] = num_relative_distance - 3
         relative_position_index[0:, 0] = num_relative_distance - 2
@@ -59,7 +81,7 @@ class RelPosBias(nn.Module):
         self.relative_position_bias_table = nn.Parameter(torch.zeros(num_relative_distance, num_heads))
         self.register_buffer(
             "relative_position_index",
-            gen_relative_position_index(self.window_size, class_token=prefix_tokens > 0),
+            gen_relative_position_index(self.window_size, class_token=prefix_tokens > 0).view(-1),
             persistent=False,
         )
 
@@ -69,7 +91,7 @@ class RelPosBias(nn.Module):
         trunc_normal_(self.relative_position_bias_table, std=.02)
 
     def get_bias(self) -> torch.Tensor:
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index]
         # win_h * win_w, win_h * win_w, num_heads
         relative_position_bias = relative_position_bias.view(self.bias_shape).permute(2, 0, 1)
         return relative_position_bias.unsqueeze(0).contiguous()
@@ -148,7 +170,7 @@ class RelPosMlp(nn.Module):
 
         self.register_buffer(
             "relative_position_index",
-            gen_relative_position_index(window_size),
+            gen_relative_position_index(window_size).view(-1),
             persistent=False)
 
         # get relative_coords_table
@@ -160,8 +182,7 @@ class RelPosMlp(nn.Module):
     def get_bias(self) -> torch.Tensor:
         relative_position_bias = self.mlp(self.rel_coords_log)
         if self.relative_position_index is not None:
-            relative_position_bias = relative_position_bias.view(-1, self.num_heads)[
-                self.relative_position_index.view(-1)]  # Wh*Ww,Wh*Ww,nH
+            relative_position_bias = relative_position_bias.view(-1, self.num_heads)[self.relative_position_index]
             relative_position_bias = relative_position_bias.view(self.bias_shape)
         relative_position_bias = relative_position_bias.permute(2, 0, 1)
         relative_position_bias = self.bias_act(relative_position_bias)

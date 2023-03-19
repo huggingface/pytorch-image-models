@@ -50,8 +50,7 @@ from timm.layers import trunc_normal_, AvgPool2dSame, DropPath, Mlp, GlobalRespo
 from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['ConvNeXt']  # model_registry will add each entrypoint fn to this
 
@@ -406,7 +405,7 @@ class ConvNeXt(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes=0, global_pool=None):
-        self.head.reset(num_classes, global_pool=global_pool)
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -415,7 +414,7 @@ class ConvNeXt(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return self.head(x, pre_logits=pre_logits)
+        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
@@ -519,6 +518,13 @@ def _cfgv2(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     # timm specific variants
+    'convnext_tiny.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_small.in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
     'convnext_atto.d2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_atto_d2-01bb0f51.pth',
         hf_hub_id='timm/',
@@ -558,12 +564,6 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/convnext_tiny_hnf_a2h-ab7e9df2.pth',
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_tiny.in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_small.in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/',
-        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
     'convnext_tiny.in12k_ft_in1k_384': _cfg(
         hf_hub_id='timm/',
@@ -581,25 +581,6 @@ default_cfgs = generate_default_cfgs({
     'convnext_small.in12k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, num_classes=11821),
-
-    'convnext_tiny.fb_in1k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_tiny_1k_224_ema.pth",
-        hf_hub_id='timm/',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_small.fb_in1k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_small_1k_224_ema.pth",
-        hf_hub_id='timm/',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_base.fb_in1k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_base_1k_224_ema.pth",
-        hf_hub_id='timm/',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_large.fb_in1k': _cfg(
-        url="https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth",
-        hf_hub_id='timm/',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'convnext_xlarge.untrained': _cfg(),
-    'convnext_xxlarge.untrained': _cfg(),
 
     'convnext_tiny.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_tiny_22k_1k_224.pth',
@@ -619,6 +600,23 @@ default_cfgs = generate_default_cfgs({
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'convnext_xlarge.fb_in22k_ft_in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_1k_224_ema.pth',
+        hf_hub_id='timm/',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'convnext_tiny.fb_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_tiny_1k_224_ema.pth",
+        hf_hub_id='timm/',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_small.fb_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_small_1k_224_ema.pth",
+        hf_hub_id='timm/',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_base.fb_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_base_1k_224_ema.pth",
+        hf_hub_id='timm/',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'convnext_large.fb_in1k': _cfg(
+        url="https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth",
         hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
@@ -1038,3 +1036,22 @@ def convnextv2_huge(pretrained=False, **kwargs):
     model_args = dict(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_huge', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+register_model_deprecations(__name__, {
+    'convnext_tiny_in22ft1k': 'convnext_tiny.fb_in22k_ft_in1k',
+    'convnext_small_in22ft1k': 'convnext_small.fb_in22k_ft_in1k',
+    'convnext_base_in22ft1k': 'convnext_base.fb_in22k_ft_in1k',
+    'convnext_large_in22ft1k': 'convnext_large.fb_in22k_ft_in1k',
+    'convnext_xlarge_in22ft1k': 'convnext_xlarge.fb_in22k_ft_in1k',
+    'convnext_tiny_384_in22ft1k': 'convnext_tiny.fb_in22k_ft_in1k_384',
+    'convnext_small_384_in22ft1k': 'convnext_small.fb_in22k_ft_in1k_384',
+    'convnext_base_384_in22ft1k': 'convnext_base.fb_in22k_ft_in1k_384',
+    'convnext_large_384_in22ft1k': 'convnext_large.fb_in22k_ft_in1k_384',
+    'convnext_xlarge_384_in22ft1k': 'convnext_xlarge.fb_in22k_ft_in1k_384',
+    'convnext_tiny_in22k': 'convnext_tiny.fb_in22k',
+    'convnext_small_in22k': 'convnext_small.fb_in22k',
+    'convnext_base_in22k': 'convnext_base.fb_in22k',
+    'convnext_large_in22k': 'convnext_large.fb_in22k',
+    'convnext_xlarge_in22k': 'convnext_xlarge.fb_in22k',
+})

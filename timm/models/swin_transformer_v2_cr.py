@@ -37,69 +37,15 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Mlp, to_2tuple, _assert
+from timm.layers import DropPath, Mlp, ClassifierHead, to_2tuple, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['SwinTransformerV2Cr']  # model_registry will add each entrypoint fn to this
 
 _logger = logging.getLogger(__name__)
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000,
-        'input_size': (3, 224, 224),
-        'pool_size': (7, 7),
-        'crop_pct': 0.9,
-        'interpolation': 'bicubic',
-        'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN,
-        'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj',
-        'classifier': 'head',
-        **kwargs,
-    }
-
-
-default_cfgs = {
-    'swinv2_cr_tiny_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_tiny_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_tiny_ns_224': _cfg(
-        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_tiny_ns_224-ba8166c6.pth",
-        input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_small_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_small_224': _cfg(
-        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_224-0813c165.pth",
-        input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_small_ns_224': _cfg(
-        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_ns_224_iv-2ce90f8e.pth",
-        input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_base_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_base_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_base_ns_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_large_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_large_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_huge_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_huge_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
-    'swinv2_cr_giant_384': _cfg(
-        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
-    'swinv2_cr_giant_224': _cfg(
-        url="", input_size=(3, 224, 224), crop_pct=0.9),
-}
 
 
 def bchw_to_bhwc(x: torch.Tensor) -> torch.Tensor:
@@ -230,22 +176,14 @@ class WindowMultiHeadAttention(nn.Module):
         relative_position_bias = relative_position_bias.unsqueeze(0)
         return relative_position_bias
 
-    def _forward_sequential(
-        self,
-        x: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """
-        """
-        # FIXME TODO figure out 'sequential' attention mentioned in paper (should reduce GPU memory)
-        assert False, "not implemented"
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """ Forward pass.
+        Args:
+            x (torch.Tensor): Input tensor of the shape (B * windows, N, C)
+            mask (Optional[torch.Tensor]): Attention mask for the shift case
 
-    def _forward_batch(
-        self,
-        x: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """This function performs standard (non-sequential) scaled cosine self-attention.
+        Returns:
+            Output tensor of the shape [B * windows, N, C]
         """
         Bw, L, C = x.shape
 
@@ -272,22 +210,8 @@ class WindowMultiHeadAttention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """ Forward pass.
-        Args:
-            x (torch.Tensor): Input tensor of the shape (B * windows, N, C)
-            mask (Optional[torch.Tensor]): Attention mask for the shift case
 
-        Returns:
-            Output tensor of the shape [B * windows, N, C]
-        """
-        if self.sequential_attn:
-            return self._forward_sequential(x, mask)
-        else:
-            return self._forward_batch(x, mask)
-
-
-class SwinTransformerBlock(nn.Module):
+class SwinTransformerV2CrBlock(nn.Module):
     r"""This class implements the Swin transformer block.
 
     Args:
@@ -321,7 +245,7 @@ class SwinTransformerBlock(nn.Module):
         sequential_attn: bool = False,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
     ) -> None:
-        super(SwinTransformerBlock, self).__init__()
+        super(SwinTransformerV2CrBlock, self).__init__()
         self.dim: int = dim
         self.feat_size: Tuple[int, int] = feat_size
         self.target_shift_size: Tuple[int, int] = to_2tuple(shift_size)
@@ -410,9 +334,7 @@ class SwinTransformerBlock(nn.Module):
         self._make_attention_mask()
 
     def _shifted_window_attn(self, x):
-        H, W = self.feat_size
-        B, L, C = x.shape
-        x = x.view(B, H, W, C)
+        B, H, W, C = x.shape
 
         # cyclic shift
         sh, sw = self.shift_size
@@ -441,7 +363,6 @@ class SwinTransformerBlock(nn.Module):
             # x = torch.cat([x[:, :, -sw:], x[:, :, :-sw]], dim=2)
             x = torch.roll(x, shifts=(sh, sw), dims=(1, 2))
 
-        x = x.view(B, L, C)
         return x
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -455,8 +376,12 @@ class SwinTransformerBlock(nn.Module):
         """
         # post-norm branches (op -> norm -> drop)
         x = x + self.drop_path1(self.norm1(self._shifted_window_attn(x)))
+
+        B, H, W, C = x.shape
+        x = x.reshape(B, -1, C)
         x = x + self.drop_path2(self.norm2(self.mlp(x)))
         x = self.norm3(x)  # main-branch norm enabled for some blocks / stages (every 6 for Huge/Giant)
+        x = x.reshape(B, H, W, C)
         return x
 
 
@@ -479,12 +404,10 @@ class PatchMerging(nn.Module):
         Returns:
             output (torch.Tensor): Output tensor of the shape [B, 2 * C, H // 2, W // 2]
         """
-        B, C, H, W = x.shape
-        # unfold + BCHW -> BHWC together
-        # ordering, 5, 3, 1 instead of 3, 5, 1 maintains compat with original swin v1 merge
-        x = x.reshape(B, C, H // 2, 2, W // 2, 2).permute(0, 2, 4, 5, 3, 1).flatten(3)
+        B, H, W, C = x.shape
+        x = x.reshape(B, H // 2, 2, W // 2, 2, C).permute(0, 1, 3, 4, 2, 5).flatten(3)
         x = self.norm(x)
-        x = bhwc_to_bchw(self.reduction(x))
+        x = self.reduction(x)
         return x
 
 
@@ -511,7 +434,7 @@ class PatchEmbed(nn.Module):
         return x
 
 
-class SwinTransformerStage(nn.Module):
+class SwinTransformerV2CrStage(nn.Module):
     r"""This class implements a stage of the Swin transformer including multiple layers.
 
     Args:
@@ -549,12 +472,16 @@ class SwinTransformerStage(nn.Module):
         extra_norm_stage: bool = False,
         sequential_attn: bool = False,
     ) -> None:
-        super(SwinTransformerStage, self).__init__()
+        super(SwinTransformerV2CrStage, self).__init__()
         self.downscale: bool = downscale
         self.grad_checkpointing: bool = False
         self.feat_size: Tuple[int, int] = (feat_size[0] // 2, feat_size[1] // 2) if downscale else feat_size
 
-        self.downsample = PatchMerging(embed_dim, norm_layer=norm_layer) if downscale else nn.Identity()
+        if downscale:
+            self.downsample = PatchMerging(embed_dim, norm_layer=norm_layer)
+            embed_dim = embed_dim * 2
+        else:
+            self.downsample = nn.Identity()
 
         def _extra_norm(index):
             i = index + 1
@@ -562,9 +489,8 @@ class SwinTransformerStage(nn.Module):
                 return True
             return i == depth if extra_norm_stage else False
 
-        embed_dim = embed_dim * 2 if downscale else embed_dim
         self.blocks = nn.Sequential(*[
-            SwinTransformerBlock(
+            SwinTransformerV2CrBlock(
                 dim=embed_dim,
                 num_heads=num_heads,
                 feat_size=self.feat_size,
@@ -602,18 +528,15 @@ class SwinTransformerStage(nn.Module):
         Returns:
             output (torch.Tensor): Output tensor of the shape [B, 2 * C, H // 2, W // 2]
         """
+        x = bchw_to_bhwc(x)
         x = self.downsample(x)
-        B, C, H, W = x.shape
-        L = H * W
-
-        x = bchw_to_bhwc(x).reshape(B, L, C)
         for block in self.blocks:
             # Perform checkpointing if utilized
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint.checkpoint(block, x)
             else:
                 x = block(x)
-        x = bhwc_to_bchw(x.reshape(B, H, W, -1))
+        x = bhwc_to_bchw(x)
         return x
 
 
@@ -676,39 +599,54 @@ class SwinTransformerV2Cr(nn.Module):
         self.img_size: Tuple[int, int] = img_size
         self.window_size: int = window_size
         self.num_features: int = int(embed_dim * 2 ** (len(depths) - 1))
+        self.feature_info = []
 
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans,
-            embed_dim=embed_dim, norm_layer=norm_layer)
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            norm_layer=norm_layer,
+        )
         patch_grid_size: Tuple[int, int] = self.patch_embed.grid_size
 
-        drop_path_rate = torch.linspace(0.0, drop_path_rate, sum(depths)).tolist()
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
         stages = []
-        for index, (depth, num_heads) in enumerate(zip(depths, num_heads)):
-            stage_scale = 2 ** max(index - 1, 0)
-            stages.append(
-                SwinTransformerStage(
-                    embed_dim=embed_dim * stage_scale,
-                    depth=depth,
-                    downscale=index != 0,
-                    feat_size=(patch_grid_size[0] // stage_scale, patch_grid_size[1] // stage_scale),
-                    num_heads=num_heads,
-                    window_size=window_size,
-                    mlp_ratio=mlp_ratio,
-                    init_values=init_values,
-                    drop=drop_rate,
-                    drop_attn=attn_drop_rate,
-                    drop_path=drop_path_rate[sum(depths[:index]):sum(depths[:index + 1])],
-                    extra_norm_period=extra_norm_period,
-                    extra_norm_stage=extra_norm_stage or (index + 1) == len(depths),  # last stage ends w/ norm
-                    sequential_attn=sequential_attn,
-                    norm_layer=norm_layer,
-                )
-            )
+        in_dim = embed_dim
+        in_scale = 1
+        for stage_idx, (depth, num_heads) in enumerate(zip(depths, num_heads)):
+            stages += [SwinTransformerV2CrStage(
+                embed_dim=in_dim,
+                depth=depth,
+                downscale=stage_idx != 0,
+                feat_size=(
+                    patch_grid_size[0] // in_scale,
+                    patch_grid_size[1] // in_scale
+                ),
+                num_heads=num_heads,
+                window_size=window_size,
+                mlp_ratio=mlp_ratio,
+                init_values=init_values,
+                drop=drop_rate,
+                drop_attn=attn_drop_rate,
+                drop_path=dpr[stage_idx],
+                extra_norm_period=extra_norm_period,
+                extra_norm_stage=extra_norm_stage or (stage_idx + 1) == len(depths),  # last stage ends w/ norm
+                sequential_attn=sequential_attn,
+                norm_layer=norm_layer,
+            )]
+            if stage_idx != 0:
+                in_dim *= 2
+                in_scale *= 2
+            self.feature_info += [dict(num_chs=in_dim, reduction=4 * in_scale, module=f'stages.{stage_idx}')]
         self.stages = nn.Sequential(*stages)
 
-        self.global_pool: str = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes else nn.Identity()
+        self.head = ClassifierHead(
+            self.num_features,
+            num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+        )
 
         # current weight init skips custom init and uses pytorch layer defaults, seems to work well
         # FIXME more experiments needed
@@ -765,7 +703,7 @@ class SwinTransformerV2Cr(nn.Module):
         Returns:
             head (nn.Module): Current classification head
         """
-        return self.head
+        return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
         """Method results the classification head
@@ -774,10 +712,8 @@ class SwinTransformerV2Cr(nn.Module):
             num_classes (int): Number of classes to be predicted
             global_pool (str): Unused
         """
-        self.num_classes: int = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -785,9 +721,7 @@ class SwinTransformerV2Cr(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool == 'avg':
-            x = x.mean(dim=(2, 3))
-        return x if pre_logits else self.head(x)
+        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
@@ -814,28 +748,91 @@ def init_weights(module: nn.Module, name: str = ''):
 
 def checkpoint_filter_fn(state_dict, model):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
+    state_dict = state_dict.get('model', state_dict)
+    state_dict = state_dict.get('state_dict', state_dict)
+    if 'head.fc.weight' in state_dict:
+        return state_dict
     out_dict = {}
-    if 'model' in state_dict:
-        # For deit models
-        state_dict = state_dict['model']
     for k, v in state_dict.items():
         if 'tau' in k:
             # convert old tau based checkpoints -> logit_scale (inverse)
             v = torch.log(1 / v)
             k = k.replace('tau', 'logit_scale')
+        k = k.replace('head.', 'head.fc.')
         out_dict[k] = v
     return out_dict
 
 
 def _create_swin_transformer_v2_cr(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+    default_out_indices = tuple(i for i, _ in enumerate(kwargs.get('depths', (1, 1, 1, 1))))
+    out_indices = kwargs.pop('out_indices', default_out_indices)
+
     model = build_model_with_cfg(
         SwinTransformerV2Cr, variant, pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs
     )
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000,
+        'input_size': (3, 224, 224),
+        'pool_size': (7, 7),
+        'crop_pct': 0.9,
+        'interpolation': 'bicubic',
+        'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN,
+        'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj',
+        'classifier': 'head.fc',
+        **kwargs,
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'swinv2_cr_tiny_384.untrained': _cfg(
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
+    'swinv2_cr_tiny_224.untrained': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_tiny_ns_224.sw_in1k': _cfg(
+        hf_hub_id='timm/',
+        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_tiny_ns_224-ba8166c6.pth",
+        input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_small_384.untrained': _cfg(
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
+    'swinv2_cr_small_224.sw_in1k': _cfg(
+        hf_hub_id='timm/',
+        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_224-0813c165.pth",
+        input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_small_ns_224.sw_in1k': _cfg(
+        hf_hub_id='timm/',
+        url="https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-swinv2/swin_v2_cr_small_ns_224_iv-2ce90f8e.pth",
+        input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_small_ns_256.untrained': _cfg(
+        url="", input_size=(3, 256, 256), crop_pct=1.0, pool_size=(8, 8)),
+    'swinv2_cr_base_384.untrained': _cfg(
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
+    'swinv2_cr_base_224.untrained': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_base_ns_224.untrained': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_large_384.untrained': _cfg(
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
+    'swinv2_cr_large_224.untrained': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_huge_384.untrained': _cfg(
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
+    'swinv2_cr_huge_224.untrained': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+    'swinv2_cr_giant_384.untrained': _cfg(
+        url="", input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
+    'swinv2_cr_giant_224.untrained': _cfg(
+        url="", input_size=(3, 224, 224), crop_pct=0.9),
+})
 
 
 @register_model
@@ -916,6 +913,19 @@ def swinv2_cr_small_ns_224(pretrained=False, **kwargs):
 
 
 @register_model
+def swinv2_cr_small_ns_256(pretrained=False, **kwargs):
+    """Swin-S V2 CR @ 256x256, trained ImageNet-1k"""
+    model_kwargs = dict(
+        embed_dim=96,
+        depths=(2, 2, 18, 2),
+        num_heads=(3, 6, 12, 24),
+        extra_norm_stage=True,
+        **kwargs
+    )
+    return _create_swin_transformer_v2_cr('swinv2_cr_small_ns_256', pretrained=pretrained, **model_kwargs)
+
+
+@register_model
 def swinv2_cr_base_384(pretrained=False, **kwargs):
     """Swin-B V2 CR @ 384x384, trained ImageNet-1k"""
     model_kwargs = dict(
@@ -961,8 +971,7 @@ def swinv2_cr_large_384(pretrained=False, **kwargs):
         num_heads=(6, 12, 24, 48),
         **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_large_384', pretrained=pretrained, **model_kwargs
-    )
+    return _create_swin_transformer_v2_cr('swinv2_cr_large_384', pretrained=pretrained, **model_kwargs)
 
 
 @register_model

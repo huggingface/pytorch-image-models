@@ -5,16 +5,19 @@ Hacked together by / Copyright 2020 Ross Wightman
 import fnmatch
 import re
 import sys
+import warnings
 from collections import defaultdict, deque
 from copy import deepcopy
 from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Sequence, Union, Tuple
 
-from ._pretrained import PretrainedCfg, DefaultCfg, split_model_name_tag
+from ._pretrained import PretrainedCfg, DefaultCfg
 
 __all__ = [
+    'split_model_name_tag', 'get_arch_name', 'register_model', 'generate_default_cfgs',
     'list_models', 'list_pretrained', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
-    'get_pretrained_cfg_value', 'is_model_pretrained', 'get_arch_name']
+    'get_pretrained_cfg_value', 'is_model_pretrained'
+]
 
 _module_to_models: Dict[str, Set[str]] = defaultdict(set)  # dict of sets to check membership of model in module
 _model_to_module: Dict[str, str] = {}  # mapping of model names to module names
@@ -23,10 +26,50 @@ _model_has_pretrained: Set[str] = set()  # set of model names that have pretrain
 _model_default_cfgs: Dict[str, PretrainedCfg] = {}  # central repo for model arch -> default cfg objects
 _model_pretrained_cfgs: Dict[str, PretrainedCfg] = {}  # central repo for model arch.tag -> pretrained cfgs
 _model_with_tags: Dict[str, List[str]] = defaultdict(list)  # shortcut to map each model arch to all model + tag names
+_module_to_deprecated_models: Dict[str, Dict[str, Optional[str]]] = defaultdict(dict)
+_deprecated_models: Dict[str, Optional[str]] = {}
+
+
+def split_model_name_tag(model_name: str, no_tag: str = '') -> Tuple[str, str]:
+    model_name, *tag_list = model_name.split('.', 1)
+    tag = tag_list[0] if tag_list else no_tag
+    return model_name, tag
 
 
 def get_arch_name(model_name: str) -> str:
     return split_model_name_tag(model_name)[0]
+
+
+def generate_default_cfgs(cfgs: Dict[str, Union[Dict[str, Any], PretrainedCfg]]):
+    out = defaultdict(DefaultCfg)
+    default_set = set()  # no tag and tags ending with * are prioritized as default
+
+    for k, v in cfgs.items():
+        if isinstance(v, dict):
+            v = PretrainedCfg(**v)
+        has_weights = v.has_weights
+
+        model, tag = split_model_name_tag(k)
+        is_default_set = model in default_set
+        priority = (has_weights and not tag) or (tag.endswith('*') and not is_default_set)
+        tag = tag.strip('*')
+
+        default_cfg = out[model]
+
+        if priority:
+            default_cfg.tags.appendleft(tag)
+            default_set.add(model)
+        elif has_weights and not default_cfg.is_pretrained:
+            default_cfg.tags.appendleft(tag)
+        else:
+            default_cfg.tags.append(tag)
+
+        if has_weights:
+            default_cfg.is_pretrained = True
+
+        default_cfg.cfgs[tag] = v
+
+    return out
 
 
 def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -87,6 +130,37 @@ def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
     return fn
 
 
+def _deprecated_model_shim(deprecated_name: str, current_fn: Callable = None, current_tag: str = ''):
+    def _fn(pretrained=False, **kwargs):
+        assert current_fn is not None,  f'Model {deprecated_name} has been removed with no replacement.'
+        warnings.warn(f'Mapping deprecated model {deprecated_name} to current {current_fn.__name__}', stacklevel=2)
+        pretrained_cfg = kwargs.pop('pretrained_cfg', None)
+        return current_fn(pretrained=pretrained, pretrained_cfg=pretrained_cfg or current_tag, **kwargs)
+    return _fn
+
+
+def register_model_deprecations(module_name: str, deprecation_map: Dict[str, Optional[str]]):
+    mod = sys.modules[module_name]
+    module_name_split = module_name.split('.')
+    module_name = module_name_split[-1] if len(module_name_split) else ''
+
+    for deprecated, current in deprecation_map.items():
+        if hasattr(mod, '__all__'):
+            mod.__all__.append(deprecated)
+        current_fn = None
+        current_tag = ''
+        if current:
+            current_name, current_tag = split_model_name_tag(current)
+            current_fn = getattr(mod, current_name)
+        deprecated_entrypoint_fn = _deprecated_model_shim(deprecated, current_fn, current_tag)
+        setattr(mod, deprecated, deprecated_entrypoint_fn)
+        _model_entrypoints[deprecated] = deprecated_entrypoint_fn
+        _model_to_module[deprecated] = module_name
+        _module_to_models[module_name].add(deprecated)
+        _deprecated_models[deprecated] = current
+        _module_to_deprecated_models[module_name][deprecated] = current
+
+
 def _natural_key(string_: str) -> List[Union[int, str]]:
     """See https://blog.codinghorror.com/sorting-for-humans-natural-sort-order/"""
     return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_.lower())]
@@ -122,16 +196,14 @@ def list_models(
         # FIXME should this be default behaviour? or default to include_tags=True?
         include_tags = pretrained
 
-    if module:
-        all_models: Iterable[str] = list(_module_to_models[module])
-    else:
-        all_models = _model_entrypoints.keys()
+    all_models: Set[str] = _module_to_models[module] if module else set(_model_entrypoints.keys())
+    all_models = all_models - _deprecated_models.keys()  # remove deprecated models from listings
 
     if include_tags:
         # expand model names to include names w/ pretrained tags
-        models_with_tags = []
+        models_with_tags: Set[str] = set()
         for m in all_models:
-            models_with_tags.extend(_model_with_tags[m])
+            models_with_tags.update(_model_with_tags[m])
         all_models = models_with_tags
 
     if filter:
@@ -142,7 +214,7 @@ def list_models(
             if len(include_models):
                 models = models.union(include_models)
     else:
-        models = set(all_models)
+        models = all_models
 
     if exclude_filters:
         if not isinstance(exclude_filters, (tuple, list)):
@@ -171,6 +243,11 @@ def list_pretrained(
         exclude_filters=exclude_filters,
         include_tags=True,
     )
+
+
+def get_deprecated_models(module: str = '') -> Dict[str, str]:
+    all_deprecated = _module_to_deprecated_models[module] if module else _deprecated_models
+    return deepcopy(all_deprecated)
 
 
 def is_model(model_name: str) -> bool:

@@ -41,9 +41,7 @@ from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_,
     resample_abs_pos_embed, RmsNorm
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
-
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to this
 

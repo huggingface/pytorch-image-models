@@ -17,6 +17,8 @@ import torch
 import torch.nn as nn
 from torch.utils.checkpoint import checkpoint
 
+from timm.layers import Format
+
 
 __all__ = ['FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet']
 
@@ -181,6 +183,7 @@ class FeatureDictNet(nn.ModuleDict):
             model: nn.Module,
             out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
             out_map: Sequence[Union[int, str]] = None,
+            output_fmt: str = 'NCHW',
             feature_concat: bool = False,
             flatten_sequential: bool = False,
     ):
@@ -195,6 +198,7 @@ class FeatureDictNet(nn.ModuleDict):
         """
         super(FeatureDictNet, self).__init__()
         self.feature_info = _get_feature_info(model, out_indices)
+        self.output_fmt = Format(output_fmt)
         self.concat = feature_concat
         self.grad_checkpointing = False
         self.return_layers = {}
@@ -253,6 +257,7 @@ class FeatureListNet(FeatureDictNet):
             self,
             model: nn.Module,
             out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
+            output_fmt: str = 'NCHW',
             feature_concat: bool = False,
             flatten_sequential: bool = False,
     ):
@@ -264,9 +269,10 @@ class FeatureListNet(FeatureDictNet):
                 first element e.g. `x[0]`
             flatten_sequential: Flatten first two-levels of sequential modules in model (re-writes model modules)
         """
-        super(FeatureListNet, self).__init__(
+        super().__init__(
             model,
             out_indices=out_indices,
+            output_fmt=output_fmt,
             feature_concat=feature_concat,
             flatten_sequential=flatten_sequential,
         )
@@ -293,7 +299,8 @@ class FeatureHookNet(nn.ModuleDict):
             model: nn.Module,
             out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
             out_map: Sequence[Union[int, str]] = None,
-            out_as_dict: bool = False,
+            return_dict: bool = False,
+            output_fmt: str = 'NCHW',
             no_rewrite: bool = False,
             flatten_sequential: bool = False,
             default_hook_type: str = 'forward',
@@ -304,16 +311,17 @@ class FeatureHookNet(nn.ModuleDict):
             model: Model from which to extract features.
             out_indices: Output indices of the model features to extract.
             out_map: Return id mapping for each output index, otherwise str(index) is used.
-            out_as_dict: Output features as a dict.
+            return_dict: Output features as a dict.
             no_rewrite: Enforce that model is not re-written if True, ie no modules are removed / changed.
                 flatten_sequential arg must also be False if this is set True.
             flatten_sequential: Re-write modules by flattening first two levels of nn.Sequential containers.
             default_hook_type: The default hook type to use if not specified in model.feature_info.
         """
-        super(FeatureHookNet, self).__init__()
+        super().__init__()
         assert not torch.jit.is_scripting()
         self.feature_info = _get_feature_info(model, out_indices)
-        self.out_as_dict = out_as_dict
+        self.return_dict = return_dict
+        self.output_fmt = Format(output_fmt)
         self.grad_checkpointing = False
 
         layers = OrderedDict()
@@ -356,4 +364,4 @@ class FeatureHookNet(nn.ModuleDict):
             else:
                 x = module(x)
         out = self.hooks.get_output(x.device)
-        return out if self.out_as_dict else list(out.values())
+        return out if self.return_dict else list(out.values())

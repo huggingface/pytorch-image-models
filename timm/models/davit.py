@@ -11,8 +11,6 @@ DaViT model defs and weights adapted from https://github.com/dingmyu/davit, orig
 # Copyright (c) 2022 Mingyu Ding
 # All rights reserved.
 # This source code is licensed under the MIT license
-import itertools
-from collections import OrderedDict
 from functools import partial
 from typing import Tuple
 
@@ -22,13 +20,12 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, Mlp, LayerNorm2d, get_norm_layer
+from timm.layers import DropPath, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer
 from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['DaViT']
 

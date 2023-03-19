@@ -29,12 +29,11 @@ import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
-    get_attn, get_act_layer, get_norm_layer, _assert
+    get_attn, get_act_layer, get_norm_layer, RelPosBias, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply
 from ._registry import register_model
-from .vision_transformer_relpos import RelPosBias  # FIXME move to common location
 
 __all__ = ['GlobalContextVit']
 
@@ -222,7 +221,7 @@ class WindowAttentionGlobal(nn.Module):
             q, k, v = qkv.unbind(0)
         q = q * self.scale
 
-        attn = (q @ k.transpose(-2, -1))
+        attn = q @ k.transpose(-2, -1).contiguous()  # NOTE contiguous() fixes an odd jit bug in PyTorch 2.0
         attn = self.rel_pos(attn)
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)

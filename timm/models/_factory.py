@@ -3,10 +3,10 @@ from typing import Any, Dict, Optional, Union
 from urllib.parse import urlsplit
 
 from timm.layers import set_layer_config
-from ._pretrained import PretrainedCfg, split_model_name_tag
 from ._helpers import load_checkpoint
 from ._hub import load_model_config_from_hf
-from ._registry import is_model, model_entrypoint
+from ._pretrained import PretrainedCfg
+from ._registry import is_model, model_entrypoint, split_model_name_tag
 
 
 __all__ = ['parse_model_name', 'safe_model_name', 'create_model']

@@ -22,8 +22,7 @@ from ._efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficie
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from ._features import FeatureInfo, FeatureHooks
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['MobileNetV3', 'MobileNetV3Features']
 
@@ -145,13 +144,12 @@ class MobileNetV3(nn.Module):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
+        x = self.flatten(x)
         if pre_logits:
-            return x.flatten(1)
-        else:
-            x = self.flatten(x)
-            if self.drop_rate > 0.:
-                x = F.dropout(x, p=self.drop_rate, training=self.training)
-            return self.classifier(x)
+            return x
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        return self.classifier(x)
 
     def forward(self, x):
         x = self.forward_features(x)
@@ -797,3 +795,9 @@ def lcnet_150(pretrained=False, **kwargs):
     """ PP-LCNet 1.5"""
     model = _gen_lcnet('lcnet_150', 1.5, pretrained=pretrained, **kwargs)
     return model
+
+
+register_model_deprecations(__name__, {
+    'mobilenetv3_large_100_miil': 'mobilenetv3_large_100.miil_in21k_ft_in1k',
+    'mobilenetv3_large_100_miil_in21k': 'mobilenetv3_large_100.miil_in21k',
+})

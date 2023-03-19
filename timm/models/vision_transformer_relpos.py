@@ -17,8 +17,7 @@ from torch.utils.checkpoint import checkpoint
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias
 from ._builder import build_model_with_cfg
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['VisionTransformerRelPos']  # model_registry will add each entrypoint fn to this
 

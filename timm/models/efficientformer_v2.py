@@ -26,8 +26,7 @@ from timm.layers import create_conv2d, create_norm_layer, get_act_layer, get_nor
 from timm.layers import DropPath, trunc_normal_, to_2tuple, to_ntuple
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 
 EfficientFormer_width = {

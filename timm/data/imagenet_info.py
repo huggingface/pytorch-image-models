@@ -7,12 +7,14 @@ from typing import Dict, List, Optional, Union
 from .dataset_info import DatasetInfo
 
 
+# NOTE no ambiguity wrt to mapping from # classes to ImageNet subset so far, but likely to change
 _NUM_CLASSES_TO_SUBSET = {
     1000: 'imagenet-1k',
-    11821: 'imagenet-12k',
-    21841: 'imagenet-22k',
-    21843: 'imagenet-21k-goog',
-    11221: 'imagenet-21k-miil',
+    11221: 'imagenet-21k-miil',  # miil subset of fall11
+    11821: 'imagenet-12k',  # timm specific 12k subset of fall11
+    21841: 'imagenet-22k',  # as in fall11.tar
+    21842: 'imagenet-22k-ms',  # a Microsoft (for FocalNet) remapping of 22k w/ moves ImageNet-1k classes to first 1000
+    21843: 'imagenet-21k-goog',  # Google's ImageNet full has two classes not in fall11
 }
 
 _SUBSETS = {
@@ -22,6 +24,7 @@ _SUBSETS = {
     'imagenet21k': 'imagenet21k_goog_synsets.txt',
     'imagenet21kgoog': 'imagenet21k_goog_synsets.txt',
     'imagenet21kmiil': 'imagenet21k_miil_synsets.txt',
+    'imagenet22kms': 'imagenet22k_ms_synsets.txt',
 }
 _LEMMA_FILE = 'imagenet_synset_to_lemma.txt'
 _DEFINITION_FILE = 'imagenet_synset_to_definition.txt'
