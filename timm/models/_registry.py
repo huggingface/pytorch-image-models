@@ -133,7 +133,8 @@ def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
 def _deprecated_model_shim(deprecated_name: str, current_fn: Callable = None, current_tag: str = ''):
     def _fn(pretrained=False, **kwargs):
         assert current_fn is not None,  f'Model {deprecated_name} has been removed with no replacement.'
-        warnings.warn(f'Mapping deprecated model {deprecated_name} to current {current_fn.__name__}', stacklevel=2)
+        current_name = '.'.join([current_fn.__name__, current_tag]) if current_tag else current_fn.__name__
+        warnings.warn(f'Mapping deprecated model {deprecated_name} to current {current_name}.', stacklevel=2)
         pretrained_cfg = kwargs.pop('pretrained_cfg', None)
         return current_fn(pretrained=pretrained, pretrained_cfg=pretrained_cfg or current_tag, **kwargs)
     return _fn
