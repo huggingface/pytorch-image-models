@@ -149,9 +149,19 @@ def create_dataset(
         else:
             assert False, f"Unknown torchvision dataset {name}"
     elif name.startswith('hfds/'):
-        # NOTE right now, HF datasets default arrow format is a random-access Dataset,
-        # There will be a IterableDataset variant too, TBD
         ds = ImageDataset(root, reader=name, split=split, class_map=class_map, **kwargs)
+    elif name.startswith('hfids/'):
+        ds = IterableImageDataset(
+            root,
+            reader=name,
+            split=split,
+            class_map=class_map,
+            is_training=is_training,
+            download=download,
+            batch_size=batch_size,
+            seed=seed,
+            **kwargs
+        )
     elif name.startswith('tfds/'):
         ds = IterableImageDataset(
             root,

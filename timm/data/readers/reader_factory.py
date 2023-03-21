@@ -15,8 +15,11 @@ def create_reader(name, root, split='train', **kwargs):
     # FIXME improve the selection right now just tfds prefix or fallback path, will need options to
     # explicitly select other options shortly
     if prefix == 'hfds':
-        from .reader_hfds import ReaderHfds  # defer tensorflow import
+        from .reader_hfds import ReaderHfds  # defer HF datasets import
         reader = ReaderHfds(root, name, split=split, **kwargs)
+    elif prefix == 'hfids':
+        from .reader_hfids import ReaderHfids  # defer HF datasets import
+        reader = ReaderHfids(root, name, split=split, **kwargs)
     elif prefix == 'tfds':
         from .reader_tfds import ReaderTfds  # defer tensorflow import
         reader = ReaderTfds(root, name, split=split, **kwargs)
