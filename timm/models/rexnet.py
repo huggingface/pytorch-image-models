@@ -281,16 +281,18 @@ default_cfgs = generate_default_cfgs({
     'rexnetr_150.untrained': _cfg(),
     'rexnetr_200.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
-        crop_pct=1.0, test_input_size=(3, 288, 288), license='apache-2.0'),
+        crop_pct=0.95, test_crop_pct=1.0, test_input_size=(3, 288, 288), license='apache-2.0'),
     'rexnetr_300.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
-        crop_pct=1.0, test_input_size=(3, 288, 288), license='apache-2.0'),
+        crop_pct=0.95, test_crop_pct=1.0, test_input_size=(3, 288, 288), license='apache-2.0'),
     'rexnetr_200.sw_in12k': _cfg(
         hf_hub_id='timm/',
-        num_classes=11821, crop_pct=1.0, license='apache-2.0'),
+        num_classes=11821,
+        crop_pct=0.95, test_crop_pct=1.0, test_input_size=(3, 288, 288), license='apache-2.0'),
     'rexnetr_300.sw_in12k': _cfg(
         hf_hub_id='timm/',
-        num_classes=11821, crop_pct=1.0, license='apache-2.0'),
+        num_classes=11821,
+        crop_pct=0.95, test_crop_pct=1.0, test_input_size=(3, 288, 288), license='apache-2.0'),
 })
 
 
