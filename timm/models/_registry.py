@@ -167,6 +167,15 @@ def _natural_key(string_: str) -> List[Union[int, str]]:
     return [int(s) if s.isdigit() else s for s in re.split(r'(\d+)', string_.lower())]
 
 
+def _expand_filter(filter: str):
+    """ expand a 'base_filter' to 'base_filter.*' if no tag portion"""
+    filter_base, filter_tag = split_model_name_tag(filter)
+    if not filter_tag:
+        return ['.'.join([filter_base, '*']), filter]
+    else:
+        return [filter]
+
+
 def list_models(
         filter: Union[str, List[str]] = '',
         module: str = '',
@@ -193,6 +202,11 @@ def list_models(
         model_list('gluon_resnet*') -- returns all models starting with 'gluon_resnet'
         model_list('*resnext*, 'resnet') -- returns all models with 'resnext' in 'resnet' module
     """
+    if filter:
+        include_filters = filter if isinstance(filter, (tuple, list)) else [filter]
+    else:
+        include_filters = []
+
     if include_tags is None:
         # FIXME should this be default behaviour? or default to include_tags=True?
         include_tags = pretrained
@@ -206,10 +220,12 @@ def list_models(
         for m in all_models:
             models_with_tags.update(_model_with_tags[m])
         all_models = models_with_tags
+        # expand include and exclude filters to include a '.*' for proper match if no tags in filter
+        include_filters = [ef for f in include_filters for ef in _expand_filter(f)]
+        exclude_filters = [ef for f in exclude_filters for ef in _expand_filter(f)]
 
-    if filter:
+    if include_filters:
         models: Set[str] = set()
-        include_filters = filter if isinstance(filter, (tuple, list)) else [filter]
         for f in include_filters:
             include_models = fnmatch.filter(all_models, f)  # include these models
             if len(include_models):

@@ -385,6 +385,9 @@ def _try_run(args, initial_batch_size):
     return results
 
 
+_NON_IN1K_FILTERS = ['*_in21k', '*_in22k', '*in12k', '*_dino', '*fcmae', '*seer']
+
+
 def main():
     setup_default_logging()
     args = parser.parse_args()
@@ -400,11 +403,17 @@ def main():
         if args.model == 'all':
             # validate all models in a list of names with pretrained checkpoints
             args.pretrained = True
-            model_names = list_models('convnext*', pretrained=True, exclude_filters=['*_in21k', '*_in22k', '*in12k', '*_dino', '*fcmae'])
+            model_names = list_models(
+                pretrained=True,
+                exclude_filters=_NON_IN1K_FILTERS,
+            )
             model_cfgs = [(n, '') for n in model_names]
         elif not is_model(args.model):
             # model name doesn't exist, try as wildcard filter
-            model_names = list_models(args.model, pretrained=True)
+            model_names = list_models(
+                args.model,
+                pretrained=True,
+            )
             model_cfgs = [(n, '') for n in model_names]
 
         if not model_cfgs and os.path.isfile(args.model):
