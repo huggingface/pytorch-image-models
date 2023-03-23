@@ -41,8 +41,7 @@ from ._builder import build_model_with_cfg
 from ._features import FeatureInfo
 from ._features_fx import register_notrace_module
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 
 
@@ -166,6 +165,7 @@ class Attention(nn.Module):
 
         self.head_dim = head_dim
         self.scale = head_dim ** -0.5
+        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME, copy-pasted over from ViT impl
 
         self.num_heads = num_heads if num_heads else dim // head_dim
         if self.num_heads == 0:
@@ -184,18 +184,25 @@ class Attention(nn.Module):
         N = H * W
         qkv = self.qkv(x.permute(0, 2, 3, 1)).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
+        
+        if self.fast_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            attn = (q @ k.transpose(-2, -1)) * self.scale
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
+        x = x.transpose(1, 2).reshape(B, H, W, self.attention_dim)
         x = self.proj(x)
         x = self.proj_drop(x)
         x = x.permute(0, 3, 1, 2)
         return x
 
-# interpolation is WIP, val at train size still matches paper
+# WIP and very much a placeholder, val at train size still matches paper
 # torchscript doesn't like the interpolation
 @register_notrace_module
 class RandomMixing(nn.Module):
