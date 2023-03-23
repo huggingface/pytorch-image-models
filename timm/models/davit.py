@@ -11,8 +11,6 @@ DaViT model defs and weights adapted from https://github.com/dingmyu/davit, orig
 # Copyright (c) 2022 Mingyu Ding
 # All rights reserved.
 # This source code is licensed under the MIT license
-import itertools
-from collections import OrderedDict
 from functools import partial
 from typing import Tuple
 
@@ -22,12 +20,12 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, Mlp, LayerNorm2d, get_norm_layer
+from timm.layers import DropPath, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer
+from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['DaViT']
 
@@ -216,9 +214,9 @@ def window_reverse(windows: Tensor, window_size: Tuple[int, int], H: int, W: int
     Returns:
         x: (B, H, W, C)
     """
-    B = int(windows.shape[0] / (H * W / window_size[0] / window_size[1]))
-    x = windows.view(B, H // window_size[0], W // window_size[1], window_size[0], window_size[1], -1)
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
+    C = windows.shape[-1]
+    x = windows.view(-1, H // window_size[0], W // window_size[1], window_size[0], window_size[1], C)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, H, W, C)
     return x
 
 
@@ -519,14 +517,23 @@ class DaViT(nn.Module):
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default DaViT order, similar to ConvNeXt
         # FIXME generalize this structure to ClassifierHead
-        self.norm_pre = norm_layer(self.num_features) if head_norm_first else nn.Identity()
-        self.head = nn.Sequential(OrderedDict([
-            ('global_pool', SelectAdaptivePool2d(pool_type=global_pool)),
-            ('norm', nn.Identity() if head_norm_first else norm_layer(self.num_features)),
-            ('flatten', nn.Flatten(1) if global_pool else nn.Identity()),
-            ('drop', nn.Dropout(self.drop_rate)),
-            ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())]))
-
+        if head_norm_first:
+            self.norm_pre = norm_layer(self.num_features)
+            self.head = ClassifierHead(
+                self.num_features,
+                num_classes,
+                pool_type=global_pool,
+                drop_rate=self.drop_rate,
+            )
+        else:
+            self.norm_pre = nn.Identity()
+            self.head = NormMlpClassifierHead(
+                self.num_features,
+                num_classes,
+                pool_type=global_pool,
+                drop_rate=self.drop_rate,
+                norm_layer=norm_layer,
+            )
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -546,10 +553,7 @@ class DaViT(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool=None):
-        if global_pool is not None:
-            self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-            self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
-        self.head.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head.reset(num_classes, global_pool=global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)

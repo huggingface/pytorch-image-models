@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, replace, asdict
 from typing import Any, Deque, Dict, Tuple, Optional, Union
 
 
-__all__ = ['PretrainedCfg', 'filter_pretrained_cfg', 'DefaultCfg', 'split_model_name_tag', 'generate_default_cfgs']
+__all__ = ['PretrainedCfg', 'filter_pretrained_cfg', 'DefaultCfg']
 
 
 @dataclass
@@ -34,9 +34,11 @@ class PretrainedCfg:
     mean: Tuple[float, ...] = (0.485, 0.456, 0.406)
     std: Tuple[float, ...] = (0.229, 0.224, 0.225)
 
-    # head config
+    # head / classifier config and meta-data
     num_classes: int = 1000
     label_offset: Optional[int] = None
+    label_names: Optional[Tuple[str]] = None
+    label_descriptions: Optional[Dict[str, str]] = None
 
     # model attributes that vary with above or required for pretrained adaptation
     pool_size: Optional[Tuple[int, ...]] = None
@@ -89,41 +91,3 @@ class DefaultCfg:
     def default_with_tag(self):
         tag = self.tags[0]
         return tag, self.cfgs[tag]
-
-
-def split_model_name_tag(model_name: str, no_tag=''):
-    model_name, *tag_list = model_name.split('.', 1)
-    tag = tag_list[0] if tag_list else no_tag
-    return model_name, tag
-
-
-def generate_default_cfgs(cfgs: Dict[str, Union[Dict[str, Any], PretrainedCfg]]):
-    out = defaultdict(DefaultCfg)
-    default_set = set()  # no tag and tags ending with * are prioritized as default
-
-    for k, v in cfgs.items():
-        if isinstance(v, dict):
-            v = PretrainedCfg(**v)
-        has_weights = v.has_weights
-
-        model, tag = split_model_name_tag(k)
-        is_default_set = model in default_set
-        priority = (has_weights and not tag) or (tag.endswith('*') and not is_default_set)
-        tag = tag.strip('*')
-
-        default_cfg = out[model]
-
-        if priority:
-            default_cfg.tags.appendleft(tag)
-            default_set.add(model)
-        elif has_weights and not default_cfg.is_pretrained:
-            default_cfg.tags.appendleft(tag)
-        else:
-            default_cfg.tags.append(tag)
-
-        if has_weights:
-            default_cfg.is_pretrained = True
-
-        default_cfg.cfgs[tag] = v
-
-    return out

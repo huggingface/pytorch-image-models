@@ -359,10 +359,9 @@ class DLA(nn.Module):
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         if pre_logits:
-            return x.flatten(1)
-        else:
-            x = self.fc(x)
             return self.flatten(x)
+        x = self.fc(x)
+        return self.flatten(x)
 
     def forward(self, x):
         x = self.forward_features(x)

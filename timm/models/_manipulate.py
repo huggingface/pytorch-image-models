@@ -3,7 +3,7 @@ import math
 import re
 from collections import defaultdict
 from itertools import chain
-from typing import Callable, Union, Dict
+from typing import Any, Callable, Dict, Iterator, Tuple, Type, Union
 
 import torch
 from torch import nn as nn
@@ -13,7 +13,7 @@ __all__ = ['model_parameters', 'named_apply', 'named_modules', 'named_modules_wi
            'group_with_matcher', 'group_modules', 'group_parameters', 'flatten_modules', 'checkpoint_seq']
 
 
-def model_parameters(model, exclude_head=False):
+def model_parameters(model: nn.Module, exclude_head: bool = False):
     if exclude_head:
         # FIXME this a bit of a quick and dirty hack to skip classifier head params based on ordering
         return [p for p in model.parameters()][:-2]
@@ -21,7 +21,12 @@ def model_parameters(model, exclude_head=False):
         return model.parameters()
 
 
-def named_apply(fn: Callable, module: nn.Module, name='', depth_first=True, include_root=False) -> nn.Module:
+def named_apply(
+        fn: Callable,
+        module: nn.Module, name='',
+        depth_first: bool = True,
+        include_root: bool = False,
+) -> nn.Module:
     if not depth_first and include_root:
         fn(module=module, name=name)
     for child_name, child_module in module.named_children():
@@ -32,7 +37,12 @@ def named_apply(fn: Callable, module: nn.Module, name='', depth_first=True, incl
     return module
 
 
-def named_modules(module: nn.Module, name='', depth_first=True, include_root=False):
+def named_modules(
+        module: nn.Module,
+        name: str = '',
+        depth_first: bool = True,
+        include_root: bool = False,
+):
     if not depth_first and include_root:
         yield name, module
     for child_name, child_module in module.named_children():
@@ -43,7 +53,12 @@ def named_modules(module: nn.Module, name='', depth_first=True, include_root=Fal
         yield name, module
 
 
-def named_modules_with_params(module: nn.Module, name='', depth_first=True, include_root=False):
+def named_modules_with_params(
+        module: nn.Module,
+        name: str = '',
+        depth_first: bool = True,
+        include_root: bool = False,
+):
     if module._parameters and not depth_first and include_root:
         yield name, module
     for child_name, child_module in module.named_children():
@@ -58,9 +73,9 @@ MATCH_PREV_GROUP = (99999,)
 
 
 def group_with_matcher(
-        named_objects,
+        named_objects: Iterator[Tuple[str, Any]],
         group_matcher: Union[Dict, Callable],
-        output_values: bool = False,
+        return_values: bool = False,
         reverse: bool = False
 ):
     if isinstance(group_matcher, dict):
@@ -96,7 +111,7 @@ def group_with_matcher(
     # map layers into groups via ordinals (ints or tuples of ints) from matcher
     grouping = defaultdict(list)
     for k, v in named_objects:
-        grouping[_get_grouping(k)].append(v if output_values else k)
+        grouping[_get_grouping(k)].append(v if return_values else k)
 
     # remap to integers
     layer_id_to_param = defaultdict(list)
@@ -107,7 +122,7 @@ def group_with_matcher(
         layer_id_to_param[lid].extend(grouping[k])
 
     if reverse:
-        assert not output_values, "reverse mapping only sensible for name output"
+        assert not return_values, "reverse mapping only sensible for name output"
         # output reverse mapping
         param_to_layer_id = {}
         for lid, lm in layer_id_to_param.items():
@@ -121,24 +136,29 @@ def group_with_matcher(
 def group_parameters(
         module: nn.Module,
         group_matcher,
-        output_values=False,
-        reverse=False,
+        return_values: bool = False,
+        reverse: bool = False,
 ):
     return group_with_matcher(
-        module.named_parameters(), group_matcher, output_values=output_values, reverse=reverse)
+        module.named_parameters(), group_matcher, return_values=return_values, reverse=reverse)
 
 
 def group_modules(
         module: nn.Module,
         group_matcher,
-        output_values=False,
-        reverse=False,
+        return_values: bool = False,
+        reverse: bool = False,
 ):
     return group_with_matcher(
-        named_modules_with_params(module), group_matcher, output_values=output_values, reverse=reverse)
+        named_modules_with_params(module), group_matcher, return_values=return_values, reverse=reverse)
 
 
-def flatten_modules(named_modules, depth=1, prefix='', module_types='sequential'):
+def flatten_modules(
+        named_modules: Iterator[Tuple[str, nn.Module]],
+        depth: int = 1,
+        prefix: Union[str, Tuple[str, ...]] = '',
+        module_types: Union[str, Tuple[Type[nn.Module]]] = 'sequential',
+):
     prefix_is_tuple = isinstance(prefix, tuple)
     if isinstance(module_types, str):
         if module_types == 'container':

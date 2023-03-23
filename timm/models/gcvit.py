@@ -29,12 +29,11 @@ import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
-    get_attn, get_act_layer, get_norm_layer, _assert
+    get_attn, get_act_layer, get_norm_layer, RelPosBias, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply
 from ._registry import register_model
-from .vision_transformer_relpos import RelPosBias  # FIXME move to common location
 
 __all__ = ['GlobalContextVit']
 
@@ -222,7 +221,7 @@ class WindowAttentionGlobal(nn.Module):
             q, k, v = qkv.unbind(0)
         q = q * self.scale
 
-        attn = (q @ k.transpose(-2, -1))
+        attn = q @ k.transpose(-2, -1).contiguous()  # NOTE contiguous() fixes an odd jit bug in PyTorch 2.0
         attn = self.rel_pos(attn)
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -243,9 +242,9 @@ def window_partition(x, window_size: Tuple[int, int]):
 @register_notrace_function  # reason: int argument is a Proxy
 def window_reverse(windows, window_size: Tuple[int, int], img_size: Tuple[int, int]):
     H, W = img_size
-    B = int(windows.shape[0] / (H * W / window_size[0] / window_size[1]))
-    x = windows.view(B, H // window_size[0], W // window_size[1], window_size[0], window_size[1], -1)
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
+    C = windows.shape[-1]
+    x = windows.view(-1, H // window_size[0], W // window_size[1], window_size[0], window_size[1], C)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, H, W, C)
     return x
 
 

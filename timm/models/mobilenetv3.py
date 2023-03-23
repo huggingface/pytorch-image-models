@@ -12,6 +12,7 @@ from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import SelectAdaptivePool2d, Linear, create_conv2d, get_norm_act_layer
@@ -21,8 +22,7 @@ from ._efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficie
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from ._features import FeatureInfo, FeatureHooks
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['MobileNetV3', 'MobileNetV3Features']
 
@@ -144,13 +144,12 @@ class MobileNetV3(nn.Module):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
+        x = self.flatten(x)
         if pre_logits:
-            return x.flatten(1)
-        else:
-            x = self.flatten(x)
-            if self.drop_rate > 0.:
-                x = F.dropout(x, p=self.drop_rate, training=self.training)
-            return self.classifier(x)
+            return x
+        if self.drop_rate > 0.:
+            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        return self.classifier(x)
 
     def forward(self, x):
         x = self.forward_features(x)
@@ -188,6 +187,7 @@ class MobileNetV3Features(nn.Module):
         norm_layer = norm_layer or nn.BatchNorm2d
         se_layer = se_layer or SqueezeExcite
         self.drop_rate = drop_rate
+        self.grad_checkpointing = False
 
         # Stem
         if not fix_stem:
@@ -220,6 +220,10 @@ class MobileNetV3Features(nn.Module):
             hooks = self.feature_info.get_dicts(keys=('module', 'hook_type'))
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
 
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        self.grad_checkpointing = enable
+
     def forward(self, x) -> List[torch.Tensor]:
         x = self.conv_stem(x)
         x = self.bn1(x)
@@ -229,7 +233,10 @@ class MobileNetV3Features(nn.Module):
             if 0 in self._stage_out_idx:
                 features.append(x)  # add stem out
             for i, b in enumerate(self.blocks):
-                x = b(x)
+                if self.grad_checkpointing and not torch.jit.is_scripting():
+                    x = checkpoint(b, x)
+                else:
+                    x = b(x)
                 if i + 1 in self._stage_out_idx:
                     features.append(x)
             return features
@@ -788,3 +795,9 @@ def lcnet_150(pretrained=False, **kwargs):
     """ PP-LCNet 1.5"""
     model = _gen_lcnet('lcnet_150', 1.5, pretrained=pretrained, **kwargs)
     return model
+
+
+register_model_deprecations(__name__, {
+    'mobilenetv3_large_100_miil': 'mobilenetv3_large_100.miil_in21k_ft_in1k',
+    'mobilenetv3_large_100_miil_in21k': 'mobilenetv3_large_100.miil_in21k',
+})

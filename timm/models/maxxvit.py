@@ -36,23 +36,23 @@ Hacked together by / Copyright 2022, Ross Wightman
 
 import math
 from collections import OrderedDict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from functools import partial
 from typing import Callable, Optional, Union, Tuple, List
 
 import torch
 from torch import nn
+from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, ConvMlp, DropPath, ClassifierHead, LayerNorm, SelectAdaptivePool2d
+from timm.layers import Mlp, ConvMlp, DropPath, LayerNorm, ClassifierHead, NormMlpClassifierHead
 from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
 from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
 from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['MaxxVitCfg', 'MaxxVitConvCfg', 'MaxxVitTransformerCfg', 'MaxxVit']
 
@@ -133,13 +133,15 @@ class MaxxVitCfg:
     block_type: Tuple[Union[str, Tuple[str, ...]], ...] = ('C', 'C', 'T', 'T')
     stem_width: Union[int, Tuple[int, int]] = 64
     stem_bias: bool = False
-    conv_cfg: MaxxVitConvCfg = MaxxVitConvCfg()
-    transformer_cfg: MaxxVitTransformerCfg = MaxxVitTransformerCfg()
+    conv_cfg: MaxxVitConvCfg = field(default_factory=MaxxVitConvCfg)
+    transformer_cfg: MaxxVitTransformerCfg = field(default_factory=MaxxVitTransformerCfg)
     head_hidden_size: int = None
     weight_init: str = 'vit_eff'
 
 
 class Attention2d(nn.Module):
+    fast_attn: Final[bool]
+
     """ multi-head attention for 2D NCHW tensors"""
     def __init__(
             self,
@@ -160,6 +162,7 @@ class Attention2d(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
+        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -175,15 +178,31 @@ class Attention2d(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, 3, self.num_heads, self.dim_head, -1).unbind(1)
 
-        attn = (q.transpose(-2, -1) @ k) * self.scale
-        if self.rel_pos is not None:
-            attn = self.rel_pos(attn)
-        elif shared_rel_pos is not None:
-            attn = attn + shared_rel_pos
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fast_attn:
+            if self.rel_pos is not None:
+                attn_bias = self.rel_pos.get_bias()
+            elif shared_rel_pos is not None:
+                attn_bias = shared_rel_pos
+            else:
+                attn_bias = None
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q.transpose(-1, -2),
+                k.transpose(-1, -2),
+                v.transpose(-1, -2),
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            ).transpose(-1, -2).reshape(B, -1, H, W)
+        else:
+            q = q * self.scale
+            attn = q.transpose(-2, -1) @ k
+            if self.rel_pos is not None:
+                attn = self.rel_pos(attn)
+            elif shared_rel_pos is not None:
+                attn = attn + shared_rel_pos
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
 
-        x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -191,6 +210,8 @@ class Attention2d(nn.Module):
 
 class AttentionCl(nn.Module):
     """ Channels-last multi-head attention (B, ..., C) """
+    fast_attn: Final[bool]
+
     def __init__(
             self,
             dim: int,
@@ -211,6 +232,7 @@ class AttentionCl(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
+        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
 
         self.qkv = nn.Linear(dim, dim_attn * 3, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -227,15 +249,30 @@ class AttentionCl(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, -1, 3, self.num_heads, self.dim_head).transpose(1, 3).unbind(2)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        if self.rel_pos is not None:
-            attn = self.rel_pos(attn, shared_rel_pos=shared_rel_pos)
-        elif shared_rel_pos is not None:
-            attn = attn + shared_rel_pos
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fast_attn:
+            if self.rel_pos is not None:
+                attn_bias = self.rel_pos.get_bias()
+            elif shared_rel_pos is not None:
+                attn_bias = shared_rel_pos
+            else:
+                attn_bias = None
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            if self.rel_pos is not None:
+                attn = self.rel_pos(attn, shared_rel_pos=shared_rel_pos)
+            elif shared_rel_pos is not None:
+                attn = attn + shared_rel_pos
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        x = (attn @ v).transpose(1, 2).reshape(restore_shape + (-1,))
+        x = x.transpose(1, 2).reshape(restore_shape + (-1,))
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -1072,69 +1109,6 @@ def cfg_window_size(cfg: MaxxVitTransformerCfg, img_size: Tuple[int, int]):
     return cfg
 
 
-class NormMlpHead(nn.Module):
-
-    def __init__(
-            self,
-            in_features,
-            num_classes,
-            hidden_size=None,
-            pool_type='avg',
-            drop_rate=0.,
-            norm_layer='layernorm2d',
-            act_layer='tanh',
-    ):
-        super().__init__()
-        self.drop_rate = drop_rate
-        self.in_features = in_features
-        self.hidden_size = hidden_size
-        self.num_features = in_features
-        self.use_conv = not pool_type
-        norm_layer = get_norm_layer(norm_layer)
-        act_layer = get_act_layer(act_layer)
-        linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
-
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
-        self.norm = norm_layer(in_features)
-        self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
-        if hidden_size:
-            self.pre_logits = nn.Sequential(OrderedDict([
-                ('fc', linear_layer(in_features, hidden_size)),
-                ('act', act_layer()),
-            ]))
-            self.num_features = hidden_size
-        else:
-            self.pre_logits = nn.Identity()
-        self.drop = nn.Dropout(self.drop_rate)
-        self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-
-    def reset(self, num_classes, global_pool=None):
-        if global_pool is not None:
-            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-            self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
-        self.use_conv = self.global_pool.is_identity()
-        linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
-        if self.hidden_size:
-            if ((isinstance(self.pre_logits.fc, nn.Conv2d) and not self.use_conv) or
-                    (isinstance(self.pre_logits.fc, nn.Linear) and self.use_conv)):
-                with torch.no_grad():
-                    new_fc = linear_layer(self.in_features, self.hidden_size)
-                    new_fc.weight.copy_(self.pre_logits.fc.weight.reshape(new_fc.weight.shape))
-                    new_fc.bias.copy_(self.pre_logits.fc.bias)
-                    self.pre_logits.fc = new_fc
-        self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-
-    def forward(self, x, pre_logits: bool = False):
-        x = self.global_pool(x)
-        x = self.norm(x)
-        x = self.flatten(x)
-        x = self.pre_logits(x)
-        if pre_logits:
-            return x
-        x = self.fc(x)
-        return x
-
-
 def _overlay_kwargs(cfg: MaxxVitCfg, **kwargs):
     transformer_kwargs = {}
     conv_kwargs = {}
@@ -1225,7 +1199,7 @@ class MaxxVit(nn.Module):
         self.head_hidden_size = cfg.head_hidden_size
         if self.head_hidden_size:
             self.norm = nn.Identity()
-            self.head = NormMlpHead(
+            self.head = NormMlpClassifierHead(
                 self.num_features,
                 num_classes,
                 hidden_size=self.head_hidden_size,

@@ -19,6 +19,11 @@ from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSa
 from timm.layers.non_local_attn import BilinearAttnTransform
 from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 
+__all__ = ['register_notrace_module', 'is_notrace_module', 'get_notrace_modules',
+           'register_notrace_function', 'is_notrace_function', 'get_notrace_functions',
+           'create_feature_extractor', 'FeatureGraphNet', 'GraphExtractNet']
+
+
 # NOTE: By default, any modules from timm.models.layers that we want to treat as leaf modules go here
 # BUT modules from timm.models should use the registration mechanism below
 _leaf_modules = {
@@ -35,16 +40,20 @@ except ImportError:
     pass
 
 
-__all__ = ['register_notrace_module', 'register_notrace_function', 'create_feature_extractor',
-           'FeatureGraphNet', 'GraphExtractNet']
-
-
 def register_notrace_module(module: Type[nn.Module]):
     """
     Any module not under timm.models.layers should get this decorator if we don't want to trace through it.
     """
     _leaf_modules.add(module)
     return module
+
+
+def is_notrace_module(module: Type[nn.Module]):
+    return module in _leaf_modules
+
+
+def get_notrace_modules():
+    return list(_leaf_modules)
 
 
 # Functions we want to autowrap (treat them as leaves)
@@ -57,6 +66,14 @@ def register_notrace_function(func: Callable):
     """
     _autowrap_functions.add(func)
     return func
+
+
+def is_notrace_function(func: Callable):
+    return func in _autowrap_functions
+
+
+def get_notrace_functions():
+    return list(_autowrap_functions)
 
 
 def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str], List[str]]):

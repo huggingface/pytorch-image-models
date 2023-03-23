@@ -9,12 +9,13 @@ Based on code in:
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import logging
-from typing import List
+from typing import List, Optional, Callable
 
 import torch
 from torch import nn as nn
 import torch.nn.functional as F
 
+from .format import Format, nchw_to
 from .helpers import to_2tuple
 from .trace_utils import _assert
 
@@ -24,15 +25,18 @@ _logger = logging.getLogger(__name__)
 class PatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
     """
+    output_fmt: Format
+
     def __init__(
             self,
-            img_size=224,
-            patch_size=16,
-            in_chans=3,
-            embed_dim=768,
-            norm_layer=None,
-            flatten=True,
-            bias=True,
+            img_size: int = 224,
+            patch_size: int = 16,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            norm_layer: Optional[Callable] = None,
+            flatten: bool = True,
+            output_fmt: Optional[str] = None,
+            bias: bool = True,
     ):
         super().__init__()
         img_size = to_2tuple(img_size)
@@ -41,7 +45,13 @@ class PatchEmbed(nn.Module):
         self.patch_size = patch_size
         self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
-        self.flatten = flatten
+        if output_fmt is not None:
+            self.flatten = False
+            self.output_fmt = Format(output_fmt)
+        else:
+            # flatten spatial dim and transpose to channels last, kept for bwd compat
+            self.flatten = flatten
+            self.output_fmt = Format.NCHW
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
@@ -52,7 +62,9 @@ class PatchEmbed(nn.Module):
         _assert(W == self.img_size[1], f"Input image width ({W}) doesn't match model ({self.img_size[1]}).")
         x = self.proj(x)
         if self.flatten:
-            x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
+            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
+        elif self.output_fmt != Format.NCHW:
+            x = nchw_to(x, self.output_fmt)
         x = self.norm(x)
         return x
 

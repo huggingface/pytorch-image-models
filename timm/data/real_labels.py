@@ -7,14 +7,19 @@ Hacked together by / Copyright 2020 Ross Wightman
 import os
 import json
 import numpy as np
+import pkgutil
 
 
 class RealLabelsImagenet:
 
-    def __init__(self, filenames, real_json='real.json', topk=(1, 5)):
-        with open(real_json) as real_labels:
-            real_labels = json.load(real_labels)
-            real_labels = {f'ILSVRC2012_val_{i + 1:08d}.JPEG': labels for i, labels in enumerate(real_labels)}
+    def __init__(self, filenames, real_json=None, topk=(1, 5)):
+        if real_json is not None:
+            with open(real_json) as real_labels:
+                real_labels = json.load(real_labels)
+        else:
+            real_labels = json.loads(
+                pkgutil.get_data(__name__, os.path.join('_info', 'imagenet_real_labels.json')).decode('utf-8'))
+        real_labels = {f'ILSVRC2012_val_{i + 1:08d}.JPEG': labels for i, labels in enumerate(real_labels)}
         self.real_labels = real_labels
         self.filenames = filenames
         assert len(self.filenames) == len(self.real_labels)

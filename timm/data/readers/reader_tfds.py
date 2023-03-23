@@ -34,6 +34,7 @@ except ImportError as e:
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
     exit(1)
 
+from .class_map import load_class_map
 from .reader import Reader
 from .shared_count import SharedCount
 
@@ -94,6 +95,7 @@ class ReaderTfds(Reader):
             root,
             name,
             split='train',
+            class_map=None,
             is_training=False,
             batch_size=None,
             download=False,
@@ -151,7 +153,12 @@ class ReaderTfds(Reader):
         # NOTE: the tfds command line app can be used download & prepare datasets if you don't enable download flag
         if download:
             self.builder.download_and_prepare()
-        self.class_to_idx = get_class_labels(self.builder.info) if self.target_name == 'label' else {}
+        self.remap_class = False
+        if class_map:
+            self.class_to_idx = load_class_map(class_map)
+            self.remap_class = True
+        else:
+            self.class_to_idx = get_class_labels(self.builder.info) if self.target_name == 'label' else {}
         self.split_info = self.builder.info.splits[split]
         self.num_samples = self.split_info.num_examples
 
@@ -299,6 +306,8 @@ class ReaderTfds(Reader):
             target_data = sample[self.target_name]
             if self.target_img_mode:
                 target_data = Image.fromarray(target_data, mode=self.target_img_mode)
+            elif self.remap_class:
+                target_data = self.class_to_idx[target_data]
             yield input_data, target_data
             sample_count += 1
             if self.is_training and sample_count >= target_sample_count:
