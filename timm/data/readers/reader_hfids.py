@@ -53,7 +53,7 @@ class ReaderHfids(Reader):
 
         self.input_name = input_name
         self.input_img_mode = input_img_mode
-        self.target_key = target_name
+        self.target_name = target_name
         self.target_img_mode = target_img_mode
 
         self.builder = datasets.load_dataset_builder(name, cache_dir=root)
@@ -143,7 +143,7 @@ class ReaderHfids(Reader):
         if self.ds is None:
             self._lazy_init()
 
-        # TODO(lhoestq): take batch_size into account to use to unsure total samples % batch_size == 0 in training across all dis nodes
+        # TODO(lhoestq): take batch_size into account to use to make sure total samples % batch_size == 0 in training across all dis nodes
         for sample in self.ds:
             input_data: Image.Image = sample[self.input_name]
             if self.input_img_mode and input_data.mode != self.input_img_mode:
