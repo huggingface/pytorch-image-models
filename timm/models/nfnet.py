@@ -445,7 +445,7 @@ class NormFreeNet(nn.Module):
         x = self.final_act(x)
         return x
 
-    def forward_head(self, x, pre_logits=False):
+    def forward_head(self, x, pre_logits: bool = False):
         return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
