@@ -131,7 +131,7 @@ class IterableImageDataset(data.IterableDataset):
             return 0
 
     def set_epoch(self, count):
-        # TFDS and WDS need external epoch count for deterministic cross process shuffle
+        # TFDS, WDS and HFIDS need external epoch count for deterministic cross process shuffle
         if hasattr(self.reader, 'set_epoch'):
             self.reader.set_epoch(count)
 
@@ -139,7 +139,7 @@ class IterableImageDataset(data.IterableDataset):
             self,
             num_workers: Optional[int] = None,
     ):
-        # TFDS and WDS readers need # workers for correct # samples estimate before loader processes created
+        # TFDS, WDS and HFIDS readers need # workers for correct # samples estimate before loader processes created
         if hasattr(self.reader, 'set_loader_cfg'):
             self.reader.set_loader_cfg(num_workers=num_workers)
 

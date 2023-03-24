@@ -152,7 +152,8 @@ class ReaderHfids(Reader):
         self.ds = split_dataset_by_node(ds, rank=self.dist_rank, world_size=self.dist_num_replicas)
 
     def _num_samples_per_worker(self):
-        num_worker_samples = self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
+        num_worker_samples = \
+            max(1, self.repeats) * self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
         if self.is_training or self.dist_num_replicas > 1:
             num_worker_samples = math.ceil(num_worker_samples)
         if self.is_training and self.batch_size is not None:

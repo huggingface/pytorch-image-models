@@ -93,7 +93,7 @@ group.add_argument('--train-split', metavar='NAME', default='train',
 group.add_argument('--val-split', metavar='NAME', default='validation',
                    help='dataset validation split (default: validation)')
 group.add_argument('--dataset-download', action='store_true', default=False,
-                   help='Allow download of dataset for torch/ and tfds/ datasets that support it.')
+                   help='Allow download of dataset for torch/, tfds/ and hfids/ datasets that support it.')
 group.add_argument('--class-map', default='', type=str, metavar='FILENAME',
                    help='path to class to idx mapping file (default: "")')
 
