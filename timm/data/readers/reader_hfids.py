@@ -99,8 +99,7 @@ class ReaderHfids(Reader):
         self.global_worker_id = 0
         self.global_num_workers = 1
 
-        # DataPipeline is lazy init, majority of WDS DataPipeline could be init here, BUT, shuffle seed
-        # is not handled in manner where it can be deterministic for each worker AND initialized up front
+        # Initialized lazily on each dataloader worker process
         self.ds: Optional[datasets.IterableDataset] = None
 
     def set_epoch(self, count):
@@ -132,10 +131,10 @@ class ReaderHfids(Reader):
         if self.download:
             dataset = self.builder.as_dataset(split=self.split)
             # to distribute evenly to workers
-            ds: datasets.IterableDataset = dataset.to_iterable_dataset(num_shards=self.global_num_workers)
+            ds = dataset.to_iterable_dataset(num_shards=self.global_num_workers)
         else:
             # in this case the number of shard is determined by the number of remote files
-            ds: datasets.IterableDataset = self.builder.as_streaming_dataset(split=self.split)
+            ds = self.builder.as_streaming_dataset(split=self.split)
 
         if self.is_training:
             # will shuffle the list of shards and use a shuffle buffer
