@@ -21,6 +21,9 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
+### March 23, 2022
+* 0.6.13 release to include Python 3.11 fix. Please try 0.8.x pre-releases (main branch or `pip install --pre timm`) for latest (transitioning to a 0.9 release soon).
+
 ### Oct 10, 2022
 * More weights in `maxxvit` series, incl first ConvNeXt block based `coatnext` and `maxxvit` experiments:
   * `coatnext_nano_rw_224` - 82.0 @ 224 (G) -- (uses ConvNeXt conv block, no BatchNorm)

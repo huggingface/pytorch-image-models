@@ -29,11 +29,11 @@ setup(
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'Topic :: Software Development',
@@ -46,6 +46,6 @@ setup(
     packages=find_packages(exclude=['convert', 'tests', 'results']),
     include_package_data=True,
     install_requires=['torch >= 1.7', 'torchvision', 'pyyaml', 'huggingface_hub'],
-    python_requires='>=3.6',
+    python_requires='>=3.7',
 )
 
