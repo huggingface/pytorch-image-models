@@ -437,6 +437,20 @@ class FocalNet(nn.Module):
         return {''}
 
     @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=[
+                (r'^layers\.(\d+)', None),
+                (r'^norm', (99999,))
+            ] if coarse else [
+                (r'^layers\.(\d+).downsample', (0,)),
+                (r'^layers\.(\d+)\.\w+\.(\d+)', None),
+                (r'^norm', (99999,)),
+            ]
+        )
+
+    @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
         for l in self.layers:
