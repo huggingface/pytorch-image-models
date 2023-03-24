@@ -1,6 +1,8 @@
 """ Dataset reader for HF IterableDataset
 """
+import math
 import os
+from itertools import repeat
 from typing import Optional
 
 import torch
@@ -10,6 +12,7 @@ from PIL import Image
 try:
     import datasets
     from datasets.distributed import split_dataset_by_node
+    from datasets.splits import SplitInfo
 except ImportError:
     print("Please install Hugging Face datasets package `pip install datasets`.")
     exit(1)
@@ -39,7 +42,7 @@ class ReaderHfids(Reader):
             target_name: str = 'label',
             target_img_mode: str = '',
             shuffle_size: Optional[int] = None,
-            num_samples: Optional[int] = None,
+            max_steps: Optional[int] = None,
     ):
         super().__init__()
         self.root = root
@@ -59,10 +62,21 @@ class ReaderHfids(Reader):
         self.builder = datasets.load_dataset_builder(name, cache_dir=root)
         if download:
             self.builder.download_and_prepare()
-        
-        self.num_samples = num_samples
+
+        split_info: Optional[SplitInfo] = None
         if self.builder.info.splits and split in self.builder.info.splits:
-            self.num_samples = self.builder.info.splits[split].num_examples
+            if isinstance(self.builder.info.splits[split], SplitInfo):
+                split_info: Optional[SplitInfo] = self.builder.info.splits[split]
+
+        if max_steps:
+            self.num_samples = max_steps
+        elif split_info and split_info.num_examples:
+            self.num_samples = split_info.num_examples
+        else:
+            raise ValueError(
+                "Dataset length is unknown, please pass `max_steps` explicitely. "
+                "The number of steps needs to be known in advance for the learning rate scheduler."
+            )
 
         self.remap_class = False
         if class_map:
@@ -90,7 +104,8 @@ class ReaderHfids(Reader):
         self.ds: Optional[datasets.IterableDataset] = None
 
     def set_epoch(self, count):
-        self.ds.set_epoch(self.epoch_count.value)
+        # to update the shuffling effective_seed = seed + epoch
+        self.ds.set_epoch(count)
 
     def set_loader_cfg(
             self,
@@ -116,35 +131,40 @@ class ReaderHfids(Reader):
 
         if self.download:
             dataset = self.builder.as_dataset(split=self.split)
-            self.num_samples = len(dataset)
-            # optimized to distribute evenly to workers
+            # to distribute evenly to workers
             ds: datasets.IterableDataset = dataset.to_iterable_dataset(num_shards=self.global_num_workers)
         else:
-            # in this case the number of shard is fixed, and it may be less optimized
+            # in this case the number of shard is determined by the number of remote files
             ds: datasets.IterableDataset = self.builder.as_streaming_dataset(split=self.split)
 
         if self.is_training:
-            # will shuffle the list of shards and use shuffle buffer
+            # will shuffle the list of shards and use a shuffle buffer
             ds = ds.shuffle(seed=self.common_seed, buffer_size=self.shuffle_size)
 
         # Distributed:
-
         # The dataset has a number of shards that is a factor of `dist_num_replicas` (i.e. if `ds.n_shards % dist_num_replicas == 0`),
-        # so the shards are evenly assigned across the nodes, which is the most optimized.
+        # so the shards are evenly assigned across the nodes.
         # If it's not the case for dataset streaming, each node keeps 1 example out of `dist_num_replicas`, skipping the other examples.
 
         # Workers:
-
         # In a node, datasets.IterableDataset assigns the shards assigned to the node as evenly as possible to workers.
 
         self.ds = split_dataset_by_node(ds, rank=self.dist_rank, world_size=self.dist_num_replicas)
 
+    def _num_samples_per_worker(self):
+        num_worker_samples = self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
+        if self.is_training or self.dist_num_replicas > 1:
+            num_worker_samples = math.ceil(num_worker_samples)
+        if self.is_training and self.batch_size is not None:
+            num_worker_samples = math.ceil(num_worker_samples / self.batch_size) * self.batch_size
+        return int(num_worker_samples)
+
     def __iter__(self):
         if self.ds is None:
             self._lazy_init()
-
-        # TODO(lhoestq): take batch_size into account to use to make sure total samples % batch_size == 0 in training across all dis nodes
-        for sample in self.ds:
+        target_sample_count = self._num_samples_per_worker()
+        sample_count = 0
+        for sample in repeat(self.ds) if self.is_training else self.ds:
             input_data: Image.Image = sample[self.input_name]
             if self.input_img_mode and input_data.mode != self.input_img_mode:
                 input_data = input_data.convert(self.input_img_mode)
@@ -156,11 +176,13 @@ class ReaderHfids(Reader):
             elif self.remap_class:
                 target_data = self.class_to_idx[target_data]
             yield input_data, target_data
+            sample_count += 1
+            if self.is_training and sample_count >= target_sample_count:
+                break
 
     def __len__(self):
-        if self.num_samples is None:
-            raise RuntimeError("Dataset length is unknown, please pass `num_samples` explicitely")
-        return self.num_samples
+        num_samples = self._num_samples_per_worker() * self.num_workers
+        return num_samples
 
     def _filename(self, index, basename=False, absolute=False):
         assert False, "Not supported"  # no random access to examples
@@ -171,8 +193,6 @@ class ReaderHfids(Reader):
             self._lazy_init()
         names = []
         for sample in self.ds:
-            if len(names) > self.num_samples:
-                break  # safety for ds.repeat() case
             if 'file_name' in sample:
                 name = sample['file_name']
             elif 'filename' in sample:
