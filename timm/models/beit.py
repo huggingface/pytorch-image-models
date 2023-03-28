@@ -40,7 +40,7 @@ Modifications by / Copyright 2021 Ross Wightman, original copyrights below
 
 import math
 from functools import partial
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Final, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -80,6 +80,8 @@ def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
 
 
 class Attention(nn.Module):
+    fast_attn: Final[bool]
+
     def __init__(
             self,
             dim: int,
