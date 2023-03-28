@@ -43,6 +43,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import trunc_normal_, AvgPool2dSame, DropPath, Mlp, GlobalResponseNormMlp, \
@@ -103,6 +104,7 @@ class ConvNeXtBlock(nn.Module):
             act_layer: Union[str, Callable] = 'gelu',
             norm_layer: Optional[Callable] = None,
             drop_path: float = 0.,
+            fast_layerscale=False,
     ):
         """
 
@@ -120,6 +122,7 @@ class ConvNeXtBlock(nn.Module):
             act_layer: Activation layer.
             norm_layer: Normalization layer (defaults to LN if not specified).
             drop_path: Stochastic depth probability.
+            fast_layerscale: Fuse LayerScale into Mlp, improves speed.
         """
         super().__init__()
         out_chs = out_chs or in_chs
@@ -146,22 +149,55 @@ class ConvNeXtBlock(nn.Module):
         else:
             self.shortcut = nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.fast_layerscale = fast_layerscale
 
     def forward(self, x):
         shortcut = x
         x = self.conv_dw(x)
         if self.use_conv_mlp:
             x = self.norm(x)
-            x = self.mlp(x)
+            x = self.forward_mlp_layerscale(x)
         else:
             x = x.permute(0, 2, 3, 1)
+            N, H, W, C = x.size()
+            x = x.reshape(-1, C)
             x = self.norm(x)
-            x = self.mlp(x)
+            x = self.forward_mlp_layerscale(x)
+            x = x.reshape(N, H, W, C)
             x = x.permute(0, 3, 1, 2)
-        if self.gamma is not None:
-            x = x.mul(self.gamma.reshape(1, -1, 1, 1))
 
         x = self.drop_path(x) + self.shortcut(shortcut)
+        return x
+    
+    def forward_mlp_layerscale(self, x):
+        if self.gamma is None:
+            return self.mlp(x)
+        elif not self.fast_layerscale:
+            if self.use_conv_mlp:
+                gamma = self.gamma.reshape(1, -1, 1, 1)
+            else:
+                gamma = self.gamma
+            return self.mlp(x).mul(gamma)
+
+        # fuse LayerScale into weight&bias of last linear
+        mlp = self.mlp
+        gamma = self.gamma
+        x = mlp.fc1(x)
+        x = mlp.act(x)
+        x = mlp.drop1(x)
+        if self.use_conv_mlp:
+            weight = mlp.fc2.weight * gamma.reshape(-1, 1, 1, 1)
+            bias = mlp.fc2.bias
+            if bias is not None:
+                bias = bias * gamma
+            x = F.conv2d(x, weight, bias)
+        else:
+            weight = mlp.fc2.weight * gamma.reshape(-1, 1)
+            bias = mlp.fc2.bias
+            if bias is not None:
+                bias = bias * gamma
+            x = F.linear(x, weight, bias)
+        x = mlp.drop2(x)
         return x
 
 
@@ -182,7 +218,8 @@ class ConvNeXtStage(nn.Module):
             use_grn=False,
             act_layer='gelu',
             norm_layer=None,
-            norm_layer_cl=None
+            norm_layer_cl=None,
+            fast_layerscale=False,
     ):
         super().__init__()
         self.grad_checkpointing = False
@@ -221,6 +258,7 @@ class ConvNeXtStage(nn.Module):
                 use_grn=use_grn,
                 act_layer=act_layer,
                 norm_layer=norm_layer if conv_mlp else norm_layer_cl,
+                fast_layerscale=fast_layerscale,
             ))
             in_chs = out_chs
         self.blocks = nn.Sequential(*stage_blocks)
@@ -262,6 +300,7 @@ class ConvNeXt(nn.Module):
             norm_eps: Optional[float] = None,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            fast_layerscale: bool = False,
     ):
         """
         Args:
@@ -285,6 +324,7 @@ class ConvNeXt(nn.Module):
             norm_layer: Normalization layer type.
             drop_rate: Head pre-classifier dropout rate.
             drop_path_rate: Stochastic depth drop rate.
+            fast_layerscale: Fuse LayerScale into Mlp, improves speed.
         """
         super().__init__()
         assert output_stride in (8, 16, 32)
@@ -353,6 +393,7 @@ class ConvNeXt(nn.Module):
                 act_layer=act_layer,
                 norm_layer=norm_layer,
                 norm_layer_cl=norm_layer_cl,
+                fast_layerscale=fast_layerscale,
             ))
             prev_chs = out_chs
             # NOTE feature_info use currently assumes stage 0 == stride 1, rest are stride 2
