@@ -1,0 +1,5 @@
+pytest
+pytest-timeout
+pytest-xdist
+pytest-forked
+expecttest

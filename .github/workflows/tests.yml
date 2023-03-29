@@ -19,6 +19,7 @@ jobs:
         python: ['3.10']
         torch: ['1.13.0']
         torchvision: ['0.14.0']
+        testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -30,7 +31,7 @@ jobs:
     - name: Install testing dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-timeout pytest-xdist pytest-forked expecttest
+        pip install -r requirements-dev.txt
     - name: Install torch on mac
       if: startsWith(matrix.os, 'macOS')
       run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
@@ -40,9 +41,10 @@ jobs:
     - name: Install torch on ubuntu
       if: startsWith(matrix.os, 'ubuntu')
       run: |
-        pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+        sudo sed -i 's/azure\.//' /etc/apt/sources.list
         sudo apt update
         sudo apt install -y google-perftools
+        pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - name: Install requirements
       run: |
         pip install -r requirements.txt
@@ -53,10 +55,10 @@ jobs:
         PYTHONDONTWRITEBYTECODE: 1
       run: |
         pytest -vv tests
-    - name: Run tests on Linux / Mac
+    - name: Run '${{ matrix.testmarker }}' tests on Linux / Mac
       if: ${{ !startsWith(matrix.os, 'windows') }}
       env:
         LD_PRELOAD: /usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
         PYTHONDONTWRITEBYTECODE: 1
       run: |
-        pytest -vv --forked --durations=0 tests
+        pytest -vv --forked --durations=0 ${{ matrix.testmarker }} tests

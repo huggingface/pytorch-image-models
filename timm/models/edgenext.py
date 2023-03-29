@@ -8,20 +8,20 @@ Original code and weights from https://github.com/mmaaz60/EdgeNeXt
 Modifications and additions for timm by / Copyright 2022, Ross Wightman
 """
 import math
-import torch
 from collections import OrderedDict
 from functools import partial
 from typing import Tuple
 
-from torch import nn
+import torch
 import torch.nn.functional as F
+from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_module
-from .layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d
-from .helpers import named_apply, build_model_with_cfg, checkpoint_seq
-from .registry import register_model
-
+from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._manipulate import named_apply, checkpoint_seq
+from ._registry import register_model
 
 __all__ = ['EdgeNeXt']  # model_registry will add each entrypoint fn to this
 

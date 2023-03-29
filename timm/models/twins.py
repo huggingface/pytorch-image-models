@@ -12,20 +12,21 @@ Code/weights from https://github.com/Meituan-AutoML/Twins, original copyright/li
 # Written by Xinjie Li, Xiangxiang Chu
 # --------------------------------------------------------
 import math
-from copy import deepcopy
-from typing import Optional, Tuple
+from functools import partial
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from functools import partial
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .layers import Mlp, DropPath, to_2tuple, trunc_normal_
-from .fx_features import register_notrace_module
-from .registry import register_model
+from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._registry import register_model
 from .vision_transformer import Attention
-from .helpers import build_model_with_cfg
+
+__all__ = ['Twins']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

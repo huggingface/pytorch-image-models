@@ -16,119 +16,23 @@ Status:
 
 Hacked together by / copyright Ross Wightman, 2021.
 """
-import math
-from dataclasses import dataclass, field
 from collections import OrderedDict
-from typing import Tuple, Optional
+from dataclasses import dataclass, replace
 from functools import partial
+from typing import Callable, Tuple, Optional
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .fx_features import register_notrace_module
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .registry import register_model
-from .layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame,\
+from timm.layers import ClassifierHead, DropPath, AvgPool2dSame, ScaledStdConv2d, ScaledStdConv2dSame, \
     get_act_layer, get_act_fn, get_attn, make_divisible
+from ._builder import build_model_with_cfg
+from ._features_fx import register_notrace_module
+from ._manipulate import checkpoint_seq
+from ._registry import generate_default_cfgs, register_model
 
-
-def _dcfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.9, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1', 'classifier': 'head.fc',
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    dm_nfnet_f0=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f0-604f9c3a.pth',
-        pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), crop_pct=.9),
-    dm_nfnet_f1=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f1-fc540f82.pth',
-        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 320, 320), crop_pct=0.91),
-    dm_nfnet_f2=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f2-89875923.pth',
-        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 352, 352), crop_pct=0.92),
-    dm_nfnet_f3=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f3-d74ab3aa.pth',
-        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 416, 416), crop_pct=0.94),
-    dm_nfnet_f4=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f4-0ac5b10b.pth',
-        pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 512, 512), crop_pct=0.951),
-    dm_nfnet_f5=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f5-ecb20ab1.pth',
-        pool_size=(13, 13), input_size=(3, 416, 416), test_input_size=(3, 544, 544), crop_pct=0.954),
-    dm_nfnet_f6=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f6-e0f12116.pth',
-        pool_size=(14, 14), input_size=(3, 448, 448), test_input_size=(3, 576, 576), crop_pct=0.956),
-
-    nfnet_f0=_dcfg(
-        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256)),
-    nfnet_f1=_dcfg(
-        url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 320, 320)),
-    nfnet_f2=_dcfg(
-        url='', pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 352, 352)),
-    nfnet_f3=_dcfg(
-        url='', pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 416, 416)),
-    nfnet_f4=_dcfg(
-        url='', pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 512, 512)),
-    nfnet_f5=_dcfg(
-        url='', pool_size=(13, 13), input_size=(3, 416, 416), test_input_size=(3, 544, 544)),
-    nfnet_f6=_dcfg(
-        url='', pool_size=(14, 14), input_size=(3, 448, 448), test_input_size=(3, 576, 576)),
-    nfnet_f7=_dcfg(
-        url='', pool_size=(15, 15), input_size=(3, 480, 480), test_input_size=(3, 608, 608)),
-
-    nfnet_l0=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nfnet_l0_ra2-45c6688d.pth',
-        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
-    eca_nfnet_l0=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l0_ra2-e3e9ac50.pth',
-        hf_hub_id='timm/eca_nfnet_l0',
-        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), crop_pct=1.0),
-    eca_nfnet_l1=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l1_ra2-7dce93cd.pth',
-        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 320, 320), crop_pct=1.0),
-    eca_nfnet_l2=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l2_ra3-da781a61.pth',
-        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), crop_pct=1.0),
-    eca_nfnet_l3=_dcfg(
-        url='',
-        pool_size=(11, 11), input_size=(3, 352, 352), test_input_size=(3, 448, 448), crop_pct=1.0),
-
-    nf_regnet_b0=_dcfg(
-        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv'),
-    nf_regnet_b1=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_regnet_b1_256_ra2-ad85cfef.pth',
-        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 288, 288), first_conv='stem.conv'),  # NOT to paper spec
-    nf_regnet_b2=_dcfg(
-        url='', pool_size=(8, 8), input_size=(3, 240, 240), test_input_size=(3, 272, 272), first_conv='stem.conv'),
-    nf_regnet_b3=_dcfg(
-        url='', pool_size=(9, 9), input_size=(3, 288, 288), test_input_size=(3, 320, 320), first_conv='stem.conv'),
-    nf_regnet_b4=_dcfg(
-        url='', pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), first_conv='stem.conv'),
-    nf_regnet_b5=_dcfg(
-        url='', pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 456, 456), first_conv='stem.conv'),
-
-    nf_resnet26=_dcfg(url='', first_conv='stem.conv'),
-    nf_resnet50=_dcfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_resnet50_ra2-9f236009.pth',
-        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 288, 288), crop_pct=0.94, first_conv='stem.conv'),
-    nf_resnet101=_dcfg(url='', first_conv='stem.conv'),
-
-    nf_seresnet26=_dcfg(url='', first_conv='stem.conv'),
-    nf_seresnet50=_dcfg(url='', first_conv='stem.conv'),
-    nf_seresnet101=_dcfg(url='', first_conv='stem.conv'),
-
-    nf_ecaresnet26=_dcfg(url='', first_conv='stem.conv'),
-    nf_ecaresnet50=_dcfg(url='', first_conv='stem.conv'),
-    nf_ecaresnet101=_dcfg(url='', first_conv='stem.conv'),
-)
+__all__ = ['NormFreeNet', 'NfCfg']  # model_registry will add each entrypoint fn to this
 
 
 @dataclass
@@ -156,107 +60,6 @@ class NfCfg:
     act_layer: str = 'silu'
 
 
-def _nfres_cfg(
-        depths, channels=(256, 512, 1024, 2048), group_size=None, act_layer='relu', attn_layer=None, attn_kwargs=None):
-    attn_kwargs = attn_kwargs or {}
-    cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='7x7_pool', stem_chs=64, bottle_ratio=0.25,
-        group_size=group_size, act_layer=act_layer, attn_layer=attn_layer, attn_kwargs=attn_kwargs)
-    return cfg
-
-
-def _nfreg_cfg(depths, channels=(48, 104, 208, 440)):
-    num_features = 1280 * channels[-1] // 440
-    attn_kwargs = dict(rd_ratio=0.5)
-    cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='3x3', group_size=8, width_factor=0.75, bottle_ratio=2.25,
-        num_features=num_features, reg=True, attn_layer='se', attn_kwargs=attn_kwargs)
-    return cfg
-
-
-def _nfnet_cfg(
-        depths, channels=(256, 512, 1536, 1536), group_size=128, bottle_ratio=0.5, feat_mult=2.,
-        act_layer='gelu', attn_layer='se', attn_kwargs=None):
-    num_features = int(channels[-1] * feat_mult)
-    attn_kwargs = attn_kwargs if attn_kwargs is not None else dict(rd_ratio=0.5)
-    cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=group_size,
-        bottle_ratio=bottle_ratio, extra_conv=True, num_features=num_features, act_layer=act_layer,
-        attn_layer=attn_layer, attn_kwargs=attn_kwargs)
-    return cfg
-
-
-def _dm_nfnet_cfg(depths, channels=(256, 512, 1536, 1536), act_layer='gelu', skipinit=True):
-    cfg = NfCfg(
-        depths=depths, channels=channels, stem_type='deep_quad', stem_chs=128, group_size=128,
-        bottle_ratio=0.5, extra_conv=True, gamma_in_act=True, same_padding=True, skipinit=skipinit,
-        num_features=int(channels[-1] * 2.0), act_layer=act_layer, attn_layer='se', attn_kwargs=dict(rd_ratio=0.5))
-    return cfg
-
-
-model_cfgs = dict(
-    # NFNet-F models w/ GELU compatible with DeepMind weights
-    dm_nfnet_f0=_dm_nfnet_cfg(depths=(1, 2, 6, 3)),
-    dm_nfnet_f1=_dm_nfnet_cfg(depths=(2, 4, 12, 6)),
-    dm_nfnet_f2=_dm_nfnet_cfg(depths=(3, 6, 18, 9)),
-    dm_nfnet_f3=_dm_nfnet_cfg(depths=(4, 8, 24, 12)),
-    dm_nfnet_f4=_dm_nfnet_cfg(depths=(5, 10, 30, 15)),
-    dm_nfnet_f5=_dm_nfnet_cfg(depths=(6, 12, 36, 18)),
-    dm_nfnet_f6=_dm_nfnet_cfg(depths=(7, 14, 42, 21)),
-
-    # NFNet-F models w/ GELU
-    nfnet_f0=_nfnet_cfg(depths=(1, 2, 6, 3)),
-    nfnet_f1=_nfnet_cfg(depths=(2, 4, 12, 6)),
-    nfnet_f2=_nfnet_cfg(depths=(3, 6, 18, 9)),
-    nfnet_f3=_nfnet_cfg(depths=(4, 8, 24, 12)),
-    nfnet_f4=_nfnet_cfg(depths=(5, 10, 30, 15)),
-    nfnet_f5=_nfnet_cfg(depths=(6, 12, 36, 18)),
-    nfnet_f6=_nfnet_cfg(depths=(7, 14, 42, 21)),
-    nfnet_f7=_nfnet_cfg(depths=(8, 16, 48, 24)),
-
-    # Experimental 'light' versions of NFNet-F that are little leaner
-    nfnet_l0=_nfnet_cfg(
-        depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
-        attn_kwargs=dict(rd_ratio=0.25, rd_divisor=8), act_layer='silu'),
-    eca_nfnet_l0=_nfnet_cfg(
-        depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
-        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
-    eca_nfnet_l1=_nfnet_cfg(
-        depths=(2, 4, 12, 6), feat_mult=2, group_size=64, bottle_ratio=0.25,
-        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
-    eca_nfnet_l2=_nfnet_cfg(
-        depths=(3, 6, 18, 9), feat_mult=2, group_size=64, bottle_ratio=0.25,
-        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
-    eca_nfnet_l3=_nfnet_cfg(
-        depths=(4, 8, 24, 12), feat_mult=2, group_size=64, bottle_ratio=0.25,
-        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
-
-    # EffNet influenced RegNet defs.
-    # NOTE: These aren't quite the official ver, ch_div=1 must be set for exact ch counts. I round to ch_div=8.
-    nf_regnet_b0=_nfreg_cfg(depths=(1, 3, 6, 6)),
-    nf_regnet_b1=_nfreg_cfg(depths=(2, 4, 7, 7)),
-    nf_regnet_b2=_nfreg_cfg(depths=(2, 4, 8, 8), channels=(56, 112, 232, 488)),
-    nf_regnet_b3=_nfreg_cfg(depths=(2, 5, 9, 9), channels=(56, 128, 248, 528)),
-    nf_regnet_b4=_nfreg_cfg(depths=(2, 6, 11, 11), channels=(64, 144, 288, 616)),
-    nf_regnet_b5=_nfreg_cfg(depths=(3, 7, 14, 14), channels=(80, 168, 336, 704)),
-    # FIXME add B6-B8
-
-    # ResNet (preact, D style deep stem/avg down) defs
-    nf_resnet26=_nfres_cfg(depths=(2, 2, 2, 2)),
-    nf_resnet50=_nfres_cfg(depths=(3, 4, 6, 3)),
-    nf_resnet101=_nfres_cfg(depths=(3, 4, 23, 3)),
-
-    nf_seresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
-    nf_seresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
-    nf_seresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
-
-    nf_ecaresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='eca', attn_kwargs=dict()),
-    nf_ecaresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='eca', attn_kwargs=dict()),
-    nf_ecaresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='eca', attn_kwargs=dict()),
-
-)
-
-
 class GammaAct(nn.Module):
     def __init__(self, act_type='relu', gamma: float = 1.0, inplace=False):
         super().__init__()
@@ -276,7 +79,14 @@ def act_with_gamma(act_type, gamma: float = 1.):
 
 class DownsampleAvg(nn.Module):
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=1, first_dilation=None, conv_layer=ScaledStdConv2d):
+            self,
+            in_chs: int,
+            out_chs: int,
+            stride: int = 1,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            conv_layer: Callable = ScaledStdConv2d,
+    ):
         """ AvgPool Downsampling as in 'D' ResNet variants. Support for dilation."""
         super(DownsampleAvg, self).__init__()
         avg_stride = stride if dilation == 1 else 1
@@ -297,9 +107,26 @@ class NormFreeBlock(nn.Module):
     """
 
     def __init__(
-            self, in_chs, out_chs=None, stride=1, dilation=1, first_dilation=None,
-            alpha=1.0, beta=1.0, bottle_ratio=0.25, group_size=None, ch_div=1, reg=True, extra_conv=False,
-            skipinit=False, attn_layer=None, attn_gain=2.0, act_layer=None, conv_layer=None, drop_path_rate=0.):
+            self,
+            in_chs: int,
+            out_chs: Optional[int] = None,
+            stride: int = 1,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            alpha: float = 1.0,
+            beta: float = 1.0,
+            bottle_ratio: float = 0.25,
+            group_size: Optional[int] = None,
+            ch_div: int = 1,
+            reg: bool = True,
+            extra_conv: bool = False,
+            skipinit: bool = False,
+            attn_layer: Optional[Callable] = None,
+            attn_gain: bool = 2.0,
+            act_layer: Optional[Callable] = None,
+            conv_layer: Callable = ScaledStdConv2d,
+            drop_path_rate: float = 0.,
+    ):
         super().__init__()
         first_dilation = first_dilation or dilation
         out_chs = out_chs or in_chs
@@ -314,7 +141,13 @@ class NormFreeBlock(nn.Module):
 
         if in_chs != out_chs or stride != 1 or dilation != first_dilation:
             self.downsample = DownsampleAvg(
-                in_chs, out_chs, stride=stride, dilation=dilation, first_dilation=first_dilation, conv_layer=conv_layer)
+                in_chs,
+                out_chs,
+                stride=stride,
+                dilation=dilation,
+                first_dilation=first_dilation,
+                conv_layer=conv_layer,
+            )
         else:
             self.downsample = None
 
@@ -362,12 +195,19 @@ class NormFreeBlock(nn.Module):
         out = self.drop_path(out)
 
         if self.skipinit_gain is not None:
-            out.mul_(self.skipinit_gain)  # this slows things down more than expected, TBD
+            out.mul_(self.skipinit_gain)
         out = out * self.alpha + shortcut
         return out
 
 
-def create_stem(in_chs, out_chs, stem_type='', conv_layer=None, act_layer=None, preact_feature=True):
+def create_stem(
+        in_chs: int,
+        out_chs: int,
+        stem_type: str = '',
+        conv_layer: Optional[Callable] = None,
+        act_layer: Optional[Callable] = None,
+        preact_feature: bool = True,
+):
     stem_stride = 2
     stem_feature = dict(num_chs=out_chs, reduction=2, module='stem.conv')
     stem = OrderedDict()
@@ -450,14 +290,33 @@ class NormFreeNet(nn.Module):
             for what it is/does. Approx 8-10% throughput loss.
     """
     def __init__(
-            self, cfg: NfCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-            drop_rate=0., drop_path_rate=0.
+            self,
+            cfg: NfCfg,
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            global_pool: str = 'avg',
+            output_stride: int = 32,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            **kwargs,
     ):
+        """
+        Args:
+            cfg: Model architecture configuration.
+            num_classes: Number of classifier classes.
+            in_chans: Number of input channels.
+            global_pool: Global pooling type.
+            output_stride: Output stride of network, one of (8, 16, 32).
+            drop_rate: Dropout rate.
+            drop_path_rate: Stochastic depth drop-path rate.
+            **kwargs: Extra kwargs overlayed onto cfg.
+        """
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
+        cfg = replace(cfg, **kwargs)
         assert cfg.act_layer in _nonlin_gamma, f"Please add non-linearity constants for activation ({cfg.act_layer})."
         conv_layer = ScaledStdConv2dSame if cfg.same_padding else ScaledStdConv2d
         if cfg.gamma_in_act:
@@ -470,7 +329,12 @@ class NormFreeNet(nn.Module):
 
         stem_chs = make_divisible((cfg.stem_chs or cfg.channels[0]) * cfg.width_factor, cfg.ch_div)
         self.stem, stem_stride, stem_feat = create_stem(
-            in_chans, stem_chs, cfg.stem_type, conv_layer=conv_layer, act_layer=act_layer)
+            in_chans,
+            stem_chs,
+            cfg.stem_type,
+            conv_layer=conv_layer,
+            act_layer=act_layer,
+        )
 
         self.feature_info = [stem_feat]
         drop_path_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
@@ -529,7 +393,12 @@ class NormFreeNet(nn.Module):
             self.final_conv = nn.Identity()
         self.final_act = act_layer(inplace=cfg.num_features > 0)
 
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+        self.head = ClassifierHead(
+            self.num_features,
+            num_classes,
+            pool_type=global_pool,
+            drop_rate=self.drop_rate,
+        )
 
         for n, m in self.named_modules():
             if 'fc' in n and isinstance(m, nn.Linear):
@@ -564,7 +433,7 @@ class NormFreeNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -576,8 +445,8 @@ class NormFreeNet(nn.Module):
         x = self.final_act(x)
         return x
 
-    def forward_head(self, x):
-        return self.head(x)
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
@@ -585,14 +454,282 @@ class NormFreeNet(nn.Module):
         return x
 
 
+def _nfres_cfg(
+        depths,
+        channels=(256, 512, 1024, 2048),
+        group_size=None,
+        act_layer='relu',
+        attn_layer=None,
+        attn_kwargs=None,
+):
+    attn_kwargs = attn_kwargs or {}
+    cfg = NfCfg(
+        depths=depths,
+        channels=channels,
+        stem_type='7x7_pool',
+        stem_chs=64,
+        bottle_ratio=0.25,
+        group_size=group_size,
+        act_layer=act_layer,
+        attn_layer=attn_layer,
+        attn_kwargs=attn_kwargs,
+    )
+    return cfg
+
+
+def _nfreg_cfg(depths, channels=(48, 104, 208, 440)):
+    num_features = 1280 * channels[-1] // 440
+    attn_kwargs = dict(rd_ratio=0.5)
+    cfg = NfCfg(
+        depths=depths,
+        channels=channels,
+        stem_type='3x3',
+        group_size=8,
+        width_factor=0.75,
+        bottle_ratio=2.25,
+        num_features=num_features,
+        reg=True,
+        attn_layer='se',
+        attn_kwargs=attn_kwargs,
+    )
+    return cfg
+
+
+def _nfnet_cfg(
+        depths,
+        channels=(256, 512, 1536, 1536),
+        group_size=128,
+        bottle_ratio=0.5,
+        feat_mult=2.,
+        act_layer='gelu',
+        attn_layer='se',
+        attn_kwargs=None,
+):
+    num_features = int(channels[-1] * feat_mult)
+    attn_kwargs = attn_kwargs if attn_kwargs is not None else dict(rd_ratio=0.5)
+    cfg = NfCfg(
+        depths=depths,
+        channels=channels,
+        stem_type='deep_quad',
+        stem_chs=128,
+        group_size=group_size,
+        bottle_ratio=bottle_ratio,
+        extra_conv=True,
+        num_features=num_features,
+        act_layer=act_layer,
+        attn_layer=attn_layer,
+        attn_kwargs=attn_kwargs,
+    )
+    return cfg
+
+
+def _dm_nfnet_cfg(
+        depths,
+        channels=(256, 512, 1536, 1536),
+        act_layer='gelu',
+        skipinit=True,
+):
+    cfg = NfCfg(
+        depths=depths,
+        channels=channels,
+        stem_type='deep_quad',
+        stem_chs=128,
+        group_size=128,
+        bottle_ratio=0.5,
+        extra_conv=True,
+        gamma_in_act=True,
+        same_padding=True,
+        skipinit=skipinit,
+        num_features=int(channels[-1] * 2.0),
+        act_layer=act_layer,
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.5),
+    )
+    return cfg
+
+
+model_cfgs = dict(
+    # NFNet-F models w/ GELU compatible with DeepMind weights
+    dm_nfnet_f0=_dm_nfnet_cfg(depths=(1, 2, 6, 3)),
+    dm_nfnet_f1=_dm_nfnet_cfg(depths=(2, 4, 12, 6)),
+    dm_nfnet_f2=_dm_nfnet_cfg(depths=(3, 6, 18, 9)),
+    dm_nfnet_f3=_dm_nfnet_cfg(depths=(4, 8, 24, 12)),
+    dm_nfnet_f4=_dm_nfnet_cfg(depths=(5, 10, 30, 15)),
+    dm_nfnet_f5=_dm_nfnet_cfg(depths=(6, 12, 36, 18)),
+    dm_nfnet_f6=_dm_nfnet_cfg(depths=(7, 14, 42, 21)),
+
+    # NFNet-F models w/ GELU
+    nfnet_f0=_nfnet_cfg(depths=(1, 2, 6, 3)),
+    nfnet_f1=_nfnet_cfg(depths=(2, 4, 12, 6)),
+    nfnet_f2=_nfnet_cfg(depths=(3, 6, 18, 9)),
+    nfnet_f3=_nfnet_cfg(depths=(4, 8, 24, 12)),
+    nfnet_f4=_nfnet_cfg(depths=(5, 10, 30, 15)),
+    nfnet_f5=_nfnet_cfg(depths=(6, 12, 36, 18)),
+    nfnet_f6=_nfnet_cfg(depths=(7, 14, 42, 21)),
+    nfnet_f7=_nfnet_cfg(depths=(8, 16, 48, 24)),
+
+    # Experimental 'light' versions of NFNet-F that are little leaner, w/ SiLU act
+    nfnet_l0=_nfnet_cfg(
+        depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        attn_kwargs=dict(rd_ratio=0.25, rd_divisor=8), act_layer='silu'),
+    eca_nfnet_l0=_nfnet_cfg(
+        depths=(1, 2, 6, 3), feat_mult=1.5, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+    eca_nfnet_l1=_nfnet_cfg(
+        depths=(2, 4, 12, 6), feat_mult=2, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+    eca_nfnet_l2=_nfnet_cfg(
+        depths=(3, 6, 18, 9), feat_mult=2, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+    eca_nfnet_l3=_nfnet_cfg(
+        depths=(4, 8, 24, 12), feat_mult=2, group_size=64, bottle_ratio=0.25,
+        attn_layer='eca', attn_kwargs=dict(), act_layer='silu'),
+
+    # EffNet influenced RegNet defs.
+    # NOTE: These aren't quite the official ver, ch_div=1 must be set for exact ch counts. I round to ch_div=8.
+    nf_regnet_b0=_nfreg_cfg(depths=(1, 3, 6, 6)),
+    nf_regnet_b1=_nfreg_cfg(depths=(2, 4, 7, 7)),
+    nf_regnet_b2=_nfreg_cfg(depths=(2, 4, 8, 8), channels=(56, 112, 232, 488)),
+    nf_regnet_b3=_nfreg_cfg(depths=(2, 5, 9, 9), channels=(56, 128, 248, 528)),
+    nf_regnet_b4=_nfreg_cfg(depths=(2, 6, 11, 11), channels=(64, 144, 288, 616)),
+    nf_regnet_b5=_nfreg_cfg(depths=(3, 7, 14, 14), channels=(80, 168, 336, 704)),
+
+    # ResNet (preact, D style deep stem/avg down) defs
+    nf_resnet26=_nfres_cfg(depths=(2, 2, 2, 2)),
+    nf_resnet50=_nfres_cfg(depths=(3, 4, 6, 3)),
+    nf_resnet101=_nfres_cfg(depths=(3, 4, 23, 3)),
+
+    nf_seresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
+    nf_seresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
+    nf_seresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='se', attn_kwargs=dict(rd_ratio=1/16)),
+
+    nf_ecaresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='eca', attn_kwargs=dict()),
+    nf_ecaresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='eca', attn_kwargs=dict()),
+    nf_ecaresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='eca', attn_kwargs=dict()),
+)
+
+
 def _create_normfreenet(variant, pretrained=False, **kwargs):
     model_cfg = model_cfgs[variant]
     feature_cfg = dict(flatten_sequential=True)
     return build_model_with_cfg(
-        NormFreeNet, variant, pretrained,
+        NormFreeNet,
+        variant,
+        pretrained,
         model_cfg=model_cfg,
         feature_cfg=feature_cfg,
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _dcfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.9, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv1', 'classifier': 'head.fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'dm_nfnet_f0.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f0-604f9c3a.pth',
+        pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), crop_pct=.9, crop_mode='squash'),
+    'dm_nfnet_f1.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f1-fc540f82.pth',
+        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 320, 320), crop_pct=0.91, crop_mode='squash'),
+    'dm_nfnet_f2.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f2-89875923.pth',
+        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 352, 352), crop_pct=0.92, crop_mode='squash'),
+    'dm_nfnet_f3.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f3-d74ab3aa.pth',
+        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 416, 416), crop_pct=0.94, crop_mode='squash'),
+    'dm_nfnet_f4.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f4-0ac5b10b.pth',
+        pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 512, 512), crop_pct=0.951, crop_mode='squash'),
+    'dm_nfnet_f5.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f5-ecb20ab1.pth',
+        pool_size=(13, 13), input_size=(3, 416, 416), test_input_size=(3, 544, 544), crop_pct=0.954, crop_mode='squash'),
+    'dm_nfnet_f6.dm_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-dnf-weights/dm_nfnet_f6-e0f12116.pth',
+        pool_size=(14, 14), input_size=(3, 448, 448), test_input_size=(3, 576, 576), crop_pct=0.956, crop_mode='squash'),
+
+    'nfnet_f0': _dcfg(
+        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256)),
+    'nfnet_f1': _dcfg(
+        url='', pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 320, 320)),
+    'nfnet_f2': _dcfg(
+        url='', pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 352, 352)),
+    'nfnet_f3': _dcfg(
+        url='', pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 416, 416)),
+    'nfnet_f4': _dcfg(
+        url='', pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 512, 512)),
+    'nfnet_f5': _dcfg(
+        url='', pool_size=(13, 13), input_size=(3, 416, 416), test_input_size=(3, 544, 544)),
+    'nfnet_f6': _dcfg(
+        url='', pool_size=(14, 14), input_size=(3, 448, 448), test_input_size=(3, 576, 576)),
+    'nfnet_f7': _dcfg(
+        url='', pool_size=(15, 15), input_size=(3, 480, 480), test_input_size=(3, 608, 608)),
+
+    'nfnet_l0.ra2_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nfnet_l0_ra2-45c6688d.pth',
+        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'eca_nfnet_l0.ra2_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l0_ra2-e3e9ac50.pth',
+        pool_size=(7, 7), input_size=(3, 224, 224), test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'eca_nfnet_l1.ra2_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l1_ra2-7dce93cd.pth',
+        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 320, 320), test_crop_pct=1.0),
+    'eca_nfnet_l2.ra3_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ecanfnet_l2_ra3-da781a61.pth',
+        pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), test_crop_pct=1.0),
+    'eca_nfnet_l3': _dcfg(
+        url='',
+        pool_size=(11, 11), input_size=(3, 352, 352), test_input_size=(3, 448, 448), test_crop_pct=1.0),
+
+    'nf_regnet_b0': _dcfg(
+        url='', pool_size=(6, 6), input_size=(3, 192, 192), test_input_size=(3, 256, 256), first_conv='stem.conv'),
+    'nf_regnet_b1.ra2_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_regnet_b1_256_ra2-ad85cfef.pth',
+        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 288, 288), first_conv='stem.conv'),  # NOT to paper spec
+    'nf_regnet_b2': _dcfg(
+        url='', pool_size=(8, 8), input_size=(3, 240, 240), test_input_size=(3, 272, 272), first_conv='stem.conv'),
+    'nf_regnet_b3': _dcfg(
+        url='', pool_size=(9, 9), input_size=(3, 288, 288), test_input_size=(3, 320, 320), first_conv='stem.conv'),
+    'nf_regnet_b4': _dcfg(
+        url='', pool_size=(10, 10), input_size=(3, 320, 320), test_input_size=(3, 384, 384), first_conv='stem.conv'),
+    'nf_regnet_b5': _dcfg(
+        url='', pool_size=(12, 12), input_size=(3, 384, 384), test_input_size=(3, 456, 456), first_conv='stem.conv'),
+
+    'nf_resnet26': _dcfg(url='', first_conv='stem.conv'),
+    'nf_resnet50.ra2_in1k': _dcfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nf_resnet50_ra2-9f236009.pth',
+        pool_size=(8, 8), input_size=(3, 256, 256), test_input_size=(3, 288, 288), crop_pct=0.94, first_conv='stem.conv'),
+    'nf_resnet101': _dcfg(url='', first_conv='stem.conv'),
+
+    'nf_seresnet26': _dcfg(url='', first_conv='stem.conv'),
+    'nf_seresnet50': _dcfg(url='', first_conv='stem.conv'),
+    'nf_seresnet101': _dcfg(url='', first_conv='stem.conv'),
+
+    'nf_ecaresnet26': _dcfg(url='', first_conv='stem.conv'),
+    'nf_ecaresnet50': _dcfg(url='', first_conv='stem.conv'),
+    'nf_ecaresnet101': _dcfg(url='', first_conv='stem.conv'),
+})
 
 
 @register_model

@@ -21,8 +21,151 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
-# Dec 6, 2022
-* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
+* ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
+* Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
+
+### March 22, 2023
+* More weights pushed to HF hub along with multi-weight support, including: `regnet.py`, `rexnet.py`, `byobnet.py`, `resnetv2.py`, `swin_transformer.py`, `swin_transformer_v2.py`, `swin_transformer_v2_cr.py`
+* Swin Transformer models support feature extraction (NCHW feat maps for `swinv2_cr_*`, and NHWC for all others) and spatial embedding outputs.
+* FocalNet (from https://github.com/microsoft/FocalNet) models and weights added with significant refactoring, feature extraction, no fixed resolution / sizing constraint
+* RegNet weights increased with HF hub push, SWAG, SEER, and torchvision v2 weights. SEER is pretty poor wrt to performance for model size, but possibly useful.
+* More ImageNet-12k pretrained and 1k fine-tuned `timm` weights:
+  * `rexnetr_200.sw_in12k_ft_in1k` - 82.6 @ 224, 83.2 @ 288
+  * `rexnetr_300.sw_in12k_ft_in1k` - 84.0 @ 224, 84.5 @ 288
+  * `regnety_120.sw_in12k_ft_in1k` - 85.0 @ 224, 85.4 @ 288
+  * `regnety_160.lion_in12k_ft_in1k` - 85.6 @ 224, 86.0 @ 288
+  * `regnety_160.sw_in12k_ft_in1k` - 85.6 @ 224, 86.0 @ 288  (compare to SWAG PT + 1k FT this is same BUT much lower res, blows SEER FT away)
+* Model name deprecation + remapping functionality added (a milestone for bringing 0.8.x out of pre-release). Mappings being added...
+* Minor bug fixes and improvements.
+
+### Feb 26, 2023
+* Add ConvNeXt-XXLarge CLIP pretrained image tower weights for fine-tune & features (fine-tuning TBD) -- see [model card](https://huggingface.co/laion/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup)
+* Update `convnext_xxlarge` default LayerNorm eps to 1e-5 (for CLIP weights, improved stability)
+* 0.8.15dev0
+
+### Feb 20, 2023
+* Add 320x320 `convnext_large_mlp.clip_laion2b_ft_320` and `convnext_lage_mlp.clip_laion2b_ft_soup_320` CLIP image tower weights for features & fine-tune
+* 0.8.13dev0 pypi release for latest changes w/ move to huggingface org
+
+### Feb 16, 2023
+* `safetensor` checkpoint support added
+* Add ideas from 'Scaling Vision Transformers to 22 B. Params' (https://arxiv.org/abs/2302.05442) -- qk norm, RmsNorm, parallel block
+* Add F.scaled_dot_product_attention support (PyTorch 2.0 only) to `vit_*`, `vit_relpos*`, `coatnet` / `maxxvit` (to start)
+* Lion optimizer (w/ multi-tensor option) added (https://arxiv.org/abs/2302.06675)
+* gradient checkpointing works with `features_only=True`
+
+### Feb 7, 2023
+* New inference benchmark numbers added in [results](results/) folder.
+* Add convnext LAION CLIP trained weights and initial set of in1k fine-tunes
+  * `convnext_base.clip_laion2b_augreg_ft_in1k` - 86.2% @ 256x256
+  * `convnext_base.clip_laiona_augreg_ft_in1k_384` - 86.5% @ 384x384
+  * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k` - 87.3% @ 256x256
+  * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384` - 87.9% @ 384x384
+* Add DaViT models. Supports `features_only=True`. Adapted from https://github.com/dingmyu/davit by [Fredo](https://github.com/fffffgggg54).
+* Use a common NormMlpClassifierHead across MaxViT, ConvNeXt, DaViT
+* Add EfficientFormer-V2 model, update EfficientFormer, and refactor LeViT (closely related architectures). Weights on HF hub.
+  * New EfficientFormer-V2 arch, significant refactor from original at (https://github.com/snap-research/EfficientFormer). Supports `features_only=True`.
+  * Minor updates to EfficientFormer.
+  * Refactor LeViT models to stages, add `features_only=True` support to new `conv` variants, weight remap required.
+* Move ImageNet meta-data (synsets, indices) from `/results` to [`timm/data/_info`](timm/data/_info/).
+* Add ImageNetInfo / DatasetInfo classes to provide labelling for various ImageNet classifier layouts in `timm`
+  * Update `inference.py` to use, try: `python inference.py /folder/to/images --model convnext_small.in12k --label-type detail --topk 5`
+* Ready for 0.8.10 pypi pre-release (final testing).
+
+### Jan 20, 2023
+* Add two convnext 12k -> 1k fine-tunes at 384x384
+  * `convnext_tiny.in12k_ft_in1k_384` - 85.1 @ 384
+  * `convnext_small.in12k_ft_in1k_384` - 86.2 @ 384
+
+* Push all MaxxViT weights to HF hub, and add new ImageNet-12k -> 1k fine-tunes for `rw` base MaxViT and CoAtNet 1/2 models
+
+|model                                                                                                                   |top1 |top5 |samples / sec  |Params (M)     |GMAC  |Act (M)|
+|------------------------------------------------------------------------------------------------------------------------|----:|----:|--------------:|--------------:|-----:|------:|
+|[maxvit_xlarge_tf_512.in21k_ft_in1k](https://huggingface.co/timm/maxvit_xlarge_tf_512.in21k_ft_in1k)                    |88.53|98.64|          21.76|         475.77|534.14|1413.22|
+|[maxvit_xlarge_tf_384.in21k_ft_in1k](https://huggingface.co/timm/maxvit_xlarge_tf_384.in21k_ft_in1k)                    |88.32|98.54|          42.53|         475.32|292.78| 668.76|
+|[maxvit_base_tf_512.in21k_ft_in1k](https://huggingface.co/timm/maxvit_base_tf_512.in21k_ft_in1k)                        |88.20|98.53|          50.87|         119.88|138.02| 703.99|
+|[maxvit_large_tf_512.in21k_ft_in1k](https://huggingface.co/timm/maxvit_large_tf_512.in21k_ft_in1k)                      |88.04|98.40|          36.42|         212.33|244.75| 942.15|
+|[maxvit_large_tf_384.in21k_ft_in1k](https://huggingface.co/timm/maxvit_large_tf_384.in21k_ft_in1k)                      |87.98|98.56|          71.75|         212.03|132.55| 445.84|
+|[maxvit_base_tf_384.in21k_ft_in1k](https://huggingface.co/timm/maxvit_base_tf_384.in21k_ft_in1k)                        |87.92|98.54|         104.71|         119.65| 73.80| 332.90|
+|[maxvit_rmlp_base_rw_384.sw_in12k_ft_in1k](https://huggingface.co/timm/maxvit_rmlp_base_rw_384.sw_in12k_ft_in1k)        |87.81|98.37|         106.55|         116.14| 70.97| 318.95|
+|[maxxvitv2_rmlp_base_rw_384.sw_in12k_ft_in1k](https://huggingface.co/timm/maxxvitv2_rmlp_base_rw_384.sw_in12k_ft_in1k)  |87.47|98.37|         149.49|         116.09| 72.98| 213.74|
+|[coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k)            |87.39|98.31|         160.80|          73.88| 47.69| 209.43|
+|[maxvit_rmlp_base_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/maxvit_rmlp_base_rw_224.sw_in12k_ft_in1k)        |86.89|98.02|         375.86|         116.14| 23.15|  92.64|
+|[maxxvitv2_rmlp_base_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/maxxvitv2_rmlp_base_rw_224.sw_in12k_ft_in1k)  |86.64|98.02|         501.03|         116.09| 24.20|  62.77|
+|[maxvit_base_tf_512.in1k](https://huggingface.co/timm/maxvit_base_tf_512.in1k)                                          |86.60|97.92|          50.75|         119.88|138.02| 703.99|
+|[coatnet_2_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_2_rw_224.sw_in12k_ft_in1k)                      |86.57|97.89|         631.88|          73.87| 15.09|  49.22|
+|[maxvit_large_tf_512.in1k](https://huggingface.co/timm/maxvit_large_tf_512.in1k)                                        |86.52|97.88|          36.04|         212.33|244.75| 942.15|
+|[coatnet_rmlp_2_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_rmlp_2_rw_224.sw_in12k_ft_in1k)            |86.49|97.90|         620.58|          73.88| 15.18|  54.78|
+|[maxvit_base_tf_384.in1k](https://huggingface.co/timm/maxvit_base_tf_384.in1k)                                          |86.29|97.80|         101.09|         119.65| 73.80| 332.90|
+|[maxvit_large_tf_384.in1k](https://huggingface.co/timm/maxvit_large_tf_384.in1k)                                        |86.23|97.69|          70.56|         212.03|132.55| 445.84|
+|[maxvit_small_tf_512.in1k](https://huggingface.co/timm/maxvit_small_tf_512.in1k)                                        |86.10|97.76|          88.63|          69.13| 67.26| 383.77|
+|[maxvit_tiny_tf_512.in1k](https://huggingface.co/timm/maxvit_tiny_tf_512.in1k)                                          |85.67|97.58|         144.25|          31.05| 33.49| 257.59|
+|[maxvit_small_tf_384.in1k](https://huggingface.co/timm/maxvit_small_tf_384.in1k)                                        |85.54|97.46|         188.35|          69.02| 35.87| 183.65|
+|[maxvit_tiny_tf_384.in1k](https://huggingface.co/timm/maxvit_tiny_tf_384.in1k)                                          |85.11|97.38|         293.46|          30.98| 17.53| 123.42|
+|[maxvit_large_tf_224.in1k](https://huggingface.co/timm/maxvit_large_tf_224.in1k)                                        |84.93|96.97|         247.71|         211.79| 43.68| 127.35|
+|[coatnet_rmlp_1_rw2_224.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_rmlp_1_rw2_224.sw_in12k_ft_in1k)          |84.90|96.96|        1025.45|          41.72|  8.11|  40.13|
+|[maxvit_base_tf_224.in1k](https://huggingface.co/timm/maxvit_base_tf_224.in1k)                                          |84.85|96.99|         358.25|         119.47| 24.04|  95.01|
+|[maxxvit_rmlp_small_rw_256.sw_in1k](https://huggingface.co/timm/maxxvit_rmlp_small_rw_256.sw_in1k)                      |84.63|97.06|         575.53|          66.01| 14.67|  58.38|
+|[coatnet_rmlp_2_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_rmlp_2_rw_224.sw_in1k)                              |84.61|96.74|         625.81|          73.88| 15.18|  54.78|
+|[maxvit_rmlp_small_rw_224.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_small_rw_224.sw_in1k)                        |84.49|96.76|         693.82|          64.90| 10.75|  49.30|
+|[maxvit_small_tf_224.in1k](https://huggingface.co/timm/maxvit_small_tf_224.in1k)                                        |84.43|96.83|         647.96|          68.93| 11.66|  53.17|
+|[maxvit_rmlp_tiny_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_tiny_rw_256.sw_in1k)                          |84.23|96.78|         807.21|          29.15|  6.77|  46.92|
+|[coatnet_1_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_1_rw_224.sw_in1k)                                        |83.62|96.38|         989.59|          41.72|  8.04|  34.60|
+|[maxvit_tiny_rw_224.sw_in1k](https://huggingface.co/timm/maxvit_tiny_rw_224.sw_in1k)                                    |83.50|96.50|        1100.53|          29.06|  5.11|  33.11|
+|[maxvit_tiny_tf_224.in1k](https://huggingface.co/timm/maxvit_tiny_tf_224.in1k)                                          |83.41|96.59|        1004.94|          30.92|  5.60|  35.78|
+|[coatnet_rmlp_1_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_rmlp_1_rw_224.sw_in1k)                              |83.36|96.45|        1093.03|          41.69|  7.85|  35.47|
+|[maxxvitv2_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxxvitv2_nano_rw_256.sw_in1k)                              |83.11|96.33|        1276.88|          23.70|  6.26|  23.05|
+|[maxxvit_rmlp_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxxvit_rmlp_nano_rw_256.sw_in1k)                        |83.03|96.34|        1341.24|          16.78|  4.37|  26.05|
+|[maxvit_rmlp_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_nano_rw_256.sw_in1k)                          |82.96|96.26|        1283.24|          15.50|  4.47|  31.92|
+|[maxvit_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_nano_rw_256.sw_in1k)                                    |82.93|96.23|        1218.17|          15.45|  4.46|  30.28|
+|[coatnet_bn_0_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_bn_0_rw_224.sw_in1k)                                  |82.39|96.19|        1600.14|          27.44|  4.67|  22.04|
+|[coatnet_0_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_0_rw_224.sw_in1k)                                        |82.39|95.84|        1831.21|          27.44|  4.43|  18.73|
+|[coatnet_rmlp_nano_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_rmlp_nano_rw_224.sw_in1k)                        |82.05|95.87|        2109.09|          15.15|  2.62|  20.34|
+|[coatnext_nano_rw_224.sw_in1k](https://huggingface.co/timm/coatnext_nano_rw_224.sw_in1k)                                |81.95|95.92|        2525.52|          14.70|  2.47|  12.80|
+|[coatnet_nano_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_nano_rw_224.sw_in1k)                                  |81.70|95.64|        2344.52|          15.14|  2.41|  15.41|
+|[maxvit_rmlp_pico_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_pico_rw_256.sw_in1k)                          |80.53|95.21|        1594.71|           7.52|  1.85|  24.86|
+
+### Jan 11, 2023
+* Update ConvNeXt ImageNet-12k pretrain series w/ two new fine-tuned weights (and pre FT `.in12k` tags)
+  * `convnext_nano.in12k_ft_in1k` - 82.3 @ 224, 82.9 @ 288  (previously released)
+  * `convnext_tiny.in12k_ft_in1k` - 84.2 @ 224, 84.5 @ 288
+  * `convnext_small.in12k_ft_in1k` - 85.2 @ 224, 85.3 @ 288
+
+### Jan 6, 2023
+* Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
+  * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
+  * `train.py /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
+* Cleanup some popular models to better support arg passthrough / merge with model configs, more to go.
+
+### Jan 5, 2023
+* ConvNeXt-V2 models and weights added to existing `convnext.py`
+  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](http://arxiv.org/abs/2301.00808)
+  * Reference impl: https://github.com/facebookresearch/ConvNeXt-V2 (NOTE: weights currently CC-BY-NC)
+
+### Dec 23, 2022 🎄☃
+* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
+  * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
+* Many more models updated to multi-weight and downloadable via HF hub now (convnext, efficientnet, mobilenet, vision_transformer*, beit)
+* More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
+* More ImageNet-12k (subset of 22k) pretrain models popping up:
+  * `efficientnet_b5.in12k_ft_in1k` - 85.9 @ 448x448
+  * `vit_medium_patch16_gap_384.in12k_ft_in1k` - 85.5 @ 384x384
+  * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 84.5 @ 256x256
+  * `convnext_nano.in12k_ft_in1k` - 82.9 @ 288x288
+
+### Dec 8, 2022
+* Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
+  * original source: https://github.com/baaivision/EVA
+
+| model                                     | top1 | param_count |  gmac | macts | hub                                     |
+|:------------------------------------------|-----:|------------:|------:|------:|:----------------------------------------|
+| eva_large_patch14_336.in22k_ft_in22k_in1k | 89.2 |       304.5 | 191.1 | 270.2 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_large_patch14_336.in22k_ft_in1k       | 88.7 |       304.5 | 191.1 | 270.2 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_large_patch14_196.in22k_ft_in22k_in1k | 88.6 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
+| eva_large_patch14_196.in22k_ft_in1k       | 87.9 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
+
+### Dec 6, 2022
+* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`.
   * original source: https://github.com/baaivision/EVA
   * paper: https://arxiv.org/abs/2211.07636
 
@@ -33,7 +176,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 | eva_giant_patch14_336.clip_ft_in1k       |   89.4 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
 | eva_giant_patch14_224.clip_ft_in1k       |   89.1 |        1012.6 |  267.2 |   192.6 | [link](https://huggingface.co/BAAI/EVA) |
 
-# Dec 5, 2022
+### Dec 5, 2022
 
 * Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`). Install with `pip install --pre timm`
   * vision_transformer, maxvit, convnext are the first three model impl w/ support
@@ -117,7 +260,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `maxxvit_rmlp_small_rw_256` - 84.6 @ 256, 84.9 @ 288 (G) -- could be trained better, hparams need tuning (uses ConvNeXt block, no BN)
   * `coatnet_rmlp_2_rw_224` - 84.6 @ 224, 85 @ 320  (T)
   * NOTE: official MaxVit weights (in1k) have been released at https://github.com/google-research/maxvit -- some extra work is needed to port and adapt since my impl was created independently of theirs and has a few small differences + the whole TF same padding fun.
-  
+
 ### Sept 23, 2022
 * LAION-2B CLIP image towers supported as pretrained backbones for fine-tune or features (no classifier)
   * vit_base_patch32_224_clip_laion2b
@@ -148,7 +291,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `coatnet_bn_0_rw_224` - 82.4  (T)
   * `maxvit_nano_rw_256` - 82.9 @ 256  (T)
   * `coatnet_rmlp_1_rw_224` - 83.4 @ 224, 84 @ 320  (T)
-  * `coatnet_1_rw_224` - 83.6 @ 224 (G) 
+  * `coatnet_1_rw_224` - 83.6 @ 224 (G)
   * (T) = TPU trained with `bits_and_tpu` branch training code, (G) = GPU trained
 * GCVit (weights adapted from https://github.com/NVlabs/GCVit, code 100% `timm` re-write for license purposes)
 * MViT-V2 (multi-scale vit, adapted from https://github.com/facebookresearch/mvit)
@@ -163,7 +306,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `convnext_atto_ols` - 75.9  @ 224, 77.2 @ 288
 
 ### Aug 5, 2022
-* More custom ConvNeXt smaller model defs with weights 
+* More custom ConvNeXt smaller model defs with weights
   * `convnext_femto` - 77.5 @ 224, 78.7 @ 288
   * `convnext_femto_ols` - 77.9  @ 224, 78.9 @ 288
   * `convnext_pico` - 79.5 @ 224, 80.4 @ 288
@@ -184,7 +327,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * `cs3sedarknet_x` - 82.2 @ 256, 82.7 @ 288
   * `cs3edgenet_x` - 82.2 @ 256, 82.7 @ 288
   * `cs3se_edgenet_x` - 82.8 @ 256, 83.5 @ 320
-* `cs3*` weights above all trained on TPU w/ `bits_and_tpu` branch. Thanks to TRC program! 
+* `cs3*` weights above all trained on TPU w/ `bits_and_tpu` branch. Thanks to TRC program!
 * Add output_stride=8 and 16 support to ConvNeXt (dilation)
 * deit3 models not being able to resize pos_emb fixed
 * Version 0.6.7 PyPi release (/w above bug fixes and new weighs since 0.6.5)
@@ -217,8 +360,8 @@ More models, more fixes
 * Hugging Face Hub support fixes verified, demo notebook TBA
 * Pretrained weights / configs can be loaded externally (ie from local disk) w/ support for head adaptation.
 * Add support to change image extensions scanned by `timm` datasets/readers. See (https://github.com/rwightman/pytorch-image-models/pull/1274#issuecomment-1178303103)
-* Default ConvNeXt LayerNorm impl to use `F.layer_norm(x.permute(0, 2, 3, 1), ...).permute(0, 3, 1, 2)` via `LayerNorm2d` in all cases. 
-  * a bit slower than previous custom impl on some hardware (ie Ampere w/ CL), but overall fewer regressions across wider HW / PyTorch version ranges. 
+* Default ConvNeXt LayerNorm impl to use `F.layer_norm(x.permute(0, 2, 3, 1), ...).permute(0, 3, 1, 2)` via `LayerNorm2d` in all cases.
+  * a bit slower than previous custom impl on some hardware (ie Ampere w/ CL), but overall fewer regressions across wider HW / PyTorch version ranges.
   * previous impl exists as `LayerNormExp2d` in `models/layers/norm.py`
 * Numerous bug fixes
 * Currently testing for imminent PyPi 0.6.x release
@@ -307,46 +450,6 @@ More models, more fixes
 * TinyNet models added by [rsomani95](https://github.com/rsomani95)
 * LCNet added via MobileNetV3 architecture
 
-### Nov 22, 2021
-* A number of updated weights anew new model defs
-  * `eca_halonext26ts` - 79.5 @ 256
-  * `resnet50_gn` (new) - 80.1 @ 224, 81.3 @ 288
-  * `resnet50` - 80.7 @ 224, 80.9 @ 288 (trained at 176, not replacing current a1 weights as default since these don't scale as well to higher res, [weights](https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50_a1h2_176-001a1197.pth))
-  * `resnext50_32x4d` - 81.1 @ 224, 82.0 @ 288
-  * `sebotnet33ts_256` (new) - 81.2 @ 224
-  * `lamhalobotnet50ts_256` - 81.5 @ 256
-  * `halonet50ts` - 81.7 @ 256
-  * `halo2botnet50ts_256` - 82.0 @ 256
-  * `resnet101` - 82.0 @ 224, 82.8 @ 288
-  * `resnetv2_101` (new) - 82.1 @ 224, 83.0 @ 288
-  * `resnet152` - 82.8 @ 224, 83.5 @ 288
-  * `regnetz_d8` (new) - 83.5 @ 256, 84.0 @ 320
-  * `regnetz_e8` (new) - 84.5 @ 256, 85.0 @ 320
-* `vit_base_patch8_224` (85.8 top-1) & `in21k` variant weights added thanks [Martins Bruveris](https://github.com/martinsbruveris)
-* Groundwork in for FX feature extraction thanks to [Alexander Soare](https://github.com/alexander-soare)
-  * models updated for tracing compatibility (almost full support with some distlled transformer exceptions)
-
-### Oct 19, 2021
-* ResNet strikes back (https://arxiv.org/abs/2110.00476) weights added, plus any extra training components used. Model weights and some more details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-rsb-weights)
-* BCE loss and Repeated Augmentation support for RSB paper
-* 4 series of ResNet based attention model experiments being added (implemented across byobnet.py/byoanet.py). These include all sorts of attention, from channel attn like SE, ECA to 2D QKV self-attention layers such as Halo, Bottlneck, Lambda. Details here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
-* Working implementations of the following 2D self-attention modules (likely to be differences from paper or eventual official impl):
-  * Halo (https://arxiv.org/abs/2103.12731)
-  * Bottleneck Transformer (https://arxiv.org/abs/2101.11605)
-  * LambdaNetworks (https://arxiv.org/abs/2102.08602)
-* A RegNetZ series of models with some attention experiments (being added to). These do not follow the paper (https://arxiv.org/abs/2103.06877) in any way other than block architecture, details of official models are not available. See more here (https://github.com/rwightman/pytorch-image-models/releases/tag/v0.1-attn-weights)
-* ConvMixer (https://openreview.net/forum?id=TVHS5Y4dNvM), CrossVit (https://arxiv.org/abs/2103.14899), and BeiT (https://arxiv.org/abs/2106.08254) architectures + weights added
-* freeze/unfreeze helpers by [Alexander Soare](https://github.com/alexander-soare)
-
-### Aug 18, 2021
-* Optimizer bonanza!
-  * Add LAMB and LARS optimizers, incl trust ratio clipping options. Tweaked to work properly in PyTorch XLA (tested on TPUs w/ `timm bits` [branch](https://github.com/rwightman/pytorch-image-models/tree/bits_and_tpu/timm/bits))
-  * Add MADGRAD from FB research w/ a few tweaks (decoupled decay option, step handling that works with PyTorch XLA)
-  * Some cleanup on all optimizers and factory. No more `.data`, a bit more consistency, unit tests for all!
-  * SGDP and AdamP still won't work with PyTorch XLA but others should (have yet to test Adabelief, Adafactor, Adahessian myself).
-* EfficientNet-V2 XL TF ported weights added, but they don't validate well in PyTorch (L is better). The pre-processing for the V2 TF training is a bit diff and the fine-tuned 21k -> 1k weights are very sensitive and less robust than the 1k weights.
-* Added PyTorch trained EfficientNet-V2 'Tiny' w/ GlobalContext attn weights. Only .1-.2 top-1 better than the SE so more of a curiosity for those interested.
-
 ## Introduction
 
 Py**T**orch **Im**age **M**odels (`timm`) is a collection of image models, layers, utilities, optimizers, schedulers, data-loaders / augmentations, and reference training / validation scripts that aim to pull together a wide variety of SOTA models with ability to reproduce ImageNet training results.
@@ -355,9 +458,7 @@ The work of many others is present here. I've tried to make sure all source mate
 
 ## Models
 
-All model architecture families include variants with pretrained weights. There are specific model variants without any weights, it is NOT a bug. Help training new or better weights is always appreciated. Here are some example [training hparams](https://rwightman.github.io/pytorch-image-models/training_hparam_examples) to get you started.
-
-A full version of the list below with source links can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/models/).
+All model architecture families include variants with pretrained weights. There are specific model variants without any weights, it is NOT a bug. Help training new or better weights is always appreciated.
 
 * Aggregating Nested Transformers - https://arxiv.org/abs/2105.12723
 * BEiT - https://arxiv.org/abs/2106.08254
@@ -367,6 +468,7 @@ A full version of the list below with source links can be found in the [document
 * CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
 * CoAtNet (Convolution and Attention) - https://arxiv.org/abs/2106.04803
 * ConvNeXt - https://arxiv.org/abs/2201.03545
+* ConvNeXt-V2 - http://arxiv.org/abs/2301.00808
 * ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
 * CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
 * DeiT - https://arxiv.org/abs/2012.12877
@@ -389,6 +491,8 @@ A full version of the list below with source links can be found in the [document
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
 * EVA - https://arxiv.org/abs/2211.07636
+* FlexiViT - https://arxiv.org/abs/2212.08013
+* FocalNet (Focal Modulation Networks) - https://arxiv.org/abs/2203.11926
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
 * GhostNet - https://arxiv.org/abs/1911.11907
 * gMLP - https://arxiv.org/abs/2105.08050
@@ -456,15 +560,15 @@ Several (less common) features that I often utilize in my projects are included.
 
 * All models have a common default configuration interface and API for
     * accessing/changing the classifier - `get_classifier` and `reset_classifier`
-    * doing a forward pass on just the features - `forward_features` (see [documentation](https://rwightman.github.io/pytorch-image-models/feature_extraction/))
+    * doing a forward pass on just the features - `forward_features` (see [documentation](https://huggingface.co/docs/timm/feature_extraction))
     * these makes it easy to write consistent network wrappers that work with any of the models
-* All models support multi-scale feature map extraction (feature pyramids) via create_model (see [documentation](https://rwightman.github.io/pytorch-image-models/feature_extraction/))
+* All models support multi-scale feature map extraction (feature pyramids) via create_model (see [documentation](https://huggingface.co/docs/timm/feature_extraction))
     * `create_model(name, features_only=True, out_indices=..., output_stride=...)`
     * `out_indices` creation arg specifies which feature maps to return, these indices are 0 based and generally correspond to the `C(i + 1)` feature level.
     * `output_stride` creation arg controls output stride of the network by using dilated convolutions. Most networks are stride 32 by default. Not all networks support this.
     * feature map channel counts, reduction level (stride) can be queried AFTER model creation via the `.feature_info` member
 * All models have a consistent pretrained weight loader that adapts last linear if necessary, and from 3 to 1 channel input if desired
-* High performance [reference training, validation, and inference scripts](https://rwightman.github.io/pytorch-image-models/scripts/) that work in several process/GPU modes:
+* High performance [reference training, validation, and inference scripts](https://huggingface.co/docs/timm/training_script) that work in several process/GPU modes:
     * NVIDIA DDP w/ a single GPU per process, multiple processes with APEX present (AMP mixed-precision optional)
     * PyTorch DistributedDataParallel w/ multi-gpu, single process (AMP disabled as it crashes when enabled)
     * PyTorch w/ single GPU single process (AMP optional)
@@ -491,7 +595,7 @@ Several (less common) features that I often utilize in my projects are included.
 * AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
 * AugMix w/ JSD loss (https://arxiv.org/abs/1912.02781), JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
-* DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382) 
+* DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382)
 * DropBlock (https://arxiv.org/abs/1810.12890)
 * Blur Pooling (https://arxiv.org/abs/1904.11486)
 * Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
@@ -514,23 +618,21 @@ Several (less common) features that I often utilize in my projects are included.
 
 ## Results
 
-Model validation results can be found in the [documentation](https://rwightman.github.io/pytorch-image-models/results/) and in the [results tables](results/README.md)
+Model validation results can be found in the [results tables](results/README.md)
 
 ## Getting Started (Documentation)
 
-My current [documentation](https://rwightman.github.io/pytorch-image-models/) for `timm` covers the basics.
-
-Hugging Face [`timm` docs](https://huggingface.co/docs/hub/timm) will be the documentation focus going forward and will eventually replace the `github.io` docs above.
+The official documentation can be found at https://huggingface.co/docs/hub/timm. Documentation contributions are welcome.
 
 [Getting Started with PyTorch Image Models (timm): A Practitioner’s Guide](https://towardsdatascience.com/getting-started-with-pytorch-image-models-timm-a-practitioners-guide-4e77b4bf9055) by [Chris Hughes](https://github.com/Chris-hughes10) is an extensive blog post covering many aspects of `timm` in detail.
 
-[timmdocs](http://timm.fast.ai/) is quickly becoming a much more comprehensive set of documentation for `timm`. A big thanks to [Aman Arora](https://github.com/amaarora) for his efforts creating timmdocs.
+[timmdocs](http://timm.fast.ai/) is an alternate set of documentation for `timm`. A big thanks to [Aman Arora](https://github.com/amaarora) for his efforts creating timmdocs.
 
 [paperswithcode](https://paperswithcode.com/lib/timm) is a good resource for browsing the models within `timm`.
 
 ## Train, Validation, Inference Scripts
 
-The root folder of the repository contains reference train, validation, and inference scripts that work with the included models and other features of this repository. They are adaptable for other datasets and use cases with a little hacking. See [documentation](https://rwightman.github.io/pytorch-image-models/scripts/) for some basics and [training hparams](https://rwightman.github.io/pytorch-image-models/training_hparam_examples) for some train examples that produce SOTA ImageNet results.
+The root folder of the repository contains reference train, validation, and inference scripts that work with the included models and other features of this repository. They are adaptable for other datasets and use cases with a little hacking. See [documentation](https://huggingface.co/docs/timm/training_script).
 
 ## Awesome PyTorch Resources
 

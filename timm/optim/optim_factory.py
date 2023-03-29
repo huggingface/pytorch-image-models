@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from timm.models.helpers import group_parameters
+from timm.models import group_parameters
 
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
@@ -18,6 +18,7 @@ from .adamp import AdamP
 from .adan import Adan
 from .lamb import Lamb
 from .lars import Lars
+from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
 from .nadam import Nadam
@@ -33,6 +34,12 @@ except ImportError:
     has_apex = False
 
 _logger = logging.getLogger(__name__)
+
+
+# optimizers to default to multi-tensor
+_DEFAULT_FOREACH = {
+    'lion',
+}
 
 
 def param_groups_weight_decay(
@@ -161,7 +168,8 @@ def optimizer_kwargs(cfg):
         opt=cfg.opt,
         lr=cfg.lr,
         weight_decay=cfg.weight_decay,
-        momentum=cfg.momentum)
+        momentum=cfg.momentum,
+    )
     if getattr(cfg, 'opt_eps', None) is not None:
         kwargs['eps'] = cfg.opt_eps
     if getattr(cfg, 'opt_betas', None) is not None:
@@ -170,6 +178,8 @@ def optimizer_kwargs(cfg):
         kwargs['layer_decay'] = cfg.layer_decay
     if getattr(cfg, 'opt_args', None) is not None:
         kwargs.update(cfg.opt_args)
+    if getattr(cfg, 'opt_foreach', None) is not None:
+        kwargs['foreach'] = cfg.opt_foreach
     return kwargs
 
 
@@ -190,6 +200,7 @@ def create_optimizer_v2(
         lr: Optional[float] = None,
         weight_decay: float = 0.,
         momentum: float = 0.9,
+        foreach: Optional[bool] = None,
         filter_bias_and_bn: bool = True,
         layer_decay: Optional[float] = None,
         param_group_fn: Optional[Callable] = None,
@@ -208,6 +219,7 @@ def create_optimizer_v2(
         lr: initial learning rate
         weight_decay: weight decay to apply in optimizer
         momentum:  momentum for momentum based optimizers (others may use betas via kwargs)
+        foreach: Enable / disable foreach (multi-tensor) operation if True / False. Choose safe default if None
         filter_bias_and_bn:  filter out bias, bn and other 1d params from weight decay
         **kwargs: extra optimizer specific kwargs to pass through
 
@@ -227,7 +239,8 @@ def create_optimizer_v2(
                 model_or_params,
                 weight_decay=weight_decay,
                 layer_decay=layer_decay,
-                no_weight_decay_list=no_weight_decay)
+                no_weight_decay_list=no_weight_decay,
+            )
             weight_decay = 0.
         elif weight_decay and filter_bias_and_bn:
             parameters = param_groups_weight_decay(model_or_params, weight_decay, no_weight_decay)
@@ -245,8 +258,15 @@ def create_optimizer_v2(
         assert has_apex and torch.cuda.is_available(), 'APEX and CUDA required for fused optimizers'
 
     opt_args = dict(weight_decay=weight_decay, **kwargs)
+
     if lr is not None:
         opt_args.setdefault('lr', lr)
+
+    if foreach is None:
+        if opt in _DEFAULT_FOREACH:
+            opt_args.setdefault('foreach', True)
+    else:
+        opt_args['foreach'] = foreach
 
     # basic SGD & related
     if opt_lower == 'sgd' or opt_lower == 'nesterov':
@@ -313,6 +333,8 @@ def create_optimizer_v2(
         optimizer = optim.RMSprop(parameters, alpha=0.9, momentum=momentum, **opt_args)
     elif opt_lower == 'rmsproptf':
         optimizer = RMSpropTF(parameters, alpha=0.9, momentum=momentum, **opt_args)
+    elif opt_lower == 'lion':
+        optimizer = Lion(parameters, **opt_args)
 
     # second order
     elif opt_lower == 'adahessian':

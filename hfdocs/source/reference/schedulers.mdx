@@ -1,0 +1,19 @@
+# Learning Rate Schedulers
+
+This page contains the API reference documentation for learning rate schedulers included in `timm`.
+
+## Schedulers
+
+### Factory functions
+
+[[autodoc]] timm.scheduler.scheduler_factory.create_scheduler
+[[autodoc]] timm.scheduler.scheduler_factory.create_scheduler_v2
+
+### Scheduler Classes
+
+[[autodoc]] timm.scheduler.cosine_lr.CosineLRScheduler
+[[autodoc]] timm.scheduler.multistep_lr.MultiStepLRScheduler
+[[autodoc]] timm.scheduler.plateau_lr.PlateauLRScheduler
+[[autodoc]] timm.scheduler.poly_lr.PolyLRScheduler
+[[autodoc]] timm.scheduler.step_lr.StepLRScheduler
+[[autodoc]] timm.scheduler.tanh_lr.TanhLRScheduler

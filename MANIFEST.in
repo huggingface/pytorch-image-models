@@ -1,2 +1,3 @@
-include timm/models/pruned/*.txt
-
+include timm/models/_pruned/*.txt
+include timm/data/_info/*.txt
+include timm/data/_info/*.json

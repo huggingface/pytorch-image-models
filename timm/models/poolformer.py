@@ -19,15 +19,15 @@ Modifications and additions for timm by / Copyright 2022, Ross Wightman
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
-import copy
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import DropPath, trunc_normal_, to_2tuple, ConvMlp, GroupNorm1
-from .registry import register_model
+from timm.layers import DropPath, trunc_normal_, to_2tuple, ConvMlp, GroupNorm1
+from ._builder import build_model_with_cfg
+from ._registry import register_model
+
+__all__ = ['PoolFormer']  # model_registry will add each entrypoint fn to this
 
 
 def _cfg(url='', **kwargs):

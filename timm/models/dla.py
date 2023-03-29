@@ -13,9 +13,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import create_classifier
-from .registry import register_model
+from timm.layers import create_classifier
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 
 __all__ = ['DLA']
 
@@ -359,10 +359,9 @@ class DLA(nn.Module):
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         if pre_logits:
-            return x.flatten(1)
-        else:
-            x = self.fc(x)
             return self.flatten(x)
+        x = self.fc(x)
+        return self.flatten(x)
 
     def forward(self, x):
         x = self.forward_features(x)

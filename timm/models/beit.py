@@ -61,11 +61,12 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from .helpers import build_model_with_cfg
-from .layers import PatchEmbed, Mlp, DropPath, trunc_normal_
-from .pretrained import generate_default_cfgs
-from .registry import register_model
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
+from ._builder import build_model_with_cfg
+from ._registry import generate_default_cfgs, register_model
 from .vision_transformer import checkpoint_filter_fn
+
+__all__ = ['Beit']
 
 
 def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
@@ -353,64 +354,76 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'beit_base_patch16_224.in22k_ft_in22k_in1k': _cfg(
-        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_224_pt22k_ft22kto1k.pth'),
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_224_pt22k_ft22kto1k.pth',
+        hf_hub_id='timm/'),
     'beit_base_patch16_384.in22k_ft_in22k_in1k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_384_pt22k_ft22kto1k.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=1.0,
     ),
     'beit_base_patch16_224.in22k_ft_in22k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_base_patch16_224_pt22k_ft22k.pth',
+        hf_hub_id='timm/',
         num_classes=21841,
     ),
     'beit_large_patch16_224.in22k_ft_in22k_in1k': _cfg(
-        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_224_pt22k_ft22kto1k.pth'),
+        url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_224_pt22k_ft22kto1k.pth',
+        hf_hub_id='timm/'),
     'beit_large_patch16_384.in22k_ft_in22k_in1k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_384_pt22k_ft22kto1k.pth',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=1.0,
     ),
     'beit_large_patch16_512.in22k_ft_in22k_in1k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_512_pt22k_ft22kto1k.pth',
+        hf_hub_id='timm/',
         input_size=(3, 512, 512), crop_pct=1.0,
     ),
     'beit_large_patch16_224.in22k_ft_in22k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beit/beit_large_patch16_224_pt22k_ft22k.pth',
+        hf_hub_id='timm/',
         num_classes=21841,
     ),
 
     'beitv2_base_patch16_224.in1k_ft_in22k_in1k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beitv2/beitv2_base_patch16_224_pt1k_ft21kto1k.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
     ),
     'beitv2_base_patch16_224.in1k_ft_in22k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beitv2/beitv2_base_patch16_224_pt1k_ft21k.pth',
-        num_classes=21841,
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
+        hf_hub_id='timm/',
+        num_classes=21841, mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
     ),
     'beitv2_large_patch16_224.in1k_ft_in22k_in1k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beitv2/beitv2_large_patch16_224_pt1k_ft21kto1k.pth',
-        crop_pct=0.95,
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
+        hf_hub_id='timm/',
+        crop_pct=0.95, mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
     ),
     'beitv2_large_patch16_224.in1k_ft_in22k': _cfg(
         url='https://conversationhub.blob.core.windows.net/beit-share-public/beitv2/beitv2_large_patch16_224_pt1k_ft21k.pth',
-        num_classes=21841,
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
+        hf_hub_id='timm/',
+        num_classes=21841, mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
     ),
 
     'eva_giant_patch14_224.clip_ft_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_clip_vis_enc_sz224_ftcls_89p1.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_clip_vis_enc_sz224_ftcls_89p1.pt',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0,
     ),
     'eva_giant_patch14_336.clip_ft_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_clip_vis_enc_sz336_ftcls_89p4.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_clip_vis_enc_sz336_ftcls_89p4.pt',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 336, 336), crop_pct=1.0, crop_mode='squash'),
     'eva_giant_patch14_336.m30m_ft_in22k_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_21k_1k_336px_psz14_ema_89p6.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_21k_1k_336px_psz14_ema_89p6.pt',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
         input_size=(3, 336, 336), crop_pct=1.0, crop_mode='squash'),
     'eva_giant_patch14_560.m30m_ft_in22k_in1k': _cfg(
-        hf_hub_id='BAAI/EVA', hf_hub_filename='eva_21k_1k_560px_psz14_ema_89p7.pt',
+        # hf_hub_id='BAAI/EVA', hf_hub_filename='eva_21k_1k_560px_psz14_ema_89p7.pt',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
         input_size=(3, 560, 560), crop_pct=1.0, crop_mode='squash'),
 })

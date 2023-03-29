@@ -11,10 +11,11 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import ClassifierHead, ConvNormAct, create_conv2d, get_norm_act_layer
-from .layers.helpers import to_3tuple
-from .registry import register_model
+from timm.layers import ClassifierHead, ConvNormAct, create_conv2d, get_norm_act_layer
+from timm.layers.helpers import to_3tuple
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
 
 __all__ = ['XceptionAligned']
 
@@ -215,7 +216,7 @@ class XceptionAligned(nn.Module):
             num_chs=self.num_features, reduction=curr_stride, module='blocks.' + str(len(self.blocks) - 1))]
         self.act = act_layer(inplace=True) if preact else nn.Identity()
         self.head = ClassifierHead(
-            in_chs=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            in_features=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

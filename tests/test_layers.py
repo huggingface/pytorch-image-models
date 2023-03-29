@@ -1,10 +1,7 @@
-import pytest
 import torch
 import torch.nn as nn
-import platform
-import os
 
-from timm.models.layers import create_act_layer, get_act_layer, set_layer_config
+from timm.layers import create_act_layer, set_layer_config
 
 
 class MLP(nn.Module):

@@ -19,9 +19,10 @@ import torch.nn as nn
 import torch.nn.parallel
 
 from timm.data import resolve_data_config
-from timm.models import create_model, is_model, list_models, set_fast_norm
+from timm.layers import set_fast_norm
+from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
-from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry
+from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs
 
 has_apex = False
 try:
@@ -107,12 +108,15 @@ parser.add_argument('--grad-checkpointing', action='store_true', default=False,
                     help='Enable gradient checkpointing through model blocks/stages')
 parser.add_argument('--amp', action='store_true', default=False,
                     help='use PyTorch Native AMP for mixed precision training. Overrides --precision arg.')
+parser.add_argument('--amp-dtype', default='float16', type=str,
+                    help='lower precision AMP dtype (default: float16). Overrides --precision arg if args.amp True.')
 parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
+parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
 
 # codegen (model compilation) options
 scripting_group = parser.add_mutually_exclusive_group()
@@ -122,7 +126,6 @@ scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None
                              help="Enable compilation w/ specified backend (default: inductor).")
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
                              help="Enable AOT Autograd optimization.")
-
 
 # train optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -167,19 +170,21 @@ def count_params(model: nn.Module):
 
 
 def resolve_precision(precision: str):
-    assert precision in ('amp', 'float16', 'bfloat16', 'float32')
-    use_amp = False
+    assert precision in ('amp', 'amp_bfloat16', 'float16', 'bfloat16', 'float32')
+    amp_dtype = None  # amp disabled
     model_dtype = torch.float32
     data_dtype = torch.float32
     if precision == 'amp':
-        use_amp = True
+        amp_dtype = torch.float16
+    elif precision == 'amp_bfloat16':
+        amp_dtype = torch.bfloat16
     elif precision == 'float16':
         model_dtype = torch.float16
         data_dtype = torch.float16
     elif precision == 'bfloat16':
         model_dtype = torch.bfloat16
         data_dtype = torch.bfloat16
-    return use_amp, model_dtype, data_dtype
+    return amp_dtype, model_dtype, data_dtype
 
 
 def profile_deepspeed(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
@@ -227,9 +232,12 @@ class BenchmarkRunner:
         self.model_name = model_name
         self.detail = detail
         self.device = device
-        self.use_amp, self.model_dtype, self.data_dtype = resolve_precision(precision)
+        self.amp_dtype, self.model_dtype, self.data_dtype = resolve_precision(precision)
         self.channels_last = kwargs.pop('channels_last', False)
-        self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=torch.float16) if self.use_amp else suppress
+        if self.amp_dtype is not None:
+            self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=self.amp_dtype)
+        else:
+            self.amp_autocast = suppress
 
         if fuser:
             set_jit_fuser(fuser)
@@ -242,6 +250,7 @@ class BenchmarkRunner:
             drop_rate=kwargs.pop('drop', 0.),
             drop_path_rate=kwargs.pop('drop_path', None),
             drop_block_rate=kwargs.pop('drop_block', None),
+            **kwargs.pop('model_kwargs', {}),
         )
         self.model.to(
             device=self.device,
@@ -559,7 +568,7 @@ def _try_run(
 def benchmark(args):
     if args.amp:
         _logger.warning("Overriding precision to 'amp' since --amp flag set.")
-        args.precision = 'amp'
+        args.precision = 'amp' if args.amp_dtype == 'float16' else '_'.join(['amp', args.amp_dtype])
     _logger.info(f'Benchmarking in {args.precision} precision. '
                  f'{"NHWC" if args.channels_last else "NCHW"} layout. '
                  f'torchscript {"enabled" if args.torchscript else "disabled"}')

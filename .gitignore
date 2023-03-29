@@ -106,9 +106,21 @@ output/
 *.tar
 *.pth
 *.pt
+*.torch
 *.gz
 Untitled.ipynb
 Testing notebook.ipynb
 
+
 # MacOS
 *.DS_Store
+
+# Root dir exclusions
+/*.csv
+/*.yaml
+/*.json
+/*.jpg
+/*.png
+/*.zip
+/*.tar.*
+

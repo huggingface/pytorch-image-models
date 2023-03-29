@@ -7,7 +7,6 @@ Official CoaT code at: https://github.com/mlpc-ucsd/CoaT
 
 Modified from timm/models/vision_transformer.py
 """
-from copy import deepcopy
 from functools import partial
 from typing import Tuple, List, Union
 
@@ -16,19 +15,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import build_model_with_cfg
-from .layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_
-from .registry import register_model
-from .layers import _assert
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert
+from ._builder import build_model_with_cfg
+from ._registry import register_model
 
-
-__all__ = [
-    "coat_tiny",
-    "coat_mini",
-    "coat_lite_tiny",
-    "coat_lite_mini",
-    "coat_lite_small"
-]
+__all__ = ['CoaT']
 
 
 def _cfg_coat(url='', **kwargs):

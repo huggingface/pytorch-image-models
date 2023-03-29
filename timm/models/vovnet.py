@@ -15,13 +15,15 @@ from typing import List
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .registry import register_model
-from .helpers import build_model_with_cfg, checkpoint_seq
-from .layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath,\
+from timm.layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath, \
     create_attn, create_norm_act_layer, get_norm_act_layer
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model
+
+__all__ = ['VovNet']  # model_registry will add each entrypoint fn to this
 
 
 # model cfgs adapted from https://github.com/youngwanLEE/vovnet-detectron2 &
@@ -179,8 +181,18 @@ class SequentialAppendList(nn.Sequential):
 class OsaBlock(nn.Module):
 
     def __init__(
-            self, in_chs, mid_chs, out_chs, layer_per_block, residual=False,
-            depthwise=False, attn='', norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path=None):
+            self,
+            in_chs,
+            mid_chs,
+            out_chs,
+            layer_per_block,
+            residual=False,
+            depthwise=False,
+            attn='',
+            norm_layer=BatchNormAct2d,
+            act_layer=nn.ReLU,
+            drop_path=None,
+    ):
         super(OsaBlock, self).__init__()
 
         self.residual = residual
@@ -230,9 +242,20 @@ class OsaBlock(nn.Module):
 class OsaStage(nn.Module):
 
     def __init__(
-            self, in_chs, mid_chs, out_chs, block_per_stage, layer_per_block, downsample=True,
-            residual=True, depthwise=False, attn='ese', norm_layer=BatchNormAct2d, act_layer=nn.ReLU,
-            drop_path_rates=None):
+            self,
+            in_chs,
+            mid_chs,
+            out_chs,
+            block_per_stage,
+            layer_per_block,
+            downsample=True,
+            residual=True,
+            depthwise=False,
+            attn='ese',
+            norm_layer=BatchNormAct2d,
+            act_layer=nn.ReLU,
+            drop_path_rates=None,
+    ):
         super(OsaStage, self).__init__()
         self.grad_checkpointing = False
 
@@ -268,16 +291,38 @@ class OsaStage(nn.Module):
 class VovNet(nn.Module):
 
     def __init__(
-            self, cfg, in_chans=3, num_classes=1000, global_pool='avg', drop_rate=0., stem_stride=4,
-            output_stride=32, norm_layer=BatchNormAct2d, act_layer=nn.ReLU, drop_path_rate=0.):
-        """ VovNet (v2)
+            self,
+            cfg,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='avg',
+            output_stride=32,
+            norm_layer=BatchNormAct2d,
+            act_layer=nn.ReLU,
+            drop_rate=0.,
+            drop_path_rate=0.,
+            **kwargs,
+    ):
+        """
+        Args:
+            cfg (dict): Model architecture configuration
+            in_chans (int): Number of input channels (default: 3)
+            num_classes (int): Number of classifier classes (default: 1000)
+            global_pool (str): Global pooling type (default: 'avg')
+            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
+            norm_layer (Union[str, nn.Module]): normalization layer
+            act_layer (Union[str, nn.Module]): activation layer
+            drop_rate (float): Dropout rate (default: 0.)
+            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
+            kwargs (dict): Extra kwargs overlayed onto cfg
         """
         super(VovNet, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        assert stem_stride in (4, 2)
         assert output_stride == 32  # FIXME support dilation
 
+        cfg = dict(cfg, **kwargs)
+        stem_stride = cfg.get("stem_stride", 4)
         stem_chs = cfg["stem_chs"]
         stage_conv_chs = cfg["stage_conv_chs"]
         stage_out_chs = cfg["stage_out_chs"]
@@ -305,9 +350,15 @@ class VovNet(nn.Module):
         for i in range(4):  # num_stages
             downsample = stem_stride == 2 or i > 0  # first stage has no stride/downsample if stem_stride is 4
             stages += [OsaStage(
-                in_ch_list[i], stage_conv_chs[i], stage_out_chs[i], block_per_stage[i], layer_per_block,
-                downsample=downsample, drop_path_rates=stage_dpr[i], **stage_args)
-            ]
+                in_ch_list[i],
+                stage_conv_chs[i],
+                stage_out_chs[i],
+                block_per_stage[i],
+                layer_per_block,
+                downsample=downsample,
+                drop_path_rates=stage_dpr[i],
+                **stage_args,
+            )]
             self.num_features = stage_out_chs[i]
             current_stride *= 2 if downsample else 1
             self.feature_info += [dict(num_chs=self.num_features, reduction=current_stride, module=f'stages.{i}')]
@@ -321,7 +372,6 @@ class VovNet(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, nn.Linear):
                 nn.init.zeros_(m.bias)
-
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
