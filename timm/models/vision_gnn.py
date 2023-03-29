@@ -2,6 +2,8 @@
 An implementation of ViG Model as defined in:
 Vision GNN: An Image is Worth Graph of Nodes.
 https://arxiv.org/abs/2206.00272
+The imagenet-21k pretrained weights:
+https://github.com/huawei-noah/Efficient-AI-Backbones/releases/download/pyramid-vig/pvig_m_im21k_90e.pth
 """
 import math
 import torch
@@ -10,9 +12,9 @@ import torch.nn.functional as F
 from torch.nn import Sequential as Seq
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .helpers import load_pretrained, build_model_with_cfg
-from .layers import DropPath, DyGraphConv2d
-from .layers.pos_embed import build_sincos2d_pos_embed
+from timm.layers import DropPath, DyGraphConv2d
+from timm.layers.pos_embed import build_sincos2d_pos_embed
+from .helpers import load_pretrained, build_model_with_cfgx
 from .registry import register_model
 from .fx_features import register_notrace_function, register_notrace_module
 
