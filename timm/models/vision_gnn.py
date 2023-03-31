@@ -13,7 +13,7 @@ from torch.nn import Sequential as Seq
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, DyGraphConv2d
-from timm.layers.pos_embed import build_sincos2d_pos_embed
+from timm.layers.pos_embed_sincos import build_sincos2d_pos_embed
 from .helpers import load_pretrained, build_model_with_cfgx
 from .registry import register_model
 from .fx_features import register_notrace_function, register_notrace_module
