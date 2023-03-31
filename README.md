@@ -25,7 +25,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
 ### March 31, 2023
-* Add EVA-02 MIM pretrained and fine-tuned weights, push to HF hub and update model cards for all EVA models. First model over 90%! 
+* Add EVA-02 MIM pretrained and fine-tuned weights, push to HF hub and update model cards for all EVA models. First model over 90% top-1 (99% top-5)! Check out the original code & weights at https://github.com/baaivision/EVA for more details on their work blending MIM, CLIP w/ many model, dataset, and train recipe tweaks.
 
 | model                                              |top1  |top5  |param_count|img_size|
 |----------------------------------------------------|------|------|-----------|--------|
@@ -515,6 +515,7 @@ All model architecture families include variants with pretrained weights. There 
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
 * EVA - https://arxiv.org/abs/2211.07636
+* EVA-02 - https://arxiv.org/abs/2303.11331
 * FlexiViT - https://arxiv.org/abs/2212.08013
 * FocalNet (Focal Modulation Networks) - https://arxiv.org/abs/2203.11926
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
