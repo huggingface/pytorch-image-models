@@ -51,11 +51,11 @@ if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
-        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge**', '*giant*', '*gigantic*',
-        'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
+        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
+        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
     NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*']
 else:
-    EXCLUDE_FILTERS = []
+    EXCLUDE_FILTERS = ['*enormous*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
