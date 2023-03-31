@@ -751,7 +751,7 @@ default_cfgs = generate_default_cfgs({
         #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA01_CLIP_g_14_plus_psz14_s11B.pt',
         num_classes=1024,
     ),
-    'eva02_base_patch14_clip_224.clip': _cfg(
+    'eva02_base_patch16_clip_224.clip': _cfg(
         #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_L_psz14_s4B.pt',
         num_classes=512,
     ),
