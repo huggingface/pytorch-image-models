@@ -1087,7 +1087,7 @@ default_cfgs = generate_default_cfgs({
         crop_pct=1.0, input_size=(3, 336, 336), crop_mode='squash'),
 
     'vit_base_patch32_clip_224.openai_ft_in12k_in1k': _cfg(
-        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k_in1k',
+        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k_in1k',  # FIXME weight exists, need to push
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD),
     'vit_base_patch32_clip_384.openai_ft_in12k_in1k': _cfg(
         hf_hub_id='timm/',
@@ -1148,7 +1148,7 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
 
     'vit_base_patch32_clip_224.laion2b_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',
+        #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',  # FIXME weight exists, need to push
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
         hf_hub_id='timm/',
@@ -1161,7 +1161,7 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
 
     'vit_base_patch32_clip_224.openai_ft_in12k': _cfg(
-        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',
+        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',  # FIXME weight exists, need to push
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.openai_ft_in12k': _cfg(
         hf_hub_id='timm/',
@@ -1175,7 +1175,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.laion2b': _cfg(
-        # hf_hub_id='laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
+        hf_hub_id='laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.laion2b': _cfg(
