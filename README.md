@@ -24,6 +24,30 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### March 31, 2023
+* Add EVA-02 MIM pretrained and fine-tuned weights, push to HF hub and update model cards for all EVA models. First model over 90%! 
+
+| model                                              |top1  |top5  |param_count|img_size|
+|----------------------------------------------------|------|------|-----------|--------|
+| [eva02_large_patch14_448.mim_m38m_ft_in22k_in1k](https://huggingface.co/timm/eva02_large_patch14_448.mim_m38m_ft_in1k) |90.054|99.042|305.08     |448     |
+| eva02_large_patch14_448.mim_in22k_ft_in22k_in1k    |89.946|99.01 |305.08     |448     |
+| eva_giant_patch14_560.m30m_ft_in22k_in1k           |89.792|98.992|1014.45    |560     |
+| eva02_large_patch14_448.mim_in22k_ft_in1k          |89.626|98.954|305.08     |448     |
+| eva02_large_patch14_448.mim_m38m_ft_in1k           |89.57 |98.918|305.08     |448     |
+| eva_giant_patch14_336.m30m_ft_in22k_in1k           |89.56 |98.956|1013.01    |336     |
+| eva_giant_patch14_336.clip_ft_in1k                 |89.466|98.82 |1013.01    |336     |
+| eva_large_patch14_336.in22k_ft_in22k_in1k          |89.214|98.854|304.53     |336     |
+| eva_giant_patch14_224.clip_ft_in1k                 |88.882|98.678|1012.56    |224     |
+| eva02_base_patch14_448.mim_in22k_ft_in22k_in1k     |88.692|98.722|87.12      |448     |
+| eva_large_patch14_336.in22k_ft_in1k                |88.652|98.722|304.53     |336     |
+| eva_large_patch14_196.in22k_ft_in22k_in1k          |88.592|98.656|304.14     |196     |
+| eva02_base_patch14_448.mim_in22k_ft_in1k           |88.23 |98.564|87.12      |448     |
+| eva_large_patch14_196.in22k_ft_in1k                |87.934|98.504|304.14     |196     |
+| eva02_small_patch14_336.mim_in22k_ft_in1k          |85.74 |97.614|22.13      |336     |
+| eva02_tiny_patch14_336.mim_in22k_ft_in1k           |80.658|95.524|5.76       |336     |
+
+* Multi-weight and HF hub for DeiT and MLP-Mixer based models
+
 ### March 22, 2023
 * More weights pushed to HF hub along with multi-weight support, including: `regnet.py`, `rexnet.py`, `byobnet.py`, `resnetv2.py`, `swin_transformer.py`, `swin_transformer_v2.py`, `swin_transformer_v2_cr.py`
 * Swin Transformer models support feature extraction (NCHW feat maps for `swinv2_cr_*`, and NHWC for all others) and spatial embedding outputs.

@@ -27,7 +27,7 @@ from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible,
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
-from .mlp import Mlp, GluMlp, GatedMlp, ConvMlp, GlobalResponseNormMlp
+from .mlp import Mlp, GluMlp, GatedMlp, SwiGLU, ConvMlp, GlobalResponseNormMlp
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
 from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm
 from .norm_act import BatchNormAct2d, GroupNormAct, GroupNorm1Act, LayerNormAct, LayerNormAct2d,\
@@ -37,8 +37,8 @@ from .patch_embed import PatchEmbed, resample_patch_embed
 from .pool2d_same import AvgPool2dSame, create_pool2d
 from .pos_embed import resample_abs_pos_embed
 from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_position_index, gen_relative_log_coords
-from .pos_embed_sincos import build_sincos2d_pos_embed, build_fourier_pos_embed, build_rotary_pos_embed, \
-    FourierEmbed, RotaryEmbedding
+from .pos_embed_sincos import pixel_freq_bands, freq_bands, build_sincos2d_pos_embed, build_fourier_pos_embed, \
+    build_rotary_pos_embed, apply_rot_embed, apply_rot_embed_cat, FourierEmbed, RotaryEmbedding, RotaryEmbeddingCat
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvNormAct

@@ -17,6 +17,7 @@ from .edgenext import *
 from .efficientformer import *
 from .efficientformer_v2 import *
 from .efficientnet import *
+from .eva import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
