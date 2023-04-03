@@ -24,6 +24,40 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### March 31, 2023
+* Add first ConvNext-XXLarge CLIP -> IN-1k fine-tune and IN-12k intermediate fine-tunes for convnext-base/large CLIP models.
+
+| model                                                                                                                |top1  |top5  |img_size|param_count|gmacs |macts |
+|----------------------------------------------------------------------------------------------------------------------|------|------|--------|-----------|------|------|
+| [convnext_xxlarge.clip_laion2b_soup_ft_in1k](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup_ft_in1k) |88.612|98.704|256     |846.47     |198.09|124.45|
+| convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384                                                               |88.312|98.578|384     |200.13     |101.11|126.74|
+| convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_320                                                               |87.968|98.47 |320     |200.13     |70.21 |88.02 |
+| convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384                                                                  |87.138|98.212|384     |88.59      |45.21 |84.49 |
+| convnext_base.clip_laion2b_augreg_ft_in12k_in1k                                                                      |86.344|97.97 |256     |88.59      |20.09 |37.55 |
+
+* Add EVA-02 MIM pretrained and fine-tuned weights, push to HF hub and update model cards for all EVA models. First model over 90% top-1 (99% top-5)! Check out the original code & weights at https://github.com/baaivision/EVA for more details on their work blending MIM, CLIP w/ many model, dataset, and train recipe tweaks.
+
+| model                                              |top1  |top5  |param_count|img_size|
+|----------------------------------------------------|------|------|-----------|--------|
+| [eva02_large_patch14_448.mim_m38m_ft_in22k_in1k](https://huggingface.co/timm/eva02_large_patch14_448.mim_m38m_ft_in1k) |90.054|99.042|305.08     |448     |
+| eva02_large_patch14_448.mim_in22k_ft_in22k_in1k    |89.946|99.01 |305.08     |448     |
+| eva_giant_patch14_560.m30m_ft_in22k_in1k           |89.792|98.992|1014.45    |560     |
+| eva02_large_patch14_448.mim_in22k_ft_in1k          |89.626|98.954|305.08     |448     |
+| eva02_large_patch14_448.mim_m38m_ft_in1k           |89.57 |98.918|305.08     |448     |
+| eva_giant_patch14_336.m30m_ft_in22k_in1k           |89.56 |98.956|1013.01    |336     |
+| eva_giant_patch14_336.clip_ft_in1k                 |89.466|98.82 |1013.01    |336     |
+| eva_large_patch14_336.in22k_ft_in22k_in1k          |89.214|98.854|304.53     |336     |
+| eva_giant_patch14_224.clip_ft_in1k                 |88.882|98.678|1012.56    |224     |
+| eva02_base_patch14_448.mim_in22k_ft_in22k_in1k     |88.692|98.722|87.12      |448     |
+| eva_large_patch14_336.in22k_ft_in1k                |88.652|98.722|304.53     |336     |
+| eva_large_patch14_196.in22k_ft_in22k_in1k          |88.592|98.656|304.14     |196     |
+| eva02_base_patch14_448.mim_in22k_ft_in1k           |88.23 |98.564|87.12      |448     |
+| eva_large_patch14_196.in22k_ft_in1k                |87.934|98.504|304.14     |196     |
+| eva02_small_patch14_336.mim_in22k_ft_in1k          |85.74 |97.614|22.13      |336     |
+| eva02_tiny_patch14_336.mim_in22k_ft_in1k           |80.658|95.524|5.76       |336     |
+
+* Multi-weight and HF hub for DeiT and MLP-Mixer based models
+
 ### March 22, 2023
 * More weights pushed to HF hub along with multi-weight support, including: `regnet.py`, `rexnet.py`, `byobnet.py`, `resnetv2.py`, `swin_transformer.py`, `swin_transformer_v2.py`, `swin_transformer_v2_cr.py`
 * Swin Transformer models support feature extraction (NCHW feat maps for `swinv2_cr_*`, and NHWC for all others) and spatial embedding outputs.
@@ -491,6 +525,7 @@ All model architecture families include variants with pretrained weights. There 
     * Single-Path NAS - https://arxiv.org/abs/1904.02877
     * TinyNet - https://arxiv.org/abs/2010.14819
 * EVA - https://arxiv.org/abs/2211.07636
+* EVA-02 - https://arxiv.org/abs/2303.11331
 * FlexiViT - https://arxiv.org/abs/2212.08013
 * FocalNet (Focal Modulation Networks) - https://arxiv.org/abs/2203.11926
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959

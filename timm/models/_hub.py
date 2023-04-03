@@ -316,9 +316,17 @@ def generate_readme(model_card: dict, model_name: str):
     readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
     if 'details' in model_card and 'Dataset' in model_card['details']:
         readme_text += 'datasets:\n'
-        readme_text += f"- {model_card['details']['Dataset'].lower()}\n"
+        if isinstance(model_card['details']['Dataset'], (tuple, list)):
+            for d in model_card['details']['Dataset']:
+                readme_text += f"- {d.lower()}\n"
+        else:
+            readme_text += f"- {model_card['details']['Dataset'].lower()}\n"
         if 'Pretrain Dataset' in model_card['details']:
-            readme_text += f"- {model_card['details']['Pretrain Dataset'].lower()}\n"
+            if isinstance(model_card['details']['Pretrain Dataset'], (tuple, list)):
+                for d in model_card['details']['Pretrain Dataset']:
+                    readme_text += f"- {d.lower()}\n"
+            else:
+                readme_text += f"- {model_card['details']['Pretrain Dataset'].lower()}\n"
     readme_text += "---\n"
     readme_text += f"# Model card for {model_name}\n"
     if 'description' in model_card:
