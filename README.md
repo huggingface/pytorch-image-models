@@ -24,6 +24,18 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### April 5, 2023
+* ALL ResNet models pushed to Hugging Face Hub with multi-weight support
+  * All past `timm` trained weights added with recipe based tags to differentiate
+  * All ResNet strikes back A1/A2/A3 (seed 0) and R50 example B/C1/C2/D weights available
+  * Add torchvision v2 recipe weights to existing torchvision originals
+  * See comparison table in https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k_ft_in1k_288#model-comparison
+* New ImageNet-12k + ImageNet-1k fine-tunes available for a few anti-aliased ResNet models
+  * `resnetaa50d.sw_in12k_ft_in1k` - 81.7 @ 224, 82.6 @ 288
+  * `resnetaa101d.sw_in12k_ft_in1k` - 83.5 @ 224, 84.1 @ 288
+  * `seresnextaa101d_32x8d.sw_in12k_ft_in1k` - 86.0 @ 224, 86.5 @ 288 
+  * `seresnextaa101d_32x8d.sw_in12k_ft_in1k_288` - 86.5 @ 288, 86.7 @ 320
+
 ### March 31, 2023
 * Add first ConvNext-XXLarge CLIP -> IN-1k fine-tune and IN-12k intermediate fine-tunes for convnext-base/large CLIP models.
 
