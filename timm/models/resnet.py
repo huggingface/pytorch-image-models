@@ -1052,7 +1052,7 @@ default_cfgs = generate_default_cfgs({
         first_conv='conv1.0', crop_pct=0.95, test_crop_pct=1.0),
     'seresnextaa101d_32x8d.sw_in12k_ft_in1k_288': _ttcfg(
         hf_hub_id='timm/',
-        crop_pct=0.95, input_size=(3, 288, 288), test_input_size=(3, 320, 320), test_crop_pct=1.0,
+        crop_pct=0.95, input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), test_crop_pct=1.0,
         first_conv='conv1.0'),
     'seresnextaa101d_32x8d.sw_in12k_ft_in1k': _ttcfg(
         hf_hub_id='timm/',
