@@ -709,116 +709,116 @@ default_cfgs = generate_default_cfgs({
 def swinv2_tiny_window16_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=16, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_tiny_window16_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=16, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_tiny_window16_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_tiny_window8_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=8, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_tiny_window8_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=8, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_tiny_window8_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_small_window16_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=16, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_small_window16_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=16, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_small_window16_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_small_window8_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=8, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_small_window8_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=8, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_small_window8_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window16_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window16_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer_v2(
+        'swinv2_base_window16_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window8_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=8, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window8_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=8, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer_v2(
+        'swinv2_base_window8_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window12_192(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window12_192', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer_v2(
+        'swinv2_base_window12_192', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window12to16_192to256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_base_window12to16_192to256', pretrained=pretrained, **model_kwargs)
+        'swinv2_base_window12to16_192to256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window12to24_192to384(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=24, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_base_window12to24_192to384', pretrained=pretrained, **model_kwargs)
+        'swinv2_base_window12to24_192to384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_large_window12_192(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer_v2('swinv2_large_window12_192', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer_v2(
+        'swinv2_large_window12_192', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_large_window12to16_192to256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=16, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_large_window12to16_192to256', pretrained=pretrained, **model_kwargs)
+        'swinv2_large_window12to16_192to256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_large_window12to24_192to384(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=24, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_large_window12to24_192to384', pretrained=pretrained, **model_kwargs)
+        'swinv2_large_window12to24_192to384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 register_model_deprecations(__name__, {

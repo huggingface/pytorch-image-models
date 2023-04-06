@@ -701,84 +701,81 @@ default_cfgs = generate_default_cfgs({
 def swin_tiny_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-T @ 224x224, trained ImageNet-1k
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_tiny_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer(
+        'swin_tiny_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_small_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-S @ 224x224
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_small_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer(
+        'swin_small_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_base_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-B @ 224x224
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer('swin_base_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer(
+        'swin_base_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_base_patch4_window12_384(pretrained=False, **kwargs):
     """ Swin-B @ 384x384
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer('swin_base_patch4_window12_384', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer(
+        'swin_base_patch4_window12_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_large_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-L @ 224x224
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer('swin_large_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer(
+        'swin_large_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_large_patch4_window12_384(pretrained=False, **kwargs):
     """ Swin-L @ 384x384
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer('swin_large_patch4_window12_384', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer(
+        'swin_large_patch4_window12_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_s3_tiny_224(pretrained=False, **kwargs):
     """ Swin-S3-T @ 224x224, https://arxiv.org/abs/2111.14725
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2),
-        num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_s3_tiny_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_tiny_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_s3_small_224(pretrained=False, **kwargs):
     """ Swin-S3-S @ 224x224, https://arxiv.org/abs/2111.14725
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2),
-        num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_s3_small_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_small_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_s3_base_224(pretrained=False, **kwargs):
     """ Swin-S3-B @ 224x224, https://arxiv.org/abs/2111.14725
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2),
-        num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_s3_base_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_base_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 register_model_deprecations(__name__, {

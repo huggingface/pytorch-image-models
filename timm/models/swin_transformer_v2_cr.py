@@ -838,25 +838,23 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def swinv2_cr_tiny_384(pretrained=False, **kwargs):
     """Swin-T V2 CR @ 384x384, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 6, 2),
         num_heads=(3, 6, 12, 24),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_tiny_384', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_tiny_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_tiny_224(pretrained=False, **kwargs):
     """Swin-T V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 6, 2),
         num_heads=(3, 6, 12, 24),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_tiny_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_tiny_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -864,176 +862,160 @@ def swinv2_cr_tiny_ns_224(pretrained=False, **kwargs):
     """Swin-T V2 CR @ 224x224, trained ImageNet-1k w/ extra stage norms.
     ** Experimental, may make default if results are improved. **
     """
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 6, 2),
         num_heads=(3, 6, 12, 24),
         extra_norm_stage=True,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_tiny_ns_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_tiny_ns_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_small_384(pretrained=False, **kwargs):
     """Swin-S V2 CR @ 384x384, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
         num_heads=(3, 6, 12, 24),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_small_384', pretrained=pretrained, **model_kwargs
-    )
+    return _create_swin_transformer_v2_cr('swinv2_cr_small_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_small_224(pretrained=False, **kwargs):
     """Swin-S V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
         num_heads=(3, 6, 12, 24),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_small_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_small_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_small_ns_224(pretrained=False, **kwargs):
     """Swin-S V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
         num_heads=(3, 6, 12, 24),
         extra_norm_stage=True,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_small_ns_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_small_ns_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_small_ns_256(pretrained=False, **kwargs):
     """Swin-S V2 CR @ 256x256, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
         num_heads=(3, 6, 12, 24),
         extra_norm_stage=True,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_small_ns_256', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_small_ns_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_base_384(pretrained=False, **kwargs):
     """Swin-B V2 CR @ 384x384, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=128,
         depths=(2, 2, 18, 2),
         num_heads=(4, 8, 16, 32),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_base_384', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_base_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_base_224(pretrained=False, **kwargs):
     """Swin-B V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=128,
         depths=(2, 2, 18, 2),
         num_heads=(4, 8, 16, 32),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_base_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_base_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_base_ns_224(pretrained=False, **kwargs):
     """Swin-B V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=128,
         depths=(2, 2, 18, 2),
         num_heads=(4, 8, 16, 32),
         extra_norm_stage=True,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_base_ns_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_base_ns_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_large_384(pretrained=False, **kwargs):
     """Swin-L V2 CR @ 384x384, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=192,
         depths=(2, 2, 18, 2),
         num_heads=(6, 12, 24, 48),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_large_384', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_large_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_large_224(pretrained=False, **kwargs):
     """Swin-L V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=192,
         depths=(2, 2, 18, 2),
         num_heads=(6, 12, 24, 48),
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_large_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_large_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_huge_384(pretrained=False, **kwargs):
     """Swin-H V2 CR @ 384x384, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=352,
         depths=(2, 2, 18, 2),
         num_heads=(11, 22, 44, 88),  # head count not certain for Huge, 384 & 224 trying diff values
         extra_norm_period=6,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_huge_384', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_huge_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_huge_224(pretrained=False, **kwargs):
     """Swin-H V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=352,
         depths=(2, 2, 18, 2),
         num_heads=(8, 16, 32, 64),  # head count not certain for Huge, 384 & 224 trying diff values
         extra_norm_period=6,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_huge_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_huge_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_giant_384(pretrained=False, **kwargs):
     """Swin-G V2 CR @ 384x384, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=512,
         depths=(2, 2, 42, 2),
         num_heads=(16, 32, 64, 128),
         extra_norm_period=6,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_giant_384', pretrained=pretrained, **model_kwargs
-    )
+    return _create_swin_transformer_v2_cr('swinv2_cr_giant_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_cr_giant_224(pretrained=False, **kwargs):
     """Swin-G V2 CR @ 224x224, trained ImageNet-1k"""
-    model_kwargs = dict(
+    model_args = dict(
         embed_dim=512,
         depths=(2, 2, 42, 2),
         num_heads=(16, 32, 64, 128),
         extra_norm_period=6,
-        **kwargs
     )
-    return _create_swin_transformer_v2_cr('swinv2_cr_giant_224', pretrained=pretrained, **model_kwargs)
+    return _create_swin_transformer_v2_cr('swinv2_cr_giant_224', pretrained=pretrained, **dict(model_args, **kwargs))

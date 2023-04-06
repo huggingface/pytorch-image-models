@@ -774,33 +774,30 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def eva_giant_patch14_224(pretrained=False, **kwargs):
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408, **kwargs)
-    model = _create_eva('eva_giant_patch14_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
+    model = _create_eva('eva_giant_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva_giant_patch14_336(pretrained=False, **kwargs):
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408, **kwargs)
-    model = _create_eva('eva_giant_patch14_336', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
+    model = _create_eva('eva_giant_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva_giant_patch14_560(pretrained=False, **kwargs):
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
-    model_kwargs = dict(
-        patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408, **kwargs)
-    model = _create_eva('eva_giant_patch14_560', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
+    model = _create_eva('eva_giant_patch14_560', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_tiny_patch14_224(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=14,
         embed_dim=192,
@@ -811,13 +808,13 @@ def eva02_tiny_patch14_224(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_tiny_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_tiny_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_small_patch14_224(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=14,
         embed_dim=384,
@@ -828,13 +825,13 @@ def eva02_small_patch14_224(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_small_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_small_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_base_patch14_224(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=14,
         embed_dim=768,
@@ -847,13 +844,13 @@ def eva02_base_patch14_224(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_base_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_base_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_large_patch14_224(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=14,
         embed_dim=1024,
@@ -866,13 +863,13 @@ def eva02_large_patch14_224(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_large_patch14_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_large_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_tiny_patch14_336(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=336,
         patch_size=14,
         embed_dim=192,
@@ -883,13 +880,13 @@ def eva02_tiny_patch14_336(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_tiny_patch14_336', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_tiny_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_small_patch14_336(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=336,
         patch_size=14,
         embed_dim=384,
@@ -900,13 +897,13 @@ def eva02_small_patch14_336(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_small_patch14_336', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_small_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_base_patch14_448(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=448,
         patch_size=14,
         embed_dim=768,
@@ -919,13 +916,13 @@ def eva02_base_patch14_448(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_base_patch14_448', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_base_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_large_patch14_448(pretrained=False, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         img_size=448,
         patch_size=14,
         embed_dim=1024,
@@ -938,14 +935,14 @@ def eva02_large_patch14_448(pretrained=False, **kwargs):
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
     )
-    model = _create_eva('eva02_large_patch14_448', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_large_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
     # A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=16,
         embed_dim=768,
@@ -960,14 +957,14 @@ def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
         ref_feat_shape=(16, 16),  # 224/14
         global_pool='token',
     )
-    model = _create_eva('eva02_base_patch16_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_base_patch16_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_large_patch14_clip_224(pretrained=False, **kwargs):
     # A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=14,
         embed_dim=1024,
@@ -982,14 +979,14 @@ def eva02_large_patch14_clip_224(pretrained=False, **kwargs):
         ref_feat_shape=(16, 16),  # 224/14
         global_pool='token',
     )
-    model = _create_eva('eva02_large_patch14_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_large_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs):
     # A EVA-CLIP specific variant that uses residual post-norm in blocks
-    model_kwargs = dict(
+    model_args = dict(
         img_size=224,
         patch_size=14,
         embed_dim=1792,
@@ -999,5 +996,5 @@ def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs):
         use_post_norm=True,
         global_pool='token',
     )
-    model = _create_eva('eva02_enormous_patch14_clip_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    model = _create_eva('eva02_enormous_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
