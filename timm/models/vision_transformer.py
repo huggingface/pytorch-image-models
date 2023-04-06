@@ -41,7 +41,7 @@ from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_,
     resample_abs_pos_embed, RmsNorm
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
-from ._registry import generate_default_cfgs, register_model
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to this
 
@@ -1830,3 +1830,27 @@ def vit_huge_patch14_xp_224(pretrained=False, **kwargs):
     model = _create_vision_transformer(
         'vit_huge_patch14_xp_224', pretrained=pretrained, **dict(model_kwargs, **kwargs))
     return model
+
+
+register_model_deprecations(__name__, {
+    'vit_tiny_patch16_224_in21k': 'vit_tiny_patch16_224.augreg_in21k',
+    'vit_small_patch32_224_in21k': 'vit_small_patch32_224.augreg_in21k',
+    'vit_small_patch16_224_in21k': 'vit_small_patch16_224.augreg_in21k',
+    'vit_base_patch32_224_in21k': 'vit_base_patch32_224.augreg_in21k',
+    'vit_base_patch16_224_in21k': 'vit_base_patch16_224.augreg_in21k',
+    'vit_base_patch8_224_in21k': 'vit_base_patch8_224.augreg_in21k',
+    'vit_large_patch32_224_in21k': 'vit_large_patch32_224.orig_in21k',
+    'vit_large_patch16_224_in21k': 'vit_large_patch16_224.augreg_in21k',
+    'vit_huge_patch14_224_in21k': 'vit_huge_patch14_224.orig_in21k',
+    'vit_base_patch32_224_sam': 'vit_base_patch32_224.sam',
+    'vit_base_patch16_224_sam': 'vit_base_patch16_224.sam',
+    'vit_small_patch16_224_dino': 'vit_small_patch16_224.dino',
+    'vit_small_patch8_224_dino': 'vit_small_patch8_224.dino',
+    'vit_base_patch16_224_dino': 'vit_base_patch16_224.dino',
+    'vit_base_patch8_224_dino': 'vit_base_patch8_224.dino',
+    'vit_base_patch16_224_miil_in21k': 'vit_base_patch16_224_miil.in21k',
+    'vit_base_patch32_224_clip_laion2b': 'vit_base_patch32_clip_224.laion2b',
+    'vit_large_patch14_224_clip_laion2b': 'vit_large_patch14_clip_224.laion2b',
+    'vit_huge_patch14_224_clip_laion2b': 'vit_huge_patch14_clip_224.laion2b',
+    'vit_giant_patch14_224_clip_laion2b': 'vit_giant_patch14_clip_224.laion2b',
+})

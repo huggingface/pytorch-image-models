@@ -20,7 +20,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import StdConv2dSame, StdConv2d, to_2tuple
-from ._registry import generate_default_cfgs, register_model
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
 from .vision_transformer import _create_vision_transformer
@@ -318,3 +318,13 @@ def vit_base_resnet50d_224(pretrained=False, **kwargs):
     model = _create_vision_transformer_hybrid(
         'vit_base_resnet50d_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
     return model
+
+
+register_model_deprecations(__name__, {
+    'vit_tiny_r_s16_p8_224_in21k': 'vit_tiny_r_s16_p8_224.augreg_in21k',
+    'vit_small_r26_s32_224_in21k': 'vit_small_r26_s32_224.augreg_in21k',
+    'vit_base_r50_s16_224_in21k': 'vit_base_r50_s16_224.orig_in21k',
+    'vit_base_resnet50_224_in21k': 'vit_base_r50_s16_224.orig_in21k',
+    'vit_large_r50_s32_224_in21k': 'vit_large_r50_s32_224.augreg_in21k',
+    'vit_base_resnet50_384': 'vit_base_r50_s16_384.orig_in21k_ft_in1k'
+})
