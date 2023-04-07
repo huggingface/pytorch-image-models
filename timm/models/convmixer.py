@@ -42,8 +42,18 @@ class Residual(nn.Module):
 
 class ConvMixer(nn.Module):
     def __init__(
-            self, dim, depth, kernel_size=9, patch_size=7, in_chans=3, num_classes=1000, global_pool='avg',
-            act_layer=nn.GELU, **kwargs):
+            self,
+            dim,
+            depth,
+            kernel_size=9,
+            patch_size=7,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='avg',
+            drop_rate=0.,
+            act_layer=nn.GELU,
+            **kwargs,
+    ):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = dim
@@ -67,6 +77,7 @@ class ConvMixer(nn.Module):
             ) for i in range(depth)]
         )
         self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(dim, num_classes) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
@@ -98,6 +109,7 @@ class ConvMixer(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.pooling(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

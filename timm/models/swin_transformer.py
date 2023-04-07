@@ -181,7 +181,7 @@ class SwinTransformerBlock(nn.Module):
             shift_size: int = 0,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
-            drop: float = 0.,
+            proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
             act_layer: Callable = nn.GELU,
@@ -197,7 +197,7 @@ class SwinTransformerBlock(nn.Module):
             shift_size: Shift size for SW-MSA.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop: Dropout rate.
+            proj_drop: Dropout rate.
             attn_drop: Attention dropout rate.
             drop_path: Stochastic depth rate.
             act_layer: Activation layer.
@@ -223,7 +223,7 @@ class SwinTransformerBlock(nn.Module):
             window_size=to_2tuple(self.window_size),
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -232,7 +232,7 @@ class SwinTransformerBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
 
         if self.shift_size > 0:
@@ -346,7 +346,7 @@ class SwinTransformerStage(nn.Module):
             window_size: _int_or_tuple_2_t = 7,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
-            drop: float = 0.,
+            proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: Union[List[float], float] = 0.,
             norm_layer: Callable = nn.LayerNorm,
@@ -362,7 +362,7 @@ class SwinTransformerStage(nn.Module):
             window_size: Local window size.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop: Dropout rate.
+            proj_drop: Projection dropout rate.
             attn_drop: Attention dropout rate.
             drop_path: Stochastic depth rate.
             norm_layer: Normalization layer.
@@ -396,7 +396,7 @@ class SwinTransformerStage(nn.Module):
                 shift_size=0 if (i % 2 == 0) else window_size // 2,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                drop=drop,
+                proj_drop=proj_drop,
                 attn_drop=attn_drop,
                 drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 norm_layer=norm_layer,
@@ -435,6 +435,7 @@ class SwinTransformer(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.1,
             norm_layer: Union[str, Callable] = nn.LayerNorm,
@@ -508,7 +509,7 @@ class SwinTransformer(nn.Module):
                 window_size=window_size[i],
                 mlp_ratio=mlp_ratio[i],
                 qkv_bias=qkv_bias,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,

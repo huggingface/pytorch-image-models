@@ -21,47 +21,9 @@ from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdap
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._manipulate import named_apply, checkpoint_seq
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['EdgeNeXt']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
-        'crop_pct': 0.9, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.0', 'classifier': 'head.fc',
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    edgenext_xx_small=_cfg(
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_xx_small.pth",
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    edgenext_x_small=_cfg(
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_x_small.pth",
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    # edgenext_small=_cfg(
-    #     url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_small.pth"),
-    edgenext_small=_cfg(  # USI weights
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.1/edgenext_small_usi.pth",
-        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
-    ),
-    # edgenext_base=_cfg(
-    #     url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.2/edgenext_base_usi.pth"),
-    edgenext_base=_cfg(  # USI weights
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.2/edgenext_base_usi.pth",
-        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
-    ),
-
-    edgenext_small_rw=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/edgenext_small_rw-sw-b00041bb.pth',
-        test_input_size=(3, 320, 320), test_crop_pct=1.0,
-    ),
-)
 
 
 @register_notrace_module  # reason: FX can't symbolically trace torch.arange in forward method
@@ -517,6 +479,43 @@ def _create_edgenext(variant, pretrained=False, **kwargs):
         feature_cfg=dict(out_indices=(0, 1, 2, 3), flatten_sequential=True),
         **kwargs)
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
+        'crop_pct': 0.9, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.0', 'classifier': 'head.fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'edgenext_xx_small.in1k': _cfg(
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_xx_small.pth",
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'edgenext_x_small.in1k': _cfg(
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_x_small.pth",
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'edgenext_small.usi_in1k': _cfg(  # USI weights
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.1/edgenext_small_usi.pth",
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
+    ),
+    'edgenext_base.usi_in1k': _cfg(  # USI weights
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.2/edgenext_base_usi.pth",
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
+    ),
+    'edgenext_base.in21k_ft_in1k': _cfg(  # USI weights
+        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.21/edgenext_base_IN21K.pth",
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
+    ),
+    'edgenext_small_rw.sw_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/edgenext_small_rw-sw-b00041bb.pth',
+        test_input_size=(3, 320, 320), test_crop_pct=1.0,
+    ),
+})
 
 
 @register_model

@@ -221,7 +221,7 @@ class SwinTransformerV2CrBlock(nn.Module):
         window_size (Tuple[int, int]): Window size to be utilized
         shift_size (int): Shifting size to be used
         mlp_ratio (int): Ratio of the hidden dimension in the FFN to the input channels
-        drop (float): Dropout in input mapping
+        proj_drop (float): Dropout in input mapping
         drop_attn (float): Dropout rate of attention map
         drop_path (float): Dropout in main path
         extra_norm (bool): Insert extra norm on 'main' branch if True
@@ -238,7 +238,7 @@ class SwinTransformerV2CrBlock(nn.Module):
         shift_size: Tuple[int, int] = (0, 0),
         mlp_ratio: float = 4.0,
         init_values: Optional[float] = 0,
-        drop: float = 0.0,
+        proj_drop: float = 0.0,
         drop_attn: float = 0.0,
         drop_path: float = 0.0,
         extra_norm: bool = False,
@@ -259,7 +259,7 @@ class SwinTransformerV2CrBlock(nn.Module):
             num_heads=num_heads,
             window_size=self.window_size,
             drop_attn=drop_attn,
-            drop_proj=drop,
+            drop_proj=proj_drop,
             sequential_attn=sequential_attn,
         )
         self.norm1 = norm_layer(dim)
@@ -269,7 +269,7 @@ class SwinTransformerV2CrBlock(nn.Module):
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
-            drop=drop,
+            drop=proj_drop,
             out_features=dim,
         )
         self.norm2 = norm_layer(dim)
@@ -445,7 +445,7 @@ class SwinTransformerV2CrStage(nn.Module):
         num_heads (int): Number of attention heads to be utilized
         window_size (int): Window size to be utilized
         mlp_ratio (int): Ratio of the hidden dimension in the FFN to the input channels
-        drop (float): Dropout in input mapping
+        proj_drop (float): Dropout in input mapping
         drop_attn (float): Dropout rate of attention map
         drop_path (float): Dropout in main path
         norm_layer (Type[nn.Module]): Type of normalization layer to be utilized. Default: nn.LayerNorm
@@ -464,7 +464,7 @@ class SwinTransformerV2CrStage(nn.Module):
         window_size: Tuple[int, int],
         mlp_ratio: float = 4.0,
         init_values: Optional[float] = 0.0,
-        drop: float = 0.0,
+        proj_drop: float = 0.0,
         drop_attn: float = 0.0,
         drop_path: Union[List[float], float] = 0.0,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
@@ -498,7 +498,7 @@ class SwinTransformerV2CrStage(nn.Module):
                 shift_size=tuple([0 if ((index % 2) == 0) else w // 2 for w in window_size]),
                 mlp_ratio=mlp_ratio,
                 init_values=init_values,
-                drop=drop,
+                proj_drop=proj_drop,
                 drop_attn=drop_attn,
                 drop_path=drop_path[index] if isinstance(drop_path, list) else drop_path,
                 extra_norm=_extra_norm(index),
@@ -546,23 +546,24 @@ class SwinTransformerV2Cr(nn.Module):
           https://arxiv.org/pdf/2111.09883
 
     Args:
-        img_size (Tuple[int, int]): Input resolution.
-        window_size (Optional[int]): Window size. If None, img_size // window_div. Default: None
-        img_window_ratio (int): Window size to image size ratio. Default: 32
-        patch_size (int | tuple(int)): Patch size. Default: 4
-        in_chans (int): Number of input channels.
-        depths (int): Depth of the stage (number of layers).
-        num_heads (int): Number of attention heads to be utilized.
-        embed_dim (int): Patch embedding dimension. Default: 96
-        num_classes (int): Number of output classes. Default: 1000
-        mlp_ratio (int):  Ratio of the hidden dimension in the FFN to the input channels. Default: 4
-        drop_rate (float): Dropout rate. Default: 0.0
-        attn_drop_rate (float): Dropout rate of attention map. Default: 0.0
-        drop_path_rate (float): Stochastic depth rate. Default: 0.0
-        norm_layer (Type[nn.Module]): Type of normalization layer to be utilized. Default: nn.LayerNorm
-        extra_norm_period (int): Insert extra norm layer on main branch every N (period) blocks in stage
-        extra_norm_stage (bool): End each stage with an extra norm layer in main branch
-        sequential_attn (bool): If true sequential self-attention is performed. Default: False
+        img_size: Input resolution.
+        window_size: Window size. If None, img_size // window_div
+        img_window_ratio: Window size to image size ratio.
+        patch_size: Patch size.
+        in_chans: Number of input channels.
+        depths: Depth of the stage (number of layers).
+        num_heads: Number of attention heads to be utilized.
+        embed_dim: Patch embedding dimension.
+        num_classes: Number of output classes.
+        mlp_ratio:  Ratio of the hidden dimension in the FFN to the input channels.
+        drop_rate: Dropout rate.
+        proj_drop_rate: Projection dropout rate.
+        attn_drop_rate: Dropout rate of attention map.
+        drop_path_rate: Stochastic depth rate.
+        norm_layer: Type of normalization layer to be utilized.
+        extra_norm_period: Insert extra norm layer on main branch every N (period) blocks in stage
+        extra_norm_stage: End each stage with an extra norm layer in main branch
+        sequential_attn: If true sequential self-attention is performed.
     """
 
     def __init__(
@@ -579,6 +580,7 @@ class SwinTransformerV2Cr(nn.Module):
         mlp_ratio: float = 4.0,
         init_values: Optional[float] = 0.,
         drop_rate: float = 0.0,
+        proj_drop_rate: float = 0.0,
         attn_drop_rate: float = 0.0,
         drop_path_rate: float = 0.0,
         norm_layer: Type[nn.Module] = nn.LayerNorm,
@@ -627,7 +629,7 @@ class SwinTransformerV2Cr(nn.Module):
                 window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 init_values=init_values,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 drop_attn=attn_drop_rate,
                 drop_path=dpr[stage_idx],
                 extra_norm_period=extra_norm_period,

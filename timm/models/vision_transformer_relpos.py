@@ -110,7 +110,7 @@ class RelPosBlock(nn.Module):
             qk_norm=False,
             rel_pos_cls=None,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -125,7 +125,7 @@ class RelPosBlock(nn.Module):
             qk_norm=qk_norm,
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -136,7 +136,7 @@ class RelPosBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -158,7 +158,7 @@ class ResPostRelPosBlock(nn.Module):
             qk_norm=False,
             rel_pos_cls=None,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -174,7 +174,7 @@ class ResPostRelPosBlock(nn.Module):
             qk_norm=qk_norm,
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.norm1 = norm_layer(dim)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -183,7 +183,7 @@ class ResPostRelPosBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -232,6 +232,7 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_dim=None,
             shared_rel_pos=False,
             drop_rate=0.,
+            proj_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
             weight_init='skip',
@@ -259,6 +260,7 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_ty pe (str): type of relative position
             shared_rel_pos (bool): share relative pos across all blocks
             drop_rate (float): dropout rate
+            proj_drop_rate (float): projection dropout rate
             attn_drop_rate (float): attention dropout rate
             drop_path_rate (float): stochastic depth rate
             weight_init (str): weight init scheme
@@ -313,7 +315,7 @@ class VisionTransformerRelPos(nn.Module):
                 qk_norm=qk_norm,
                 rel_pos_cls=rel_pos_cls,
                 init_values=init_values,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -324,6 +326,7 @@ class VisionTransformerRelPos(nn.Module):
 
         # Classifier Head
         self.fc_norm = norm_layer(embed_dim) if fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         if weight_init != 'skip':
@@ -380,6 +383,7 @@ class VisionTransformerRelPos(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

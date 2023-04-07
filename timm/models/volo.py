@@ -85,7 +85,17 @@ default_cfgs = {
 
 class OutlookAttention(nn.Module):
 
-    def __init__(self, dim, num_heads, kernel_size=3, padding=1, stride=1, qkv_bias=False, attn_drop=0., proj_drop=0.):
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            kernel_size=3,
+            padding=1,
+            stride=1,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         head_dim = dim // num_heads
         self.num_heads = num_heads
@@ -133,21 +143,40 @@ class OutlookAttention(nn.Module):
 
 class Outlooker(nn.Module):
     def __init__(
-            self, dim, kernel_size, padding, stride=1, num_heads=1, mlp_ratio=3., attn_drop=0.,
-            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, qkv_bias=False
+            self,
+            dim,
+            kernel_size,
+            padding,
+            stride=1,
+            num_heads=1,
+            mlp_ratio=3.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            qkv_bias=False,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = OutlookAttention(
-            dim, num_heads, kernel_size=kernel_size,
-            padding=padding, stride=stride,
-            qkv_bias=qkv_bias, attn_drop=attn_drop)
+            dim,
+            num_heads,
+            kernel_size=kernel_size,
+            padding=padding,
+            stride=stride,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+        )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+        )
 
     def forward(self, x):
         x = x + self.drop_path(self.attn(self.norm1(x)))
@@ -158,7 +187,13 @@ class Outlooker(nn.Module):
 class Attention(nn.Module):
 
     def __init__(
-            self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -189,8 +224,16 @@ class Attention(nn.Module):
 class Transformer(nn.Module):
 
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., qkv_bias=False,
-            attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop)
@@ -211,7 +254,14 @@ class Transformer(nn.Module):
 class ClassAttention(nn.Module):
 
     def __init__(
-            self, dim, num_heads=8, head_dim=None, qkv_bias=False, attn_drop=0., proj_drop=0.):
+            self,
+            dim,
+            num_heads=8,
+            head_dim=None,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         self.num_heads = num_heads
         if head_dim is not None:
@@ -246,17 +296,38 @@ class ClassAttention(nn.Module):
 class ClassBlock(nn.Module):
 
     def __init__(
-            self, dim, num_heads, head_dim=None, mlp_ratio=4., qkv_bias=False,
-            drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+            self,
+            dim,
+            num_heads,
+            head_dim=None,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = ClassAttention(
-            dim, num_heads=num_heads, head_dim=head_dim, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+            dim,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+        )
         # NOTE: drop path for stochastic depth
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+            drop=drop,
+        )
 
     def forward(self, x):
         cls_embed = x[:, :1]
@@ -354,18 +425,33 @@ def outlooker_blocks(
     blocks = []
     for block_idx in range(layers[index]):
         block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
-        blocks.append(
-            block_fn(
-                dim, kernel_size=kernel_size, padding=padding,
-                stride=stride, num_heads=num_heads, mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias, attn_drop=attn_drop, drop_path=block_dpr))
+        blocks.append(block_fn(
+            dim,
+            kernel_size=kernel_size,
+            padding=padding,
+            stride=stride,
+            num_heads=num_heads,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            drop_path=block_dpr,
+        ))
     blocks = nn.Sequential(*blocks)
     return blocks
 
 
 def transformer_blocks(
-        block_fn, index, dim, layers, num_heads, mlp_ratio=3.,
-        qkv_bias=False, attn_drop=0, drop_path_rate=0., **kwargs):
+        block_fn,
+        index,
+        dim,
+        layers,
+        num_heads,
+        mlp_ratio=3.,
+        qkv_bias=False,
+        attn_drop=0,
+        drop_path_rate=0.,
+        **kwargs,
+):
     """
     generate transformer layers in stage2
     return: transformer layers
@@ -373,13 +459,14 @@ def transformer_blocks(
     blocks = []
     for block_idx in range(layers[index]):
         block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
-        blocks.append(
-            block_fn(
-                dim, num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                attn_drop=attn_drop,
-                drop_path=block_dpr))
+        blocks.append(block_fn(
+            dim,
+            num_heads,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            drop_path=block_dpr,
+        ))
     blocks = nn.Sequential(*blocks)
     return blocks
 
@@ -405,6 +492,7 @@ class VOLO(nn.Module):
             mlp_ratio=3.0,
             qkv_bias=False,
             drop_rate=0.,
+            pos_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
             norm_layer=nn.LayerNorm,
@@ -429,14 +517,18 @@ class VOLO(nn.Module):
         self.grad_checkpointing = False
 
         self.patch_embed = PatchEmbed(
-            stem_conv=True, stem_stride=2, patch_size=patch_size,
-            in_chans=in_chans, hidden_dim=stem_hidden_dim,
-            embed_dim=embed_dims[0])
+            stem_conv=True,
+            stem_stride=2,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            hidden_dim=stem_hidden_dim,
+            embed_dim=embed_dims[0],
+        )
 
         # inital positional encoding, we add positional encoding after outlooker blocks
         patch_grid = (img_size[0] // patch_size // pooling_scale, img_size[1] // patch_size // pooling_scale)
         self.pos_embed = nn.Parameter(torch.zeros(1, patch_grid[0], patch_grid[1], embed_dims[-1]))
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         # set the main block in network
         network = []
@@ -444,14 +536,31 @@ class VOLO(nn.Module):
             if outlook_attention[i]:
                 # stage 1
                 stage = outlooker_blocks(
-                    Outlooker, i, embed_dims[i], layers, num_heads[i], mlp_ratio=mlp_ratio[i],
-                    qkv_bias=qkv_bias, attn_drop=attn_drop_rate, norm_layer=norm_layer)
+                    Outlooker,
+                    i,
+                    embed_dims[i],
+                    layers,
+                    num_heads[i],
+                    mlp_ratio=mlp_ratio[i],
+                    qkv_bias=qkv_bias,
+                    attn_drop=attn_drop_rate,
+                    norm_layer=norm_layer,
+                )
                 network.append(stage)
             else:
                 # stage 2
                 stage = transformer_blocks(
-                    Transformer, i, embed_dims[i], layers, num_heads[i], mlp_ratio=mlp_ratio[i], qkv_bias=qkv_bias,
-                    drop_path_rate=drop_path_rate, attn_drop=attn_drop_rate, norm_layer=norm_layer)
+                    Transformer,
+                    i,
+                    embed_dims[i],
+                    layers,
+                    num_heads[i],
+                    mlp_ratio=mlp_ratio[i],
+                    qkv_bias=qkv_bias,
+                    drop_path_rate=drop_path_rate,
+                    attn_drop=attn_drop_rate,
+                    norm_layer=norm_layer,
+                )
                 network.append(stage)
 
             if downsamples[i]:
@@ -463,19 +572,18 @@ class VOLO(nn.Module):
         # set post block, for example, class attention layers
         self.post_network = None
         if post_layers is not None:
-            self.post_network = nn.ModuleList(
-                [
-                    get_block(
-                        post_layers[i],
-                        dim=embed_dims[-1],
-                        num_heads=num_heads[-1],
-                        mlp_ratio=mlp_ratio[-1],
-                        qkv_bias=qkv_bias,
-                        attn_drop=attn_drop_rate,
-                        drop_path=0.,
-                        norm_layer=norm_layer)
-                    for i in range(len(post_layers))
-                ])
+            self.post_network = nn.ModuleList([
+                get_block(
+                    post_layers[i],
+                    dim=embed_dims[-1],
+                    num_heads=num_heads[-1],
+                    mlp_ratio=mlp_ratio[-1],
+                    qkv_bias=qkv_bias,
+                    attn_drop=attn_drop_rate,
+                    drop_path=0.,
+                    norm_layer=norm_layer)
+                for i in range(len(post_layers))
+            ])
             self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dims[-1]))
             trunc_normal_(self.cls_token, std=.02)
 
@@ -487,6 +595,7 @@ class VOLO(nn.Module):
         self.norm = norm_layer(self.num_features)
 
         # Classifier head
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
@@ -630,6 +739,7 @@ class VOLO(nn.Module):
             out = x[:, 0]
         else:
             out = x
+        x = self.head_drop(x)
         if pre_logits:
             return out
         out = self.head(out)

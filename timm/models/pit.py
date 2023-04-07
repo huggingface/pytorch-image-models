@@ -78,7 +78,16 @@ class SequentialTuple(nn.Sequential):
 
 class Transformer(nn.Module):
     def __init__(
-            self, base_dim, depth, heads, mlp_ratio, pool=None, drop_rate=.0, attn_drop_rate=.0, drop_path_prob=None):
+            self,
+            base_dim,
+            depth,
+            heads,
+            mlp_ratio,
+            pool=None,
+            proj_drop=.0,
+            attn_drop=.0,
+            drop_path_prob=None,
+    ):
         super(Transformer, self).__init__()
         self.layers = nn.ModuleList([])
         embed_dim = base_dim * heads
@@ -89,8 +98,8 @@ class Transformer(nn.Module):
                 num_heads=heads,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=True,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
+                proj_drop=proj_drop,
+                attn_drop=attn_drop,
                 drop_path=drop_path_prob[i],
                 norm_layer=partial(nn.LayerNorm, eps=1e-6)
             )
@@ -122,8 +131,14 @@ class ConvHeadPooling(nn.Module):
         super(ConvHeadPooling, self).__init__()
 
         self.conv = nn.Conv2d(
-            in_feature, out_feature, kernel_size=stride + 1, padding=stride // 2, stride=stride,
-            padding_mode=padding_mode, groups=in_feature)
+            in_feature,
+            out_feature,
+            kernel_size=stride + 1,
+            padding=stride // 2,
+            stride=stride,
+            padding_mode=padding_mode,
+            groups=in_feature,
+        )
         self.fc = nn.Linear(in_feature, out_feature)
 
     def forward(self, x, cls_token) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -150,9 +165,24 @@ class PoolingVisionTransformer(nn.Module):
         - https://arxiv.org/abs/2103.16302
     """
     def __init__(
-            self, img_size, patch_size, stride, base_dims, depth, heads,
-            mlp_ratio, num_classes=1000, in_chans=3, global_pool='token',
-            distilled=False, attn_drop_rate=.0, drop_rate=.0, drop_path_rate=.0):
+            self,
+            img_size,
+            patch_size,
+            stride,
+            base_dims,
+            depth,
+            heads,
+            mlp_ratio,
+            num_classes=1000,
+            in_chans=3,
+            global_pool='token',
+            distilled=False,
+            drop_rate=0.,
+            pos_drop_drate=0.,
+            proj_drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.,
+    ):
         super(PoolingVisionTransformer, self).__init__()
         assert global_pool in ('token',)
 
@@ -173,7 +203,7 @@ class PoolingVisionTransformer(nn.Module):
         self.patch_embed = ConvEmbedding(in_chans, base_dims[0] * heads[0], patch_size, stride, padding)
 
         self.cls_token = nn.Parameter(torch.randn(1, self.num_tokens, base_dims[0] * heads[0]))
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(p=pos_drop_drate)
 
         transformers = []
         # stochastic depth decay rule
@@ -182,16 +212,27 @@ class PoolingVisionTransformer(nn.Module):
             pool = None
             if stage < len(heads) - 1:
                 pool = ConvHeadPooling(
-                    base_dims[stage] * heads[stage], base_dims[stage + 1] * heads[stage + 1], stride=2)
+                    base_dims[stage] * heads[stage],
+                    base_dims[stage + 1] * heads[stage + 1],
+                    stride=2,
+                )
             transformers += [Transformer(
-                base_dims[stage], depth[stage], heads[stage], mlp_ratio, pool=pool,
-                drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, drop_path_prob=dpr[stage])
+                base_dims[stage],
+                depth[stage],
+                heads[stage],
+                mlp_ratio,
+                pool=pool,
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path_prob=dpr[stage],
+            )
             ]
         self.transformers = SequentialTuple(*transformers)
         self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6)
         self.num_features = self.embed_dim = base_dims[-1] * heads[-1]
 
         # Classifier head
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         self.head_dist = None
         if distilled:
@@ -243,6 +284,8 @@ class PoolingVisionTransformer(nn.Module):
         if self.head_dist is not None:
             assert self.global_pool == 'token'
             x, x_dist = x[:, 0], x[:, 1]
+            x = self.head_drop(x)
+            x_dist = self.head_drop(x)
             if not pre_logits:
                 x = self.head(x)
                 x_dist = self.head_dist(x_dist)
@@ -255,6 +298,7 @@ class PoolingVisionTransformer(nn.Module):
         else:
             if self.global_pool == 'token':
                 x = x[:, 0]
+            x = self.head_drop(x)
             if not pre_logits:
                 x = self.head(x)
             return x
@@ -284,71 +328,70 @@ def _create_pit(variant, pretrained=False, **kwargs):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
     model = build_model_with_cfg(
-        PoolingVisionTransformer, variant, pretrained,
+        PoolingVisionTransformer,
+        variant,
+        pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        **kwargs)
+        **kwargs,
+    )
     return model
 
 
 @register_model
 def pit_b_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=14,
         stride=7,
         base_dims=[64, 64, 64],
         depth=[3, 6, 4],
         heads=[4, 8, 16],
         mlp_ratio=4,
-        **kwargs
     )
-    return _create_pit('pit_b_224', pretrained, **model_kwargs)
+    return _create_pit('pit_b_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_s_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16,
         stride=8,
         base_dims=[48, 48, 48],
         depth=[2, 6, 4],
         heads=[3, 6, 12],
         mlp_ratio=4,
-        **kwargs
     )
-    return _create_pit('pit_s_224', pretrained, **model_kwargs)
+    return _create_pit('pit_s_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_xs_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16,
         stride=8,
         base_dims=[48, 48, 48],
         depth=[2, 6, 4],
         heads=[2, 4, 8],
         mlp_ratio=4,
-        **kwargs
     )
-    return _create_pit('pit_xs_224', pretrained, **model_kwargs)
+    return _create_pit('pit_xs_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_ti_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16,
         stride=8,
         base_dims=[32, 32, 32],
         depth=[2, 6, 4],
         heads=[2, 4, 8],
         mlp_ratio=4,
-        **kwargs
     )
-    return _create_pit('pit_ti_224', pretrained, **model_kwargs)
+    return _create_pit('pit_ti_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_b_distilled_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=14,
         stride=7,
         base_dims=[64, 64, 64],
@@ -356,14 +399,13 @@ def pit_b_distilled_224(pretrained, **kwargs):
         heads=[4, 8, 16],
         mlp_ratio=4,
         distilled=True,
-        **kwargs
     )
-    return _create_pit('pit_b_distilled_224', pretrained, **model_kwargs)
+    return _create_pit('pit_b_distilled_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_s_distilled_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16,
         stride=8,
         base_dims=[48, 48, 48],
@@ -371,14 +413,13 @@ def pit_s_distilled_224(pretrained, **kwargs):
         heads=[3, 6, 12],
         mlp_ratio=4,
         distilled=True,
-        **kwargs
     )
-    return _create_pit('pit_s_distilled_224', pretrained, **model_kwargs)
+    return _create_pit('pit_s_distilled_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_xs_distilled_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16,
         stride=8,
         base_dims=[48, 48, 48],
@@ -386,14 +427,13 @@ def pit_xs_distilled_224(pretrained, **kwargs):
         heads=[2, 4, 8],
         mlp_ratio=4,
         distilled=True,
-        **kwargs
     )
-    return _create_pit('pit_xs_distilled_224', pretrained, **model_kwargs)
+    return _create_pit('pit_xs_distilled_224', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def pit_ti_distilled_224(pretrained, **kwargs):
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16,
         stride=8,
         base_dims=[32, 32, 32],
@@ -401,6 +441,5 @@ def pit_ti_distilled_224(pretrained, **kwargs):
         heads=[2, 4, 8],
         mlp_ratio=4,
         distilled=True,
-        **kwargs
     )
-    return _create_pit('pit_ti_distilled_224', pretrained, **model_kwargs)
+    return _create_pit('pit_ti_distilled_224', pretrained, **dict(model_args, **kwargs))

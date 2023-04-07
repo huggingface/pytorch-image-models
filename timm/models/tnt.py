@@ -80,31 +80,64 @@ class Block(nn.Module):
     """ TNT Block
     """
     def __init__(
-            self, dim, in_dim, num_pixel, num_heads=12, in_num_head=4, mlp_ratio=4.,
-            qkv_bias=False, drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+            self,
+            dim,
+            dim_out,
+            num_pixel,
+            num_heads_in=4,
+            num_heads_out=12,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         # Inner transformer
-        self.norm_in = norm_layer(in_dim)
+        self.norm_in = norm_layer(dim)
         self.attn_in = Attention(
-            in_dim, in_dim, num_heads=in_num_head, qkv_bias=qkv_bias,
-            attn_drop=attn_drop, proj_drop=drop)
+            dim,
+            dim,
+            num_heads=num_heads_in,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+        )
         
-        self.norm_mlp_in = norm_layer(in_dim)
-        self.mlp_in = Mlp(in_features=in_dim, hidden_features=int(in_dim * 4),
-            out_features=in_dim, act_layer=act_layer, drop=drop)
+        self.norm_mlp_in = norm_layer(dim)
+        self.mlp_in = Mlp(
+            in_features=dim,
+            hidden_features=int(dim * 4),
+            out_features=dim,
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
         
-        self.norm1_proj = norm_layer(in_dim)
-        self.proj = nn.Linear(in_dim * num_pixel, dim, bias=True)
+        self.norm1_proj = norm_layer(dim)
+        self.proj = nn.Linear(dim * num_pixel, dim_out, bias=True)
+
         # Outer transformer
-        self.norm_out = norm_layer(dim)
+        self.norm_out = norm_layer(dim_out)
         self.attn_out = Attention(
-            dim, dim, num_heads=num_heads, qkv_bias=qkv_bias,
-            attn_drop=attn_drop, proj_drop=drop)
+            dim_out,
+            dim_out,
+            num_heads=num_heads_out,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+        )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         
-        self.norm_mlp = norm_layer(dim)
-        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio),
-            out_features=dim, act_layer=act_layer, drop=drop)
+        self.norm_mlp = norm_layer(dim_out)
+        self.mlp = Mlp(
+            in_features=dim_out,
+            hidden_features=int(dim_out * mlp_ratio),
+            out_features=dim_out,
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
 
     def forward(self, pixel_embed, patch_embed):
         # inner
@@ -157,9 +190,27 @@ class TNT(nn.Module):
     """ Transformer in Transformer - https://arxiv.org/abs/2103.00112
     """
     def __init__(
-            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
-            embed_dim=768, in_dim=48, depth=12, num_heads=12, in_num_head=4, mlp_ratio=4., qkv_bias=False,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm, first_stride=4):
+            self,
+            img_size=224,
+            patch_size=16,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='token',
+            embed_dim=768,
+            inner_dim=48,
+            depth=12,
+            num_heads_inner=4,
+            num_heads_outer=12,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            drop_rate=0.,
+            pos_drop_rate=0.,
+            proj_drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.,
+            norm_layer=nn.LayerNorm,
+            first_stride=4,
+    ):
         super().__init__()
         assert global_pool in ('', 'token', 'avg')
         self.num_classes = num_classes
@@ -168,31 +219,46 @@ class TNT(nn.Module):
         self.grad_checkpointing = False
 
         self.pixel_embed = PixelEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, in_dim=in_dim, stride=first_stride)
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            in_dim=inner_dim,
+            stride=first_stride,
+        )
         num_patches = self.pixel_embed.num_patches
         self.num_patches = num_patches
         new_patch_size = self.pixel_embed.new_patch_size
         num_pixel = new_patch_size[0] * new_patch_size[1]
         
-        self.norm1_proj = norm_layer(num_pixel * in_dim)
-        self.proj = nn.Linear(num_pixel * in_dim, embed_dim)
+        self.norm1_proj = norm_layer(num_pixel * inner_dim)
+        self.proj = nn.Linear(num_pixel * inner_dim, embed_dim)
         self.norm2_proj = norm_layer(embed_dim)
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.patch_pos = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        self.pixel_pos = nn.Parameter(torch.zeros(1, in_dim, new_patch_size[0], new_patch_size[1]))
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pixel_pos = nn.Parameter(torch.zeros(1, inner_dim, new_patch_size[0], new_patch_size[1]))
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         blocks = []
         for i in range(depth):
             blocks.append(Block(
-                dim=embed_dim, in_dim=in_dim, num_pixel=num_pixel, num_heads=num_heads, in_num_head=in_num_head,
-                mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate, attn_drop=attn_drop_rate,
-                drop_path=dpr[i], norm_layer=norm_layer))
+                dim=inner_dim,
+                dim_out=embed_dim,
+                num_pixel=num_pixel,
+                num_heads_in=num_heads_inner,
+                num_heads_out=num_heads_outer,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dpr[i],
+                norm_layer=norm_layer,
+            ))
         self.blocks = nn.ModuleList(blocks)
         self.norm = norm_layer(embed_dim)
 
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.cls_token, std=.02)
@@ -260,6 +326,7 @@ class TNT(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
             x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -290,16 +357,16 @@ def _create_tnt(variant, pretrained=False, **kwargs):
 @register_model
 def tnt_s_patch16_224(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=16, embed_dim=384, in_dim=24, depth=12, num_heads=6, in_num_head=4,
-        qkv_bias=False, **kwargs)
-    model = _create_tnt('tnt_s_patch16_224', pretrained=pretrained, **model_cfg)
+        patch_size=16, embed_dim=384, inner_dim=24, depth=12, num_heads_outer=6,
+        qkv_bias=False)
+    model = _create_tnt('tnt_s_patch16_224', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model
 
 
 @register_model
 def tnt_b_patch16_224(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=16, embed_dim=640, in_dim=40, depth=12, num_heads=10, in_num_head=4,
-        qkv_bias=False, **kwargs)
-    model = _create_tnt('tnt_b_patch16_224', pretrained=pretrained, **model_cfg)
+        patch_size=16, embed_dim=640, inner_dim=40, depth=12, num_heads_outer=10,
+        qkv_bias=False)
+    model = _create_tnt('tnt_b_patch16_224', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model

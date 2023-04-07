@@ -468,7 +468,6 @@ class DaViT(nn.Module):
             ffn=True,
             cpe_act=False,
             drop_rate=0.,
-            attn_drop_rate=0.,
             drop_path_rate=0.,
             num_classes=1000,
             global_pool='avg',

@@ -34,8 +34,8 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, RotaryEmbeddingCat, \
-    apply_rot_embed_cat, trunc_normal_, resample_patch_embed, resample_abs_pos_embed, to_2tuple
+from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, PatchDropout, RotaryEmbeddingCat, \
+    apply_rot_embed_cat, apply_keep_indices_nlc, trunc_normal_, resample_patch_embed, resample_abs_pos_embed, to_2tuple
 
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
@@ -355,10 +355,14 @@ class Eva(nn.Module):
             scale_mlp: bool = False,
             scale_attn_inner: bool = False,
             drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            patch_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             norm_layer: Callable = LayerNorm,
             init_values: Optional[float] = None,
+            class_token: bool = True,
             use_abs_pos_emb: bool = True,
             use_rot_pos_emb: bool = False,
             use_post_norm: bool = False,
@@ -383,10 +387,13 @@ class Eva(nn.Module):
             scale_mlp:
             scale_attn_inner:
             drop_rate:
+            pos_drop_rate:
+            proj_drop_rate:
             attn_drop_rate:
             drop_path_rate:
             norm_layer:
             init_values:
+            class_token:
             use_abs_pos_emb:
             use_rot_pos_emb:
             use_post_norm:
@@ -397,7 +404,7 @@ class Eva(nn.Module):
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.num_prefix_tokens = 1
+        self.num_prefix_tokens = 1 if class_token else 0
         self.grad_checkpointing = False
 
         self.patch_embed = PatchEmbed(
@@ -408,9 +415,19 @@ class Eva(nn.Module):
         )
         num_patches = self.patch_embed.num_patches
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) if use_abs_pos_emb else None
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
+
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches + self.num_prefix_tokens, embed_dim)) if use_abs_pos_emb else None
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
+        if patch_drop_rate > 0:
+            self.patch_drop = PatchDropout(
+                patch_drop_rate,
+                num_prefix_tokens=self.num_prefix_tokens,
+                return_indices=True,
+            )
+        else:
+            self.patch_drop = None
 
         if use_rot_pos_emb:
             ref_feat_shape = to_2tuple(ref_feat_shape) if ref_feat_shape is not None else None
@@ -435,7 +452,7 @@ class Eva(nn.Module):
                 swiglu_mlp=swiglu_mlp,
                 scale_mlp=scale_mlp,
                 scale_attn_inner=scale_attn_inner,
-                proj_drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -446,6 +463,7 @@ class Eva(nn.Module):
         use_fc_norm = self.global_pool == 'avg'
         self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -505,12 +523,21 @@ class Eva(nn.Module):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+
+        if self.cls_token is not None:
+            x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+
+        # apply abs position embedding
         if self.pos_embed is not None:
             x = x + self.pos_embed
         x = self.pos_drop(x)
 
+        # obtain shared rotary position embedding and apply patch dropout
         rot_pos_embed = self.rope.get_embed() if self.rope is not None else None
+        if self.patch_drop is not None:
+            x, keep_indices = self.patch_drop(x)
+            if rot_pos_embed is not None and keep_indices is not None:
+                rot_pos_embed = apply_keep_indices_nlc(x, rot_pos_embed, keep_indices)
 
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -525,6 +552,7 @@ class Eva(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
