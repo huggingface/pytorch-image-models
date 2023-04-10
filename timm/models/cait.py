@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
+from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model
@@ -73,12 +73,15 @@ default_cfgs = dict(
 
 class ClassAttn(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
-    # with slight modifications to do CA 
+    # with slight modifications to do CA
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.k = nn.Linear(dim, dim, bias=qkv_bias)
@@ -91,15 +94,21 @@ class ClassAttn(nn.Module):
         B, N, C = x.shape
         q = self.q(x[:, 0]).unsqueeze(1).reshape(B, 1, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
         k = self.k(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-
-        q = q * self.scale
         v = self.v(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
-        attn = (q @ k.transpose(-2, -1))
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fused_attn:
+            x_cls = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x_cls = attn @ v
 
-        x_cls = (attn @ v).transpose(1, 2).reshape(B, 1, C)
+        x_cls = x_cls.transpose(1, 2).reshape(B, 1, C)
         x_cls = self.proj(x_cls)
         x_cls = self.proj_drop(x_cls)
 
@@ -179,7 +188,7 @@ class TalkingHeadAttn(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0] * self.scale, qkv[1], qkv[2]
 
-        attn = (q @ k.transpose(-2, -1))
+        attn = q @ k.transpose(-2, -1)
 
         attn = self.proj_l(attn.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 

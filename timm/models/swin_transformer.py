@@ -23,7 +23,8 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, _assert
+from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
+    _assert, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply
@@ -86,6 +87,7 @@ class WindowAttention(nn.Module):
     """ Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports shifted and non-shifted windows.
     """
+    fused_attn: torch.jit.Final[bool]
 
     def __init__(
             self,
@@ -116,6 +118,7 @@ class WindowAttention(nn.Module):
         head_dim = head_dim or dim // num_heads
         attn_dim = head_dim * num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn(experimental=True)  # NOTE not tested for prime-time yet
 
         # define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
         self.relative_position_bias_table = nn.Parameter(torch.zeros((2 * win_h - 1) * (2 * win_w - 1), num_heads))
@@ -147,21 +150,30 @@ class WindowAttention(nn.Module):
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        attn = attn + self._get_rel_pos_bias()
-
-        if mask is not None:
-            num_win = mask.shape[0]
-            attn = attn.view(-1, num_win, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-            attn = self.softmax(attn)
+        if self.fused_attn:
+            attn_mask = self._get_rel_pos_bias()
+            if mask is not None:
+                num_win = mask.shape[0]
+                mask = mask.view(1, num_win, 1, N, N).expand(B_ // num_win, -1, self.num_heads, -1, -1)
+                attn_mask = attn_mask + mask.reshape(-1, self.num_heads, N, N)
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask,
+                dropout_p=self.attn_drop.p,
+            )
         else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn + self._get_rel_pos_bias()
+            if mask is not None:
+                num_win = mask.shape[0]
+                attn = attn.view(-1, num_win, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
+                attn = attn.view(-1, self.num_heads, N, N)
             attn = self.softmax(attn)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, -1)
+        x = x.transpose(1, 2).reshape(B_, N, -1)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

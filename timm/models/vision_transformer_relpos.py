@@ -15,7 +15,7 @@ from torch.jit import Final
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias
+from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
 
@@ -25,7 +25,7 @@ _logger = logging.getLogger(__name__)
 
 
 class RelPosAttention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -43,7 +43,7 @@ class RelPosAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -60,13 +60,13 @@ class RelPosAttention(nn.Module):
         q = self.q_norm(q)
         k = self.k_norm(k)
 
-        if self.fast_attn:
+        if self.fused_attn:
+            attn_bias = None
             if self.rel_pos is not None:
                 attn_bias = self.rel_pos.get_bias()
             elif shared_rel_pos is not None:
                 attn_bias = shared_rel_pos
-            else:
-                attn_bias = None
+
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_bias,

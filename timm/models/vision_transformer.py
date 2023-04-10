@@ -38,7 +38,7 @@ from torch.jit import Final
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
-    resample_abs_pos_embed, RmsNorm, PatchDropout
+    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -50,7 +50,7 @@ _logger = logging.getLogger(__name__)
 
 
 class Attention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -67,7 +67,7 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -82,7 +82,7 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        if self.fast_attn:
+        if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
                 dropout_p=self.attn_drop.p,
@@ -215,7 +215,7 @@ class ParallelScalingBlock(nn.Module):
     Based on:
       'Scaling Vision Transformers to 22 Billion Parameters` - https://arxiv.org/abs/2302.05442
     """
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -236,7 +236,7 @@ class ParallelScalingBlock(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
         mlp_hidden_dim = int(mlp_ratio * dim)
         in_proj_out_dim = mlp_hidden_dim + 3 * dim
 
@@ -279,7 +279,7 @@ class ParallelScalingBlock(nn.Module):
         q = self.q_norm(q.view(B, N, self.num_heads, self.head_dim)).transpose(1, 2)
         k = self.k_norm(k.view(B, N, self.num_heads, self.head_dim)).transpose(1, 2)
         v = v.view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
-        if self.fast_attn:
+        if self.fused_attn:
             x_attn = F.scaled_dot_product_attention(
                 q, k, v,
                 dropout_p=self.attn_drop.p,
@@ -1219,6 +1219,10 @@ default_cfgs = generate_default_cfgs({
     'vit_large_patch14_clip_224.openai': _cfg(
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+    'vit_large_patch14_clip_336.openai': _cfg(
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
 
     # experimental (may be removed)
     'vit_base_patch32_plus_256': _cfg(url='', input_size=(3, 256, 256), crop_pct=0.95),

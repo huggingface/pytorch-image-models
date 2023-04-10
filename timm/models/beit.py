@@ -48,7 +48,7 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_
+from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_, use_fused_attn
 
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
@@ -80,7 +80,7 @@ def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
 
 
 class Attention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -99,7 +99,7 @@ class Attention(nn.Module):
             head_dim = attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
         if qkv_bias:
@@ -142,15 +142,14 @@ class Attention(nn.Module):
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)  # B, num_heads, N, head_dim
 
-        if self.fast_attn:
+        if self.fused_attn:
+            rel_pos_bias = None
             if self.relative_position_bias_table is not None:
                 rel_pos_bias = self._get_rel_pos_bias()
                 if shared_rel_pos_bias is not None:
                     rel_pos_bias = rel_pos_bias + shared_rel_pos_bias
             elif shared_rel_pos_bias is not None:
                 rel_pos_bias = shared_rel_pos_bias
-            else:
-                rel_pos_bias = None
 
             x = F.scaled_dot_product_attention(
                 q, k, v,

@@ -48,7 +48,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, ConvMlp, DropPath, LayerNorm, ClassifierHead, NormMlpClassifierHead
 from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
 from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
-from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf
+from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint_seq
@@ -140,7 +140,7 @@ class MaxxVitCfg:
 
 
 class Attention2d(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     """ multi-head attention for 2D NCHW tensors"""
     def __init__(
@@ -162,7 +162,7 @@ class Attention2d(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -178,13 +178,13 @@ class Attention2d(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, 3, self.num_heads, self.dim_head, -1).unbind(1)
 
-        if self.fast_attn:
+        if self.fused_attn:
+            attn_bias = None
             if self.rel_pos is not None:
                 attn_bias = self.rel_pos.get_bias()
             elif shared_rel_pos is not None:
                 attn_bias = shared_rel_pos
-            else:
-                attn_bias = None
+
             x = torch.nn.functional.scaled_dot_product_attention(
                 q.transpose(-1, -2),
                 k.transpose(-1, -2),
@@ -210,7 +210,7 @@ class Attention2d(nn.Module):
 
 class AttentionCl(nn.Module):
     """ Channels-last multi-head attention (B, ..., C) """
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -232,7 +232,7 @@ class AttentionCl(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim_attn * 3, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -249,13 +249,13 @@ class AttentionCl(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, -1, 3, self.num_heads, self.dim_head).transpose(1, 3).unbind(2)
 
-        if self.fast_attn:
+        if self.fused_attn:
+            attn_bias = None
             if self.rel_pos is not None:
                 attn_bias = self.rel_pos.get_bias()
             elif shared_rel_pos is not None:
                 attn_bias = shared_rel_pos
-            else:
-                attn_bias = None
+
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_bias,

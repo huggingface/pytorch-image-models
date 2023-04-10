@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier
+from timm.layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model
@@ -90,7 +90,7 @@ class SpatialMlp(nn.Module):
 
 
 class Attention(nn.Module):
-    fast_attn: torch.jit.Final[bool]
+    fused_attn: torch.jit.Final[bool]
 
     def __init__(self, dim, num_heads=8, head_dim_ratio=1., attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -99,7 +99,7 @@ class Attention(nn.Module):
         head_dim = round(dim // num_heads * head_dim_ratio)
         self.head_dim = head_dim
         self.scale = head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Conv2d(dim, head_dim * num_heads * 3, 1, stride=1, padding=0, bias=False)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -111,7 +111,7 @@ class Attention(nn.Module):
         x = self.qkv(x).reshape(B, 3, self.num_heads, self.head_dim, -1).permute(1, 0, 2, 4, 3)
         q, k, v = x.unbind(0)
 
-        if self.fast_attn:
+        if self.fused_attn:
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 dropout_p=self.attn_drop.p,

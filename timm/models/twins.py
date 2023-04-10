@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_
+from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._registry import register_model
@@ -68,6 +68,8 @@ Size_ = Tuple[int, int]
 class LocallyGroupedAttn(nn.Module):
     """ LSA: self attention within a group
     """
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(self, dim, num_heads=8, attn_drop=0., proj_drop=0., ws=1):
         assert ws != 1
         super(LocallyGroupedAttn, self).__init__()
@@ -77,6 +79,7 @@ class LocallyGroupedAttn(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=True)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -100,12 +103,22 @@ class LocallyGroupedAttn(nn.Module):
         x = x.reshape(B, _h, self.ws, _w, self.ws, C).transpose(2, 3)
         qkv = self.qkv(x).reshape(
             B, _h * _w, self.ws * self.ws, 3, self.num_heads, C // self.num_heads).permute(3, 0, 1, 4, 2, 5)
-        q, k, v = qkv[0], qkv[1], qkv[2]
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-        attn = (attn @ v).transpose(2, 3).reshape(B, _h, _w, self.ws, self.ws, C)
-        x = attn.transpose(2, 3).reshape(B, _h * self.ws, _w * self.ws, C)
+        q, k, v = qkv.unbind(0)
+
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(2, 3).reshape(B, _h, _w, self.ws, self.ws, C)
+        x = x.transpose(2, 3).reshape(B, _h * self.ws, _w * self.ws, C)
         if pad_r > 0 or pad_b > 0:
             x = x[:, :H, :W, :].contiguous()
         x = x.reshape(B, N, C)
@@ -152,6 +165,8 @@ class LocallyGroupedAttn(nn.Module):
 class GlobalSubSampleAttn(nn.Module):
     """ GSA: using a  key to summarize the information for a group to be efficient.
     """
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(self, dim, num_heads=8, attn_drop=0., proj_drop=0., sr_ratio=1):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
@@ -160,6 +175,7 @@ class GlobalSubSampleAttn(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.q = nn.Linear(dim, dim, bias=True)
         self.kv = nn.Linear(dim, dim * 2, bias=True)
@@ -184,13 +200,21 @@ class GlobalSubSampleAttn(nn.Module):
             x = self.sr(x).reshape(B, C, -1).permute(0, 2, 1)
             x = self.norm(x)
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        k, v = kv[0], kv[1]
+        k, v = kv.unbind(0)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fused_attn:
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
 
@@ -200,8 +224,18 @@ class GlobalSubSampleAttn(nn.Module):
 class Block(nn.Module):
 
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., proj_drop=0., attn_drop=0., drop_path=0.,
-            act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, ws=None):
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            sr_ratio=1,
+            ws=None,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         if ws is None:
@@ -210,14 +244,20 @@ class Block(nn.Module):
             self.attn = GlobalSubSampleAttn(dim, num_heads, attn_drop, proj_drop, sr_ratio)
         else:
             self.attn = LocallyGroupedAttn(dim, num_heads, attn_drop, proj_drop, ws)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
         self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=proj_drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x, size: Size_):
-        x = x + self.drop_path(self.attn(self.norm1(x), size))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        x = x + self.drop_path1(self.attn(self.norm1(x), size))
+        x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
 
@@ -225,7 +265,9 @@ class PosConv(nn.Module):
     # PEG  from https://arxiv.org/abs/2102.10882
     def __init__(self, in_chans, embed_dim=768, stride=1):
         super(PosConv, self).__init__()
-        self.proj = nn.Sequential(nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim), )
+        self.proj = nn.Sequential(
+            nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim),
+        )
         self.stride = stride
 
     def forward(self, x, size: Size_):
