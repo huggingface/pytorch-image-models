@@ -34,8 +34,9 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, RotaryEmbeddingCat, \
-    apply_rot_embed_cat, trunc_normal_, resample_patch_embed, resample_abs_pos_embed, to_2tuple
+from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, PatchDropout, RotaryEmbeddingCat, \
+    apply_rot_embed_cat, apply_keep_indices_nlc, trunc_normal_, resample_patch_embed, resample_abs_pos_embed, \
+    to_2tuple, use_fused_attn
 
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
@@ -44,7 +45,7 @@ __all__ = ['Eva']
 
 
 class EvaAttention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -76,7 +77,7 @@ class EvaAttention(nn.Module):
             head_dim = attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.fused_attn = use_fused_attn()
 
         if qkv_fused:
             self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
@@ -121,7 +122,7 @@ class EvaAttention(nn.Module):
             q = torch.cat([q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope)], 2).type_as(v)
             k = torch.cat([k[:, :, :1, :], apply_rot_embed_cat(k[:, :, 1:, :], rope)], 2).type_as(v)
 
-        if self.fast_attn:
+        if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_mask,
@@ -355,10 +356,14 @@ class Eva(nn.Module):
             scale_mlp: bool = False,
             scale_attn_inner: bool = False,
             drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            patch_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             norm_layer: Callable = LayerNorm,
             init_values: Optional[float] = None,
+            class_token: bool = True,
             use_abs_pos_emb: bool = True,
             use_rot_pos_emb: bool = False,
             use_post_norm: bool = False,
@@ -383,10 +388,13 @@ class Eva(nn.Module):
             scale_mlp:
             scale_attn_inner:
             drop_rate:
+            pos_drop_rate:
+            proj_drop_rate:
             attn_drop_rate:
             drop_path_rate:
             norm_layer:
             init_values:
+            class_token:
             use_abs_pos_emb:
             use_rot_pos_emb:
             use_post_norm:
@@ -397,7 +405,7 @@ class Eva(nn.Module):
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.num_prefix_tokens = 1
+        self.num_prefix_tokens = 1 if class_token else 0
         self.grad_checkpointing = False
 
         self.patch_embed = PatchEmbed(
@@ -408,9 +416,19 @@ class Eva(nn.Module):
         )
         num_patches = self.patch_embed.num_patches
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) if use_abs_pos_emb else None
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
+
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches + self.num_prefix_tokens, embed_dim)) if use_abs_pos_emb else None
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
+        if patch_drop_rate > 0:
+            self.patch_drop = PatchDropout(
+                patch_drop_rate,
+                num_prefix_tokens=self.num_prefix_tokens,
+                return_indices=True,
+            )
+        else:
+            self.patch_drop = None
 
         if use_rot_pos_emb:
             ref_feat_shape = to_2tuple(ref_feat_shape) if ref_feat_shape is not None else None
@@ -435,7 +453,7 @@ class Eva(nn.Module):
                 swiglu_mlp=swiglu_mlp,
                 scale_mlp=scale_mlp,
                 scale_attn_inner=scale_attn_inner,
-                proj_drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -446,6 +464,7 @@ class Eva(nn.Module):
         use_fc_norm = self.global_pool == 'avg'
         self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -470,11 +489,8 @@ class Eva(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -505,12 +521,21 @@ class Eva(nn.Module):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+
+        if self.cls_token is not None:
+            x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+
+        # apply abs position embedding
         if self.pos_embed is not None:
             x = x + self.pos_embed
         x = self.pos_drop(x)
 
+        # obtain shared rotary position embedding and apply patch dropout
         rot_pos_embed = self.rope.get_embed() if self.rope is not None else None
+        if self.patch_drop is not None:
+            x, keep_indices = self.patch_drop(x)
+            if rot_pos_embed is not None and keep_indices is not None:
+                rot_pos_embed = apply_keep_indices_nlc(x, rot_pos_embed, keep_indices)
 
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -525,6 +550,7 @@ class Eva(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -747,24 +773,51 @@ default_cfgs = generate_default_cfgs({
     ),
 
     # EVA01 and EVA02 CLIP image towers
-    'eva_giant_patch14_224.clip': _cfg(
-        #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA01_CLIP_g_14_plus_psz14_s11B.pt',
+    'eva_giant_patch14_clip_224.laion400m': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA01_CLIP_g_14_plus_psz14_s11B.pt',
+        hf_hub_id='timm/eva_giant_patch14_clip_224.laion400m_s11b_b41k',  # float16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=1024,
     ),
-    'eva02_base_patch16_clip_224.clip': _cfg(
-        #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_L_psz14_s4B.pt',
+    'eva_giant_patch14_clip_224.merged2b': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA01_CLIP_g_14_plus_psz14_s11B.pt',
+        hf_hub_id='timm/eva_giant_patch14_plus_clip_224.merged2b_s11b_b114k',  # float16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=1024,
+    ),
+    'eva02_base_patch16_clip_224.merged2b': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_L_psz14_s4B.pt',
+        hf_hub_id='timm/eva02_base_patch16_clip_224.merged2b_s8b_b131k',  # float16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=512,
     ),
-    'eva02_large_patch14_clip_224.clip': _cfg(
-        #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_L_psz14_s4B.pt',
+    'eva02_large_patch14_clip_224.merged2b': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_L_psz14_s4B.pt',
+        hf_hub_id='timm/eva02_large_patch14_clip_224.merged2b_s4b_b131k',  # float16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=768,
     ),
-    'eva02_enormous_patch14_clip_224.clip': _cfg(
-        #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_E_psz14_plus_s9B.pt',
+    'eva02_large_patch14_clip_336.merged2b': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_L_psz14_s4B.pt',
+        hf_hub_id='timm/eva02_large_patch14_clip_336.merged2b_s6b_b61k',  # float16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 336, 336), crop_pct=1.0,
+        num_classes=768,
+    ),
+    'eva02_enormous_patch14_clip_224.laion2b': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_E_psz14_plus_s9B.pt',
+        hf_hub_id='timm/eva02_enormous_patch14_clip_224.laion2b_s4b_b115k',  # float16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=1024,
+    ),
+    'eva02_enormous_patch14_clip_224.laion2b_plus': _cfg(
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_CLIP_E_psz14_plus_s9B.pt',
+        hf_hub_id='timm/eva02_enormous_patch14_plus_clip_224.laion2b_s9b_b144k',  # bfloat16 weights
+        hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=1024,
     ),
     'eva02_enormous_patch14_clip_224.pretrain': _cfg(
-        #hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_E_psz14.pt',
+        # hf_hub_id='QuanSun/EVA-CLIP', hf_hub_filename='EVA02_E_psz14.pt',
         num_classes=0,
     ),
 
@@ -940,8 +993,18 @@ def eva02_large_patch14_448(pretrained=False, **kwargs):
 
 
 @register_model
+def eva_giant_patch14_clip_224(pretrained=False, **kwargs):
+    """ EVA-g CLIP model (only difference from non-CLIP is the pooling)  """
+    model_args = dict(
+        patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408,
+        global_pool=kwargs.pop('global_pool', 'token'))
+    model = _create_eva('eva_giant_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
-    # A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base
+    """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base """
     model_args = dict(
         img_size=224,
         patch_size=16,
@@ -955,7 +1018,7 @@ def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
         scale_attn_inner=True,
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
-        global_pool='token',
+        global_pool=kwargs.pop('global_pool', 'token'),
     )
     model = _create_eva('eva02_base_patch16_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -963,7 +1026,7 @@ def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
 
 @register_model
 def eva02_large_patch14_clip_224(pretrained=False, **kwargs):
-    # A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large
+    """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -977,15 +1040,37 @@ def eva02_large_patch14_clip_224(pretrained=False, **kwargs):
         scale_attn_inner=True,
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
-        global_pool='token',
+        global_pool=kwargs.pop('global_pool', 'token'),
     )
     model = _create_eva('eva02_large_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
+def eva02_large_patch14_clip_336(pretrained=False, **kwargs):
+    """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
+    model_args = dict(
+        img_size=336,
+        patch_size=14,
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        mlp_ratio=4 * 2 / 3,
+        qkv_fused=False,
+        swiglu_mlp=True,
+        scale_mlp=True,
+        scale_attn_inner=True,
+        use_rot_pos_emb=True,
+        ref_feat_shape=(16, 16),  # 224/14
+        global_pool=kwargs.pop('global_pool', 'token'),
+    )
+    model = _create_eva('eva02_large_patch14_clip_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs):
-    # A EVA-CLIP specific variant that uses residual post-norm in blocks
+    """ A EVA-CLIP specific variant that uses residual post-norm in blocks """
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -994,7 +1079,7 @@ def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs):
         num_heads=16,
         mlp_ratio=15360 / 1792,
         use_post_norm=True,
-        global_pool='token',
+        global_pool=kwargs.pop('global_pool', 'token'),
     )
     model = _create_eva('eva02_enormous_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

@@ -54,8 +54,14 @@ default_cfgs = {
 
 class MlpWithDepthwiseConv(nn.Module):
     def __init__(
-            self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU,
-            drop=0., extra_relu=False):
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.GELU,
+            drop=0.,
+            extra_relu=False,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -154,8 +160,19 @@ class Attention(nn.Module):
 class Block(nn.Module):
 
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., sr_ratio=1, linear_attn=False, qkv_bias=False,
-            drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            sr_ratio=1,
+            linear_attn=False,
+            qkv_bias=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -165,7 +182,7 @@ class Block(nn.Module):
             linear_attn=linear_attn,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -173,8 +190,8 @@ class Block(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
-            extra_relu=linear_attn
+            drop=proj_drop,
+            extra_relu=linear_attn,
         )
 
     def forward(self, x, feat_size: List[int]):
@@ -193,8 +210,8 @@ class OverlapPatchEmbed(nn.Module):
         assert max(patch_size) > stride, "Set larger patch_size than stride"
         self.patch_size = patch_size
         self.proj = nn.Conv2d(
-            in_chans, embed_dim, kernel_size=patch_size, stride=stride,
-            padding=(patch_size[0] // 2, patch_size[1] // 2))
+            in_chans, embed_dim, patch_size,
+            stride=stride, padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
@@ -217,7 +234,7 @@ class PyramidVisionTransformerStage(nn.Module):
             linear_attn: bool = False,
             mlp_ratio: float = 4.0,
             qkv_bias: bool = True,
-            drop: float = 0.,
+            proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: Union[List[float], float] = 0.0,
             norm_layer: Callable = nn.LayerNorm,
@@ -242,7 +259,7 @@ class PyramidVisionTransformerStage(nn.Module):
             linear_attn=linear_attn,
             mlp_ratio=mlp_ratio,
             qkv_bias=qkv_bias,
-            drop=drop,
+            proj_drop=proj_drop,
             attn_drop=attn_drop,
             drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
             norm_layer=norm_layer,
@@ -278,6 +295,7 @@ class PyramidVisionTransformerV2(nn.Module):
             qkv_bias=True,
             linear=False,
             drop_rate=0.,
+            proj_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
             norm_layer=nn.LayerNorm,
@@ -314,16 +332,17 @@ class PyramidVisionTransformerV2(nn.Module):
                 mlp_ratio=mlp_ratios[i],
                 linear_attn=linear,
                 qkv_bias=qkv_bias,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
-                norm_layer=norm_layer
+                norm_layer=norm_layer,
             ))
             prev_dim = embed_dims[i]
             cur += depths[i]
 
         # classification head
         self.num_features = embed_dims[-1]
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -379,6 +398,7 @@ class PyramidVisionTransformerV2(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
             x = x.mean(dim=(-1, -2))
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

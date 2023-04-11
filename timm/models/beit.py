@@ -48,7 +48,7 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_
+from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_, use_fused_attn
 
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
@@ -80,7 +80,7 @@ def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
 
 
 class Attention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -99,7 +99,7 @@ class Attention(nn.Module):
             head_dim = attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
         if qkv_bias:
@@ -142,15 +142,14 @@ class Attention(nn.Module):
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)  # B, num_heads, N, head_dim
 
-        if self.fast_attn:
+        if self.fused_attn:
+            rel_pos_bias = None
             if self.relative_position_bias_table is not None:
                 rel_pos_bias = self._get_rel_pos_bias()
                 if shared_rel_pos_bias is not None:
                     rel_pos_bias = rel_pos_bias + shared_rel_pos_bias
             elif shared_rel_pos_bias is not None:
                 rel_pos_bias = shared_rel_pos_bias
-            else:
-                rel_pos_bias = None
 
             x = F.scaled_dot_product_attention(
                 q, k, v,
@@ -279,6 +278,8 @@ class Beit(nn.Module):
             swiglu_mlp: bool = False,
             scale_mlp: bool = False,
             drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             norm_layer: Callable = LayerNorm,
@@ -306,7 +307,7 @@ class Beit(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         # self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) if use_abs_pos_emb else None
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         if use_shared_rel_pos_bias:
             self.rel_pos_bias = RelativePositionBias(
@@ -325,7 +326,7 @@ class Beit(nn.Module):
                 mlp_ratio=mlp_ratio,
                 scale_mlp=scale_mlp,
                 swiglu_mlp=swiglu_mlp,
-                proj_drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -337,6 +338,7 @@ class Beit(nn.Module):
         use_fc_norm = self.global_pool == 'avg'
         self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -417,6 +419,7 @@ class Beit(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

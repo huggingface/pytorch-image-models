@@ -271,7 +271,7 @@ class MobileVitBlock(nn.Module):
                 num_heads=num_heads,
                 qkv_bias=True,
                 attn_drop=attn_drop,
-                drop=drop,
+                proj_drop=drop,
                 drop_path=drop_path_rate,
                 act_layer=layers.act,
                 norm_layer=transformer_norm_layer,

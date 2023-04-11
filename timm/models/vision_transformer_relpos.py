@@ -15,7 +15,7 @@ from torch.jit import Final
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias
+from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
 
@@ -25,7 +25,7 @@ _logger = logging.getLogger(__name__)
 
 
 class RelPosAttention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -43,7 +43,7 @@ class RelPosAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -60,13 +60,13 @@ class RelPosAttention(nn.Module):
         q = self.q_norm(q)
         k = self.k_norm(k)
 
-        if self.fast_attn:
+        if self.fused_attn:
+            attn_bias = None
             if self.rel_pos is not None:
                 attn_bias = self.rel_pos.get_bias()
             elif shared_rel_pos is not None:
                 attn_bias = shared_rel_pos
-            else:
-                attn_bias = None
+
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_bias,
@@ -110,7 +110,7 @@ class RelPosBlock(nn.Module):
             qk_norm=False,
             rel_pos_cls=None,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -125,7 +125,7 @@ class RelPosBlock(nn.Module):
             qk_norm=qk_norm,
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -136,7 +136,7 @@ class RelPosBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -158,7 +158,7 @@ class ResPostRelPosBlock(nn.Module):
             qk_norm=False,
             rel_pos_cls=None,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -174,7 +174,7 @@ class ResPostRelPosBlock(nn.Module):
             qk_norm=qk_norm,
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.norm1 = norm_layer(dim)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -183,7 +183,7 @@ class ResPostRelPosBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -232,6 +232,7 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_dim=None,
             shared_rel_pos=False,
             drop_rate=0.,
+            proj_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
             weight_init='skip',
@@ -259,6 +260,7 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_ty pe (str): type of relative position
             shared_rel_pos (bool): share relative pos across all blocks
             drop_rate (float): dropout rate
+            proj_drop_rate (float): projection dropout rate
             attn_drop_rate (float): attention dropout rate
             drop_path_rate (float): stochastic depth rate
             weight_init (str): weight init scheme
@@ -313,7 +315,7 @@ class VisionTransformerRelPos(nn.Module):
                 qk_norm=qk_norm,
                 rel_pos_cls=rel_pos_cls,
                 init_values=init_values,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -324,6 +326,7 @@ class VisionTransformerRelPos(nn.Module):
 
         # Classifier Head
         self.fc_norm = norm_layer(embed_dim) if fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         if weight_init != 'skip':
@@ -380,6 +383,7 @@ class VisionTransformerRelPos(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

@@ -27,7 +27,7 @@ import logging
 import math
 from collections import OrderedDict
 from functools import partial
-from typing import Optional, List
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -38,7 +38,7 @@ from torch.jit import Final
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
-    resample_abs_pos_embed, RmsNorm
+    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -50,7 +50,7 @@ _logger = logging.getLogger(__name__)
 
 
 class Attention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -67,7 +67,7 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -82,7 +82,7 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        if self.fast_attn:
+        if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
                 dropout_p=self.attn_drop.p,
@@ -119,7 +119,7 @@ class Block(nn.Module):
             mlp_ratio=4.,
             qkv_bias=False,
             qk_norm=False,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             init_values=None,
             drop_path=0.,
@@ -134,7 +134,7 @@ class Block(nn.Module):
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
             norm_layer=norm_layer,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
@@ -145,7 +145,7 @@ class Block(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -165,7 +165,7 @@ class ResPostBlock(nn.Module):
             mlp_ratio=4.,
             qkv_bias=False,
             qk_norm=False,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             init_values=None,
             drop_path=0.,
@@ -181,7 +181,7 @@ class ResPostBlock(nn.Module):
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
             norm_layer=norm_layer,
         )
         self.norm1 = norm_layer(dim)
@@ -191,7 +191,7 @@ class ResPostBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -215,7 +215,7 @@ class ParallelScalingBlock(nn.Module):
     Based on:
       'Scaling Vision Transformers to 22 Billion Parameters` - https://arxiv.org/abs/2302.05442
     """
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -224,7 +224,7 @@ class ParallelScalingBlock(nn.Module):
             mlp_ratio=4.,
             qkv_bias=False,
             qk_norm=False,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             init_values=None,
             drop_path=0.,
@@ -236,7 +236,7 @@ class ParallelScalingBlock(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
         mlp_hidden_dim = int(mlp_ratio * dim)
         in_proj_out_dim = mlp_hidden_dim + 3 * dim
 
@@ -255,7 +255,7 @@ class ParallelScalingBlock(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.attn_out_proj = nn.Linear(dim, dim)
 
-        self.mlp_drop = nn.Dropout(drop)
+        self.mlp_drop = nn.Dropout(proj_drop)
         self.mlp_act = act_layer()
         self.mlp_out_proj = nn.Linear(mlp_hidden_dim, dim)
 
@@ -279,7 +279,7 @@ class ParallelScalingBlock(nn.Module):
         q = self.q_norm(q.view(B, N, self.num_heads, self.head_dim)).transpose(1, 2)
         k = self.k_norm(k.view(B, N, self.num_heads, self.head_dim)).transpose(1, 2)
         v = v.view(B, N, self.num_heads, self.head_dim).transpose(1, 2)
-        if self.fast_attn:
+        if self.fused_attn:
             x_attn = F.scaled_dot_product_attention(
                 q, k, v,
                 dropout_p=self.attn_drop.p,
@@ -318,7 +318,7 @@ class ParallelThingsBlock(nn.Module):
             qkv_bias=False,
             qk_norm=False,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -337,7 +337,7 @@ class ParallelThingsBlock(nn.Module):
                     qkv_bias=qkv_bias,
                     qk_norm=qk_norm,
                     attn_drop=attn_drop,
-                    proj_drop=drop,
+                    proj_drop=proj_drop,
                     norm_layer=norm_layer,
                 )),
                 ('ls', LayerScale(dim, init_values=init_values) if init_values else nn.Identity()),
@@ -349,7 +349,7 @@ class ParallelThingsBlock(nn.Module):
                     dim,
                     hidden_features=int(dim * mlp_ratio),
                     act_layer=act_layer,
-                    drop=drop,
+                    drop=proj_drop,
                 )),
                 ('ls', LayerScale(dim, init_values=init_values) if init_values else nn.Identity()),
                 ('drop_path', DropPath(drop_path) if drop_path > 0. else nn.Identity())
@@ -382,53 +382,58 @@ class VisionTransformer(nn.Module):
 
     def __init__(
             self,
-            img_size=224,
-            patch_size=16,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='token',
-            embed_dim=768,
-            depth=12,
-            num_heads=12,
-            mlp_ratio=4.,
-            qkv_bias=True,
-            qk_norm=False,
-            init_values=None,
-            class_token=True,
-            no_embed_class=False,
-            pre_norm=False,
-            fc_norm=None,
-            drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
-            weight_init='',
-            embed_layer=PatchEmbed,
-            norm_layer=None,
-            act_layer=None,
-            block_fn=Block,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: Union[int, Tuple[int, int]] = 16,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'token',
+            embed_dim: int = 768,
+            depth: int = 12,
+            num_heads: int = 12,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = True,
+            qk_norm: bool = False,
+            init_values: Optional[float] = None,
+            class_token: bool = True,
+            no_embed_class: bool = False,
+            pre_norm: bool = False,
+            fc_norm: Optional[bool] = None,
+            drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            patch_drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            weight_init: str = '',
+            embed_layer: Callable = PatchEmbed,
+            norm_layer: Optional[Callable] = None,
+            act_layer: Optional[Callable] = None,
+            block_fn: Callable = Block,
     ):
         """
         Args:
-            img_size (int, tuple): input image size
-            patch_size (int, tuple): patch size
-            in_chans (int): number of input channels
-            num_classes (int): number of classes for classification head
-            global_pool (str): type of global pooling for final sequence (default: 'token')
-            embed_dim (int): embedding dimension
-            depth (int): depth of transformer
-            num_heads (int): number of attention heads
-            mlp_ratio (int): ratio of mlp hidden dim to embedding dim
-            qkv_bias (bool): enable bias for qkv if True
-            init_values: (float): layer-scale init values
-            class_token (bool): use class token
-            fc_norm (Optional[bool]): pre-fc norm after pool, set if global_pool == 'avg' if None (default: None)
-            drop_rate (float): dropout rate
-            attn_drop_rate (float): attention dropout rate
-            drop_path_rate (float): stochastic depth rate
-            weight_init (str): weight init scheme
-            embed_layer (nn.Module): patch embedding layer
-            norm_layer: (nn.Module): normalization layer
-            act_layer: (nn.Module): MLP activation layer
+            img_size: Input image size.
+            patch_size: Patch size.
+            in_chans: Number of image input channels.
+            num_classes: Mumber of classes for classification head.
+            global_pool: Type of global pooling for final sequence (default: 'token').
+            embed_dim: Transformer embedding dimension.
+            depth: Depth of transformer.
+            num_heads: Number of attention heads.
+            mlp_ratio: Ratio of mlp hidden dim to embedding dim.
+            qkv_bias: Enable bias for qkv projections if True.
+            init_values: Layer-scale init values (layer-scale enabled if not None).
+            class_token: Use class token.
+            fc_norm: Pre head norm after pool (instead of before), if None, enabled when global_pool == 'avg'.
+            drop_rate: Head dropout rate.
+            pos_drop_rate: Position embedding dropout rate.
+            attn_drop_rate: Attention dropout rate.
+            drop_path_rate: Stochastic depth rate.
+            weight_init: Weight initialization scheme.
+            embed_layer: Patch embedding layey.
+            norm_layer: Normalization layer.
+            act_layer: MLP activation layer.
+            block_fn: Transformer block layer.
         """
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
@@ -456,7 +461,14 @@ class VisionTransformer(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         embed_len = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
         self.pos_embed = nn.Parameter(torch.randn(1, embed_len, embed_dim) * .02)
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
+        if patch_drop_rate > 0:
+            self.patch_drop = PatchDropout(
+                patch_drop_rate,
+                num_prefix_tokens=self.num_prefix_tokens,
+            )
+        else:
+            self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -468,7 +480,7 @@ class VisionTransformer(nn.Module):
                 qkv_bias=qkv_bias,
                 qk_norm=qk_norm,
                 init_values=init_values,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -479,6 +491,7 @@ class VisionTransformer(nn.Module):
 
         # Classifier Head
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         if weight_init != 'skip':
@@ -544,6 +557,7 @@ class VisionTransformer(nn.Module):
     def forward_features(self, x):
         x = self.patch_embed(x)
         x = self._pos_embed(x)
+        x = self.patch_drop(x)
         x = self.norm_pre(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
@@ -556,6 +570,7 @@ class VisionTransformer(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -1204,6 +1219,10 @@ default_cfgs = generate_default_cfgs({
     'vit_large_patch14_clip_224.openai': _cfg(
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+    'vit_large_patch14_clip_336.openai': _cfg(
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
 
     # experimental (may be removed)
     'vit_base_patch32_plus_256': _cfg(url='', input_size=(3, 256, 256), crop_pct=0.95),

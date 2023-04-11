@@ -194,6 +194,8 @@ def rot(x):
 
 
 def apply_rot_embed(x: torch.Tensor, sin_emb, cos_emb):
+    if sin_emb.ndim == 3:
+        return x * cos_emb.unsqueeze(1).expand_as(x) + rot(x) * sin_emb.unsqueeze(1).expand_as(x)
     return x * cos_emb + rot(x) * sin_emb
 
 
@@ -205,7 +207,15 @@ def apply_rot_embed_list(x: List[torch.Tensor], sin_emb, cos_emb):
 
 def apply_rot_embed_cat(x: torch.Tensor, emb):
     sin_emb, cos_emb = emb.tensor_split(2, -1)
+    if sin_emb.ndim == 3:
+        return x * cos_emb.unsqueeze(1).expand_as(x) + rot(x) * sin_emb.unsqueeze(1).expand_as(x)
     return x * cos_emb + rot(x) * sin_emb
+
+
+def apply_keep_indices_nlc(x, pos_embed, keep_indices):
+    pos_embed = pos_embed.unsqueeze(0).expand(x.shape[0], -1, -1)
+    pos_embed = pos_embed.gather(1, keep_indices.unsqueeze(-1).expand(-1, -1, pos_embed.shape[-1]))
+    return pos_embed
 
 
 def build_rotary_pos_embed(

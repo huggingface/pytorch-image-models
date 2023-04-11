@@ -75,12 +75,6 @@ class FocalModulation(nn.Module):
         self.norm = norm_layer(dim) if self.use_post_norm else nn.Identity()
 
     def forward(self, x):
-        """
-        Args:
-            x: input features with shape of (B, H, W, C)
-        """
-        C = x.shape[1]
-
         # pre linear projection
         x = self.f(x)
         q, ctx, gates = torch.split(x, self.input_split, 1)

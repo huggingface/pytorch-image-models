@@ -211,7 +211,7 @@ class MetaBlock1d(nn.Module):
             mlp_ratio=4.,
             act_layer=nn.GELU,
             norm_layer=nn.LayerNorm,
-            drop=0.,
+            proj_drop=0.,
             drop_path=0.,
             layer_scale_init_value=1e-5
     ):
@@ -219,7 +219,12 @@ class MetaBlock1d(nn.Module):
         self.norm1 = norm_layer(dim)
         self.token_mixer = Attention(dim)
         self.norm2 = norm_layer(dim)
-        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.ls1 = LayerScale(dim, layer_scale_init_value)
@@ -251,7 +256,7 @@ class MetaBlock2d(nn.Module):
             mlp_ratio=4.,
             act_layer=nn.GELU,
             norm_layer=nn.BatchNorm2d,
-            drop=0.,
+            proj_drop=0.,
             drop_path=0.,
             layer_scale_init_value=1e-5
     ):
@@ -261,7 +266,12 @@ class MetaBlock2d(nn.Module):
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.mlp = ConvMlpWithNorm(
-            dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, norm_layer=norm_layer, drop=drop)
+            dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            norm_layer=norm_layer,
+            drop=proj_drop,
+        )
         self.ls2 = LayerScale2d(dim, layer_scale_init_value)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
@@ -285,7 +295,7 @@ class EfficientFormerStage(nn.Module):
             act_layer=nn.GELU,
             norm_layer=nn.BatchNorm2d,
             norm_layer_cl=nn.LayerNorm,
-            drop=.0,
+            proj_drop=.0,
             drop_path=0.,
             layer_scale_init_value=1e-5,
 ):
@@ -312,7 +322,7 @@ class EfficientFormerStage(nn.Module):
                         mlp_ratio=mlp_ratio,
                         act_layer=act_layer,
                         norm_layer=norm_layer_cl,
-                        drop=drop,
+                        proj_drop=proj_drop,
                         drop_path=drop_path[block_idx],
                         layer_scale_init_value=layer_scale_init_value,
                     ))
@@ -324,7 +334,7 @@ class EfficientFormerStage(nn.Module):
                         mlp_ratio=mlp_ratio,
                         act_layer=act_layer,
                         norm_layer=norm_layer,
-                        drop=drop,
+                        proj_drop=proj_drop,
                         drop_path=drop_path[block_idx],
                         layer_scale_init_value=layer_scale_init_value,
                     ))
@@ -360,6 +370,7 @@ class EfficientFormer(nn.Module):
             norm_layer=nn.BatchNorm2d,
             norm_layer_cl=nn.LayerNorm,
             drop_rate=0.,
+            proj_drop_rate=0.,
             drop_path_rate=0.,
             **kwargs
     ):
@@ -386,7 +397,7 @@ class EfficientFormer(nn.Module):
                 act_layer=act_layer,
                 norm_layer_cl=norm_layer_cl,
                 norm_layer=norm_layer,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 drop_path=dpr[i],
                 layer_scale_init_value=layer_scale_init_value,
             )
@@ -398,6 +409,7 @@ class EfficientFormer(nn.Module):
         # Classifier head
         self.num_features = embed_dims[-1]
         self.norm = norm_layer_cl(self.num_features)
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
         # assuming model is always distilled (valid for current checkpoints, will split def if that changes)
         self.head_dist = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
@@ -453,6 +465,7 @@ class EfficientFormer(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool == 'avg':
             x = x.mean(dim=1)
+        x = self.head_drop(x)
         if pre_logits:
             return x
         x, x_dist = self.head(x), self.head_dist(x)

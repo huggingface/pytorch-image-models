@@ -27,41 +27,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tuple
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
-from ._registry import register_model
+from ._registry import register_model, register_model_deprecations, generate_default_cfgs
 
 __all__ = ['MultiScaleVit', 'MultiScaleVitCfg']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
-        'fixed_input_size': True,
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    mvitv2_tiny=_cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_T_in1k.pyth'),
-    mvitv2_small=_cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_S_in1k.pyth'),
-    mvitv2_base=_cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_B_in1k.pyth'),
-    mvitv2_large=_cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_L_in1k.pyth'),
-
-    mvitv2_base_in21k=_cfg(
-        url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_B_in21k.pyth',
-        num_classes=19168),
-    mvitv2_large_in21k=_cfg(
-        url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_L_in21k.pyth',
-        num_classes=19168),
-    mvitv2_huge_in21k=_cfg(
-        url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_H_in21k.pyth',
-        num_classes=19168),
-
-    mvitv2_small_cls=_cfg(url=''),
-)
 
 
 @dataclass
@@ -111,40 +79,6 @@ class MultiScaleVitCfg:
                     ]
                 pool_kv_stride.append(tuple(_stride_kv))
             self.stride_kv = tuple(pool_kv_stride)
-
-
-model_cfgs = dict(
-    mvitv2_tiny=MultiScaleVitCfg(
-        depths=(1, 2, 5, 2),
-    ),
-    mvitv2_small=MultiScaleVitCfg(
-        depths=(1, 2, 11, 2),
-    ),
-    mvitv2_base=MultiScaleVitCfg(
-        depths=(2, 3, 16, 3),
-    ),
-    mvitv2_large=MultiScaleVitCfg(
-        depths=(2, 6, 36, 4),
-        embed_dim=144,
-        num_heads=2,
-        expand_attn=False,
-    ),
-
-    mvitv2_base_in21k=MultiScaleVitCfg(
-        depths=(2, 3, 16, 3),
-    ),
-    mvitv2_large_in21k=MultiScaleVitCfg(
-        depths=(2, 6, 36, 4),
-        embed_dim=144,
-        num_heads=2,
-        expand_attn=False,
-    ),
-
-    mvitv2_small_cls=MultiScaleVitCfg(
-        depths=(1, 2, 11, 2),
-        use_cls_token=True,
-    ),
-)
 
 
 def prod(iterable):
@@ -229,26 +163,32 @@ def cal_rel_pos_type(
     # Scale up rel pos if shapes for q and k are different.
     q_h_ratio = max(k_h / q_h, 1.0)
     k_h_ratio = max(q_h / k_h, 1.0)
-    dist_h = torch.arange(q_h)[:, None] * q_h_ratio - torch.arange(k_h)[None, :] * k_h_ratio
+    dist_h = (
+            torch.arange(q_h, device=q.device).unsqueeze(-1) * q_h_ratio -
+            torch.arange(k_h, device=q.device).unsqueeze(0) * k_h_ratio
+    )
     dist_h += (k_h - 1) * k_h_ratio
     q_w_ratio = max(k_w / q_w, 1.0)
     k_w_ratio = max(q_w / k_w, 1.0)
-    dist_w = torch.arange(q_w)[:, None] * q_w_ratio - torch.arange(k_w)[None, :] * k_w_ratio
+    dist_w = (
+            torch.arange(q_w, device=q.device).unsqueeze(-1) * q_w_ratio -
+            torch.arange(k_w, device=q.device).unsqueeze(0) * k_w_ratio
+    )
     dist_w += (k_w - 1) * k_w_ratio
 
-    Rh = rel_pos_h[dist_h.long()]
-    Rw = rel_pos_w[dist_w.long()]
+    rel_h = rel_pos_h[dist_h.long()]
+    rel_w = rel_pos_w[dist_w.long()]
 
     B, n_head, q_N, dim = q.shape
 
     r_q = q[:, :, sp_idx:].reshape(B, n_head, q_h, q_w, dim)
-    rel_h = torch.einsum("byhwc,hkc->byhwk", r_q, Rh)
-    rel_w = torch.einsum("byhwc,wkc->byhwk", r_q, Rw)
+    rel_h = torch.einsum("byhwc,hkc->byhwk", r_q, rel_h)
+    rel_w = torch.einsum("byhwc,wkc->byhwk", r_q, rel_w)
 
     attn[:, :, sp_idx:, sp_idx:] = (
         attn[:, :, sp_idx:, sp_idx:].view(B, -1, q_h, q_w, k_h, k_w)
-        + rel_h[:, :, :, :, :, None]
-        + rel_w[:, :, :, :, None, :]
+        + rel_h.unsqueeze(-1)
+        + rel_w.unsqueeze(-2)
     ).view(B, -1, q_h * q_w, k_h * k_w)
 
     return attn
@@ -390,18 +330,18 @@ class MultiScaleAttentionPoolFirst(nn.Module):
             v = self.norm_v(v)
 
         q_N = q_size[0] * q_size[1] + int(self.has_cls_token)
-        q = q.permute(0, 2, 1, 3).reshape(B, q_N, -1)
-        q = self.q(q).reshape(B, q_N, self.num_heads, -1).permute(0, 2, 1, 3)
+        q = q.transpose(1, 2).reshape(B, q_N, -1)
+        q = self.q(q).reshape(B, q_N, self.num_heads, -1).transpose(1, 2)
 
         k_N = k_size[0] * k_size[1] + int(self.has_cls_token)
-        k = k.permute(0, 2, 1, 3).reshape(B, k_N, -1)
-        k = self.k(k).reshape(B, k_N, self.num_heads, -1).permute(0, 2, 1, 3)
+        k = k.transpose(1, 2).reshape(B, k_N, -1)
+        k = self.k(k).reshape(B, k_N, self.num_heads, -1)
 
         v_N = v_size[0] * v_size[1] + int(self.has_cls_token)
-        v = v.permute(0, 2, 1, 3).reshape(B, v_N, -1)
-        v = self.v(v).reshape(B, v_N, self.num_heads, -1).permute(0, 2, 1, 3)
+        v = v.transpose(1, 2).reshape(B, v_N, -1)
+        v = self.v(v).reshape(B, v_N, self.num_heads, -1).transpose(1, 2)
 
-        attn = (q * self.scale) @ k.transpose(-2, -1)
+        attn = (q * self.scale) @ k
         if self.rel_pos_type == 'spatial':
             attn = cal_rel_pos_type(
                 attn,
@@ -764,7 +704,7 @@ class MultiScaleVit(nn.Module):
             cfg: MultiScaleVitCfg,
             img_size: Tuple[int, int] = (224, 224),
             in_chans: int = 3,
-            global_pool: str = 'avg',
+            global_pool: Optional[str] = None,
             num_classes: int = 1000,
             drop_path_rate: float = 0.,
             drop_rate: float = 0.,
@@ -774,6 +714,8 @@ class MultiScaleVit(nn.Module):
         norm_layer = partial(get_norm_layer(cfg.norm_layer), eps=cfg.norm_eps)
         self.num_classes = num_classes
         self.drop_rate = drop_rate
+        if global_pool is None:
+            global_pool = 'token' if cfg.use_cls_token else 'avg'
         self.global_pool = global_pool
         self.depths = tuple(cfg.depths)
         self.expand_attn = cfg.expand_attn
@@ -963,13 +905,89 @@ def checkpoint_filter_fn(state_dict, model):
     return out_dict
 
 
+model_cfgs = dict(
+    mvitv2_tiny=MultiScaleVitCfg(
+        depths=(1, 2, 5, 2),
+    ),
+    mvitv2_small=MultiScaleVitCfg(
+        depths=(1, 2, 11, 2),
+    ),
+    mvitv2_base=MultiScaleVitCfg(
+        depths=(2, 3, 16, 3),
+    ),
+    mvitv2_large=MultiScaleVitCfg(
+        depths=(2, 6, 36, 4),
+        embed_dim=144,
+        num_heads=2,
+        expand_attn=False,
+    ),
+
+    mvitv2_small_cls=MultiScaleVitCfg(
+        depths=(1, 2, 11, 2),
+        use_cls_token=True,
+    ),
+    mvitv2_base_cls=MultiScaleVitCfg(
+        depths=(2, 3, 16, 3),
+        use_cls_token=True,
+    ),
+    mvitv2_large_cls=MultiScaleVitCfg(
+        depths=(2, 6, 36, 4),
+        embed_dim=144,
+        num_heads=2,
+        use_cls_token=True,
+        expand_attn=True,
+    ),
+    mvitv2_huge_cls=MultiScaleVitCfg(
+        depths=(4, 8, 60, 8),
+        embed_dim=192,
+        num_heads=3,
+        use_cls_token=True,
+        expand_attn=True,
+    ),
+)
+
+
 def _create_mvitv2(variant, cfg_variant=None, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        MultiScaleVit, variant, pretrained,
+        MultiScaleVit,
+        variant,
+        pretrained,
         model_cfg=model_cfgs[variant] if not cfg_variant else model_cfgs[cfg_variant],
         pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True),
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .9, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
+        'fixed_input_size': True,
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'mvitv2_tiny.fb_in1k': _cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_T_in1k.pyth'),
+    'mvitv2_small.fb_in1k': _cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_S_in1k.pyth'),
+    'mvitv2_base.fb_in1k': _cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_B_in1k.pyth'),
+    'mvitv2_large.fb_in1k': _cfg(url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_L_in1k.pyth'),
+
+    'mvitv2_small_cls': _cfg(url=''),
+    'mvitv2_base_cls.fb_inw21k': _cfg(
+        url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_B_in21k.pyth',
+        num_classes=19168),
+    'mvitv2_large_cls.fb_inw21k': _cfg(
+        url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_L_in21k.pyth',
+        num_classes=19168),
+    'mvitv2_huge_cls.fb_inw21k': _cfg(
+        url='https://dl.fbaipublicfiles.com/mvit/mvitv2_models/MViTv2_H_in21k.pyth',
+        num_classes=19168),
+})
 
 
 @register_model
@@ -992,21 +1010,21 @@ def mvitv2_large(pretrained=False, **kwargs):
     return _create_mvitv2('mvitv2_large', pretrained=pretrained, **kwargs)
 
 
-# @register_model
-# def mvitv2_base_in21k(pretrained=False, **kwargs):
-#     return _create_mvitv2('mvitv2_base_in21k', pretrained=pretrained, **kwargs)
-#
-#
-# @register_model
-# def mvitv2_large_in21k(pretrained=False, **kwargs):
-#     return _create_mvitv2('mvitv2_large_in21k', pretrained=pretrained, **kwargs)
-#
-#
-# @register_model
-# def mvitv2_huge_in21k(pretrained=False, **kwargs):
-#     return _create_mvitv2('mvitv2_huge_in21k', pretrained=pretrained, **kwargs)
-
-
 @register_model
 def mvitv2_small_cls(pretrained=False, **kwargs):
     return _create_mvitv2('mvitv2_small_cls', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mvitv2_base_cls(pretrained=False, **kwargs):
+    return _create_mvitv2('mvitv2_base_cls', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mvitv2_large_cls(pretrained=False, **kwargs):
+    return _create_mvitv2('mvitv2_large_cls', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def mvitv2_huge_cls(pretrained=False, **kwargs):
+    return _create_mvitv2('mvitv2_huge_cls', pretrained=pretrained, **kwargs)

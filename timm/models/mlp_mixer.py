@@ -192,6 +192,7 @@ class MlpMixer(nn.Module):
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
             act_layer=nn.GELU,
             drop_rate=0.,
+            proj_drop_rate=0.,
             drop_path_rate=0.,
             nlhb=False,
             stem_norm=False,
@@ -219,11 +220,12 @@ class MlpMixer(nn.Module):
                 mlp_layer=mlp_layer,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
-                drop=drop_rate,
+                drop=proj_drop_rate,
                 drop_path=drop_path_rate,
             )
             for _ in range(num_blocks)])
         self.norm = norm_layer(embed_dim)
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
         self.init_weights(nlhb=nlhb)
@@ -267,6 +269,7 @@ class MlpMixer(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool == 'avg':
             x = x.mean(dim=1)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
