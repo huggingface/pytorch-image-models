@@ -50,6 +50,8 @@ __all__ = ['get_cache_dir', 'download_cached_file', 'has_hf_hub', 'hf_split', 'l
 # Default name for a weights file hosted on the Huggingface Hub.
 HF_WEIGHTS_NAME = "pytorch_model.bin"  # default pytorch pkl
 HF_SAFE_WEIGHTS_NAME = "model.safetensors"  # safetensors version
+HF_OPEN_CLIP_WEIGHTS_NAME = "open_clip_pytorch_model.bin"  # default pytorch pkl
+HF_OPEN_CLIP_SAFE_WEIGHTS_NAME = "open_clip_model.safetensors"  # safetensors version
 
 
 def get_cache_dir(child_dir=''):
@@ -374,5 +376,7 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
     """
     if filename == HF_WEIGHTS_NAME:
         yield HF_SAFE_WEIGHTS_NAME
-    if filename != HF_WEIGHTS_NAME and filename.endswith(".bin"):
-        return filename[:-4] + ".safetensors"
+    # if filename == HF_OPEN_CLIP_WEIGHTS_NAME:  # FIXME tracking safetensors yet
+    #     yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
+    if filename not in (HF_WEIGHTS_NAME, HF_OPEN_CLIP_WEIGHTS_NAME) and filename.endswith(".bin"):
+        yield filename[:-4] + ".safetensors"
