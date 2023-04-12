@@ -8,6 +8,8 @@ from typing import List, Tuple, Optional, Union
 import torch
 from torch import nn as nn
 
+from .trace_utils import _assert
+
 
 def pixel_freq_bands(
         num_bands: int,
@@ -425,7 +427,7 @@ class RotaryEmbeddingCat(nn.Module):
     def get_embed(self, shape: Optional[List[int]] = None):
         if self.bands is not None:
             # rebuild embeddings every call, use if target shape changes
-            assert shape is not None
+            _assert(shape is not None, 'valid shape needed')
             embeds = build_rotary_pos_embed(
                 shape,
                 self.bands,
