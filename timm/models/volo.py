@@ -30,57 +30,9 @@ from torch.utils.checkpoint import checkpoint
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['VOLO']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .96, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.conv.0', 'classifier': ('head', 'aux_head'),
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'volo_d1_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_224_84.2.pth.tar',
-        crop_pct=0.96),
-    'volo_d1_384': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_384_85.2.pth.tar',
-        crop_pct=1.0, input_size=(3, 384, 384)),
-    'volo_d2_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_224_85.2.pth.tar',
-        crop_pct=0.96),
-    'volo_d2_384': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_384_86.0.pth.tar',
-        crop_pct=1.0, input_size=(3, 384, 384)),
-    'volo_d3_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_224_85.4.pth.tar',
-        crop_pct=0.96),
-    'volo_d3_448': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_448_86.3.pth.tar',
-        crop_pct=1.0, input_size=(3, 448, 448)),
-    'volo_d4_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_224_85.7.pth.tar',
-        crop_pct=0.96),
-    'volo_d4_448': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_448_86.79.pth.tar',
-        crop_pct=1.15, input_size=(3, 448, 448)),
-    'volo_d5_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_224_86.10.pth.tar',
-        crop_pct=0.96),
-    'volo_d5_448': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_448_87.0.pth.tar',
-        crop_pct=1.15, input_size=(3, 448, 448)),
-    'volo_d5_512': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_512_87.07.pth.tar',
-        crop_pct=1.15, input_size=(3, 512, 512)),
-}
 
 
 class OutlookAttention(nn.Module):
@@ -370,8 +322,15 @@ class PatchEmbed(nn.Module):
     """
 
     def __init__(
-            self, img_size=224, stem_conv=False, stem_stride=1,
-            patch_size=8, in_chans=3, hidden_dim=64, embed_dim=384):
+            self,
+            img_size=224,
+            stem_conv=False,
+            stem_stride=1,
+            patch_size=8,
+            in_chans=3,
+            hidden_dim=64,
+            embed_dim=384,
+    ):
         super().__init__()
         assert patch_size in [4, 8, 16]
         if stem_conv:
@@ -416,8 +375,20 @@ class Downsample(nn.Module):
 
 
 def outlooker_blocks(
-        block_fn, index, dim, layers, num_heads=1, kernel_size=3, padding=1, stride=2,
-        mlp_ratio=3., qkv_bias=False, attn_drop=0, drop_path_rate=0., **kwargs):
+        block_fn,
+        index,
+        dim,
+        layers,
+        num_heads=1,
+        kernel_size=3,
+        padding=1,
+        stride=2,
+        mlp_ratio=3.,
+        qkv_bias=False,
+        attn_drop=0,
+        drop_path_rate=0.,
+        **kwargs,
+):
     """
     generate outlooker layer in stage1
     return: outlooker layers
@@ -759,7 +730,71 @@ class VOLO(nn.Module):
 def _create_volo(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    return build_model_with_cfg(VOLO, variant, pretrained, **kwargs)
+    return build_model_with_cfg(
+        VOLO,
+        variant,
+        pretrained,
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .96, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.conv.0', 'classifier': ('head', 'aux_head'),
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'volo_d1_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_224_84.2.pth.tar',
+        crop_pct=0.96),
+    'volo_d1_384.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_384_85.2.pth.tar',
+        crop_pct=1.0, input_size=(3, 384, 384)),
+    'volo_d2_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_224_85.2.pth.tar',
+        crop_pct=0.96),
+    'volo_d2_384.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_384_86.0.pth.tar',
+        crop_pct=1.0, input_size=(3, 384, 384)),
+    'volo_d3_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_224_85.4.pth.tar',
+        crop_pct=0.96),
+    'volo_d3_448.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_448_86.3.pth.tar',
+        crop_pct=1.0, input_size=(3, 448, 448)),
+    'volo_d4_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_224_85.7.pth.tar',
+        crop_pct=0.96),
+    'volo_d4_448.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_448_86.79.pth.tar',
+        crop_pct=1.15, input_size=(3, 448, 448)),
+    'volo_d5_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_224_86.10.pth.tar',
+        crop_pct=0.96),
+    'volo_d5_448.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_448_87.0.pth.tar',
+        crop_pct=1.15, input_size=(3, 448, 448)),
+    'volo_d5_512.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_512_87.07.pth.tar',
+        crop_pct=1.15, input_size=(3, 512, 512)),
+})
 
 
 @register_model

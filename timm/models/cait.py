@@ -17,58 +17,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['Cait', 'ClassAttn', 'LayerScaleBlockClassAttn', 'LayerScaleBlock', 'TalkingHeadAttn']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 384, 384), 'pool_size': None,
-        'crop_pct': 1.0, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    cait_xxs24_224=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/XXS24_224.pth',
-        input_size=(3, 224, 224),
-    ),
-    cait_xxs24_384=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/XXS24_384.pth',
-    ),
-    cait_xxs36_224=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/XXS36_224.pth',
-        input_size=(3, 224, 224),
-    ),
-    cait_xxs36_384=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/XXS36_384.pth',
-    ),
-    cait_xs24_384=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/XS24_384.pth',
-    ),
-    cait_s24_224=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/S24_224.pth',
-        input_size=(3, 224, 224),
-    ),
-    cait_s24_384=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/S24_384.pth',
-    ),
-    cait_s36_384=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/S36_384.pth',
-    ),
-    cait_m36_384=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/M36_384.pth',
-    ),
-    cait_m48_448=_cfg(
-        url='https://dl.fbaipublicfiles.com/deit/M48_448.pth',
-        input_size=(3, 448, 448),
-    ),
-)
 
 
 class ClassAttn(nn.Module):
@@ -433,6 +384,65 @@ def _create_cait(variant, pretrained=False, **kwargs):
         **kwargs,
     )
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 384, 384), 'pool_size': None,
+        'crop_pct': 1.0, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'cait_xxs24_224.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/XXS24_224.pth',
+        input_size=(3, 224, 224),
+    ),
+    'cait_xxs24_384.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/XXS24_384.pth',
+    ),
+    'cait_xxs36_224.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/XXS36_224.pth',
+        input_size=(3, 224, 224),
+    ),
+    'cait_xxs36_384.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/XXS36_384.pth',
+    ),
+    'cait_xs24_384.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/XS24_384.pth',
+    ),
+    'cait_s24_224.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/S24_224.pth',
+        input_size=(3, 224, 224),
+    ),
+    'cait_s24_384.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/S24_384.pth',
+    ),
+    'cait_s36_384.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/S36_384.pth',
+    ),
+    'cait_m36_384.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/M36_384.pth',
+    ),
+    'cait_m48_448.fb_dist_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://dl.fbaipublicfiles.com/deit/M48_448.pth',
+        input_size=(3, 448, 448),
+    ),
+})
 
 
 @register_model
