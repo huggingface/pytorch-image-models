@@ -50,11 +50,11 @@ top5_prob, top5_catid = torch.topk(probabilities, 5)
 for i in range(top5_prob.size(0)):
     print(categories[top5_catid[i]], top5_prob[i].item())
 # prints class names and probabilities like:
-# Samoyed 0.8442415595054626
-# Pomeranian 0.09159677475690842
-# Great Pyrenees 0.013929242268204689
-# Arctic fox 0.00913404393941164
-# white wolf 0.008576451800763607
+# Samoyed    0.9452909231185913
+# Pomeranian 0.04509485140442848
+# white wolf 0.0029849212151020765
+# Arctic fox 0.0020403596572577953
+# keeshond   0.0009282337850891054
 ```
 
 Replace the model name with the variant you want to use, e.g. `simplenetv1_9m_m2`. You can find the IDs in the model summaries at the top of this page.
