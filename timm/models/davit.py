@@ -11,8 +11,6 @@ DaViT model defs and weights adapted from https://github.com/dingmyu/davit, orig
 # Copyright (c) 2022 Mingyu Ding
 # All rights reserved.
 # This source code is licensed under the MIT license
-import itertools
-from collections import OrderedDict
 from functools import partial
 from typing import Tuple
 
@@ -22,13 +20,12 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, SelectAdaptivePool2d, Mlp, LayerNorm2d, get_norm_layer
+from timm.layers import DropPath, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer, use_fused_attn
 from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['DaViT']
 
@@ -217,9 +214,9 @@ def window_reverse(windows: Tensor, window_size: Tuple[int, int], H: int, W: int
     Returns:
         x: (B, H, W, C)
     """
-    B = int(windows.shape[0] / (H * W / window_size[0] / window_size[1]))
-    x = windows.view(B, H // window_size[0], W // window_size[1], window_size[0], window_size[1], -1)
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
+    C = windows.shape[-1]
+    x = windows.view(-1, H // window_size[0], W // window_size[1], window_size[0], window_size[1], C)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, H, W, C)
     return x
 
 
@@ -232,6 +229,7 @@ class WindowAttention(nn.Module):
         num_heads (int): Number of attention heads.
         qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
     """
+    fused_attn: torch.jit.Final[bool]
 
     def __init__(self, dim, window_size, num_heads, qkv_bias=True):
         super().__init__()
@@ -240,6 +238,7 @@ class WindowAttention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim, dim)
@@ -252,11 +251,15 @@ class WindowAttention(nn.Module):
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        attn = self.softmax(attn)
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(q, k, v)
+        else:
+            q = q * self.scale
+            attn = (q @ k.transpose(-2, -1))
+            attn = self.softmax(attn)
+            x = attn @ v
 
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+        x = x.transpose(1, 2).reshape(B_, N, C)
         x = self.proj(x)
         return x
 
@@ -471,7 +474,6 @@ class DaViT(nn.Module):
             ffn=True,
             cpe_act=False,
             drop_rate=0.,
-            attn_drop_rate=0.,
             drop_path_rate=0.,
             num_classes=1000,
             global_pool='avg',

@@ -392,6 +392,9 @@ def build_model_with_cfg(
     # Wrap the model in a feature extraction module if enabled
     if features:
         feature_cls = FeatureListNet
+        output_fmt = getattr(model, 'output_fmt', None)
+        if output_fmt is not None:
+            feature_cfg.setdefault('output_fmt', output_fmt)
         if 'feature_cls' in feature_cfg:
             feature_cls = feature_cfg.pop('feature_cls')
             if isinstance(feature_cls, str):
@@ -403,7 +406,7 @@ def build_model_with_cfg(
                 else:
                     assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)
-        model.pretrained_cfg = pretrained_cfg_for_features(pretrained_cfg)  # add back default_cfg
-        model.default_cfg = model.pretrained_cfg  # alias for backwards compat
+        model.pretrained_cfg = pretrained_cfg_for_features(pretrained_cfg)  # add back pretrained cfg
+        model.default_cfg = model.pretrained_cfg  # alias for rename backwards compat (default_cfg -> pretrained_cfg)
 
     return model

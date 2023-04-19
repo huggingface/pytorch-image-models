@@ -42,17 +42,17 @@ from typing import Callable, Optional, Union, Tuple, List
 
 import torch
 from torch import nn
+from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, ConvMlp, DropPath, LayerNorm, ClassifierHead, NormMlpClassifierHead
 from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
 from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
-from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf
+from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['MaxxVitCfg', 'MaxxVitConvCfg', 'MaxxVitTransformerCfg', 'MaxxVit']
 
@@ -140,6 +140,8 @@ class MaxxVitCfg:
 
 
 class Attention2d(nn.Module):
+    fused_attn: Final[bool]
+
     """ multi-head attention for 2D NCHW tensors"""
     def __init__(
             self,
@@ -160,6 +162,7 @@ class Attention2d(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -175,15 +178,31 @@ class Attention2d(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, 3, self.num_heads, self.dim_head, -1).unbind(1)
 
-        attn = (q.transpose(-2, -1) @ k) * self.scale
-        if self.rel_pos is not None:
-            attn = self.rel_pos(attn)
-        elif shared_rel_pos is not None:
-            attn = attn + shared_rel_pos
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fused_attn:
+            attn_bias = None
+            if self.rel_pos is not None:
+                attn_bias = self.rel_pos.get_bias()
+            elif shared_rel_pos is not None:
+                attn_bias = shared_rel_pos
 
-        x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q.transpose(-1, -2),
+                k.transpose(-1, -2),
+                v.transpose(-1, -2),
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            ).transpose(-1, -2).reshape(B, -1, H, W)
+        else:
+            q = q * self.scale
+            attn = q.transpose(-2, -1) @ k
+            if self.rel_pos is not None:
+                attn = self.rel_pos(attn)
+            elif shared_rel_pos is not None:
+                attn = attn + shared_rel_pos
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
+
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -191,6 +210,8 @@ class Attention2d(nn.Module):
 
 class AttentionCl(nn.Module):
     """ Channels-last multi-head attention (B, ..., C) """
+    fused_attn: Final[bool]
+
     def __init__(
             self,
             dim: int,
@@ -211,6 +232,7 @@ class AttentionCl(nn.Module):
         self.dim_head = dim_head
         self.head_first = head_first
         self.scale = dim_head ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim_attn * 3, bias=bias)
         self.rel_pos = rel_pos_cls(num_heads=self.num_heads) if rel_pos_cls else None
@@ -227,15 +249,30 @@ class AttentionCl(nn.Module):
         else:
             q, k, v = self.qkv(x).reshape(B, -1, 3, self.num_heads, self.dim_head).transpose(1, 3).unbind(2)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        if self.rel_pos is not None:
-            attn = self.rel_pos(attn, shared_rel_pos=shared_rel_pos)
-        elif shared_rel_pos is not None:
-            attn = attn + shared_rel_pos
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fused_attn:
+            attn_bias = None
+            if self.rel_pos is not None:
+                attn_bias = self.rel_pos.get_bias()
+            elif shared_rel_pos is not None:
+                attn_bias = shared_rel_pos
 
-        x = (attn @ v).transpose(1, 2).reshape(restore_shape + (-1,))
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            if self.rel_pos is not None:
+                attn = self.rel_pos(attn, shared_rel_pos=shared_rel_pos)
+            elif shared_rel_pos is not None:
+                attn = attn + shared_rel_pos
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(1, 2).reshape(restore_shape + (-1,))
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

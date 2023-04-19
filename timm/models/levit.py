@@ -24,7 +24,6 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 # Copyright 2020 Ross Wightman, Apache-2.0 License
 from collections import OrderedDict
-from dataclasses import dataclass
 from functools import partial
 from typing import Dict
 
@@ -35,9 +34,7 @@ from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
 from timm.layers import to_ntuple, to_2tuple, get_act_layer, DropPath, trunc_normal_
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
-
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['Levit']
 

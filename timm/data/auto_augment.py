@@ -54,8 +54,7 @@ def _interpolation(kwargs):
     interpolation = kwargs.pop('resample', _DEFAULT_INTERPOLATION)
     if isinstance(interpolation, (list, tuple)):
         return random.choice(interpolation)
-    else:
-        return interpolation
+    return interpolation
 
 
 def _check_args_tf(kwargs):
@@ -100,7 +99,7 @@ def rotate(img, degrees, **kwargs):
     _check_args_tf(kwargs)
     if _PIL_VER >= (5, 2):
         return img.rotate(degrees, **kwargs)
-    elif _PIL_VER >= (5, 0):
+    if _PIL_VER >= (5, 0):
         w, h = img.size
         post_trans = (0, 0)
         rotn_center = (w / 2.0, h / 2.0)
@@ -124,8 +123,7 @@ def rotate(img, degrees, **kwargs):
         matrix[2] += rotn_center[0]
         matrix[5] += rotn_center[1]
         return img.transform(img.size, Image.AFFINE, matrix, **kwargs)
-    else:
-        return img.rotate(degrees, resample=kwargs['resample'])
+    return img.rotate(degrees, resample=kwargs['resample'])
 
 
 def auto_contrast(img, **__):
@@ -151,12 +149,13 @@ def solarize_add(img, add, thresh=128, **__):
             lut.append(min(255, i + add))
         else:
             lut.append(i)
+
     if img.mode in ("L", "RGB"):
         if img.mode == "RGB" and len(lut) == 256:
             lut = lut + lut + lut
         return img.point(lut)
-    else:
-        return img
+
+    return img
 
 
 def posterize(img, bits_to_keep, **__):
@@ -226,7 +225,7 @@ def _enhance_increasing_level_to_arg(level, _hparams):
 
 def _minmax_level_to_arg(level, _hparams, min_val=0., max_val=1.0, clamp=True):
     level = (level / _LEVEL_DENOM)
-    min_val + (max_val - min_val) * level
+    level = min_val + (max_val - min_val) * level
     if clamp:
         level = max(min_val, min(max_val, level))
     return level,
@@ -552,16 +551,15 @@ def auto_augment_policy(name='v0', hparams=None):
     hparams = hparams or _HPARAMS_DEFAULT
     if name == 'original':
         return auto_augment_policy_original(hparams)
-    elif name == 'originalr':
+    if name == 'originalr':
         return auto_augment_policy_originalr(hparams)
-    elif name == 'v0':
+    if name == 'v0':
         return auto_augment_policy_v0(hparams)
-    elif name == 'v0r':
+    if name == 'v0r':
         return auto_augment_policy_v0r(hparams)
-    elif name == '3a':
+    if name == '3a':
         return auto_augment_policy_3a(hparams)
-    else:
-        assert False, 'Unknown AA policy (%s)' % name
+    assert False, f'Unknown AA policy {name}'
 
 
 class AutoAugment:
@@ -576,7 +574,7 @@ class AutoAugment:
         return img
 
     def __repr__(self):
-        fs = self.__class__.__name__ + f'(policy='
+        fs = self.__class__.__name__ + '(policy='
         for p in self.policy:
             fs += '\n\t['
             fs += ', '.join([str(op) for op in p])
@@ -636,7 +634,7 @@ _RAND_TRANSFORMS = [
     'ShearY',
     'TranslateXRel',
     'TranslateYRel',
-    #'Cutout'  # NOTE I've implement this as random erasing separately
+    # 'Cutout'  # NOTE I've implement this as random erasing separately
 ]
 
 
@@ -656,7 +654,7 @@ _RAND_INCREASING_TRANSFORMS = [
     'ShearY',
     'TranslateXRel',
     'TranslateYRel',
-    #'Cutout'  # NOTE I've implement this as random erasing separately
+    # 'Cutout'  # NOTE I've implement this as random erasing separately
 ]
 
 
@@ -667,7 +665,7 @@ _RAND_3A = [
 ]
 
 
-_RAND_CHOICE_3A = {
+_RAND_WEIGHTED_3A = {
     'SolarizeIncreasing': 6,
     'Desaturate': 6,
     'GaussianBlur': 6,
@@ -687,7 +685,7 @@ _RAND_CHOICE_3A = {
 
 # These experimental weights are based loosely on the relative improvements mentioned in paper.
 # They may not result in increased performance, but could likely be tuned to so.
-_RAND_CHOICE_WEIGHTS_0 = {
+_RAND_WEIGHTED_0 = {
     'Rotate': 3,
     'ShearX': 2,
     'ShearY': 2,
@@ -715,13 +713,12 @@ def _get_weighted_transforms(transforms: Dict):
 
 def rand_augment_choices(name: str, increasing=True):
     if name == 'weights':
-        return _RAND_CHOICE_WEIGHTS_0
-    elif name == '3aw':
-        return _RAND_CHOICE_3A
-    elif name == '3a':
+        return _RAND_WEIGHTED_0
+    if name == '3aw':
+        return _RAND_WEIGHTED_3A
+    if name == '3a':
         return _RAND_3A
-    else:
-        return _RAND_INCREASING_TRANSFORMS if increasing else _RAND_TRANSFORMS
+    return _RAND_INCREASING_TRANSFORMS if increasing else _RAND_TRANSFORMS
 
 
 def rand_augment_ops(

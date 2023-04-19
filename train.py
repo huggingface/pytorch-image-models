@@ -143,6 +143,10 @@ group.add_argument('--grad-checkpointing', action='store_true', default=False,
 group.add_argument('--fast-norm', default=False, action='store_true',
                    help='enable experimental fast-norm')
 group.add_argument('--model-kwargs', nargs='*', default={}, action=utils.ParseKwargs)
+group.add_argument('--head-init-scale', default=None, type=float,
+                   help='Head initialization scale')
+group.add_argument('--head-init-bias', default=None, type=float,
+                   help='Head initialization bias value')
 
 scripting_group = group.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
@@ -432,6 +436,13 @@ def main():
         checkpoint_path=args.initial_checkpoint,
         **args.model_kwargs,
     )
+    if args.head_init_scale is not None:
+        with torch.no_grad():
+            model.get_classifier().weight.mul_(args.head_init_scale)
+            model.get_classifier().bias.mul_(args.head_init_scale)
+    if args.head_init_bias is not None:
+        nn.init.constant_(model.get_classifier().bias, args.head_init_bias)
+
     if args.num_classes is None:
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
@@ -519,8 +530,14 @@ def main():
         if utils.is_primary(args):
             _logger.info('Using NVIDIA APEX AMP. Training in mixed precision.')
     elif use_amp == 'native':
-        amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
-        if device.type == 'cuda':
+        try:
+            amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
+        except (AttributeError, TypeError):
+            # fallback to CUDA only AMP for PyTorch < 1.10
+            assert device.type == 'cuda'
+            amp_autocast = torch.cuda.amp.autocast
+        if device.type == 'cuda' and amp_dtype == torch.float16:
+            # loss scaler only used for float16 (half) dtype, bfloat16 does not need it
             loss_scaler = NativeScaler()
         if utils.is_primary(args):
             _logger.info('Using native Torch AMP. Training in mixed precision.')

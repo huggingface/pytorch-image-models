@@ -104,15 +104,25 @@ class TransformerLayer(nn.Module):
         - Called TransformerLayer here to allow for "block" as defined in the paper ("non-overlapping image blocks")
         - Uses modified Attention layer that handles the "block" dimension
     """
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=proj_drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=proj_drop)
 
     def forward(self, x):
         y = self.norm1(x)
@@ -176,9 +186,23 @@ class NestLevel(nn.Module):
     """ Single hierarchical level of a Nested Transformer
     """
     def __init__(
-            self, num_blocks, block_size, seq_length, num_heads, depth, embed_dim, prev_embed_dim=None,
-            mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0., drop_path_rates=[],
-            norm_layer=None, act_layer=None, pad_type=''):
+            self,
+            num_blocks,
+            block_size,
+            seq_length,
+            num_heads,
+            depth,
+            embed_dim,
+            prev_embed_dim=None,
+            mlp_ratio=4.,
+            qkv_bias=True,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=[],
+            norm_layer=None,
+            act_layer=None,
+            pad_type='',
+    ):
         super().__init__()
         self.block_size = block_size
         self.grad_checkpointing = False
@@ -191,13 +215,20 @@ class NestLevel(nn.Module):
             self.pool = nn.Identity()
 
         # Transformer encoder
-        if len(drop_path_rates):
-            assert len(drop_path_rates) == depth, 'Must provide as many drop path rates as there are transformer layers'
+        if len(drop_path):
+            assert len(drop_path) == depth, 'Must provide as many drop path rates as there are transformer layers'
         self.transformer_encoder = nn.Sequential(*[
             TransformerLayer(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=drop_path_rates[i],
-                norm_layer=norm_layer, act_layer=act_layer)
+                dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                proj_drop=proj_drop,
+                attn_drop=attn_drop,
+                drop_path=drop_path[i],
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            )
             for i in range(depth)])
 
     def forward(self, x):
@@ -225,10 +256,26 @@ class Nest(nn.Module):
     """
 
     def __init__(
-            self, img_size=224, in_chans=3, patch_size=4, num_levels=3, embed_dims=(128, 256, 512),
-            num_heads=(4, 8, 16), depths=(2, 2, 20), num_classes=1000, mlp_ratio=4., qkv_bias=True,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0.5, norm_layer=None, act_layer=None,
-            pad_type='', weight_init='', global_pool='avg'
+            self,
+            img_size=224,
+            in_chans=3,
+            patch_size=4,
+            num_levels=3,
+            embed_dims=(128, 256, 512),
+            num_heads=(4, 8, 16),
+            depths=(2, 2, 20),
+            num_classes=1000,
+            mlp_ratio=4.,
+            qkv_bias=True,
+            drop_rate=0.,
+            proj_drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.5,
+            norm_layer=None,
+            act_layer=None,
+            pad_type='',
+            weight_init='',
+            global_pool='avg',
     ):
         """
         Args:
@@ -292,7 +339,12 @@ class Nest(nn.Module):
         
         # Patch embedding
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dims[0], flatten=False)
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dims[0],
+            flatten=False,
+        )
         self.num_patches = self.patch_embed.num_patches
         self.seq_length = self.num_patches // self.num_blocks[0]
 
@@ -304,8 +356,22 @@ class Nest(nn.Module):
         for i in range(len(self.num_blocks)):
             dim = embed_dims[i]
             levels.append(NestLevel(
-                self.num_blocks[i], self.block_size, self.seq_length, num_heads[i], depths[i], dim, prev_dim,
-                mlp_ratio, qkv_bias, drop_rate, attn_drop_rate, dp_rates[i], norm_layer, act_layer, pad_type=pad_type))
+                self.num_blocks[i],
+                self.block_size,
+                self.seq_length,
+                num_heads[i],
+                depths[i],
+                dim,
+                prev_dim,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dp_rates[i],
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                pad_type=pad_type,
+            ))
             self.feature_info += [dict(num_chs=dim, reduction=curr_stride, module=f'levels.{i}')]
             prev_dim = dim
             curr_stride *= 2
@@ -315,7 +381,10 @@ class Nest(nn.Module):
         self.norm = norm_layer(embed_dims[-1])
 
         # Classifier
-        self.global_pool, self.head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        global_pool, head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool = global_pool
+        self.head_drop = nn.Dropout(drop_rate)
+        self.head = head
 
         self.init_weights(weight_init)
 
@@ -366,8 +435,7 @@ class Nest(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

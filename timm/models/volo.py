@@ -30,62 +30,24 @@ from torch.utils.checkpoint import checkpoint
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['VOLO']  # model_registry will add each entrypoint fn to this
 
 
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .96, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.conv.0', 'classifier': ('head', 'aux_head'),
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'volo_d1_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_224_84.2.pth.tar',
-        crop_pct=0.96),
-    'volo_d1_384': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_384_85.2.pth.tar',
-        crop_pct=1.0, input_size=(3, 384, 384)),
-    'volo_d2_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_224_85.2.pth.tar',
-        crop_pct=0.96),
-    'volo_d2_384': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_384_86.0.pth.tar',
-        crop_pct=1.0, input_size=(3, 384, 384)),
-    'volo_d3_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_224_85.4.pth.tar',
-        crop_pct=0.96),
-    'volo_d3_448': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_448_86.3.pth.tar',
-        crop_pct=1.0, input_size=(3, 448, 448)),
-    'volo_d4_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_224_85.7.pth.tar',
-        crop_pct=0.96),
-    'volo_d4_448': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_448_86.79.pth.tar',
-        crop_pct=1.15, input_size=(3, 448, 448)),
-    'volo_d5_224': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_224_86.10.pth.tar',
-        crop_pct=0.96),
-    'volo_d5_448': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_448_87.0.pth.tar',
-        crop_pct=1.15, input_size=(3, 448, 448)),
-    'volo_d5_512': _cfg(
-        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_512_87.07.pth.tar',
-        crop_pct=1.15, input_size=(3, 512, 512)),
-}
-
-
 class OutlookAttention(nn.Module):
 
-    def __init__(self, dim, num_heads, kernel_size=3, padding=1, stride=1, qkv_bias=False, attn_drop=0., proj_drop=0.):
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            kernel_size=3,
+            padding=1,
+            stride=1,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         head_dim = dim // num_heads
         self.num_heads = num_heads
@@ -133,21 +95,40 @@ class OutlookAttention(nn.Module):
 
 class Outlooker(nn.Module):
     def __init__(
-            self, dim, kernel_size, padding, stride=1, num_heads=1, mlp_ratio=3., attn_drop=0.,
-            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, qkv_bias=False
+            self,
+            dim,
+            kernel_size,
+            padding,
+            stride=1,
+            num_heads=1,
+            mlp_ratio=3.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            qkv_bias=False,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = OutlookAttention(
-            dim, num_heads, kernel_size=kernel_size,
-            padding=padding, stride=stride,
-            qkv_bias=qkv_bias, attn_drop=attn_drop)
+            dim,
+            num_heads,
+            kernel_size=kernel_size,
+            padding=padding,
+            stride=stride,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+        )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+        )
 
     def forward(self, x):
         x = x + self.drop_path(self.attn(self.norm1(x)))
@@ -158,7 +139,13 @@ class Outlooker(nn.Module):
 class Attention(nn.Module):
 
     def __init__(
-            self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -189,8 +176,16 @@ class Attention(nn.Module):
 class Transformer(nn.Module):
 
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., qkv_bias=False,
-            attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop)
@@ -211,7 +206,14 @@ class Transformer(nn.Module):
 class ClassAttention(nn.Module):
 
     def __init__(
-            self, dim, num_heads=8, head_dim=None, qkv_bias=False, attn_drop=0., proj_drop=0.):
+            self,
+            dim,
+            num_heads=8,
+            head_dim=None,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         self.num_heads = num_heads
         if head_dim is not None:
@@ -246,17 +248,38 @@ class ClassAttention(nn.Module):
 class ClassBlock(nn.Module):
 
     def __init__(
-            self, dim, num_heads, head_dim=None, mlp_ratio=4., qkv_bias=False,
-            drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+            self,
+            dim,
+            num_heads,
+            head_dim=None,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = ClassAttention(
-            dim, num_heads=num_heads, head_dim=head_dim, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+            dim,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+        )
         # NOTE: drop path for stochastic depth
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+            drop=drop,
+        )
 
     def forward(self, x):
         cls_embed = x[:, :1]
@@ -299,8 +322,15 @@ class PatchEmbed(nn.Module):
     """
 
     def __init__(
-            self, img_size=224, stem_conv=False, stem_stride=1,
-            patch_size=8, in_chans=3, hidden_dim=64, embed_dim=384):
+            self,
+            img_size=224,
+            stem_conv=False,
+            stem_stride=1,
+            patch_size=8,
+            in_chans=3,
+            hidden_dim=64,
+            embed_dim=384,
+    ):
         super().__init__()
         assert patch_size in [4, 8, 16]
         if stem_conv:
@@ -345,8 +375,20 @@ class Downsample(nn.Module):
 
 
 def outlooker_blocks(
-        block_fn, index, dim, layers, num_heads=1, kernel_size=3, padding=1, stride=2,
-        mlp_ratio=3., qkv_bias=False, attn_drop=0, drop_path_rate=0., **kwargs):
+        block_fn,
+        index,
+        dim,
+        layers,
+        num_heads=1,
+        kernel_size=3,
+        padding=1,
+        stride=2,
+        mlp_ratio=3.,
+        qkv_bias=False,
+        attn_drop=0,
+        drop_path_rate=0.,
+        **kwargs,
+):
     """
     generate outlooker layer in stage1
     return: outlooker layers
@@ -354,18 +396,33 @@ def outlooker_blocks(
     blocks = []
     for block_idx in range(layers[index]):
         block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
-        blocks.append(
-            block_fn(
-                dim, kernel_size=kernel_size, padding=padding,
-                stride=stride, num_heads=num_heads, mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias, attn_drop=attn_drop, drop_path=block_dpr))
+        blocks.append(block_fn(
+            dim,
+            kernel_size=kernel_size,
+            padding=padding,
+            stride=stride,
+            num_heads=num_heads,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            drop_path=block_dpr,
+        ))
     blocks = nn.Sequential(*blocks)
     return blocks
 
 
 def transformer_blocks(
-        block_fn, index, dim, layers, num_heads, mlp_ratio=3.,
-        qkv_bias=False, attn_drop=0, drop_path_rate=0., **kwargs):
+        block_fn,
+        index,
+        dim,
+        layers,
+        num_heads,
+        mlp_ratio=3.,
+        qkv_bias=False,
+        attn_drop=0,
+        drop_path_rate=0.,
+        **kwargs,
+):
     """
     generate transformer layers in stage2
     return: transformer layers
@@ -373,13 +430,14 @@ def transformer_blocks(
     blocks = []
     for block_idx in range(layers[index]):
         block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
-        blocks.append(
-            block_fn(
-                dim, num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                attn_drop=attn_drop,
-                drop_path=block_dpr))
+        blocks.append(block_fn(
+            dim,
+            num_heads,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            drop_path=block_dpr,
+        ))
     blocks = nn.Sequential(*blocks)
     return blocks
 
@@ -405,6 +463,7 @@ class VOLO(nn.Module):
             mlp_ratio=3.0,
             qkv_bias=False,
             drop_rate=0.,
+            pos_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
             norm_layer=nn.LayerNorm,
@@ -429,14 +488,18 @@ class VOLO(nn.Module):
         self.grad_checkpointing = False
 
         self.patch_embed = PatchEmbed(
-            stem_conv=True, stem_stride=2, patch_size=patch_size,
-            in_chans=in_chans, hidden_dim=stem_hidden_dim,
-            embed_dim=embed_dims[0])
+            stem_conv=True,
+            stem_stride=2,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            hidden_dim=stem_hidden_dim,
+            embed_dim=embed_dims[0],
+        )
 
         # inital positional encoding, we add positional encoding after outlooker blocks
         patch_grid = (img_size[0] // patch_size // pooling_scale, img_size[1] // patch_size // pooling_scale)
         self.pos_embed = nn.Parameter(torch.zeros(1, patch_grid[0], patch_grid[1], embed_dims[-1]))
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         # set the main block in network
         network = []
@@ -444,14 +507,31 @@ class VOLO(nn.Module):
             if outlook_attention[i]:
                 # stage 1
                 stage = outlooker_blocks(
-                    Outlooker, i, embed_dims[i], layers, num_heads[i], mlp_ratio=mlp_ratio[i],
-                    qkv_bias=qkv_bias, attn_drop=attn_drop_rate, norm_layer=norm_layer)
+                    Outlooker,
+                    i,
+                    embed_dims[i],
+                    layers,
+                    num_heads[i],
+                    mlp_ratio=mlp_ratio[i],
+                    qkv_bias=qkv_bias,
+                    attn_drop=attn_drop_rate,
+                    norm_layer=norm_layer,
+                )
                 network.append(stage)
             else:
                 # stage 2
                 stage = transformer_blocks(
-                    Transformer, i, embed_dims[i], layers, num_heads[i], mlp_ratio=mlp_ratio[i], qkv_bias=qkv_bias,
-                    drop_path_rate=drop_path_rate, attn_drop=attn_drop_rate, norm_layer=norm_layer)
+                    Transformer,
+                    i,
+                    embed_dims[i],
+                    layers,
+                    num_heads[i],
+                    mlp_ratio=mlp_ratio[i],
+                    qkv_bias=qkv_bias,
+                    drop_path_rate=drop_path_rate,
+                    attn_drop=attn_drop_rate,
+                    norm_layer=norm_layer,
+                )
                 network.append(stage)
 
             if downsamples[i]:
@@ -463,19 +543,18 @@ class VOLO(nn.Module):
         # set post block, for example, class attention layers
         self.post_network = None
         if post_layers is not None:
-            self.post_network = nn.ModuleList(
-                [
-                    get_block(
-                        post_layers[i],
-                        dim=embed_dims[-1],
-                        num_heads=num_heads[-1],
-                        mlp_ratio=mlp_ratio[-1],
-                        qkv_bias=qkv_bias,
-                        attn_drop=attn_drop_rate,
-                        drop_path=0.,
-                        norm_layer=norm_layer)
-                    for i in range(len(post_layers))
-                ])
+            self.post_network = nn.ModuleList([
+                get_block(
+                    post_layers[i],
+                    dim=embed_dims[-1],
+                    num_heads=num_heads[-1],
+                    mlp_ratio=mlp_ratio[-1],
+                    qkv_bias=qkv_bias,
+                    attn_drop=attn_drop_rate,
+                    drop_path=0.,
+                    norm_layer=norm_layer)
+                for i in range(len(post_layers))
+            ])
             self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dims[-1]))
             trunc_normal_(self.cls_token, std=.02)
 
@@ -487,6 +566,7 @@ class VOLO(nn.Module):
         self.norm = norm_layer(self.num_features)
 
         # Classifier head
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
@@ -630,6 +710,7 @@ class VOLO(nn.Module):
             out = x[:, 0]
         else:
             out = x
+        x = self.head_drop(x)
         if pre_logits:
             return out
         out = self.head(out)
@@ -649,7 +730,71 @@ class VOLO(nn.Module):
 def _create_volo(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    return build_model_with_cfg(VOLO, variant, pretrained, **kwargs)
+    return build_model_with_cfg(
+        VOLO,
+        variant,
+        pretrained,
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .96, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.conv.0', 'classifier': ('head', 'aux_head'),
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'volo_d1_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_224_84.2.pth.tar',
+        crop_pct=0.96),
+    'volo_d1_384.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d1_384_85.2.pth.tar',
+        crop_pct=1.0, input_size=(3, 384, 384)),
+    'volo_d2_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_224_85.2.pth.tar',
+        crop_pct=0.96),
+    'volo_d2_384.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d2_384_86.0.pth.tar',
+        crop_pct=1.0, input_size=(3, 384, 384)),
+    'volo_d3_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_224_85.4.pth.tar',
+        crop_pct=0.96),
+    'volo_d3_448.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d3_448_86.3.pth.tar',
+        crop_pct=1.0, input_size=(3, 448, 448)),
+    'volo_d4_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_224_85.7.pth.tar',
+        crop_pct=0.96),
+    'volo_d4_448.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d4_448_86.79.pth.tar',
+        crop_pct=1.15, input_size=(3, 448, 448)),
+    'volo_d5_224.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_224_86.10.pth.tar',
+        crop_pct=0.96),
+    'volo_d5_448.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_448_87.0.pth.tar',
+        crop_pct=1.15, input_size=(3, 448, 448)),
+    'volo_d5_512.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/sail-sg/volo/releases/download/volo_1/d5_512_87.07.pth.tar',
+        crop_pct=1.15, input_size=(3, 512, 512)),
+})
 
 
 @register_model
