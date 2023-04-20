@@ -29,9 +29,9 @@ class ApexScaler:
     ):
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward(create_graph=create_graph)
-        if clip_grad is not None:
-            dispatch_clip_grad(amp.master_params(optimizer), clip_grad, mode=clip_mode)
         if need_update:
+            if clip_grad is not None:
+                dispatch_clip_grad(amp.master_params(optimizer), clip_grad, mode=clip_mode)
             optimizer.step()
 
     def state_dict(self):
@@ -60,11 +60,11 @@ class NativeScaler:
             need_update=True,
     ):
         self._scaler.scale(loss).backward(create_graph=create_graph)
-        if clip_grad is not None:
-            assert parameters is not None
-            self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
-            dispatch_clip_grad(parameters, clip_grad, mode=clip_mode)
         if need_update:
+            if clip_grad is not None:
+                assert parameters is not None
+                self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
+                dispatch_clip_grad(parameters, clip_grad, mode=clip_mode)
             self._scaler.step(optimizer)
             self._scaler.update()
 

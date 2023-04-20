@@ -927,13 +927,13 @@ def train_one_epoch(
                 )
             else:
                 loss.backward(create_graph=second_order)
-                if args.clip_grad is not None:
-                    utils.dispatch_clip_grad(
-                        model_parameters(model, exclude_head='agc' in args.clip_mode),
-                        value=args.clip_grad,
-                        mode=args.clip_mode,
-                    )
                 if need_update:
+                    if args.clip_grad is not None:
+                        utils.dispatch_clip_grad(
+                            model_parameters(model, exclude_head='agc' in args.clip_mode),
+                            value=args.clip_grad,
+                            mode=args.clip_mode,
+                        )
                     optimizer.step()
 
         if has_no_sync and not need_update:
