@@ -591,9 +591,9 @@ class MetaFormer(nn.Module):
         # if using MlpHead, dropout is handled by MlpHead
         if num_classes > 0:
             if self.drop_rate > 0.0:
-                head = self.head_fn(dims[-1], num_classes, head_dropout=self.drop_rate)
+                head = self.head_fn(self.num_features, num_classes, head_dropout=self.drop_rate)
             else:
-                head = self.head_fn(dims[-1], num_classes)
+                head = self.head_fn(self.num_features, num_classes)
         else:
             head = nn.Identity()
         
@@ -628,9 +628,9 @@ class MetaFormer(nn.Module):
             self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
         if num_classes > 0:
             if self.drop_rate > 0.0:
-                head = self.head_fn(dims[-1], num_classes, head_dropout=self.drop_rate)
+                head = self.head_fn(self.num_features, num_classes, head_dropout=self.drop_rate)
             else:
-                head = self.head_fn(dims[-1], num_classes)
+                head = self.head_fn(self.num_features, num_classes)
         else:
             head = nn.Identity()
         self.head.fc = head
