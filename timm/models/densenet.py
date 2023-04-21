@@ -15,39 +15,21 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
 from ._builder import build_model_with_cfg
 from ._manipulate import MATCH_PREV_GROUP
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['DenseNet']
 
 
-def _cfg(url=''):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'features.conv0', 'classifier': 'classifier',
-    }
-
-
-default_cfgs = {
-    'densenet121': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/densenet121_ra-50efcf5c.pth'),
-    'densenet121d': _cfg(url=''),
-    'densenetblur121d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/densenetblur121d_ra-100dcfbc.pth'),
-    'densenet169': _cfg(url='https://download.pytorch.org/models/densenet169-b2777c0a.pth'),
-    'densenet201': _cfg(url='https://download.pytorch.org/models/densenet201-c1103571.pth'),
-    'densenet161': _cfg(url='https://download.pytorch.org/models/densenet161-8d451a50.pth'),
-    'densenet264': _cfg(url=''),
-    'densenet264d_iabn': _cfg(url=''),
-    'tv_densenet121': _cfg(url='https://download.pytorch.org/models/densenet121-a639ec97.pth'),
-}
-
-
 class DenseLayer(nn.Module):
     def __init__(
-            self, num_input_features, growth_rate, bn_size, norm_layer=BatchNormAct2d,
-            drop_rate=0., memory_efficient=False):
+            self,
+            num_input_features,
+            growth_rate,
+            bn_size,
+            norm_layer=BatchNormAct2d,
+            drop_rate=0.,
+            memory_efficient=False,
+    ):
         super(DenseLayer, self).__init__()
         self.add_module('norm1', norm_layer(num_input_features)),
         self.add_module('conv1', nn.Conv2d(
@@ -145,7 +127,13 @@ class DenseBlock(nn.ModuleDict):
 
 
 class DenseTransition(nn.Sequential):
-    def __init__(self, num_input_features, num_output_features, norm_layer=BatchNormAct2d, aa_layer=None):
+    def __init__(
+            self,
+            num_input_features,
+            num_output_features,
+            norm_layer=BatchNormAct2d,
+            aa_layer=None,
+    ):
         super(DenseTransition, self).__init__()
         self.add_module('norm', norm_layer(num_input_features))
         self.add_module('conv', nn.Conv2d(
@@ -324,9 +312,35 @@ def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
     kwargs['growth_rate'] = growth_rate
     kwargs['block_config'] = block_config
     return build_model_with_cfg(
-        DenseNet, variant, pretrained,
+        DenseNet,
+        variant,
+        pretrained,
         feature_cfg=dict(flatten_sequential=True), pretrained_filter_fn=_filter_torchvision_pretrained,
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url=''):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'features.conv0', 'classifier': 'classifier',
+    }
+
+
+default_cfgs = {
+    'densenet121.ra_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/densenet121_ra-50efcf5c.pth'),
+    'densenet121d': _cfg(url=''),
+    'densenetblur121d.ra_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/densenetblur121d_ra-100dcfbc.pth'),
+    'densenet169.tv_in1k': _cfg(url='https://download.pytorch.org/models/densenet169-b2777c0a.pth'),
+    'densenet201.tv_in1k': _cfg(url='https://download.pytorch.org/models/densenet201-c1103571.pth'),
+    'densenet161.tv_in1k': _cfg(url='https://download.pytorch.org/models/densenet161-8d451a50.pth'),
+    'densenet264.untrained': _cfg(url=''),
+    'densenet121.tv_in1k': _cfg(url='https://download.pytorch.org/models/densenet121-a639ec97.pth'),
+}
 
 
 @register_model
@@ -400,22 +414,3 @@ def densenet264(pretrained=False, **kwargs):
         'densenet264', growth_rate=48, block_config=(6, 12, 64, 48), pretrained=pretrained, **kwargs)
     return model
 
-
-@register_model
-def densenet264d_iabn(pretrained=False, **kwargs):
-    r"""Densenet-264 model with deep stem and Inplace-ABN
-    """
-    model = _create_densenet(
-        'densenet264d_iabn', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep',
-        norm_layer='iabn', act_layer='leaky_relu', pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def tv_densenet121(pretrained=False, **kwargs):
-    r"""Densenet-121 model with original Torchvision weights, from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
-    """
-    model = _create_densenet(
-        'tv_densenet121', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, **kwargs)
-    return model

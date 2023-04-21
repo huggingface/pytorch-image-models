@@ -17,37 +17,9 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DPN_MEAN, IMAGENET_DPN_STD, IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import BatchNormAct2d, ConvNormAct, create_conv2d, create_classifier, get_norm_act_layer
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['DPN']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DPN_MEAN, 'std': IMAGENET_DPN_STD,
-        'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'dpn48b': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'dpn68': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
-    'dpn68b': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dpn68b_ra-a31ca160.pth',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'dpn92': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
-    'dpn98': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),
-    'dpn131': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn131-71dfe43e0.pth'),
-    'dpn107': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn107_extra-1ac7121e2.pth')
-}
 
 
 class CatBnAct(nn.Module):
@@ -310,9 +282,42 @@ class DPN(nn.Module):
 
 def _create_dpn(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        DPN, variant, pretrained,
+        DPN,
+        variant,
+        pretrained,
         feature_cfg=dict(feature_concat=True, flatten_sequential=True),
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DPN_MEAN, 'std': IMAGENET_DPN_STD,
+        'first_conv': 'features.conv1_1.conv', 'classifier': 'classifier',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'dpn48b.untrained': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    'dpn68.mx_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
+    'dpn68b.ra_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dpn68b_ra-a31ca160.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+    'dpn68b.mx_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68b_extra-84854c156.pth'),
+    'dpn92.mx_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
+    'dpn98.mx_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),
+    'dpn131.mx_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn131-71dfe43e0.pth'),
+    'dpn107.mx_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn107_extra-1ac7121e2.pth')
+})
 
 
 @register_model

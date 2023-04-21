@@ -18,150 +18,12 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ConvNormAct, SeparableConvNormAct, BatchNormAct2d, ClassifierHead, DropPath, \
-    create_attn, create_norm_act_layer, get_norm_act_layer
+    create_attn, create_norm_act_layer
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['VovNet']  # model_registry will add each entrypoint fn to this
-
-
-# model cfgs adapted from https://github.com/youngwanLEE/vovnet-detectron2 &
-# https://github.com/stigma0617/VoVNet.pytorch/blob/master/models_vovnet/vovnet.py
-model_cfgs = dict(
-    vovnet39a=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=5,
-        block_per_stage=[1, 1, 2, 2],
-        residual=False,
-        depthwise=False,
-        attn='',
-    ),
-    vovnet57a=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=5,
-        block_per_stage=[1, 1, 4, 3],
-        residual=False,
-        depthwise=False,
-        attn='',
-
-    ),
-    ese_vovnet19b_slim_dw=dict(
-        stem_chs=[64, 64, 64],
-        stage_conv_chs=[64, 80, 96, 112],
-        stage_out_chs=[112, 256, 384, 512],
-        layer_per_block=3,
-        block_per_stage=[1, 1, 1, 1],
-        residual=True,
-        depthwise=True,
-        attn='ese',
-
-    ),
-    ese_vovnet19b_dw=dict(
-        stem_chs=[64, 64, 64],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=3,
-        block_per_stage=[1, 1, 1, 1],
-        residual=True,
-        depthwise=True,
-        attn='ese',
-    ),
-    ese_vovnet19b_slim=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[64, 80, 96, 112],
-        stage_out_chs=[112, 256, 384, 512],
-        layer_per_block=3,
-        block_per_stage=[1, 1, 1, 1],
-        residual=True,
-        depthwise=False,
-        attn='ese',
-    ),
-    ese_vovnet19b=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=3,
-        block_per_stage=[1, 1, 1, 1],
-        residual=True,
-        depthwise=False,
-        attn='ese',
-
-    ),
-    ese_vovnet39b=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=5,
-        block_per_stage=[1, 1, 2, 2],
-        residual=True,
-        depthwise=False,
-        attn='ese',
-    ),
-    ese_vovnet57b=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=5,
-        block_per_stage=[1, 1, 4, 3],
-        residual=True,
-        depthwise=False,
-        attn='ese',
-
-    ),
-    ese_vovnet99b=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=5,
-        block_per_stage=[1, 3, 9, 3],
-        residual=True,
-        depthwise=False,
-        attn='ese',
-    ),
-    eca_vovnet39b=dict(
-        stem_chs=[64, 64, 128],
-        stage_conv_chs=[128, 160, 192, 224],
-        stage_out_chs=[256, 512, 768, 1024],
-        layer_per_block=5,
-        block_per_stage=[1, 1, 2, 2],
-        residual=True,
-        depthwise=False,
-        attn='eca',
-    ),
-)
-model_cfgs['ese_vovnet39b_evos'] = model_cfgs['ese_vovnet39b']
-model_cfgs['ese_vovnet99b_iabn'] = model_cfgs['ese_vovnet99b']
-
-
-def _cfg(url=''):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.0.conv', 'classifier': 'head.fc',
-    }
-
-
-default_cfgs = dict(
-    vovnet39a=_cfg(url=''),
-    vovnet57a=_cfg(url=''),
-    ese_vovnet19b_slim_dw=_cfg(url=''),
-    ese_vovnet19b_dw=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet19b_dw-a8741004.pth'),
-    ese_vovnet19b_slim=_cfg(url=''),
-    ese_vovnet39b=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth'),
-    ese_vovnet57b=_cfg(url=''),
-    ese_vovnet99b=_cfg(url=''),
-    eca_vovnet39b=_cfg(url=''),
-    ese_vovnet39b_evos=_cfg(url=''),
-    ese_vovnet99b_iabn=_cfg(url=''),
-)
 
 
 class SequentialAppendList(nn.Sequential):
@@ -405,12 +267,151 @@ class VovNet(nn.Module):
         return x
 
 
+# model cfgs adapted from https://github.com/youngwanLEE/vovnet-detectron2 &
+# https://github.com/stigma0617/VoVNet.pytorch/blob/master/models_vovnet/vovnet.py
+model_cfgs = dict(
+    vovnet39a=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=5,
+        block_per_stage=[1, 1, 2, 2],
+        residual=False,
+        depthwise=False,
+        attn='',
+    ),
+    vovnet57a=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=5,
+        block_per_stage=[1, 1, 4, 3],
+        residual=False,
+        depthwise=False,
+        attn='',
+
+    ),
+    ese_vovnet19b_slim_dw=dict(
+        stem_chs=[64, 64, 64],
+        stage_conv_chs=[64, 80, 96, 112],
+        stage_out_chs=[112, 256, 384, 512],
+        layer_per_block=3,
+        block_per_stage=[1, 1, 1, 1],
+        residual=True,
+        depthwise=True,
+        attn='ese',
+
+    ),
+    ese_vovnet19b_dw=dict(
+        stem_chs=[64, 64, 64],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=3,
+        block_per_stage=[1, 1, 1, 1],
+        residual=True,
+        depthwise=True,
+        attn='ese',
+    ),
+    ese_vovnet19b_slim=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[64, 80, 96, 112],
+        stage_out_chs=[112, 256, 384, 512],
+        layer_per_block=3,
+        block_per_stage=[1, 1, 1, 1],
+        residual=True,
+        depthwise=False,
+        attn='ese',
+    ),
+    ese_vovnet19b=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=3,
+        block_per_stage=[1, 1, 1, 1],
+        residual=True,
+        depthwise=False,
+        attn='ese',
+
+    ),
+    ese_vovnet39b=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=5,
+        block_per_stage=[1, 1, 2, 2],
+        residual=True,
+        depthwise=False,
+        attn='ese',
+    ),
+    ese_vovnet57b=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=5,
+        block_per_stage=[1, 1, 4, 3],
+        residual=True,
+        depthwise=False,
+        attn='ese',
+
+    ),
+    ese_vovnet99b=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=5,
+        block_per_stage=[1, 3, 9, 3],
+        residual=True,
+        depthwise=False,
+        attn='ese',
+    ),
+    eca_vovnet39b=dict(
+        stem_chs=[64, 64, 128],
+        stage_conv_chs=[128, 160, 192, 224],
+        stage_out_chs=[256, 512, 768, 1024],
+        layer_per_block=5,
+        block_per_stage=[1, 1, 2, 2],
+        residual=True,
+        depthwise=False,
+        attn='eca',
+    ),
+)
+model_cfgs['ese_vovnet39b_evos'] = model_cfgs['ese_vovnet39b']
+
+
 def _create_vovnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        VovNet, variant, pretrained,
+        VovNet,
+        variant,
+        pretrained,
         model_cfg=model_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True),
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url=''):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.0.conv', 'classifier': 'head.fc',
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'vovnet39a.untrained': _cfg(url=''),
+    'vovnet57a.untrained': _cfg(url=''),
+    'ese_vovnet19b_slim_dw.untrained': _cfg(url=''),
+    'ese_vovnet19b_dw.ra_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet19b_dw-a8741004.pth'),
+    'ese_vovnet19b_slim.untrained': _cfg(url=''),
+    'ese_vovnet39b.ra_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth'),
+    'ese_vovnet57b.untrained': _cfg(url=''),
+    'ese_vovnet99b.untrained': _cfg(url=''),
+    'eca_vovnet39b.untrained': _cfg(url=''),
+    'ese_vovnet39b_evos.untrained': _cfg(url=''),
+})
 
 
 @register_model
@@ -465,10 +466,3 @@ def ese_vovnet39b_evos(pretrained=False, **kwargs):
     def norm_act_fn(num_features, **nkwargs):
         return create_norm_act_layer('evonorms0', num_features, jit=False, **nkwargs)
     return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)
-
-
-@register_model
-def ese_vovnet99b_iabn(pretrained=False, **kwargs):
-    norm_layer = get_norm_act_layer('iabn', act_layer='leaky_relu')
-    return _create_vovnet(
-        'ese_vovnet99b_iabn', pretrained=pretrained, norm_layer=norm_layer, act_layer=nn.LeakyReLU, **kwargs)
