@@ -303,29 +303,23 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    'tresnet_m.miil_in21k_ft_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_1k_miil_83_1-d236afcb.pth'),
-    'tresnet_m.miil_in21k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_miil_in21k-901b6ed4.pth',
-        num_classes=11221),
-    'tresnet_m.miil_in1k': _cfg(
-        url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_80_8-dbc13962.pth'),
-    'tresnet_l.miil_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_81_5-235b486c.pth'),
-    'tresnet_xl.miil_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_xl_82_0-a2d51b00.pth'),
+    'tresnet_m.miil_in21k_ft_in1k': _cfg(hf_hub_id='timm/'),
+    'tresnet_m.miil_in21k': _cfg(hf_hub_id='timm/', num_classes=11221),
+    'tresnet_m.miil_in1k': _cfg(hf_hub_id='timm/'),
+    'tresnet_l.miil_in1k': _cfg(hf_hub_id='timm/'),
+    'tresnet_xl.miil_in1k': _cfg(hf_hub_id='timm/'),
     'tresnet_m.miil_in1k_448': _cfg(
         input_size=(3, 448, 448), pool_size=(14, 14),
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_m_448-bc359d10.pth'),
+        hf_hub_id='timm/'),
     'tresnet_l.miil_in1k_448': _cfg(
         input_size=(3, 448, 448), pool_size=(14, 14),
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_448-940d0cd1.pth'),
+        hf_hub_id='timm/'),
     'tresnet_xl.miil_in1k_448': _cfg(
         input_size=(3, 448, 448), pool_size=(14, 14),
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_xl_448-8c1815de.pth'),
+        hf_hub_id='timm/'),
 
-    'tresnet_v2_l.miil_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/tresnet_l_v2_83_9-f36e4445.pth'),
+    'tresnet_v2_l.miil_in21k_ft_in1k': _cfg(hf_hub_id='timm/'),
+    'tresnet_v2_l.miil_in21k': _cfg(hf_hub_id='timm/', num_classes=11221),
 })
 
 
