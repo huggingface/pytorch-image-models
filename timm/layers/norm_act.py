@@ -40,6 +40,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
             track_running_stats=True,
             apply_act=True,
             act_layer=nn.ReLU,
+            act_params=None,  # FIXME not the final approach
             inplace=True,
             drop_layer=None,
             device=None,
@@ -59,6 +60,8 @@ class BatchNormAct2d(nn.BatchNorm2d):
         act_layer = get_act_layer(act_layer)  # string -> nn.Module
         if act_layer is not None and apply_act:
             act_args = dict(inplace=True) if inplace else {}
+            if act_params is not None:
+                act_args['negative_slope'] = act_params
             self.act = act_layer(**act_args)
         else:
             self.act = nn.Identity()

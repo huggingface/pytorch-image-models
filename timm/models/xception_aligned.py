@@ -15,47 +15,23 @@ from timm.layers import ClassifierHead, ConvNormAct, create_conv2d, get_norm_act
 from timm.layers.helpers import to_3tuple
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['XceptionAligned']
 
 
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (10, 10),
-        'crop_pct': 0.903, 'interpolation': 'bicubic',
-        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'stem.0.conv', 'classifier': 'head.fc',
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    xception41=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_41-e6439c97.pth'),
-    xception65=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception65_ra3-1447db8d.pth',
-        crop_pct=0.94,
-    ),
-    xception71=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_71-8eec7df1.pth'),
-
-    xception41p=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception41p_ra3-33195bc8.pth',
-        crop_pct=0.94,
-    ),
-    xception65p=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception65p_ra3-3c6114e4.pth',
-        crop_pct=0.94,
-    ),
-)
-
-
 class SeparableConv2d(nn.Module):
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=1, padding='',
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=1,
+            padding='',
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+    ):
         super(SeparableConv2d, self).__init__()
         self.kernel_size = kernel_size
         self.dilation = dilation
@@ -84,8 +60,17 @@ class SeparableConv2d(nn.Module):
 
 class PreSeparableConv2d(nn.Module):
     def __init__(
-            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=1, padding='',
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, first_act=True):
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=3,
+            stride=1,
+            dilation=1,
+            padding='',
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            first_act=True,
+    ):
         super(PreSeparableConv2d, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
         self.kernel_size = kernel_size
@@ -109,8 +94,17 @@ class PreSeparableConv2d(nn.Module):
 
 class XceptionModule(nn.Module):
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=1, pad_type='',
-            start_with_relu=True, no_skip=False, act_layer=nn.ReLU, norm_layer=None):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=1,
+            pad_type='',
+            start_with_relu=True,
+            no_skip=False,
+            act_layer=nn.ReLU,
+            norm_layer=None,
+    ):
         super(XceptionModule, self).__init__()
         out_chs = to_3tuple(out_chs)
         self.in_channels = in_chs
@@ -144,8 +138,16 @@ class XceptionModule(nn.Module):
 
 class PreXceptionModule(nn.Module):
     def __init__(
-            self, in_chs, out_chs, stride=1, dilation=1, pad_type='',
-            no_skip=False, act_layer=nn.ReLU, norm_layer=None):
+            self,
+            in_chs,
+            out_chs,
+            stride=1,
+            dilation=1,
+            pad_type='',
+            no_skip=False,
+            act_layer=nn.ReLU,
+            norm_layer=None,
+    ):
         super(PreXceptionModule, self).__init__()
         out_chs = to_3tuple(out_chs)
         self.in_channels = in_chs
@@ -160,8 +162,16 @@ class PreXceptionModule(nn.Module):
         self.stack = nn.Sequential()
         for i in range(3):
             self.stack.add_module(f'conv{i + 1}', PreSeparableConv2d(
-                in_chs, out_chs[i], 3, stride=stride if i == 2 else 1, dilation=dilation, padding=pad_type,
-                act_layer=act_layer, norm_layer=norm_layer, first_act=i > 0))
+                in_chs,
+                out_chs[i],
+                3,
+                stride=stride if i == 2 else 1,
+                dilation=dilation,
+                padding=pad_type,
+                act_layer=act_layer,
+                norm_layer=norm_layer,
+                first_act=i > 0,
+            ))
             in_chs = out_chs[i]
 
     def forward(self, x):
@@ -178,8 +188,17 @@ class XceptionAligned(nn.Module):
     """
 
     def __init__(
-            self, block_cfg, num_classes=1000, in_chans=3, output_stride=32, preact=False,
-            act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, drop_rate=0., global_pool='avg'):
+            self,
+            block_cfg,
+            num_classes=1000,
+            in_chans=3,
+            output_stride=32,
+            preact=False,
+            act_layer=nn.ReLU,
+            norm_layer=nn.BatchNorm2d,
+            drop_rate=0.,
+            global_pool='avg',
+    ):
         super(XceptionAligned, self).__init__()
         assert output_stride in (8, 16, 32)
         self.num_classes = num_classes
@@ -216,7 +235,11 @@ class XceptionAligned(nn.Module):
             num_chs=self.num_features, reduction=curr_stride, module='blocks.' + str(len(self.blocks) - 1))]
         self.act = act_layer(inplace=True) if preact else nn.Identity()
         self.head = ClassifierHead(
-            in_features=self.num_features, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            in_features=self.num_features,
+            num_classes=num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+        )
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -234,7 +257,7 @@ class XceptionAligned(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+        self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -256,9 +279,47 @@ class XceptionAligned(nn.Module):
 
 def _xception(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        XceptionAligned, variant, pretrained,
+        XceptionAligned,
+        variant,
+        pretrained,
         feature_cfg=dict(flatten_sequential=True, feature_cls='hook'),
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (10, 10),
+        'crop_pct': 0.903, 'interpolation': 'bicubic',
+        'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
+        'first_conv': 'stem.0.conv', 'classifier': 'head.fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'xception65.ra3_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception65_ra3-1447db8d.pth',
+        crop_pct=0.94,
+    ),
+
+    'xception41.tf_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_41-e6439c97.pth'),
+    'xception65.tf_in1k': _cfg(
+        url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_xception_65-c9ae96e8.pth'),
+    'xception71.tf_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_71-8eec7df1.pth'),
+
+    'xception41p.ra3_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception41p_ra3-33195bc8.pth',
+        crop_pct=0.94,
+    ),
+    'xception65p.ra3_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception65p_ra3-3c6114e4.pth',
+        crop_pct=0.94,
+    ),
+})
 
 
 @register_model

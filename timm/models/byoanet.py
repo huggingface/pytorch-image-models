@@ -14,74 +14,10 @@ Hacked together by / copyright Ross Wightman, 2021.
 """
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .byobnet import ByoBlockCfg, ByoModelCfg, ByobNet, interleave_blocks
 
 __all__ = []
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.95, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
-        'fixed_input_size': False, 'min_input_size': (3, 224, 224),
-        **kwargs
-    }
-
-
-default_cfgs = {
-    # GPU-Efficient (ResNet) weights
-    'botnet26t_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_c1_256-167a0e9f.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-    'sebotnet33ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sebotnet33ts_a1h2_256-957e3c3e.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
-    'botnet50ts_256': _cfg(
-        url='',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-    'eca_botnext26ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_botnext26ts_c_256-95a898f6.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-
-    'halonet_h1': _cfg(url='', input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
-    'halonet26t': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_a1h_256-3083328c.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
-    'sehalonet33ts': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sehalonet33ts_256-87e053f9.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
-    'halonet50ts': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_a1h2_256-f3a3daee.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
-    'eca_halonext26ts': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_c_256-06906299.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
-
-    'lambda_resnet26t': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_c_256-e5a5c857.pth',
-        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
-    'lambda_resnet50ts': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet50ts_a1h_256-b87370f7.pth',
-        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
-    'lambda_resnet26rpt_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26rpt_c_256-ab00292d.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
-
-    'haloregnetz_b': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/haloregnetz_c_raa_256-c8ad7616.pth',
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
-
-    'lamhalobotnet50ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet50ts_a1h2_256-fe3d9445.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-    'halo2botnet50ts_256': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h2_256-fd9c11a3.pth',
-        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
-}
 
 
 model_cfgs = dict(
@@ -329,7 +265,71 @@ def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
         ByobNet, variant, pretrained,
         model_cfg=model_cfgs[variant] if not cfg_variant else model_cfgs[cfg_variant],
         feature_cfg=dict(flatten_sequential=True),
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.95, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
+        'fixed_input_size': False, 'min_input_size': (3, 224, 224),
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    # GPU-Efficient (ResNet) weights
+    'botnet26t_256.c1_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_c1_256-167a0e9f.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'sebotnet33ts_256.a1h_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sebotnet33ts_a1h2_256-957e3c3e.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
+    'botnet50ts_256.untrained': _cfg(
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'eca_botnext26ts_256.c1_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_botnext26ts_c_256-95a898f6.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+
+    'halonet_h1.untrained': _cfg(input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'halonet26t.a1h_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_a1h_256-3083328c.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
+    'sehalonet33ts.ra2_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sehalonet33ts_256-87e053f9.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
+    'halonet50ts.a1h_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_a1h2_256-f3a3daee.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
+    'eca_halonext26ts.c1_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_c_256-06906299.pth',
+        input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
+
+    'lambda_resnet26t.c1_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_c_256-e5a5c857.pth',
+        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
+    'lambda_resnet50ts.a1h_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet50ts_a1h_256-b87370f7.pth',
+        min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
+    'lambda_resnet26rpt_256.c1_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26rpt_c_256-ab00292d.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
+
+    'haloregnetz_b.ra3_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/haloregnetz_c_raa_256-c8ad7616.pth',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
+
+    'lamhalobotnet50ts_256.a1h_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet50ts_a1h2_256-fe3d9445.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+    'halo2botnet50ts_256.a1h_in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h2_256-fd9c11a3.pth',
+        fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
+})
 
 
 @register_model

@@ -78,6 +78,7 @@ _ACT_LAYER_DEFAULT = dict(
     hard_sigmoid=nn.Hardsigmoid if _has_hardsigmoid else HardSigmoid,
     hard_swish=nn.Hardswish if _has_hardswish else HardSwish,
     hard_mish=HardMish,
+    identity=nn.Identity,
 )
 
 _ACT_LAYER_JIT = dict(

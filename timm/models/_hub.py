@@ -314,7 +314,7 @@ def push_to_hf_hub(
 def generate_readme(model_card: dict, model_name: str):
     readme_text = "---\n"
     readme_text += "tags:\n- image-classification\n- timm\n"
-    readme_text += "library_tag: timm\n"
+    readme_text += "library_name: timm\n"
     readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
     if 'details' in model_card and 'Dataset' in model_card['details']:
         readme_text += 'datasets:\n'
