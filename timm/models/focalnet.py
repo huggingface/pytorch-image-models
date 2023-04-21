@@ -75,12 +75,6 @@ class FocalModulation(nn.Module):
         self.norm = norm_layer(dim) if self.use_post_norm else nn.Identity()
 
     def forward(self, x):
-        """
-        Args:
-            x: input features with shape of (B, H, W, C)
-        """
-        C = x.shape[1]
-
         # pre linear projection
         x = self.f(x)
         q, ctx, gates = torch.split(x, self.input_split, 1)
@@ -435,6 +429,20 @@ class FocalNet(nn.Module):
     @torch.jit.ignore
     def no_weight_decay(self):
         return {''}
+
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',
+            blocks=[
+                (r'^layers\.(\d+)', None),
+                (r'^norm', (99999,))
+            ] if coarse else [
+                (r'^layers\.(\d+).downsample', (0,)),
+                (r'^layers\.(\d+)\.\w+\.(\d+)', None),
+                (r'^norm', (99999,)),
+            ]
+        )
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):

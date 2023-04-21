@@ -48,7 +48,6 @@ jobs:
     - name: Install requirements
       run: |
         pip install -r requirements.txt
-        pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git
     - name: Run tests on Windows
       if: startsWith(matrix.os, 'windows')
       env:

@@ -103,9 +103,16 @@ class PoolFormerBlock(nn.Module):
     """
 
     def __init__(
-            self, dim, pool_size=3, mlp_ratio=4.,
-            act_layer=nn.GELU, norm_layer=GroupNorm1,
-            drop=0., drop_path=0., layer_scale_init_value=1e-5):
+            self,
+            dim,
+            pool_size=3,
+            mlp_ratio=4.,
+            act_layer=nn.GELU,
+            norm_layer=GroupNorm1,
+            drop=0.,
+            drop_path=0.,
+            layer_scale_init_value=1e-5,
+    ):
 
         super().__init__()
 
@@ -116,7 +123,7 @@ class PoolFormerBlock(nn.Module):
         self.mlp = ConvMlp(dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer, drop=drop)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        if layer_scale_init_value:
+        if layer_scale_init_value is not None:
             self.layer_scale_1 = nn.Parameter(layer_scale_init_value * torch.ones(dim))
             self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones(dim))
         else:
@@ -134,10 +141,15 @@ class PoolFormerBlock(nn.Module):
 
 
 def basic_blocks(
-        dim, index, layers,
-        pool_size=3, mlp_ratio=4.,
-        act_layer=nn.GELU, norm_layer=GroupNorm1,
-        drop_rate=.0, drop_path_rate=0.,
+        dim,
+        index,
+        layers,
+        pool_size=3,
+        mlp_ratio=4.,
+        act_layer=nn.GELU,
+        norm_layer=GroupNorm1,
+        drop_rate=.0,
+        drop_path_rate=0.,
         layer_scale_init_value=1e-5,
 ):
     """ generate PoolFormer blocks for a stage """
@@ -145,9 +157,13 @@ def basic_blocks(
     for block_idx in range(layers[index]):
         block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
         blocks.append(PoolFormerBlock(
-            dim, pool_size=pool_size, mlp_ratio=mlp_ratio,
-            act_layer=act_layer, norm_layer=norm_layer,
-            drop=drop_rate, drop_path=block_dpr,
+            dim,
+            pool_size=pool_size,
+            mlp_ratio=mlp_ratio,
+            act_layer=act_layer,
+            norm_layer=norm_layer,
+            drop=drop_rate,
+            drop_path=block_dpr,
             layer_scale_init_value=layer_scale_init_value,
         ))
     blocks = nn.Sequential(*blocks)
@@ -176,9 +192,12 @@ class PoolFormer(nn.Module):
             down_patch_size=3,
             down_stride=2,
             down_pad=1,
-            drop_rate=0., drop_path_rate=0.,
+            drop_rate=0.,
+            proj_drop_rate=0.,
+            drop_path_rate=0.,
             layer_scale_init_value=1e-5,
-            **kwargs):
+            **kwargs,
+    ):
 
         super().__init__()
         self.num_classes = num_classes
@@ -187,28 +206,42 @@ class PoolFormer(nn.Module):
         self.grad_checkpointing = False
 
         self.patch_embed = PatchEmbed(
-            patch_size=in_patch_size, stride=in_stride, padding=in_pad,
-            in_chs=in_chans, embed_dim=embed_dims[0])
+            patch_size=in_patch_size,
+            stride=in_stride,
+            padding=in_pad,
+            in_chs=in_chans,
+            embed_dim=embed_dims[0],
+        )
 
         # set the main block in network
         network = []
         for i in range(len(layers)):
             network.append(basic_blocks(
-                embed_dims[i], i, layers,
-                pool_size=pool_size, mlp_ratio=mlp_ratios[i],
-                act_layer=act_layer, norm_layer=norm_layer,
-                drop_rate=drop_rate, drop_path_rate=drop_path_rate,
-                layer_scale_init_value=layer_scale_init_value)
-            )
+                embed_dims[i],
+                i,
+                layers,
+                pool_size=pool_size,
+                mlp_ratio=mlp_ratios[i],
+                act_layer=act_layer,
+                norm_layer=norm_layer,
+                drop_rate=proj_drop_rate,
+                drop_path_rate=drop_path_rate,
+                layer_scale_init_value=layer_scale_init_value
+            ))
             if i < len(layers) - 1 and (downsamples[i] or embed_dims[i] != embed_dims[i + 1]):
                 # downsampling between stages
                 network.append(PatchEmbed(
-                    in_chs=embed_dims[i], embed_dim=embed_dims[i + 1],
-                    patch_size=down_patch_size, stride=down_stride, padding=down_pad)
-                )
+                    in_chs=embed_dims[i],
+                    embed_dim=embed_dims[i + 1],
+                    patch_size=down_patch_size,
+                    stride=down_stride,
+                    padding=down_pad,
+                ))
 
         self.network = nn.Sequential(*network)
         self.norm = norm_layer(self.num_features)
+
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -254,6 +287,7 @@ class PoolFormer(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool == 'avg':
             x = x.mean([-2, -1])
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):

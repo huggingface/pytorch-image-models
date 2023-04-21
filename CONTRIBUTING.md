@@ -80,7 +80,6 @@ Then install the remaining dependencies:
 ```
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt  # for testing
-python -m pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git
 python -m pip install -e .
 ```
 

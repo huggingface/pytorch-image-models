@@ -17,10 +17,10 @@ from .edgenext import *
 from .efficientformer import *
 from .efficientformer_v2 import *
 from .efficientnet import *
+from .eva import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
-from .gluon_resnet import *
 from .gluon_xception import *
 from .hardcorenas import *
 from .hrnet import *

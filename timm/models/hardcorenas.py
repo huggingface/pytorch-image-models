@@ -7,30 +7,10 @@ from ._builder import build_model_with_cfg
 from ._builder import pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
 from ._efficientnet_builder import decode_arch_def, resolve_act_layer, resolve_bn_args, round_channels
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .mobilenetv3 import MobileNetV3, MobileNetV3Features
 
 __all__ = []  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'conv_stem', 'classifier': 'classifier',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'hardcorenas_a': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/hardcorenas_a_green_38ms_75_9-31dc7186.pth'),
-    'hardcorenas_b': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/hardcorenas_b_green_40ms_76_5-32d91ff2.pth'),
-    'hardcorenas_c': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/hardcorenas_c_green_44ms_77_1-631a0983.pth'),
-    'hardcorenas_d': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/hardcorenas_d_green_50ms_77_4-998d9d7a.pth'),
-    'hardcorenas_e': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/hardcorenas_e_green_55ms_77_9-482886a3.pth'),
-    'hardcorenas_f': _cfg(url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tresnet/hardcorenas_f_green_60ms_78_1-14b9e780.pth'),
-}
 
 
 def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
@@ -60,13 +40,36 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
         kwargs_filter = ('num_classes', 'num_features', 'global_pool', 'head_conv', 'head_bias', 'global_pool')
         model_cls = MobileNetV3Features
     model = build_model_with_cfg(
-        model_cls, variant, pretrained,
+        model_cls,
+        variant,
+        pretrained,
         pretrained_strict=not features_only,
         kwargs_filter=kwargs_filter,
-        **model_kwargs)
+        **model_kwargs,
+    )
     if features_only:
         model.default_cfg = pretrained_cfg_for_features(model.default_cfg)
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'conv_stem', 'classifier': 'classifier',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'hardcorenas_a.miil_green_in1k': _cfg(hf_hub_id='timm/'),
+    'hardcorenas_b.miil_green_in1k': _cfg(hf_hub_id='timm/'),
+    'hardcorenas_c.miil_green_in1k': _cfg(hf_hub_id='timm/'),
+    'hardcorenas_d.miil_green_in1k': _cfg(hf_hub_id='timm/'),
+    'hardcorenas_e.miil_green_in1k': _cfg(hf_hub_id='timm/'),
+    'hardcorenas_f.miil_green_in1k': _cfg(hf_hub_id='timm/'),
+})
 
 
 @register_model

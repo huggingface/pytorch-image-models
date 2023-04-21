@@ -81,7 +81,7 @@ def create_model(
         pretrained_cfg, model_name = load_model_config_from_hf(model_name)
     else:
         model_name, pretrained_tag = split_model_name_tag(model_name)
-        if not pretrained_cfg:
+        if pretrained_tag and not pretrained_cfg:
             # a valid pretrained_cfg argument takes priority over tag in model name
             pretrained_cfg = pretrained_tag
 

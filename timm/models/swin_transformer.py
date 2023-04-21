@@ -23,7 +23,8 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, _assert
+from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
+    _assert, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply
@@ -86,6 +87,7 @@ class WindowAttention(nn.Module):
     """ Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports shifted and non-shifted windows.
     """
+    fused_attn: torch.jit.Final[bool]
 
     def __init__(
             self,
@@ -116,6 +118,7 @@ class WindowAttention(nn.Module):
         head_dim = head_dim or dim // num_heads
         attn_dim = head_dim * num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn(experimental=True)  # NOTE not tested for prime-time yet
 
         # define a parameter table of relative position bias, shape: 2*Wh-1 * 2*Ww-1, nH
         self.relative_position_bias_table = nn.Parameter(torch.zeros((2 * win_h - 1) * (2 * win_w - 1), num_heads))
@@ -147,21 +150,30 @@ class WindowAttention(nn.Module):
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        attn = attn + self._get_rel_pos_bias()
-
-        if mask is not None:
-            num_win = mask.shape[0]
-            attn = attn.view(-1, num_win, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-            attn = self.softmax(attn)
+        if self.fused_attn:
+            attn_mask = self._get_rel_pos_bias()
+            if mask is not None:
+                num_win = mask.shape[0]
+                mask = mask.view(1, num_win, 1, N, N).expand(B_ // num_win, -1, self.num_heads, -1, -1)
+                attn_mask = attn_mask + mask.reshape(-1, self.num_heads, N, N)
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_mask,
+                dropout_p=self.attn_drop.p,
+            )
         else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn + self._get_rel_pos_bias()
+            if mask is not None:
+                num_win = mask.shape[0]
+                attn = attn.view(-1, num_win, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
+                attn = attn.view(-1, self.num_heads, N, N)
             attn = self.softmax(attn)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, -1)
+        x = x.transpose(1, 2).reshape(B_, N, -1)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -181,7 +193,7 @@ class SwinTransformerBlock(nn.Module):
             shift_size: int = 0,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
-            drop: float = 0.,
+            proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
             act_layer: Callable = nn.GELU,
@@ -197,7 +209,7 @@ class SwinTransformerBlock(nn.Module):
             shift_size: Shift size for SW-MSA.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop: Dropout rate.
+            proj_drop: Dropout rate.
             attn_drop: Attention dropout rate.
             drop_path: Stochastic depth rate.
             act_layer: Activation layer.
@@ -223,7 +235,7 @@ class SwinTransformerBlock(nn.Module):
             window_size=to_2tuple(self.window_size),
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -232,7 +244,7 @@ class SwinTransformerBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
 
         if self.shift_size > 0:
@@ -346,7 +358,7 @@ class SwinTransformerStage(nn.Module):
             window_size: _int_or_tuple_2_t = 7,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
-            drop: float = 0.,
+            proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: Union[List[float], float] = 0.,
             norm_layer: Callable = nn.LayerNorm,
@@ -362,7 +374,7 @@ class SwinTransformerStage(nn.Module):
             window_size: Local window size.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop: Dropout rate.
+            proj_drop: Projection dropout rate.
             attn_drop: Attention dropout rate.
             drop_path: Stochastic depth rate.
             norm_layer: Normalization layer.
@@ -396,7 +408,7 @@ class SwinTransformerStage(nn.Module):
                 shift_size=0 if (i % 2 == 0) else window_size // 2,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                drop=drop,
+                proj_drop=proj_drop,
                 attn_drop=attn_drop,
                 drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 norm_layer=norm_layer,
@@ -435,6 +447,7 @@ class SwinTransformer(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.1,
             norm_layer: Union[str, Callable] = nn.LayerNorm,
@@ -508,7 +521,7 @@ class SwinTransformer(nn.Module):
                 window_size=window_size[i],
                 mlp_ratio=mlp_ratio[i],
                 qkv_bias=qkv_bias,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -701,84 +714,81 @@ default_cfgs = generate_default_cfgs({
 def swin_tiny_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-T @ 224x224, trained ImageNet-1k
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_tiny_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer(
+        'swin_tiny_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_small_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-S @ 224x224
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_small_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer(
+        'swin_small_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_base_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-B @ 224x224
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer('swin_base_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer(
+        'swin_base_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_base_patch4_window12_384(pretrained=False, **kwargs):
     """ Swin-B @ 384x384
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer('swin_base_patch4_window12_384', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer(
+        'swin_base_patch4_window12_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_large_patch4_window7_224(pretrained=False, **kwargs):
     """ Swin-L @ 224x224
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=7, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer('swin_large_patch4_window7_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=7, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer(
+        'swin_large_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_large_patch4_window12_384(pretrained=False, **kwargs):
     """ Swin-L @ 384x384
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer('swin_large_patch4_window12_384', pretrained=pretrained, **model_kwargs)
+    model_args = dict(patch_size=4, window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer(
+        'swin_large_patch4_window12_384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_s3_tiny_224(pretrained=False, **kwargs):
     """ Swin-S3-T @ 224x224, https://arxiv.org/abs/2111.14725
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2),
-        num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_s3_tiny_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_tiny_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_s3_small_224(pretrained=False, **kwargs):
     """ Swin-S3-S @ 224x224, https://arxiv.org/abs/2111.14725
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2),
-        num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_s3_small_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_small_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swin_s3_base_224(pretrained=False, **kwargs):
     """ Swin-S3-B @ 224x224, https://arxiv.org/abs/2111.14725
     """
-    model_kwargs = dict(
-        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2),
-        num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer('swin_s3_base_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_base_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 register_model_deprecations(__name__, {

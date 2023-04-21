@@ -203,7 +203,7 @@ class SwinTransformerV2Block(nn.Module):
             shift_size=0,
             mlp_ratio=4.,
             qkv_bias=True,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -219,7 +219,7 @@ class SwinTransformerV2Block(nn.Module):
             shift_size: Shift size for SW-MSA.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop: Dropout rate.
+            proj_drop: Dropout rate.
             attn_drop: Attention dropout rate.
             drop_path: Stochastic depth rate.
             act_layer: Activation layer.
@@ -242,7 +242,7 @@ class SwinTransformerV2Block(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
             pretrained_window_size=to_2tuple(pretrained_window_size),
         )
         self.norm1 = norm_layer(dim)
@@ -252,7 +252,7 @@ class SwinTransformerV2Block(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -279,7 +279,7 @@ class SwinTransformerV2Block(nn.Module):
         else:
             attn_mask = None
 
-        self.register_buffer("attn_mask", attn_mask)
+        self.register_buffer("attn_mask", attn_mask, persistent=False)
 
     def _calc_window_shift(self, target_window_size, target_shift_size) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         target_window_size = to_2tuple(target_window_size)
@@ -367,7 +367,7 @@ class SwinTransformerV2Stage(nn.Module):
             downsample=False,
             mlp_ratio=4.,
             qkv_bias=True,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             norm_layer=nn.LayerNorm,
@@ -384,7 +384,7 @@ class SwinTransformerV2Stage(nn.Module):
             downsample: Use downsample layer at start of the block.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop: Dropout rate
+            proj_drop: Projection dropout rate
             attn_drop: Attention dropout rate.
             drop_path: Stochastic depth rate.
             norm_layer: Normalization layer.
@@ -416,7 +416,7 @@ class SwinTransformerV2Stage(nn.Module):
                 shift_size=0 if (i % 2 == 0) else window_size // 2,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                drop=drop,
+                proj_drop=proj_drop,
                 attn_drop=attn_drop,
                 drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 norm_layer=norm_layer,
@@ -463,6 +463,7 @@ class SwinTransformerV2(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.1,
             norm_layer: Callable = nn.LayerNorm,
@@ -481,7 +482,8 @@ class SwinTransformerV2(nn.Module):
             window_size: Window size.
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
-            drop_rate: Dropout rate.
+            drop_rate: Head dropout rate.
+            proj_drop_rate: Projection dropout rate.
             attn_drop_rate: Attention dropout rate.
             drop_path_rate: Stochastic depth rate.
             norm_layer: Normalization layer.
@@ -531,7 +533,8 @@ class SwinTransformerV2(nn.Module):
                 window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                drop=drop_rate, attn_drop=attn_drop_rate,
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 pretrained_window_size=pretrained_window_sizes[i],
@@ -611,16 +614,18 @@ class SwinTransformerV2(nn.Module):
 def checkpoint_filter_fn(state_dict, model):
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
-    if 'head.fc.weight' in state_dict:
-        return state_dict
+    native_checkpoint = 'head.fc.weight' in state_dict
     out_dict = {}
     import re
     for k, v in state_dict.items():
-        if any([n in k for n in ('relative_position_index', 'relative_coords_table')]):
+        if any([n in k for n in ('relative_position_index', 'relative_coords_table', 'attn_mask')]):
             continue  # skip buffers that should not be persistent
-        k = re.sub(r'layers.(\d+).downsample', lambda x: f'layers.{int(x.group(1)) + 1}.downsample', k)
-        k = k.replace('head.', 'head.fc.')
+        if not native_checkpoint:
+            # skip layer remapping for updated checkpoints
+            k = re.sub(r'layers.(\d+).downsample', lambda x: f'layers.{int(x.group(1)) + 1}.downsample', k)
+            k = k.replace('head.', 'head.fc.')
         out_dict[k] = v
+      
     return out_dict
 
 
@@ -709,116 +714,116 @@ default_cfgs = generate_default_cfgs({
 def swinv2_tiny_window16_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=16, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_tiny_window16_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=16, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_tiny_window16_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_tiny_window8_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=8, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_tiny_window8_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=8, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_tiny_window8_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_small_window16_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=16, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_small_window16_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=16, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_small_window16_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_small_window8_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=8, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_swin_transformer_v2('swinv2_small_window8_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=8, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer_v2(
+        'swinv2_small_window8_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window16_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window16_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer_v2(
+        'swinv2_base_window16_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window8_256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=8, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window8_256', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=8, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer_v2(
+        'swinv2_base_window8_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window12_192(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_swin_transformer_v2('swinv2_base_window12_192', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer_v2(
+        'swinv2_base_window12_192', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window12to16_192to256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=16, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_base_window12to16_192to256', pretrained=pretrained, **model_kwargs)
+        'swinv2_base_window12to16_192to256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_base_window12to24_192to384(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=24, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_base_window12to24_192to384', pretrained=pretrained, **model_kwargs)
+        'swinv2_base_window12to24_192to384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_large_window12_192(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
-        window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_swin_transformer_v2('swinv2_large_window12_192', pretrained=pretrained, **model_kwargs)
+    model_args = dict(window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer_v2(
+        'swinv2_large_window12_192', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_large_window12to16_192to256(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=16, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_large_window12to16_192to256', pretrained=pretrained, **model_kwargs)
+        'swinv2_large_window12to16_192to256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def swinv2_large_window12to24_192to384(pretrained=False, **kwargs):
     """
     """
-    model_kwargs = dict(
+    model_args = dict(
         window_size=24, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48),
-        pretrained_window_sizes=(12, 12, 12, 6), **kwargs)
+        pretrained_window_sizes=(12, 12, 12, 6))
     return _create_swin_transformer_v2(
-        'swinv2_large_window12to24_192to384', pretrained=pretrained, **model_kwargs)
+        'swinv2_large_window12to24_192to384', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 register_model_deprecations(__name__, {
