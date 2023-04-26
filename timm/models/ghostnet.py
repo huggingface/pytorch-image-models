@@ -16,63 +16,62 @@ from timm.layers import SelectAdaptivePool2d, Linear, make_divisible
 from ._builder import build_model_with_cfg
 from ._efficientnet_blocks import SqueezeExcite, ConvBnAct
 from ._manipulate import checkpoint_seq
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['GhostNet']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'conv_stem', 'classifier': 'classifier',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'ghostnet_050': _cfg(url=''),
-    'ghostnet_100': _cfg(
-        url='https://github.com/huawei-noah/CV-backbones/releases/download/ghostnet_pth/ghostnet_1x.pth'),
-    'ghostnet_130': _cfg(url=''),
-}
 
 
 _SE_LAYER = partial(SqueezeExcite, gate_layer='hard_sigmoid', rd_round_fn=partial(make_divisible, divisor=4))
 
 
 class GhostModule(nn.Module):
-    def __init__(self, inp, oup, kernel_size=1, ratio=2, dw_size=3, stride=1, relu=True):
+    def __init__(
+            self,
+            in_chs,
+            out_chs,
+            kernel_size=1,
+            ratio=2,
+            dw_size=3,
+            stride=1,
+            relu=True,
+    ):
         super(GhostModule, self).__init__()
-        self.oup = oup
-        init_channels = math.ceil(oup / ratio)
-        new_channels = init_channels * (ratio - 1)
+        self.out_chs = out_chs
+        init_chs = math.ceil(out_chs / ratio)
+        new_chs = init_chs * (ratio - 1)
 
         self.primary_conv = nn.Sequential(
-            nn.Conv2d(inp, init_channels, kernel_size, stride, kernel_size//2, bias=False),
-            nn.BatchNorm2d(init_channels),
-            nn.ReLU(inplace=True) if relu else nn.Sequential(),
+            nn.Conv2d(in_chs, init_chs, kernel_size, stride, kernel_size // 2, bias=False),
+            nn.BatchNorm2d(init_chs),
+            nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
 
         self.cheap_operation = nn.Sequential(
-            nn.Conv2d(init_channels, new_channels, dw_size, 1, dw_size//2, groups=init_channels, bias=False),
-            nn.BatchNorm2d(new_channels),
-            nn.ReLU(inplace=True) if relu else nn.Sequential(),
+            nn.Conv2d(init_chs, new_chs, dw_size, 1, dw_size//2, groups=init_chs, bias=False),
+            nn.BatchNorm2d(new_chs),
+            nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
 
     def forward(self, x):
         x1 = self.primary_conv(x)
         x2 = self.cheap_operation(x1)
         out = torch.cat([x1, x2], dim=1)
-        return out[:, :self.oup, :, :]
+        return out[:, :self.out_chs, :, :]
 
 
 class GhostBottleneck(nn.Module):
     """ Ghost bottleneck w/ optional SE"""
 
-    def __init__(self, in_chs, mid_chs, out_chs, dw_kernel_size=3,
-                 stride=1, act_layer=nn.ReLU, se_ratio=0.):
+    def __init__(
+            self,
+            in_chs,
+            mid_chs,
+            out_chs,
+            dw_kernel_size=3,
+            stride=1,
+            act_layer=nn.ReLU,
+            se_ratio=0.,
+    ):
         super(GhostBottleneck, self).__init__()
         has_se = se_ratio is not None and se_ratio > 0.
         self.stride = stride
@@ -133,7 +132,15 @@ class GhostBottleneck(nn.Module):
 
 class GhostNet(nn.Module):
     def __init__(
-            self, cfgs, num_classes=1000, width=1.0, in_chans=3, output_stride=32, global_pool='avg', drop_rate=0.2):
+            self,
+            cfgs,
+            num_classes=1000,
+            width=1.0,
+            in_chans=3,
+            output_stride=32,
+            global_pool='avg',
+            drop_rate=0.2,
+    ):
         super(GhostNet, self).__init__()
         # setting of inverted residual blocks
         assert output_stride == 32, 'only output_stride==32 is valid, dilation not supported'
@@ -275,9 +282,30 @@ def _create_ghostnet(variant, width=1.0, pretrained=False, **kwargs):
         **kwargs,
     )
     return build_model_with_cfg(
-        GhostNet, variant, pretrained,
+        GhostNet,
+        variant,
+        pretrained,
         feature_cfg=dict(flatten_sequential=True),
-        **model_kwargs)
+        **model_kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'conv_stem', 'classifier': 'classifier',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'ghostnet_050.untrained': _cfg(),
+    'ghostnet_100.in1k': _cfg(
+        url='https://github.com/huawei-noah/CV-backbones/releases/download/ghostnet_pth/ghostnet_1x.pth'),
+    'ghostnet_130.untrained': _cfg(),
+})
 
 
 @register_model

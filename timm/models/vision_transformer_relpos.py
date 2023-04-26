@@ -61,11 +61,12 @@ class RelPosAttention(nn.Module):
         k = self.k_norm(k)
 
         if self.fused_attn:
-            attn_bias = None
             if self.rel_pos is not None:
                 attn_bias = self.rel_pos.get_bias()
             elif shared_rel_pos is not None:
                 attn_bias = shared_rel_pos
+            else:
+                attn_bias = None
 
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,

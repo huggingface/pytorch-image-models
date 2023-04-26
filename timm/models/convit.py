@@ -28,35 +28,14 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp
+from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp, LayerNorm
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .vision_transformer_hybrid import HybridEmbed
 
 
 __all__ = ['ConViT']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    # ConViT
-    'convit_tiny': _cfg(
-        url="https://dl.fbaipublicfiles.com/convit/convit_tiny.pth"),
-    'convit_small': _cfg(
-        url="https://dl.fbaipublicfiles.com/convit/convit_small.pth"),
-    'convit_base': _cfg(
-        url="https://dl.fbaipublicfiles.com/convit/convit_base.pth")
-}
 
 
 @register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
@@ -218,7 +197,7 @@ class Block(nn.Module):
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            norm_layer=LayerNorm,
             use_gpsa=True,
             locality_strength=1.,
     ):
@@ -280,7 +259,7 @@ class ConViT(nn.Module):
             attn_drop_rate=0.,
             drop_path_rate=0.,
             hybrid_backbone=None,
-            norm_layer=nn.LayerNorm,
+            norm_layer=LayerNorm,
             local_up_to_layer=3,
             locality_strength=1.,
             use_pos_embed=True,
@@ -300,7 +279,11 @@ class ConViT(nn.Module):
                 hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
         else:
             self.patch_embed = PatchEmbed(
-                img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+                img_size=img_size,
+                patch_size=patch_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+            )
         num_patches = self.patch_embed.num_patches
         self.num_patches = num_patches
 
@@ -405,28 +388,43 @@ def _create_convit(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(ConViT, variant, pretrained, **kwargs)
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    # ConViT
+    'convit_tiny.fb_in1k': _cfg(hf_hub_id='timm/'),
+    'convit_small.fb_in1k': _cfg(hf_hub_id='timm/'),
+    'convit_base.fb_in1k': _cfg(hf_hub_id='timm/')
+})
+
+
 @register_model
 def convit_tiny(pretrained=False, **kwargs):
     model_args = dict(
-        local_up_to_layer=10, locality_strength=1.0, embed_dim=48,
-        num_heads=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model = _create_convit(variant='convit_tiny', pretrained=pretrained, **model_args)
+        local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=4)
+    model = _create_convit(variant='convit_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def convit_small(pretrained=False, **kwargs):
     model_args = dict(
-        local_up_to_layer=10, locality_strength=1.0, embed_dim=48,
-        num_heads=9, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model = _create_convit(variant='convit_small', pretrained=pretrained, **model_args)
+        local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=9)
+    model = _create_convit(variant='convit_small', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def convit_base(pretrained=False, **kwargs):
     model_args = dict(
-        local_up_to_layer=10, locality_strength=1.0, embed_dim=48,
-        num_heads=16, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model = _create_convit(variant='convit_base', pretrained=pretrained, **model_args)
+        local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=16)
+    model = _create_convit(variant='convit_base', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
