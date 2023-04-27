@@ -139,8 +139,8 @@ default_cfgs = generate_default_cfgs({
     'res2net50_26w_8s.in1k': _cfg(hf_hub_id='timm/'),
     'res2net101_26w_4s.in1k': _cfg(hf_hub_id='timm/'),
     'res2next50.in1k': _cfg(hf_hub_id='timm/'),
-    'res2net50d.in1k': _cfg(hf_hub_id='timm/'),
-    'res2net101d.in1k': _cfg(hf_hub_id='timm/'),
+    'res2net50d.in1k': _cfg(hf_hub_id='timm/', first_conv='conv1.0'),
+    'res2net101d.in1k': _cfg(hf_hub_id='timm/', first_conv='conv1.0'),
 })
 
 

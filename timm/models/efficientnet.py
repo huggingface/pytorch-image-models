@@ -961,10 +961,10 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b4_ra2_320-7eb33cd5.pth',
         hf_hub_id='timm/',
         input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), crop_pct=1.0),
-    'efficientnet_b5.in12k_ft_in1k': _cfg(
+    'efficientnet_b5.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, crop_mode='squash'),
-    'efficientnet_b5.in12k': _cfg(
+    'efficientnet_b5.sw_in12k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 416, 416), pool_size=(13, 13), crop_pct=0.95, num_classes=11821),
     'efficientnet_b6.untrained': _cfg(
@@ -1197,27 +1197,27 @@ default_cfgs = generate_default_cfgs({
 
     'tf_efficientnet_b0.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0-0af12548.pth',
-        hf_hub_id='timm/',
+        #hf_hub_id='timm/',
         input_size=(3, 224, 224)),
     'tf_efficientnet_b1.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b1-5c1377c4.pth',
-        hf_hub_id='timm/',
+        #hf_hub_id='timm/',
         input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
     'tf_efficientnet_b2.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b2-e393ef04.pth',
-        hf_hub_id='timm/',
+        #hf_hub_id='timm/',
         input_size=(3, 260, 260), pool_size=(9, 9), crop_pct=0.890),
     'tf_efficientnet_b3.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b3-e3bd6955.pth',
-        hf_hub_id='timm/',
+        #hf_hub_id='timm/',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
     'tf_efficientnet_b4.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b4-74ee3bed.pth',
-        hf_hub_id='timm/',
+        #hf_hub_id='timm/',
         input_size=(3, 380, 380), pool_size=(12, 12), crop_pct=0.922),
     'tf_efficientnet_b5.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b5-c6949ce9.pth',
-        hf_hub_id='timm/',
+        #hf_hub_id='timm/',
         input_size=(3, 456, 456), pool_size=(15, 15), crop_pct=0.934),
 
 

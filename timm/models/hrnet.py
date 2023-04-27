@@ -815,6 +815,7 @@ class HighResolutionNetFeatures(HighResolutionNet):
             drop_rate=0.0,
             feature_location='incre',
             out_indices=(0, 1, 2, 3, 4),
+            **kwargs,
     ):
         assert feature_location in ('incre', '')
         super(HighResolutionNetFeatures, self).__init__(
@@ -825,6 +826,7 @@ class HighResolutionNetFeatures(HighResolutionNet):
             global_pool=global_pool,
             drop_rate=drop_rate,
             head=feature_location,
+            **kwargs,
         )
         self.feature_info = FeatureInfo(self.feature_info, out_indices)
         self._out_idx = {i for i in out_indices}

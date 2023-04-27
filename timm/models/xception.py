@@ -248,7 +248,7 @@ default_cfgs = generate_default_cfgs({
 
 @register_model
 def legacy_xception(pretrained=False, **kwargs):
-    return _xception('xception', pretrained=pretrained, **kwargs)
+    return _xception('legacy_xception', pretrained=pretrained, **kwargs)
 
 
 register_model_deprecations(__name__, {
