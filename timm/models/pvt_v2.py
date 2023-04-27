@@ -66,6 +66,8 @@ class MlpWithDepthwiseConv(nn.Module):
 
 
 class Attention(nn.Module):
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(
             self,
             dim,
