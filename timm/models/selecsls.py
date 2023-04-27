@@ -18,39 +18,9 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_classifier
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['SelecSLS']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (4, 4),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.0', 'classifier': 'fc',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'selecsls42': _cfg(
-        url='',
-        interpolation='bicubic'),
-    'selecsls42b': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls42b-8af30141.pth',
-        interpolation='bicubic'),
-    'selecsls60': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls60-bbf87526.pth',
-        interpolation='bicubic'),
-    'selecsls60b': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-selecsls/selecsls60b-94e619b5.pth',
-        interpolation='bicubic'),
-    'selecsls84': _cfg(
-        url='',
-        interpolation='bicubic'),
-}
 
 
 class SequentialList(nn.Sequential):
@@ -155,7 +125,6 @@ class SelecSLS(nn.Module):
 
     def __init__(self, cfg, num_classes=1000, in_chans=3, drop_rate=0.0, global_pool='avg'):
         self.num_classes = num_classes
-        self.drop_rate = drop_rate
         super(SelecSLS, self).__init__()
 
         self.stem = conv_bn(in_chans, 32, stride=2)
@@ -165,14 +134,16 @@ class SelecSLS(nn.Module):
         self.num_features = cfg['num_features']
         self.feature_info = cfg['feature_info']
 
-        self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.head_drop, self.fc = create_classifier(
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+        )
 
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1.)
-                nn.init.constant_(m.bias, 0.)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -202,8 +173,7 @@ class SelecSLS(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.head_drop(x)
         return x if pre_logits else self.fc(x)
 
     def forward(self, x):
@@ -336,10 +306,41 @@ def _create_selecsls(variant, pretrained, **kwargs):
 
     # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
     return build_model_with_cfg(
-        SelecSLS, variant, pretrained,
+        SelecSLS,
+        variant,
+        pretrained,
         model_cfg=cfg,
         feature_cfg=dict(out_indices=(0, 1, 2, 3, 4), flatten_sequential=True),
-        **kwargs)
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (4, 4),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.0', 'classifier': 'fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'selecsls42.untrained': _cfg(
+        interpolation='bicubic'),
+    'selecsls42b.in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'selecsls60.in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'selecsls60b.in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'selecsls84.untrained': _cfg(
+        interpolation='bicubic'),
+})
 
 
 @register_model

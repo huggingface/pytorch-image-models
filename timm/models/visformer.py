@@ -14,28 +14,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import to_2tuple, trunc_normal_, DropPath, PatchEmbed, LayerNorm2d, create_classifier, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['Visformer']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.0', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = dict(
-    visformer_tiny=_cfg(),
-    visformer_small=_cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/visformer_small-839e1f5b.pth'
-    ),
-)
 
 
 class SpatialMlp(nn.Module):
@@ -462,6 +443,23 @@ def _create_visformer(variant, pretrained=False, default_cfg=None, **kwargs):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
     model = build_model_with_cfg(Visformer, variant, pretrained, **kwargs)
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.0', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'visformer_tiny.in1k': _cfg(hf_hub_id='timm/'),
+    'visformer_small.in1k': _cfg(hf_hub_id='timm/'),
+})
 
 
 @register_model

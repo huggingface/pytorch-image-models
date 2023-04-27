@@ -14,25 +14,9 @@ import torch.nn.functional as F
 
 from timm.layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['PNASNet5Large']
-
-default_cfgs = {
-    'pnasnet5large': {
-        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/pnasnet5large-bf079911.pth',
-        'input_size': (3, 331, 331),
-        'pool_size': (11, 11),
-        'crop_pct': 0.911,
-        'interpolation': 'bicubic',
-        'mean': (0.5, 0.5, 0.5),
-        'std': (0.5, 0.5, 0.5),
-        'num_classes': 1000,
-        'first_conv': 'conv_0.conv',
-        'classifier': 'last_linear',
-        'label_offset': 1,  # 1001 classes in pretrained weights
-    },
-}
 
 
 class SeparableConv2d(nn.Module):
@@ -185,8 +169,16 @@ class CellStem0(CellBase):
 
 class Cell(CellBase):
 
-    def __init__(self, in_chs_left, out_chs_left, in_chs_right, out_chs_right, pad_type='',
-                 is_reduction=False, match_prev_layer_dims=False):
+    def __init__(
+            self,
+            in_chs_left,
+            out_chs_left,
+            in_chs_right,
+            out_chs_right,
+            pad_type='',
+            is_reduction=False,
+            match_prev_layer_dims=False,
+    ):
         super(Cell, self).__init__()
 
         # If `is_reduction` is set to `True` stride 2 is used for
@@ -236,10 +228,17 @@ class Cell(CellBase):
 
 
 class PNASNet5Large(nn.Module):
-    def __init__(self, num_classes=1000, in_chans=3, output_stride=32, drop_rate=0., global_pool='avg', pad_type=''):
+    def __init__(
+            self,
+            num_classes=1000,
+            in_chans=3,
+            output_stride=32,
+            drop_rate=0.,
+            global_pool='avg',
+            pad_type='',
+    ):
         super(PNASNet5Large, self).__init__()
         self.num_classes = num_classes
-        self.drop_rate = drop_rate
         self.num_features = 4320
         assert output_stride == 32
 
@@ -293,8 +292,8 @@ class PNASNet5Large(nn.Module):
             dict(num_chs=4320, reduction=32, module='act'),
         ]
 
-        self.global_pool, self.last_linear = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.head_drop, self.last_linear = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -334,8 +333,7 @@ class PNASNet5Large(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
-        if self.drop_rate > 0:
-            x = F.dropout(x, self.drop_rate, training=self.training)
+        x = self.head_drop(x)
         return x if pre_logits else self.last_linear(x)
 
     def forward(self, x):
@@ -346,9 +344,30 @@ class PNASNet5Large(nn.Module):
 
 def _create_pnasnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        PNASNet5Large, variant, pretrained,
+        PNASNet5Large,
+        variant,
+        pretrained,
         feature_cfg=dict(feature_cls='hook', no_rewrite=True),  # not possible to re-write this model
-        **kwargs)
+        **kwargs,
+    )
+
+
+default_cfgs = generate_default_cfgs({
+    'pnasnet5large.tf_in1k': {
+        'hf_hub_id': 'timm/',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/pnasnet5large-bf079911.pth',
+        'input_size': (3, 331, 331),
+        'pool_size': (11, 11),
+        'crop_pct': 0.911,
+        'interpolation': 'bicubic',
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'num_classes': 1000,
+        'first_conv': 'conv_0.conv',
+        'classifier': 'last_linear',
+        'label_offset': 1,  # 1001 classes in pretrained weights
+    },
+})
 
 
 @register_model

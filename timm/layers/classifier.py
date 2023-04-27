@@ -52,6 +52,7 @@ def create_classifier(
         pool_type: str = 'avg',
         use_conv: bool = False,
         input_fmt: str = 'NCHW',
+        drop_rate: Optional[float] = None,
 ):
     global_pool, num_pooled_features = _create_pool(
         num_features,
@@ -65,6 +66,9 @@ def create_classifier(
         num_classes,
         use_conv=use_conv,
     )
+    if drop_rate is not None:
+        dropout = nn.Dropout(drop_rate)
+        return global_pool, dropout, fc
     return global_pool, fc
 
 

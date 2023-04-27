@@ -36,54 +36,10 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, to_2tuple, trunc_normal_, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Block
 
 __all__ = ['CrossViT']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 240, 240), 'pool_size': None, 'crop_pct': 0.875,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
-        'first_conv': ('patch_embed.0.proj', 'patch_embed.1.proj'),
-        'classifier': ('head.0', 'head.1'),
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'crossvit_15_240': _cfg(url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_15_224.pth'),
-    'crossvit_15_dagger_240': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_15_dagger_224.pth',
-        first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'),
-    ),
-    'crossvit_15_dagger_408': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_15_dagger_384.pth',
-        input_size=(3, 408, 408), first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'), crop_pct=1.0,
-    ),
-    'crossvit_18_240': _cfg(url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_18_224.pth'),
-    'crossvit_18_dagger_240': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_18_dagger_224.pth',
-        first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'),
-    ),
-    'crossvit_18_dagger_408': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_18_dagger_384.pth',
-        input_size=(3, 408, 408), first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'), crop_pct=1.0,
-    ),
-    'crossvit_9_240': _cfg(url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_9_224.pth'),
-    'crossvit_9_dagger_240': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_9_dagger_224.pth',
-        first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'),
-    ),
-    'crossvit_base_240': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_base_224.pth'),
-    'crossvit_small_240': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_small_224.pth'),
-    'crossvit_tiny_240': _cfg(
-        url='https://github.com/IBM/CrossViT/releases/download/weights-0.1/crossvit_tiny_224.pth'),
-}
 
 
 class PatchEmbed(nn.Module):
@@ -529,6 +485,47 @@ def _create_crossvit(variant, pretrained=False, **kwargs):
         pretrained_filter_fn=pretrained_filter_fn,
         **kwargs,
     )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 240, 240), 'pool_size': None, 'crop_pct': 0.875,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
+        'first_conv': ('patch_embed.0.proj', 'patch_embed.1.proj'),
+        'classifier': ('head.0', 'head.1'),
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'crossvit_15_240.in1k': _cfg(hf_hub_id='timm/'),
+    'crossvit_15_dagger_240.in1k': _cfg(
+        hf_hub_id='timm/',
+        first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'),
+    ),
+    'crossvit_15_dagger_408.in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 408, 408), first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'), crop_pct=1.0,
+    ),
+    'crossvit_18_240.in1k': _cfg(hf_hub_id='timm/'),
+    'crossvit_18_dagger_240.in1k': _cfg(
+        hf_hub_id='timm/',
+        first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'),
+    ),
+    'crossvit_18_dagger_408.in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 408, 408), first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'), crop_pct=1.0,
+    ),
+    'crossvit_9_240.in1k': _cfg(hf_hub_id='timm/'),
+    'crossvit_9_dagger_240.in1k': _cfg(
+        hf_hub_id='timm/',
+        first_conv=('patch_embed.0.proj.0', 'patch_embed.1.proj.0'),
+    ),
+    'crossvit_base_240.in1k': _cfg(hf_hub_id='timm/'),
+    'crossvit_small_240.in1k': _cfg(hf_hub_id='timm/'),
+    'crossvit_tiny_240.in1k': _cfg(hf_hub_id='timm/'),
+})
 
 
 @register_model

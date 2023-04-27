@@ -23,43 +23,10 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Attention
 
 __all__ = ['Twins']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embeds.0.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'twins_pcpvt_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_small-e70e7e7a.pth',
-        ),
-    'twins_pcpvt_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_base-e5ecb09b.pth',
-        ),
-    'twins_pcpvt_large': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_large-d273f802.pth',
-        ),
-    'twins_svt_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_small-42e5f78c.pth',
-        ),
-    'twins_svt_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_base-c2265010.pth',
-        ),
-    'twins_svt_large': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_large-90f6aaa9.pth',
-        ),
-}
 
 Size_ = Tuple[int, int]
 
@@ -467,6 +434,27 @@ def _create_twins(variant, pretrained=False, **kwargs):
 
     model = build_model_with_cfg(Twins, variant, pretrained, **kwargs)
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embeds.0.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'twins_pcpvt_small.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_pcpvt_base.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_pcpvt_large.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_svt_small.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_svt_base.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_svt_large.in1k': _cfg(hf_hub_id='timm/'),
+})
 
 
 @register_model
