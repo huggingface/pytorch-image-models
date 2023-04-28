@@ -1019,10 +1019,10 @@ default_cfgs = generate_default_cfgs({
         custom_load=True, num_classes=21843),
 
     # SAM trained models (https://arxiv.org/abs/2106.01548)
-    'vit_base_patch32_224.sam': _cfg(
+    'vit_base_patch32_224.sam_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/sam/ViT-B_32.npz', custom_load=True,
         hf_hub_id='timm/'),
-    'vit_base_patch16_224.sam': _cfg(
+    'vit_base_patch16_224.sam_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/sam/ViT-B_16.npz', custom_load=True,
         hf_hub_id='timm/'),
 
