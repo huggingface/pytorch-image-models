@@ -1197,6 +1197,10 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='laion/CLIP-ViT-L-14-laion2B-s32B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=768),
+    'vit_large_patch14_clip_224.datacompxl': _cfg(
+        hf_hub_id='laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.laion2b': _cfg(
         hf_hub_id='laion/CLIP-ViT-H-14-laion2B-s32B-b79K',
         hf_hub_filename='open_clip_pytorch_model.bin',
