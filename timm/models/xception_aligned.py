@@ -300,23 +300,20 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'xception65.ra3_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception65_ra3-1447db8d.pth',
+        hf_hub_id='timm/',
         crop_pct=0.94,
     ),
 
-    'xception41.tf_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_41-e6439c97.pth'),
-    'xception65.tf_in1k': _cfg(
-        url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_xception_65-c9ae96e8.pth'),
-    'xception71.tf_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_xception_71-8eec7df1.pth'),
+    'xception41.tf_in1k': _cfg(hf_hub_id='timm/'),
+    'xception65.tf_in1k': _cfg(hf_hub_id='timm/'),
+    'xception71.tf_in1k': _cfg(hf_hub_id='timm/'),
 
     'xception41p.ra3_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception41p_ra3-33195bc8.pth',
+        hf_hub_id='timm/',
         crop_pct=0.94,
     ),
     'xception65p.ra3_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/xception65p_ra3-3c6114e4.pth',
+        hf_hub_id='timm/',
         crop_pct=0.94,
     ),
 })

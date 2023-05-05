@@ -15,41 +15,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, LayerNorm
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['CoaT']
-
-
-def _cfg_coat(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed1.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'coat_tiny': _cfg_coat(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_tiny-473c2a20.pth'
-    ),
-    'coat_mini': _cfg_coat(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_mini-2c6baf49.pth'
-    ),
-    'coat_lite_tiny': _cfg_coat(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_lite_tiny-461b07a7.pth'
-    ),
-    'coat_lite_mini': _cfg_coat(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_lite_mini-d7842000.pth'
-    ),
-    'coat_lite_small': _cfg_coat(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-coat-weights/coat_lite_small-fea1d5a1.pth'
-    ),
-}
 
 
 class ConvRelPosEnc(nn.Module):
@@ -147,7 +117,7 @@ class FactorAttnConvRelPosEnc(nn.Module):
 
         # Generate Q, K, V.
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]  # [B, h, N, Ch]
+        q, k, v = qkv.unbind(0)  # [B, h, N, Ch]
 
         # Factorized attention.
         k_softmax = k.softmax(dim=2)
@@ -334,7 +304,12 @@ class ParallelBlock(nn.Module):
         
         img_tokens = img_tokens.transpose(1, 2).reshape(B, C, H, W)
         img_tokens = F.interpolate(
-            img_tokens, scale_factor=scale_factor, recompute_scale_factor=False, mode='bilinear', align_corners=False)
+            img_tokens,
+            scale_factor=scale_factor,
+            recompute_scale_factor=False,
+            mode='bilinear',
+            align_corners=False,
+        )
         img_tokens = img_tokens.reshape(B, C, -1).transpose(1, 2)
         
         out = torch.cat((cls_token, img_tokens), dim=1)
@@ -384,17 +359,17 @@ class CoaT(nn.Module):
             patch_size=16,
             in_chans=3,
             num_classes=1000,
-            embed_dims=(0, 0, 0, 0),
-            serial_depths=(0, 0, 0, 0),
+            embed_dims=(64, 128, 320, 512),
+            serial_depths=(3, 4, 6, 3),
             parallel_depth=0,
-            num_heads=0,
-            mlp_ratios=(0, 0, 0, 0),
+            num_heads=8,
+            mlp_ratios=(4, 4, 4, 4),
             qkv_bias=True,
             drop_rate=0.,
             proj_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            norm_layer=LayerNorm,
             return_interm_layers=False,
             out_features=None,
             crpe_window=None,
@@ -711,6 +686,7 @@ def remove_cls(x):
 
 def checkpoint_filter_fn(state_dict, model):
     out_dict = {}
+    state_dict = state_dict.get('model', state_dict)
     for k, v in state_dict.items():
         # original model had unused norm layers, removing them requires filtering pretrained checkpoints
         if k.startswith('norm1') or \
@@ -726,52 +702,100 @@ def _create_coat(variant, pretrained=False, default_cfg=None, **kwargs):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
     model = build_model_with_cfg(
-        CoaT, variant, pretrained,
+        CoaT,
+        variant,
+        pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        **kwargs)
+        **kwargs,
+    )
     return model
+
+
+def _cfg_coat(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed1.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'coat_tiny.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_mini.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_small.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_lite_tiny.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_lite_mini.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_lite_small.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_lite_medium.in1k': _cfg_coat(hf_hub_id='timm/'),
+    'coat_lite_medium_384.in1k': _cfg_coat(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0, crop_mode='squash',
+    ),
+})
 
 
 @register_model
 def coat_tiny(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=4, embed_dims=[152, 152, 152, 152], serial_depths=[2, 2, 2, 2], parallel_depth=6,
-        num_heads=8, mlp_ratios=[4, 4, 4, 4], **kwargs)
-    model = _create_coat('coat_tiny', pretrained=pretrained, **model_cfg)
+        patch_size=4, embed_dims=[152, 152, 152, 152], serial_depths=[2, 2, 2, 2], parallel_depth=6)
+    model = _create_coat('coat_tiny', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model
 
 
 @register_model
 def coat_mini(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=4, embed_dims=[152, 216, 216, 216], serial_depths=[2, 2, 2, 2], parallel_depth=6,
-        num_heads=8, mlp_ratios=[4, 4, 4, 4], **kwargs)
-    model = _create_coat('coat_mini', pretrained=pretrained, **model_cfg)
+        patch_size=4, embed_dims=[152, 216, 216, 216], serial_depths=[2, 2, 2, 2], parallel_depth=6)
+    model = _create_coat('coat_mini', pretrained=pretrained, **dict(model_cfg, **kwargs))
+    return model
+
+
+@register_model
+def coat_small(pretrained=False, **kwargs):
+    model_cfg = dict(
+        patch_size=4, embed_dims=[152, 320, 320, 320], serial_depths=[2, 2, 2, 2], parallel_depth=6, **kwargs)
+    model = _create_coat('coat_small', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model
 
 
 @register_model
 def coat_lite_tiny(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=4, embed_dims=[64, 128, 256, 320], serial_depths=[2, 2, 2, 2], parallel_depth=0,
-        num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
-    model = _create_coat('coat_lite_tiny', pretrained=pretrained, **model_cfg)
+        patch_size=4, embed_dims=[64, 128, 256, 320], serial_depths=[2, 2, 2, 2], mlp_ratios=[8, 8, 4, 4])
+    model = _create_coat('coat_lite_tiny', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model
 
 
 @register_model
 def coat_lite_mini(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=4, embed_dims=[64, 128, 320, 512], serial_depths=[2, 2, 2, 2], parallel_depth=0,
-        num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
-    model = _create_coat('coat_lite_mini', pretrained=pretrained, **model_cfg)
+        patch_size=4, embed_dims=[64, 128, 320, 512], serial_depths=[2, 2, 2, 2], mlp_ratios=[8, 8, 4, 4])
+    model = _create_coat('coat_lite_mini', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model
 
 
 @register_model
 def coat_lite_small(pretrained=False, **kwargs):
     model_cfg = dict(
-        patch_size=4, embed_dims=[64, 128, 320, 512], serial_depths=[3, 4, 6, 3], parallel_depth=0,
-        num_heads=8, mlp_ratios=[8, 8, 4, 4], **kwargs)
-    model = _create_coat('coat_lite_small', pretrained=pretrained, **model_cfg)
+        patch_size=4, embed_dims=[64, 128, 320, 512], serial_depths=[3, 4, 6, 3], mlp_ratios=[8, 8, 4, 4])
+    model = _create_coat('coat_lite_small', pretrained=pretrained, **dict(model_cfg, **kwargs))
+    return model
+
+
+@register_model
+def coat_lite_medium(pretrained=False, **kwargs):
+    model_cfg = dict(
+        patch_size=4, embed_dims=[128, 256, 320, 512], serial_depths=[3, 6, 10, 8])
+    model = _create_coat('coat_lite_medium', pretrained=pretrained, **dict(model_cfg, **kwargs))
+    return model
+
+
+@register_model
+def coat_lite_medium_384(pretrained=False, **kwargs):
+    model_cfg = dict(
+        img_size=384, patch_size=4, embed_dims=[128, 256, 320, 512], serial_depths=[3, 6, 10, 8])
+    model = _create_coat('coat_lite_medium_384', pretrained=pretrained, **dict(model_cfg, **kwargs))
     return model

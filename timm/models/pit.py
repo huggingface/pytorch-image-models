@@ -14,55 +14,19 @@ Modifications for timm by / Copyright 2020 Ross Wightman
 import math
 import re
 from functools import partial
-from typing import Tuple
+from typing import Sequence, Tuple
 
 import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, to_2tuple
+from timm.layers import trunc_normal_, to_2tuple, LayerNorm
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Block
 
 
 __all__ = ['PoolingVisionTransformer']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.conv', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    # deit models (FB weights)
-    'pit_ti_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_ti_730.pth'),
-    'pit_xs_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_xs_781.pth'),
-    'pit_s_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_s_809.pth'),
-    'pit_b_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_b_820.pth'),
-    'pit_ti_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_ti_distill_746.pth',
-        classifier=('head', 'head_dist')),
-    'pit_xs_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_xs_distill_791.pth',
-        classifier=('head', 'head_dist')),
-    'pit_s_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_s_distill_819.pth',
-        classifier=('head', 'head_dist')),
-    'pit_b_distilled_224': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-pit-weights/pit_b_distill_840.pth',
-        classifier=('head', 'head_dist')),
-}
 
 
 class SequentialTuple(nn.Sequential):
@@ -87,11 +51,13 @@ class Transformer(nn.Module):
             proj_drop=.0,
             attn_drop=.0,
             drop_path_prob=None,
+            norm_layer=None,
     ):
         super(Transformer, self).__init__()
-        self.layers = nn.ModuleList([])
         embed_dim = base_dim * heads
 
+        self.pool = pool
+        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
         self.blocks = nn.Sequential(*[
             Block(
                 dim=embed_dim,
@@ -105,30 +71,29 @@ class Transformer(nn.Module):
             )
             for i in range(depth)])
 
-        self.pool = pool
-
     def forward(self, x: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, cls_tokens = x
-        B, C, H, W = x.shape
         token_length = cls_tokens.shape[1]
+        if self.pool is not None:
+            x, cls_tokens = self.pool(x, cls_tokens)
 
+        B, C, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
         x = torch.cat((cls_tokens, x), dim=1)
 
+        x = self.norm(x)
         x = self.blocks(x)
 
         cls_tokens = x[:, :token_length]
         x = x[:, token_length:]
         x = x.transpose(1, 2).reshape(B, C, H, W)
 
-        if self.pool is not None:
-            x, cls_tokens = self.pool(x, cls_tokens)
         return x, cls_tokens
 
 
-class ConvHeadPooling(nn.Module):
+class Pooling(nn.Module):
     def __init__(self, in_feature, out_feature, stride, padding_mode='zeros'):
-        super(ConvHeadPooling, self).__init__()
+        super(Pooling, self).__init__()
 
         self.conv = nn.Conv2d(
             in_feature,
@@ -148,10 +113,26 @@ class ConvHeadPooling(nn.Module):
 
 
 class ConvEmbedding(nn.Module):
-    def __init__(self, in_channels, out_channels, patch_size, stride, padding):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            img_size: int = 224,
+            patch_size: int = 16,
+            stride: int = 8,
+            padding: int = 0,
+    ):
         super(ConvEmbedding, self).__init__()
+        padding = padding
+        self.img_size = to_2tuple(img_size)
+        self.patch_size = to_2tuple(patch_size)
+        self.height = math.floor((self.img_size[0] + 2 * padding - self.patch_size[0]) / stride + 1)
+        self.width = math.floor((self.img_size[1] + 2 * padding - self.patch_size[1]) / stride + 1)
+        self.grid_size = (self.height, self.width)
+
         self.conv = nn.Conv2d(
-            in_channels, out_channels, kernel_size=patch_size, stride=stride, padding=padding, bias=True)
+            in_channels, out_channels, kernel_size=patch_size,
+            stride=stride, padding=padding, bias=True)
 
     def forward(self, x):
         x = self.conv(x)
@@ -166,13 +147,14 @@ class PoolingVisionTransformer(nn.Module):
     """
     def __init__(
             self,
-            img_size,
-            patch_size,
-            stride,
-            base_dims,
-            depth,
-            heads,
-            mlp_ratio,
+            img_size: int = 224,
+            patch_size: int = 16,
+            stride: int = 8,
+            stem_type: str = 'overlap',
+            base_dims: Sequence[int] = (48, 48, 48),
+            depth: Sequence[int] = (2, 6, 4),
+            heads: Sequence[int] = (2, 4, 8),
+            mlp_ratio: float = 4,
             num_classes=1000,
             in_chans=3,
             global_pool='token',
@@ -186,50 +168,48 @@ class PoolingVisionTransformer(nn.Module):
         super(PoolingVisionTransformer, self).__init__()
         assert global_pool in ('token',)
 
-        padding = 0
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        height = math.floor((img_size[0] + 2 * padding - patch_size[0]) / stride + 1)
-        width = math.floor((img_size[1] + 2 * padding - patch_size[1]) / stride + 1)
-
         self.base_dims = base_dims
         self.heads = heads
+        embed_dim = base_dims[0] * heads[0]
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_tokens = 2 if distilled else 1
+        self.feature_info = []
 
-        self.patch_size = patch_size
-        self.pos_embed = nn.Parameter(torch.randn(1, base_dims[0] * heads[0], height, width))
-        self.patch_embed = ConvEmbedding(in_chans, base_dims[0] * heads[0], patch_size, stride, padding)
-
-        self.cls_token = nn.Parameter(torch.randn(1, self.num_tokens, base_dims[0] * heads[0]))
+        self.patch_embed = ConvEmbedding(in_chans, embed_dim, img_size, patch_size, stride)
+        self.pos_embed = nn.Parameter(torch.randn(1, embed_dim, self.patch_embed.height, self.patch_embed.width))
+        self.cls_token = nn.Parameter(torch.randn(1, self.num_tokens, embed_dim))
         self.pos_drop = nn.Dropout(p=pos_drop_drate)
 
         transformers = []
         # stochastic depth decay rule
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depth)).split(depth)]
-        for stage in range(len(depth)):
+        prev_dim = embed_dim
+        for i in range(len(depth)):
             pool = None
-            if stage < len(heads) - 1:
-                pool = ConvHeadPooling(
-                    base_dims[stage] * heads[stage],
-                    base_dims[stage + 1] * heads[stage + 1],
+            embed_dim = base_dims[i] * heads[i]
+            if i > 0:
+                pool = Pooling(
+                    prev_dim,
+                    embed_dim,
                     stride=2,
                 )
             transformers += [Transformer(
-                base_dims[stage],
-                depth[stage],
-                heads[stage],
+                base_dims[i],
+                depth[i],
+                heads[i],
                 mlp_ratio,
                 pool=pool,
                 proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
-                drop_path_prob=dpr[stage],
-            )
-            ]
+                drop_path_prob=dpr[i],
+            )]
+            prev_dim = embed_dim
+            self.feature_info += [dict(num_chs=prev_dim, reduction=(stride - 1) * 2**i, module=f'transformers.{i}')]
+
         self.transformers = SequentialTuple(*transformers)
         self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6)
-        self.num_features = self.embed_dim = base_dims[-1] * heads[-1]
+        self.num_features = self.embed_dim = embed_dim
 
         # Classifier head
         self.head_drop = nn.Dropout(drop_rate)
@@ -318,23 +298,56 @@ def checkpoint_filter_fn(state_dict, model):
         # if k == 'pos_embed' and v.shape != model.pos_embed.shape:
         #     # To resize pos embedding when using model at different size from pretrained weights
         #     v = resize_pos_embed(v, model.pos_embed)
-        k = p_blocks.sub(lambda exp: f'transformers.{int(exp.group(1))}.pool.', k)
+        k = p_blocks.sub(lambda exp: f'transformers.{int(exp.group(1)) + 1}.pool.', k)
         out_dict[k] = v
     return out_dict
 
 
 def _create_pit(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+    default_out_indices = tuple(range(3))
+    out_indices = kwargs.pop('out_indices', default_out_indices)
 
     model = build_model_with_cfg(
         PoolingVisionTransformer,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(feature_cls='hook', no_rewrite=True, out_indices=out_indices),
         **kwargs,
     )
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.conv', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    # deit models (FB weights)
+    'pit_ti_224.in1k': _cfg(hf_hub_id='timm/'),
+    'pit_xs_224.in1k': _cfg(hf_hub_id='timm/'),
+    'pit_s_224.in1k': _cfg(hf_hub_id='timm/'),
+    'pit_b_224.in1k': _cfg(hf_hub_id='timm/'),
+    'pit_ti_distilled_224.in1k': _cfg(
+        hf_hub_id='timm/',
+        classifier=('head', 'head_dist')),
+    'pit_xs_distilled_224.in1k': _cfg(
+        hf_hub_id='timm/',
+        classifier=('head', 'head_dist')),
+    'pit_s_distilled_224.in1k': _cfg(
+        hf_hub_id='timm/',
+        classifier=('head', 'head_dist')),
+    'pit_b_distilled_224.in1k': _cfg(
+        hf_hub_id='timm/',
+        classifier=('head', 'head_dist')),
+})
 
 
 @register_model

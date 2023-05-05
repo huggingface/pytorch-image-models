@@ -389,12 +389,12 @@ def _create_vovnet(variant, pretrained=False, **kwargs):
     )
 
 
-def _cfg(url=''):
+def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.0.conv', 'classifier': 'head.fc',
+        'first_conv': 'stem.0.conv', 'classifier': 'head.fc', **kwargs,
     }
 
 
@@ -403,10 +403,12 @@ default_cfgs = generate_default_cfgs({
     'vovnet57a.untrained': _cfg(url=''),
     'ese_vovnet19b_slim_dw.untrained': _cfg(url=''),
     'ese_vovnet19b_dw.ra_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet19b_dw-a8741004.pth'),
+        hf_hub_id='timm/',
+        test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'ese_vovnet19b_slim.untrained': _cfg(url=''),
     'ese_vovnet39b.ra_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/ese_vovnet39b-f912fe73.pth'),
+        hf_hub_id='timm/',
+        test_input_size=(3, 288, 288), test_crop_pct=0.95),
     'ese_vovnet57b.untrained': _cfg(url=''),
     'ese_vovnet99b.untrained': _cfg(url=''),
     'eca_vovnet39b.untrained': _cfg(url=''),

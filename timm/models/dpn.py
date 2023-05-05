@@ -302,21 +302,16 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'dpn48b.untrained': _cfg(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'dpn68.mx_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68-66bebafa7.pth'),
+    'dpn68.mx_in1k': _cfg(hf_hub_id='timm/'),
     'dpn68b.ra_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/dpn68b_ra-a31ca160.pth',
-        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-    'dpn68b.mx_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn68b_extra-84854c156.pth'),
-    'dpn92.mx_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn92_extra-b040e4a9b.pth'),
-    'dpn98.mx_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn98-5b90dec4d.pth'),
-    'dpn131.mx_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn131-71dfe43e0.pth'),
-    'dpn107.mx_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-dpn-pretrained/releases/download/v0.1/dpn107_extra-1ac7121e2.pth')
+        hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'dpn68b.mx_in1k': _cfg(hf_hub_id='timm/'),
+    'dpn92.mx_in1k': _cfg(hf_hub_id='timm/'),
+    'dpn98.mx_in1k': _cfg(hf_hub_id='timm/'),
+    'dpn131.mx_in1k': _cfg(hf_hub_id='timm/'),
+    'dpn107.mx_in1k': _cfg(hf_hub_id='timm/')
 })
 
 

@@ -6,29 +6,11 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectAdaptivePool2d
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 
 __all__ = ['ConvMixer']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .96, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'classifier': 'head',
-        'first_conv': 'stem.0',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'convmixer_1536_20': _cfg(url='https://github.com/tmp-iclr/convmixer/releases/download/timm-v1.0/convmixer_1536_20_ks9_p7.pth.tar'),
-    'convmixer_768_32': _cfg(url='https://github.com/tmp-iclr/convmixer/releases/download/timm-v1.0/convmixer_768_32_ks7_p7_relu.pth.tar'),
-    'convmixer_1024_20_ks9_p14': _cfg(url='https://github.com/tmp-iclr/convmixer/releases/download/timm-v1.0/convmixer_1024_20_ks9_p14.pth.tar')
-}
 
 
 class Residual(nn.Module):
@@ -120,6 +102,25 @@ class ConvMixer(nn.Module):
 
 def _create_convmixer(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(ConvMixer, variant, pretrained, **kwargs)
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .96, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'classifier': 'head',
+        'first_conv': 'stem.0',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'convmixer_1536_20.in1k': _cfg(hf_hub_id='timm/'),
+    'convmixer_768_32.in1k': _cfg(hf_hub_id='timm/'),
+    'convmixer_1024_20_ks9_p14.in1k': _cfg(hf_hub_id='timm/')
+})
+
 
 
 @register_model

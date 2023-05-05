@@ -17,7 +17,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d
+from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d, \
+    use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._manipulate import named_apply, checkpoint_seq
@@ -37,14 +38,16 @@ class PositionalEncodingFourier(nn.Module):
         self.dim = dim
 
     def forward(self, shape: Tuple[int, int, int]):
-        inv_mask = ~torch.zeros(shape).to(device=self.token_projection.weight.device, dtype=torch.bool)
-        y_embed = inv_mask.cumsum(1, dtype=torch.float32)
-        x_embed = inv_mask.cumsum(2, dtype=torch.float32)
+        device = self.token_projection.weight.device
+        dtype = self.token_projection.weight.dtype
+        inv_mask = ~torch.zeros(shape).to(device=device, dtype=torch.bool)
+        y_embed = inv_mask.cumsum(1, dtype=dtype)
+        x_embed = inv_mask.cumsum(2, dtype=dtype)
         eps = 1e-6
         y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
         x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
-        dim_t = torch.arange(self.hidden_dim, dtype=torch.float32, device=inv_mask.device)
+        dim_t = torch.arange(self.hidden_dim, dtype=dtype, device=device)
         dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode='floor') / self.hidden_dim)
 
         pos_x = x_embed[:, :, :, None] / dim_t
@@ -129,9 +132,9 @@ class CrossCovarianceAttn(nn.Module):
         attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1)) * self.temperature
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
+        x = (attn @ v)
 
-        x = (attn @ v).permute(0, 3, 1, 2).reshape(B, N, C)
-
+        x = x.permute(0, 3, 1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -494,25 +497,25 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'edgenext_xx_small.in1k': _cfg(
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_xx_small.pth",
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'edgenext_x_small.in1k': _cfg(
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.0/edgenext_x_small.pth",
+        hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'edgenext_small.usi_in1k': _cfg(  # USI weights
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.1/edgenext_small_usi.pth",
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
     ),
     'edgenext_base.usi_in1k': _cfg(  # USI weights
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.2/edgenext_base_usi.pth",
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
     ),
     'edgenext_base.in21k_ft_in1k': _cfg(  # USI weights
-        url="https://github.com/mmaaz60/EdgeNeXt/releases/download/v1.21/edgenext_base_IN21K.pth",
+        hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0,
     ),
     'edgenext_small_rw.sw_in1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/edgenext_small_rw-sw-b00041bb.pth',
+        hf_hub_id='timm/',
         test_input_size=(3, 320, 320), test_crop_pct=1.0,
     ),
 })

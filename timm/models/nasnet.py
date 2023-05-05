@@ -10,25 +10,10 @@ import torch.nn.functional as F
 
 from timm.layers import ConvNormAct, create_conv2d, create_pool2d, create_classifier
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['NASNetALarge']
 
-default_cfgs = {
-    'nasnetalarge': {
-        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nasnetalarge-dc4a7b8b.pth',
-        'input_size': (3, 331, 331),
-        'pool_size': (11, 11),
-        'crop_pct': 0.911,
-        'interpolation': 'bicubic',
-        'mean': (0.5, 0.5, 0.5),
-        'std': (0.5, 0.5, 0.5),
-        'num_classes': 1000,
-        'first_conv': 'conv0.conv',
-        'classifier': 'last_linear',
-        'label_offset': 1,  # 1001 classes in pretrained weights
-    },
-}
 
 
 class ActConvBn(nn.Module):
@@ -408,14 +393,22 @@ class NASNetALarge(nn.Module):
     """NASNetALarge (6 @ 4032) """
 
     def __init__(
-            self, num_classes=1000, in_chans=3, stem_size=96, channel_multiplier=2,
-            num_features=4032, output_stride=32, drop_rate=0., global_pool='avg', pad_type='same'):
+            self,
+            num_classes=1000,
+            in_chans=3,
+            stem_size=96,
+            channel_multiplier=2,
+            num_features=4032,
+            output_stride=32,
+            drop_rate=0.,
+            global_pool='avg',
+            pad_type='same',
+    ):
         super(NASNetALarge, self).__init__()
         self.num_classes = num_classes
         self.stem_size = stem_size
         self.num_features = num_features
         self.channel_multiplier = channel_multiplier
-        self.drop_rate = drop_rate
         assert output_stride == 32
 
         channels = self.num_features // 24
@@ -501,8 +494,8 @@ class NASNetALarge(nn.Module):
             dict(num_chs=4032, reduction=32, module='act'),
         ]
 
-        self.global_pool, self.last_linear = create_classifier(
-            self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool, self.head_drop, self.last_linear = create_classifier(
+            self.num_features, self.num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -562,8 +555,7 @@ class NASNetALarge(nn.Module):
 
     def forward_head(self, x):
         x = self.global_pool(x)
-        if self.drop_rate > 0:
-            x = F.dropout(x, self.drop_rate, training=self.training)
+        x = self.head_drop(x)
         x = self.last_linear(x)
         return x
 
@@ -575,9 +567,30 @@ class NASNetALarge(nn.Module):
 
 def _create_nasnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
-        NASNetALarge, variant, pretrained,
+        NASNetALarge,
+        variant,
+        pretrained,
         feature_cfg=dict(feature_cls='hook', no_rewrite=True),  # not possible to re-write this model
-        **kwargs)
+        **kwargs,
+    )
+
+
+default_cfgs = generate_default_cfgs({
+    'nasnetalarge.tf_in1k': {
+        'hf_hub_id': 'timm/',
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/nasnetalarge-dc4a7b8b.pth',
+        'input_size': (3, 331, 331),
+        'pool_size': (11, 11),
+        'crop_pct': 0.911,
+        'interpolation': 'bicubic',
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'num_classes': 1000,
+        'first_conv': 'conv0.conv',
+        'classifier': 'last_linear',
+        'label_offset': 1,  # 1001 classes in pretrained weights
+    },
+})
 
 
 @register_model
