@@ -6,7 +6,8 @@ from MetaFormer Baselines for Vision https://arxiv.org/abs/2210.13452
 
 All implemented models support feature extraction and variable input resolution.
 
-Original implementation by Weihao Yu et al., adapted for timm by Fredo Guan.
+Original implementation by Weihao Yu et al.,
+adapted for timm by Fredo Guan and Ross Wightman.
 
 Adapted from https://github.com/sail-sg/metaformer, original copyright below
 """
@@ -39,8 +40,6 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
     use_fused_attn
 from ._builder import build_model_with_cfg
-from ._features import FeatureInfo
-from ._features_fx import register_notrace_module
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
@@ -194,7 +193,7 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv.unbind(0)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
@@ -264,7 +263,6 @@ class SepConv(nn.Module):
         self.pwconv2 = nn.Conv2d(mid_channels, dim, kernel_size=1, bias=bias)
 
     def forward(self, x):
-        # [B, C, H, W]
         x = self.pwconv1(x)
         x = self.act1(x)
         x = self.dwconv(x)
@@ -452,25 +450,24 @@ class MetaFormer(nn.Module):
           https://arxiv.org/abs/2210.13452
 
     Args:
-        in_chans (int): Number of input image channels. Default: 3.
-        num_classes (int): Number of classes for classification head. Default: 1000.
-        depths (list or tuple): Number of blocks at each stage. Default: [2, 2, 6, 2].
-        dims (list or tuple): Feature dimension at each stage. Default: [64, 128, 320, 512].
-        downsample_norm (nn.Module): Norm layer used in stem and downsampling layers. Default: LayerNorm2dWithoutBias.
-        token_mixers (list, tuple or token_fcn): Token mixer for each stage. Default: nn.Identity.
-        mlps (list, tuple or mlp_fcn): Mlp for each stage. Default: Mlp.
-        mlp_fn (nn.Module): Module used to implement mlp layers. Default: partial(nn.Conv2d, kernel_size=1).
-        mlp_bias (boolean): Enable or disable mlp bias term. Default: False.
-        norm_layers (list, tuple or norm_fcn): Norm layers for each stage. Default: GroupNorm1WithoutBias.
-        drop_path_rate (float): Stochastic depth rate. Default: 0.
-        drop_rate (float): Dropout rate. Default: 0.
-        layer_scale_init_values (list, tuple, float or None): Init value for Layer Scale. Default: None.
+        in_chans (int): Number of input image channels.
+        num_classes (int): Number of classes for classification head.
+        global_pool: Pooling for classifier head.
+        depths (list or tuple): Number of blocks at each stage.
+        dims (list or tuple): Feature dimension at each stage.
+        token_mixers (list, tuple or token_fcn): Token mixer for each stage.
+        mlp_act: Activation layer for MLP.
+        mlp_bias (boolean): Enable or disable mlp bias term.
+        drop_path_rate (float): Stochastic depth rate.
+        drop_rate (float): Dropout rate.
+        layer_scale_init_values (list, tuple, float or None): Init value for Layer Scale.
             None means not use the layer scale. Form: https://arxiv.org/abs/2103.17239.
-        res_scale_init_values (list, tuple, float or None): Init value for res Scale on residual connections. Default: [None, None, 1.0, 1.0].
+        res_scale_init_values (list, tuple, float or None): Init value for res Scale on residual connections.
             None means not use the res scale. From: https://arxiv.org/abs/2110.09456.
-        output_norm: norm before classifier head. Default: LayerNorm2d.
-        head_fn: classification head. Default: nn.Linear.
-        global_pool: pooling for classifier head. Default: 'avg'.
+        downsample_norm (nn.Module): Norm layer used in stem and downsampling layers.
+        norm_layers (list, tuple or norm_fcn): Norm layers for each stage.
+        output_norm: Norm layer before classifier head.
+        use_mlp_head: Use MLP classification head.
     """
 
     def __init__(
@@ -487,7 +484,7 @@ class MetaFormer(nn.Module):
             proj_drop_rate=0.,
             drop_rate=0.0,
             layer_scale_init_values=None,
-            res_scale_init_values=[None, None, 1.0, 1.0],
+            res_scale_init_values=(None, None, 1.0, 1.0),
             downsample_norm=LayerNorm2dNoBias,
             norm_layers=LayerNorm2dNoBias,
             output_norm=LayerNorm2d,
@@ -620,6 +617,9 @@ class MetaFormer(nn.Module):
 
 # this works but it's long and breaks backwards compatability with weights from the poolformer-only impl
 def checkpoint_filter_fn(state_dict, model):
+    if 'stem.conv.weight' in state_dict:
+        return state_dict
+
     import re
     out_dict = {}
     is_poolformerv1 = 'network.0.0.mlp.fc1.weight' in state_dict
@@ -663,7 +663,8 @@ def _create_metaformer(variant, pretrained=False, **kwargs):
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
-        **kwargs)
+        **kwargs,
+    )
 
     return model
 
@@ -681,158 +682,153 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'poolformer_s12.sail_in1k': _cfg(
-        url='https://github.com/sail-sg/poolformer/releases/download/v1.0/poolformer_s12.pth.tar',
+        hf_hub_id='timm/',
         crop_pct=0.9),
     'poolformer_s24.sail_in1k': _cfg(
-        url='https://github.com/sail-sg/poolformer/releases/download/v1.0/poolformer_s24.pth.tar',
+        hf_hub_id='timm/',
         crop_pct=0.9),
     'poolformer_s36.sail_in1k': _cfg(
-        url='https://github.com/sail-sg/poolformer/releases/download/v1.0/poolformer_s36.pth.tar',
+        hf_hub_id='timm/',
         crop_pct=0.9),
     'poolformer_m36.sail_in1k': _cfg(
-        url='https://github.com/sail-sg/poolformer/releases/download/v1.0/poolformer_m36.pth.tar',
+        hf_hub_id='timm/',
         crop_pct=0.95),
     'poolformer_m48.sail_in1k': _cfg(
-        url='https://github.com/sail-sg/poolformer/releases/download/v1.0/poolformer_m48.pth.tar',
+        hf_hub_id='timm/',
         crop_pct=0.95),
 
-    'poolformerv2_s12.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/poolformerv2/poolformerv2_s12.pth'),
-    'poolformerv2_s24.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/poolformerv2/poolformerv2_s24.pth'),
-    'poolformerv2_s36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/poolformerv2/poolformerv2_s36.pth'),
-    'poolformerv2_m36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/poolformerv2/poolformerv2_m36.pth'),
-    'poolformerv2_m48.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/poolformerv2/poolformerv2_m48.pth'),
+    'poolformerv2_s12.sail_in1k': _cfg(hf_hub_id='timm/'),
+    'poolformerv2_s24.sail_in1k': _cfg(hf_hub_id='timm/'),
+    'poolformerv2_s36.sail_in1k': _cfg(hf_hub_id='timm/'),
+    'poolformerv2_m36.sail_in1k': _cfg(hf_hub_id='timm/'),
+    'poolformerv2_m48.sail_in1k': _cfg(hf_hub_id='timm/'),
 
     'convformer_s18.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_s18.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_s18.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_s18.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_s18.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s18_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'convformer_s36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_s36.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_s36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_s36.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_s36.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_s36_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'convformer_m36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_m36.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_m36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_m36.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_m36.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_m36_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'convformer_b36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_b36.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_b36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'convformer_b36.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'convformer_b36.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/convformer/convformer_b36_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_s18.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_s18.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_s18.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_s18.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_s18.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s18_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_s36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_s36.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_s36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_s36.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_s36.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_s36_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_m36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_m36.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_m36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_m36.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_m36.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_m36_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 
     'caformer_b36.sail_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_b36.sail_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_384.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_b36.sail_in22k_ft_in1k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2'),
     'caformer_b36.sail_in22k_ft_in1k_384': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_384_in21ft1k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', input_size=(3, 384, 384), pool_size=(12, 12)),
     'caformer_b36.sail_in22k': _cfg(
-        url='https://huggingface.co/sail/dl/resolve/main/caformer/caformer_b36_in21k.pth',
+        hf_hub_id='timm/',
         classifier='head.fc.fc2', num_classes=21841),
 })
 
