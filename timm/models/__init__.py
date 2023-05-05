@@ -29,7 +29,7 @@ from .inception_v3 import *
 from .inception_v4 import *
 from .levit import *
 from .maxxvit import *
-from .metaformers import *
+from .metaformer import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
@@ -39,7 +39,6 @@ from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
-from .poolformer import *
 from .pvt_v2 import *
 from .regnet import *
 from .res2net import *
