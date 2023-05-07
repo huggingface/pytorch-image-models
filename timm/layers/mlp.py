@@ -130,8 +130,8 @@ class SwiGLU(nn.Module):
 
     def init_weights(self):
         # override init of fc1 w/ gate portion set to weight near zero, bias=1
-        nn.init.ones_(self.fc1a.bias)
-        nn.init.normal_(self.fc1a.weight, std=1e-6)
+        nn.init.ones_(self.fc1_g.bias)
+        nn.init.normal_(self.fc1_g.weight, std=1e-6)
 
     def forward(self, x):
         x_gate = self.fc1_g(x)

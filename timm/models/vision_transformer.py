@@ -813,6 +813,31 @@ def _convert_openai_clip(state_dict, model):
     return out_dict
 
 
+def _convert_dinov2(state_dict, model):
+    import re
+
+    out_dict = {}
+
+    for k, v in state_dict.items():
+        if k == "mask_token":
+            continue
+
+        if re.match(r"blocks\.(\d+)\.mlp\.w12\.(?:weight|bias)", k):
+            # We need to split the weight w12 to fc1_g and fc1_x
+            # fc1_g is the first half of the weight, fc1_x is the second half
+            w1, w2 = v.chunk(2, dim=0)
+            out_dict[k.replace("w12", "fc1_g")] = w1
+            out_dict[k.replace("w12", "fc1_x")] = w2
+            continue
+
+        elif re.match(r"blocks\.(\d+)\.mlp\.w3\.(?:weight|bias)", k):
+            out_dict[k.replace("w3", "fc2")] = v
+            continue
+    
+        out_dict[k] = v
+
+    return out_dict
+
 def checkpoint_filter_fn(
         state_dict,
         model,
@@ -828,6 +853,9 @@ def checkpoint_filter_fn(
 
     if 'visual.class_embedding' in state_dict:
         return _convert_openai_clip(state_dict, model)
+
+    if "mask_token" in state_dict:
+        return _convert_dinov2(state_dict, model)
 
     for k, v in state_dict.items():
         if 'patch_embed.proj.weight' in k:
@@ -1880,7 +1908,7 @@ def vit_small_patch14_dinov2(pretrained=False, **kwargs):
     """
     model_args = dict(
         patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1.0,
-        ffn_layer=Mlp, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        ffn_layer=partial(Mlp, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
     )
     
     model = _create_vision_transformer(
@@ -1894,7 +1922,7 @@ def vit_base_patch14_dinov2(pretrained=False, **kwargs):
     """
     model_args = dict(
         patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1.0,
-        ffn_layer=Mlp, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        ffn_layer=partial(Mlp, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
     )
 
     model = _create_vision_transformer(
@@ -1908,25 +1936,31 @@ def vit_large_patch14_dinov2(pretrained=False, **kwargs):
     """
     model_args = dict(
         patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1.0,
-        ffn_layer=Mlp, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        ffn_layer=partial(Mlp, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
     )
 
     model = _create_vision_transformer(
         'vit_large_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
-# @register_model
-# def vit_giant_patch14_dinov2(pretrained=False, **kwargs):
-#     """ ViT-G/14 for DINOv2
-#     """
-#     model_args = dict(
-#         patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0,
-#         ffn_layer=SwiGLU, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
-#     )
+@register_model
+def vit_giant_patch14_dinov2(pretrained=False, **kwargs):
+    """ ViT-G/14 for DINOv2
+    """
 
-#     model = _create_vision_transformer(
-#         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
-#     return model
+    # The hidden_features of SwiGLU is calculated by:
+    # hidden_features = (int(hidden_features * 2 / 3) + 7) // 8 * 8
+    # When embed_dim=1536, hidden_features=4096
+
+    model_args = dict(
+        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0, mlp_ratio=2.66667,
+        ffn_layer=partial(SwiGLU, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        act_layer=nn.SiLU
+    )
+
+    model = _create_vision_transformer(
+        'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
 
 register_model_deprecations(__name__, {
     'vit_tiny_patch16_224_in21k': 'vit_tiny_patch16_224.augreg_in21k',

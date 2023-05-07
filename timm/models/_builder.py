@@ -219,10 +219,6 @@ def load_pretrained(
                 state_dict[classifier_name + '.weight'] = classifier_weight[label_offset:]
                 classifier_bias = state_dict[classifier_name + '.bias']
                 state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
-    
-    if "mask_token" in state_dict:
-        # Remove mask token for dinov2
-        del state_dict["mask_token"]
 
     model.load_state_dict(state_dict, strict=strict)
 
