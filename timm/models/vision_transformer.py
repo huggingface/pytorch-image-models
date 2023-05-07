@@ -38,7 +38,7 @@ from torch.jit import Final
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
-    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn
+    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn, SwiGLU
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -124,7 +124,8 @@ class Block(nn.Module):
             init_values=None,
             drop_path=0.,
             act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm
+            norm_layer=nn.LayerNorm,
+            ffn_layer=Mlp,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -141,7 +142,7 @@ class Block(nn.Module):
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim)
-        self.mlp = Mlp(
+        self.mlp = ffn_layer(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
@@ -170,7 +171,8 @@ class ResPostBlock(nn.Module):
             init_values=None,
             drop_path=0.,
             act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm
+            norm_layer=nn.LayerNorm,
+            ffn_layer=Mlp,
     ):
         super().__init__()
         self.init_values = init_values
@@ -187,7 +189,7 @@ class ResPostBlock(nn.Module):
         self.norm1 = norm_layer(dim)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self.mlp = Mlp(
+        self.mlp = ffn_layer(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
@@ -322,7 +324,8 @@ class ParallelThingsBlock(nn.Module):
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm
+            norm_layer=nn.LayerNorm,
+            ffn_layer=Mlp,
     ):
         super().__init__()
         self.num_parallel = num_parallel
@@ -345,7 +348,7 @@ class ParallelThingsBlock(nn.Module):
             ])))
             self.ffns.append(nn.Sequential(OrderedDict([
                 ('norm', norm_layer(dim)),
-                ('mlp', Mlp(
+                ('mlp', ffn_layer(
                     dim,
                     hidden_features=int(dim * mlp_ratio),
                     act_layer=act_layer,
@@ -409,6 +412,7 @@ class VisionTransformer(nn.Module):
             norm_layer: Optional[Callable] = None,
             act_layer: Optional[Callable] = None,
             block_fn: Callable = Block,
+            ffn_layer: Callable = Mlp,
     ):
         """
         Args:
@@ -484,7 +488,8 @@ class VisionTransformer(nn.Module):
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
-                act_layer=act_layer
+                act_layer=act_layer,
+                ffn_layer=ffn_layer,
             )
             for i in range(depth)])
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
@@ -1042,6 +1047,20 @@ default_cfgs = generate_default_cfgs({
     'vit_base_patch8_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_vitbase8_pretrain/dino_vitbase8_pretrain.pth',
         hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
+    
+    # DINOv2 pretrained - https://arxiv.org/abs/2304.07193 (no classifier head, for fine-tune only)
+    'vit_small_patch14_dinov2': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
+    'vit_base_patch14_dinov2': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
+    'vit_large_patch14_dinov2': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
+    'vit_giant_patch14_dinov2': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitg14/dinov2_vitg14_pretrain.pth',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 
     # ViT ImageNet-21K-P pretraining by MILL
@@ -1854,6 +1873,60 @@ def vit_huge_patch14_xp_224(pretrained=False, **kwargs):
         'vit_huge_patch14_xp_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
+
+@register_model
+def vit_small_patch14_dinov2(pretrained=False, **kwargs):
+    """ ViT-S/14 for DINOv2
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1.0,
+        ffn_layer=Mlp, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+    )
+    
+    model = _create_vision_transformer(
+        'vit_small_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch14_dinov2(pretrained=False, **kwargs):
+    """ ViT-B/14 for DINOv2
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1.0,
+        ffn_layer=Mlp, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+    )
+
+    model = _create_vision_transformer(
+        'vit_base_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_large_patch14_dinov2(pretrained=False, **kwargs):
+    """ ViT-L/14 for DINOv2
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1.0,
+        ffn_layer=Mlp, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+    )
+
+    model = _create_vision_transformer(
+        'vit_large_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+# @register_model
+# def vit_giant_patch14_dinov2(pretrained=False, **kwargs):
+#     """ ViT-G/14 for DINOv2
+#     """
+#     model_args = dict(
+#         patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0,
+#         ffn_layer=SwiGLU, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+#     )
+
+#     model = _create_vision_transformer(
+#         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+#     return model
 
 register_model_deprecations(__name__, {
     'vit_tiny_patch16_224_in21k': 'vit_tiny_patch16_224.augreg_in21k',
