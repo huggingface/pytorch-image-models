@@ -522,7 +522,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def edgenext_xx_small(pretrained=False, **kwargs):
+def edgenext_xx_small(pretrained=False, **kwargs) -> EdgeNeXt:
     # 1.33M & 260.58M @ 256 resolution
     # 71.23% Top-1 accuracy
     # No AA, Color Jitter=0.4, No Mixup & Cutmix, DropPath=0.0, BS=4096, lr=0.006, multi-scale-sampler
@@ -533,7 +533,7 @@ def edgenext_xx_small(pretrained=False, **kwargs):
 
 
 @register_model
-def edgenext_x_small(pretrained=False, **kwargs):
+def edgenext_x_small(pretrained=False, **kwargs) -> EdgeNeXt:
     # 2.34M & 538.0M @ 256 resolution
     # 75.00% Top-1 accuracy
     # No AA, No Mixup & Cutmix, DropPath=0.0, BS=4096, lr=0.006, multi-scale-sampler
@@ -544,7 +544,7 @@ def edgenext_x_small(pretrained=False, **kwargs):
 
 
 @register_model
-def edgenext_small(pretrained=False, **kwargs):
+def edgenext_small(pretrained=False, **kwargs) -> EdgeNeXt:
     # 5.59M & 1260.59M @ 256 resolution
     # 79.43% Top-1 accuracy
     # AA=True, No Mixup & Cutmix, DropPath=0.1, BS=4096, lr=0.006, multi-scale-sampler
@@ -555,7 +555,7 @@ def edgenext_small(pretrained=False, **kwargs):
 
 
 @register_model
-def edgenext_base(pretrained=False, **kwargs):
+def edgenext_base(pretrained=False, **kwargs) -> EdgeNeXt:
     # 18.51M & 3840.93M @ 256 resolution
     # 82.5% (normal) 83.7% (USI) Top-1 accuracy
     # AA=True, Mixup & Cutmix, DropPath=0.1, BS=4096, lr=0.006, multi-scale-sampler
@@ -566,7 +566,7 @@ def edgenext_base(pretrained=False, **kwargs):
 
 
 @register_model
-def edgenext_small_rw(pretrained=False, **kwargs):
+def edgenext_small_rw(pretrained=False, **kwargs) -> EdgeNeXt:
     model_kwargs = dict(
         depths=(3, 3, 9, 3), dims=(48, 96, 192, 384),
         downsample_block=True, conv_bias=False, stem_type='overlap', **kwargs)

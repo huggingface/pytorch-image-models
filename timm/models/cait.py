@@ -446,70 +446,70 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def cait_xxs24_224(pretrained=False, **kwargs):
+def cait_xxs24_224(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=192, depth=24, num_heads=4, init_values=1e-5)
     model = _create_cait('cait_xxs24_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_xxs24_384(pretrained=False, **kwargs):
+def cait_xxs24_384(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=192, depth=24, num_heads=4, init_values=1e-5)
     model = _create_cait('cait_xxs24_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_xxs36_224(pretrained=False, **kwargs):
+def cait_xxs36_224(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=192, depth=36, num_heads=4, init_values=1e-5)
     model = _create_cait('cait_xxs36_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_xxs36_384(pretrained=False, **kwargs):
+def cait_xxs36_384(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=192, depth=36, num_heads=4, init_values=1e-5)
     model = _create_cait('cait_xxs36_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_xs24_384(pretrained=False, **kwargs):
+def cait_xs24_384(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=288, depth=24, num_heads=6, init_values=1e-5)
     model = _create_cait('cait_xs24_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_s24_224(pretrained=False, **kwargs):
+def cait_s24_224(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=384, depth=24, num_heads=8, init_values=1e-5)
     model = _create_cait('cait_s24_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_s24_384(pretrained=False, **kwargs):
+def cait_s24_384(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=384, depth=24, num_heads=8, init_values=1e-5)
     model = _create_cait('cait_s24_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_s36_384(pretrained=False, **kwargs):
+def cait_s36_384(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=384, depth=36, num_heads=8, init_values=1e-6)
     model = _create_cait('cait_s36_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_m36_384(pretrained=False, **kwargs):
+def cait_m36_384(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=768, depth=36, num_heads=16, init_values=1e-6)
     model = _create_cait('cait_m36_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def cait_m48_448(pretrained=False, **kwargs):
+def cait_m48_448(pretrained=False, **kwargs) -> Cait:
     model_args = dict(patch_size=16, embed_dim=768, depth=48, num_heads=16, init_values=1e-6)
     model = _create_cait('cait_m48_448', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

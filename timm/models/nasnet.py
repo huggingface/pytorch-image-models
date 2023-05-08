@@ -594,7 +594,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def nasnetalarge(pretrained=False, **kwargs):
+def nasnetalarge(pretrained=False, **kwargs) -> NASNetALarge:
     """NASNet-A large model architecture.
     """
     model_kwargs = dict(pad_type='same', **kwargs)

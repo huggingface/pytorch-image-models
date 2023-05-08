@@ -73,7 +73,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def hardcorenas_a(pretrained=False, **kwargs):
+def hardcorenas_a(pretrained=False, **kwargs) -> MobileNetV3:
     """ hardcorenas_A """
     arch_def = [['ds_r1_k3_s1_e1_c16_nre'], ['ir_r1_k5_s2_e3_c24_nre', 'ir_r1_k5_s1_e3_c24_nre_se0.25'],
                 ['ir_r1_k5_s2_e3_c40_nre', 'ir_r1_k5_s1_e6_c40_nre_se0.25'],
@@ -85,7 +85,7 @@ def hardcorenas_a(pretrained=False, **kwargs):
 
 
 @register_model
-def hardcorenas_b(pretrained=False, **kwargs):
+def hardcorenas_b(pretrained=False, **kwargs) -> MobileNetV3:
     """ hardcorenas_B """
     arch_def = [['ds_r1_k3_s1_e1_c16_nre'],
                 ['ir_r1_k5_s2_e3_c24_nre', 'ir_r1_k5_s1_e3_c24_nre_se0.25', 'ir_r1_k3_s1_e3_c24_nre'],
@@ -99,7 +99,7 @@ def hardcorenas_b(pretrained=False, **kwargs):
 
 
 @register_model
-def hardcorenas_c(pretrained=False, **kwargs):
+def hardcorenas_c(pretrained=False, **kwargs) -> MobileNetV3:
     """ hardcorenas_C """
     arch_def = [['ds_r1_k3_s1_e1_c16_nre'], ['ir_r1_k5_s2_e3_c24_nre', 'ir_r1_k5_s1_e3_c24_nre_se0.25'],
                 ['ir_r1_k5_s2_e3_c40_nre', 'ir_r1_k5_s1_e3_c40_nre', 'ir_r1_k5_s1_e3_c40_nre',
@@ -113,7 +113,7 @@ def hardcorenas_c(pretrained=False, **kwargs):
 
 
 @register_model
-def hardcorenas_d(pretrained=False, **kwargs):
+def hardcorenas_d(pretrained=False, **kwargs) -> MobileNetV3:
     """ hardcorenas_D """
     arch_def = [['ds_r1_k3_s1_e1_c16_nre'], ['ir_r1_k5_s2_e3_c24_nre_se0.25', 'ir_r1_k5_s1_e3_c24_nre_se0.25'],
                 ['ir_r1_k5_s2_e3_c40_nre_se0.25', 'ir_r1_k5_s1_e4_c40_nre_se0.25', 'ir_r1_k3_s1_e3_c40_nre_se0.25'],
@@ -128,7 +128,7 @@ def hardcorenas_d(pretrained=False, **kwargs):
 
 
 @register_model
-def hardcorenas_e(pretrained=False, **kwargs):
+def hardcorenas_e(pretrained=False, **kwargs) -> MobileNetV3:
     """ hardcorenas_E """
     arch_def = [['ds_r1_k3_s1_e1_c16_nre'], ['ir_r1_k5_s2_e3_c24_nre_se0.25', 'ir_r1_k5_s1_e3_c24_nre_se0.25'],
                 ['ir_r1_k5_s2_e6_c40_nre_se0.25', 'ir_r1_k5_s1_e4_c40_nre_se0.25', 'ir_r1_k5_s1_e4_c40_nre_se0.25',
@@ -142,7 +142,7 @@ def hardcorenas_e(pretrained=False, **kwargs):
 
 
 @register_model
-def hardcorenas_f(pretrained=False, **kwargs):
+def hardcorenas_f(pretrained=False, **kwargs) -> MobileNetV3:
     """ hardcorenas_F """
     arch_def = [['ds_r1_k3_s1_e1_c16_nre'], ['ir_r1_k5_s2_e3_c24_nre_se0.25', 'ir_r1_k5_s1_e3_c24_nre_se0.25'],
                 ['ir_r1_k5_s2_e6_c40_nre_se0.25', 'ir_r1_k5_s1_e6_c40_nre_se0.25'],

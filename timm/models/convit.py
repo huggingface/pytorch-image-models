@@ -35,7 +35,7 @@ from ._registry import register_model, generate_default_cfgs
 from .vision_transformer_hybrid import HybridEmbed
 
 
-__all__ = ['ConViT']
+__all__ = ['ConVit']
 
 
 @register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
@@ -237,7 +237,7 @@ class Block(nn.Module):
         return x
 
 
-class ConViT(nn.Module):
+class ConVit(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
 
@@ -385,7 +385,7 @@ def _create_convit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    return build_model_with_cfg(ConViT, variant, pretrained, **kwargs)
+    return build_model_with_cfg(ConVit, variant, pretrained, **kwargs)
 
 
 def _cfg(url='', **kwargs):
@@ -407,7 +407,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def convit_tiny(pretrained=False, **kwargs):
+def convit_tiny(pretrained=False, **kwargs) -> ConVit:
     model_args = dict(
         local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=4)
     model = _create_convit(variant='convit_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -415,7 +415,7 @@ def convit_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def convit_small(pretrained=False, **kwargs):
+def convit_small(pretrained=False, **kwargs) -> ConVit:
     model_args = dict(
         local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=9)
     model = _create_convit(variant='convit_small', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -423,7 +423,7 @@ def convit_small(pretrained=False, **kwargs):
 
 
 @register_model
-def convit_base(pretrained=False, **kwargs):
+def convit_base(pretrained=False, **kwargs) -> ConVit:
     model_args = dict(
         local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=16)
     model = _create_convit(variant='convit_base', pretrained=pretrained, **dict(model_args, **kwargs))

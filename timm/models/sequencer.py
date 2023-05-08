@@ -490,7 +490,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def sequencer2d_s(pretrained=False, **kwargs):
+def sequencer2d_s(pretrained=False, **kwargs) -> Sequencer2d:
     model_args = dict(
         layers=[4, 3, 8, 3],
         patch_sizes=[7, 2, 1, 1],
@@ -507,7 +507,7 @@ def sequencer2d_s(pretrained=False, **kwargs):
 
 
 @register_model
-def sequencer2d_m(pretrained=False, **kwargs):
+def sequencer2d_m(pretrained=False, **kwargs) -> Sequencer2d:
     model_args = dict(
         layers=[4, 3, 14, 3],
         patch_sizes=[7, 2, 1, 1],
@@ -524,7 +524,7 @@ def sequencer2d_m(pretrained=False, **kwargs):
 
 
 @register_model
-def sequencer2d_l(pretrained=False, **kwargs):
+def sequencer2d_l(pretrained=False, **kwargs) -> Sequencer2d:
     model_args = dict(
         layers=[8, 8, 16, 4],
         patch_sizes=[7, 2, 1, 1],

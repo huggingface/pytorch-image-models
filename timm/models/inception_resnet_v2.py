@@ -336,7 +336,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def inception_resnet_v2(pretrained=False, **kwargs):
+def inception_resnet_v2(pretrained=False, **kwargs) -> InceptionResnetV2:
     return _create_inception_resnet_v2('inception_resnet_v2', pretrained=pretrained, **kwargs)
 
 

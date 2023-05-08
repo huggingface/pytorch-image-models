@@ -357,7 +357,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def densenet121(pretrained=False, **kwargs):
+def densenet121(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -367,7 +367,7 @@ def densenet121(pretrained=False, **kwargs):
 
 
 @register_model
-def densenetblur121d(pretrained=False, **kwargs):
+def densenetblur121d(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-121 w/ blur-pooling & 3-layer 3x3 stem
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -378,7 +378,7 @@ def densenetblur121d(pretrained=False, **kwargs):
 
 
 @register_model
-def densenet169(pretrained=False, **kwargs):
+def densenet169(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-169 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -388,7 +388,7 @@ def densenet169(pretrained=False, **kwargs):
 
 
 @register_model
-def densenet201(pretrained=False, **kwargs):
+def densenet201(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-201 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -398,7 +398,7 @@ def densenet201(pretrained=False, **kwargs):
 
 
 @register_model
-def densenet161(pretrained=False, **kwargs):
+def densenet161(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-161 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
@@ -408,7 +408,7 @@ def densenet161(pretrained=False, **kwargs):
 
 
 @register_model
-def densenet264d(pretrained=False, **kwargs):
+def densenet264d(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-264 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """

@@ -884,7 +884,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def convnext_atto(pretrained=False, **kwargs):
+def convnext_atto(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant (NOTE: still tweaking depths, will vary between 3-4M param, current is 3.7M
     model_args = dict(depths=(2, 2, 6, 2), dims=(40, 80, 160, 320), conv_mlp=True)
     model = _create_convnext('convnext_atto', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -892,7 +892,7 @@ def convnext_atto(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_atto_ols(pretrained=False, **kwargs):
+def convnext_atto_ols(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant with overlapping 3x3 conv stem, wider than non-ols femto above, current param count 3.7M
     model_args = dict(depths=(2, 2, 6, 2), dims=(40, 80, 160, 320), conv_mlp=True, stem_type='overlap_tiered')
     model = _create_convnext('convnext_atto_ols', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -900,7 +900,7 @@ def convnext_atto_ols(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_femto(pretrained=False, **kwargs):
+def convnext_femto(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant
     model_args = dict(depths=(2, 2, 6, 2), dims=(48, 96, 192, 384), conv_mlp=True)
     model = _create_convnext('convnext_femto', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -908,7 +908,7 @@ def convnext_femto(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_femto_ols(pretrained=False, **kwargs):
+def convnext_femto_ols(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant
     model_args = dict(depths=(2, 2, 6, 2), dims=(48, 96, 192, 384), conv_mlp=True, stem_type='overlap_tiered')
     model = _create_convnext('convnext_femto_ols', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -916,7 +916,7 @@ def convnext_femto_ols(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_pico(pretrained=False, **kwargs):
+def convnext_pico(pretrained=False, **kwargs) -> ConvNeXt:
     # timm pico variant
     model_args = dict(depths=(2, 2, 6, 2), dims=(64, 128, 256, 512), conv_mlp=True)
     model = _create_convnext('convnext_pico', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -924,7 +924,7 @@ def convnext_pico(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_pico_ols(pretrained=False, **kwargs):
+def convnext_pico_ols(pretrained=False, **kwargs) -> ConvNeXt:
     # timm nano variant with overlapping 3x3 conv stem
     model_args = dict(depths=(2, 2, 6, 2), dims=(64, 128, 256, 512), conv_mlp=True,  stem_type='overlap_tiered')
     model = _create_convnext('convnext_pico_ols', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -932,7 +932,7 @@ def convnext_pico_ols(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_nano(pretrained=False, **kwargs):
+def convnext_nano(pretrained=False, **kwargs) -> ConvNeXt:
     # timm nano variant with standard stem and head
     model_args = dict(depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), conv_mlp=True)
     model = _create_convnext('convnext_nano', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -940,7 +940,7 @@ def convnext_nano(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_nano_ols(pretrained=False, **kwargs):
+def convnext_nano_ols(pretrained=False, **kwargs) -> ConvNeXt:
     # experimental nano variant with overlapping conv stem
     model_args = dict(depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), conv_mlp=True, stem_type='overlap')
     model = _create_convnext('convnext_nano_ols', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -948,7 +948,7 @@ def convnext_nano_ols(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_tiny_hnf(pretrained=False, **kwargs):
+def convnext_tiny_hnf(pretrained=False, **kwargs) -> ConvNeXt:
     # experimental tiny variant with norm before pooling in head (head norm first)
     model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), head_norm_first=True, conv_mlp=True)
     model = _create_convnext('convnext_tiny_hnf', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -956,56 +956,56 @@ def convnext_tiny_hnf(pretrained=False, **kwargs):
 
 
 @register_model
-def convnext_tiny(pretrained=False, **kwargs):
+def convnext_tiny(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768))
     model = _create_convnext('convnext_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnext_small(pretrained=False, **kwargs):
+def convnext_small(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768])
     model = _create_convnext('convnext_small', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnext_base(pretrained=False, **kwargs):
+def convnext_base(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024])
     model = _create_convnext('convnext_base', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnext_large(pretrained=False, **kwargs):
+def convnext_large(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536])
     model = _create_convnext('convnext_large', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnext_large_mlp(pretrained=False, **kwargs):
+def convnext_large_mlp(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], head_hidden_size=1536)
     model = _create_convnext('convnext_large_mlp', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnext_xlarge(pretrained=False, **kwargs):
+def convnext_xlarge(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048])
     model = _create_convnext('convnext_xlarge', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnext_xxlarge(pretrained=False, **kwargs):
+def convnext_xxlarge(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 4, 30, 3], dims=[384, 768, 1536, 3072], norm_eps=kwargs.pop('norm_eps', 1e-5))
     model = _create_convnext('convnext_xxlarge', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnextv2_atto(pretrained=False, **kwargs):
+def convnextv2_atto(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant (NOTE: still tweaking depths, will vary between 3-4M param, current is 3.7M
     model_args = dict(
         depths=(2, 2, 6, 2), dims=(40, 80, 160, 320), use_grn=True, ls_init_value=None, conv_mlp=True)
@@ -1014,7 +1014,7 @@ def convnextv2_atto(pretrained=False, **kwargs):
 
 
 @register_model
-def convnextv2_femto(pretrained=False, **kwargs):
+def convnextv2_femto(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant
     model_args = dict(
         depths=(2, 2, 6, 2), dims=(48, 96, 192, 384), use_grn=True, ls_init_value=None, conv_mlp=True)
@@ -1023,7 +1023,7 @@ def convnextv2_femto(pretrained=False, **kwargs):
 
 
 @register_model
-def convnextv2_pico(pretrained=False, **kwargs):
+def convnextv2_pico(pretrained=False, **kwargs) -> ConvNeXt:
     # timm pico variant
     model_args = dict(
         depths=(2, 2, 6, 2), dims=(64, 128, 256, 512), use_grn=True, ls_init_value=None, conv_mlp=True)
@@ -1032,7 +1032,7 @@ def convnextv2_pico(pretrained=False, **kwargs):
 
 
 @register_model
-def convnextv2_nano(pretrained=False, **kwargs):
+def convnextv2_nano(pretrained=False, **kwargs) -> ConvNeXt:
     # timm nano variant with standard stem and head
     model_args = dict(
         depths=(2, 2, 8, 2), dims=(80, 160, 320, 640), use_grn=True, ls_init_value=None, conv_mlp=True)
@@ -1041,35 +1041,35 @@ def convnextv2_nano(pretrained=False, **kwargs):
 
 
 @register_model
-def convnextv2_tiny(pretrained=False, **kwargs):
+def convnextv2_tiny(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768), use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnextv2_small(pretrained=False, **kwargs):
+def convnextv2_small(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_small', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnextv2_base(pretrained=False, **kwargs):
+def convnextv2_base(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_base', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnextv2_large(pretrained=False, **kwargs):
+def convnextv2_large(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_large', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convnextv2_huge(pretrained=False, **kwargs):
+def convnextv2_huge(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_huge', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

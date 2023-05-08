@@ -145,7 +145,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def res2net50_26w_4s(pretrained=False, **kwargs):
+def res2net50_26w_4s(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Res2Net-50 26w4s model.
     """
     model_args = dict(
@@ -154,7 +154,7 @@ def res2net50_26w_4s(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net101_26w_4s(pretrained=False, **kwargs):
+def res2net101_26w_4s(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Res2Net-101 26w4s model.
     """
     model_args = dict(
@@ -163,7 +163,7 @@ def res2net101_26w_4s(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net50_26w_6s(pretrained=False, **kwargs):
+def res2net50_26w_6s(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Res2Net-50 26w6s model.
     """
     model_args = dict(
@@ -172,7 +172,7 @@ def res2net50_26w_6s(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net50_26w_8s(pretrained=False, **kwargs):
+def res2net50_26w_8s(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Res2Net-50 26w8s model.
     """
     model_args = dict(
@@ -181,7 +181,7 @@ def res2net50_26w_8s(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net50_48w_2s(pretrained=False, **kwargs):
+def res2net50_48w_2s(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Res2Net-50 48w2s model.
     """
     model_args = dict(
@@ -190,7 +190,7 @@ def res2net50_48w_2s(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net50_14w_8s(pretrained=False, **kwargs):
+def res2net50_14w_8s(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Res2Net-50 14w8s model.
     """
     model_args = dict(
@@ -199,7 +199,7 @@ def res2net50_14w_8s(pretrained=False, **kwargs):
 
 
 @register_model
-def res2next50(pretrained=False, **kwargs):
+def res2next50(pretrained=False, **kwargs) -> ResNet:
     """Construct Res2NeXt-50 4s
     """
     model_args = dict(
@@ -208,7 +208,7 @@ def res2next50(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net50d(pretrained=False, **kwargs):
+def res2net50d(pretrained=False, **kwargs) -> ResNet:
     """Construct Res2Net-50
     """
     model_args = dict(
@@ -218,7 +218,7 @@ def res2net50d(pretrained=False, **kwargs):
 
 
 @register_model
-def res2net101d(pretrained=False, **kwargs):
+def res2net101d(pretrained=False, **kwargs) -> ResNet:
     """Construct Res2Net-50
     """
     model_args = dict(

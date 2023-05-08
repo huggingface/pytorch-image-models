@@ -23,7 +23,7 @@ from timm.layers import StdConv2dSame, StdConv2d, to_2tuple
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
-from .vision_transformer import _create_vision_transformer
+from .vision_transformer import _create_vision_transformer, VisionTransformer
 
 
 class HybridEmbed(nn.Module):
@@ -177,7 +177,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def vit_tiny_r_s16_p8_224(pretrained=False, **kwargs):
+def vit_tiny_r_s16_p8_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R+ViT-Ti/S16 w/ 8x8 patch hybrid @ 224 x 224.
     """
     backbone = _resnetv2(layers=(), **kwargs)
@@ -188,7 +188,7 @@ def vit_tiny_r_s16_p8_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_tiny_r_s16_p8_384(pretrained=False, **kwargs):
+def vit_tiny_r_s16_p8_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R+ViT-Ti/S16 w/ 8x8 patch hybrid @ 384 x 384.
     """
     backbone = _resnetv2(layers=(), **kwargs)
@@ -199,7 +199,7 @@ def vit_tiny_r_s16_p8_384(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_small_r26_s32_224(pretrained=False, **kwargs):
+def vit_small_r26_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R26+ViT-S/S32 hybrid.
     """
     backbone = _resnetv2((2, 2, 2, 2), **kwargs)
@@ -210,7 +210,7 @@ def vit_small_r26_s32_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_small_r26_s32_384(pretrained=False, **kwargs):
+def vit_small_r26_s32_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R26+ViT-S/S32 hybrid.
     """
     backbone = _resnetv2((2, 2, 2, 2), **kwargs)
@@ -221,7 +221,7 @@ def vit_small_r26_s32_384(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_r26_s32_224(pretrained=False, **kwargs):
+def vit_base_r26_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R26+ViT-B/S32 hybrid.
     """
     backbone = _resnetv2((2, 2, 2, 2), **kwargs)
@@ -232,7 +232,7 @@ def vit_base_r26_s32_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_r50_s16_224(pretrained=False, **kwargs):
+def vit_base_r50_s16_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-B/S16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
     """
     backbone = _resnetv2((3, 4, 9), **kwargs)
@@ -243,7 +243,7 @@ def vit_base_r50_s16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_r50_s16_384(pretrained=False, **kwargs):
+def vit_base_r50_s16_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-B/16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
@@ -255,7 +255,7 @@ def vit_base_r50_s16_384(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_large_r50_s32_224(pretrained=False, **kwargs):
+def vit_large_r50_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-L/S32 hybrid.
     """
     backbone = _resnetv2((3, 4, 6, 3), **kwargs)
@@ -266,7 +266,7 @@ def vit_large_r50_s32_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_large_r50_s32_384(pretrained=False, **kwargs):
+def vit_large_r50_s32_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-L/S32 hybrid.
     """
     backbone = _resnetv2((3, 4, 6, 3), **kwargs)
@@ -277,7 +277,7 @@ def vit_large_r50_s32_384(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_small_resnet26d_224(pretrained=False, **kwargs):
+def vit_small_resnet26d_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT small hybrid w/ ResNet26D stride 32. No pretrained weights.
     """
     backbone = resnet26d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
@@ -288,7 +288,7 @@ def vit_small_resnet26d_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_small_resnet50d_s16_224(pretrained=False, **kwargs):
+def vit_small_resnet50d_s16_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT small hybrid w/ ResNet50D 3-stages, stride 16. No pretrained weights.
     """
     backbone = resnet50d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[3])
@@ -299,7 +299,7 @@ def vit_small_resnet50d_s16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_resnet26d_224(pretrained=False, **kwargs):
+def vit_base_resnet26d_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT base hybrid w/ ResNet26D stride 32. No pretrained weights.
     """
     backbone = resnet26d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
@@ -310,7 +310,7 @@ def vit_base_resnet26d_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_resnet50d_224(pretrained=False, **kwargs):
+def vit_base_resnet50d_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT base hybrid w/ ResNet50D stride 32. No pretrained weights.
     """
     backbone = resnet50d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])

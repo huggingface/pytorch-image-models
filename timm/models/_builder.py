@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 # Use set_pretrained_download_progress / set_pretrained_check_hash functions to toggle.
 _DOWNLOAD_PROGRESS = False
 _CHECK_HASH = False
-
+_USE_OLD_CACHE = int(os.environ.get('TIMM_USE_OLD_CACHE', 0)) > 0
 
 __all__ = ['set_pretrained_download_progress', 'set_pretrained_check_hash', 'load_custom_pretrained', 'load_pretrained',
            'pretrained_cfg_for_features', 'resolve_pretrained_cfg', 'build_model_with_cfg']
@@ -49,9 +49,11 @@ def _resolve_pretrained_source(pretrained_cfg):
             load_from = 'file'
             pretrained_loc = pretrained_file
         else:
-            # next, HF hub is prioritized unless a valid cached version of weights exists already
-            cached_url_valid = check_cached_file(pretrained_url) if pretrained_url else False
-            if hf_hub_id and has_hf_hub(necessary=True) and not cached_url_valid:
+            old_cache_valid = False
+            if _USE_OLD_CACHE:
+                # prioritized old cached weights if exists and env var enabled
+                old_cache_valid = check_cached_file(pretrained_url) if pretrained_url else False
+            if not old_cache_valid and hf_hub_id and has_hf_hub(necessary=True):
                 # hf-hub available as alternate weight source in default_cfg
                 load_from = 'hf-hub'
                 pretrained_loc = hf_hub_id

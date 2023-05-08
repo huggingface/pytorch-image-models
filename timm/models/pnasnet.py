@@ -371,7 +371,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def pnasnet5large(pretrained=False, **kwargs):
+def pnasnet5large(pretrained=False, **kwargs) -> PNASNet5Large:
     r"""PNASNet-5 model architecture from the
     `"Progressive Neural Architecture Search"
     <https://arxiv.org/abs/1712.00559>`_ paper.

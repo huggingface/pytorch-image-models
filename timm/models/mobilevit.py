@@ -621,52 +621,52 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def mobilevit_xxs(pretrained=False, **kwargs):
+def mobilevit_xxs(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevit_xxs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevit_xs(pretrained=False, **kwargs):
+def mobilevit_xs(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevit_xs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevit_s(pretrained=False, **kwargs):
+def mobilevit_s(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevit_s', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_050(pretrained=False, **kwargs):
+def mobilevitv2_050(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_050', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_075(pretrained=False, **kwargs):
+def mobilevitv2_075(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_075', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_100(pretrained=False, **kwargs):
+def mobilevitv2_100(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_100', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_125(pretrained=False, **kwargs):
+def mobilevitv2_125(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_125', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_150(pretrained=False, **kwargs):
+def mobilevitv2_150(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_150', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_175(pretrained=False, **kwargs):
+def mobilevitv2_175(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_175', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_200(pretrained=False, **kwargs):
+def mobilevitv2_200(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_200', pretrained=pretrained, **kwargs)
 
 

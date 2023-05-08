@@ -1543,7 +1543,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def gernet_l(pretrained=False, **kwargs):
+def gernet_l(pretrained=False, **kwargs) -> ByobNet:
     """ GEResNet-Large (GENet-Large from official impl)
     `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
     """
@@ -1551,7 +1551,7 @@ def gernet_l(pretrained=False, **kwargs):
 
 
 @register_model
-def gernet_m(pretrained=False, **kwargs):
+def gernet_m(pretrained=False, **kwargs) -> ByobNet:
     """ GEResNet-Medium (GENet-Normal from official impl)
     `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
     """
@@ -1559,7 +1559,7 @@ def gernet_m(pretrained=False, **kwargs):
 
 
 @register_model
-def gernet_s(pretrained=False, **kwargs):
+def gernet_s(pretrained=False, **kwargs) -> ByobNet:
     """ EResNet-Small (GENet-Small from official impl)
     `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
     """
@@ -1567,7 +1567,7 @@ def gernet_s(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_a2(pretrained=False, **kwargs):
+def repvgg_a2(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-A2
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1575,7 +1575,7 @@ def repvgg_a2(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b0(pretrained=False, **kwargs):
+def repvgg_b0(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B0
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1583,7 +1583,7 @@ def repvgg_b0(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b1(pretrained=False, **kwargs):
+def repvgg_b1(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B1
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1591,7 +1591,7 @@ def repvgg_b1(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b1g4(pretrained=False, **kwargs):
+def repvgg_b1g4(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B1g4
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1599,7 +1599,7 @@ def repvgg_b1g4(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b2(pretrained=False, **kwargs):
+def repvgg_b2(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B2
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1607,7 +1607,7 @@ def repvgg_b2(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b2g4(pretrained=False, **kwargs):
+def repvgg_b2g4(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B2g4
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1615,7 +1615,7 @@ def repvgg_b2g4(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b3(pretrained=False, **kwargs):
+def repvgg_b3(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B3
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1623,7 +1623,7 @@ def repvgg_b3(pretrained=False, **kwargs):
 
 
 @register_model
-def repvgg_b3g4(pretrained=False, **kwargs):
+def repvgg_b3g4(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B3g4
     `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
     """
@@ -1631,154 +1631,154 @@ def repvgg_b3g4(pretrained=False, **kwargs):
 
 
 @register_model
-def resnet51q(pretrained=False, **kwargs):
+def resnet51q(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('resnet51q', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def resnet61q(pretrained=False, **kwargs):
+def resnet61q(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('resnet61q', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def resnext26ts(pretrained=False, **kwargs):
+def resnext26ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def gcresnext26ts(pretrained=False, **kwargs):
+def gcresnext26ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('gcresnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def seresnext26ts(pretrained=False, **kwargs):
+def seresnext26ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('seresnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def eca_resnext26ts(pretrained=False, **kwargs):
+def eca_resnext26ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('eca_resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def bat_resnext26ts(pretrained=False, **kwargs):
+def bat_resnext26ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('bat_resnext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def resnet32ts(pretrained=False, **kwargs):
+def resnet32ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('resnet32ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def resnet33ts(pretrained=False, **kwargs):
+def resnet33ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('resnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def gcresnet33ts(pretrained=False, **kwargs):
+def gcresnet33ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('gcresnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def seresnet33ts(pretrained=False, **kwargs):
+def seresnet33ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('seresnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def eca_resnet33ts(pretrained=False, **kwargs):
+def eca_resnet33ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('eca_resnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def gcresnet50t(pretrained=False, **kwargs):
+def gcresnet50t(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('gcresnet50t', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def gcresnext50ts(pretrained=False, **kwargs):
+def gcresnext50ts(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('gcresnext50ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_b16(pretrained=False, **kwargs):
+def regnetz_b16(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_b16', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_c16(pretrained=False, **kwargs):
+def regnetz_c16(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_c16', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_d32(pretrained=False, **kwargs):
+def regnetz_d32(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_d32', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_d8(pretrained=False, **kwargs):
+def regnetz_d8(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_d8', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_e8(pretrained=False, **kwargs):
+def regnetz_e8(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_e8', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_b16_evos(pretrained=False, **kwargs):
+def regnetz_b16_evos(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_b16_evos', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_c16_evos(pretrained=False, **kwargs):
+def regnetz_c16_evos(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_c16_evos', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def regnetz_d8_evos(pretrained=False, **kwargs):
+def regnetz_d8_evos(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('regnetz_d8_evos', pretrained=pretrained, **kwargs)

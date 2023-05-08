@@ -825,7 +825,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def eva_giant_patch14_224(pretrained=False, **kwargs):
+def eva_giant_patch14_224(pretrained=False, **kwargs) -> Eva:
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -833,7 +833,7 @@ def eva_giant_patch14_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva_giant_patch14_336(pretrained=False, **kwargs):
+def eva_giant_patch14_336(pretrained=False, **kwargs) -> Eva:
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -841,7 +841,7 @@ def eva_giant_patch14_336(pretrained=False, **kwargs):
 
 
 @register_model
-def eva_giant_patch14_560(pretrained=False, **kwargs):
+def eva_giant_patch14_560(pretrained=False, **kwargs) -> Eva:
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_560', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -849,7 +849,7 @@ def eva_giant_patch14_560(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_tiny_patch14_224(pretrained=False, **kwargs):
+def eva02_tiny_patch14_224(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -866,7 +866,7 @@ def eva02_tiny_patch14_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_small_patch14_224(pretrained=False, **kwargs):
+def eva02_small_patch14_224(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -883,7 +883,7 @@ def eva02_small_patch14_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_base_patch14_224(pretrained=False, **kwargs):
+def eva02_base_patch14_224(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -902,7 +902,7 @@ def eva02_base_patch14_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_large_patch14_224(pretrained=False, **kwargs):
+def eva02_large_patch14_224(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -921,7 +921,7 @@ def eva02_large_patch14_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_tiny_patch14_336(pretrained=False, **kwargs):
+def eva02_tiny_patch14_336(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -938,7 +938,7 @@ def eva02_tiny_patch14_336(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_small_patch14_336(pretrained=False, **kwargs):
+def eva02_small_patch14_336(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -955,7 +955,7 @@ def eva02_small_patch14_336(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_base_patch14_448(pretrained=False, **kwargs):
+def eva02_base_patch14_448(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=448,
         patch_size=14,
@@ -974,7 +974,7 @@ def eva02_base_patch14_448(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_large_patch14_448(pretrained=False, **kwargs):
+def eva02_large_patch14_448(pretrained=False, **kwargs) -> Eva:
     model_args = dict(
         img_size=448,
         patch_size=14,
@@ -993,7 +993,7 @@ def eva02_large_patch14_448(pretrained=False, **kwargs):
 
 
 @register_model
-def eva_giant_patch14_clip_224(pretrained=False, **kwargs):
+def eva_giant_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
     """ EVA-g CLIP model (only difference from non-CLIP is the pooling)  """
     model_args = dict(
         patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408,
@@ -1003,7 +1003,7 @@ def eva_giant_patch14_clip_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
+def eva02_base_patch16_clip_224(pretrained=False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base """
     model_args = dict(
         img_size=224,
@@ -1025,7 +1025,7 @@ def eva02_base_patch16_clip_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_large_patch14_clip_224(pretrained=False, **kwargs):
+def eva02_large_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
     model_args = dict(
         img_size=224,
@@ -1047,7 +1047,7 @@ def eva02_large_patch14_clip_224(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_large_patch14_clip_336(pretrained=False, **kwargs):
+def eva02_large_patch14_clip_336(pretrained=False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
     model_args = dict(
         img_size=336,
@@ -1069,7 +1069,7 @@ def eva02_large_patch14_clip_336(pretrained=False, **kwargs):
 
 
 @register_model
-def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs):
+def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that uses residual post-norm in blocks """
     model_args = dict(
         img_size=224,

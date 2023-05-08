@@ -450,7 +450,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def inception_v3(pretrained=False, **kwargs):
+def inception_v3(pretrained=False, **kwargs) -> InceptionV3:
     model = _create_inception_v3('inception_v3', pretrained=pretrained, **kwargs)
     return model
 

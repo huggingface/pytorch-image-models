@@ -230,7 +230,6 @@ def _xception(variant, pretrained=False, **kwargs):
 
 default_cfgs = generate_default_cfgs({
     'legacy_xception.tf_in1k': {
-        'hf_hub_id': 'timm/',
         'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/xception-43020ad28.pth',
         'input_size': (3, 299, 299),
         'pool_size': (10, 10),
@@ -247,7 +246,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def legacy_xception(pretrained=False, **kwargs):
+def legacy_xception(pretrained=False, **kwargs) -> Xception:
     return _xception('legacy_xception', pretrained=pretrained, **kwargs)
 
 

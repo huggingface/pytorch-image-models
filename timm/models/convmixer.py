@@ -124,18 +124,18 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def convmixer_1536_20(pretrained=False, **kwargs):
+def convmixer_1536_20(pretrained=False, **kwargs) -> ConvMixer:
     model_args = dict(dim=1536, depth=20, kernel_size=9, patch_size=7, **kwargs)
     return _create_convmixer('convmixer_1536_20', pretrained, **model_args)
 
 
 @register_model
-def convmixer_768_32(pretrained=False, **kwargs):
+def convmixer_768_32(pretrained=False, **kwargs) -> ConvMixer:
     model_args = dict(dim=768, depth=32, kernel_size=7, patch_size=7, act_layer=nn.ReLU, **kwargs)
     return _create_convmixer('convmixer_768_32', pretrained, **model_args)
 
 
 @register_model
-def convmixer_1024_20_ks9_p14(pretrained=False, **kwargs):
+def convmixer_1024_20_ks9_p14(pretrained=False, **kwargs) -> ConvMixer:
     model_args = dict(dim=1024, depth=20, kernel_size=9, patch_size=14, **kwargs)
     return _create_convmixer('convmixer_1024_20_ks9_p14', pretrained, **model_args)

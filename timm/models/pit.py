@@ -351,7 +351,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def pit_b_224(pretrained, **kwargs):
+def pit_b_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=14,
         stride=7,
@@ -364,7 +364,7 @@ def pit_b_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_s_224(pretrained, **kwargs):
+def pit_s_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=16,
         stride=8,
@@ -377,7 +377,7 @@ def pit_s_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_xs_224(pretrained, **kwargs):
+def pit_xs_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=16,
         stride=8,
@@ -390,7 +390,7 @@ def pit_xs_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_ti_224(pretrained, **kwargs):
+def pit_ti_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=16,
         stride=8,
@@ -403,7 +403,7 @@ def pit_ti_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_b_distilled_224(pretrained, **kwargs):
+def pit_b_distilled_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=14,
         stride=7,
@@ -417,7 +417,7 @@ def pit_b_distilled_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_s_distilled_224(pretrained, **kwargs):
+def pit_s_distilled_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=16,
         stride=8,
@@ -431,7 +431,7 @@ def pit_s_distilled_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_xs_distilled_224(pretrained, **kwargs):
+def pit_xs_distilled_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=16,
         stride=8,
@@ -445,7 +445,7 @@ def pit_xs_distilled_224(pretrained, **kwargs):
 
 
 @register_model
-def pit_ti_distilled_224(pretrained, **kwargs):
+def pit_ti_distilled_224(pretrained=False, **kwargs) -> PoolingVisionTransformer:
     model_args = dict(
         patch_size=16,
         stride=8,

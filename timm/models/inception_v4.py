@@ -299,7 +299,7 @@ class InceptionV4(nn.Module):
         return x
 
 
-def _create_inception_v4(variant, pretrained=False, **kwargs):
+def _create_inception_v4(variant, pretrained=False, **kwargs) -> InceptionV4:
     return build_model_with_cfg(
         InceptionV4,
         variant,

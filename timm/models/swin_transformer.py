@@ -711,7 +711,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def swin_tiny_patch4_window7_224(pretrained=False, **kwargs):
+def swin_tiny_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-T @ 224x224, trained ImageNet-1k
     """
     model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
@@ -720,7 +720,7 @@ def swin_tiny_patch4_window7_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_small_patch4_window7_224(pretrained=False, **kwargs):
+def swin_small_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-S @ 224x224
     """
     model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
@@ -729,7 +729,7 @@ def swin_small_patch4_window7_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_base_patch4_window7_224(pretrained=False, **kwargs):
+def swin_base_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-B @ 224x224
     """
     model_args = dict(patch_size=4, window_size=7, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
@@ -738,7 +738,7 @@ def swin_base_patch4_window7_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_base_patch4_window12_384(pretrained=False, **kwargs):
+def swin_base_patch4_window12_384(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-B @ 384x384
     """
     model_args = dict(patch_size=4, window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
@@ -747,7 +747,7 @@ def swin_base_patch4_window12_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_large_patch4_window7_224(pretrained=False, **kwargs):
+def swin_large_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-L @ 224x224
     """
     model_args = dict(patch_size=4, window_size=7, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
@@ -756,7 +756,7 @@ def swin_large_patch4_window7_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_large_patch4_window12_384(pretrained=False, **kwargs):
+def swin_large_patch4_window12_384(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-L @ 384x384
     """
     model_args = dict(patch_size=4, window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
@@ -765,7 +765,7 @@ def swin_large_patch4_window12_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_s3_tiny_224(pretrained=False, **kwargs):
+def swin_s3_tiny_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-S3-T @ 224x224, https://arxiv.org/abs/2111.14725
     """
     model_args = dict(
@@ -774,7 +774,7 @@ def swin_s3_tiny_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_s3_small_224(pretrained=False, **kwargs):
+def swin_s3_small_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-S3-S @ 224x224, https://arxiv.org/abs/2111.14725
     """
     model_args = dict(
@@ -783,7 +783,7 @@ def swin_s3_small_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swin_s3_base_224(pretrained=False, **kwargs):
+def swin_s3_base_224(pretrained=False, **kwargs) -> SwinTransformer:
     """ Swin-S3-B @ 224x224, https://arxiv.org/abs/2111.14725
     """
     model_args = dict(
