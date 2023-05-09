@@ -231,7 +231,8 @@ class ParallelScalingBlock(nn.Module):
             init_values=None,
             drop_path=0.,
             act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm
+            norm_layer=nn.LayerNorm,
+            ffn_layer=None, # NOTE: not used
     ):
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -1901,8 +1902,8 @@ def vit_small_patch14_dinov2(pretrained=False, **kwargs):
     """ ViT-S/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1.0,
-        ffn_layer=partial(Mlp, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        patch_size=14, embed_dim=384, depth=12, num_heads=6, 
+        init_values=1.0, img_size=518, 
     )
     
     model = _create_vision_transformer(
@@ -1915,8 +1916,8 @@ def vit_base_patch14_dinov2(pretrained=False, **kwargs):
     """ ViT-B/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1.0,
-        ffn_layer=partial(Mlp, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, 
+        init_values=1.0, img_size=518, 
     )
 
     model = _create_vision_transformer(
@@ -1929,8 +1930,8 @@ def vit_large_patch14_dinov2(pretrained=False, **kwargs):
     """ ViT-L/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1.0,
-        ffn_layer=partial(Mlp, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, 
+        init_values=1.0, img_size=518, 
     )
 
     model = _create_vision_transformer(
@@ -1948,9 +1949,8 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs):
     # With SwiGLUPacked, we need to set hidden_features = 2 * 4096 = 8192
 
     model_args = dict(
-        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0, mlp_ratio=2.66667 * 2,
-        ffn_layer=SwiGLUPacked, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
-        act_layer=nn.SiLU
+        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0, 
+        mlp_ratio=2.66667 * 2, ffn_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU
     )
 
     model = _create_vision_transformer(
