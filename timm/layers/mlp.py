@@ -97,6 +97,9 @@ class GluMlp(nn.Module):
         return x
 
 
+SwiGLUPacked = partial(GluMlp, act_layer=nn.SiLU, gate_last=False)
+
+
 class SwiGLU(nn.Module):
     """ SwiGLU
     NOTE: GluMLP above can implement SwiGLU, but this impl has split fc1 and
@@ -108,7 +111,7 @@ class SwiGLU(nn.Module):
             hidden_features=None,
             out_features=None,
             act_layer=nn.SiLU,
-            norm_layer=nn.LayerNorm,
+            norm_layer=None,
             bias=True,
             drop=0.,
     ):
