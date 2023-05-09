@@ -38,7 +38,7 @@ from torch.jit import Final
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
-    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn, SwiGLU
+    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn, SwiGLUPacked
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -821,15 +821,9 @@ def _convert_dinov2(state_dict, model):
     for k, v in state_dict.items():
         if k == "mask_token":
             continue
-
-        if re.match(r"blocks\.(\d+)\.mlp\.w12\.(?:weight|bias)", k):
-            # We need to split the weight w12 to fc1_g and fc1_x
-            # fc1_g is the first half of the weight, fc1_x is the second half
-            w1, w2 = v.chunk(2, dim=0)
-            out_dict[k.replace("w12", "fc1_g")] = w1
-            out_dict[k.replace("w12", "fc1_x")] = w2
+        elif re.match(r"blocks\.(\d+)\.mlp\.w12\.(?:weight|bias)", k):
+            out_dict[k.replace("w12", "fc1")] = v
             continue
-
         elif re.match(r"blocks\.(\d+)\.mlp\.w3\.(?:weight|bias)", k):
             out_dict[k.replace("w3", "fc2")] = v
             continue
@@ -1951,10 +1945,11 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs):
     # The hidden_features of SwiGLU is calculated by:
     # hidden_features = (int(hidden_features * 2 / 3) + 7) // 8 * 8
     # When embed_dim=1536, hidden_features=4096
+    # With SwiGLUPacked, we need to set hidden_features = 2 * 4096 = 8192
 
     model_args = dict(
-        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0, mlp_ratio=2.66667,
-        ffn_layer=partial(SwiGLU, norm_layer=None), img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1.0, mlp_ratio=2.66667 * 2,
+        ffn_layer=SwiGLUPacked, img_size=518, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
         act_layer=nn.SiLU
     )
 
