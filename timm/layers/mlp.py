@@ -97,6 +97,9 @@ class GluMlp(nn.Module):
         return x
 
 
+SwiGLUPacked = partial(GluMlp, act_layer=nn.SiLU, gate_last=False)
+
+
 class SwiGLU(nn.Module):
     """ SwiGLU
     NOTE: GluMLP above can implement SwiGLU, but this impl has split fc1 and
@@ -108,7 +111,7 @@ class SwiGLU(nn.Module):
             hidden_features=None,
             out_features=None,
             act_layer=nn.SiLU,
-            norm_layer=nn.LayerNorm,
+            norm_layer=None,
             bias=True,
             drop=0.,
     ):
@@ -130,8 +133,8 @@ class SwiGLU(nn.Module):
 
     def init_weights(self):
         # override init of fc1 w/ gate portion set to weight near zero, bias=1
-        nn.init.ones_(self.fc1a.bias)
-        nn.init.normal_(self.fc1a.weight, std=1e-6)
+        nn.init.ones_(self.fc1_g.bias)
+        nn.init.normal_(self.fc1_g.weight, std=1e-6)
 
     def forward(self, x):
         x_gate = self.fc1_g(x)
