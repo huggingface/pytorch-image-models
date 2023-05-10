@@ -24,6 +24,18 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
 * Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
 
+### May 10, 2023
+* Hugging Face Hub downloading is now default, 1129 models on https://huggingface.co/timm, 1160 weights in `timm`
+* DINOv2 vit feature backbone weights added thanks to [Leng Yue](https://github.com/leng-yue)
+* FB MAE vit feature backbone weights added
+* OpenCLIP DataComp-XL L/14 feat backbone weights added
+* MetaFormer (poolformer-v2, caformer, convformer, updated poolformer (v1)) w/ weights added by [Fredo Guan](https://github.com/fffffgggg54)
+* Experimental `get_intermediate_layers` function on vit/deit models for grabbing hidden states (inspired by DINO impl). This is WIP and may change significantly... feedback welcome.
+* Model creation throws error if `pretrained=True` and no weights exist (instead of continuing with random initialization)
+* Fix regression with inception / nasnet TF sourced weights with 1001 classes in original classifiers
+* Misc cleanup and fixes
+* Final testing before switching to a 0.9 and bringing `timm` out of pre-release state
+
 ### April 27, 2023
 * 97% of `timm` models uploaded to HF Hub and almost all updated to support multi-weight pretrained configs
 * Minor cleanup and refactoring of another batch of models as multi-weight added. More fused_attn (F.sdpa) and features_only support, and torchscript fixes.
