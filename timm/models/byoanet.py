@@ -284,50 +284,63 @@ default_cfgs = generate_default_cfgs({
     # GPU-Efficient (ResNet) weights
     'botnet26t_256.c1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/botnet26t_c1_256-167a0e9f.pth',
+        hf_hub_id='timm/',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'sebotnet33ts_256.a1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sebotnet33ts_a1h2_256-957e3c3e.pth',
+        hf_hub_id='timm/',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
     'botnet50ts_256.untrained': _cfg(
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'eca_botnext26ts_256.c1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_botnext26ts_c_256-95a898f6.pth',
+        hf_hub_id='timm/',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 
     'halonet_h1.untrained': _cfg(input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'halonet26t.a1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet26t_a1h_256-3083328c.pth',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256)),
     'sehalonet33ts.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/sehalonet33ts_256-87e053f9.pth',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'halonet50ts.a1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halonet50ts_a1h2_256-f3a3daee.pth',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
     'eca_halonext26ts.c1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/eca_halonext26ts_c_256-06906299.pth',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8), min_input_size=(3, 256, 256), crop_pct=0.94),
 
     'lambda_resnet26t.c1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26t_c_256-e5a5c857.pth',
+        hf_hub_id='timm/',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
     'lambda_resnet50ts.a1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet50ts_a1h_256-b87370f7.pth',
+        hf_hub_id='timm/',
         min_input_size=(3, 128, 128), input_size=(3, 256, 256), pool_size=(8, 8)),
     'lambda_resnet26rpt_256.c1_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lambda_resnet26rpt_c_256-ab00292d.pth',
+        hf_hub_id='timm/',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.94),
 
     'haloregnetz_b.ra3_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/haloregnetz_c_raa_256-c8ad7616.pth',
+        hf_hub_id='timm/',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         first_conv='stem.conv', input_size=(3, 224, 224), pool_size=(7, 7), min_input_size=(3, 224, 224), crop_pct=0.94),
 
     'lamhalobotnet50ts_256.a1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/lamhalobotnet50ts_a1h2_256-fe3d9445.pth',
+        hf_hub_id='timm/',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
     'halo2botnet50ts_256.a1h_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-attn-weights/halo2botnet50ts_a1h2_256-fd9c11a3.pth',
+        hf_hub_id='timm/',
         fixed_input_size=True, input_size=(3, 256, 256), pool_size=(8, 8)),
 })
 
