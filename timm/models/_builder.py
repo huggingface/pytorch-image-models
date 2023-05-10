@@ -152,8 +152,7 @@ def load_pretrained(
     """
     pretrained_cfg = pretrained_cfg or getattr(model, 'pretrained_cfg', None)
     if not pretrained_cfg:
-        _logger.warning("Invalid pretrained config, cannot load weights.")
-        return
+        raise RuntimeError("Invalid pretrained config, cannot load weights. Use `pretrained=False` for random init.")
 
     load_from, pretrained_loc = _resolve_pretrained_source(pretrained_cfg)
     if load_from == 'state_dict':
@@ -186,8 +185,8 @@ def load_pretrained(
         else:
             state_dict = load_state_dict_from_hf(pretrained_loc)
     else:
-        _logger.warning("No pretrained weights exist or were found for this model. Using random initialization.")
-        return
+        model_name = pretrained_cfg.get('architecture', 'this model')
+        raise RuntimeError(f"No pretrained weights exist for {model_name}. Use `pretrained=False` for random init.")
 
     if filter_fn is not None:
         try:
