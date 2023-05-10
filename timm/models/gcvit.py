@@ -33,34 +33,9 @@ from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, Lay
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['GlobalContextVit']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1', 'classifier': 'head.fc',
-        'fixed_input_size': True,
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'gcvit_xxtiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xxtiny_224_nvidia-d1d86009.pth'),
-    'gcvit_xtiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xtiny_224_nvidia-274b92b7.pth'),
-    'gcvit_tiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_tiny_224_nvidia-ac783954.pth'),
-    'gcvit_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_small_224_nvidia-4e98afa2.pth'),
-    'gcvit_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_base_224_nvidia-f009139b.pth'),
-}
 
 
 class MbConvBlock(nn.Module):
@@ -539,6 +514,31 @@ def _create_gcvit(variant, pretrained=False, **kwargs):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
     model = build_model_with_cfg(GlobalContextVit, variant, pretrained, **kwargs)
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv1', 'classifier': 'head.fc',
+        'fixed_input_size': True,
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'gcvit_xxtiny.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xxtiny_224_nvidia-d1d86009.pth'),
+    'gcvit_xtiny.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xtiny_224_nvidia-274b92b7.pth'),
+    'gcvit_tiny.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_tiny_224_nvidia-ac783954.pth'),
+    'gcvit_small.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_small_224_nvidia-4e98afa2.pth'),
+    'gcvit_base.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_base_224_nvidia-f009139b.pth'),
+})
 
 
 @register_model

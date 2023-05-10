@@ -448,13 +448,13 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    'pvt_v2_b0': _cfg(hf_hub_id='timm/'),
-    'pvt_v2_b1': _cfg(hf_hub_id='timm/'),
-    'pvt_v2_b2': _cfg(hf_hub_id='timm/'),
-    'pvt_v2_b3': _cfg(hf_hub_id='timm/'),
-    'pvt_v2_b4': _cfg(hf_hub_id='timm/'),
-    'pvt_v2_b5': _cfg(hf_hub_id='timm/'),
-    'pvt_v2_b2_li': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b0.in1k': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b1.in1k': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b2.in1k': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b3.in1k': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b4.in1k': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b5.in1k': _cfg(hf_hub_id='timm/'),
+    'pvt_v2_b2_li.in1k': _cfg(hf_hub_id='timm/'),
 })
 
 

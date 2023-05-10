@@ -415,7 +415,7 @@ default_cfgs = generate_default_cfgs({
     'dla102.in1k': _cfg(hf_hub_id='timm/'),
     'dla102x.in1k': _cfg(hf_hub_id='timm/'),
     'dla102x2.in1k': _cfg(hf_hub_id='timm/'),
-    'dla169': _cfg(hf_hub_id='timm/'),
+    'dla169.in1k': _cfg(hf_hub_id='timm/'),
     'dla60_res2net.in1k': _cfg(hf_hub_id='timm/'),
     'dla60_res2next.in1k': _cfg(hf_hub_id='timm/'),
 })
