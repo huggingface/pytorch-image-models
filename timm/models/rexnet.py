@@ -23,7 +23,7 @@ from ._efficientnet_builder import efficientnet_init_weights
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
-__all__ = ['ReXNetV1']  # model_registry will add each entrypoint fn to this
+__all__ = ['RexNet']  # model_registry will add each entrypoint fn to this
 
 
 SEWithNorm = partial(SEModule, norm_layer=nn.BatchNorm2d)
@@ -167,7 +167,7 @@ def _build_blocks(
     return features, feature_info
 
 
-class ReXNetV1(nn.Module):
+class RexNet(nn.Module):
     def __init__(
             self,
             in_chans=3,
@@ -185,7 +185,7 @@ class ReXNetV1(nn.Module):
             drop_rate=0.2,
             drop_path_rate=0.,
     ):
-        super(ReXNetV1, self).__init__()
+        super(RexNet, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
@@ -252,7 +252,7 @@ class ReXNetV1(nn.Module):
 def _create_rexnet(variant, pretrained, **kwargs):
     feature_cfg = dict(flatten_sequential=True)
     return build_model_with_cfg(
-        ReXNetV1,
+        RexNet,
         variant,
         pretrained,
         feature_cfg=feature_cfg,
@@ -297,60 +297,60 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def rexnet_100(pretrained=False, **kwargs):
+def rexnet_100(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 1.0x"""
     return _create_rexnet('rexnet_100', pretrained, **kwargs)
 
 
 @register_model
-def rexnet_130(pretrained=False, **kwargs):
+def rexnet_130(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 1.3x"""
     return _create_rexnet('rexnet_130', pretrained, width_mult=1.3, **kwargs)
 
 
 @register_model
-def rexnet_150(pretrained=False, **kwargs):
+def rexnet_150(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 1.5x"""
     return _create_rexnet('rexnet_150', pretrained, width_mult=1.5, **kwargs)
 
 
 @register_model
-def rexnet_200(pretrained=False, **kwargs):
+def rexnet_200(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 2.0x"""
     return _create_rexnet('rexnet_200', pretrained, width_mult=2.0, **kwargs)
 
 
 @register_model
-def rexnet_300(pretrained=False, **kwargs):
+def rexnet_300(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 3.0x"""
     return _create_rexnet('rexnet_300', pretrained, width_mult=3.0, **kwargs)
 
 
 @register_model
-def rexnetr_100(pretrained=False, **kwargs):
+def rexnetr_100(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 1.0x w/ rounded (mod 8) channels"""
     return _create_rexnet('rexnetr_100', pretrained, ch_div=8, **kwargs)
 
 
 @register_model
-def rexnetr_130(pretrained=False, **kwargs):
+def rexnetr_130(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 1.3x w/ rounded (mod 8) channels"""
     return _create_rexnet('rexnetr_130', pretrained, width_mult=1.3, ch_div=8, **kwargs)
 
 
 @register_model
-def rexnetr_150(pretrained=False, **kwargs):
+def rexnetr_150(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 1.5x w/ rounded (mod 8) channels"""
     return _create_rexnet('rexnetr_150', pretrained, width_mult=1.5, ch_div=8, **kwargs)
 
 
 @register_model
-def rexnetr_200(pretrained=False, **kwargs):
+def rexnetr_200(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 2.0x w/ rounded (mod 8) channels"""
     return _create_rexnet('rexnetr_200', pretrained, width_mult=2.0, ch_div=8, **kwargs)
 
 
 @register_model
-def rexnetr_300(pretrained=False, **kwargs):
+def rexnetr_300(pretrained=False, **kwargs) -> RexNet:
     """ReXNet V1 3.0x w/ rounded (mod 16) channels"""
     return _create_rexnet('rexnetr_300', pretrained, width_mult=3.0, ch_div=16, **kwargs)

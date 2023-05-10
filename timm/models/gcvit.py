@@ -542,7 +542,7 @@ def _create_gcvit(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_xxtiny(pretrained=False, **kwargs):
+def gcvit_xxtiny(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(2, 2, 6, 2),
         num_heads=(2, 4, 8, 16),
@@ -551,7 +551,7 @@ def gcvit_xxtiny(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_xtiny(pretrained=False, **kwargs):
+def gcvit_xtiny(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 6, 5),
         num_heads=(2, 4, 8, 16),
@@ -560,7 +560,7 @@ def gcvit_xtiny(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_tiny(pretrained=False, **kwargs):
+def gcvit_tiny(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 19, 5),
         num_heads=(2, 4, 8, 16),
@@ -569,7 +569,7 @@ def gcvit_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_small(pretrained=False, **kwargs):
+def gcvit_small(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 19, 5),
         num_heads=(3, 6, 12, 24),
@@ -581,7 +581,7 @@ def gcvit_small(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_base(pretrained=False, **kwargs):
+def gcvit_base(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 19, 5),
         num_heads=(4, 8, 16, 32),

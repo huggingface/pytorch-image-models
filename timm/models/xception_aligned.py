@@ -320,7 +320,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def xception41(pretrained=False, **kwargs):
+def xception41(pretrained=False, **kwargs) -> XceptionAligned:
     """ Modified Aligned Xception-41
     """
     block_cfg = [
@@ -339,7 +339,7 @@ def xception41(pretrained=False, **kwargs):
 
 
 @register_model
-def xception65(pretrained=False, **kwargs):
+def xception65(pretrained=False, **kwargs) -> XceptionAligned:
     """ Modified Aligned Xception-65
     """
     block_cfg = [
@@ -358,7 +358,7 @@ def xception65(pretrained=False, **kwargs):
 
 
 @register_model
-def xception71(pretrained=False, **kwargs):
+def xception71(pretrained=False, **kwargs) -> XceptionAligned:
     """ Modified Aligned Xception-71
     """
     block_cfg = [
@@ -379,7 +379,7 @@ def xception71(pretrained=False, **kwargs):
 
 
 @register_model
-def xception41p(pretrained=False, **kwargs):
+def xception41p(pretrained=False, **kwargs) -> XceptionAligned:
     """ Modified Aligned Xception-41 w/ Pre-Act
     """
     block_cfg = [
@@ -398,7 +398,7 @@ def xception41p(pretrained=False, **kwargs):
 
 
 @register_model
-def xception65p(pretrained=False, **kwargs):
+def xception65p(pretrained=False, **kwargs) -> XceptionAligned:
     """ Modified Aligned Xception-65 w/ Pre-Act
     """
     block_cfg = [

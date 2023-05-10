@@ -417,54 +417,54 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def vovnet39a(pretrained=False, **kwargs):
+def vovnet39a(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('vovnet39a', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def vovnet57a(pretrained=False, **kwargs):
+def vovnet57a(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('vovnet57a', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ese_vovnet19b_slim_dw(pretrained=False, **kwargs):
+def ese_vovnet19b_slim_dw(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('ese_vovnet19b_slim_dw', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ese_vovnet19b_dw(pretrained=False, **kwargs):
+def ese_vovnet19b_dw(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('ese_vovnet19b_dw', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ese_vovnet19b_slim(pretrained=False, **kwargs):
+def ese_vovnet19b_slim(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('ese_vovnet19b_slim', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ese_vovnet39b(pretrained=False, **kwargs):
+def ese_vovnet39b(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('ese_vovnet39b', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ese_vovnet57b(pretrained=False, **kwargs):
+def ese_vovnet57b(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('ese_vovnet57b', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def ese_vovnet99b(pretrained=False, **kwargs):
+def ese_vovnet99b(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('ese_vovnet99b', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def eca_vovnet39b(pretrained=False, **kwargs):
+def eca_vovnet39b(pretrained=False, **kwargs) -> VovNet:
     return _create_vovnet('eca_vovnet39b', pretrained=pretrained, **kwargs)
 
 
 # Experimental Models
 
 @register_model
-def ese_vovnet39b_evos(pretrained=False, **kwargs):
+def ese_vovnet39b_evos(pretrained=False, **kwargs) -> VovNet:
     def norm_act_fn(num_features, **nkwargs):
         return create_norm_act_layer('evonorms0', num_features, jit=False, **nkwargs)
     return _create_vovnet('ese_vovnet39b_evos', pretrained=pretrained, norm_layer=norm_act_fn, **kwargs)

@@ -566,44 +566,44 @@ def _create_focalnet(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def focalnet_tiny_srf(pretrained=False, **kwargs):
+def focalnet_tiny_srf(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(depths=[2, 2, 6, 2], embed_dim=96, **kwargs)
     return _create_focalnet('focalnet_tiny_srf', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def focalnet_small_srf(pretrained=False, **kwargs):
+def focalnet_small_srf(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(depths=[2, 2, 18, 2], embed_dim=96, **kwargs)
     return _create_focalnet('focalnet_small_srf', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def focalnet_base_srf(pretrained=False, **kwargs):
+def focalnet_base_srf(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(depths=[2, 2, 18, 2], embed_dim=128, **kwargs)
     return _create_focalnet('focalnet_base_srf', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def focalnet_tiny_lrf(pretrained=False, **kwargs):
+def focalnet_tiny_lrf(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(depths=[2, 2, 6, 2], embed_dim=96, focal_levels=[3, 3, 3, 3], **kwargs)
     return _create_focalnet('focalnet_tiny_lrf', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def focalnet_small_lrf(pretrained=False, **kwargs):
+def focalnet_small_lrf(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(depths=[2, 2, 18, 2], embed_dim=96, focal_levels=[3, 3, 3, 3], **kwargs)
     return _create_focalnet('focalnet_small_lrf', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def focalnet_base_lrf(pretrained=False, **kwargs):
+def focalnet_base_lrf(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(depths=[2, 2, 18, 2], embed_dim=128, focal_levels=[3, 3, 3, 3], **kwargs)
     return _create_focalnet('focalnet_base_lrf', pretrained=pretrained, **model_kwargs)
 
 
 # FocalNet large+ models
 @register_model
-def focalnet_large_fl3(pretrained=False, **kwargs):
+def focalnet_large_fl3(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(
         depths=[2, 2, 18, 2], embed_dim=192, focal_levels=[3, 3, 3, 3], focal_windows=[5] * 4,
         use_post_norm=True, use_overlap_down=True, layerscale_value=1e-4, **kwargs)
@@ -611,7 +611,7 @@ def focalnet_large_fl3(pretrained=False, **kwargs):
 
 
 @register_model
-def focalnet_large_fl4(pretrained=False, **kwargs):
+def focalnet_large_fl4(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(
         depths=[2, 2, 18, 2], embed_dim=192, focal_levels=[4, 4, 4, 4],
         use_post_norm=True, use_overlap_down=True, layerscale_value=1e-4, **kwargs)
@@ -619,7 +619,7 @@ def focalnet_large_fl4(pretrained=False, **kwargs):
 
 
 @register_model
-def focalnet_xlarge_fl3(pretrained=False, **kwargs):
+def focalnet_xlarge_fl3(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(
         depths=[2, 2, 18, 2], embed_dim=256, focal_levels=[3, 3, 3, 3], focal_windows=[5] * 4,
         use_post_norm=True, use_overlap_down=True, layerscale_value=1e-4, **kwargs)
@@ -627,7 +627,7 @@ def focalnet_xlarge_fl3(pretrained=False, **kwargs):
 
 
 @register_model
-def focalnet_xlarge_fl4(pretrained=False, **kwargs):
+def focalnet_xlarge_fl4(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(
         depths=[2, 2, 18, 2], embed_dim=256, focal_levels=[4, 4, 4, 4],
         use_post_norm=True, use_overlap_down=True, layerscale_value=1e-4, **kwargs)
@@ -635,7 +635,7 @@ def focalnet_xlarge_fl4(pretrained=False, **kwargs):
 
 
 @register_model
-def focalnet_huge_fl3(pretrained=False, **kwargs):
+def focalnet_huge_fl3(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(
         depths=[2, 2, 18, 2], embed_dim=352, focal_levels=[3, 3, 3, 3], focal_windows=[3] * 4,
         use_post_norm=True, use_post_norm_in_modulation=True, use_overlap_down=True, layerscale_value=1e-4, **kwargs)
@@ -643,7 +643,7 @@ def focalnet_huge_fl3(pretrained=False, **kwargs):
 
 
 @register_model
-def focalnet_huge_fl4(pretrained=False, **kwargs):
+def focalnet_huge_fl4(pretrained=False, **kwargs) -> FocalNet:
     model_kwargs = dict(
         depths=[2, 2, 18, 2], embed_dim=352, focal_levels=[4, 4, 4, 4],
         use_post_norm=True, use_post_norm_in_modulation=True, use_overlap_down=True, layerscale_value=1e-4, **kwargs)

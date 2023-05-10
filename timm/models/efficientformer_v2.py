@@ -687,7 +687,7 @@ def _create_efficientformerv2(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def efficientformerv2_s0(pretrained=False, **kwargs):
+def efficientformerv2_s0(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
         depths=EfficientFormer_depth['S0'],
         embed_dims=EfficientFormer_width['S0'],
@@ -699,7 +699,7 @@ def efficientformerv2_s0(pretrained=False, **kwargs):
 
 
 @register_model
-def efficientformerv2_s1(pretrained=False, **kwargs):
+def efficientformerv2_s1(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
         depths=EfficientFormer_depth['S1'],
         embed_dims=EfficientFormer_width['S1'],
@@ -711,7 +711,7 @@ def efficientformerv2_s1(pretrained=False, **kwargs):
 
 
 @register_model
-def efficientformerv2_s2(pretrained=False, **kwargs):
+def efficientformerv2_s2(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
         depths=EfficientFormer_depth['S2'],
         embed_dims=EfficientFormer_width['S2'],
@@ -723,7 +723,7 @@ def efficientformerv2_s2(pretrained=False, **kwargs):
 
 
 @register_model
-def efficientformerv2_l(pretrained=False, **kwargs):
+def efficientformerv2_l(pretrained=False, **kwargs) -> EfficientFormerV2:
     model_args = dict(
         depths=EfficientFormer_depth['L'],
         embed_dims=EfficientFormer_width['L'],

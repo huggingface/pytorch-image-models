@@ -20,7 +20,7 @@ from timm.layers import create_classifier
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 
-__all__ = ['SelecSLS']  # model_registry will add each entrypoint fn to this
+__all__ = ['SelecSls']  # model_registry will add each entrypoint fn to this
 
 
 class SequentialList(nn.Sequential):
@@ -77,9 +77,9 @@ def conv_bn(in_chs, out_chs, k=3, stride=1, padding=None, dilation=1):
     )
 
 
-class SelecSLSBlock(nn.Module):
+class SelecSlsBlock(nn.Module):
     def __init__(self, in_chs, skip_chs, mid_chs, out_chs, is_first, stride, dilation=1):
-        super(SelecSLSBlock, self).__init__()
+        super(SelecSlsBlock, self).__init__()
         self.stride = stride
         self.is_first = is_first
         assert stride in [1, 2]
@@ -107,8 +107,8 @@ class SelecSLSBlock(nn.Module):
             return [self.conv6(torch.cat([d1, d2, d3, x[1]], 1)), x[1]]
 
 
-class SelecSLS(nn.Module):
-    """SelecSLS42 / SelecSLS60 / SelecSLS84
+class SelecSls(nn.Module):
+    """SelecSls42 / SelecSls60 / SelecSls84
 
     Parameters
     ----------
@@ -125,7 +125,7 @@ class SelecSLS(nn.Module):
 
     def __init__(self, cfg, num_classes=1000, in_chans=3, drop_rate=0.0, global_pool='avg'):
         self.num_classes = num_classes
-        super(SelecSLS, self).__init__()
+        super(SelecSls, self).__init__()
 
         self.stem = conv_bn(in_chans, 32, stride=2)
         self.features = SequentialList(*[cfg['block'](*block_args) for block_args in cfg['features']])
@@ -182,11 +182,11 @@ class SelecSLS(nn.Module):
         return x
 
 
-def _create_selecsls(variant, pretrained, **kwargs):
+def _create_SelecSls(variant, pretrained, **kwargs):
     cfg = {}
     feature_info = [dict(num_chs=32, reduction=2, module='stem.2')]
-    if variant.startswith('selecsls42'):
-        cfg['block'] = SelecSLSBlock
+    if variant.startswith('SelecSls42'):
+        cfg['block'] = SelecSlsBlock
         # Define configuration of the network after the initial neck
         cfg['features'] = [
             # in_chs, skip_chs, mid_chs, out_chs, is_first, stride
@@ -204,7 +204,7 @@ def _create_selecsls(variant, pretrained, **kwargs):
         ])
         # Head can be replaced with alternative configurations depending on the problem
         feature_info.append(dict(num_chs=1024, reduction=32, module='head.1'))
-        if variant == 'selecsls42b':
+        if variant == 'SelecSls42b':
             cfg['head'] = [
                 (480, 960, 3, 2),
                 (960, 1024, 3, 1),
@@ -223,8 +223,8 @@ def _create_selecsls(variant, pretrained, **kwargs):
             feature_info.append(dict(num_chs=1280, reduction=64, module='head.3'))
             cfg['num_features'] = 1280
 
-    elif variant.startswith('selecsls60'):
-        cfg['block'] = SelecSLSBlock
+    elif variant.startswith('SelecSls60'):
+        cfg['block'] = SelecSlsBlock
         # Define configuration of the network after the initial neck
         cfg['features'] = [
             # in_chs, skip_chs, mid_chs, out_chs, is_first, stride
@@ -245,7 +245,7 @@ def _create_selecsls(variant, pretrained, **kwargs):
         ])
         # Head can be replaced with alternative configurations depending on the problem
         feature_info.append(dict(num_chs=1024, reduction=32, module='head.1'))
-        if variant == 'selecsls60b':
+        if variant == 'SelecSls60b':
             cfg['head'] = [
                 (416, 756, 3, 2),
                 (756, 1024, 3, 1),
@@ -264,8 +264,8 @@ def _create_selecsls(variant, pretrained, **kwargs):
             feature_info.append(dict(num_chs=1280, reduction=64, module='head.3'))
             cfg['num_features'] = 1280
 
-    elif variant == 'selecsls84':
-        cfg['block'] = SelecSLSBlock
+    elif variant == 'SelecSls84':
+        cfg['block'] = SelecSlsBlock
         # Define configuration of the network after the initial neck
         cfg['features'] = [
             # in_chs, skip_chs, mid_chs, out_chs, is_first, stride
@@ -306,7 +306,7 @@ def _create_selecsls(variant, pretrained, **kwargs):
 
     # this model can do 6 feature levels by default, unlike most others, leave as 0-4 to avoid surprises?
     return build_model_with_cfg(
-        SelecSLS,
+        SelecSls,
         variant,
         pretrained,
         model_cfg=cfg,
@@ -327,52 +327,52 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    'selecsls42.untrained': _cfg(
+    'SelecSls42.untrained': _cfg(
         interpolation='bicubic'),
-    'selecsls42b.in1k': _cfg(
+    'SelecSls42b.in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic'),
-    'selecsls60.in1k': _cfg(
+    'SelecSls60.in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic'),
-    'selecsls60b.in1k': _cfg(
+    'SelecSls60b.in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic'),
-    'selecsls84.untrained': _cfg(
+    'SelecSls84.untrained': _cfg(
         interpolation='bicubic'),
 })
 
 
 @register_model
-def selecsls42(pretrained=False, **kwargs):
-    """Constructs a SelecSLS42 model.
+def SelecSls42(pretrained=False, **kwargs) -> SelecSls:
+    """Constructs a SelecSls42 model.
     """
-    return _create_selecsls('selecsls42', pretrained, **kwargs)
+    return _create_SelecSls('SelecSls42', pretrained, **kwargs)
 
 
 @register_model
-def selecsls42b(pretrained=False, **kwargs):
-    """Constructs a SelecSLS42_B model.
+def SelecSls42b(pretrained=False, **kwargs) -> SelecSls:
+    """Constructs a SelecSls42_B model.
     """
-    return _create_selecsls('selecsls42b', pretrained, **kwargs)
+    return _create_SelecSls('SelecSls42b', pretrained, **kwargs)
 
 
 @register_model
-def selecsls60(pretrained=False, **kwargs):
-    """Constructs a SelecSLS60 model.
+def SelecSls60(pretrained=False, **kwargs) -> SelecSls:
+    """Constructs a SelecSls60 model.
     """
-    return _create_selecsls('selecsls60', pretrained, **kwargs)
+    return _create_SelecSls('SelecSls60', pretrained, **kwargs)
 
 
 @register_model
-def selecsls60b(pretrained=False, **kwargs):
-    """Constructs a SelecSLS60_B model.
+def SelecSls60b(pretrained=False, **kwargs) -> SelecSls:
+    """Constructs a SelecSls60_B model.
     """
-    return _create_selecsls('selecsls60b', pretrained, **kwargs)
+    return _create_SelecSls('SelecSls60b', pretrained, **kwargs)
 
 
 @register_model
-def selecsls84(pretrained=False, **kwargs):
-    """Constructs a SelecSLS84 model.
+def SelecSls84(pretrained=False, **kwargs) -> SelecSls:
+    """Constructs a SelecSls84 model.
     """
-    return _create_selecsls('selecsls84', pretrained, **kwargs)
+    return _create_SelecSls('SelecSls84', pretrained, **kwargs)

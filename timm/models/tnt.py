@@ -355,7 +355,7 @@ def _create_tnt(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def tnt_s_patch16_224(pretrained=False, **kwargs):
+def tnt_s_patch16_224(pretrained=False, **kwargs) -> TNT:
     model_cfg = dict(
         patch_size=16, embed_dim=384, inner_dim=24, depth=12, num_heads_outer=6,
         qkv_bias=False)
@@ -364,7 +364,7 @@ def tnt_s_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def tnt_b_patch16_224(pretrained=False, **kwargs):
+def tnt_b_patch16_224(pretrained=False, **kwargs) -> TNT:
     model_cfg = dict(
         patch_size=16, embed_dim=640, inner_dim=40, depth=12, num_heads_outer=10,
         qkv_bias=False)

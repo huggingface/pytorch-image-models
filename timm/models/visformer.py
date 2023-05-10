@@ -463,7 +463,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def visformer_tiny(pretrained=False, **kwargs):
+def visformer_tiny(pretrained=False, **kwargs) -> Visformer:
     model_cfg = dict(
         init_channels=16, embed_dim=192, depth=(7, 4, 4), num_heads=3, mlp_ratio=4., group=8,
         attn_stage='011', spatial_conv='100', norm_layer=nn.BatchNorm2d, conv_init=True,
@@ -473,7 +473,7 @@ def visformer_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def visformer_small(pretrained=False, **kwargs):
+def visformer_small(pretrained=False, **kwargs) -> Visformer:
     model_cfg = dict(
         init_channels=32, embed_dim=384, depth=(7, 4, 4), num_heads=6, mlp_ratio=4., group=8,
         attn_stage='011', spatial_conv='100', norm_layer=nn.BatchNorm2d, conv_init=True,

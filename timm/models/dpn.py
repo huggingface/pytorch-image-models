@@ -316,7 +316,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def dpn48b(pretrained=False, **kwargs):
+def dpn48b(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 6, 3), inc_sec=(16, 32, 32, 64), act_layer='silu')
@@ -324,7 +324,7 @@ def dpn48b(pretrained=False, **kwargs):
 
 
 @register_model
-def dpn68(pretrained=False, **kwargs):
+def dpn68(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
         k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64))
@@ -332,7 +332,7 @@ def dpn68(pretrained=False, **kwargs):
 
 
 @register_model
-def dpn68b(pretrained=False, **kwargs):
+def dpn68b(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64))
@@ -340,7 +340,7 @@ def dpn68b(pretrained=False, **kwargs):
 
 
 @register_model
-def dpn92(pretrained=False, **kwargs):
+def dpn92(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         num_init_features=64, k_r=96, groups=32,
         k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128))
@@ -348,7 +348,7 @@ def dpn92(pretrained=False, **kwargs):
 
 
 @register_model
-def dpn98(pretrained=False, **kwargs):
+def dpn98(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         num_init_features=96, k_r=160, groups=40,
         k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128))
@@ -356,7 +356,7 @@ def dpn98(pretrained=False, **kwargs):
 
 
 @register_model
-def dpn131(pretrained=False, **kwargs):
+def dpn131(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         num_init_features=128, k_r=160, groups=40,
         k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128))
@@ -364,7 +364,7 @@ def dpn131(pretrained=False, **kwargs):
 
 
 @register_model
-def dpn107(pretrained=False, **kwargs):
+def dpn107(pretrained=False, **kwargs) -> DPN:
     model_kwargs = dict(
         num_init_features=128, k_r=200, groups=50,
         k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128))

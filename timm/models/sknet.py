@@ -172,7 +172,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def skresnet18(pretrained=False, **kwargs):
+def skresnet18(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Selective Kernel ResNet-18 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -186,7 +186,7 @@ def skresnet18(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnet34(pretrained=False, **kwargs):
+def skresnet34(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Selective Kernel ResNet-34 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -200,7 +200,7 @@ def skresnet34(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnet50(pretrained=False, **kwargs):
+def skresnet50(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Select Kernel ResNet-50 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -214,7 +214,7 @@ def skresnet50(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnet50d(pretrained=False, **kwargs):
+def skresnet50d(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Select Kernel ResNet-50-D model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -228,7 +228,7 @@ def skresnet50d(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnext50_32x4d(pretrained=False, **kwargs):
+def skresnext50_32x4d(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Select Kernel ResNeXt50-32x4d model. This should be equivalent to
     the SKNet-50 model in the Select Kernel Paper
     """

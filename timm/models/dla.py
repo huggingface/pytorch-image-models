@@ -422,7 +422,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def dla60_res2net(pretrained=False, **kwargs):
+def dla60_res2net(pretrained=False, **kwargs) -> DLA:
     model_args = dict(
         levels=(1, 1, 1, 2, 3, 1), channels=(16, 32, 128, 256, 512, 1024),
         block=DlaBottle2neck, cardinality=1, base_width=28)
@@ -438,21 +438,21 @@ def dla60_res2next(pretrained=False,**kwargs):
 
 
 @register_model
-def dla34(pretrained=False, **kwargs):  # DLA-34
+def dla34(pretrained=False, **kwargs) -> DLA:  # DLA-34
     model_args = dict(
         levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 128, 256, 512], block=DlaBasic)
     return _create_dla('dla34', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def dla46_c(pretrained=False, **kwargs):  # DLA-46-C
+def dla46_c(pretrained=False, **kwargs) -> DLA:  # DLA-46-C
     model_args = dict(
         levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 64, 128, 256], block=DlaBottleneck)
     return _create_dla('dla46_c', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def dla46x_c(pretrained=False, **kwargs):  # DLA-X-46-C
+def dla46x_c(pretrained=False, **kwargs) -> DLA:  # DLA-X-46-C
     model_args = dict(
         levels=[1, 1, 1, 2, 2, 1], channels=[16, 32, 64, 64, 128, 256],
         block=DlaBottleneck, cardinality=32, base_width=4)
@@ -460,7 +460,7 @@ def dla46x_c(pretrained=False, **kwargs):  # DLA-X-46-C
 
 
 @register_model
-def dla60x_c(pretrained=False, **kwargs):  # DLA-X-60-C
+def dla60x_c(pretrained=False, **kwargs) -> DLA:  # DLA-X-60-C
     model_args = dict(
         levels=[1, 1, 1, 2, 3, 1], channels=[16, 32, 64, 64, 128, 256],
         block=DlaBottleneck, cardinality=32, base_width=4)
@@ -468,7 +468,7 @@ def dla60x_c(pretrained=False, **kwargs):  # DLA-X-60-C
 
 
 @register_model
-def dla60(pretrained=False, **kwargs):  # DLA-60
+def dla60(pretrained=False, **kwargs) -> DLA:  # DLA-60
     model_args = dict(
         levels=[1, 1, 1, 2, 3, 1], channels=[16, 32, 128, 256, 512, 1024],
         block=DlaBottleneck)
@@ -476,7 +476,7 @@ def dla60(pretrained=False, **kwargs):  # DLA-60
 
 
 @register_model
-def dla60x(pretrained=False, **kwargs):  # DLA-X-60
+def dla60x(pretrained=False, **kwargs) -> DLA:  # DLA-X-60
     model_args = dict(
         levels=[1, 1, 1, 2, 3, 1], channels=[16, 32, 128, 256, 512, 1024],
         block=DlaBottleneck, cardinality=32, base_width=4)
@@ -484,7 +484,7 @@ def dla60x(pretrained=False, **kwargs):  # DLA-X-60
 
 
 @register_model
-def dla102(pretrained=False, **kwargs):  # DLA-102
+def dla102(pretrained=False, **kwargs) -> DLA:  # DLA-102
     model_args = dict(
         levels=[1, 1, 1, 3, 4, 1], channels=[16, 32, 128, 256, 512, 1024],
         block=DlaBottleneck, shortcut_root=True)
@@ -492,7 +492,7 @@ def dla102(pretrained=False, **kwargs):  # DLA-102
 
 
 @register_model
-def dla102x(pretrained=False, **kwargs):  # DLA-X-102
+def dla102x(pretrained=False, **kwargs) -> DLA:  # DLA-X-102
     model_args = dict(
         levels=[1, 1, 1, 3, 4, 1], channels=[16, 32, 128, 256, 512, 1024],
         block=DlaBottleneck, cardinality=32, base_width=4, shortcut_root=True)
@@ -500,7 +500,7 @@ def dla102x(pretrained=False, **kwargs):  # DLA-X-102
 
 
 @register_model
-def dla102x2(pretrained=False, **kwargs):  # DLA-X-102 64
+def dla102x2(pretrained=False, **kwargs) -> DLA:  # DLA-X-102 64
     model_args = dict(
         levels=[1, 1, 1, 3, 4, 1], channels=[16, 32, 128, 256, 512, 1024],
         block=DlaBottleneck, cardinality=64, base_width=4, shortcut_root=True)
@@ -508,7 +508,7 @@ def dla102x2(pretrained=False, **kwargs):  # DLA-X-102 64
 
 
 @register_model
-def dla169(pretrained=False, **kwargs):  # DLA-169
+def dla169(pretrained=False, **kwargs) -> DLA:  # DLA-169
     model_args = dict(
         levels=[1, 1, 2, 3, 5, 1], channels=[16, 32, 128, 256, 512, 1024],
         block=DlaBottleneck, shortcut_root=True)

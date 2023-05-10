@@ -458,7 +458,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def twins_pcpvt_small(pretrained=False, **kwargs):
+def twins_pcpvt_small(pretrained=False, **kwargs) -> Twins:
     model_args = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
         depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1])
@@ -466,7 +466,7 @@ def twins_pcpvt_small(pretrained=False, **kwargs):
 
 
 @register_model
-def twins_pcpvt_base(pretrained=False, **kwargs):
+def twins_pcpvt_base(pretrained=False, **kwargs) -> Twins:
     model_args = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
         depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1])
@@ -474,7 +474,7 @@ def twins_pcpvt_base(pretrained=False, **kwargs):
 
 
 @register_model
-def twins_pcpvt_large(pretrained=False, **kwargs):
+def twins_pcpvt_large(pretrained=False, **kwargs) -> Twins:
     model_args = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
         depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1])
@@ -482,7 +482,7 @@ def twins_pcpvt_large(pretrained=False, **kwargs):
 
 
 @register_model
-def twins_svt_small(pretrained=False, **kwargs):
+def twins_svt_small(pretrained=False, **kwargs) -> Twins:
     model_args = dict(
         patch_size=4, embed_dims=[64, 128, 256, 512], num_heads=[2, 4, 8, 16], mlp_ratios=[4, 4, 4, 4],
         depths=[2, 2, 10, 4], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1])
@@ -490,7 +490,7 @@ def twins_svt_small(pretrained=False, **kwargs):
 
 
 @register_model
-def twins_svt_base(pretrained=False, **kwargs):
+def twins_svt_base(pretrained=False, **kwargs) -> Twins:
     model_args = dict(
         patch_size=4, embed_dims=[96, 192, 384, 768], num_heads=[3, 6, 12, 24], mlp_ratios=[4, 4, 4, 4],
         depths=[2, 2, 18, 2], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1])
@@ -498,7 +498,7 @@ def twins_svt_base(pretrained=False, **kwargs):
 
 
 @register_model
-def twins_svt_large(pretrained=False, **kwargs):
+def twins_svt_large(pretrained=False, **kwargs) -> Twins:
     model_args = dict(
         patch_size=4, embed_dims=[128, 256, 512, 1024], num_heads=[4, 8, 16, 32], mlp_ratios=[4, 4, 4, 4],
         depths=[2, 2, 18, 2], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1])

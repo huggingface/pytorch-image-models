@@ -834,7 +834,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def poolformer_s12(pretrained=False, **kwargs):
+def poolformer_s12(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
@@ -850,7 +850,7 @@ def poolformer_s12(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformer_s24(pretrained=False, **kwargs):
+def poolformer_s24(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[4, 4, 12, 4],
         dims=[64, 128, 320, 512],
@@ -866,7 +866,7 @@ def poolformer_s24(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformer_s36(pretrained=False, **kwargs):
+def poolformer_s36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[6, 6, 18, 6],
         dims=[64, 128, 320, 512],
@@ -882,7 +882,7 @@ def poolformer_s36(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformer_m36(pretrained=False, **kwargs):
+def poolformer_m36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[6, 6, 18, 6],
         dims=[96, 192, 384, 768],
@@ -898,7 +898,7 @@ def poolformer_m36(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformer_m48(pretrained=False, **kwargs):
+def poolformer_m48(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[8, 8, 24, 8],
         dims=[96, 192, 384, 768],
@@ -914,7 +914,7 @@ def poolformer_m48(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformerv2_s12(pretrained=False, **kwargs):
+def poolformerv2_s12(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[2, 2, 6, 2],
         dims=[64, 128, 320, 512],
@@ -925,7 +925,7 @@ def poolformerv2_s12(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformerv2_s24(pretrained=False, **kwargs):
+def poolformerv2_s24(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[4, 4, 12, 4],
         dims=[64, 128, 320, 512],
@@ -936,7 +936,7 @@ def poolformerv2_s24(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformerv2_s36(pretrained=False, **kwargs):
+def poolformerv2_s36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[6, 6, 18, 6],
         dims=[64, 128, 320, 512],
@@ -947,7 +947,7 @@ def poolformerv2_s36(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformerv2_m36(pretrained=False, **kwargs):
+def poolformerv2_m36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[6, 6, 18, 6],
         dims=[96, 192, 384, 768],
@@ -958,7 +958,7 @@ def poolformerv2_m36(pretrained=False, **kwargs):
 
 
 @register_model
-def poolformerv2_m48(pretrained=False, **kwargs):
+def poolformerv2_m48(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[8, 8, 24, 8],
         dims=[96, 192, 384, 768],
@@ -969,7 +969,7 @@ def poolformerv2_m48(pretrained=False, **kwargs):
 
 
 @register_model
-def convformer_s18(pretrained=False, **kwargs):
+def convformer_s18(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 3, 9, 3],
         dims=[64, 128, 320, 512],
@@ -980,7 +980,7 @@ def convformer_s18(pretrained=False, **kwargs):
 
 
 @register_model
-def convformer_s36(pretrained=False, **kwargs):
+def convformer_s36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 12, 18, 3],
         dims=[64, 128, 320, 512],
@@ -991,7 +991,7 @@ def convformer_s36(pretrained=False, **kwargs):
 
 
 @register_model
-def convformer_m36(pretrained=False, **kwargs):
+def convformer_m36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 12, 18, 3],
         dims=[96, 192, 384, 576],
@@ -1002,7 +1002,7 @@ def convformer_m36(pretrained=False, **kwargs):
 
 
 @register_model
-def convformer_b36(pretrained=False, **kwargs):
+def convformer_b36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 12, 18, 3],
         dims=[128, 256, 512, 768],
@@ -1013,7 +1013,7 @@ def convformer_b36(pretrained=False, **kwargs):
 
 
 @register_model
-def caformer_s18(pretrained=False, **kwargs):
+def caformer_s18(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 3, 9, 3],
         dims=[64, 128, 320, 512],
@@ -1024,7 +1024,7 @@ def caformer_s18(pretrained=False, **kwargs):
 
 
 @register_model
-def caformer_s36(pretrained=False, **kwargs):
+def caformer_s36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 12, 18, 3],
         dims=[64, 128, 320, 512],
@@ -1035,7 +1035,7 @@ def caformer_s36(pretrained=False, **kwargs):
 
 
 @register_model
-def caformer_m36(pretrained=False, **kwargs):
+def caformer_m36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 12, 18, 3],
         dims=[96, 192, 384, 576],
@@ -1046,7 +1046,7 @@ def caformer_m36(pretrained=False, **kwargs):
 
 
 @register_model
-def caformer_b36(pretrained=False, **kwargs):
+def caformer_b36(pretrained=False, **kwargs) -> MetaFormer:
     model_kwargs = dict(
         depths=[3, 12, 18, 3],
         dims=[128, 256, 512, 768],

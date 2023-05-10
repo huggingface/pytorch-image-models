@@ -309,21 +309,21 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def ghostnet_050(pretrained=False, **kwargs):
+def ghostnet_050(pretrained=False, **kwargs) -> GhostNet:
     """ GhostNet-0.5x """
     model = _create_ghostnet('ghostnet_050', width=0.5, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
-def ghostnet_100(pretrained=False, **kwargs):
+def ghostnet_100(pretrained=False, **kwargs) -> GhostNet:
     """ GhostNet-1.0x """
     model = _create_ghostnet('ghostnet_100', width=1.0, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
-def ghostnet_130(pretrained=False, **kwargs):
+def ghostnet_130(pretrained=False, **kwargs) -> GhostNet:
     """ GhostNet-1.3x """
     model = _create_ghostnet('ghostnet_130', width=1.3, pretrained=pretrained, **kwargs)
     return model

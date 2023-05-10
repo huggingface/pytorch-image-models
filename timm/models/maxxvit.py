@@ -2040,280 +2040,280 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def coatnet_pico_rw_224(pretrained=False, **kwargs):
+def coatnet_pico_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_pico_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_nano_rw_224(pretrained=False, **kwargs):
+def coatnet_nano_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_nano_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_0_rw_224(pretrained=False, **kwargs):
+def coatnet_0_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_0_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_1_rw_224(pretrained=False, **kwargs):
+def coatnet_1_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_1_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_2_rw_224(pretrained=False, **kwargs):
+def coatnet_2_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_2_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_3_rw_224(pretrained=False, **kwargs):
+def coatnet_3_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_3_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_bn_0_rw_224(pretrained=False, **kwargs):
+def coatnet_bn_0_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_bn_0_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_nano_rw_224(pretrained=False, **kwargs):
+def coatnet_rmlp_nano_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_nano_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_0_rw_224(pretrained=False, **kwargs):
+def coatnet_rmlp_0_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_0_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_1_rw_224(pretrained=False, **kwargs):
+def coatnet_rmlp_1_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_1_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_1_rw2_224(pretrained=False, **kwargs):
+def coatnet_rmlp_1_rw2_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_1_rw2_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_2_rw_224(pretrained=False, **kwargs):
+def coatnet_rmlp_2_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_2_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_2_rw_384(pretrained=False, **kwargs):
+def coatnet_rmlp_2_rw_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_2_rw_384', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_rmlp_3_rw_224(pretrained=False, **kwargs):
+def coatnet_rmlp_3_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_rmlp_3_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_nano_cc_224(pretrained=False, **kwargs):
+def coatnet_nano_cc_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_nano_cc_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnext_nano_rw_224(pretrained=False, **kwargs):
+def coatnext_nano_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnext_nano_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_0_224(pretrained=False, **kwargs):
+def coatnet_0_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_0_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_1_224(pretrained=False, **kwargs):
+def coatnet_1_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_1_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_2_224(pretrained=False, **kwargs):
+def coatnet_2_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_2_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_3_224(pretrained=False, **kwargs):
+def coatnet_3_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_3_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_4_224(pretrained=False, **kwargs):
+def coatnet_4_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_4_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def coatnet_5_224(pretrained=False, **kwargs):
+def coatnet_5_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('coatnet_5_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_pico_rw_256(pretrained=False, **kwargs):
+def maxvit_pico_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_pico_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_nano_rw_256(pretrained=False, **kwargs):
+def maxvit_nano_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_tiny_rw_224(pretrained=False, **kwargs):
+def maxvit_tiny_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_tiny_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_tiny_rw_256(pretrained=False, **kwargs):
+def maxvit_tiny_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_tiny_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_pico_rw_256(pretrained=False, **kwargs):
+def maxvit_rmlp_pico_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_pico_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_nano_rw_256(pretrained=False, **kwargs):
+def maxvit_rmlp_nano_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs):
+def maxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_tiny_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_small_rw_224(pretrained=False, **kwargs):
+def maxvit_rmlp_small_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_small_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_small_rw_256(pretrained=False, **kwargs):
+def maxvit_rmlp_small_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_small_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_base_rw_224(pretrained=False, **kwargs):
+def maxvit_rmlp_base_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_base_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_rmlp_base_rw_384(pretrained=False, **kwargs):
+def maxvit_rmlp_base_rw_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_rmlp_base_rw_384', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_tiny_pm_256(pretrained=False, **kwargs):
+def maxvit_tiny_pm_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_tiny_pm_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvit_rmlp_nano_rw_256(pretrained=False, **kwargs):
+def maxxvit_rmlp_nano_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvit_rmlp_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs):
+def maxxvit_rmlp_tiny_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvit_rmlp_tiny_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvit_rmlp_small_rw_256(pretrained=False, **kwargs):
+def maxxvit_rmlp_small_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvit_rmlp_small_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvitv2_nano_rw_256(pretrained=False, **kwargs):
+def maxxvitv2_nano_rw_256(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvitv2_nano_rw_256', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvitv2_rmlp_base_rw_224(pretrained=False, **kwargs):
+def maxxvitv2_rmlp_base_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvitv2_rmlp_base_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvitv2_rmlp_base_rw_384(pretrained=False, **kwargs):
+def maxxvitv2_rmlp_base_rw_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvitv2_rmlp_base_rw_384', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxxvitv2_rmlp_large_rw_224(pretrained=False, **kwargs):
+def maxxvitv2_rmlp_large_rw_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxxvitv2_rmlp_large_rw_224', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_tiny_tf_224(pretrained=False, **kwargs):
+def maxvit_tiny_tf_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_tiny_tf_224', 'maxvit_tiny_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_tiny_tf_384(pretrained=False, **kwargs):
+def maxvit_tiny_tf_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_tiny_tf_384', 'maxvit_tiny_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_tiny_tf_512(pretrained=False, **kwargs):
+def maxvit_tiny_tf_512(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_tiny_tf_512', 'maxvit_tiny_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_small_tf_224(pretrained=False, **kwargs):
+def maxvit_small_tf_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_small_tf_224', 'maxvit_small_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_small_tf_384(pretrained=False, **kwargs):
+def maxvit_small_tf_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_small_tf_384', 'maxvit_small_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_small_tf_512(pretrained=False, **kwargs):
+def maxvit_small_tf_512(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_small_tf_512', 'maxvit_small_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_base_tf_224(pretrained=False, **kwargs):
+def maxvit_base_tf_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_base_tf_224', 'maxvit_base_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_base_tf_384(pretrained=False, **kwargs):
+def maxvit_base_tf_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_base_tf_384', 'maxvit_base_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_base_tf_512(pretrained=False, **kwargs):
+def maxvit_base_tf_512(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_base_tf_512', 'maxvit_base_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_large_tf_224(pretrained=False, **kwargs):
+def maxvit_large_tf_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_large_tf_224', 'maxvit_large_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_large_tf_384(pretrained=False, **kwargs):
+def maxvit_large_tf_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_large_tf_384', 'maxvit_large_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_large_tf_512(pretrained=False, **kwargs):
+def maxvit_large_tf_512(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_large_tf_512', 'maxvit_large_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_xlarge_tf_224(pretrained=False, **kwargs):
+def maxvit_xlarge_tf_224(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_xlarge_tf_224', 'maxvit_xlarge_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_xlarge_tf_384(pretrained=False, **kwargs):
+def maxvit_xlarge_tf_384(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_xlarge_tf_384', 'maxvit_xlarge_tf', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def maxvit_xlarge_tf_512(pretrained=False, **kwargs):
+def maxvit_xlarge_tf_512(pretrained=False, **kwargs) -> MaxxVit:
     return _create_maxxvit('maxvit_xlarge_tf_512', 'maxvit_xlarge_tf', pretrained=pretrained, **kwargs)

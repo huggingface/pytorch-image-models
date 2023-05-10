@@ -299,7 +299,7 @@ class InceptionV4(nn.Module):
         return x
 
 
-def _create_inception_v4(variant, pretrained=False, **kwargs):
+def _create_inception_v4(variant, pretrained=False, **kwargs) -> InceptionV4:
     return build_model_with_cfg(
         InceptionV4,
         variant,
@@ -312,12 +312,10 @@ def _create_inception_v4(variant, pretrained=False, **kwargs):
 default_cfgs = generate_default_cfgs({
     'inception_v4.tf_in1k': {
         'hf_hub_id': 'timm/',
-        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/inceptionv4-8e4777a0.pth',
         'num_classes': 1000, 'input_size': (3, 299, 299), 'pool_size': (8, 8),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'features.0.conv', 'classifier': 'last_linear',
-        'label_offset': 1,  # 1001 classes in pretrained weights
     }
 })
 

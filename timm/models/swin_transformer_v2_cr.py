@@ -838,7 +838,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def swinv2_cr_tiny_384(pretrained=False, **kwargs):
+def swinv2_cr_tiny_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-T V2 CR @ 384x384, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=96,
@@ -849,7 +849,7 @@ def swinv2_cr_tiny_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_tiny_224(pretrained=False, **kwargs):
+def swinv2_cr_tiny_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-T V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=96,
@@ -860,7 +860,7 @@ def swinv2_cr_tiny_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_tiny_ns_224(pretrained=False, **kwargs):
+def swinv2_cr_tiny_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-T V2 CR @ 224x224, trained ImageNet-1k w/ extra stage norms.
     ** Experimental, may make default if results are improved. **
     """
@@ -874,7 +874,7 @@ def swinv2_cr_tiny_ns_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_small_384(pretrained=False, **kwargs):
+def swinv2_cr_small_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-S V2 CR @ 384x384, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=96,
@@ -885,7 +885,7 @@ def swinv2_cr_small_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_small_224(pretrained=False, **kwargs):
+def swinv2_cr_small_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-S V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=96,
@@ -896,7 +896,7 @@ def swinv2_cr_small_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_small_ns_224(pretrained=False, **kwargs):
+def swinv2_cr_small_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-S V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=96,
@@ -908,7 +908,7 @@ def swinv2_cr_small_ns_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_small_ns_256(pretrained=False, **kwargs):
+def swinv2_cr_small_ns_256(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-S V2 CR @ 256x256, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=96,
@@ -920,7 +920,7 @@ def swinv2_cr_small_ns_256(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_base_384(pretrained=False, **kwargs):
+def swinv2_cr_base_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-B V2 CR @ 384x384, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=128,
@@ -931,7 +931,7 @@ def swinv2_cr_base_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_base_224(pretrained=False, **kwargs):
+def swinv2_cr_base_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-B V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=128,
@@ -942,7 +942,7 @@ def swinv2_cr_base_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_base_ns_224(pretrained=False, **kwargs):
+def swinv2_cr_base_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-B V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=128,
@@ -954,7 +954,7 @@ def swinv2_cr_base_ns_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_large_384(pretrained=False, **kwargs):
+def swinv2_cr_large_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-L V2 CR @ 384x384, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=192,
@@ -965,7 +965,7 @@ def swinv2_cr_large_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_large_224(pretrained=False, **kwargs):
+def swinv2_cr_large_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-L V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=192,
@@ -976,7 +976,7 @@ def swinv2_cr_large_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_huge_384(pretrained=False, **kwargs):
+def swinv2_cr_huge_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-H V2 CR @ 384x384, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=352,
@@ -988,7 +988,7 @@ def swinv2_cr_huge_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_huge_224(pretrained=False, **kwargs):
+def swinv2_cr_huge_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-H V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=352,
@@ -1000,7 +1000,7 @@ def swinv2_cr_huge_224(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_giant_384(pretrained=False, **kwargs):
+def swinv2_cr_giant_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-G V2 CR @ 384x384, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=512,
@@ -1012,7 +1012,7 @@ def swinv2_cr_giant_384(pretrained=False, **kwargs):
 
 
 @register_model
-def swinv2_cr_giant_224(pretrained=False, **kwargs):
+def swinv2_cr_giant_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-G V2 CR @ 224x224, trained ImageNet-1k"""
     model_args = dict(
         embed_dim=512,

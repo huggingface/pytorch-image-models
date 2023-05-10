@@ -991,40 +991,40 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def mvitv2_tiny(pretrained=False, **kwargs):
+def mvitv2_tiny(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_tiny', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_small(pretrained=False, **kwargs):
+def mvitv2_small(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_small', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_base(pretrained=False, **kwargs):
+def mvitv2_base(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_base', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_large(pretrained=False, **kwargs):
+def mvitv2_large(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_large', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_small_cls(pretrained=False, **kwargs):
+def mvitv2_small_cls(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_small_cls', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_base_cls(pretrained=False, **kwargs):
+def mvitv2_base_cls(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_base_cls', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_large_cls(pretrained=False, **kwargs):
+def mvitv2_large_cls(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_large_cls', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mvitv2_huge_cls(pretrained=False, **kwargs):
+def mvitv2_huge_cls(pretrained=False, **kwargs) -> MultiScaleVit:
     return _create_mvitv2('mvitv2_huge_cls', pretrained=pretrained, **kwargs)

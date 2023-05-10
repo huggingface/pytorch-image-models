@@ -453,7 +453,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def vit_relpos_base_patch32_plus_rpn_256(pretrained=False, **kwargs):
+def vit_relpos_base_patch32_plus_rpn_256(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/32+) w/ relative log-coord position and residual post-norm, no class token
     """
     model_args = dict(patch_size=32, embed_dim=896, depth=12, num_heads=14, block_fn=ResPostRelPosBlock)
@@ -463,7 +463,7 @@ def vit_relpos_base_patch32_plus_rpn_256(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_base_patch16_plus_240(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_plus_240(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16+) w/ relative log-coord position, no class token
     """
     model_args = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14)
@@ -473,7 +473,7 @@ def vit_relpos_base_patch16_plus_240(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_small_patch16_224(pretrained=False, **kwargs):
+def vit_relpos_small_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
     """
     model_args = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=True)
@@ -483,7 +483,7 @@ def vit_relpos_small_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_medium_patch16_224(pretrained=False, **kwargs):
+def vit_relpos_medium_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
     """
     model_args = dict(
@@ -494,7 +494,7 @@ def vit_relpos_medium_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_base_patch16_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
     """
     model_args = dict(
@@ -505,7 +505,7 @@ def vit_relpos_base_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_srelpos_small_patch16_224(pretrained=False, **kwargs):
+def vit_srelpos_small_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
     """
     model_args = dict(
@@ -517,7 +517,7 @@ def vit_srelpos_small_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_srelpos_medium_patch16_224(pretrained=False, **kwargs):
+def vit_srelpos_medium_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
     """
     model_args = dict(
@@ -529,7 +529,7 @@ def vit_srelpos_medium_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_medium_patch16_cls_224(pretrained=False, **kwargs):
+def vit_relpos_medium_patch16_cls_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-M/16) w/ relative log-coord position, class token present
     """
     model_args = dict(
@@ -541,7 +541,7 @@ def vit_relpos_medium_patch16_cls_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
     """
     model_args = dict(
@@ -552,7 +552,7 @@ def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_base_patch16_clsgap_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_clsgap_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
     NOTE this config is a bit of a mistake, class token was enabled but global avg-pool w/ fc-norm was not disabled
     Leaving here for comparisons w/ a future re-train as it performs quite well.
@@ -565,7 +565,7 @@ def vit_relpos_base_patch16_clsgap_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_small_patch16_rpn_224(pretrained=False, **kwargs):
+def vit_relpos_small_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
     model_args = dict(
@@ -576,7 +576,7 @@ def vit_relpos_small_patch16_rpn_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_medium_patch16_rpn_224(pretrained=False, **kwargs):
+def vit_relpos_medium_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
     model_args = dict(
@@ -587,7 +587,7 @@ def vit_relpos_medium_patch16_rpn_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
     model_args = dict(

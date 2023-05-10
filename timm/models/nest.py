@@ -518,7 +518,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def nest_base(pretrained=False, **kwargs):
+def nest_base(pretrained=False, **kwargs) -> Nest:
     """ Nest-B @ 224x224
     """
     model_kwargs = dict(
@@ -528,7 +528,7 @@ def nest_base(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_small(pretrained=False, **kwargs):
+def nest_small(pretrained=False, **kwargs) -> Nest:
     """ Nest-S @ 224x224
     """
     model_kwargs = dict(embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 20), **kwargs)
@@ -537,7 +537,7 @@ def nest_small(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_tiny(pretrained=False, **kwargs):
+def nest_tiny(pretrained=False, **kwargs) -> Nest:
     """ Nest-T @ 224x224
     """
     model_kwargs = dict(embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 8), **kwargs)
@@ -546,7 +546,7 @@ def nest_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_base_jx(pretrained=False, **kwargs):
+def nest_base_jx(pretrained=False, **kwargs) -> Nest:
     """ Nest-B @ 224x224
     """
     kwargs.setdefault('pad_type', 'same')
@@ -557,7 +557,7 @@ def nest_base_jx(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_small_jx(pretrained=False, **kwargs):
+def nest_small_jx(pretrained=False, **kwargs) -> Nest:
     """ Nest-S @ 224x224
     """
     kwargs.setdefault('pad_type', 'same')
@@ -567,7 +567,7 @@ def nest_small_jx(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_tiny_jx(pretrained=False, **kwargs):
+def nest_tiny_jx(pretrained=False, **kwargs) -> Nest:
     """ Nest-T @ 224x224
     """
     kwargs.setdefault('pad_type', 'same')

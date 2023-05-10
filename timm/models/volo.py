@@ -798,7 +798,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def volo_d1_224(pretrained=False, **kwargs):
+def volo_d1_224(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D1 model, Params: 27M """
     model_args = dict(layers=(4, 4, 8, 2), embed_dims=(192, 384, 384, 384), num_heads=(6, 12, 12, 12), **kwargs)
     model = _create_volo('volo_d1_224', pretrained=pretrained, **model_args)
@@ -806,7 +806,7 @@ def volo_d1_224(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d1_384(pretrained=False, **kwargs):
+def volo_d1_384(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D1 model, Params: 27M """
     model_args = dict(layers=(4, 4, 8, 2), embed_dims=(192, 384, 384, 384), num_heads=(6, 12, 12, 12), **kwargs)
     model = _create_volo('volo_d1_384', pretrained=pretrained, **model_args)
@@ -814,7 +814,7 @@ def volo_d1_384(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d2_224(pretrained=False, **kwargs):
+def volo_d2_224(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D2 model, Params: 59M """
     model_args = dict(layers=(6, 4, 10, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d2_224', pretrained=pretrained, **model_args)
@@ -822,7 +822,7 @@ def volo_d2_224(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d2_384(pretrained=False, **kwargs):
+def volo_d2_384(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D2 model, Params: 59M """
     model_args = dict(layers=(6, 4, 10, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d2_384', pretrained=pretrained, **model_args)
@@ -830,7 +830,7 @@ def volo_d2_384(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d3_224(pretrained=False, **kwargs):
+def volo_d3_224(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D3 model, Params: 86M """
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d3_224', pretrained=pretrained, **model_args)
@@ -838,7 +838,7 @@ def volo_d3_224(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d3_448(pretrained=False, **kwargs):
+def volo_d3_448(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D3 model, Params: 86M """
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d3_448', pretrained=pretrained, **model_args)
@@ -846,7 +846,7 @@ def volo_d3_448(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d4_224(pretrained=False, **kwargs):
+def volo_d4_224(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D4 model, Params: 193M """
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d4_224', pretrained=pretrained, **model_args)
@@ -854,7 +854,7 @@ def volo_d4_224(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d4_448(pretrained=False, **kwargs):
+def volo_d4_448(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D4 model, Params: 193M """
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d4_448', pretrained=pretrained, **model_args)
@@ -862,7 +862,7 @@ def volo_d4_448(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d5_224(pretrained=False, **kwargs):
+def volo_d5_224(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D5 model, Params: 296M
     stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5
     """
@@ -874,7 +874,7 @@ def volo_d5_224(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d5_448(pretrained=False, **kwargs):
+def volo_d5_448(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D5 model, Params: 296M
     stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5
     """
@@ -886,7 +886,7 @@ def volo_d5_448(pretrained=False, **kwargs):
 
 
 @register_model
-def volo_d5_512(pretrained=False, **kwargs):
+def volo_d5_512(pretrained=False, **kwargs) -> VOLO:
     """ VOLO-D5 model, Params: 296M
     stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5
     """
