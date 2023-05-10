@@ -11,11 +11,13 @@ Modifications copyright 2021, Ross Wightman
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
 from functools import partial
+from typing import Sequence, Union
 
 import torch
 from torch import nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.layers import resample_abs_pos_embed
 from timm.models.vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
@@ -71,11 +73,37 @@ class VisionTransformerDistilled(VisionTransformer):
     def set_distilled_training(self, enable=True):
         self.distilled_training = enable
 
+    def _intermediate_layers(
+            self,
+            x: torch.Tensor,
+            n: Union[int, Sequence] = 1,
+    ):
+        outputs, num_blocks = [], len(self.blocks)
+        take_indices = set(range(num_blocks - n, num_blocks) if isinstance(n, int) else n)
+
+        # forward pass
+        x = self.patch_embed(x)
+        x = torch.cat((
+            self.cls_token.expand(x.shape[0], -1, -1),
+            self.dist_token.expand(x.shape[0], -1, -1),
+            x),
+            dim=1)
+        x = self.pos_drop(x + self.pos_embed)
+        x = self.patch_drop(x)
+        x = self.norm_pre(x)
+        for i, blk in enumerate(self.blocks):
+            x = blk(x)
+            if i in take_indices:
+                outputs.append(x)
+
+        return outputs
+
     def forward_features(self, x) -> torch.Tensor:
         x = self.patch_embed(x)
         x = torch.cat((
             self.cls_token.expand(x.shape[0], -1, -1),
-            self.dist_token.expand(x.shape[0], -1, -1), x),
+            self.dist_token.expand(x.shape[0], -1, -1),
+            x),
             dim=1)
         x = self.pos_drop(x + self.pos_embed)
         if self.grad_checkpointing and not torch.jit.is_scripting():

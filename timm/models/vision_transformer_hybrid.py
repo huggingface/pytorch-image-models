@@ -14,6 +14,7 @@ They were moved here to keep file sizes sane.
 Hacked together by / Copyright 2020, Ross Wightman
 """
 from functools import partial
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
@@ -74,8 +75,41 @@ class HybridEmbed(nn.Module):
         x = self.backbone(x)
         if isinstance(x, (list, tuple)):
             x = x[-1]  # last feature if backbone outputs list/tuple of features
-        x = self.proj(x).flatten(2).transpose(1, 2)
+        x = self.proj(x)
+        x = x.flatten(2).transpose(1, 2)
         return x
+
+
+class HybridEmbedWithSize(nn.Module):
+    """ CNN Feature Map Embedding
+    Extract feature map from CNN, flatten, project to embedding dim.
+    """
+    def __init__(
+            self,
+            backbone,
+            img_size=224,
+            patch_size=1,
+            feature_size=None,
+            in_chans=3,
+            embed_dim=768,
+            bias=True,
+    ):
+        super().__init__(
+            backbone=backbone,
+            img_size=img_size,
+            patch_size=patch_size,
+            feature_size=feature_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            bias=bias,
+        )
+
+    def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
+        x = self.backbone(x)
+        if isinstance(x, (list, tuple)):
+            x = x[-1]  # last feature if backbone outputs list/tuple of features
+        x = self.proj(x)
+        return x.flatten(2).transpose(1, 2), x.shape[-2:]
 
 
 def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwargs):
