@@ -1121,21 +1121,25 @@ default_cfgs = generate_default_cfgs({
     # DINOv2 pretrained - https://arxiv.org/abs/2304.07193 (no classifier head, for fine-tune/features only)
     'vit_small_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
     'vit_base_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
     'vit_large_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
     'vit_giant_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitg14/dinov2_vitg14_pretrain.pth',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
@@ -1416,17 +1420,17 @@ default_cfgs = generate_default_cfgs({
 
     'vit_base_patch16_224.mae': _cfg(
         url='https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     'vit_large_patch16_224.mae': _cfg(
         url='https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_large.pth',
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     'vit_huge_patch14_224.mae': _cfg(
         url='https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_huge.pth',
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 })
@@ -1970,7 +1974,7 @@ def vit_huge_patch14_xp_224(pretrained=False, **kwargs) -> VisionTransformer:
 
 
 @register_model
-def vit_small_patch14_dinov2(pretrained=False, **kwargs):
+def vit_small_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-S/14 for DINOv2
     """
     model_args = dict(
@@ -1982,7 +1986,7 @@ def vit_small_patch14_dinov2(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_base_patch14_dinov2(pretrained=False, **kwargs):
+def vit_base_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-B/14 for DINOv2
     """
     model_args = dict(
@@ -1994,7 +1998,7 @@ def vit_base_patch14_dinov2(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_large_patch14_dinov2(pretrained=False, **kwargs):
+def vit_large_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-L/14 for DINOv2
     """
     model_args = dict(
@@ -2006,7 +2010,7 @@ def vit_large_patch14_dinov2(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_giant_patch14_dinov2(pretrained=False, **kwargs):
+def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-G/14 for DINOv2
     """
 
