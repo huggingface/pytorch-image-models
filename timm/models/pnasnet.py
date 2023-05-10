@@ -355,7 +355,6 @@ def _create_pnasnet(variant, pretrained=False, **kwargs):
 default_cfgs = generate_default_cfgs({
     'pnasnet5large.tf_in1k': {
         'hf_hub_id': 'timm/',
-        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/pnasnet5large-bf079911.pth',
         'input_size': (3, 331, 331),
         'pool_size': (11, 11),
         'crop_pct': 0.911,
@@ -365,7 +364,6 @@ default_cfgs = generate_default_cfgs({
         'num_classes': 1000,
         'first_conv': 'conv_0.conv',
         'classifier': 'last_linear',
-        'label_offset': 1,  # 1001 classes in pretrained weights
     },
 })
 

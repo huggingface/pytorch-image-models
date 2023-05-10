@@ -588,7 +588,6 @@ default_cfgs = generate_default_cfgs({
         'num_classes': 1000,
         'first_conv': 'conv0.conv',
         'classifier': 'last_linear',
-        'label_offset': 1,  # 1001 classes in pretrained weights
     },
 })
 
