@@ -2013,7 +2013,8 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 512, 512), pool_size=(16, 16), crop_pct=1.0, crop_mode='squash'),
 
     'maxvit_base_tf_224.in21k': _cfg(
-        url=''),
+        hf_hub_id='timm/',
+        num_classes=21843),
     'maxvit_base_tf_384.in21k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
@@ -2021,7 +2022,8 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         input_size=(3, 512, 512), pool_size=(16, 16), crop_pct=1.0, crop_mode='squash'),
     'maxvit_large_tf_224.in21k': _cfg(
-        url=''),
+        hf_hub_id='timm/',
+        num_classes=21843),
     'maxvit_large_tf_384.in21k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
@@ -2029,7 +2031,8 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         input_size=(3, 512, 512), crop_pct=1.0, crop_mode='squash'),
     'maxvit_xlarge_tf_224.in21k': _cfg(
-        url=''),
+        hf_hub_id='timm/',
+        num_classes=21843),
     'maxvit_xlarge_tf_384.in21k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
