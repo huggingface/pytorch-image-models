@@ -21,11 +21,24 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 
 ## What's New
 
-* ❗Updates after Oct 10, 2022 are available in 0.8.x pre-releases (`pip install --pre timm`) or cloning main❗
-* Stable releases are 0.6.x and available by normal pip install or clone from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch.
+❗Updates after Oct 10, 2022 are available in version >= 0.9❗
+* Many changes since the last 0.6.x stable releases. They were previewed in 0.8.x dev releases but not everyone transitioned.
+* `timm.models.layers` moved to `timm.layers`:
+  * `from timm.models.layers import name` will still work via deprecation mapping (but please transition to `timm.layers`).
+  * `import timm.models.layers.module` or `from timm.models.layers.module import name` needs to be changed now.
+* Builder, helper, non-model modules in `timm.models` have a `_` prefix added, ie `timm.models.helpers` -> `timm.models._helpers`, there are temporary deprecation mapping files but those will be removed.
+* All models now support `architecture.pretrained_tag` naming (ex `resnet50.rsb_a1`).
+  * The pretrained_tag is the specific weight variant (different head) for the architecture.
+  * Using just using `architecture` uses the 'default' pretrained tag (first instance in default_cfgs for that arch).
+  * In adding pretrained tags, many model names that existed to differentiate were renamed to use the tag  (ex: `vit_base_patch16_224_in21k` -> `vit_base_patch16_224.augreg_in21k`). There are deprecation mappings for these.
+* The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
+* Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
+
+### May 11, 2023
+* `timm` 0.9 released, transition from 0.8.xdev releases
 
 ### May 10, 2023
-* Hugging Face Hub downloading is now default, 1129 models on https://huggingface.co/timm, 1160 weights in `timm`
+* Hugging Face Hub downloading is now default, 1132 models on https://huggingface.co/timm, 1163 weights in `timm`
 * DINOv2 vit feature backbone weights added thanks to [Leng Yue](https://github.com/leng-yue)
 * FB MAE vit feature backbone weights added
 * OpenCLIP DataComp-XL L/14 feat backbone weights added
@@ -33,6 +46,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * Experimental `get_intermediate_layers` function on vit/deit models for grabbing hidden states (inspired by DINO impl). This is WIP and may change significantly... feedback welcome.
 * Model creation throws error if `pretrained=True` and no weights exist (instead of continuing with random initialization)
 * Fix regression with inception / nasnet TF sourced weights with 1001 classes in original classifiers
+* bitsandbytes (https://github.com/TimDettmers/bitsandbytes) optimizers added to factory, use `bnb` prefix, ie `bnbadam8bit`
 * Misc cleanup and fixes
 * Final testing before switching to a 0.9 and bringing `timm` out of pre-release state
 

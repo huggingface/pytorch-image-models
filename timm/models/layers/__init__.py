@@ -46,4 +46,4 @@ from timm.layers.trace_utils import _assert, _float_to_int
 from timm.layers.weight_init import trunc_normal_, trunc_normal_tf_, variance_scaling_, lecun_normal_
 
 import warnings
-warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", DeprecationWarning)
+warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", DeprecationWarning)
