@@ -29,7 +29,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * Builder, helper, non-model modules in `timm.models` have a `_` prefix added, ie `timm.models.helpers` -> `timm.models._helpers`, there are temporary deprecation mapping files but those will be removed.
 * All models now support `architecture.pretrained_tag` naming (ex `resnet50.rsb_a1`).
   * The pretrained_tag is the specific weight variant (different head) for the architecture.
-  * Using just using `architecture` uses the 'default' pretrained tag (first instance in default_cfgs for that arch).
+  * Using only `architecture` defaults to the first weights in the default_cfgs for that model architecture.
   * In adding pretrained tags, many model names that existed to differentiate were renamed to use the tag  (ex: `vit_base_patch16_224_in21k` -> `vit_base_patch16_224.augreg_in21k`). There are deprecation mappings for these.
 * A number of models had their checkpoints remaped to match architecture changes needed to better support `features_only=True`, there are `checkpoint_filter_fn` methods in any model module that was remapped. These can be passed to `timm.models.load_checkpoint(..., filter_fn=timm.models.swin_transformer_v2.checkpoint_filter_fn)` to remap your existing checkpoint.
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
