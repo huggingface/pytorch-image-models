@@ -26,7 +26,7 @@ Modifications by / Copyright 2023 Ross Wightman, original copyrights below
 # EVA02 models Copyright (c) 2023 BAAI-Vision
 
 import math
-from typing import Callable, Final, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -45,7 +45,7 @@ __all__ = ['Eva']
 
 
 class EvaAttention(nn.Module):
-    fused_attn: Final[bool]
+    fused_attn: torch.jit.Final[bool]
 
     def __init__(
             self,
