@@ -60,6 +60,7 @@ from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
 from .vision_transformer_relpos import *
+from .vision_transformer_sam import *
 from .volo import *
 from .vovnet import *
 from .xception import *
