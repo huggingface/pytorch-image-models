@@ -36,7 +36,7 @@ from .padding import get_padding, get_same_padding, pad_same
 from .patch_dropout import PatchDropout
 from .patch_embed import PatchEmbed, PatchEmbedWithSize, resample_patch_embed
 from .pool2d_same import AvgPool2dSame, create_pool2d
-from .pos_embed import resample_abs_pos_embed
+from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
 from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_position_index, gen_relative_log_coords
 from .pos_embed_sincos import pixel_freq_bands, freq_bands, build_sincos2d_pos_embed, build_fourier_pos_embed, \
     build_rotary_pos_embed, apply_rot_embed, apply_rot_embed_cat, apply_rot_embed_list, apply_keep_indices_nlc, \
