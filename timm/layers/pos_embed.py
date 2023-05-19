@@ -52,3 +52,24 @@ def resample_abs_pos_embed(
         _logger.info(f'Resized position embedding: {old_size} to {new_size}.')
 
     return posemb
+
+
+def resample_abs_pos_embed_nhwc(
+        posemb,
+        new_size: List[int],
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+        verbose: bool = False,
+):
+    if new_size[0] == posemb.shape[-3] and new_size[1] == posemb.shape[-2]:
+        return posemb
+
+    # do the interpolation
+    posemb = posemb.reshape(1, posemb.shape[-3], posemb.shape[-2], posemb.shape[-1]).permute(0, 3, 1, 2)
+    posemb = F.interpolate(posemb, size=new_size, mode=interpolation, antialias=antialias)
+    posemb = posemb.permute(0, 2, 3, 1)
+
+    if not torch.jit.is_scripting() and verbose:
+        _logger.info(f'Resized position embedding: {posemb.shape[-3:-1]} to {new_size}.')
+
+    return posemb
