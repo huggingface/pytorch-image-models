@@ -343,6 +343,7 @@ def create_optimizer_v2(
     elif opt_lower == 'rmsproptf':
         optimizer = RMSpropTF(parameters, alpha=0.9, momentum=momentum, **opt_args)
     elif opt_lower == 'lion':
+        opt_args.pop('eps', None)
         optimizer = Lion(parameters, **opt_args)
 
     # second order
