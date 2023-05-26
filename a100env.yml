@@ -1,0 +1,16 @@
+name: timm
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pytorch=1.7.1
+  - torchvision
+  - cudatoolkit=11.0
+  - pip
+  - pip:
+    - pyyaml
+    - huggingface_hub
+    - safetensors>=0.2
+    - -r requirements-dev.txt
+    - -e .
