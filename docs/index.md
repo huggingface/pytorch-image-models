@@ -20,12 +20,12 @@ pip install git+https://github.com/rwightman/pytorch-image-models.git
 ```
 
 !!! info "Conda Environment"
-    All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically 3.7, 3.8, 3.9, 3.10
-    
+    All development and testing has been done in Conda Python 3 environments on Linux x86-64 systems, specifically 3.7, 3.8, 3.9, 3.10, 3.11
+
     Little to no care has been taken to be Python 2.x friendly and will not support it. If you run into any challenges running on Windows, or other OS, I'm definitely open to looking into those issues so long as it's in a reproducible (read Conda) environment.
-    
+
     PyTorch versions 1.9, 1.10, 1.11 have been tested with the latest versions of this code.
-    
+
     I've tried to keep the dependencies minimal, the setup is as per the PyTorch default install instructions for Conda:
     ```
     conda create -n torch-env

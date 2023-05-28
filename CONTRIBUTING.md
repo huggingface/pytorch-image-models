@@ -6,7 +6,7 @@ There haven't been any formal guidelines to date so please bear with me, and fee
 
 # Coding style
 
-Code linting and auto-format (black) are not currently in place but open to consideration. In the meantime, the style to follow is (mostly) aligned with Google's guide: https://google.github.io/styleguide/pyguide.html. 
+Code linting and auto-format (black) are not currently in place but open to consideration. In the meantime, the style to follow is (mostly) aligned with Google's guide: https://google.github.io/styleguide/pyguide.html.
 
 A few specific differences from Google style (or black)
 1. Line length is 120 char. Going over is okay in some cases (e.g. I prefer not to break URL across lines).
@@ -73,7 +73,7 @@ There are a LOT of gaps in current documentation relative to the functionality i
 
 # Installation
 
-Create a Python virtual environment using Python 3.10. Inside the environment, install torch` and `torchvision` using the instructions matching your system as listed on the [PyTorch website](https://pytorch.org/).
+Create a Python virtual environment using Python 3.11. Inside the environment, install torch` and `torchvision` using the instructions matching your system as listed on the [PyTorch website](https://pytorch.org/).
 
 Then install the remaining dependencies:
 

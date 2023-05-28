@@ -16,9 +16,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: ['3.10']
-        torch: ['1.13.0']
-        torchvision: ['0.14.0']
+        python: ['3.11']
+        torch: ['2.0.1']
+        torchvision: ['0.15.2']
         testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
     runs-on: ${{ matrix.os }}
 
