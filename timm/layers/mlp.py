@@ -28,7 +28,7 @@ class Mlp(nn.Module):
         hidden_features = hidden_features or in_features
         bias = to_2tuple(bias)
         drop_probs = to_2tuple(drop)
-        linear_layer = partial(nn.Conv2d, kernel_size=1) if use_conv else nn.Linear
+        linear_layer = partial(nn.Conv1d, kernel_size=1) if use_conv else nn.Linear
 
         self.fc1 = linear_layer(in_features, hidden_features, bias=bias[0])
         self.act = act_layer()
