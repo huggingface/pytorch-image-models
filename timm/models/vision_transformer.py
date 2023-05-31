@@ -408,6 +408,7 @@ class VisionTransformer(nn.Module):
             proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            drop_path_schedule: str = 'linear',
             weight_init: str = '',
             embed_layer: Callable = PatchEmbed,
             norm_layer: Optional[Callable] = None,
@@ -443,6 +444,8 @@ class VisionTransformer(nn.Module):
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
         assert class_token or global_pool != 'token'
+        assert drop_path_schedule in ('linear', 'uniform')
+
         use_fc_norm = global_pool == 'avg' if fc_norm is None else fc_norm
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
@@ -476,7 +479,12 @@ class VisionTransformer(nn.Module):
             self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        if drop_path_schedule == 'linear':
+            # stochastic depth decay rule
+            dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        elif drop_path_schedule == 'uniform':
+            dpr = [drop_path_rate] * depth
+
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,
@@ -1982,7 +1990,8 @@ def vit_small_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-S/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5, img_size=518,
+        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5, 
+        img_size=518, drop_path_schedule='uniform'
     )
     model = _create_vision_transformer(
         'vit_small_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -1994,7 +2003,8 @@ def vit_base_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-B/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5, img_size=518,
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5, 
+        img_size=518, drop_path_schedule='uniform'
     )
     model = _create_vision_transformer(
         'vit_base_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2006,7 +2016,8 @@ def vit_large_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-L/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, img_size=518,
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, 
+        img_size=518, drop_path_schedule='uniform'
     )
     model = _create_vision_transformer(
         'vit_large_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2025,7 +2036,8 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
 
     model_args = dict(
         patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1e-5, 
-        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU
+        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU,
+        drop_path_schedule='uniform'
     )
     model = _create_vision_transformer(
         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
