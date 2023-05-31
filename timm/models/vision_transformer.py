@@ -126,10 +126,11 @@ class Block(nn.Module):
             act_layer=nn.GELU,
             norm_layer=nn.LayerNorm,
             mlp_layer=Mlp,
+            attn_class=Attention,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(
+        self.attn = attn_class(
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
