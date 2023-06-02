@@ -4,6 +4,9 @@ Paper: `Lookahead Optimizer: k steps forward, 1 step back` - https://arxiv.org/a
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+from collections import OrderedDict
+from typing import Callable, Dict
+
 import torch
 from torch.optim.optimizer import Optimizer
 from collections import defaultdict
@@ -12,6 +15,8 @@ from collections import defaultdict
 class Lookahead(Optimizer):
     def __init__(self, base_optimizer, alpha=0.5, k=6):
         # NOTE super().__init__() not called on purpose
+        self._optimizer_step_pre_hooks: Dict[int, Callable] = OrderedDict()
+        self._optimizer_step_post_hooks: Dict[int, Callable] = OrderedDict()
         if not 0.0 <= alpha <= 1.0:
             raise ValueError(f'Invalid slow update rate: {alpha}')
         if not 1 <= k:
