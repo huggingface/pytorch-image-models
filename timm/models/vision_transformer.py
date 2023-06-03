@@ -158,11 +158,13 @@ class Block(nn.Module):
         if self.efficient_drop_path:
             x = x + efficient_drop_path(
                 x, lambda _x: self.ls1(self.attn(self.norm1(_x))), 
-                self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.
+                drop_ratio=self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.,
+                training=self.training
             )
             x = x + efficient_drop_path(
                 x, lambda _x: self.ls2(self.mlp(self.norm2(_x))),
-                self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.
+                drop_ratio=self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.,
+                training=self.training
             )
         else:
             x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))

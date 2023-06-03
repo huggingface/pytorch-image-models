@@ -206,6 +206,19 @@ def apply_residual(
 def efficient_drop_path(
     x: torch.Tensor, func: Callable[[torch.Tensor], torch.Tensor], drop_ratio: float = 0.0, training: bool = False
 ) -> torch.Tensor:
+    """Efficient Drop Path implementation.
+    Ref impl: https://github.com/facebookresearch/dinov2/blob/main/dinov2/layers/block.py
+
+    Args:
+        x (torch.Tensor): input tensor
+        func (Callable[[torch.Tensor], torch.Tensor]): function to calculate residual
+        drop_ratio (float, optional): Drop ratio. Defaults to 0.0.
+        training (bool, optional): training mode. Defaults to False.
+
+    Returns:
+        torch.Tensor: output tensor
+    """
+
     if not training or drop_ratio == 0.0:
         return func(x)
 
