@@ -37,7 +37,7 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
+from timm.layers import PatchEmbed, Mlp, DropPath, efficient_drop_path, trunc_normal_, lecun_normal_, resample_patch_embed, \
     resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn, SwiGLUPacked
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
@@ -127,6 +127,7 @@ class Block(nn.Module):
             norm_layer=nn.LayerNorm,
             mlp_layer=Mlp,
             attn_class=Attention,
+            efficient_drop_path=False,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -151,10 +152,22 @@ class Block(nn.Module):
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.efficient_drop_path = efficient_drop_path
 
     def forward(self, x):
-        x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
-        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        if self.efficient_drop_path:
+            x = x + efficient_drop_path(
+                x, lambda _x: self.ls1(self.attn(self.norm1(_x))), 
+                self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.
+            )
+            x = x + efficient_drop_path(
+                x, lambda _x: self.ls2(self.mlp(self.norm2(_x))),
+                self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.
+            )
+        else:
+            x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
+            x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+
         return x
 
 
@@ -416,6 +429,7 @@ class VisionTransformer(nn.Module):
             act_layer: Optional[Callable] = None,
             block_fn: Callable = Block,
             mlp_layer: Callable = Mlp,
+            efficient_drop_path: bool = False,
     ):
         """
         Args:
@@ -441,6 +455,7 @@ class VisionTransformer(nn.Module):
             norm_layer: Normalization layer.
             act_layer: MLP activation layer.
             block_fn: Transformer block layer.
+            efficient_drop_path: Use efficient drop path implementation.
         """
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
@@ -500,6 +515,7 @@ class VisionTransformer(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 mlp_layer=mlp_layer,
+                efficient_drop_path=efficient_drop_path,
             )
             for i in range(depth)])
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
