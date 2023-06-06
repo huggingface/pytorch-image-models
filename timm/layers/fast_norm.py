@@ -53,7 +53,7 @@ def fast_group_norm(
         # here we use the low precision autocast dtype
         # FIXME what to do re CPU autocast?
         dt = torch.get_autocast_gpu_dtype()
-        x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt)
+        x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt) if bias is not None else None
 
     with torch.cuda.amp.autocast(enabled=False):
         return F.group_norm(x, num_groups, weight, bias, eps)
@@ -78,7 +78,7 @@ def fast_layer_norm(
         # apex LN does not, this is behaving like Apex
         dt = torch.get_autocast_gpu_dtype()
         # FIXME what to do re CPU autocast?
-        x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt)
+        x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt) if bias is not None else None
 
     with torch.cuda.amp.autocast(enabled=False):
         return F.layer_norm(x, normalized_shape, weight, bias, eps)

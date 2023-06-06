@@ -23,84 +23,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, get_attn, create_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, MATCH_PREV_GROUP
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['CspNet']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
-        'crop_pct': 0.887, 'interpolation': 'bilinear',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'cspresnet50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnet50_ra-d3e8d487.pth'),
-    'cspresnet50d': _cfg(url=''),
-    'cspresnet50w': _cfg(url=''),
-    'cspresnext50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnext50_ra_224-648b4713.pth',
-    ),
-    'cspdarknet53': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspdarknet53_ra_256-d05c7c21.pth'),
-
-    'darknet17': _cfg(url=''),
-    'darknet21': _cfg(url=''),
-    'sedarknet21': _cfg(url=''),
-    'darknet53': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknet53_256_c2ns-3aeff817.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'darknetaa53': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknetaa53_c2ns-5c28ec8a.pth',
-        test_input_size=(3, 288, 288), test_crop_pct=1.0),
-
-    'cs3darknet_s': _cfg(
-        url='', interpolation='bicubic'),
-    'cs3darknet_m': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_m_c2ns-43f06604.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95,
-    ),
-    'cs3darknet_l': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_l_c2ns-16220c5d.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'cs3darknet_x': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_x_c2ns-4e4490aa.pth',
-        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
-
-    'cs3darknet_focus_s': _cfg(
-        url='', interpolation='bicubic'),
-    'cs3darknet_focus_m': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_m_c2ns-e23bed41.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'cs3darknet_focus_l': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_l_c2ns-65ef8888.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'cs3darknet_focus_x': _cfg(
-        url='', interpolation='bicubic'),
-
-    'cs3sedarknet_l': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_l_c2ns-e8d1dc13.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'cs3sedarknet_x': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_x_c2ns-b4d0abc0.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
-
-    'cs3sedarknet_xdw': _cfg(
-        url='', interpolation='bicubic'),
-
-    'cs3edgenet_x': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3edgenet_x_c2-2e1610a9.pth',
-        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
-    'cs3se_edgenet_x': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3se_edgenet_x_c2ns-76f8e3ac.pth',
-        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
-}
 
 
 @dataclass
@@ -205,167 +130,6 @@ def _cs3_cfg(
         ),
         act_layer=act_layer,
     )
-
-
-model_cfgs = dict(
-    cspresnet50=CspModelCfg(
-        stem=CspStemCfg(out_chs=64, kernel_size=7, stride=4, pool='max'),
-        stages=CspStagesCfg(
-            depth=(3, 3, 5, 2),
-            out_chs=(128, 256, 512, 1024),
-            stride=(1, 2),
-            expand_ratio=2.,
-            bottle_ratio=0.5,
-            cross_linear=True,
-        ),
-    ),
-    cspresnet50d=CspModelCfg(
-        stem=CspStemCfg(out_chs=(32, 32, 64), kernel_size=3, stride=4, pool='max'),
-        stages=CspStagesCfg(
-            depth=(3, 3, 5, 2),
-            out_chs=(128, 256, 512, 1024),
-            stride=(1,) + (2,),
-            expand_ratio=2.,
-            bottle_ratio=0.5,
-            block_ratio=1.,
-            cross_linear=True,
-        ),
-    ),
-    cspresnet50w=CspModelCfg(
-        stem=CspStemCfg(out_chs=(32, 32, 64), kernel_size=3, stride=4, pool='max'),
-        stages=CspStagesCfg(
-            depth=(3, 3, 5, 2),
-            out_chs=(256, 512, 1024, 2048),
-            stride=(1,) + (2,),
-            expand_ratio=1.,
-            bottle_ratio=0.25,
-            block_ratio=0.5,
-            cross_linear=True,
-        ),
-    ),
-    cspresnext50=CspModelCfg(
-        stem=CspStemCfg(out_chs=64, kernel_size=7, stride=4, pool='max'),
-        stages=CspStagesCfg(
-            depth=(3, 3, 5, 2),
-            out_chs=(256, 512, 1024, 2048),
-            stride=(1,) + (2,),
-            groups=32,
-            expand_ratio=1.,
-            bottle_ratio=1.,
-            block_ratio=0.5,
-            cross_linear=True,
-        ),
-    ),
-    cspdarknet53=CspModelCfg(
-        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
-        stages=CspStagesCfg(
-            depth=(1, 2, 8, 8, 4),
-            out_chs=(64, 128, 256, 512, 1024),
-            stride=2,
-            expand_ratio=(2.,) + (1.,),
-            bottle_ratio=(0.5,) + (1.,),
-            block_ratio=(1.,) + (0.5,),
-            down_growth=True,
-            block_type='dark',
-        ),
-    ),
-    darknet17=CspModelCfg(
-        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
-        stages=CspStagesCfg(
-            depth=(1,) * 5,
-            out_chs=(64, 128, 256, 512, 1024),
-            stride=(2,),
-            bottle_ratio=(0.5,),
-            block_ratio=(1.,),
-            stage_type='dark',
-            block_type='dark',
-        ),
-    ),
-    darknet21=CspModelCfg(
-        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
-        stages=CspStagesCfg(
-            depth=(1, 1, 1, 2, 2),
-            out_chs=(64, 128, 256, 512, 1024),
-            stride=(2,),
-            bottle_ratio=(0.5,),
-            block_ratio=(1.,),
-            stage_type='dark',
-            block_type='dark',
-
-        ),
-    ),
-    sedarknet21=CspModelCfg(
-        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
-        stages=CspStagesCfg(
-            depth=(1, 1, 1, 2, 2),
-            out_chs=(64, 128, 256, 512, 1024),
-            stride=2,
-            bottle_ratio=0.5,
-            block_ratio=1.,
-            attn_layer='se',
-            stage_type='dark',
-            block_type='dark',
-
-        ),
-    ),
-    darknet53=CspModelCfg(
-        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
-        stages=CspStagesCfg(
-            depth=(1, 2, 8, 8, 4),
-            out_chs=(64, 128, 256, 512, 1024),
-            stride=2,
-            bottle_ratio=0.5,
-            block_ratio=1.,
-            stage_type='dark',
-            block_type='dark',
-        ),
-    ),
-    darknetaa53=CspModelCfg(
-        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
-        stages=CspStagesCfg(
-            depth=(1, 2, 8, 8, 4),
-            out_chs=(64, 128, 256, 512, 1024),
-            stride=2,
-            bottle_ratio=0.5,
-            block_ratio=1.,
-            avg_down=True,
-            stage_type='dark',
-            block_type='dark',
-        ),
-    ),
-
-    cs3darknet_s=_cs3_cfg(width_multiplier=0.5, depth_multiplier=0.5),
-    cs3darknet_m=_cs3_cfg(width_multiplier=0.75, depth_multiplier=0.67),
-    cs3darknet_l=_cs3_cfg(),
-    cs3darknet_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33),
-
-    cs3darknet_focus_s=_cs3_cfg(width_multiplier=0.5, depth_multiplier=0.5, focus=True),
-    cs3darknet_focus_m=_cs3_cfg(width_multiplier=0.75, depth_multiplier=0.67, focus=True),
-    cs3darknet_focus_l=_cs3_cfg(focus=True),
-    cs3darknet_focus_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33, focus=True),
-
-    cs3sedarknet_l=_cs3_cfg(attn_layer='se', attn_kwargs=dict(rd_ratio=.25)),
-    cs3sedarknet_x=_cs3_cfg(attn_layer='se', width_multiplier=1.25, depth_multiplier=1.33),
-
-    cs3sedarknet_xdw=CspModelCfg(
-        stem=CspStemCfg(out_chs=(32, 64), kernel_size=3, stride=2, pool=''),
-        stages=CspStagesCfg(
-            depth=(3, 6, 12, 4),
-            out_chs=(256, 512, 1024, 2048),
-            stride=2,
-            groups=(1, 1, 256, 512),
-            bottle_ratio=0.5,
-            block_ratio=0.5,
-            attn_layer='se',
-        ),
-        act_layer='silu',
-    ),
-
-    cs3edgenet_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33, bottle_ratio=1.5, block_type='edge'),
-    cs3se_edgenet_x=_cs3_cfg(
-        width_multiplier=1.25, depth_multiplier=1.33, bottle_ratio=1.5, block_type='edge',
-        attn_layer='se', attn_kwargs=dict(rd_ratio=.25)),
-)
 
 
 class BottleneckBlock(nn.Module):
@@ -967,6 +731,167 @@ def _init_weights(module, name, zero_init_last=False):
         module.zero_init_last()
 
 
+model_cfgs = dict(
+    cspresnet50=CspModelCfg(
+        stem=CspStemCfg(out_chs=64, kernel_size=7, stride=4, pool='max'),
+        stages=CspStagesCfg(
+            depth=(3, 3, 5, 2),
+            out_chs=(128, 256, 512, 1024),
+            stride=(1, 2),
+            expand_ratio=2.,
+            bottle_ratio=0.5,
+            cross_linear=True,
+        ),
+    ),
+    cspresnet50d=CspModelCfg(
+        stem=CspStemCfg(out_chs=(32, 32, 64), kernel_size=3, stride=4, pool='max'),
+        stages=CspStagesCfg(
+            depth=(3, 3, 5, 2),
+            out_chs=(128, 256, 512, 1024),
+            stride=(1,) + (2,),
+            expand_ratio=2.,
+            bottle_ratio=0.5,
+            block_ratio=1.,
+            cross_linear=True,
+        ),
+    ),
+    cspresnet50w=CspModelCfg(
+        stem=CspStemCfg(out_chs=(32, 32, 64), kernel_size=3, stride=4, pool='max'),
+        stages=CspStagesCfg(
+            depth=(3, 3, 5, 2),
+            out_chs=(256, 512, 1024, 2048),
+            stride=(1,) + (2,),
+            expand_ratio=1.,
+            bottle_ratio=0.25,
+            block_ratio=0.5,
+            cross_linear=True,
+        ),
+    ),
+    cspresnext50=CspModelCfg(
+        stem=CspStemCfg(out_chs=64, kernel_size=7, stride=4, pool='max'),
+        stages=CspStagesCfg(
+            depth=(3, 3, 5, 2),
+            out_chs=(256, 512, 1024, 2048),
+            stride=(1,) + (2,),
+            groups=32,
+            expand_ratio=1.,
+            bottle_ratio=1.,
+            block_ratio=0.5,
+            cross_linear=True,
+        ),
+    ),
+    cspdarknet53=CspModelCfg(
+        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
+        stages=CspStagesCfg(
+            depth=(1, 2, 8, 8, 4),
+            out_chs=(64, 128, 256, 512, 1024),
+            stride=2,
+            expand_ratio=(2.,) + (1.,),
+            bottle_ratio=(0.5,) + (1.,),
+            block_ratio=(1.,) + (0.5,),
+            down_growth=True,
+            block_type='dark',
+        ),
+    ),
+    darknet17=CspModelCfg(
+        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
+        stages=CspStagesCfg(
+            depth=(1,) * 5,
+            out_chs=(64, 128, 256, 512, 1024),
+            stride=(2,),
+            bottle_ratio=(0.5,),
+            block_ratio=(1.,),
+            stage_type='dark',
+            block_type='dark',
+        ),
+    ),
+    darknet21=CspModelCfg(
+        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
+        stages=CspStagesCfg(
+            depth=(1, 1, 1, 2, 2),
+            out_chs=(64, 128, 256, 512, 1024),
+            stride=(2,),
+            bottle_ratio=(0.5,),
+            block_ratio=(1.,),
+            stage_type='dark',
+            block_type='dark',
+
+        ),
+    ),
+    sedarknet21=CspModelCfg(
+        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
+        stages=CspStagesCfg(
+            depth=(1, 1, 1, 2, 2),
+            out_chs=(64, 128, 256, 512, 1024),
+            stride=2,
+            bottle_ratio=0.5,
+            block_ratio=1.,
+            attn_layer='se',
+            stage_type='dark',
+            block_type='dark',
+
+        ),
+    ),
+    darknet53=CspModelCfg(
+        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
+        stages=CspStagesCfg(
+            depth=(1, 2, 8, 8, 4),
+            out_chs=(64, 128, 256, 512, 1024),
+            stride=2,
+            bottle_ratio=0.5,
+            block_ratio=1.,
+            stage_type='dark',
+            block_type='dark',
+        ),
+    ),
+    darknetaa53=CspModelCfg(
+        stem=CspStemCfg(out_chs=32, kernel_size=3, stride=1, pool=''),
+        stages=CspStagesCfg(
+            depth=(1, 2, 8, 8, 4),
+            out_chs=(64, 128, 256, 512, 1024),
+            stride=2,
+            bottle_ratio=0.5,
+            block_ratio=1.,
+            avg_down=True,
+            stage_type='dark',
+            block_type='dark',
+        ),
+    ),
+
+    cs3darknet_s=_cs3_cfg(width_multiplier=0.5, depth_multiplier=0.5),
+    cs3darknet_m=_cs3_cfg(width_multiplier=0.75, depth_multiplier=0.67),
+    cs3darknet_l=_cs3_cfg(),
+    cs3darknet_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33),
+
+    cs3darknet_focus_s=_cs3_cfg(width_multiplier=0.5, depth_multiplier=0.5, focus=True),
+    cs3darknet_focus_m=_cs3_cfg(width_multiplier=0.75, depth_multiplier=0.67, focus=True),
+    cs3darknet_focus_l=_cs3_cfg(focus=True),
+    cs3darknet_focus_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33, focus=True),
+
+    cs3sedarknet_l=_cs3_cfg(attn_layer='se', attn_kwargs=dict(rd_ratio=.25)),
+    cs3sedarknet_x=_cs3_cfg(attn_layer='se', width_multiplier=1.25, depth_multiplier=1.33),
+
+    cs3sedarknet_xdw=CspModelCfg(
+        stem=CspStemCfg(out_chs=(32, 64), kernel_size=3, stride=2, pool=''),
+        stages=CspStagesCfg(
+            depth=(3, 6, 12, 4),
+            out_chs=(256, 512, 1024, 2048),
+            stride=2,
+            groups=(1, 1, 256, 512),
+            bottle_ratio=0.5,
+            block_ratio=0.5,
+            attn_layer='se',
+        ),
+        act_layer='silu',
+    ),
+
+    cs3edgenet_x=_cs3_cfg(width_multiplier=1.25, depth_multiplier=1.33, bottle_ratio=1.5, block_type='edge'),
+    cs3se_edgenet_x=_cs3_cfg(
+        width_multiplier=1.25, depth_multiplier=1.33, bottle_ratio=1.5, block_type='edge',
+        attn_layer='se', attn_kwargs=dict(rd_ratio=.25)),
+)
+
+
 def _create_cspnet(variant, pretrained=False, **kwargs):
     if variant.startswith('darknet') or variant.startswith('cspdarknet'):
         # NOTE: DarkNet is one of few models with stride==1 features w/ 6 out_indices [0..5]
@@ -981,116 +906,201 @@ def _create_cspnet(variant, pretrained=False, **kwargs):
         **kwargs)
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
+        'crop_pct': 0.887, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv1.conv', 'classifier': 'head.fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'cspresnet50.ra_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnet50_ra-d3e8d487.pth'),
+    'cspresnet50d.untrained': _cfg(),
+    'cspresnet50w.untrained': _cfg(),
+    'cspresnext50.ra_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspresnext50_ra_224-648b4713.pth',
+    ),
+    'cspdarknet53.ra_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/cspdarknet53_ra_256-d05c7c21.pth'),
+
+    'darknet17.untrained': _cfg(),
+    'darknet21.untrained': _cfg(),
+    'sedarknet21.untrained': _cfg(),
+    'darknet53.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknet53_256_c2ns-3aeff817.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'darknetaa53.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/darknetaa53_c2ns-5c28ec8a.pth',
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'cs3darknet_s.untrained': _cfg(interpolation='bicubic'),
+    'cs3darknet_m.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_m_c2ns-43f06604.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95,
+    ),
+    'cs3darknet_l.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_l_c2ns-16220c5d.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'cs3darknet_x.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_x_c2ns-4e4490aa.pth',
+        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'cs3darknet_focus_s.untrained': _cfg(interpolation='bicubic'),
+    'cs3darknet_focus_m.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_m_c2ns-e23bed41.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'cs3darknet_focus_l.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_l_c2ns-65ef8888.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'cs3darknet_focus_x.untrained': _cfg(interpolation='bicubic'),
+
+    'cs3sedarknet_l.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_l_c2ns-e8d1dc13.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=0.95),
+    'cs3sedarknet_x.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3sedarknet_x_c2ns-b4d0abc0.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
+
+    'cs3sedarknet_xdw.untrained': _cfg(interpolation='bicubic'),
+
+    'cs3edgenet_x.c2_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3edgenet_x_c2-2e1610a9.pth',
+        interpolation='bicubic', test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'cs3se_edgenet_x.c2ns_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3se_edgenet_x_c2ns-76f8e3ac.pth',
+        interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
+})
+
+
 @register_model
-def cspresnet50(pretrained=False, **kwargs):
+def cspresnet50(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cspresnet50', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cspresnet50d(pretrained=False, **kwargs):
+def cspresnet50d(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cspresnet50d', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cspresnet50w(pretrained=False, **kwargs):
+def cspresnet50w(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cspresnet50w', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cspresnext50(pretrained=False, **kwargs):
+def cspresnext50(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cspresnext50', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cspdarknet53(pretrained=False, **kwargs):
+def cspdarknet53(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cspdarknet53', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def darknet17(pretrained=False, **kwargs):
+def darknet17(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('darknet17', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def darknet21(pretrained=False, **kwargs):
+def darknet21(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('darknet21', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def sedarknet21(pretrained=False, **kwargs):
+def sedarknet21(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('sedarknet21', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def darknet53(pretrained=False, **kwargs):
+def darknet53(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('darknet53', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def darknetaa53(pretrained=False, **kwargs):
+def darknetaa53(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('darknetaa53', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_s(pretrained=False, **kwargs):
+def cs3darknet_s(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_s', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_m(pretrained=False, **kwargs):
+def cs3darknet_m(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_m', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_l(pretrained=False, **kwargs):
+def cs3darknet_l(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_l', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_x(pretrained=False, **kwargs):
+def cs3darknet_x(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_x', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_focus_s(pretrained=False, **kwargs):
+def cs3darknet_focus_s(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_focus_s', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_focus_m(pretrained=False, **kwargs):
+def cs3darknet_focus_m(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_focus_m', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_focus_l(pretrained=False, **kwargs):
+def cs3darknet_focus_l(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_focus_l', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3darknet_focus_x(pretrained=False, **kwargs):
+def cs3darknet_focus_x(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3darknet_focus_x', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3sedarknet_l(pretrained=False, **kwargs):
+def cs3sedarknet_l(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3sedarknet_l', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3sedarknet_x(pretrained=False, **kwargs):
+def cs3sedarknet_x(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3sedarknet_x', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3sedarknet_xdw(pretrained=False, **kwargs):
+def cs3sedarknet_xdw(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3sedarknet_xdw', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3edgenet_x(pretrained=False, **kwargs):
+def cs3edgenet_x(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3edgenet_x', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def cs3se_edgenet_x(pretrained=False, **kwargs):
+def cs3se_edgenet_x(pretrained=False, **kwargs) -> CspNet:
     return _create_cspnet('cs3se_edgenet_x', pretrained=pretrained, **kwargs)

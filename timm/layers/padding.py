@@ -5,6 +5,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import math
 from typing import List, Tuple
 
+import torch
 import torch.nn.functional as F
 
 
@@ -15,8 +16,11 @@ def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1, **_) -> in
 
 
 # Calculate asymmetric TensorFlow-like 'SAME' padding for a convolution
-def get_same_padding(x: int, k: int, s: int, d: int):
-    return max((math.ceil(x / s) - 1) * s + (k - 1) * d + 1 - x, 0)
+def get_same_padding(x: int, kernel_size: int, stride: int, dilation: int):
+    if isinstance(x, torch.Tensor):
+        return torch.clamp(((x / stride).ceil() - 1) * stride + (kernel_size - 1) * dilation + 1 - x, min=0)
+    else:
+        return max((math.ceil(x / stride) - 1) * stride + (kernel_size - 1) * dilation + 1 - x, 0)
 
 
 # Can SAME padding for given args be done statically?
@@ -24,12 +28,31 @@ def is_static_pad(kernel_size: int, stride: int = 1, dilation: int = 1, **_):
     return stride == 1 and (dilation * (kernel_size - 1)) % 2 == 0
 
 
+def pad_same_arg(
+        input_size: List[int],
+        kernel_size: List[int],
+        stride: List[int],
+        dilation: List[int] = (1, 1),
+) -> List[int]:
+    ih, iw = input_size
+    kh, kw = kernel_size
+    pad_h = get_same_padding(ih, kh, stride[0], dilation[0])
+    pad_w = get_same_padding(iw, kw, stride[1], dilation[1])
+    return [pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2]
+
+
 # Dynamically pad input x with 'SAME' padding for conv with specified args
-def pad_same(x, k: List[int], s: List[int], d: List[int] = (1, 1), value: float = 0):
+def pad_same(
+        x,
+        kernel_size: List[int],
+        stride: List[int],
+        dilation: List[int] = (1, 1),
+        value: float = 0,
+):
     ih, iw = x.size()[-2:]
-    pad_h, pad_w = get_same_padding(ih, k[0], s[0], d[0]), get_same_padding(iw, k[1], s[1], d[1])
-    if pad_h > 0 or pad_w > 0:
-        x = F.pad(x, [pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2], value=value)
+    pad_h = get_same_padding(ih, kernel_size[0], stride[0], dilation[0])
+    pad_w = get_same_padding(iw, kernel_size[1], stride[1], dilation[1])
+    x = F.pad(x, (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2), value=value)
     return x
 
 

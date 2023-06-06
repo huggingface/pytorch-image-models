@@ -893,205 +893,205 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def regnetx_002(pretrained=False, **kwargs):
+def regnetx_002(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-200MF"""
     return _create_regnet('regnetx_002', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_004(pretrained=False, **kwargs):
+def regnetx_004(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-400MF"""
     return _create_regnet('regnetx_004', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_004_tv(pretrained=False, **kwargs):
+def regnetx_004_tv(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-400MF w/ torchvision group rounding"""
     return _create_regnet('regnetx_004_tv', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_006(pretrained=False, **kwargs):
+def regnetx_006(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-600MF"""
     return _create_regnet('regnetx_006', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_008(pretrained=False, **kwargs):
+def regnetx_008(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-800MF"""
     return _create_regnet('regnetx_008', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_016(pretrained=False, **kwargs):
+def regnetx_016(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-1.6GF"""
     return _create_regnet('regnetx_016', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_032(pretrained=False, **kwargs):
+def regnetx_032(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-3.2GF"""
     return _create_regnet('regnetx_032', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_040(pretrained=False, **kwargs):
+def regnetx_040(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-4.0GF"""
     return _create_regnet('regnetx_040', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_064(pretrained=False, **kwargs):
+def regnetx_064(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-6.4GF"""
     return _create_regnet('regnetx_064', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_080(pretrained=False, **kwargs):
+def regnetx_080(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-8.0GF"""
     return _create_regnet('regnetx_080', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_120(pretrained=False, **kwargs):
+def regnetx_120(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-12GF"""
     return _create_regnet('regnetx_120', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_160(pretrained=False, **kwargs):
+def regnetx_160(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-16GF"""
     return _create_regnet('regnetx_160', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_320(pretrained=False, **kwargs):
+def regnetx_320(pretrained=False, **kwargs) -> RegNet:
     """RegNetX-32GF"""
     return _create_regnet('regnetx_320', pretrained, **kwargs)
 
 
 @register_model
-def regnety_002(pretrained=False, **kwargs):
+def regnety_002(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-200MF"""
     return _create_regnet('regnety_002', pretrained, **kwargs)
 
 
 @register_model
-def regnety_004(pretrained=False, **kwargs):
+def regnety_004(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-400MF"""
     return _create_regnet('regnety_004', pretrained, **kwargs)
 
 
 @register_model
-def regnety_006(pretrained=False, **kwargs):
+def regnety_006(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-600MF"""
     return _create_regnet('regnety_006', pretrained, **kwargs)
 
 
 @register_model
-def regnety_008(pretrained=False, **kwargs):
+def regnety_008(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-800MF"""
     return _create_regnet('regnety_008', pretrained, **kwargs)
 
 
 @register_model
-def regnety_008_tv(pretrained=False, **kwargs):
+def regnety_008_tv(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-800MF w/ torchvision group rounding"""
     return _create_regnet('regnety_008_tv', pretrained, **kwargs)
 
 
 @register_model
-def regnety_016(pretrained=False, **kwargs):
+def regnety_016(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-1.6GF"""
     return _create_regnet('regnety_016', pretrained, **kwargs)
 
 
 @register_model
-def regnety_032(pretrained=False, **kwargs):
+def regnety_032(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-3.2GF"""
     return _create_regnet('regnety_032', pretrained, **kwargs)
 
 
 @register_model
-def regnety_040(pretrained=False, **kwargs):
+def regnety_040(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-4.0GF"""
     return _create_regnet('regnety_040', pretrained, **kwargs)
 
 
 @register_model
-def regnety_064(pretrained=False, **kwargs):
+def regnety_064(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-6.4GF"""
     return _create_regnet('regnety_064', pretrained, **kwargs)
 
 
 @register_model
-def regnety_080(pretrained=False, **kwargs):
+def regnety_080(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-8.0GF"""
     return _create_regnet('regnety_080', pretrained, **kwargs)
 
 
 @register_model
-def regnety_080_tv(pretrained=False, **kwargs):
+def regnety_080_tv(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-8.0GF w/ torchvision group rounding"""
     return _create_regnet('regnety_080_tv', pretrained, **kwargs)
 
 
 @register_model
-def regnety_120(pretrained=False, **kwargs):
+def regnety_120(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-12GF"""
     return _create_regnet('regnety_120', pretrained, **kwargs)
 
 
 @register_model
-def regnety_160(pretrained=False, **kwargs):
+def regnety_160(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-16GF"""
     return _create_regnet('regnety_160', pretrained, **kwargs)
 
 
 @register_model
-def regnety_320(pretrained=False, **kwargs):
+def regnety_320(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-32GF"""
     return _create_regnet('regnety_320', pretrained, **kwargs)
 
 
 @register_model
-def regnety_640(pretrained=False, **kwargs):
+def regnety_640(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-64GF"""
     return _create_regnet('regnety_640', pretrained, **kwargs)
 
 
 @register_model
-def regnety_1280(pretrained=False, **kwargs):
+def regnety_1280(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-128GF"""
     return _create_regnet('regnety_1280', pretrained, **kwargs)
 
 
 @register_model
-def regnety_2560(pretrained=False, **kwargs):
+def regnety_2560(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-256GF"""
     return _create_regnet('regnety_2560', pretrained, **kwargs)
 
 
 @register_model
-def regnety_040_sgn(pretrained=False, **kwargs):
+def regnety_040_sgn(pretrained=False, **kwargs) -> RegNet:
     """RegNetY-4.0GF w/ GroupNorm """
     return _create_regnet('regnety_040_sgn', pretrained, **kwargs)
 
 
 @register_model
-def regnetv_040(pretrained=False, **kwargs):
+def regnetv_040(pretrained=False, **kwargs) -> RegNet:
     """RegNetV-4.0GF (pre-activation)"""
     return _create_regnet('regnetv_040', pretrained, **kwargs)
 
 
 @register_model
-def regnetv_064(pretrained=False, **kwargs):
+def regnetv_064(pretrained=False, **kwargs) -> RegNet:
     """RegNetV-6.4GF (pre-activation)"""
     return _create_regnet('regnetv_064', pretrained, **kwargs)
 
 
 @register_model
-def regnetz_005(pretrained=False, **kwargs):
+def regnetz_005(pretrained=False, **kwargs) -> RegNet:
     """RegNetZ-500MF
     NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
     but it's not clear it is equivalent to paper model as not detailed in the paper.
@@ -1100,7 +1100,7 @@ def regnetz_005(pretrained=False, **kwargs):
 
 
 @register_model
-def regnetz_040(pretrained=False, **kwargs):
+def regnetz_040(pretrained=False, **kwargs) -> RegNet:
     """RegNetZ-4.0GF
     NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
     but it's not clear it is equivalent to paper model as not detailed in the paper.
@@ -1109,7 +1109,7 @@ def regnetz_040(pretrained=False, **kwargs):
 
 
 @register_model
-def regnetz_040_h(pretrained=False, **kwargs):
+def regnetz_040_h(pretrained=False, **kwargs) -> RegNet:
     """RegNetZ-4.0GF
     NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
     but it's not clear it is equivalent to paper model as not detailed in the paper.

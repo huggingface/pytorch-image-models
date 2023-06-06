@@ -21,43 +21,9 @@ import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_classifier
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['SENet']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'layer0.conv1', 'classifier': 'last_linear',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'legacy_senet154': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_senet154-e9eb9fe6.pth'),
-    'legacy_seresnet18': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet18-4bb0ce65.pth',
-        interpolation='bicubic'),
-    'legacy_seresnet34': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet34-a4004e63.pth'),
-    'legacy_seresnet50': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet50-ce0d4300.pth'),
-    'legacy_seresnet101': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet101-7e38fcc6.pth'),
-    'legacy_seresnet152': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet152-d17c99b7.pth'),
-    'legacy_seresnext26_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26_32x4d-65ebdb501.pth',
-        interpolation='bicubic'),
-    'legacy_seresnext50_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_se_resnext50_32x4d-f3651bad.pth'),
-    'legacy_seresnext101_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_se_resnext101_32x4d-37725eac.pth'),
-}
 
 
 def _weight_init(m):
@@ -401,43 +367,77 @@ def _create_senet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(SENet, variant, pretrained, **kwargs)
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'layer0.conv1', 'classifier': 'last_linear',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'legacy_senet154.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_senet154-e9eb9fe6.pth'),
+    'legacy_seresnet18.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet18-4bb0ce65.pth',
+        interpolation='bicubic'),
+    'legacy_seresnet34.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet34-a4004e63.pth'),
+    'legacy_seresnet50.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet50-ce0d4300.pth'),
+    'legacy_seresnet101.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet101-7e38fcc6.pth'),
+    'legacy_seresnet152.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/se_resnet152-d17c99b7.pth'),
+    'legacy_seresnext26_32x4d.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnext26_32x4d-65ebdb501.pth',
+        interpolation='bicubic'),
+    'legacy_seresnext50_32x4d.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_se_resnext50_32x4d-f3651bad.pth'),
+    'legacy_seresnext101_32x4d.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/legacy_se_resnext101_32x4d-37725eac.pth'),
+})
+
+
 @register_model
-def legacy_seresnet18(pretrained=False, **kwargs):
+def legacy_seresnet18(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNetBlock, layers=[2, 2, 2, 2], groups=1, reduction=16, **kwargs)
     return _create_senet('legacy_seresnet18', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnet34(pretrained=False, **kwargs):
+def legacy_seresnet34(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNetBlock, layers=[3, 4, 6, 3], groups=1, reduction=16, **kwargs)
     return _create_senet('legacy_seresnet34', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnet50(pretrained=False, **kwargs):
+def legacy_seresnet50(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNetBottleneck, layers=[3, 4, 6, 3], groups=1, reduction=16, **kwargs)
     return _create_senet('legacy_seresnet50', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnet101(pretrained=False, **kwargs):
+def legacy_seresnet101(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNetBottleneck, layers=[3, 4, 23, 3], groups=1, reduction=16, **kwargs)
     return _create_senet('legacy_seresnet101', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnet152(pretrained=False, **kwargs):
+def legacy_seresnet152(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNetBottleneck, layers=[3, 8, 36, 3], groups=1, reduction=16, **kwargs)
     return _create_senet('legacy_seresnet152', pretrained, **model_args)
 
 
 @register_model
-def legacy_senet154(pretrained=False, **kwargs):
+def legacy_senet154(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEBottleneck, layers=[3, 8, 36, 3], groups=64, reduction=16,
         downsample_kernel_size=3, downsample_padding=1,  inplanes=128, input_3x3=True, **kwargs)
@@ -445,21 +445,21 @@ def legacy_senet154(pretrained=False, **kwargs):
 
 
 @register_model
-def legacy_seresnext26_32x4d(pretrained=False, **kwargs):
+def legacy_seresnext26_32x4d(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNeXtBottleneck, layers=[2, 2, 2, 2], groups=32, reduction=16, **kwargs)
     return _create_senet('legacy_seresnext26_32x4d', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnext50_32x4d(pretrained=False, **kwargs):
+def legacy_seresnext50_32x4d(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNeXtBottleneck, layers=[3, 4, 6, 3], groups=32, reduction=16, **kwargs)
     return _create_senet('legacy_seresnext50_32x4d', pretrained, **model_args)
 
 
 @register_model
-def legacy_seresnext101_32x4d(pretrained=False, **kwargs):
+def legacy_seresnext101_32x4d(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEResNeXtBottleneck, layers=[3, 4, 23, 3], groups=32, reduction=16, **kwargs)
     return _create_senet('legacy_seresnext101_32x4d', pretrained, **model_args)

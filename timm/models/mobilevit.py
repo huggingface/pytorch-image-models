@@ -23,75 +23,11 @@ from torch import nn
 from timm.layers import to_2tuple, make_divisible, GroupNorm1, ConvMlp, DropPath, is_exportable
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 from .byobnet import register_block, ByoBlockCfg, ByoModelCfg, ByobNet, LayerFn, num_groups
 from .vision_transformer import Block as TransformerBlock
 
 __all__ = []
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
-        'crop_pct': 0.9, 'interpolation': 'bicubic',
-        'mean': (0., 0., 0.), 'std': (1., 1., 1.),
-        'first_conv': 'stem.conv', 'classifier': 'head.fc',
-        'fixed_input_size': False,
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'mobilevit_xxs': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevit_xxs-ad385b40.pth'),
-    'mobilevit_xs': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevit_xs-8fbd6366.pth'),
-    'mobilevit_s': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevit_s-38a5a959.pth'),
-    'semobilevit_s': _cfg(),
-
-    'mobilevitv2_050': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_050-49951ee2.pth',
-        crop_pct=0.888),
-    'mobilevitv2_075': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_075-b5556ef6.pth',
-        crop_pct=0.888),
-    'mobilevitv2_100': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_100-e464ef3b.pth',
-        crop_pct=0.888),
-    'mobilevitv2_125': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_125-0ae35027.pth',
-        crop_pct=0.888),
-    'mobilevitv2_150': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_150-737c5019.pth',
-        crop_pct=0.888),
-    'mobilevitv2_175': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_175-16462ee2.pth',
-        crop_pct=0.888),
-    'mobilevitv2_200': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_200-b3422f67.pth',
-        crop_pct=0.888),
-
-    'mobilevitv2_150_in22ft1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_150_in22ft1k-0b555d7b.pth',
-        crop_pct=0.888),
-    'mobilevitv2_175_in22ft1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_175_in22ft1k-4117fa1f.pth',
-        crop_pct=0.888),
-    'mobilevitv2_200_in22ft1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_200_in22ft1k-1d7c8927.pth',
-        crop_pct=0.888),
-
-    'mobilevitv2_150_384_in22ft1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_150_384_in22ft1k-9e142854.pth',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
-    'mobilevitv2_175_384_in22ft1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_175_384_in22ft1k-059cbe56.pth',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
-    'mobilevitv2_200_384_in22ft1k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-mvit-weights/mobilevitv2_200_384_in22ft1k-32c87503.pth',
-        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
-}
 
 
 def _inverted_residual_block(d, c, s, br=4.0):
@@ -271,7 +207,7 @@ class MobileVitBlock(nn.Module):
                 num_heads=num_heads,
                 qkv_bias=True,
                 attn_drop=attn_drop,
-                drop=drop,
+                proj_drop=drop,
                 drop_path=drop_path_rate,
                 act_layer=layers.act,
                 norm_layer=transformer_norm_layer,
@@ -600,7 +536,6 @@ class MobileVitV2Block(nn.Module):
             x = x.reshape(B, C, patch_h, patch_w, num_patch_h, num_patch_w).permute(0, 1, 4, 2, 5, 3)
             x = x.reshape(B, C, num_patch_h * patch_h, num_patch_w * patch_w)
 
-
         x = self.conv_proj(x)
         return x
 
@@ -625,92 +560,122 @@ def _create_mobilevit2(variant, cfg_variant=None, pretrained=False, **kwargs):
         **kwargs)
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
+        'crop_pct': 0.9, 'interpolation': 'bicubic',
+        'mean': (0., 0., 0.), 'std': (1., 1., 1.),
+        'first_conv': 'stem.conv', 'classifier': 'head.fc',
+        'fixed_input_size': False,
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'mobilevit_xxs.cvnets_in1k': _cfg(hf_hub_id='timm/'),
+    'mobilevit_xs.cvnets_in1k': _cfg(hf_hub_id='timm/'),
+    'mobilevit_s.cvnets_in1k': _cfg(hf_hub_id='timm/'),
+
+    'mobilevitv2_050.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_075.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_100.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_125.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_150.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_175.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_200.cvnets_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+
+    'mobilevitv2_150.cvnets_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_175.cvnets_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+    'mobilevitv2_200.cvnets_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.888),
+
+    'mobilevitv2_150.cvnets_in22k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+    'mobilevitv2_175.cvnets_in22k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+    'mobilevitv2_200.cvnets_in22k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+})
+
+
 @register_model
-def mobilevit_xxs(pretrained=False, **kwargs):
+def mobilevit_xxs(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevit_xxs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevit_xs(pretrained=False, **kwargs):
+def mobilevit_xs(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevit_xs', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevit_s(pretrained=False, **kwargs):
+def mobilevit_s(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevit_s', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def semobilevit_s(pretrained=False, **kwargs):
-    return _create_mobilevit('semobilevit_s', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def mobilevitv2_050(pretrained=False, **kwargs):
+def mobilevitv2_050(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_050', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_075(pretrained=False, **kwargs):
+def mobilevitv2_075(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_075', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_100(pretrained=False, **kwargs):
+def mobilevitv2_100(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_100', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_125(pretrained=False, **kwargs):
+def mobilevitv2_125(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_125', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_150(pretrained=False, **kwargs):
+def mobilevitv2_150(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_150', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_175(pretrained=False, **kwargs):
+def mobilevitv2_175(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_175', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def mobilevitv2_200(pretrained=False, **kwargs):
+def mobilevitv2_200(pretrained=False, **kwargs) -> ByobNet:
     return _create_mobilevit('mobilevitv2_200', pretrained=pretrained, **kwargs)
 
 
-@register_model
-def mobilevitv2_150_in22ft1k(pretrained=False, **kwargs):
-    return _create_mobilevit(
-        'mobilevitv2_150_in22ft1k', cfg_variant='mobilevitv2_150', pretrained=pretrained, **kwargs)
+register_model_deprecations(__name__, {
+    'mobilevitv2_150_in22ft1k': 'mobilevitv2_150.cvnets_in22k_ft_in1k',
+    'mobilevitv2_175_in22ft1k': 'mobilevitv2_175.cvnets_in22k_ft_in1k',
+    'mobilevitv2_200_in22ft1k': 'mobilevitv2_200.cvnets_in22k_ft_in1k',
 
-
-@register_model
-def mobilevitv2_175_in22ft1k(pretrained=False, **kwargs):
-    return _create_mobilevit(
-        'mobilevitv2_175_in22ft1k', cfg_variant='mobilevitv2_175', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def mobilevitv2_200_in22ft1k(pretrained=False, **kwargs):
-    return _create_mobilevit(
-        'mobilevitv2_200_in22ft1k', cfg_variant='mobilevitv2_200', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def mobilevitv2_150_384_in22ft1k(pretrained=False, **kwargs):
-    return _create_mobilevit(
-        'mobilevitv2_150_384_in22ft1k', cfg_variant='mobilevitv2_150', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def mobilevitv2_175_384_in22ft1k(pretrained=False, **kwargs):
-    return _create_mobilevit(
-        'mobilevitv2_175_384_in22ft1k', cfg_variant='mobilevitv2_175', pretrained=pretrained, **kwargs)
-
-
-@register_model
-def mobilevitv2_200_384_in22ft1k(pretrained=False, **kwargs):
-    return _create_mobilevit(
-        'mobilevitv2_200_384_in22ft1k', cfg_variant='mobilevitv2_200', pretrained=pretrained, **kwargs)
+    'mobilevitv2_150_384_in22ft1k': 'mobilevitv2_150.cvnets_in22k_ft_in1k_384',
+    'mobilevitv2_175_384_in22ft1k': 'mobilevitv2_175.cvnets_in22k_ft_in1k_384',
+    'mobilevitv2_200_384_in22ft1k': 'mobilevitv2_200.cvnets_in22k_ft_in1k_384',
+})

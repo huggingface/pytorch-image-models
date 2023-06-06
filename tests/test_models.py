@@ -41,7 +41,7 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'eva_*', 'flexivit*', 'eva02*', 'pvig_*'
+    'eva_*', 'flexivit*', 'eva02*', 'pvig_*', 'samvit_*'
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -57,6 +57,8 @@ if 'GITHUB_ACTIONS' in os.environ:
 else:
     EXCLUDE_FILTERS = ['*enormous*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
+
+EXCLUDE_JIT_FILTERS = []
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
@@ -277,7 +279,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
 
 if 'GITHUB_ACTIONS' not in os.environ:
-    @pytest.mark.timeout(120)
+    @pytest.mark.timeout(240)
     @pytest.mark.parametrize('model_name', list_models(pretrained=True))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_load_pretrained(model_name, batch_size):
@@ -286,18 +288,12 @@ if 'GITHUB_ACTIONS' not in os.environ:
         create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=5)
         create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=0)
 
-    @pytest.mark.timeout(120)
+    @pytest.mark.timeout(240)
     @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""
         create_model(model_name, pretrained=True, features_only=True)
-
-EXCLUDE_JIT_FILTERS = [
-    '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*', 'ghostnet*', 'pvig_*',  # hopefully fix at some point
-    'vit_large_*', 'vit_huge_*', 'vit_gi*',
-]
 
 
 @pytest.mark.torchscript

@@ -20,46 +20,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_
+from timm.layers import Mlp, DropPath, to_2tuple, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Attention
 
 __all__ = ['Twins']  # model_registry will add each entrypoint fn to this
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embeds.0.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'twins_pcpvt_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_small-e70e7e7a.pth',
-        ),
-    'twins_pcpvt_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_base-e5ecb09b.pth',
-        ),
-    'twins_pcpvt_large': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_pcpvt_large-d273f802.pth',
-        ),
-    'twins_svt_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_small-42e5f78c.pth',
-        ),
-    'twins_svt_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_base-c2265010.pth',
-        ),
-    'twins_svt_large': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/twins_svt_large-90f6aaa9.pth',
-        ),
-}
 
 Size_ = Tuple[int, int]
 
@@ -68,6 +35,8 @@ Size_ = Tuple[int, int]
 class LocallyGroupedAttn(nn.Module):
     """ LSA: self attention within a group
     """
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(self, dim, num_heads=8, attn_drop=0., proj_drop=0., ws=1):
         assert ws != 1
         super(LocallyGroupedAttn, self).__init__()
@@ -77,6 +46,7 @@ class LocallyGroupedAttn(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=True)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -100,12 +70,22 @@ class LocallyGroupedAttn(nn.Module):
         x = x.reshape(B, _h, self.ws, _w, self.ws, C).transpose(2, 3)
         qkv = self.qkv(x).reshape(
             B, _h * _w, self.ws * self.ws, 3, self.num_heads, C // self.num_heads).permute(3, 0, 1, 4, 2, 5)
-        q, k, v = qkv[0], qkv[1], qkv[2]
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-        attn = (attn @ v).transpose(2, 3).reshape(B, _h, _w, self.ws, self.ws, C)
-        x = attn.transpose(2, 3).reshape(B, _h * self.ws, _w * self.ws, C)
+        q, k, v = qkv.unbind(0)
+
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(2, 3).reshape(B, _h, _w, self.ws, self.ws, C)
+        x = x.transpose(2, 3).reshape(B, _h * self.ws, _w * self.ws, C)
         if pad_r > 0 or pad_b > 0:
             x = x[:, :H, :W, :].contiguous()
         x = x.reshape(B, N, C)
@@ -152,6 +132,8 @@ class LocallyGroupedAttn(nn.Module):
 class GlobalSubSampleAttn(nn.Module):
     """ GSA: using a  key to summarize the information for a group to be efficient.
     """
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(self, dim, num_heads=8, attn_drop=0., proj_drop=0., sr_ratio=1):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
@@ -160,6 +142,7 @@ class GlobalSubSampleAttn(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.q = nn.Linear(dim, dim, bias=True)
         self.kv = nn.Linear(dim, dim * 2, bias=True)
@@ -184,13 +167,21 @@ class GlobalSubSampleAttn(nn.Module):
             x = self.sr(x).reshape(B, C, -1).permute(0, 2, 1)
             x = self.norm(x)
         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        k, v = kv[0], kv[1]
+        k, v = kv.unbind(0)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fused_attn:
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
 
@@ -200,24 +191,40 @@ class GlobalSubSampleAttn(nn.Module):
 class Block(nn.Module):
 
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., drop=0., attn_drop=0., drop_path=0.,
-            act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, ws=None):
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            sr_ratio=1,
+            ws=None,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         if ws is None:
-            self.attn = Attention(dim, num_heads, False, None, attn_drop, drop)
+            self.attn = Attention(dim, num_heads, False, None, attn_drop, proj_drop)
         elif ws == 1:
-            self.attn = GlobalSubSampleAttn(dim, num_heads, attn_drop, drop, sr_ratio)
+            self.attn = GlobalSubSampleAttn(dim, num_heads, attn_drop, proj_drop, sr_ratio)
         else:
-            self.attn = LocallyGroupedAttn(dim, num_heads, attn_drop, drop, ws)
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+            self.attn = LocallyGroupedAttn(dim, num_heads, attn_drop, proj_drop, ws)
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
         self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x, size: Size_):
-        x = x + self.drop_path(self.attn(self.norm1(x), size))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        x = x + self.drop_path1(self.attn(self.norm1(x), size))
+        x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
 
@@ -225,7 +232,9 @@ class PosConv(nn.Module):
     # PEG  from https://arxiv.org/abs/2102.10882
     def __init__(self, in_chans, embed_dim=768, stride=1):
         super(PosConv, self).__init__()
-        self.proj = nn.Sequential(nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim), )
+        self.proj = nn.Sequential(
+            nn.Conv2d(in_chans, embed_dim, 3, stride, 1, bias=True, groups=embed_dim),
+        )
         self.stride = stride
 
     def forward(self, x, size: Size_):
@@ -275,10 +284,26 @@ class Twins(nn.Module):
     Adapted from PVT (PyramidVisionTransformer) class at https://github.com/whai362/PVT.git
     """
     def __init__(
-            self, img_size=224, patch_size=4, in_chans=3, num_classes=1000, global_pool='avg',
-            embed_dims=(64, 128, 256, 512), num_heads=(1, 2, 4, 8), mlp_ratios=(4, 4, 4, 4), depths=(3, 4, 6, 3),
-            sr_ratios=(8, 4, 2, 1), wss=None, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6), block_cls=Block):
+            self,
+            img_size=224,
+            patch_size=4,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='avg',
+            embed_dims=(64, 128, 256, 512),
+            num_heads=(1, 2, 4, 8),
+            mlp_ratios=(4, 4, 4, 4),
+            depths=(3, 4, 6, 3),
+            sr_ratios=(8, 4, 2, 1),
+            wss=None,
+            drop_rate=0.,
+            pos_drop_rate=0.,
+            proj_drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.,
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            block_cls=Block,
+    ):
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -293,7 +318,7 @@ class Twins(nn.Module):
         self.pos_drops = nn.ModuleList()
         for i in range(len(depths)):
             self.patch_embeds.append(PatchEmbed(img_size, patch_size, prev_chs, embed_dims[i]))
-            self.pos_drops.append(nn.Dropout(p=drop_rate))
+            self.pos_drops.append(nn.Dropout(p=pos_drop_rate))
             prev_chs = embed_dims[i]
             img_size = tuple(t // patch_size for t in img_size)
             patch_size = 2
@@ -303,9 +328,16 @@ class Twins(nn.Module):
         cur = 0
         for k in range(len(depths)):
             _block = nn.ModuleList([block_cls(
-                dim=embed_dims[k], num_heads=num_heads[k], mlp_ratio=mlp_ratios[k], drop=drop_rate,
-                attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer, sr_ratio=sr_ratios[k],
-                ws=1 if wss is None or i % 2 == 1 else wss[k]) for i in range(depths[k])])
+                dim=embed_dims[k],
+                num_heads=num_heads[k],
+                mlp_ratio=mlp_ratios[k],
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dpr[cur + i],
+                norm_layer=norm_layer,
+                sr_ratio=sr_ratios[k],
+                ws=1 if wss is None or i % 2 == 1 else wss[k]) for i in range(depths[k])],
+            )
             self.blocks.append(_block)
             cur += depths[k]
 
@@ -314,6 +346,7 @@ class Twins(nn.Module):
         self.norm = norm_layer(self.num_features)
 
         # classification head
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
         # init weights
@@ -386,6 +419,7 @@ class Twins(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool == 'avg':
             x = x.mean(dim=1)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -402,49 +436,70 @@ def _create_twins(variant, pretrained=False, **kwargs):
     return model
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embeds.0.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'twins_pcpvt_small.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_pcpvt_base.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_pcpvt_large.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_svt_small.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_svt_base.in1k': _cfg(hf_hub_id='timm/'),
+    'twins_svt_large.in1k': _cfg(hf_hub_id='timm/'),
+})
+
+
 @register_model
-def twins_pcpvt_small(pretrained=False, **kwargs):
-    model_kwargs = dict(
+def twins_pcpvt_small(pretrained=False, **kwargs) -> Twins:
+    model_args = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-        depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], **kwargs)
-    return _create_twins('twins_pcpvt_small', pretrained=pretrained, **model_kwargs)
+        depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1])
+    return _create_twins('twins_pcpvt_small', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def twins_pcpvt_base(pretrained=False, **kwargs):
-    model_kwargs = dict(
+def twins_pcpvt_base(pretrained=False, **kwargs) -> Twins:
+    model_args = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-        depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1], **kwargs)
-    return _create_twins('twins_pcpvt_base', pretrained=pretrained, **model_kwargs)
+        depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1])
+    return _create_twins('twins_pcpvt_base', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def twins_pcpvt_large(pretrained=False, **kwargs):
-    model_kwargs = dict(
+def twins_pcpvt_large(pretrained=False, **kwargs) -> Twins:
+    model_args = dict(
         patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-        depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1], **kwargs)
-    return _create_twins('twins_pcpvt_large', pretrained=pretrained, **model_kwargs)
+        depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1])
+    return _create_twins('twins_pcpvt_large', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def twins_svt_small(pretrained=False, **kwargs):
-    model_kwargs = dict(
+def twins_svt_small(pretrained=False, **kwargs) -> Twins:
+    model_args = dict(
         patch_size=4, embed_dims=[64, 128, 256, 512], num_heads=[2, 4, 8, 16], mlp_ratios=[4, 4, 4, 4],
-        depths=[2, 2, 10, 4], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1], **kwargs)
-    return _create_twins('twins_svt_small', pretrained=pretrained, **model_kwargs)
+        depths=[2, 2, 10, 4], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1])
+    return _create_twins('twins_svt_small', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def twins_svt_base(pretrained=False, **kwargs):
-    model_kwargs = dict(
+def twins_svt_base(pretrained=False, **kwargs) -> Twins:
+    model_args = dict(
         patch_size=4, embed_dims=[96, 192, 384, 768], num_heads=[3, 6, 12, 24], mlp_ratios=[4, 4, 4, 4],
-        depths=[2, 2, 18, 2], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1], **kwargs)
-    return _create_twins('twins_svt_base', pretrained=pretrained, **model_kwargs)
+        depths=[2, 2, 18, 2], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1])
+    return _create_twins('twins_svt_base', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
-def twins_svt_large(pretrained=False, **kwargs):
-    model_kwargs = dict(
+def twins_svt_large(pretrained=False, **kwargs) -> Twins:
+    model_args = dict(
         patch_size=4, embed_dims=[128, 256, 512, 1024], num_heads=[4, 8, 16, 32], mlp_ratios=[4, 4, 4, 4],
-        depths=[2, 2, 18, 2], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1], **kwargs)
-    return _create_twins('twins_svt_large', pretrained=pretrained, **model_kwargs)
+        depths=[2, 2, 18, 2], wss=[7, 7, 7, 7], sr_ratios=[8, 4, 2, 1])
+    return _create_twins('twins_svt_large', pretrained=pretrained, **dict(model_args, **kwargs))

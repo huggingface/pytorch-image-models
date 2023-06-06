@@ -50,6 +50,8 @@ __all__ = ['get_cache_dir', 'download_cached_file', 'has_hf_hub', 'hf_split', 'l
 # Default name for a weights file hosted on the Huggingface Hub.
 HF_WEIGHTS_NAME = "pytorch_model.bin"  # default pytorch pkl
 HF_SAFE_WEIGHTS_NAME = "model.safetensors"  # safetensors version
+HF_OPEN_CLIP_WEIGHTS_NAME = "open_clip_pytorch_model.bin"  # default pytorch pkl
+HF_OPEN_CLIP_SAFE_WEIGHTS_NAME = "open_clip_model.safetensors"  # safetensors version
 
 
 def get_cache_dir(child_dir=''):
@@ -312,7 +314,7 @@ def push_to_hf_hub(
 def generate_readme(model_card: dict, model_name: str):
     readme_text = "---\n"
     readme_text += "tags:\n- image-classification\n- timm\n"
-    readme_text += "library_tag: timm\n"
+    readme_text += "library_name: timm\n"
     readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
     if 'details' in model_card and 'Dataset' in model_card['details']:
         readme_text += 'datasets:\n'
@@ -374,5 +376,7 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
     """
     if filename == HF_WEIGHTS_NAME:
         yield HF_SAFE_WEIGHTS_NAME
-    if filename != HF_WEIGHTS_NAME and filename.endswith(".bin"):
-        return filename[:-4] + ".safetensors"
+    # if filename == HF_OPEN_CLIP_WEIGHTS_NAME:  # FIXME tracking safetensors yet
+    #     yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
+    if filename not in (HF_WEIGHTS_NAME, HF_OPEN_CLIP_WEIGHTS_NAME) and filename.endswith(".bin"):
+        yield filename[:-4] + ".safetensors"

@@ -192,6 +192,7 @@ class MlpMixer(nn.Module):
             norm_layer=partial(nn.LayerNorm, eps=1e-6),
             act_layer=nn.GELU,
             drop_rate=0.,
+            proj_drop_rate=0.,
             drop_path_rate=0.,
             nlhb=False,
             stem_norm=False,
@@ -219,11 +220,12 @@ class MlpMixer(nn.Module):
                 mlp_layer=mlp_layer,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
-                drop=drop_rate,
+                drop=proj_drop_rate,
                 drop_path=drop_path_rate,
             )
             for _ in range(num_blocks)])
         self.norm = norm_layer(embed_dim)
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
         self.init_weights(nlhb=nlhb)
@@ -267,6 +269,7 @@ class MlpMixer(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool == 'avg':
             x = x.mean(dim=1)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -452,7 +455,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def mixer_s32_224(pretrained=False, **kwargs):
+def mixer_s32_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-S/32 224x224
     Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
@@ -462,7 +465,7 @@ def mixer_s32_224(pretrained=False, **kwargs):
 
 
 @register_model
-def mixer_s16_224(pretrained=False, **kwargs):
+def mixer_s16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-S/16 224x224
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
@@ -472,7 +475,7 @@ def mixer_s16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def mixer_b32_224(pretrained=False, **kwargs):
+def mixer_b32_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-B/32 224x224
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
@@ -482,7 +485,7 @@ def mixer_b32_224(pretrained=False, **kwargs):
 
 
 @register_model
-def mixer_b16_224(pretrained=False, **kwargs):
+def mixer_b16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
@@ -492,7 +495,7 @@ def mixer_b16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def mixer_l32_224(pretrained=False, **kwargs):
+def mixer_l32_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-L/32 224x224.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
@@ -502,7 +505,7 @@ def mixer_l32_224(pretrained=False, **kwargs):
 
 
 @register_model
-def mixer_l16_224(pretrained=False, **kwargs):
+def mixer_l16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-L/16 224x224. ImageNet-1k pretrained weights.
     Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
@@ -512,7 +515,7 @@ def mixer_l16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def gmixer_12_224(pretrained=False, **kwargs):
+def gmixer_12_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Glu-Mixer-12 224x224
     Experiment by Ross Wightman, adding SwiGLU to MLP-Mixer
     """
@@ -524,7 +527,7 @@ def gmixer_12_224(pretrained=False, **kwargs):
 
 
 @register_model
-def gmixer_24_224(pretrained=False, **kwargs):
+def gmixer_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Glu-Mixer-24 224x224
     Experiment by Ross Wightman, adding SwiGLU to MLP-Mixer
     """
@@ -536,7 +539,7 @@ def gmixer_24_224(pretrained=False, **kwargs):
 
 
 @register_model
-def resmlp_12_224(pretrained=False, **kwargs):
+def resmlp_12_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-12
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
@@ -547,7 +550,7 @@ def resmlp_12_224(pretrained=False, **kwargs):
 
 
 @register_model
-def resmlp_24_224(pretrained=False, **kwargs):
+def resmlp_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-24
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
@@ -559,7 +562,7 @@ def resmlp_24_224(pretrained=False, **kwargs):
 
 
 @register_model
-def resmlp_36_224(pretrained=False, **kwargs):
+def resmlp_36_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-36
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
@@ -571,7 +574,7 @@ def resmlp_36_224(pretrained=False, **kwargs):
 
 
 @register_model
-def resmlp_big_24_224(pretrained=False, **kwargs):
+def resmlp_big_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-B-24
     Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
@@ -583,7 +586,7 @@ def resmlp_big_24_224(pretrained=False, **kwargs):
 
 
 @register_model
-def gmlp_ti16_224(pretrained=False, **kwargs):
+def gmlp_ti16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ gMLP-Tiny
     Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
@@ -595,7 +598,7 @@ def gmlp_ti16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def gmlp_s16_224(pretrained=False, **kwargs):
+def gmlp_s16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ gMLP-Small
     Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
@@ -607,7 +610,7 @@ def gmlp_s16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def gmlp_b16_224(pretrained=False, **kwargs):
+def gmlp_b16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ gMLP-Base
     Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """

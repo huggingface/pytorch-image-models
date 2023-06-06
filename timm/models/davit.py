@@ -20,14 +20,14 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer
+from timm.layers import DropPath, to_2tuple, trunc_normal_, Mlp, LayerNorm2d, get_norm_layer, use_fused_attn
 from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
-__all__ = ['DaViT']
+__all__ = ['DaVit']
 
 
 class ConvPosEnc(nn.Module):
@@ -229,6 +229,7 @@ class WindowAttention(nn.Module):
         num_heads (int): Number of attention heads.
         qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
     """
+    fused_attn: torch.jit.Final[bool]
 
     def __init__(self, dim, window_size, num_heads, qkv_bias=True):
         super().__init__()
@@ -237,6 +238,7 @@ class WindowAttention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim, dim)
@@ -249,11 +251,15 @@ class WindowAttention(nn.Module):
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
 
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        attn = self.softmax(attn)
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(q, k, v)
+        else:
+            q = q * self.scale
+            attn = (q @ k.transpose(-2, -1))
+            attn = self.softmax(attn)
+            x = attn @ v
 
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+        x = x.transpose(1, 2).reshape(B_, N, C)
         x = self.proj(x)
         return x
 
@@ -356,7 +362,7 @@ class SpatialBlock(nn.Module):
         return x
 
 
-class DaViTStage(nn.Module):
+class DaVitStage(nn.Module):
     def __init__(
             self,
             in_chs,
@@ -434,7 +440,7 @@ class DaViTStage(nn.Module):
         return x
 
 
-class DaViT(nn.Module):
+class DaVit(nn.Module):
     r""" DaViT
         A PyTorch implementation of `DaViT: Dual Attention Vision Transformers`  - https://arxiv.org/abs/2204.03645
         Supports arbitrary input sizes and pyramid feature extraction
@@ -468,7 +474,6 @@ class DaViT(nn.Module):
             ffn=True,
             cpe_act=False,
             drop_rate=0.,
-            attn_drop_rate=0.,
             drop_path_rate=0.,
             num_classes=1000,
             global_pool='avg',
@@ -492,7 +497,7 @@ class DaViT(nn.Module):
         stages = []
         for stage_idx in range(num_stages):
             out_chs = embed_dims[stage_idx]
-            stage = DaViTStage(
+            stage = DaVitStage(
                 in_chs,
                 out_chs,
                 depth=depths[stage_idx],
@@ -605,7 +610,7 @@ def _create_davit(variant, pretrained=False, **kwargs):
     out_indices = kwargs.pop('out_indices', default_out_indices)
 
     model = build_model_with_cfg(
-        DaViT,
+        DaVit,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
@@ -642,42 +647,42 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def davit_tiny(pretrained=False, **kwargs):
+def davit_tiny(pretrained=False, **kwargs) -> DaVit:
     model_kwargs = dict(
         depths=(1, 1, 3, 1), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24), **kwargs)
     return _create_davit('davit_tiny', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def davit_small(pretrained=False, **kwargs):
+def davit_small(pretrained=False, **kwargs) -> DaVit:
     model_kwargs = dict(
         depths=(1, 1, 9, 1), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24), **kwargs)
     return _create_davit('davit_small', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def davit_base(pretrained=False, **kwargs):
+def davit_base(pretrained=False, **kwargs) -> DaVit:
     model_kwargs = dict(
         depths=(1, 1, 9, 1), embed_dims=(128, 256, 512, 1024), num_heads=(4, 8, 16, 32), **kwargs)
     return _create_davit('davit_base', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def davit_large(pretrained=False, **kwargs):
+def davit_large(pretrained=False, **kwargs) -> DaVit:
     model_kwargs = dict(
         depths=(1, 1, 9, 1), embed_dims=(192, 384, 768, 1536), num_heads=(6, 12, 24, 48), **kwargs)
     return _create_davit('davit_large', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def davit_huge(pretrained=False, **kwargs):
+def davit_huge(pretrained=False, **kwargs) -> DaVit:
     model_kwargs = dict(
         depths=(1, 1, 9, 1), embed_dims=(256, 512, 1024, 2048), num_heads=(8, 16, 32, 64), **kwargs)
     return _create_davit('davit_huge', pretrained=pretrained, **model_kwargs)
 
 
 @register_model
-def davit_giant(pretrained=False, **kwargs):
+def davit_giant(pretrained=False, **kwargs) -> DaVit:
     model_kwargs = dict(
         depths=(1, 1, 12, 3), embed_dims=(384, 768, 1536, 3072), num_heads=(12, 24, 48, 96), **kwargs)
     return _create_davit('davit_giant', pretrained=pretrained, **model_kwargs)

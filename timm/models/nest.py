@@ -26,40 +26,15 @@ from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_, _assert
-from timm.layers import create_conv2d, create_pool2d, to_ntuple
+from timm.layers import create_conv2d, create_pool2d, to_ntuple, use_fused_attn, LayerNorm
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['Nest']  # model_registry will add each entrypoint fn to this
 
 _logger = logging.getLogger(__name__)
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': [14, 14],
-        'crop_pct': .875, 'interpolation': 'bicubic', 'fixed_input_size': True,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    # (weights from official Google JAX impl)
-    'nest_base': _cfg(),
-    'nest_small': _cfg(),
-    'nest_tiny': _cfg(),
-    'jx_nest_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/jx_nest_base-8bc41011.pth'),
-    'jx_nest_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/jx_nest_small-422eaded.pth'),
-    'jx_nest_tiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vt3p-weights/jx_nest_tiny-e3428fb9.pth'),
-}
 
 
 class Attention(nn.Module):
@@ -67,11 +42,14 @@ class Attention(nn.Module):
     This is much like `.vision_transformer.Attention` but uses *localised* self attention by accepting an input with
      an extra "image block" dim
     """
+    fused_attn: torch.jit.Final[bool]
+
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, 3*dim, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
@@ -87,12 +65,17 @@ class Attention(nn.Module):
         qkv = self.qkv(x).reshape(B, T, N, 3, self.num_heads, C // self.num_heads).permute(3, 0, 4, 1, 2, 5)
         q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale # (B, H, T, N, N)
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p)
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1) # (B, H, T, N, N)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
 
         # (B, H, T, N, C'), permute -> (B, T, N, C', H)
-        x = (attn @ v).permute(0, 2, 3, 4, 1).reshape(B, T, N, C)
+        x = x.permute(0, 2, 3, 4, 1).reshape(B, T, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x  # (B, T, N, C)
@@ -104,15 +87,36 @@ class TransformerLayer(nn.Module):
         - Called TransformerLayer here to allow for "block" as defined in the paper ("non-overlapping image blocks")
         - Uses modified Attention layer that handles the "block" dimension
     """
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = Attention(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+        )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
 
     def forward(self, x):
         y = self.norm1(x)
@@ -176,9 +180,23 @@ class NestLevel(nn.Module):
     """ Single hierarchical level of a Nested Transformer
     """
     def __init__(
-            self, num_blocks, block_size, seq_length, num_heads, depth, embed_dim, prev_embed_dim=None,
-            mlp_ratio=4., qkv_bias=True, drop_rate=0., attn_drop_rate=0., drop_path_rates=[],
-            norm_layer=None, act_layer=None, pad_type=''):
+            self,
+            num_blocks,
+            block_size,
+            seq_length,
+            num_heads,
+            depth,
+            embed_dim,
+            prev_embed_dim=None,
+            mlp_ratio=4.,
+            qkv_bias=True,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=[],
+            norm_layer=None,
+            act_layer=None,
+            pad_type='',
+    ):
         super().__init__()
         self.block_size = block_size
         self.grad_checkpointing = False
@@ -191,13 +209,20 @@ class NestLevel(nn.Module):
             self.pool = nn.Identity()
 
         # Transformer encoder
-        if len(drop_path_rates):
-            assert len(drop_path_rates) == depth, 'Must provide as many drop path rates as there are transformer layers'
+        if len(drop_path):
+            assert len(drop_path) == depth, 'Must provide as many drop path rates as there are transformer layers'
         self.transformer_encoder = nn.Sequential(*[
             TransformerLayer(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=drop_path_rates[i],
-                norm_layer=norm_layer, act_layer=act_layer)
+                dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                proj_drop=proj_drop,
+                attn_drop=attn_drop,
+                drop_path=drop_path[i],
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            )
             for i in range(depth)])
 
     def forward(self, x):
@@ -225,10 +250,26 @@ class Nest(nn.Module):
     """
 
     def __init__(
-            self, img_size=224, in_chans=3, patch_size=4, num_levels=3, embed_dims=(128, 256, 512),
-            num_heads=(4, 8, 16), depths=(2, 2, 20), num_classes=1000, mlp_ratio=4., qkv_bias=True,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0.5, norm_layer=None, act_layer=None,
-            pad_type='', weight_init='', global_pool='avg'
+            self,
+            img_size=224,
+            in_chans=3,
+            patch_size=4,
+            num_levels=3,
+            embed_dims=(128, 256, 512),
+            num_heads=(4, 8, 16),
+            depths=(2, 2, 20),
+            num_classes=1000,
+            mlp_ratio=4.,
+            qkv_bias=True,
+            drop_rate=0.,
+            proj_drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.5,
+            norm_layer=None,
+            act_layer=None,
+            pad_type='',
+            weight_init='',
+            global_pool='avg',
     ):
         """
         Args:
@@ -270,7 +311,7 @@ class Nest(nn.Module):
         self.num_classes = num_classes
         self.num_features = embed_dims[-1]
         self.feature_info = []
-        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
+        norm_layer = norm_layer or LayerNorm
         act_layer = act_layer or nn.GELU
         self.drop_rate = drop_rate
         self.num_levels = num_levels
@@ -292,7 +333,12 @@ class Nest(nn.Module):
         
         # Patch embedding
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dims[0], flatten=False)
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dims[0],
+            flatten=False,
+        )
         self.num_patches = self.patch_embed.num_patches
         self.seq_length = self.num_patches // self.num_blocks[0]
 
@@ -304,8 +350,22 @@ class Nest(nn.Module):
         for i in range(len(self.num_blocks)):
             dim = embed_dims[i]
             levels.append(NestLevel(
-                self.num_blocks[i], self.block_size, self.seq_length, num_heads[i], depths[i], dim, prev_dim,
-                mlp_ratio, qkv_bias, drop_rate, attn_drop_rate, dp_rates[i], norm_layer, act_layer, pad_type=pad_type))
+                self.num_blocks[i],
+                self.block_size,
+                self.seq_length,
+                num_heads[i],
+                depths[i],
+                dim,
+                prev_dim,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dp_rates[i],
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                pad_type=pad_type,
+            ))
             self.feature_info += [dict(num_chs=dim, reduction=curr_stride, module=f'levels.{i}')]
             prev_dim = dim
             curr_stride *= 2
@@ -315,7 +375,10 @@ class Nest(nn.Module):
         self.norm = norm_layer(embed_dims[-1])
 
         # Classifier
-        self.global_pool, self.head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        global_pool, head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
+        self.global_pool = global_pool
+        self.head_drop = nn.Dropout(drop_rate)
+        self.head = head
 
         self.init_weights(weight_init)
 
@@ -366,8 +429,7 @@ class Nest(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
-        if self.drop_rate > 0.:
-            x = F.dropout(x, p=self.drop_rate, training=self.training)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -422,16 +484,41 @@ def checkpoint_filter_fn(state_dict, model):
 
 def _create_nest(variant, pretrained=False, **kwargs):
     model = build_model_with_cfg(
-        Nest, variant, pretrained,
+        Nest,
+        variant,
+        pretrained,
         feature_cfg=dict(out_indices=(0, 1, 2), flatten_sequential=True),
         pretrained_filter_fn=checkpoint_filter_fn,
-        **kwargs)
+        **kwargs,
+    )
 
     return model
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': [14, 14],
+        'crop_pct': .875, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'nest_base.untrained': _cfg(),
+    'nest_small.untrained': _cfg(),
+    'nest_tiny.untrained': _cfg(),
+    # (weights from official Google JAX impl, require 'SAME' padding)
+    'nest_base_jx.goog_in1k': _cfg(hf_hub_id='timm/'),
+    'nest_small_jx.goog_in1k': _cfg(hf_hub_id='timm/'),
+    'nest_tiny_jx.goog_in1k': _cfg(hf_hub_id='timm/'),
+})
+
+
 @register_model
-def nest_base(pretrained=False, **kwargs):
+def nest_base(pretrained=False, **kwargs) -> Nest:
     """ Nest-B @ 224x224
     """
     model_kwargs = dict(
@@ -441,7 +528,7 @@ def nest_base(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_small(pretrained=False, **kwargs):
+def nest_small(pretrained=False, **kwargs) -> Nest:
     """ Nest-S @ 224x224
     """
     model_kwargs = dict(embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 20), **kwargs)
@@ -450,7 +537,7 @@ def nest_small(pretrained=False, **kwargs):
 
 
 @register_model
-def nest_tiny(pretrained=False, **kwargs):
+def nest_tiny(pretrained=False, **kwargs) -> Nest:
     """ Nest-T @ 224x224
     """
     model_kwargs = dict(embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 8), **kwargs)
@@ -459,30 +546,38 @@ def nest_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def jx_nest_base(pretrained=False, **kwargs):
-    """ Nest-B @ 224x224, Pretrained weights converted from official Jax impl.
+def nest_base_jx(pretrained=False, **kwargs) -> Nest:
+    """ Nest-B @ 224x224
     """
-    kwargs['pad_type'] = 'same'
-    model_kwargs = dict(embed_dims=(128, 256, 512), num_heads=(4, 8, 16), depths=(2, 2, 20), **kwargs)
-    model = _create_nest('jx_nest_base', pretrained=pretrained, **model_kwargs)
+    kwargs.setdefault('pad_type', 'same')
+    model_kwargs = dict(
+        embed_dims=(128, 256, 512), num_heads=(4, 8, 16), depths=(2, 2, 20), **kwargs)
+    model = _create_nest('nest_base_jx', pretrained=pretrained, **model_kwargs)
     return model
 
 
 @register_model
-def jx_nest_small(pretrained=False, **kwargs):
-    """ Nest-S @ 224x224, Pretrained weights converted from official Jax impl.
+def nest_small_jx(pretrained=False, **kwargs) -> Nest:
+    """ Nest-S @ 224x224
     """
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('pad_type', 'same')
     model_kwargs = dict(embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 20), **kwargs)
-    model = _create_nest('jx_nest_small', pretrained=pretrained, **model_kwargs)
+    model = _create_nest('nest_small_jx', pretrained=pretrained, **model_kwargs)
     return model
 
 
 @register_model
-def jx_nest_tiny(pretrained=False, **kwargs):
-    """ Nest-T @ 224x224, Pretrained weights converted from official Jax impl.
+def nest_tiny_jx(pretrained=False, **kwargs) -> Nest:
+    """ Nest-T @ 224x224
     """
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('pad_type', 'same')
     model_kwargs = dict(embed_dims=(96, 192, 384), num_heads=(3, 6, 12), depths=(2, 2, 8), **kwargs)
-    model = _create_nest('jx_nest_tiny', pretrained=pretrained, **model_kwargs)
+    model = _create_nest('nest_tiny_jx', pretrained=pretrained, **model_kwargs)
     return model
+
+
+register_model_deprecations(__name__, {
+    'jx_nest_base': 'nest_base_jx',
+    'jx_nest_small': 'nest_small_jx',
+    'jx_nest_tiny': 'nest_tiny_jx',
+})

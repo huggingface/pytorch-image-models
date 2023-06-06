@@ -24,6 +24,18 @@ from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm
 from .trace_utils import _assert
 
 
+def _create_act(act_layer, act_kwargs=None, inplace=False, apply_act=True):
+    act_layer = get_act_layer(act_layer)  # string -> nn.Module
+    act_kwargs = act_kwargs or {}
+    if act_layer is not None and apply_act:
+        if inplace:
+            act_kwargs['inplace'] = inplace
+        act = act_layer(**act_kwargs)
+    else:
+        act = nn.Identity()
+    return act
+
+
 class BatchNormAct2d(nn.BatchNorm2d):
     """BatchNorm + Activation
 
@@ -40,28 +52,33 @@ class BatchNormAct2d(nn.BatchNorm2d):
             track_running_stats=True,
             apply_act=True,
             act_layer=nn.ReLU,
+            act_kwargs=None,
             inplace=True,
             drop_layer=None,
             device=None,
-            dtype=None
+            dtype=None,
     ):
         try:
             factory_kwargs = {'device': device, 'dtype': dtype}
             super(BatchNormAct2d, self).__init__(
-                num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats,
-                **factory_kwargs
+                num_features,
+                eps=eps,
+                momentum=momentum,
+                affine=affine,
+                track_running_stats=track_running_stats,
+                **factory_kwargs,
             )
         except TypeError:
             # NOTE for backwards compat with old PyTorch w/o factory device/dtype support
             super(BatchNormAct2d, self).__init__(
-                num_features, eps=eps, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
+                num_features,
+                eps=eps,
+                momentum=momentum,
+                affine=affine,
+                track_running_stats=track_running_stats,
+            )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        act_layer = get_act_layer(act_layer)  # string -> nn.Module
-        if act_layer is not None and apply_act:
-            act_args = dict(inplace=True) if inplace else {}
-            self.act = act_layer(**act_args)
-        else:
-            self.act = nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
     def forward(self, x):
         # cut & paste of torch.nn.BatchNorm2d.forward impl to avoid issues with torchscript and tracing
@@ -185,6 +202,7 @@ class FrozenBatchNormAct2d(torch.nn.Module):
         eps: float = 1e-5,
         apply_act=True,
         act_layer=nn.ReLU,
+        act_kwargs=None,
         inplace=True,
         drop_layer=None,
     ):
@@ -196,12 +214,7 @@ class FrozenBatchNormAct2d(torch.nn.Module):
         self.register_buffer("running_var", torch.ones(num_features))
 
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        act_layer = get_act_layer(act_layer)  # string -> nn.Module
-        if act_layer is not None and apply_act:
-            act_args = dict(inplace=True) if inplace else {}
-            self.act = act_layer(**act_args)
-        else:
-            self.act = nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
     def _load_from_state_dict(
         self,
@@ -341,6 +354,7 @@ class GroupNormAct(nn.GroupNorm):
             group_size=None,
             apply_act=True,
             act_layer=nn.ReLU,
+            act_kwargs=None,
             inplace=True,
             drop_layer=None,
     ):
@@ -351,12 +365,8 @@ class GroupNormAct(nn.GroupNorm):
             affine=affine,
         )
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        act_layer = get_act_layer(act_layer)  # string -> nn.Module
-        if act_layer is not None and apply_act:
-            act_args = dict(inplace=True) if inplace else {}
-            self.act = act_layer(**act_args)
-        else:
-            self.act = nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):
@@ -377,17 +387,14 @@ class GroupNorm1Act(nn.GroupNorm):
             affine=True,
             apply_act=True,
             act_layer=nn.ReLU,
+            act_kwargs=None,
             inplace=True,
             drop_layer=None,
     ):
         super(GroupNorm1Act, self).__init__(1, num_channels, eps=eps, affine=affine)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        act_layer = get_act_layer(act_layer)  # string -> nn.Module
-        if act_layer is not None and apply_act:
-            act_args = dict(inplace=True) if inplace else {}
-            self.act = act_layer(**act_args)
-        else:
-            self.act = nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):
@@ -408,17 +415,15 @@ class LayerNormAct(nn.LayerNorm):
             affine=True,
             apply_act=True,
             act_layer=nn.ReLU,
+            act_kwargs=None,
             inplace=True,
             drop_layer=None,
     ):
         super(LayerNormAct, self).__init__(normalization_shape, eps=eps, elementwise_affine=affine)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         act_layer = get_act_layer(act_layer)  # string -> nn.Module
-        if act_layer is not None and apply_act:
-            act_args = dict(inplace=True) if inplace else {}
-            self.act = act_layer(**act_args)
-        else:
-            self.act = nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):
@@ -439,17 +444,13 @@ class LayerNormAct2d(nn.LayerNorm):
             affine=True,
             apply_act=True,
             act_layer=nn.ReLU,
+            act_kwargs=None,
             inplace=True,
             drop_layer=None,
     ):
         super(LayerNormAct2d, self).__init__(num_channels, eps=eps, elementwise_affine=affine)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
-        act_layer = get_act_layer(act_layer)  # string -> nn.Module
-        if act_layer is not None and apply_act:
-            act_args = dict(inplace=True) if inplace else {}
-            self.act = act_layer(**act_args)
-        else:
-            self.act = nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
         self._fast_norm = is_fast_norm()
 
     def forward(self, x):

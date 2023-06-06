@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 # Use set_pretrained_download_progress / set_pretrained_check_hash functions to toggle.
 _DOWNLOAD_PROGRESS = False
 _CHECK_HASH = False
-
+_USE_OLD_CACHE = int(os.environ.get('TIMM_USE_OLD_CACHE', 0)) > 0
 
 __all__ = ['set_pretrained_download_progress', 'set_pretrained_check_hash', 'load_custom_pretrained', 'load_pretrained',
            'pretrained_cfg_for_features', 'resolve_pretrained_cfg', 'build_model_with_cfg']
@@ -32,6 +32,7 @@ def _resolve_pretrained_source(pretrained_cfg):
     cfg_source = pretrained_cfg.get('source', '')
     pretrained_url = pretrained_cfg.get('url', None)
     pretrained_file = pretrained_cfg.get('file', None)
+    pretrained_sd = pretrained_cfg.get('state_dict', None)
     hf_hub_id = pretrained_cfg.get('hf_hub_id', None)
 
     # resolve where to load pretrained weights from
@@ -44,14 +45,21 @@ def _resolve_pretrained_source(pretrained_cfg):
         pretrained_loc = hf_hub_id
     else:
         # default source == timm or unspecified
-        if pretrained_file:
-            # file load override is the highest priority if set
+        if pretrained_sd:
+            # direct state_dict pass through is the highest priority
+            load_from = 'state_dict'
+            pretrained_loc = pretrained_sd
+            assert isinstance(pretrained_loc, dict)
+        elif pretrained_file:
+            # file load override is the second-highest priority if set
             load_from = 'file'
             pretrained_loc = pretrained_file
         else:
-            # next, HF hub is prioritized unless a valid cached version of weights exists already
-            cached_url_valid = check_cached_file(pretrained_url) if pretrained_url else False
-            if hf_hub_id and has_hf_hub(necessary=True) and not cached_url_valid:
+            old_cache_valid = False
+            if _USE_OLD_CACHE:
+                # prioritized old cached weights if exists and env var enabled
+                old_cache_valid = check_cached_file(pretrained_url) if pretrained_url else False
+            if not old_cache_valid and hf_hub_id and has_hf_hub(necessary=True):
                 # hf-hub available as alternate weight source in default_cfg
                 load_from = 'hf-hub'
                 pretrained_loc = hf_hub_id
@@ -106,7 +114,7 @@ def load_custom_pretrained(
     if not load_from:
         _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
-    if load_from == 'hf-hub':  # FIXME
+    if load_from == 'hf-hub':
         _logger.warning("Hugging Face hub not currently supported for custom load pretrained models.")
     elif load_from == 'url':
         pretrained_loc = download_cached_file(
@@ -144,11 +152,13 @@ def load_pretrained(
     """
     pretrained_cfg = pretrained_cfg or getattr(model, 'pretrained_cfg', None)
     if not pretrained_cfg:
-        _logger.warning("Invalid pretrained config, cannot load weights.")
-        return
+        raise RuntimeError("Invalid pretrained config, cannot load weights. Use `pretrained=False` for random init.")
 
     load_from, pretrained_loc = _resolve_pretrained_source(pretrained_cfg)
-    if load_from == 'file':
+    if load_from == 'state_dict':
+        _logger.info(f'Loading pretrained weights from state dict')
+        state_dict = pretrained_loc  # pretrained_loc is the actual state dict for this override
+    elif load_from == 'file':
         _logger.info(f'Loading pretrained weights from file ({pretrained_loc})')
         state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
@@ -175,8 +185,8 @@ def load_pretrained(
         else:
             state_dict = load_state_dict_from_hf(pretrained_loc)
     else:
-        _logger.warning("No pretrained weights exist or were found for this model. Using random initialization.")
-        return
+        model_name = pretrained_cfg.get('architecture', 'this model')
+        raise RuntimeError(f"No pretrained weights exist for {model_name}. Use `pretrained=False` for random init.")
 
     if filter_fn is not None:
         try:

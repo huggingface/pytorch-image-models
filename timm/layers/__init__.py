@@ -5,8 +5,8 @@ from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbeddi
 from .blur_pool import BlurPool2d
 from .classifier import ClassifierHead, create_classifier, NormMlpClassifierHead
 from .cond_conv2d import CondConv2d, get_condconv_initializer
-from .config import is_exportable, is_scriptable, is_no_jit, set_exportable, set_scriptable, set_no_jit,\
-    set_layer_config
+from .config import is_exportable, is_scriptable, is_no_jit, use_fused_attn, \
+    set_exportable, set_scriptable, set_no_jit, set_layer_config, set_fused_attn
 from .conv2d_same import Conv2dSame, conv2d_same
 from .conv_bn_act import ConvNormAct, ConvNormActAa, ConvBnAct
 from .create_act import create_act_layer, get_act_layer, get_act_fn
@@ -28,22 +28,24 @@ from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible,
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
-from .mlp import Mlp, GluMlp, GatedMlp, SwiGLU, ConvMlp, GlobalResponseNormMlp
+from .mlp import Mlp, GluMlp, GatedMlp, SwiGLU, SwiGLUPacked, ConvMlp, GlobalResponseNormMlp
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
 from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm
 from .norm_act import BatchNormAct2d, GroupNormAct, GroupNorm1Act, LayerNormAct, LayerNormAct2d,\
     SyncBatchNormAct, convert_sync_batchnorm, FrozenBatchNormAct2d, freeze_batch_norm_2d, unfreeze_batch_norm_2d
 from .padding import get_padding, get_same_padding, pad_same
-from .patch_embed import PatchEmbed, resample_patch_embed
+from .patch_dropout import PatchDropout
+from .patch_embed import PatchEmbed, PatchEmbedWithSize, resample_patch_embed
 from .pool2d_same import AvgPool2dSame, create_pool2d
-from .pos_embed import resample_abs_pos_embed
+from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
 from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_position_index, gen_relative_log_coords
 from .pos_embed_sincos import pixel_freq_bands, freq_bands, build_sincos2d_pos_embed, build_fourier_pos_embed, \
-    build_rotary_pos_embed, apply_rot_embed, apply_rot_embed_cat, FourierEmbed, RotaryEmbedding, RotaryEmbeddingCat
+    build_rotary_pos_embed, apply_rot_embed, apply_rot_embed_cat, apply_rot_embed_list, apply_keep_indices_nlc, \
+    FourierEmbed, RotaryEmbedding, RotaryEmbeddingCat
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvNormAct
-from .space_to_depth import SpaceToDepthModule
+from .space_to_depth import SpaceToDepthModule, SpaceToDepth, DepthToSpace
 from .split_attn import SplitAttn
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
