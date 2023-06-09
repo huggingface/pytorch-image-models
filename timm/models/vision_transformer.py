@@ -154,18 +154,31 @@ class Block(nn.Module):
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.efficient_drop_path = efficient_drop_path
 
+    @torch.jit.ignore(drop=True)
+    def efficient_drop_path_forward(self, x):
+        def residual_attn_func(x):
+            return self.ls1(self.attn(self.norm1(x)))
+
+        def residual_mlp_func(x):
+            return self.ls2(self.mlp(self.norm2(x)))
+        
+        x = efficient_drop_path(
+            x, residual_attn_func, 
+            drop_ratio=self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.,
+            training=self.training
+        )
+
+        x = efficient_drop_path(
+            x, residual_mlp_func,
+            drop_ratio=self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.,
+            training=self.training
+        )
+
+        return x
+
     def forward(self, x):
-        if self.efficient_drop_path:
-            x = efficient_drop_path(
-                x, lambda _x: self.ls1(self.attn(self.norm1(_x))), 
-                drop_ratio=self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.,
-                training=self.training
-            )
-            x = efficient_drop_path(
-                x, lambda _x: self.ls2(self.mlp(self.norm2(_x))),
-                drop_ratio=self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.,
-                training=self.training
-            )
+        if self.efficient_drop_path and not torch.jit.is_scripting():
+            x = self.efficient_drop_path_forward(x)
         else:
             x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
             x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
