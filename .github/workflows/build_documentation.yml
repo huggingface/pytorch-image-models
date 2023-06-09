@@ -14,8 +14,8 @@ jobs:
       commit_sha: ${{ github.sha }}
       package: pytorch-image-models
       package_name: timm
-      repo_owner: rwightman
       path_to_docs: pytorch-image-models/hfdocs/source
       version_tag_suffix: ""
     secrets:
       token: ${{ secrets.HUGGINGFACE_PUSH }}
+      hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}
