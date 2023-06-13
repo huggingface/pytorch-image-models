@@ -70,6 +70,10 @@ has_compile = hasattr(torch, 'compile')
 
 _logger = logging.getLogger('train')
 
+# Fix error: `torch.storage.TypedStorage` has no attribute `_new_shared_fd_cpu`
+if torch.__version__.startswith('1.13.1+cu116.moreh'):
+    torch.multiprocessing.set_sharing_strategy('file_system')
+
 # The first arg parser parses out only the --config argument, this argument is used to
 # load a yaml file containing key-values that override the defaults for the main parser below
 config_parser = parser = argparse.ArgumentParser(description='Training Config', add_help=False)
