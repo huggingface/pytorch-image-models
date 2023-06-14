@@ -32,7 +32,12 @@ class Nadam(Optimizer):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         defaults = dict(
-            lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, schedule_decay=schedule_decay)
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            schedule_decay=schedule_decay,
+        )
         super(Nadam, self).__init__(params, defaults)
 
     @torch.no_grad()
