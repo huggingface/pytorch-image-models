@@ -419,9 +419,11 @@ class EfficientNetBuilder:
                 if extract_features:
                     feature_info = dict(
                         stage=stack_idx + 1, reduction=current_stride, **block.feature_info(self.feature_location))
-                    module_name = f'blocks.{stack_idx}.{block_idx}'
                     leaf_name = feature_info.get('module', '')
-                    feature_info['module'] = '.'.join([module_name, leaf_name]) if leaf_name else module_name
+                    if leaf_name:
+                        feature_info['module'] = '.'.join([f'blocks.{stack_idx}.{block_idx}', leaf_name])
+                    else:
+                        feature_info['module'] = f'blocks.{stack_idx}'
                     self.features.append(feature_info)
 
                 total_block_idx += 1  # incr global block idx (across all stacks)
