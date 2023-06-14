@@ -605,6 +605,3 @@ def samvit_huge_patch16(pretrained=False, **kwargs) -> VisionTransformerSAM:
     model = _create_vision_transformer(
         'samvit_huge_patch16', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
-
-# TODO:
-# support any input size, now only 1024 x 1024 (pretrained)
