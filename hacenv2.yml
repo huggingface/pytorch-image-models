@@ -1,0 +1,13 @@
+name: timm2
+dependencies:
+  - python=3.8
+  - pip
+  - pip:
+    - moreh-driver==23.6.0
+    - torch==1.10.0+cu111.moreh23.6.0
+    - torchvision
+    - pyyaml
+    - huggingface_hub
+    - safetensors>=0.2
+    - -r requirements-dev.txt
+    - -e .
