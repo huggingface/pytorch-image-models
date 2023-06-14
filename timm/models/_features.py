@@ -27,12 +27,13 @@ class FeatureInfo:
 
     def __init__(self, feature_info: List[Dict], out_indices: Tuple[int]):
         prev_reduction = 1
-        for fi in feature_info:
+        for i, fi in enumerate(feature_info):
             # sanity check the mandatory fields, there may be additional fields depending on the model
             assert 'num_chs' in fi and fi['num_chs'] > 0
             assert 'reduction' in fi and fi['reduction'] >= prev_reduction
             prev_reduction = fi['reduction']
             assert 'module' in fi
+            fi.setdefault('index', i)
         self.out_indices = out_indices
         self.info = feature_info
 

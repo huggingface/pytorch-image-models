@@ -829,7 +829,7 @@ class HighResolutionNetFeatures(HighResolutionNet):
             **kwargs,
         )
         self.feature_info = FeatureInfo(self.feature_info, out_indices)
-        self._out_idx = {i for i in out_indices}
+        self._out_idx = {f['index'] for f in self.feature_info.get_dicts()}
 
     def forward_features(self, x):
         assert False, 'Not supported'

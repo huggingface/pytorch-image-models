@@ -370,9 +370,7 @@ class EfficientNetBuilder:
         stages = []
         if model_block_args[0][0]['stride'] > 1:
             # if the first block starts with a stride, we need to extract first level feat from stem
-            feature_info = dict(
-                module='act1', num_chs=in_chs, stage=0, reduction=current_stride,
-                hook_type='forward' if self.feature_location != 'bottleneck' else '')
+            feature_info = dict(module='bn1', num_chs=in_chs, stage=0, reduction=current_stride)
             self.features.append(feature_info)
 
         # outer list of block_args defines the stacks
@@ -418,11 +416,15 @@ class EfficientNetBuilder:
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
                     feature_info = dict(
-                        stage=stack_idx + 1, reduction=current_stride, **block.feature_info(self.feature_location))
+                        stage=stack_idx + 1,
+                        reduction=current_stride,
+                        **block.feature_info(self.feature_location),
+                    )
                     leaf_name = feature_info.get('module', '')
                     if leaf_name:
                         feature_info['module'] = '.'.join([f'blocks.{stack_idx}.{block_idx}', leaf_name])
                     else:
+                        assert last_block
                         feature_info['module'] = f'blocks.{stack_idx}'
                     self.features.append(feature_info)
 
