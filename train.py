@@ -1000,7 +1000,10 @@ def train_one_epoch(
     if hasattr(optimizer, 'sync_lookahead'):
         optimizer.sync_lookahead()
 
-    return OrderedDict([('loss', losses_m.avg), ('update_time', update_time_m.avg)])
+    # NOTE: this throughput calculation does not take distributed training into
+    # account
+    throughput = args.batch_size / update_time_m.avg
+    return OrderedDict([('loss', losses_m.avg), ('throughput', throughput)])
 
 
 def validate(
@@ -1070,7 +1073,11 @@ def validate(
                     f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
                 )
 
-    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg), ('batch_time', batch_time_m.avg)])
+    # NOTE: this throughput calculation does not take distributed training into
+    # account
+    val_batch_size = args.validation_batch_size or args.batch_size
+    throughput = val_batch_size / batch_time_m.avg
+    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg), ('throughput', throughput)])
 
     return metrics
 
