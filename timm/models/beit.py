@@ -220,7 +220,6 @@ class Block(nn.Module):
                 in_features=dim,
                 hidden_features=int(dim * mlp_ratio),
                 act_layer=act_layer,
-                norm_layer=norm_layer if scale_mlp else None,
                 drop=proj_drop,
             )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()

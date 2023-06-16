@@ -225,7 +225,6 @@ class EvaBlock(nn.Module):
                 in_features=dim,
                 hidden_features=hidden_features,
                 act_layer=act_layer,
-                norm_layer=norm_layer if scale_mlp else None,
                 drop=proj_drop,
             )
         self.gamma_2 = nn.Parameter(init_values * torch.ones(dim)) if init_values is not None else None
@@ -319,7 +318,6 @@ class EvaBlockPostNorm(nn.Module):
                 in_features=dim,
                 hidden_features=hidden_features,
                 act_layer=act_layer,
-                norm_layer=norm_layer if scale_mlp else None,
                 drop=proj_drop,
             )
         self.norm2 = norm_layer(dim)
