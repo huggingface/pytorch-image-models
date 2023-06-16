@@ -70,6 +70,10 @@ has_compile = hasattr(torch, 'compile')
 
 _logger = logging.getLogger('train')
 
+# Fix error: `torch.storage.TypedStorage` has no attribute `_new_shared_fd_cpu`
+if torch.__version__.startswith('1.13.1+cu116.moreh'):
+    torch.multiprocessing.set_sharing_strategy('file_system')
+
 # The first arg parser parses out only the --config argument, this argument is used to
 # load a yaml file containing key-values that override the defaults for the main parser below
 config_parser = parser = argparse.ArgumentParser(description='Training Config', add_help=False)
@@ -996,7 +1000,10 @@ def train_one_epoch(
     if hasattr(optimizer, 'sync_lookahead'):
         optimizer.sync_lookahead()
 
-    return OrderedDict([('loss', losses_m.avg)])
+    # NOTE: this throughput calculation does not take distributed training into
+    # account
+    throughput = args.batch_size / update_time_m.avg
+    return OrderedDict([('loss', losses_m.avg), ('throughput', throughput)])
 
 
 def validate(
@@ -1066,7 +1073,11 @@ def validate(
                     f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
                 )
 
-    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg)])
+    # NOTE: this throughput calculation does not take distributed training into
+    # account
+    val_batch_size = args.validation_batch_size or args.batch_size
+    throughput = val_batch_size / batch_time_m.avg
+    metrics = OrderedDict([('loss', losses_m.avg), ('top1', top1_m.avg), ('top5', top5_m.avg), ('throughput', throughput)])
 
     return metrics
 
