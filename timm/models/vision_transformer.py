@@ -126,12 +126,10 @@ class Block(nn.Module):
             act_layer=nn.GELU,
             norm_layer=nn.LayerNorm,
             mlp_layer=Mlp,
-            attn_class=Attention,
-            efficient_drop_path=False,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = attn_class(
+        self.attn = Attention(
             dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
@@ -152,7 +150,54 @@ class Block(nn.Module):
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.efficient_drop_path = efficient_drop_path
+
+    def forward(self, x):
+        x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        return x
+
+
+class EfficientDropPathBlock(nn.Module):
+
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            qk_norm=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            init_values=None,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            mlp_layer=Mlp,
+            attn_class=Attention,
+    ):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = attn_class(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            qk_norm=qk_norm,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+            norm_layer=norm_layer,
+        )
+        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.drop_path1 = drop_path
+
+        self.norm2 = norm_layer(dim)
+        self.mlp = mlp_layer(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.drop_path2 = drop_path
 
     @torch.jit.ignore(drop=True)
     def efficient_drop_path_forward(self, x):
@@ -164,20 +209,20 @@ class Block(nn.Module):
         
         x = efficient_drop_path(
             x, residual_attn_func, 
-            drop_ratio=self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.,
+            drop_ratio=self.drop_path1,
             training=self.training
         )
 
         x = efficient_drop_path(
             x, residual_mlp_func,
-            drop_ratio=self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.,
+            drop_ratio=self.drop_path2,
             training=self.training
         )
 
         return x
 
     def forward(self, x):
-        if self.efficient_drop_path and not torch.jit.is_scripting():
+        if not torch.jit.is_scripting():
             x = self.efficient_drop_path_forward(x)
         else:
             x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
