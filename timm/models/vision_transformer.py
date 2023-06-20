@@ -489,7 +489,6 @@ class VisionTransformer(nn.Module):
             act_layer: Optional[Callable] = None,
             block_fn: Callable = Block,
             mlp_layer: Callable = Mlp,
-            efficient_drop_path: bool = False,
     ):
         """
         Args:
@@ -515,7 +514,6 @@ class VisionTransformer(nn.Module):
             norm_layer: Normalization layer.
             act_layer: MLP activation layer.
             block_fn: Transformer block layer.
-            efficient_drop_path: Use efficient drop path implementation.
         """
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
@@ -575,7 +573,6 @@ class VisionTransformer(nn.Module):
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 mlp_layer=mlp_layer,
-                efficient_drop_path=efficient_drop_path,
             )
             for i in range(depth)])
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
