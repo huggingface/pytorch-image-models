@@ -187,7 +187,7 @@ class EfficientDropPathBlock(nn.Module):
             norm_layer=norm_layer,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
-        self.drop_path1 = drop_path
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim)
         self.mlp = mlp_layer(
@@ -197,7 +197,7 @@ class EfficientDropPathBlock(nn.Module):
             drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
-        self.drop_path2 = drop_path
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     @torch.jit.ignore(drop=True)
     def efficient_drop_path_forward(self, x):
@@ -209,13 +209,13 @@ class EfficientDropPathBlock(nn.Module):
         
         x = efficient_drop_path(
             x, residual_attn_func, 
-            drop_ratio=self.drop_path1,
+            drop_ratio=self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.0,
             training=self.training
         )
 
         x = efficient_drop_path(
             x, residual_mlp_func,
-            drop_ratio=self.drop_path2,
+            drop_ratio=self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.0,
             training=self.training
         )
 
