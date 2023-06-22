@@ -769,11 +769,11 @@ def main():
     # MLFlow init
     import mlflow
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
-    mlflow_experiment_id = mlflow.create_experiment('{}'.format(args.model))
-    mlflow_experiment = mlflow.get_experiment(mlflow_experiment_id)
+    experiment_id = mlflow.create_experiment('{}'.format(args.model))
+    experiment = mlflow.get_experiment(experiment_id)
 
     try:
-        mlflow.start_run(run_name=args.model, experiment_id=mlflow_experiment.mlflow_experiment_id)
+        mlflow.start_run(run_name=args.model, experiment_id=experiment.experiment_id)
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
