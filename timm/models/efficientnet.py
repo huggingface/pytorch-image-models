@@ -232,7 +232,7 @@ class EfficientNetFeatures(nn.Module):
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = FeatureInfo(builder.features, out_indices)
-        self._stage_out_idx = {v['stage']: i for i, v in enumerate(self.feature_info) if i in out_indices}
+        self._stage_out_idx = {f['stage']: f['index'] for f in self.feature_info.get_dicts()}
 
         efficientnet_init_weights(self)
 
@@ -268,20 +268,28 @@ class EfficientNetFeatures(nn.Module):
 
 
 def _create_effnet(variant, pretrained=False, **kwargs):
-    features_only = False
+    features_mode = ''
     model_cls = EfficientNet
     kwargs_filter = None
     if kwargs.pop('features_only', False):
-        features_only = True
-        kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
-        model_cls = EfficientNetFeatures
+        if 'feature_cfg' in kwargs:
+            features_mode = 'cfg'
+        else:
+            kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
+            model_cls = EfficientNetFeatures
+            features_mode = 'cls'
+
     model = build_model_with_cfg(
-        model_cls, variant, pretrained,
-        pretrained_strict=not features_only,
+        model_cls,
+        variant,
+        pretrained,
+        features_only=features_mode == 'cfg',
+        pretrained_strict=features_mode != 'cls',
         kwargs_filter=kwargs_filter,
-        **kwargs)
-    if features_only:
-        model.default_cfg = pretrained_cfg_for_features(model.default_cfg)
+        **kwargs,
+    )
+    if features_mode == 'cls':
+        model.pretrained_cfg = model.default_cfg = pretrained_cfg_for_features(model.pretrained_cfg)
     return model
 
 

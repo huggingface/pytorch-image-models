@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Union, Type
 import torch
 from torch import nn
 
-from ._features import _get_feature_info
+from ._features import _get_feature_info, _get_return_layers
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor as _create_feature_extractor
@@ -93,9 +93,7 @@ class FeatureGraphNet(nn.Module):
         self.feature_info = _get_feature_info(model, out_indices)
         if out_map is not None:
             assert len(out_map) == len(out_indices)
-        return_nodes = {
-            info['module']: out_map[i] if out_map is not None else info['module']
-            for i, info in enumerate(self.feature_info) if i in out_indices}
+        return_nodes = _get_return_layers(self.feature_info, out_map)
         self.graph_module = create_feature_extractor(model, return_nodes)
 
     def forward(self, x):

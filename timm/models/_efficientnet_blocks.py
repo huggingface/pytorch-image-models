@@ -75,7 +75,7 @@ class ConvBnAct(nn.Module):
         if location == 'expansion':  # output of conv after act, same as block coutput
             return dict(module='bn1', hook_type='forward', num_chs=self.conv.out_channels)
         else:  # location == 'bottleneck', block output
-            return dict(module='', hook_type='', num_chs=self.conv.out_channels)
+            return dict(module='', num_chs=self.conv.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -116,7 +116,7 @@ class DepthwiseSeparableConv(nn.Module):
         if location == 'expansion':  # after SE, input to PW
             return dict(module='conv_pw', hook_type='forward_pre', num_chs=self.conv_pw.in_channels)
         else:  # location == 'bottleneck', block output
-            return dict(module='', hook_type='', num_chs=self.conv_pw.out_channels)
+            return dict(module='', num_chs=self.conv_pw.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -173,7 +173,7 @@ class InvertedResidual(nn.Module):
         if location == 'expansion':  # after SE, input to PWL
             return dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
         else:  # location == 'bottleneck', block output
-            return dict(module='', hook_type='', num_chs=self.conv_pwl.out_channels)
+            return dict(module='', num_chs=self.conv_pwl.out_channels)
 
     def forward(self, x):
         shortcut = x
@@ -266,7 +266,7 @@ class EdgeResidual(nn.Module):
         if location == 'expansion':  # after SE, before PWL
             return dict(module='conv_pwl', hook_type='forward_pre', num_chs=self.conv_pwl.in_channels)
         else:  # location == 'bottleneck', block output
-            return dict(module='', hook_type='', num_chs=self.conv_pwl.out_channels)
+            return dict(module='', num_chs=self.conv_pwl.out_channels)
 
     def forward(self, x):
         shortcut = x
