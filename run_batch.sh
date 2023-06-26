@@ -22,6 +22,14 @@ COMMON_ARGS="""
 """
 
 mkdir -p $LOG_DIR
+
+# Install MLFlow
+pip install mlflow
+# Start MLFlow server in the background
+mlflow server &
+# Wait for the serer to start (5 secs)
+sleep 5
+
 while read model; do
     # echo $model
     /usr/bin/env python3 train.py \
@@ -29,3 +37,6 @@ while read model; do
         $COMMON_ARGS \
         2>&1 | tee ${LOG_DIR}/${model}.log
 done < $input_file
+
+# Stop the MLFlow server at the end
+pkill -f mlflow
