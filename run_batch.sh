@@ -23,12 +23,10 @@ COMMON_ARGS="""
 
 mkdir -p $LOG_DIR
 
-# Install MLFlow
-pip install mlflow
-# Start MLFlow server in the background
-mlflow server &
-# Wait for the serer to start (5 secs)
-sleep 5
+if [[ -x $(command -v mlflow) ]]; then
+    mlflow server &
+    sleep 5
+fi
 
 while read model; do
     # echo $model
