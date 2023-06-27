@@ -67,6 +67,14 @@ except ImportError as e:
 
 has_compile = hasattr(torch, 'compile')
 
+try:
+    import mlflow
+    if not os.environ.get("MLFLOW_TRACKING_URI", None):
+        mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    has_mlflow = True
+except ImportError:
+    has_mlflow = False
+
 
 _logger = logging.getLogger('train')
 
@@ -766,7 +774,14 @@ def main():
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
+    # setup mlflow tracking
+    if has_mlflow:
+        experiment_id = mlflow.create_experiment('{}'.format(args.model))
+        experiment = mlflow.get_experiment(experiment_id)
+
     try:
+        if has_mlflow:
+            mlflow.start_run(run_name=args.model, experiment_id=experiment.experiment_id)
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
@@ -787,6 +802,7 @@ def main():
                 loss_scaler=loss_scaler,
                 model_ema=model_ema,
                 mixup_fn=mixup_fn,
+                has_mlflow=has_mlflow,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -800,6 +816,7 @@ def main():
                 validate_loss_fn,
                 args,
                 amp_autocast=amp_autocast,
+                has_mlflow=has_mlflow,
             )
 
             if model_ema is not None and not args.model_ema_force_cpu:
@@ -837,6 +854,8 @@ def main():
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
 
+        if has_mlflow:
+            mlflow.end_run()
     except KeyboardInterrupt:
         pass
 
@@ -859,6 +878,7 @@ def train_one_epoch(
         loss_scaler=None,
         model_ema=None,
         mixup_fn=None,
+        has_mlflow=False,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -978,6 +998,10 @@ def train_one_epoch(
                     f'Data: {data_time_m.val:.3f} ({data_time_m.avg:.3f})'
                 )
 
+                if has_mlflow:
+                    mlflow.log_metric('loss', losses_m.val)
+                    mlflow.log_metric('throughput', update_sample_count / update_time_m.val)
+
                 if args.save_images and output_dir:
                     torchvision.utils.save_image(
                         input,
@@ -1013,7 +1037,8 @@ def validate(
         args,
         device=torch.device('cuda'),
         amp_autocast=suppress,
-        log_suffix=''
+        log_suffix='',
+        has_mlflow=False,
 ):
     batch_time_m = utils.AverageMeter()
     losses_m = utils.AverageMeter()
@@ -1072,6 +1097,10 @@ def validate(
                     f'Acc@1: {top1_m.val:>7.3f} ({top1_m.avg:>7.3f})  '
                     f'Acc@5: {top5_m.val:>7.3f} ({top5_m.avg:>7.3f})'
                 )
+                if has_mlflow:
+                    mlflow.log_metric('val_loss', losses_m.val)
+                    mlflow.log_metric('acc_top1', top1_m.val)
+                    mlflow.log_metric('acc_top5', top5_m.val)
 
     # NOTE: this throughput calculation does not take distributed training into
     # account
