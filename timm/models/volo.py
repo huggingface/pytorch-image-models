@@ -301,8 +301,8 @@ def rand_bbox(size, lam, scale=1):
     W = size[1] // scale
     H = size[2] // scale
     cut_rat = np.sqrt(1. - lam)
-    cut_w = np.int(W * cut_rat)
-    cut_h = np.int(H * cut_rat)
+    cut_w = (W * cut_rat).astype(int)
+    cut_h = (H * cut_rat).astype(int)
 
     # uniform
     cx = np.random.randint(W)
