@@ -23,18 +23,14 @@ COMMON_ARGS="""
 
 mkdir -p $LOG_DIR
 
-if [[ -x $(command -v mlflow) ]]; then
+if [[ -x $(command -v mlflow) ]] && [[ -z $(pgrep mlflow) ]]; then
     mlflow server &
     sleep 5
 fi
 
 while read model; do
-    # echo $model
     /usr/bin/env python3 train.py \
         --model $model \
         $COMMON_ARGS \
         2>&1 | tee ${LOG_DIR}/${model}.log
 done < $input_file
-
-# Stop the MLFlow server at the end
-pkill -f mlflow
