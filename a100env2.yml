@@ -1,0 +1,17 @@
+name: timm2
+channels:
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.8
+  - pytorch=1.13.1
+  - torchvision
+  - pytorch-cuda=11.6
+  - pip
+  - pip:
+    - pyyaml
+    - huggingface_hub
+    - safetensors>=0.2
+    - mlflow
+    - -r requirements-dev.txt
+    - -e .
