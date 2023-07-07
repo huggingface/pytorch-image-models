@@ -12,6 +12,7 @@ dependencies:
     - pyyaml
     - huggingface_hub
     - safetensors>=0.2
+    - boto3
     - mlflow
     - -r requirements-dev.txt
     - -e .
