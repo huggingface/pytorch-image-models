@@ -37,7 +37,7 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
+from timm.layers import PatchEmbed, Mlp, DropPath, efficient_drop_path, trunc_normal_, lecun_normal_, resample_patch_embed, \
     resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn, SwiGLUPacked
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
@@ -154,6 +154,80 @@ class Block(nn.Module):
     def forward(self, x):
         x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        return x
+
+
+class EfficientDropPathBlock(nn.Module):
+
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            qk_norm=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            init_values=None,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            mlp_layer=Mlp,
+            attn_class=Attention,
+    ):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = attn_class(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            qk_norm=qk_norm,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+            norm_layer=norm_layer,
+        )
+        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.norm2 = norm_layer(dim)
+        self.mlp = mlp_layer(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+    @torch.jit.ignore(drop=True)
+    def efficient_drop_path_forward(self, x):
+        def residual_attn_func(x):
+            return self.ls1(self.attn(self.norm1(x)))
+
+        def residual_mlp_func(x):
+            return self.ls2(self.mlp(self.norm2(x)))
+        
+        x = efficient_drop_path(
+            x, residual_attn_func, 
+            drop_ratio=self.drop_path1.drop_prob if isinstance(self.drop_path1, DropPath) else 0.0,
+            training=self.training
+        )
+
+        x = efficient_drop_path(
+            x, residual_mlp_func,
+            drop_ratio=self.drop_path2.drop_prob if isinstance(self.drop_path2, DropPath) else 0.0,
+            training=self.training
+        )
+
+        return x
+
+    def forward(self, x):
+        if not torch.jit.is_scripting():
+            x = self.efficient_drop_path_forward(x)
+        else:
+            x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
+            x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+
         return x
 
 
@@ -408,6 +482,7 @@ class VisionTransformer(nn.Module):
             proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            drop_path_schedule: str = 'linear',
             weight_init: str = '',
             embed_layer: Callable = PatchEmbed,
             norm_layer: Optional[Callable] = None,
@@ -443,6 +518,8 @@ class VisionTransformer(nn.Module):
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
         assert class_token or global_pool != 'token'
+        assert drop_path_schedule in ('linear', 'uniform')
+
         use_fc_norm = global_pool == 'avg' if fc_norm is None else fc_norm
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
@@ -476,7 +553,12 @@ class VisionTransformer(nn.Module):
             self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        if drop_path_schedule == 'linear':
+            # stochastic depth decay rule
+            dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        elif drop_path_schedule == 'uniform':
+            dpr = [drop_path_rate] * depth
+
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,
@@ -2017,7 +2099,8 @@ def vit_small_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-S/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5, img_size=518,
+        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5, 
+        img_size=518, drop_path_schedule='uniform', drop_path_rate=0.4
     )
     model = _create_vision_transformer(
         'vit_small_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2029,7 +2112,8 @@ def vit_base_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-B/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5, img_size=518,
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5, 
+        img_size=518, drop_path_schedule='uniform', drop_path_rate=0.4
     )
     model = _create_vision_transformer(
         'vit_base_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2041,7 +2125,8 @@ def vit_large_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-L/14 for DINOv2
     """
     model_args = dict(
-        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, img_size=518,
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, 
+        img_size=518, drop_path_schedule='uniform', drop_path_rate=0.4
     )
     model = _create_vision_transformer(
         'vit_large_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2060,7 +2145,8 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
 
     model_args = dict(
         patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1e-5, 
-        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU
+        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU,
+        drop_path_schedule='uniform', drop_path_rate=0.4
     )
     model = _create_vision_transformer(
         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
