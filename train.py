@@ -69,7 +69,7 @@ has_compile = hasattr(torch, 'compile')
 
 try:
     import mlflow
-    if not os.environ.get("MLFLOW_TRACKING_URI", None):
+    if not mlflow.is_tracking_uri_set():
         mlflow.set_tracking_uri("http://127.0.0.1:5000")
     has_mlflow = True
 except ImportError:
