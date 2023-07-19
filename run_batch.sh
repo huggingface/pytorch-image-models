@@ -34,7 +34,7 @@ while read model; do
         $COMMON_ARGS \
         2>&1 | tee ${LOG_DIR}/${model}.log
 
-    if [[ ! -z $S3_ACCESS_KEY ]] && [[ ! -z $S3_SECRET_KEY ]]; then
+    if [[ ! -z $AWS_ACCESS_KEY_ID ]] && [[ ! -z $AWS_SECRET_ACCESS_KEY ]]; then
         ./moreh-upload-log-S3.py ${LOG_DIR}/${model}.log --folder timm/${HOSTNAME}
     fi
 done < $input_file
