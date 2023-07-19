@@ -17,4 +17,5 @@ dependencies:
     - -r requirements-dev.txt
     - -e .
 variables:
+  LD_LIBRARY_PATH: /data/work/anaconda3/envs/timm/lib
   MLFLOW_TRACKING_URI: http://127.0.0.1:5000
