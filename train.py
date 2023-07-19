@@ -777,6 +777,7 @@ def main():
     # setup mlflow tracking
     if has_mlflow:
         experiment_name = args.model
+        run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
         experiment = mlflow.get_experiment_by_name(experiment_name)
         if experiment:
             experiment_id = experiment.experiment_id
@@ -785,7 +786,7 @@ def main():
 
     try:
         if has_mlflow:
-            mlflow.start_run(experiment_id=experiment_id)
+            mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
