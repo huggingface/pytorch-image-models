@@ -13,7 +13,7 @@ LOG_DIR="./logs"
 COMMON_ARGS="""
     --data-dir ${imgnet100_path} \
     --num-classes 100 \
-    -b 64 \
+    -b 32 -vb 32 \
     --epochs 3 \
     -j 8 \
     --seed 42 \
