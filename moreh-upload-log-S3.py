@@ -5,10 +5,6 @@ import os
 import boto3
 from argparse import ArgumentParser
 
-# awscli credential
-ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", None)
-SECRET_KEY = os.environ.get("S3_SECRET_KEY", None)
-
 
 def parse_args():
     parser = ArgumentParser(description="Upload a log file to moreh-vietnam AWS S3")
@@ -25,9 +21,7 @@ def upload(path, directory):
     Args:
         path : file path. It can be a relative path or an absolute path.
     """
-    s3 = boto3.resource(
-        "s3", aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY
-    )
+    s3 = boto3.resource("s3")
 
     # .txt suffix make us to open a uploaded file to be easily read.
     suffix = ".txt"
@@ -49,9 +43,4 @@ def upload(path, directory):
 
 if __name__ == "__main__":
     args = parse_args()
-
-    if not ACCESS_KEY or not SECRET_KEY:
-        print("Keys for accessing AmazonAWS S3 not found!", file=sys.stderr)
-        sys.exit(1)
-
     upload(args.filename, args.folder)

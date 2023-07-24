@@ -69,7 +69,7 @@ has_compile = hasattr(torch, 'compile')
 
 try:
     import mlflow
-    if not os.environ.get("MLFLOW_TRACKING_URI", None):
+    if not mlflow.is_tracking_uri_set():
         mlflow.set_tracking_uri("http://127.0.0.1:5000")
     has_mlflow = True
 except ImportError:
@@ -776,12 +776,17 @@ def main():
 
     # setup mlflow tracking
     if has_mlflow:
-        experiment_id = mlflow.create_experiment('{}'.format(args.model))
-        experiment = mlflow.get_experiment(experiment_id)
+        experiment_name = args.model
+        run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment:
+            experiment_id = experiment.experiment_id
+        else:
+            experiment_id = mlflow.create_experiment(experiment_name)
 
     try:
         if has_mlflow:
-            mlflow.start_run(run_name=args.model, experiment_id=experiment.experiment_id)
+            mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
