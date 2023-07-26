@@ -1052,6 +1052,13 @@ default_cfgs = generate_default_cfgs({
     'seresnextaa101d_32x8d.sw_in12k_ft_in1k': _ttcfg(
         hf_hub_id='timm/',
         first_conv='conv1.0', test_crop_pct=1.0),
+    'seresnextaa201d_32x8d.sw_in12k_ft_in1k_384': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic', first_conv='conv1.0', input_size=(3, 384, 384), crop_pct=1.0),
+    'seresnextaa201d_32x8d.sw_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821, interpolation='bicubic', first_conv='conv1.0',
+        crop_pct=0.95, input_size=(3, 320, 320), test_input_size=(3, 384, 384), test_crop_pct=1.0),
 
     'resnetaa50d.sw_in12k': _ttcfg(
         hf_hub_id='timm/',
@@ -1836,6 +1843,17 @@ def seresnextaa101d_32x8d(pretrained=False, **kwargs) -> ResNet:
         stem_width=32, stem_type='deep', avg_down=True, aa_layer=nn.AvgPool2d,
         block_args=dict(attn_layer='se'))
     return _create_resnet('seresnextaa101d_32x8d', pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def seresnextaa201d_32x8d(pretrained=False, **kwargs):
+    """Constructs a SE=ResNeXt-101-D 32x8d model with avgpool anti-aliasing
+    """
+    model_args = dict(
+        block=Bottleneck, layers=[3, 24, 36, 4], cardinality=32, base_width=8,
+        stem_width=64, stem_type='deep', avg_down=True, aa_layer=nn.AvgPool2d,
+        block_args=dict(attn_layer='se'))
+    return _create_resnet('seresnextaa201d_32x8d', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
