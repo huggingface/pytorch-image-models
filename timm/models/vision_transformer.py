@@ -1466,6 +1466,7 @@ default_cfgs = generate_default_cfgs({
         url='https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.16-448px-300e.pth.tar',
         # hf_hub_id='timm/',
         license='cc-by-nc-4.0',
+        input_size=(3, 448, 448), crop_pct=1.0,
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     'vit_gigantic_patch16_224_ijepa.in22k': _cfg(
         url='https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar',
@@ -2066,21 +2067,27 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
+
 @register_model
 def vit_huge_patch14_224_ijepa(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-Huge model (ViT-H/14) from `I-JEPA` - https://arxiv.org/abs/2301.08243
     """
     model_args = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, class_token=False, global_pool='avg')
-    model = _create_vision_transformer('vit_huge_patch14_224_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_vision_transformer(
+        'vit_huge_patch14_224_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
 
 @register_model
 def vit_huge_patch16_448_ijepa(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-Huge model (ViT-H/16) from `I-JEPA` - https://arxiv.org/abs/2301.08243
     """
-    model_args = dict(patch_size=16, embed_dim=1280, depth=32, num_heads=16, class_token=False, global_pool='avg', img_size=448)
-    model = _create_vision_transformer('vit_huge_patch16_448_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
+    model_args = dict(
+        patch_size=16, embed_dim=1280, depth=32, num_heads=16, class_token=False, global_pool='avg', img_size=448)
+    model = _create_vision_transformer(
+        'vit_huge_patch16_448_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
 
 @register_model
 def vit_gigantic_patch16_224_ijepa(pretrained=False, **kwargs) -> VisionTransformer:
@@ -2090,6 +2097,7 @@ def vit_gigantic_patch16_224_ijepa(pretrained=False, **kwargs) -> VisionTransfor
     model = _create_vision_transformer(
         'vit_gigantic_patch16_224_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
 
 register_model_deprecations(__name__, {
     'vit_tiny_patch16_224_in21k': 'vit_tiny_patch16_224.augreg_in21k',
