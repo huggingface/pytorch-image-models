@@ -35,6 +35,15 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### July 27, 2023
+* Added timm trained `seresnextaa201d_32x8d.sw_in12k_ft_in1k_384` weights (and `.sw_in12k` pretrain) with 87.3% top-1 on ImageNet-1k, best ImageNet ResNet family model I'm aware of.
+* RepViT model and weights (https://arxiv.org/abs/2307.09283) added by [wangao](https://github.com/jameslahm)
+* I-JEPA ViT feature weights (no classifier) added by [SeeFun](https://github.com/seefun)
+* SAM-ViT (segment anything) feature weights (no classifier) added by [SeeFun](https://github.com/seefun)
+* Add support for alternative feat extraction methods and -ve indices to EfficientNet
+* Add NAdamW optimizer
+* Misc fixes
+
 ### May 11, 2023
 * `timm` 0.9 released, transition from 0.8.xdev releases
 
