@@ -1,4 +1,4 @@
-""" EfficientViT
+""" EfficientViT (by MIT Song Han's Lab)
 
 Paper: `Efficientvit: Enhanced linear attention for high-resolution low-computation visual recognition`
     - https://arxiv.org/abs/2205.14756
@@ -40,7 +40,7 @@ def get_same_padding(kernel_size: int or tuple[int, ...]) -> int or tuple[int, .
         assert kernel_size % 2 > 0, "kernel size should be odd number"
         return kernel_size // 2
 
-class ConvLayer(nn.Module):
+class ConvNormAct(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -54,7 +54,7 @@ class ConvLayer(nn.Module):
         norm=nn.BatchNorm2d,
         act_func=nn.ReLU,
     ):
-        super(ConvLayer, self).__init__()
+        super(ConvNormAct, self).__init__()
 
         padding = get_same_padding(kernel_size)
         padding *= dilation
@@ -101,7 +101,7 @@ class DSConv(nn.Module):
         norm = val2tuple(norm, 2)
         act_func = val2tuple(act_func, 2)
 
-        self.depth_conv = ConvLayer(
+        self.depth_conv = ConvNormAct(
             in_channels,
             in_channels,
             kernel_size,
@@ -111,7 +111,7 @@ class DSConv(nn.Module):
             act_func=act_func[0],
             use_bias=use_bias[0],
         )
-        self.point_conv = ConvLayer(
+        self.point_conv = ConvNormAct(
             in_channels,
             out_channels,
             1,
@@ -146,7 +146,7 @@ class MBConv(nn.Module):
         act_func = val2tuple(act_func, 3)
         mid_channels = mid_channels or round(in_channels * expand_ratio)
 
-        self.inverted_conv = ConvLayer(
+        self.inverted_conv = ConvNormAct(
             in_channels,
             mid_channels,
             1,
@@ -155,7 +155,7 @@ class MBConv(nn.Module):
             act_func=act_func[0],
             use_bias=use_bias[0],
         )
-        self.depth_conv = ConvLayer(
+        self.depth_conv = ConvNormAct(
             mid_channels,
             mid_channels,
             kernel_size,
@@ -165,7 +165,7 @@ class MBConv(nn.Module):
             act_func=act_func[1],
             use_bias=use_bias[1],
         )
-        self.point_conv = ConvLayer(
+        self.point_conv = ConvNormAct(
             mid_channels,
             out_channels,
             1,
@@ -207,7 +207,7 @@ class LiteMSA(nn.Module):
         act_func = val2tuple(act_func, 2)
 
         self.dim = dim
-        self.qkv = ConvLayer(
+        self.qkv = ConvNormAct(
             in_channels,
             3 * total_dim,
             1,
@@ -233,7 +233,7 @@ class LiteMSA(nn.Module):
         )
         self.kernel_func = kernel_func(inplace=False)
 
-        self.proj = ConvLayer(
+        self.proj = ConvNormAct(
             total_dim * (1 + len(scales)),
             out_channels,
             1,
@@ -368,7 +368,7 @@ class ClsHead(nn.Module):
     ):
         super(ClsHead, self).__init__()
         self.ops = nn.Sequential(
-            ConvLayer(in_channels, width_list[0], 1, norm=norm, act_func=act_func),
+            ConvNormAct(in_channels, width_list[0], 1, norm=norm, act_func=act_func),
             SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW'),
             nn.Linear(width_list[0], width_list[1], bias=False),
             nn.LayerNorm(width_list[1]),
@@ -402,7 +402,7 @@ class EfficientViT(nn.Module):
         self.global_pool = global_pool
         # input stem
         input_stem = [
-            ('in_conv', ConvLayer(
+            ('in_conv', ConvNormAct(
                 in_channels=3,
                 out_channels=width_list[0],
                 kernel_size=3,
@@ -425,23 +425,24 @@ class EfficientViT(nn.Module):
             stem_block += 1
         in_channels = width_list[0]
         self.stem = nn.Sequential(OrderedDict(input_stem))
-
+        stride = 4
         self.feature_info = []
         stages = []
         stage_idx = 0
         for w, d in zip(width_list[1:3], depth_list[1:3]):
             stage = []
             for i in range(d):
-                stride = 2 if i == 0 else 1
+                stage_stride = 2 if i == 0 else 1
+                stride *= stage_stride
                 block = self.build_local_block(
                     in_channels=in_channels,
                     out_channels=w,
-                    stride=stride,
+                    stride=stage_stride,
                     expand_ratio=expand_ratio,
                     norm=norm,
                     act_func=act_func,
                 )
-                block = ResidualBlock(block, nn.Identity() if stride == 1 else None)
+                block = ResidualBlock(block, nn.Identity() if stage_stride == 1 else None)
                 stage.append(block)
                 in_channels = w
             stages.append(nn.Sequential(*stage))
@@ -473,9 +474,10 @@ class EfficientViT(nn.Module):
                     )
                 )
             stages.append(nn.Sequential(*stage))
+            stride *= 2
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{stage_idx}')]
             stage_idx += 1
-        
+
         self.stages = nn.Sequential(*stages)
         self.num_features = in_channels
         self.head_width_list = head_width_list
