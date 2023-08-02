@@ -15,7 +15,6 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
-from functools import partial
 from timm.layers import SelectAdaptivePool2d
 from collections import OrderedDict
 
@@ -25,6 +24,7 @@ def val2list(x: list or tuple or any, repeat_time=1):
         return list(x)
     return [x for _ in range(repeat_time)]
 
+
 def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1):
     # repeat elements if necessary
     x = val2list(x)
@@ -33,12 +33,14 @@ def val2tuple(x: list or tuple or any, min_len: int = 1, idx_repeat: int = -1):
 
     return tuple(x)
 
+
 def get_same_padding(kernel_size: int or tuple[int, ...]) -> int or tuple[int, ...]:
     if isinstance(kernel_size, tuple):
         return tuple([get_same_padding(ks) for ks in kernel_size])
     else:
         assert kernel_size % 2 > 0, "kernel size should be odd number"
         return kernel_size // 2
+
 
 class ConvNormAct(nn.Module):
     def __init__(
@@ -263,9 +265,9 @@ class LiteMSA(nn.Module):
         )
         multi_scale_qkv = torch.transpose(multi_scale_qkv, -1, -2)
         q, k, v = (
-            multi_scale_qkv[..., 0 : self.dim],
-            multi_scale_qkv[..., self.dim : 2 * self.dim],
-            multi_scale_qkv[..., 2 * self.dim :],
+            multi_scale_qkv[..., 0: self.dim],
+            multi_scale_qkv[..., self.dim: 2 * self.dim],
+            multi_scale_qkv[..., 2 * self.dim:],
         )
 
         # lightweight global attention
@@ -285,6 +287,7 @@ class LiteMSA(nn.Module):
         out = self.proj(out)
 
         return out
+
 
 class EfficientViTBlock(nn.Module):
     def __init__(
@@ -354,6 +357,7 @@ class ResidualBlock(nn.Module):
             if self.post_act:
                 res = self.post_act(res)
         return res
+
 
 class ClsHead(nn.Module):
     def __init__(
@@ -425,7 +429,7 @@ class EfficientViT(nn.Module):
             stem_block += 1
         in_channels = width_list[0]
         self.stem = nn.Sequential(OrderedDict(input_stem))
-        stride = 4
+        stride = 2
         self.feature_info = []
         stages = []
         stage_idx = 0
@@ -448,7 +452,7 @@ class EfficientViT(nn.Module):
             stages.append(nn.Sequential(*stage))
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{stage_idx}')]
             stage_idx += 1
-        
+
         for w, d in zip(width_list[3:], depth_list[3:]):
             stage = []
             block = self.build_local_block(
@@ -625,11 +629,13 @@ default_cfgs = generate_default_cfgs(
 
 
 def _create_efficientvit(variant, pretrained=False, **kwargs):
+    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3))
     model = build_model_with_cfg(
         EfficientViT,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs
     )
     return model
