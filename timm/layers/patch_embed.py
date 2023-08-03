@@ -197,7 +197,11 @@ def resample_patch_embed(
         return resampled_kernel.reshape(new_size)
 
     v_resample_kernel = vmap(vmap(resample_kernel, 0, 0), 1, 1)
-    return v_resample_kernel(patch_embed)
+    orig_dtype = patch_embed.dtype
+    patch_embed = patch_embed.float()
+    patch_embed = v_resample_kernel(patch_embed)
+    patch_embed = patch_embed.to(orig_dtype)
+    return patch_embed
 
 
 # def divs(n, m=None):

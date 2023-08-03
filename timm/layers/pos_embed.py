@@ -40,9 +40,12 @@ def resample_abs_pos_embed(
 
     # do the interpolation
     embed_dim = posemb.shape[-1]
+    orig_dtype = posemb.dtype
+    posemb = posemb.float()  # interpolate needs float32
     posemb = posemb.reshape(1, old_size[0], old_size[1], -1).permute(0, 3, 1, 2)
     posemb = F.interpolate(posemb, size=new_size, mode=interpolation, antialias=antialias)
     posemb = posemb.permute(0, 2, 3, 1).reshape(1, -1, embed_dim)
+    posemb = posemb.to(orig_dtype)
 
     # add back extra (class, etc) prefix tokens
     if posemb_prefix is not None:
@@ -64,12 +67,12 @@ def resample_abs_pos_embed_nhwc(
     if new_size[0] == posemb.shape[-3] and new_size[1] == posemb.shape[-2]:
         return posemb
 
-    previous_dtype = posemb.dtype
+    orig_dtype = posemb.dtype
     posemb = posemb.float()
     # do the interpolation
     posemb = posemb.reshape(1, posemb.shape[-3], posemb.shape[-2], posemb.shape[-1]).permute(0, 3, 1, 2)
     posemb = F.interpolate(posemb, size=new_size, mode=interpolation, antialias=antialias)
-    posemb = posemb.permute(0, 2, 3, 1).to(previous_dtype)
+    posemb = posemb.permute(0, 2, 3, 1).to(orig_dtype)
 
     if not torch.jit.is_scripting() and verbose:
         _logger.info(f'Resized position embedding: {posemb.shape[-3:-1]} to {new_size}.')
