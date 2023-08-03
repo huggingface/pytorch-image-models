@@ -182,10 +182,10 @@ class SelecSls(nn.Module):
         return x
 
 
-def _create_SelecSls(variant, pretrained, **kwargs):
+def _create_selecsls(variant, pretrained, **kwargs):
     cfg = {}
     feature_info = [dict(num_chs=32, reduction=2, module='stem.2')]
-    if variant.startswith('SelecSls42'):
+    if variant.startswith('selecsls42'):
         cfg['block'] = SelecSlsBlock
         # Define configuration of the network after the initial neck
         cfg['features'] = [
@@ -204,7 +204,7 @@ def _create_SelecSls(variant, pretrained, **kwargs):
         ])
         # Head can be replaced with alternative configurations depending on the problem
         feature_info.append(dict(num_chs=1024, reduction=32, module='head.1'))
-        if variant == 'SelecSls42b':
+        if variant == 'selecsls42b':
             cfg['head'] = [
                 (480, 960, 3, 2),
                 (960, 1024, 3, 1),
@@ -223,7 +223,7 @@ def _create_SelecSls(variant, pretrained, **kwargs):
             feature_info.append(dict(num_chs=1280, reduction=64, module='head.3'))
             cfg['num_features'] = 1280
 
-    elif variant.startswith('SelecSls60'):
+    elif variant.startswith('selecsls60'):
         cfg['block'] = SelecSlsBlock
         # Define configuration of the network after the initial neck
         cfg['features'] = [
@@ -245,7 +245,7 @@ def _create_SelecSls(variant, pretrained, **kwargs):
         ])
         # Head can be replaced with alternative configurations depending on the problem
         feature_info.append(dict(num_chs=1024, reduction=32, module='head.1'))
-        if variant == 'SelecSls60b':
+        if variant == 'selecsls60b':
             cfg['head'] = [
                 (416, 756, 3, 2),
                 (756, 1024, 3, 1),
@@ -264,7 +264,7 @@ def _create_SelecSls(variant, pretrained, **kwargs):
             feature_info.append(dict(num_chs=1280, reduction=64, module='head.3'))
             cfg['num_features'] = 1280
 
-    elif variant == 'SelecSls84':
+    elif variant == 'selecsls84':
         cfg['block'] = SelecSlsBlock
         # Define configuration of the network after the initial neck
         cfg['features'] = [
@@ -327,52 +327,52 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    'SelecSls42.untrained': _cfg(
+    'selecsls42.untrained': _cfg(
         interpolation='bicubic'),
-    'SelecSls42b.in1k': _cfg(
+    'selecsls42b.in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic'),
-    'SelecSls60.in1k': _cfg(
+    'selecsls60.in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic'),
-    'SelecSls60b.in1k': _cfg(
+    'selecsls60b.in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic'),
-    'SelecSls84.untrained': _cfg(
+    'selecsls84.untrained': _cfg(
         interpolation='bicubic'),
 })
 
 
 @register_model
-def SelecSls42(pretrained=False, **kwargs) -> SelecSls:
+def selecsls42(pretrained=False, **kwargs) -> SelecSls:
     """Constructs a SelecSls42 model.
     """
-    return _create_SelecSls('SelecSls42', pretrained, **kwargs)
+    return _create_selecsls('selecsls42', pretrained, **kwargs)
 
 
 @register_model
-def SelecSls42b(pretrained=False, **kwargs) -> SelecSls:
+def selecsls42b(pretrained=False, **kwargs) -> SelecSls:
     """Constructs a SelecSls42_B model.
     """
-    return _create_SelecSls('SelecSls42b', pretrained, **kwargs)
+    return _create_selecsls('selecsls42b', pretrained, **kwargs)
 
 
 @register_model
-def SelecSls60(pretrained=False, **kwargs) -> SelecSls:
+def selecsls60(pretrained=False, **kwargs) -> SelecSls:
     """Constructs a SelecSls60 model.
     """
-    return _create_SelecSls('SelecSls60', pretrained, **kwargs)
+    return _create_selecsls('selecsls60', pretrained, **kwargs)
 
 
 @register_model
-def SelecSls60b(pretrained=False, **kwargs) -> SelecSls:
+def selecsls60b(pretrained=False, **kwargs) -> SelecSls:
     """Constructs a SelecSls60_B model.
     """
-    return _create_SelecSls('SelecSls60b', pretrained, **kwargs)
+    return _create_selecsls('selecsls60b', pretrained, **kwargs)
 
 
 @register_model
-def SelecSls84(pretrained=False, **kwargs) -> SelecSls:
+def selecsls84(pretrained=False, **kwargs) -> SelecSls:
     """Constructs a SelecSls84 model.
     """
-    return _create_SelecSls('SelecSls84', pretrained, **kwargs)
+    return _create_selecsls('selecsls84', pretrained, **kwargs)
