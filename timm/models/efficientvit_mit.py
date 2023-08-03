@@ -16,7 +16,6 @@ from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from timm.layers import SelectAdaptivePool2d
-from collections import OrderedDict
 
 
 def val2list(x: list or tuple or any, repeat_time=1):
@@ -61,7 +60,7 @@ class ConvNormAct(nn.Module):
         padding = get_same_padding(kernel_size)
         padding *= dilation
 
-        self.dropout = nn.Dropout(dropout, inplace=False) if dropout > 0 else None
+        self.dropout = nn.Dropout(dropout, inplace=False)
         self.conv = nn.Conv2d(
             in_channels,
             out_channels,
@@ -76,8 +75,7 @@ class ConvNormAct(nn.Module):
         self.act = act_func(inplace=True) if act_func else None
 
     def forward(self, x):
-        if self.dropout is not None:
-            x = self.dropout(x)
+        x = self.dropout(x)
         x = self.conv(x)
         if self.norm:
             x = self.norm(x)
@@ -245,7 +243,7 @@ class LiteMSA(nn.Module):
         )
 
     def forward(self, x):
-        B, _, H, W = list(x.size())
+        B, _, H, W = x.shape
 
         # generate multi-scale q, k, v
         qkv = self.qkv(x)
@@ -359,7 +357,105 @@ class ResidualBlock(nn.Module):
         return res
 
 
-class ClsHead(nn.Module):
+def build_local_block(in_channels: int,
+                      out_channels: int,
+                      stride: int,
+                      expand_ratio: float,
+                      norm: str,
+                      act_func: str,
+                      fewer_norm: bool = False,):
+    if expand_ratio == 1:
+        block = DSConv(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            stride=stride,
+            use_bias=(True, False) if fewer_norm else False,
+            norm=(None, norm) if fewer_norm else norm,
+            act_func=(act_func, None),
+        )
+    else:
+        block = MBConv(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            stride=stride,
+            expand_ratio=expand_ratio,
+            use_bias=(True, True, False) if fewer_norm else False,
+            norm=(None, None, norm) if fewer_norm else norm,
+            act_func=(act_func, act_func, None),
+        )
+    return block
+
+
+class Stem(nn.Sequential):
+    def __init__(self, in_chs, out_chs, depth, norm, act_func):
+        super().__init__()
+        self.stride = 2
+
+        self.add_module('in_conv', ConvNormAct(in_channels=in_chs, out_channels=out_chs, kernel_size=3, stride=2, norm=norm, act_func=act_func))
+        stem_block = 0
+        for _ in range(depth):
+            block = build_local_block(
+                in_channels=out_chs,
+                out_channels=out_chs,
+                stride=1,
+                expand_ratio=1,
+                norm=norm,
+                act_func=act_func,
+            )
+            self.add_module(f'res{stem_block}', ResidualBlock(block, nn.Identity()))
+            stem_block += 1
+
+
+class EfficientViTStage(nn.Module):
+    def __init__(self, in_chs, out_chs, depth, norm, act_func, expand_ratio, dim, conv_stage=False):
+        super(EfficientViTStage, self).__init__()
+        blocks = []
+        if conv_stage:
+            # for stage 1, 2
+            for i in range(depth):
+                stage_stride = 2 if i == 0 else 1
+                block = build_local_block(
+                    in_channels=in_chs,
+                    out_channels=out_chs,
+                    stride=stage_stride,
+                    expand_ratio=expand_ratio,
+                    norm=norm,
+                    act_func=act_func,
+                )
+                block = ResidualBlock(block, nn.Identity() if stage_stride == 1 else None)
+                blocks.append(block)
+                in_chs = out_chs
+        else:
+            # for stage 3, 4
+            block = build_local_block(
+                in_channels=in_chs,
+                out_channels=out_chs,
+                stride=2,
+                expand_ratio=expand_ratio,
+                norm=norm,
+                act_func=act_func,
+                fewer_norm=True,
+            )
+            blocks.append(ResidualBlock(block, None))
+            in_chs = out_chs
+
+            for _ in range(depth):
+                blocks.append(
+                    EfficientViTBlock(
+                        in_channels=in_chs,
+                        dim=dim,
+                        expand_ratio=expand_ratio,
+                        norm=norm,
+                        act_func=act_func,
+                    )
+                )
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x):
+        return self.blocks(x)
+
+
+class ClassifierHead(nn.Module):
     def __init__(
         self,
         in_channels,
@@ -370,19 +466,21 @@ class ClsHead(nn.Module):
         act_func=nn.Hardswish,
         global_pool='avg',
     ):
-        super(ClsHead, self).__init__()
-        self.ops = nn.Sequential(
-            ConvNormAct(in_channels, width_list[0], 1, norm=norm, act_func=act_func),
-            SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW'),
+        super(ClassifierHead, self).__init__()
+        self.in_conv = ConvNormAct(in_channels, width_list[0], 1, norm=norm, act_func=act_func)
+        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
+        self.classifier = nn.Sequential(
             nn.Linear(width_list[0], width_list[1], bias=False),
             nn.LayerNorm(width_list[1]),
             act_func(inplace=True),
-            nn.Dropout(dropout, inplace=False) if dropout else nn.Identity(),
+            nn.Dropout(dropout, inplace=False),
             nn.Linear(width_list[1], n_classes, bias=True),
         )
 
     def forward(self, x):
-        x = self.ops(x)
+        x = self.in_conv(x)
+        x = self.global_pool(x)
+        x = self.classifier(x)
         return x
 
 
@@ -403,82 +501,27 @@ class EfficientViT(nn.Module):
     ):
         super(EfficientViT, self).__init__()
         self.grad_checkpointing = False
-        self.global_pool = global_pool
+        self.global_pool_name = global_pool
         # input stem
-        input_stem = [
-            ('in_conv', ConvNormAct(
-                in_channels=3,
-                out_channels=width_list[0],
-                kernel_size=3,
-                stride=2,
-                norm=norm,
-                act_func=act_func,
-            ))
-        ]
-        stem_block = 0
-        for _ in range(depth_list[0]):
-            block = self.build_local_block(
-                in_channels=width_list[0],
-                out_channels=width_list[0],
-                stride=1,
-                expand_ratio=1,
-                norm=norm,
-                act_func=act_func,
-            )
-            input_stem.append((f'res{stem_block}', ResidualBlock(block, nn.Identity())))
-            stem_block += 1
-        in_channels = width_list[0]
-        self.stem = nn.Sequential(OrderedDict(input_stem))
-        stride = 2
+        self.stem = Stem(in_chans, width_list[0], depth_list[0], norm, act_func)
+        stride = self.stem.stride
+
+        # stages
         self.feature_info = []
         stages = []
         stage_idx = 0
+        in_channels = width_list[0]
         for w, d in zip(width_list[1:3], depth_list[1:3]):
-            stage = []
-            for i in range(d):
-                stage_stride = 2 if i == 0 else 1
-                stride *= stage_stride
-                block = self.build_local_block(
-                    in_channels=in_channels,
-                    out_channels=w,
-                    stride=stage_stride,
-                    expand_ratio=expand_ratio,
-                    norm=norm,
-                    act_func=act_func,
-                )
-                block = ResidualBlock(block, nn.Identity() if stage_stride == 1 else None)
-                stage.append(block)
-                in_channels = w
-            stages.append(nn.Sequential(*stage))
+            stages.append(EfficientViTStage(in_channels, w, d, norm, act_func, expand_ratio, dim, conv_stage=True))
+            stride *= 2
+            in_channels = w
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{stage_idx}')]
             stage_idx += 1
 
         for w, d in zip(width_list[3:], depth_list[3:]):
-            stage = []
-            block = self.build_local_block(
-                in_channels=in_channels,
-                out_channels=w,
-                stride=2,
-                expand_ratio=expand_ratio,
-                norm=norm,
-                act_func=act_func,
-                fewer_norm=True,
-            )
-            stage.append(ResidualBlock(block, None))
-            in_channels = w
-
-            for _ in range(d):
-                stage.append(
-                    EfficientViTBlock(
-                        in_channels=in_channels,
-                        dim=dim,
-                        expand_ratio=expand_ratio,
-                        norm=norm,
-                        act_func=act_func,
-                    )
-                )
-            stages.append(nn.Sequential(*stage))
+            stages.append(EfficientViTStage(in_channels, w, d, norm, act_func, expand_ratio, dim, conv_stage=False))
             stride *= 2
+            in_channels = w
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{stage_idx}')]
             stage_idx += 1
 
@@ -487,43 +530,12 @@ class EfficientViT(nn.Module):
         self.head_width_list = head_width_list
         self.head_dropout = head_dropout
         if num_classes > 0:
-            self.head = ClsHead(self.num_features, self.head_width_list, n_classes=num_classes, dropout=self.head_dropout, global_pool=self.global_pool)
+            self.head = ClassifierHead(self.num_features, self.head_width_list, n_classes=num_classes, dropout=self.head_dropout, global_pool=self.global_pool_name)
         else:
             if global_pool is not None:
                 self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
             else:
                 self.head = nn.Identity()
-
-    @staticmethod
-    def build_local_block(
-        in_channels: int,
-        out_channels: int,
-        stride: int,
-        expand_ratio: float,
-        norm: str,
-        act_func: str,
-        fewer_norm: bool = False,
-    ):
-        if expand_ratio == 1:
-            block = DSConv(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                stride=stride,
-                use_bias=(True, False) if fewer_norm else False,
-                norm=(None, norm) if fewer_norm else norm,
-                act_func=(act_func, None),
-            )
-        else:
-            block = MBConv(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                stride=stride,
-                expand_ratio=expand_ratio,
-                use_bias=(True, True, False) if fewer_norm else False,
-                norm=(None, None, norm) if fewer_norm else norm,
-                act_func=(act_func, act_func, None),
-            )
-        return block
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -544,9 +556,9 @@ class EfficientViT(nn.Module):
     def reset_classifier(self, num_classes, global_pool=None, dropout=0):
         self.num_classes = num_classes
         if global_pool is not None:
-            self.global_pool = global_pool
+            self.global_pool_name = global_pool
         if num_classes > 0:
-            self.head = ClsHead(self.num_features, self.head_width_list, n_classes=num_classes, dropout=self.head_dropout, global_pool=global_pool)
+            self.head = ClassifierHead(self.num_features, self.head_width_list, n_classes=num_classes, dropout=self.head_dropout, global_pool=self.global_pool_name)
         else:
             if global_pool is not None:
                 self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
@@ -587,7 +599,7 @@ def _cfg(url='', **kwargs):
         'mean': IMAGENET_DEFAULT_MEAN,
         'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'stem.in_conv.conv',
-        'classifier': 'head',
+        'classifier': 'head.classifier',
         **kwargs,
     }
 
