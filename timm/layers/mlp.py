@@ -42,6 +42,7 @@ class Mlp(nn.Module):
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
+        x = self.norm(x)
         x = self.fc2(x)
         x = self.drop2(x)
         return x
