@@ -398,6 +398,8 @@ class SwinTransformerV2Stage(nn.Module):
         self.depth = depth
         self.output_nchw = output_nchw
         self.grad_checkpointing = False
+        window_size = to_2tuple(window_size)
+        shift_size = tuple([w // 2 for w in window_size])
 
         # patch merging / downsample layer
         if downsample:
@@ -413,7 +415,7 @@ class SwinTransformerV2Stage(nn.Module):
                 input_resolution=self.output_resolution,
                 num_heads=num_heads,
                 window_size=window_size,
-                shift_size=0 if (i % 2 == 0) else window_size // 2,
+                shift_size=0 if (i % 2 == 0) else shift_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop,
