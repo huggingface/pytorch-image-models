@@ -296,8 +296,7 @@ class SwinTransformerBlock(nn.Module):
         # pad for resolution not divisible by window size
         pad_h = (self.window_size[0] - H % self.window_size[0]) % self.window_size[0]
         pad_w = (self.window_size[1] - W % self.window_size[1]) % self.window_size[1]
-        if pad_h > 0 or pad_w > 0:
-            shifted_x = torch.nn.functional.pad(shifted_x, (0, 0, 0, pad_w, 0, pad_h))
+        shifted_x = torch.nn.functional.pad(shifted_x, (0, 0, 0, pad_w, 0, pad_h))
         Hp, Wp = H + pad_h, W + pad_w
 
         # partition windows
