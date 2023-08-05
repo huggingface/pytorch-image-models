@@ -41,7 +41,7 @@ _int_or_tuple_2_t = Union[int, Tuple[int, int]]
 def window_partition(
         x: torch.Tensor,
         window_size: Tuple[int, int],
-) -> Tuple[torch.Tensor, Tuple[int, int]]:
+) -> torch.Tensor:
     """
     Partition into non-overlapping windows with padding if needed.
     Args:
