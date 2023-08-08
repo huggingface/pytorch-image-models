@@ -48,7 +48,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, ConvMlp, DropPath, LayerNorm, ClassifierHead, NormMlpClassifierHead
 from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act_layer, create_conv2d, create_pool2d
 from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
-from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn
+from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn, resize_rel_pos_bias_table
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint_seq
@@ -186,9 +186,9 @@ class Attention2d(nn.Module):
                 attn_bias = shared_rel_pos
 
             x = torch.nn.functional.scaled_dot_product_attention(
-                q.transpose(-1, -2),
-                k.transpose(-1, -2),
-                v.transpose(-1, -2),
+                q.transpose(-1, -2).contiguous(),
+                k.transpose(-1, -2).contiguous(),
+                v.transpose(-1, -2).contiguous(),
                 attn_mask=attn_bias,
                 dropout_p=self.attn_drop.p,
             ).transpose(-1, -2).reshape(B, -1, H, W)
@@ -1790,6 +1790,15 @@ def checkpoint_filter_fn(state_dict, model: nn.Module):
     model_state_dict = model.state_dict()
     out_dict = {}
     for k, v in state_dict.items():
+        if k.endswith('relative_position_bias_table'):
+            m = model.get_submodule(k[:-29])
+            if v.shape != m.relative_position_bias_table.shape or m.window_size[0] != m.window_size[1]:
+                v = resize_rel_pos_bias_table(
+                    v,
+                    new_window_size=m.window_size,
+                    new_bias_shape=m.relative_position_bias_table.shape,
+                )
+
         if k in model_state_dict and v.ndim != model_state_dict[k].ndim and v.numel() == model_state_dict[k].numel():
             # adapt between conv2d / linear layers
             assert v.ndim in (2, 4)

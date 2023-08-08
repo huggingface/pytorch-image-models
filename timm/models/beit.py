@@ -48,6 +48,8 @@ from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_, use_fused_attn
+from timm.layers import resample_patch_embed, resample_abs_pos_embed, resize_rel_pos_bias_table
+
 
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
@@ -115,7 +117,7 @@ class Attention(nn.Module):
             self.num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
             self.relative_position_bias_table = nn.Parameter(
                 torch.zeros(self.num_relative_distance, num_heads))  # 2*Wh-1 * 2*Ww-1, nH
-            self.register_buffer("relative_position_index", gen_relative_position_index(window_size))
+            self.register_buffer("relative_position_index", gen_relative_position_index(window_size), persistent=False)
         else:
             self.window_size = None
             self.relative_position_bias_table = None
@@ -504,11 +506,46 @@ default_cfgs = generate_default_cfgs({
 })
 
 
-def _beit_checkpoint_filter_fn(state_dict, model):
-    if 'module' in state_dict:
-        # beit v2 didn't strip module
-        state_dict = state_dict['module']
-    return checkpoint_filter_fn(state_dict, model)
+def _beit_checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antialias=True):
+    state_dict = state_dict.get('model', state_dict)
+    state_dict = state_dict.get('module', state_dict)
+    # beit v2 didn't strip module
+
+    out_dict = {}
+    for k, v in state_dict.items():
+        if 'relative_position_index' in k:
+            continue
+        if 'patch_embed.proj.weight' in k:
+            O, I, H, W = model.patch_embed.proj.weight.shape
+            if v.shape[-1] != W or v.shape[-2] != H:
+                v = resample_patch_embed(
+                    v,
+                    (H, W),
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
+        elif k == 'pos_embed' and v.shape[1] != model.pos_embed.shape[1]:
+            # To resize pos embedding when using model at different size from pretrained weights
+            num_prefix_tokens = 1
+            v = resample_abs_pos_embed(
+                v,
+                new_size=model.patch_embed.grid_size,
+                num_prefix_tokens=num_prefix_tokens,
+                interpolation=interpolation,
+                antialias=antialias,
+                verbose=True,
+            )
+        elif k.endswith('relative_position_bias_table'):
+            m = model.get_submodule(k[:-29])
+            if v.shape != m.relative_position_bias_table.shape or m.window_size[0] != m.window_size[1]:
+                v = resize_rel_pos_bias_table(
+                    v,
+                    new_window_size=m.window_size,
+                    new_bias_shape=m.relative_position_bias_table.shape,
+                )
+        out_dict[k] = v
+    return out_dict
 
 
 def _create_beit(variant, pretrained=False, **kwargs):

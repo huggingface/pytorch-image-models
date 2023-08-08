@@ -24,7 +24,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
-    _assert, use_fused_attn
+    _assert, use_fused_attn, resize_rel_pos_bias_table
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply
@@ -625,7 +625,6 @@ def checkpoint_filter_fn(state_dict, model):
     if 'head.fc.weight' in state_dict:
         old_weights = False
     import re
-    current_state_dict = model.state_dict()
     out_dict = {}
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
@@ -635,15 +634,12 @@ def checkpoint_filter_fn(state_dict, model):
 
         if k.endswith('relative_position_bias_table'):
             m = model.get_submodule(k[:-29])
-            bias_size = tuple([2 * x -1 for x in m.window_size])
-            old_len = int(len(v) ** 0.5)  # we have to assume pretrained weight is square right now
             if v.shape != m.relative_position_bias_table.shape or m.window_size[0] != m.window_size[1]:
-                new_pos_bias = torch.nn.functional.interpolate(
-                    v.transpose(1, 0).reshape(1, -1, old_len, old_len),
-                    size=bias_size,
-                    mode="bicubic",
+                v = resize_rel_pos_bias_table(
+                    v,
+                    new_window_size=m.window_size,
+                    new_bias_shape=m.relative_position_bias_table.shape,
                 )
-                v = new_pos_bias.reshape(-1, bias_size[0] * bias_size[1]).transpose(0, 1)
 
         if old_weights:
             k = re.sub(r'layers.(\d+).downsample', lambda x: f'layers.{int(x.group(1)) + 1}.downsample', k)

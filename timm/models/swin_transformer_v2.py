@@ -570,7 +570,7 @@ class SwinTransformerV2(nn.Module):
     def no_weight_decay(self):
         nod = set()
         for n, m in self.named_modules():
-            if any([kw in n for kw in ("cpb_mlp", "logit_scale", 'relative_position_bias_table')]):
+            if any([kw in n for kw in ("cpb_mlp", "logit_scale")]):
                 nod.add(n)
         return nod
 
