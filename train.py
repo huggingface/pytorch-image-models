@@ -774,9 +774,21 @@ def main():
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
+    if has_mlflow:
+        experiment_id = None
+        run_name = None
+        if not os.environ.get("MLFLOW_RUN_ID"):
+            experiment_name = args.model
+            run_name = datetime.now().strftime("%y/%m/%d-%H:%M")
+            experiment = mlflow.get_experiment_by_name(experiment_name)
+            if experiment:
+                experiment_id = experiment.experiment_id
+            else:
+                experiment_id = mlflow.create_experiment(experiment_name)
+
     try:
         if has_mlflow:
-            mlflow.start_run()
+            mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
