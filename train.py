@@ -774,19 +774,9 @@ def main():
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
-    # setup mlflow tracking
-    if has_mlflow:
-        experiment_name = args.model
-        run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
-        experiment = mlflow.get_experiment_by_name(experiment_name)
-        if experiment:
-            experiment_id = experiment.experiment_id
-        else:
-            experiment_id = mlflow.create_experiment(experiment_name)
-
     try:
         if has_mlflow:
-            mlflow.start_run(experiment_id=experiment_id, run_name=run_name)
+            mlflow.start_run()
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
                 dataset_train.set_epoch(epoch)
@@ -1004,8 +994,9 @@ def train_one_epoch(
                 )
 
                 if has_mlflow:
-                    mlflow.log_metric('loss', losses_m.val)
-                    mlflow.log_metric('throughput', update_sample_count / update_time_m.val)
+                    mlflow.log_metric('loss', losses_m.val, step=update_idx)
+                    mlflow.log_metric('throughput', update_sample_count / update_time_m.val, step=update_idx)
+                    mlflow.log_metric('lr', lr, step=update_idx)
 
                 if args.save_images and output_dir:
                     torchvision.utils.save_image(
@@ -1104,8 +1095,8 @@ def validate(
                 )
                 if has_mlflow:
                     mlflow.log_metric('val_loss', losses_m.val)
-                    mlflow.log_metric('acc_top1', top1_m.val)
-                    mlflow.log_metric('acc_top5', top5_m.val)
+                    mlflow.log_metric('val_acc_top1', top1_m.val)
+                    mlflow.log_metric('val_acc_top5', top5_m.val)
 
     # NOTE: this throughput calculation does not take distributed training into
     # account
