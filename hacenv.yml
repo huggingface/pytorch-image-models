@@ -3,8 +3,8 @@ dependencies:
   - python=3.8
   - pip
   - pip:
-    - moreh-driver==23.6.0
-    - torch==1.7.1+cu110.moreh23.6.0
+    - moreh-driver==23.7.0
+    - torch==1.7.1+cu110.moreh23.7.0
     - torchvision
     - pyyaml
     - huggingface_hub
