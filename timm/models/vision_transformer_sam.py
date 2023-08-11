@@ -434,6 +434,7 @@ class VisionTransformerSAM(nn.Module):
                 ),
                 LayerNorm2d(neck_chans),
             )
+            self.num_features = neck_chans
         else:
             self.neck = nn.Identity()
             neck_chans = embed_dim
