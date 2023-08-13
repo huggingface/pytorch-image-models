@@ -111,6 +111,10 @@ output/
 Untitled.ipynb
 Testing notebook.ipynb
 
+
+# MacOS
+*.DS_Store
+
 # Root dir exclusions
 /*.csv
 /*.yaml
@@ -119,3 +123,4 @@ Testing notebook.ipynb
 /*.png
 /*.zip
 /*.tar.*
+

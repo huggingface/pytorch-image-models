@@ -23,6 +23,7 @@ from timm.layers.fast_norm import is_fast_norm, set_fast_norm, fast_group_norm, 
 from timm.layers.filter_response_norm import FilterResponseNormTlu2d, FilterResponseNormAct2d
 from timm.layers.gather_excite import GatherExcite
 from timm.layers.global_context import GlobalContext
+from timm.layers.gnn_layers import DyGraphConv2d
 from timm.layers.helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
 from timm.layers.inplace_abn import InplaceAbn
 from timm.layers.linear import Linear
