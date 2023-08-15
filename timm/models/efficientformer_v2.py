@@ -232,7 +232,7 @@ class Attention2dDownsample(torch.nn.Module):
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.N))
         k_pos = torch.stack(torch.meshgrid(torch.arange(
-            self.resolution[1]),
+            self.resolution[0]),
             torch.arange(self.resolution[1]))).flatten(1)
         q_pos = torch.stack(torch.meshgrid(
             torch.arange(0, self.resolution[0], step=2),
