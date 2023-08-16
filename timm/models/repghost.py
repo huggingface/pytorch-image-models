@@ -441,19 +441,19 @@ def repghostnet_111(pretrained=False, **kwargs) -> RepGhostNet:
 @register_model
 def repghostnet_130(pretrained=False, **kwargs) -> RepGhostNet:
     """ RepGhostNet-1.3x """
-    model = _create_repghostnet('ghostnet_130', width=1.3, pretrained=pretrained, **kwargs)
+    model = _create_repghostnet('repghostnet_130', width=1.3, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def repghostnet_150(pretrained=False, **kwargs) -> RepGhostNet:
     """ RepGhostNet-1.5x """
-    model = _create_repghostnet('ghostnet_150', width=1.5, pretrained=pretrained, **kwargs)
+    model = _create_repghostnet('repghostnet_150', width=1.5, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def repghostnet_200(pretrained=False, **kwargs) -> RepGhostNet:
     """ RepGhostNet-2.0x """
-    model = _create_repghostnet('ghostnet_200', width=2.0, pretrained=pretrained, **kwargs)
+    model = _create_repghostnet('repghostnet_200', width=2.0, pretrained=pretrained, **kwargs)
     return model
