@@ -661,14 +661,14 @@ def efficientvit_b0(pretrained=False, **kwargs):
 @register_model
 def efficientvit_b1(pretrained=False, **kwargs):
     model_args = dict(width_list=[16, 32, 64, 128, 256], depth_list=[1, 2, 3, 3, 4], dim=16, head_width_list=[1536, 1600])
-    return _create_efficientvit('efficientvit_b0', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_efficientvit('efficientvit_b1', pretrained=pretrained, **dict(model_args, **kwargs))
 
 @register_model
 def efficientvit_b2(pretrained=False, **kwargs):
     model_args = dict(width_list=[24, 48, 96, 192, 384], depth_list=[1, 3, 4, 4, 6], dim=32, head_width_list=[2304, 2560])
-    return _create_efficientvit('efficientvit_b0', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_efficientvit('efficientvit_b2', pretrained=pretrained, **dict(model_args, **kwargs))
 
 @register_model
 def efficientvit_b3(pretrained=False, **kwargs):
     model_args = dict(width_list=[32, 64, 128, 256, 512], depth_list=[1, 4, 6, 6, 9], dim=32, head_width_list=[2304, 2560])
-    return _create_efficientvit('efficientvit_b0', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_efficientvit('efficientvit_b3', pretrained=pretrained, **dict(model_args, **kwargs))

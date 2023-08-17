@@ -373,8 +373,8 @@ class EfficientViTMSRA(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
-        self.out_dims = embed_dim[-1]
-        self.head = BNLinear(self.out_dims, num_classes) if num_classes > 0 else torch.nn.Identity()
+        self.num_features = embed_dim[-1]
+        self.head = BNLinear(self.num_features, num_classes) if num_classes > 0 else torch.nn.Identity()
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -396,7 +396,7 @@ class EfficientViTMSRA(nn.Module):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
-        self.head = BNLinear(self.out_dims, num_classes) if num_classes > 0 else torch.nn.Identity()
+        self.head = BNLinear(self.num_features, num_classes) if num_classes > 0 else torch.nn.Identity()
 
     def forward_features(self, x):
         x = self.patch_embed(x)
