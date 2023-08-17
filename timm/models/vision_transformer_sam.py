@@ -160,7 +160,11 @@ class Attention(nn.Module):
                 k = apply_rot_embed_cat(k, rope).type_as(v)
 
         if self.fused_attn:
-            x = nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_bias)
+            x = nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            )
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
