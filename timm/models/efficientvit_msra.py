@@ -518,6 +518,7 @@ def _cfg(url='', **kwargs):
         'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.conv1.conv',
         'classifier': 'head.linear',
+        'fixed_input_size': True,
         **kwargs,
     }
 
