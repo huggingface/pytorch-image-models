@@ -527,7 +527,7 @@ class EfficientVit(nn.Module):
             )
         else:
             if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
+                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
             else:
                 self.head = nn.Identity()
 
@@ -561,7 +561,7 @@ class EfficientVit(nn.Module):
             )
         else:
             if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
+                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
             else:
                 self.head = nn.Identity()
 
