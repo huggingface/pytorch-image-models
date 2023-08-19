@@ -53,7 +53,7 @@ class ConvNormAct(nn.Module):
         dilation=1,
         groups=1,
         bias=False,
-        dropout=0,
+        dropout=0.,
         norm_layer=nn.BatchNorm2d,
         act_layer=nn.ReLU,
     ):
@@ -248,7 +248,7 @@ class LiteMSA(nn.Module):
         # lightweight global attention
         q = self.kernel_func(q)
         k = self.kernel_func(k)
-        v = F.pad(v, (0, 1), mode="constant", value=1)
+        v = F.pad(v, (0, 1), mode="constant", value=1.)
 
         kv = k.transpose(-1, -2) @ v
         out = q @ kv
@@ -443,7 +443,7 @@ class ClassifierHead(nn.Module):
         in_channels,
         widths,
         n_classes=1000,
-        dropout=0,
+        dropout=0.,
         norm_layer=nn.BatchNorm2d,
         act_layer=nn.Hardswish,
         global_pool='avg',
@@ -547,7 +547,7 @@ class EfficientVit(nn.Module):
     def get_classifier(self):
         return self.head.classifier[-1]
 
-    def reset_classifier(self, num_classes, global_pool=None, dropout=0):
+    def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -561,7 +561,7 @@ class EfficientVit(nn.Module):
             )
         else:
             if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+                self.head = SelectAdaptivePool2d(pool_type=self.global_pool, flatten=True)
             else:
                 self.head = nn.Identity()
 
@@ -592,6 +592,7 @@ def _cfg(url='', **kwargs):
         'classifier': 'head.classifier.4',
         'crop_pct': 0.95,
         'input_size': (3, 224, 224),
+        'pool_size': (7, 7),
         **kwargs,
     }
 
@@ -605,33 +606,33 @@ default_cfgs = generate_default_cfgs({
     ),
     'efficientvit_b1.r256_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 256, 256), crop_pct=1.0,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
     ),
     'efficientvit_b1.r288_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 288, 288), crop_pct=1.0,
+        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
     ),
     'efficientvit_b2.r224_in1k': _cfg(
         hf_hub_id='timm/',
     ),
     'efficientvit_b2.r256_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 256, 256), crop_pct=1.0,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
     ),
     'efficientvit_b2.r288_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 288, 288), crop_pct=1.0,
+        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
     ),
     'efficientvit_b3.r224_in1k': _cfg(
         hf_hub_id='timm/',
     ),
     'efficientvit_b3.r256_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 256, 256), crop_pct=1.0,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
     ),
     'efficientvit_b3.r288_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 288, 288), crop_pct=1.0,
+        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
     ),
 })
 
