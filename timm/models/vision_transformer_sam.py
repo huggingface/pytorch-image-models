@@ -24,6 +24,7 @@ from timm.layers import PatchEmbed, Mlp, DropPath, PatchDropout, LayerNorm2d, Cl
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
+from ._features_fx import register_notrace_function
 
 # model_registry will add each entrypoint fn to this
 __all__ = ['VisionTransformerSAM']
@@ -64,6 +65,7 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
 
     return rel_pos_resized[relative_coords.long()]
 
+register_notrace_function(get_rel_pos)
 
 def get_decomposed_rel_pos_bias(
     q: torch.Tensor,
@@ -278,8 +280,7 @@ def window_partition(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, T
 
     pad_h = (window_size - H % window_size) % window_size
     pad_w = (window_size - W % window_size) % window_size
-    if pad_h > 0 or pad_w > 0:
-        x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
+    x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
     Hp, Wp = H + pad_h, W + pad_w
 
     x = x.view(B, Hp // window_size, window_size, Wp // window_size, window_size, C)
@@ -306,9 +307,7 @@ def window_unpartition(
     B = windows.shape[0] // (Hp * Wp // window_size // window_size)
     x = windows.view(B, Hp // window_size, Wp // window_size, window_size, window_size, -1)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
-
-    if Hp > H or Wp > W:
-        x = x[:, :H, :W, :].contiguous()
+    x = x[:, :H, :W, :].contiguous()
     return x
 
 
@@ -673,7 +672,7 @@ def samvit_base_patch16_224(pretrained=False, **kwargs) -> VisionTransformerSAM:
     """
     model_args = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, global_attn_indexes=[2, 5, 8, 11],
-        window_size=16, use_rel_pos=True, img_size=224, neck_chans=None,
+        window_size=14, use_rel_pos=True, use_abs_pos=False, img_size=224, neck_chans=None,
     )
     model = _create_vision_transformer(
         'samvit_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
