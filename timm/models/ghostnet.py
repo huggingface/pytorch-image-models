@@ -1,8 +1,11 @@
 """
-An implementation of GhostNet Model as defined in:
+An implementation of GhostNet & GhostNetV2 Models as defined in:
 GhostNet: More Features from Cheap Operations. https://arxiv.org/abs/1911.11907
-The train script of the model is similar to that of MobileNetV3
+GhostNetV2: Enhance Cheap Operation with Long-Range Attention. https://proceedings.neurips.cc/paper_files/paper/2022/file/40b60852a4abdaa696b5a1a78da34635-Paper-Conference.pdf
+
+The train script & code of models at:
 Original model: https://github.com/huawei-noah/CV-backbones/tree/master/ghostnet_pytorch
+Original model: https://github.com/huawei-noah/Efficient-AI-Backbones/blob/master/ghostnetv2_pytorch/model/ghostnetv2_torch.py
 """
 import math
 from functools import partial
