@@ -23,7 +23,6 @@ from .eva import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
-from .ghostnetv2 import *
 from .hardcorenas import *
 from .hrnet import *
 from .inception_resnet_v2 import *
