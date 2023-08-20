@@ -67,6 +67,7 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
 
 register_notrace_function(get_rel_pos)
 
+
 def get_decomposed_rel_pos_bias(
     q: torch.Tensor,
     rel_pos_h: torch.Tensor,
@@ -162,7 +163,7 @@ class Attention(nn.Module):
                 k = apply_rot_embed_cat(k, rope).type_as(v)
 
         if self.fused_attn:
-            x = nn.functional.scaled_dot_product_attention(
+            x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_bias,
                 dropout_p=self.attn_drop.p,
@@ -247,6 +248,7 @@ class Block(nn.Module):
         shortcut = x
         x = self.norm1(x)
         # Window partition
+        pad_hw: Optional[Tuple[int, int]] = None
         if self.window_size > 0:
             x, pad_hw = window_partition(x, self.window_size)
 
@@ -254,7 +256,7 @@ class Block(nn.Module):
 
         # Reverse window partition
         if self.window_size > 0:
-            x = window_unpartition(x, self.window_size, pad_hw, (H, W))
+            x = window_unpartition(x, self.window_size, (H, W), pad_hw)
 
         x = shortcut + x
 
@@ -289,7 +291,7 @@ def window_partition(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, T
 
 
 def window_unpartition(
-    windows: torch.Tensor, window_size: int, pad_hw: Tuple[int, int], hw: Tuple[int, int]
+    windows: torch.Tensor, window_size: int, hw: Tuple[int, int], pad_hw: Optional[Tuple[int, int]] = None,
 ) -> torch.Tensor:
     """
     Window unpartition into original sequences and removing padding.
@@ -302,7 +304,7 @@ def window_unpartition(
     Returns:
         x: unpartitioned sequences with [B, H, W, C].
     """
-    Hp, Wp = pad_hw
+    Hp, Wp = pad_hw if pad_hw is not None else hw
     H, W = hw
     B = windows.shape[0] // (Hp * Wp // window_size // window_size)
     x = windows.view(B, Hp // window_size, Wp // window_size, window_size, window_size, -1)
