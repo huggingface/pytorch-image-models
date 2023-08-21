@@ -17,6 +17,8 @@ from .edgenext import *
 from .efficientformer import *
 from .efficientformer_v2 import *
 from .efficientnet import *
+from .efficientvit_mit import *
+from .efficientvit_msra import *
 from .eva import *
 from .focalnet import *
 from .gcvit import *
@@ -40,6 +42,7 @@ from .pit import *
 from .pnasnet import *
 from .pvt_v2 import *
 from .regnet import *
+from .repghost import *
 from .repvit import *
 from .res2net import *
 from .resnest import *
