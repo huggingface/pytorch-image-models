@@ -17,204 +17,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
+from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead,\
-    Format, resample_abs_pos_embed_nhwc
+    Format, resample_abs_pos_embed_nhwc, RotaryEmbeddingCat, apply_rot_embed_cat, to_2tuple, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
+from ._features_fx import register_notrace_function
 
 # model_registry will add each entrypoint fn to this
 __all__ = ['VisionTransformerSAM']
 
 
 _logger = logging.getLogger(__name__)
-
-
-class Attention(nn.Module):
-
-    def __init__(
-            self,
-            dim,
-            num_heads=8,
-            qkv_bias=True,
-            qk_norm=False,
-            attn_drop=0.,
-            proj_drop=0.,
-            norm_layer=nn.LayerNorm,
-            use_rel_pos: bool = False,
-            rel_pos_zero_init: bool = True,
-            input_size: Optional[Tuple[int, int]] = None,
-    ):
-        super().__init__()
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
-        self.num_heads = num_heads
-        self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
-
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-        self.use_rel_pos = use_rel_pos
-        if self.use_rel_pos:
-            assert (
-                input_size is not None
-            ), "Input size must be provided if using relative positional encoding."
-            # initialize relative positional embeddings
-            self.rel_pos_h = nn.Parameter(torch.zeros(
-                2 * input_size[0] - 1, self.head_dim))
-            self.rel_pos_w = nn.Parameter(torch.zeros(
-                2 * input_size[1] - 1, self.head_dim))
-
-    def forward(self, x):
-        B, H, W, _ = x.shape
-        qkv = self.qkv(x).reshape(
-            B, H * W, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        # qkv with shape (3, B, nHead, H * W, C)
-        q, k, v = qkv.reshape(3, B * self.num_heads, H * W, -1).unbind(0)
-        # q, k, v with shape (B * nHead, H * W, C)
-        q, k = self.q_norm(q), self.k_norm(k)
-        q = q * self.scale
-        attn = q @ k.transpose(-2, -1)
-
-        if self.use_rel_pos:
-            attn = add_decomposed_rel_pos(attn, q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W))
-
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-        x = (attn @ v).view(B, self.num_heads, H, W, -1).permute(0, 2, 3, 1, 4).reshape(B, H, W, -1)
-        x = self.proj(x)
-
-        return x
-
-
-class LayerScale(nn.Module):
-    def __init__(self, dim, init_values=1e-5, inplace=False):
-        super().__init__()
-        self.inplace = inplace
-        self.gamma = nn.Parameter(init_values * torch.ones(dim))
-
-    def forward(self, x):
-        return x.mul_(self.gamma) if self.inplace else x * self.gamma
-
-
-class Block(nn.Module):
-
-    def __init__(
-            self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            qkv_bias=True,
-            qk_norm=False,
-            proj_drop=0.,
-            attn_drop=0.,
-            init_values=None,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            mlp_layer=Mlp,
-            use_rel_pos=False,
-            window_size=0,
-            input_size=None,
-    ):
-        super().__init__()
-        self.window_size = window_size
-        self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim,
-            num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qk_norm=qk_norm,
-            attn_drop=attn_drop,
-            proj_drop=proj_drop,
-            norm_layer=norm_layer,
-            use_rel_pos=use_rel_pos,
-            input_size=input_size if window_size == 0 else (window_size, window_size),
-        )
-        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
-        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
-        self.norm2 = norm_layer(dim)
-        self.mlp = mlp_layer(
-            in_features=dim,
-            hidden_features=int(dim * mlp_ratio),
-            act_layer=act_layer,
-            drop=proj_drop,
-        )
-        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
-        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
-    def forward(self, x):
-        shortcut = x
-        x = self.norm1(x)
-        # Window partition
-        if self.window_size > 0:
-            H, W = x.shape[1], x.shape[2]
-            x, pad_hw = window_partition(x, self.window_size)
-
-        x = self.drop_path1(self.ls1(self.attn(x)))
-        # Reverse window partition
-        if self.window_size > 0:
-            x = window_unpartition(x, self.window_size, pad_hw, (H, W))
-
-        x = shortcut + x
-        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
-
-        return x
-
-
-def window_partition(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, Tuple[int, int]]:
-    """
-    Partition into non-overlapping windows with padding if needed.
-    Args:
-        x (tensor): input tokens with [B, H, W, C].
-        window_size (int): window size.
-
-    Returns:
-        windows: windows after partition with [B * num_windows, window_size, window_size, C].
-        (Hp, Wp): padded height and width before partition
-    """
-    B, H, W, C = x.shape
-
-    pad_h = (window_size - H % window_size) % window_size
-    pad_w = (window_size - W % window_size) % window_size
-    if pad_h > 0 or pad_w > 0:
-        x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
-    Hp, Wp = H + pad_h, W + pad_w
-
-    x = x.view(B, Hp // window_size, window_size, Wp // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
-    return windows, (Hp, Wp)
-
-
-def window_unpartition(
-    windows: torch.Tensor, window_size: int, pad_hw: Tuple[int, int], hw: Tuple[int, int]
-) -> torch.Tensor:
-    """
-    Window unpartition into original sequences and removing padding.
-    Args:
-        windows (tensor): input tokens with [B * num_windows, window_size, window_size, C].
-        window_size (int): window size.
-        pad_hw (Tuple): padded height and width (Hp, Wp).
-        hw (Tuple): original height and width (H, W) before padding.
-
-    Returns:
-        x: unpartitioned sequences with [B, H, W, C].
-    """
-    Hp, Wp = pad_hw
-    H, W = hw
-    B = windows.shape[0] // (Hp * Wp // window_size // window_size)
-    x = windows.view(B, Hp // window_size, Wp // window_size, window_size, window_size, -1)
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
-
-    if Hp > H or Wp > W:
-        x = x[:, :H, :W, :].contiguous()
-    return x
 
 
 def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
@@ -249,9 +66,10 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
 
     return rel_pos_resized[relative_coords.long()]
 
+register_notrace_function(get_rel_pos)
 
-def add_decomposed_rel_pos(
-    attn: torch.Tensor,
+
+def get_decomposed_rel_pos_bias(
     q: torch.Tensor,
     rel_pos_h: torch.Tensor,
     rel_pos_w: torch.Tensor,
@@ -262,7 +80,6 @@ def add_decomposed_rel_pos(
     Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
     https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py
     Args:
-        attn (Tensor): attention map.
         q (Tensor): query q in the attention layer with shape (B, q_h * q_w, C).
         rel_pos_h (Tensor): relative position embeddings (Lh, C) for height axis.
         rel_pos_w (Tensor): relative position embeddings (Lw, C) for width axis.
@@ -270,7 +87,7 @@ def add_decomposed_rel_pos(
         k_size (Tuple): spatial sequence size of key k with (k_h, k_w).
 
     Returns:
-        attn (Tensor): attention map with added relative positional embeddings.
+        bias (Tensor): attention bias to add to attention map
     """
     q_h, q_w = q_size
     k_h, k_w = k_size
@@ -282,12 +99,220 @@ def add_decomposed_rel_pos(
     rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh)
     rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw)
 
-    attn = (
-        attn.view(B, q_h, q_w, k_h, k_w) +
-        rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]
-    ).view(B, q_h * q_w, k_h * k_w)
+    attn_bias = rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]
+    return attn_bias.reshape(-1, q_h * q_w, k_h * k_w)
 
-    return attn
+
+class Attention(nn.Module):
+    fused_attn: Final[bool]
+
+    def __init__(
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=True,
+            qk_norm=False,
+            attn_drop=0.,
+            proj_drop=0.,
+            norm_layer=nn.LayerNorm,
+            use_rel_pos: bool = False,
+            input_size: Optional[Tuple[int, int]] = None,
+            rope: Optional[nn.Module] = None,
+    ):
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+        self.use_rel_pos = use_rel_pos
+        if self.use_rel_pos:
+            assert rope is None
+            assert (
+                input_size is not None
+            ), "Input size must be provided if using relative positional encoding."
+            # initialize relative positional embeddings
+            self.rel_pos_h = nn.Parameter(torch.zeros(
+                2 * input_size[0] - 1, self.head_dim))
+            self.rel_pos_w = nn.Parameter(torch.zeros(
+                2 * input_size[1] - 1, self.head_dim))
+        self.rope = rope
+
+    def forward(self, x):
+        B, H, W, _ = x.shape
+        N = H * W
+        x = x.reshape(B, N, -1)
+        qkv = self.qkv(x).view(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
+        # qkv with shape (3, B, nHead, H * W, C)
+        q, k, v = qkv.reshape(3, B * self.num_heads, N, -1).unbind(0)
+        # q, k, v with shape (B * nHead, H * W, C)
+        q, k = self.q_norm(q), self.k_norm(k)
+
+        if self.use_rel_pos:
+            attn_bias = get_decomposed_rel_pos_bias(q, self.rel_pos_h, self.rel_pos_w, (H, W), (H, W))
+        else:
+            attn_bias = None
+            if self.rope is not None:
+                rope = self.rope.get_embed()
+                q = apply_rot_embed_cat(q, rope).type_as(v)
+                k = apply_rot_embed_cat(k, rope).type_as(v)
+
+        if self.fused_attn:
+            x = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=attn_bias,
+                dropout_p=self.attn_drop.p,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            if attn_bias is not None:
+                attn = attn + attn_bias
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.view(B, self.num_heads, N, -1).transpose(1, 2).reshape(B, N, -1)
+        x = self.proj(x)
+        x = x.view(B, H, W, -1)
+        return x
+
+
+class LayerScale(nn.Module):
+    def __init__(self, dim, init_values=1e-5, inplace=False):
+        super().__init__()
+        self.inplace = inplace
+        self.gamma = nn.Parameter(init_values * torch.ones(dim))
+
+    def forward(self, x):
+        return x.mul_(self.gamma) if self.inplace else x * self.gamma
+
+
+class Block(nn.Module):
+
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=True,
+            qk_norm=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            init_values=None,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm,
+            mlp_layer=Mlp,
+            use_rel_pos=False,
+            window_size=0,
+            input_size=None,
+            rope=None,
+    ):
+        super().__init__()
+        self.window_size = window_size
+        self.norm1 = norm_layer(dim)
+        self.attn = Attention(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            qk_norm=qk_norm,
+            attn_drop=attn_drop,
+            proj_drop=proj_drop,
+            norm_layer=norm_layer,
+            use_rel_pos=use_rel_pos,
+            input_size=input_size if window_size == 0 else (window_size, window_size),
+            rope=rope,
+        )
+        self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+        self.norm2 = norm_layer(dim)
+        self.mlp = mlp_layer(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+        self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
+        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+    def forward(self, x):
+        B, H, W, _ = x.shape
+
+        shortcut = x
+        x = self.norm1(x)
+        # Window partition
+        pad_hw: Optional[Tuple[int, int]] = None
+        if self.window_size > 0:
+            x, pad_hw = window_partition(x, self.window_size)
+
+        x = self.drop_path1(self.ls1(self.attn(x)))
+
+        # Reverse window partition
+        if self.window_size > 0:
+            x = window_unpartition(x, self.window_size, (H, W), pad_hw)
+
+        x = shortcut + x
+
+        x = x.reshape(B, H * W, -1)  # MLP is faster for N, L, C tensor
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        x = x.reshape(B, H, W, -1)
+
+        return x
+
+
+def window_partition(x: torch.Tensor, window_size: int) -> Tuple[torch.Tensor, Tuple[int, int]]:
+    """
+    Partition into non-overlapping windows with padding if needed.
+    Args:
+        x (tensor): input tokens with [B, H, W, C].
+        window_size (int): window size.
+
+    Returns:
+        windows: windows after partition with [B * num_windows, window_size, window_size, C].
+        (Hp, Wp): padded height and width before partition
+    """
+    B, H, W, C = x.shape
+
+    pad_h = (window_size - H % window_size) % window_size
+    pad_w = (window_size - W % window_size) % window_size
+    x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
+    Hp, Wp = H + pad_h, W + pad_w
+
+    x = x.view(B, Hp // window_size, window_size, Wp // window_size, window_size, C)
+    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
+    return windows, (Hp, Wp)
+
+
+def window_unpartition(
+    windows: torch.Tensor, window_size: int, hw: Tuple[int, int], pad_hw: Optional[Tuple[int, int]] = None,
+) -> torch.Tensor:
+    """
+    Window unpartition into original sequences and removing padding.
+    Args:
+        windows (tensor): input tokens with [B * num_windows, window_size, window_size, C].
+        window_size (int): window size.
+        pad_hw (Tuple): padded height and width (Hp, Wp).
+        hw (Tuple): original height and width (H, W) before padding.
+
+    Returns:
+        x: unpartitioned sequences with [B, H, W, C].
+    """
+    Hp, Wp = pad_hw if pad_hw is not None else hw
+    H, W = hw
+    B = windows.shape[0] // (Hp * Wp // window_size // window_size)
+    x = windows.view(B, Hp // window_size, Wp // window_size, window_size, window_size, -1)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
+    x = x[:, :H, :W, :].contiguous()
+    return x
 
 
 class VisionTransformerSAM(nn.Module):
@@ -326,11 +351,13 @@ class VisionTransformerSAM(nn.Module):
             mlp_layer: Callable = Mlp,
             use_abs_pos: bool = True,
             use_rel_pos: bool = False,
+            use_rope: bool = False,
             window_size: int = 14,
             global_attn_indexes: Tuple[int, ...] = (),
             neck_chans: int = 256,
             global_pool: str = 'avg',
-            head_hidden_size: Optional[int] = None
+            head_hidden_size: Optional[int] = None,
+            ref_feat_shape: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
     ):
         """
         Args:
@@ -356,10 +383,12 @@ class VisionTransformerSAM(nn.Module):
             block_fn: Transformer block layer.
             use_abs_pos: If True, use absolute positional embeddings.
             use_rel_pos: If True, add relative positional embeddings to the attention map.
+            use_rope: If True, add rotary position embeddings to q/k in attention block.
             window_size: Window size for window attention blocks. If 0, not use window attention.
             global_attn_indexes: Indexes for blocks using global attention. Used when window_size > 0.
             global_pool: Global pooling type.
             head_hidden_size: If set, use NormMlpHead
+            ref_feat_shape: Tuple of reference feature shapes for ROPE, (global, local)
         """
         super().__init__()
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
@@ -394,6 +423,30 @@ class VisionTransformerSAM(nn.Module):
             self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
+        if use_rope:
+            assert not use_rel_pos, "ROPE and relative pos embeddings should not be enabled at same time"
+            if ref_feat_shape is not None:
+                assert len(ref_feat_shape) == 2
+                ref_feat_shape_global = to_2tuple(ref_feat_shape[0])
+                ref_feat_shape_window = to_2tuple(ref_feat_shape[1])
+            else:
+                ref_feat_shape_global = ref_feat_shape_window = None
+            self.rope_global = RotaryEmbeddingCat(
+                embed_dim // num_heads,
+                in_pixels=False,
+                feat_shape=grid_size,
+                ref_feat_shape=ref_feat_shape_global,
+            )
+            self.rope_window = RotaryEmbeddingCat(
+                embed_dim // num_heads,
+                in_pixels=False,
+                feat_shape=to_2tuple(window_size),
+                ref_feat_shape=ref_feat_shape_window,
+            )
+        else:
+            self.rope_global = None
+            self.rope_window = None
+
         # stochastic depth decay rule
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
         self.blocks = nn.Sequential(*[
@@ -413,6 +466,7 @@ class VisionTransformerSAM(nn.Module):
                 use_rel_pos=use_rel_pos,
                 window_size=window_size if i not in global_attn_indexes else 0,
                 input_size=grid_size,
+                rope=self.rope_window if i not in global_attn_indexes else self.rope_global,
             )
             for i in range(depth)])
 
@@ -436,7 +490,11 @@ class VisionTransformerSAM(nn.Module):
             )
             self.num_features = neck_chans
         else:
-            self.neck = nn.Identity()
+            if head_hidden_size:
+                self.neck = nn.Identity()
+            else:
+                # should have a final norm with standard ClassifierHead
+                self.neck = LayerNorm2d(embed_dim)
             neck_chans = embed_dim
 
         # Classifier Head
@@ -526,7 +584,7 @@ def _cfg(url='', **kwargs):
         'num_classes': 1000, 'input_size': (3, 1024, 1024), 'pool_size': None,
         'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
         **kwargs
     }
 
@@ -552,6 +610,10 @@ default_cfgs = generate_default_cfgs({
         license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 1024, 1024), crop_pct=1.0),
+
+    'samvit_base_patch16_224': _cfg(
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=1000,
+        input_size=(3, 224, 224), crop_pct=0.9),
 })
 
 
@@ -606,3 +668,17 @@ def samvit_huge_patch16(pretrained=False, **kwargs) -> VisionTransformerSAM:
     model = _create_vision_transformer(
         'samvit_huge_patch16', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+@register_model
+def samvit_base_patch16_224(pretrained=False, **kwargs) -> VisionTransformerSAM:
+    """ ViT-B/16 based on samvit arch
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, global_attn_indexes=[2, 5, 8, 11],
+        window_size=14, use_rel_pos=True, use_abs_pos=False, img_size=224, neck_chans=None,
+    )
+    model = _create_vision_transformer(
+        'samvit_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
