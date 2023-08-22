@@ -589,7 +589,7 @@ class MobileOneBlock(nn.Module):
             self.identity = layers.norm_act(out_chs, apply_act=False) if use_ident else None
 
             # Re-parameterizable conv branches
-            convs = list()
+            convs = []
             for _ in range(self.num_conv_branches):
                 convs.append(layers.conv_norm_act(
                     in_chs, out_chs, kernel_size=kernel_size,
@@ -624,8 +624,8 @@ class MobileOneBlock(nn.Module):
 
         # Other branches
         out = scale_out + identity_out
-        for ix in range(self.num_conv_branches):
-            out += self.conv_kxk[ix](x)
+        for ck in self.conv_kxk:
+            out += ck(x)
 
         return self.act(self.attn(out))
 
@@ -1643,11 +1643,15 @@ model_cfgs = dict(
     ),
 )
 
+# FIXME temporary for mobileone remap
+from .fastvit import checkpoint_filter_fn
+
 
 def _create_byobnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         ByobNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True),
         **kwargs)
 
@@ -1805,6 +1809,27 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetz_d8_evos_ch-2bc12646.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
+
+    'mobileone_s0': _cfg(
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s0_unfused.pth.tar',
+        crop_pct=0.875,
+    ),
+    'mobileone_s1': _cfg(
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s1_unfused.pth.tar',
+        crop_pct=0.9,
+    ),
+    'mobileone_s2': _cfg(
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s2_unfused.pth.tar',
+        crop_pct=0.9,
+    ),
+    'mobileone_s3': _cfg(
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s3_unfused.pth.tar',
+        crop_pct=0.9,
+    ),
+    'mobileone_s4': _cfg(
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s4_unfused.pth.tar',
+        crop_pct=0.9,
+    ),
 })
 
 
