@@ -12,6 +12,10 @@ RepVGG - repvgg_*
 Paper: `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
 Code and weights: https://github.com/DingXiaoH/RepVGG, licensed MIT
 
+MobileOne - mobileone_*
+Paper: `MobileOne: An Improved One millisecond Mobile Backbone` - https://arxiv.org/abs/2206.04040
+Code and weights: https://github.com/apple/ml-mobileone, licensed MIT
+
 In all cases the models have been modified to fit within the design of ByobNet. I've remapped
 the original weights and verified accuracies.
 
@@ -468,8 +472,6 @@ class RepVggBlock(nn.Module):
     """ RepVGG Block.
 
     Adapted from impl at https://github.com/DingXiaoH/RepVGG
-
-    This version does not currently support the deploy optimization. It is currently fixed in 'train' mode.
     """
 
     def __init__(
@@ -485,20 +487,34 @@ class RepVggBlock(nn.Module):
             layers: LayerFn = None,
             drop_block: Callable = None,
             drop_path_rate: float = 0.,
+            inference_mode: bool = False
     ):
         super(RepVggBlock, self).__init__()
+        self.groups = groups = num_groups(group_size, in_chs)
         layers = layers or LayerFn()
-        groups = num_groups(group_size, in_chs)
-        #self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)  # FIXME temp for remapping
-        use_ident = in_chs == out_chs and stride == 1 and dilation[0] == dilation[1]
-        self.identity = layers.norm_act(out_chs, apply_act=False) if use_ident else None
-        self.conv_kxk = layers.conv_norm_act(
-            in_chs, out_chs, kernel_size,
-            stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block, apply_act=False,
-        )
-        self.conv_1x1 = layers.conv_norm_act(in_chs, out_chs, 1, stride=stride, groups=groups, apply_act=False)
+
+        if inference_mode:
+            self.reparam_conv = nn.Conv2d(
+                in_channels=in_chs,
+                out_channels=out_chs,
+                kernel_size=kernel_size,
+                stride=stride,
+                dilation=dilation,
+                groups=groups,
+                bias=True,
+            )
+        else:
+            self.reparam_conv = None
+            use_ident = in_chs == out_chs and stride == 1 and dilation[0] == dilation[1]
+            self.identity = layers.norm_act(out_chs, apply_act=False) if use_ident else None
+            self.conv_kxk = layers.conv_norm_act(
+                in_chs, out_chs, kernel_size,
+                stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block, apply_act=False,
+            )
+            self.conv_1x1 = layers.conv_norm_act(in_chs, out_chs, 1, stride=stride, groups=groups, apply_act=False)
+            self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
+
         self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)
-        self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
         self.act = layers.act(inplace=True)
 
     def init_weights(self, zero_init_last: bool = False):
@@ -511,15 +527,108 @@ class RepVggBlock(nn.Module):
             self.attn.reset_parameters()
 
     def forward(self, x):
+        if self.reparam_conv is not None:
+            return self.act(self.attn(self.reparam_conv(x)))
+
         if self.identity is None:
             x = self.conv_1x1(x) + self.conv_kxk(x)
         else:
             identity = self.identity(x)
             x = self.conv_1x1(x) + self.conv_kxk(x)
             x = self.drop_path(x)  # not in the paper / official impl, experimental
-            x = x + identity
+            x += identity
         x = self.attn(x)  # no attn in the paper / official impl, experimental
         return self.act(x)
+
+    def reparameterize(self):
+        """ Following works like `RepVGG: Making VGG-style ConvNets Great Again` -
+        https://arxiv.org/pdf/2101.03697.pdf. We re-parameterize multi-branched
+        architecture used at training time to obtain a plain CNN-like structure
+        for inference.
+        """
+        if self.reparam_conv is not None:
+            return
+
+        kernel, bias = self._get_kernel_bias()
+        self.reparam_conv = nn.Conv2d(
+            in_channels=self.conv_kxk.conv.in_channels,
+            out_channels=self.conv_kxk.conv.out_channels,
+            kernel_size=self.conv_kxk.conv.kernel_size,
+            stride=self.conv_kxk.conv.stride,
+            padding=self.conv_kxk.conv.padding,
+            dilation=self.conv_kxk.conv.dilation,
+            groups=self.conv_kxk.conv.groups,
+            bias=True,
+        )
+        self.reparam_conv.weight.data = kernel
+        self.reparam_conv.bias.data = bias
+
+        # Delete un-used branches
+        for name, para in self.named_parameters():
+            if 'reparam_conv' in name:
+                continue
+            para.detach_()
+        self.__delattr__('conv_kxk')
+        self.__delattr__('conv_1x1')
+        self.__delattr__('identity')
+        self.__delattr__('drop_path')
+
+    def _get_kernel_bias(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """ Method to obtain re-parameterized kernel and bias.
+        Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L83
+        """
+        # get weights and bias of scale branch
+        kernel_1x1 = 0
+        bias_1x1 = 0
+        if self.conv_1x1 is not None:
+            kernel_1x1, bias_1x1 = self._fuse_bn_tensor(self.conv_1x1)
+            # Pad scale branch kernel to match conv branch kernel size.
+            pad = self.conv_kxk.conv.kernel_size[0] // 2
+            kernel_1x1 = torch.nn.functional.pad(kernel_1x1, [pad, pad, pad, pad])
+
+        # get weights and bias of skip branch
+        kernel_identity = 0
+        bias_identity = 0
+        if self.identity is not None:
+            kernel_identity, bias_identity = self._fuse_bn_tensor(self.identity)
+
+        # get weights and bias of conv branches
+        kernel_conv, bias_conv = self._fuse_bn_tensor(self.conv_kxk)
+
+        kernel_final = kernel_conv + kernel_1x1 + kernel_identity
+        bias_final = bias_conv + bias_1x1 + bias_identity
+        return kernel_final, bias_final
+
+    def _fuse_bn_tensor(self, branch) -> Tuple[torch.Tensor, torch.Tensor]:
+        """ Method to fuse batchnorm layer with preceeding conv layer.
+        Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L95
+        """
+        if isinstance(branch, ConvNormAct):
+            kernel = branch.conv.weight
+            running_mean = branch.bn.running_mean
+            running_var = branch.bn.running_var
+            gamma = branch.bn.weight
+            beta = branch.bn.bias
+            eps = branch.bn.eps
+        else:
+            assert isinstance(branch, nn.BatchNorm2d)
+            if not hasattr(self, 'id_tensor'):
+                in_chs = self.conv_kxk.conv.in_channels
+                input_dim = in_chs // self.groups
+                kernel_size = self.conv_kxk.conv.kernel_size
+                kernel_value = torch.zeros_like(self.conv_kxk.conv.weight)
+                for i in range(in_chs):
+                    kernel_value[i, i % input_dim, kernel_size[0] // 2, kernel_size[1] // 2] = 1
+                self.id_tensor = kernel_value
+            kernel = self.id_tensor
+            running_mean = branch.running_mean
+            running_var = branch.running_var
+            gamma = branch.weight
+            beta = branch.bias
+            eps = branch.eps
+        std = (running_var + eps).sqrt()
+        t = (gamma / std).reshape(-1, 1, 1, 1)
+        return kernel * t, beta - running_mean * gamma / std
 
 
 class MobileOneBlock(nn.Module):
@@ -549,28 +658,11 @@ class MobileOneBlock(nn.Module):
             drop_path_rate: float = 0.,
     ) -> None:
         """ Construct a MobileOneBlock module.
-
-        :param in_chs: Number of channels in the input.
-        :param out_chs: Number of channels produced by the block.
-        :param kernel_size: Size of the convolution kernel.
-        :param stride: Stride size.
-        :param dilation: Kernel dilation factor.
-        :param groups: Group number.
-        :param inference_mode: If True, instantiates model in inference mode.
-        :param use_se: Whether to use SE-ReLU activations.
-        :param num_conv_branches: Number of linear conv branches.
         """
         super(MobileOneBlock, self).__init__()
-        self.stride = stride
-        self.kernel_size = kernel_size
-        self.in_channels = in_chs
-        self.out_channels = out_chs
         self.num_conv_branches = num_conv_branches
+        self.groups = groups = num_groups(group_size, in_chs)
         layers = layers or LayerFn()
-        groups = num_groups(group_size, in_chs)
-
-        # Check if SE-ReLU is requested
-        self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)  # FIXME move after remap
 
         if inference_mode:
             self.reparam_conv = nn.Conv2d(
@@ -602,7 +694,9 @@ class MobileOneBlock(nn.Module):
                 self.conv_scale = layers.conv_norm_act(
                     in_chs, out_chs, kernel_size=1,
                     stride=stride, groups=groups, apply_act=False)
+            self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0. and use_ident else nn.Identity()
 
+        self.attn = nn.Identity() if layers.attn is None else layers.attn(out_chs)
         self.act = layers.act(inplace=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -623,9 +717,11 @@ class MobileOneBlock(nn.Module):
             scale_out = self.conv_scale(x)
 
         # Other branches
-        out = scale_out + identity_out
+        out = scale_out
         for ck in self.conv_kxk:
             out += ck(x)
+        out = self.drop_path(out)
+        out += identity_out
 
         return self.act(self.attn(out))
 
@@ -652,18 +748,18 @@ class MobileOneBlock(nn.Module):
         self.reparam_conv.bias.data = bias
 
         # Delete un-used branches
-        for para in self.parameters():
+        for name, para in self.named_parameters():
+            if 'reparam_conv' in name:
+                continue
             para.detach_()
         self.__delattr__('conv_kxk')
         self.__delattr__('conv_scale')
-        if hasattr(self, 'identity'):
-            self.__delattr__('identity')
+        self.__delattr__('identity')
+        self.__delattr__('drop_path')
 
     def _get_kernel_bias(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Method to obtain re-parameterized kernel and bias.
         Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L83
-
-        :return: Tuple of (kernel, bias) after fusing branches.
         """
         # get weights and bias of scale branch
         kernel_scale = 0
@@ -671,7 +767,7 @@ class MobileOneBlock(nn.Module):
         if self.conv_scale is not None:
             kernel_scale, bias_scale = self._fuse_bn_tensor(self.conv_scale)
             # Pad scale branch kernel to match conv branch kernel size.
-            pad = self.kernel_size // 2
+            pad = self.conv_kxk[0].conv.kernel_size[0] // 2
             kernel_scale = torch.nn.functional.pad(kernel_scale, [pad, pad, pad, pad])
 
         # get weights and bias of skip branch
@@ -695,9 +791,6 @@ class MobileOneBlock(nn.Module):
     def _fuse_bn_tensor(self, branch) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Method to fuse batchnorm layer with preceeding conv layer.
         Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L95
-
-        :param branch:
-        :return: Tuple of (kernel, bias) after fusing batchnorm.
         """
         if isinstance(branch, ConvNormAct):
             kernel = branch.conv.weight
@@ -709,16 +802,12 @@ class MobileOneBlock(nn.Module):
         else:
             assert isinstance(branch, nn.BatchNorm2d)
             if not hasattr(self, 'id_tensor'):
-                input_dim = self.in_channels // self.groups
-                kernel_value = torch.zeros(
-                    (self.in_channels,
-                     input_dim,
-                     self.kernel_size,
-                     self.kernel_size),
-                    dtype=branch.weight.dtype,
-                    device=branch.weight.device)
-                for i in range(self.in_channels):
-                    kernel_value[i, i % input_dim, self.kernel_size // 2, self.kernel_size // 2] = 1
+                in_chs = self.conv_kxk[0].conv.in_channels
+                input_dim = in_chs // self.groups
+                kernel_size = self.conv_kxk[0].conv.kernel_size
+                kernel_value = torch.zeros_like(self.conv_kxk[0].conv.weight)
+                for i in range(in_chs):
+                    kernel_value[i, i % input_dim, kernel_size[0] // 2, kernel_size[1] // 2] = 1
                 self.id_tensor = kernel_value
             kernel = self.id_tensor
             running_mean = branch.running_mean
@@ -1226,6 +1315,16 @@ model_cfgs = dict(
         num_features=1920,
     ),
 
+    repvgg_a0=ByoModelCfg(
+        blocks=_rep_vgg_bcfg(d=(2, 4, 14, 1), wf=(0.75, 0.75, 0.75, 2.5)),
+        stem_type='rep',
+        stem_chs=48,
+    ),
+    repvgg_a1=ByoModelCfg(
+        blocks=_rep_vgg_bcfg(d=(2, 4, 14, 1), wf=(1, 1, 1, 2.5)),
+        stem_type='rep',
+        stem_chs=64,
+    ),
     repvgg_a2=ByoModelCfg(
         blocks=_rep_vgg_bcfg(d=(2, 4, 14, 1), wf=(1.5, 1.5, 1.5, 2.75)),
         stem_type='rep',
@@ -1643,15 +1742,11 @@ model_cfgs = dict(
     ),
 )
 
-# FIXME temporary for mobileone remap
-from .fastvit import checkpoint_filter_fn
-
 
 def _create_byobnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         ByobNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
-        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True),
         **kwargs)
 
@@ -1683,6 +1778,12 @@ default_cfgs = generate_default_cfgs({
     'gernet_l.idstcv_in1k': _cfg(hf_hub_id='timm/', input_size=(3, 256, 256), pool_size=(8, 8)),
 
     # RepVGG weights
+    'repvgg_a0.rvgg_in1k': _cfg(
+        hf_hub_id='timm/',
+        first_conv=('stem.conv_kxk.conv', 'stem.conv_1x1.conv'), license='mit'),
+    'repvgg_a1.rvgg_in1k': _cfg(
+        hf_hub_id='timm/',
+        first_conv=('stem.conv_kxk.conv', 'stem.conv_1x1.conv'), license='mit'),
     'repvgg_a2.rvgg_in1k': _cfg(
         hf_hub_id='timm/',
         first_conv=('stem.conv_kxk.conv', 'stem.conv_1x1.conv'), license='mit'),
@@ -1707,6 +1808,11 @@ default_cfgs = generate_default_cfgs({
     'repvgg_b3g4.rvgg_in1k': _cfg(
         hf_hub_id='timm/',
         first_conv=('stem.conv_kxk.conv', 'stem.conv_1x1.conv'), license='mit'),
+    'repvgg_d2se.rvgg_in1k': _cfg(
+        hf_hub_id='timm/',
+        first_conv=('stem.conv_kxk.conv', 'stem.conv_1x1.conv'), license='mit',
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0,
+    ),
 
     # experimental ResNet configs
     'resnet51q.ra2_in1k': _cfg(
@@ -1810,24 +1916,24 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/regnetz_d8_evos_ch-2bc12646.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0),
 
-    'mobileone_s0': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s0_unfused.pth.tar',
+    'mobileone_s0.apple_in1k': _cfg(
+        hf_hub_id='timm/',
         crop_pct=0.875,
     ),
-    'mobileone_s1': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s1_unfused.pth.tar',
+    'mobileone_s1.apple_in1k': _cfg(
+        hf_hub_id='timm/',
         crop_pct=0.9,
     ),
-    'mobileone_s2': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s2_unfused.pth.tar',
+    'mobileone_s2.apple_in1k': _cfg(
+        hf_hub_id='timm/',
         crop_pct=0.9,
     ),
-    'mobileone_s3': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s3_unfused.pth.tar',
+    'mobileone_s3.apple_in1k': _cfg(
+        hf_hub_id='timm/',
         crop_pct=0.9,
     ),
-    'mobileone_s4': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s4_unfused.pth.tar',
+    'mobileone_s4.apple_in1k': _cfg(
+        hf_hub_id='timm/',
         crop_pct=0.9,
     ),
 })
@@ -1855,6 +1961,22 @@ def gernet_s(pretrained=False, **kwargs) -> ByobNet:
     `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
     """
     return _create_byobnet('gernet_s', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_a0(pretrained=False, **kwargs) -> ByobNet:
+    """ RepVGG-A0
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_a0', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def repvgg_a1(pretrained=False, **kwargs) -> ByobNet:
+    """ RepVGG-A1
+    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    """
+    return _create_byobnet('repvgg_a1', pretrained=pretrained, **kwargs)
 
 
 @register_model

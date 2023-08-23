@@ -126,6 +126,9 @@ class RepGhostModule(nn.Module):
         self.fusion_conv = []
         self.fusion_bn = []
 
+    def reparameterize(self):
+        self.switch_to_deploy()
+
 
 class RepGhostBottleneck(nn.Module):
     """ RepGhost bottleneck w/ optional SE"""
