@@ -37,8 +37,8 @@ class ConvNorm(torch.nn.Sequential):
         b = bn.bias - bn.running_mean * bn.weight / \
             (bn.running_var + bn.eps)**0.5
         m = torch.nn.Conv2d(
-            w.size(1) * self.c.groups, w.size(0), w.shape[2:],
-            stride=self.c.stride, padding=self.c.padding, dilation=self.c.dilation, groups=self.c.groups)
+            w.size(1) * self.conv.groups, w.size(0), w.shape[2:],
+            stride=self.conv.stride, padding=self.conv.padding, dilation=self.conv.dilation, groups=self.conv.groups)
         m.weight.data.copy_(w)
         m.bias.data.copy_(b)
         return m

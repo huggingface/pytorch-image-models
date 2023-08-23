@@ -26,7 +26,7 @@ from timm.data import create_dataset, create_loader, resolve_data_config, RealLa
 from timm.layers import apply_test_time_pool, set_fast_norm
 from timm.models import create_model, load_checkpoint, is_model, list_models
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser, \
-    decay_batch_step, check_batch_size_retry, ParseKwargs
+    decay_batch_step, check_batch_size_retry, ParseKwargs, reparameterize_model
 
 try:
     from apex import amp
@@ -125,6 +125,8 @@ parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
+parser.add_argument('--reparam', default=False, action='store_true',
+                    help='Reparameterize model')
 parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
 
 
@@ -206,6 +208,9 @@ def validate(args):
 
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint, args.use_ema)
+
+    if args.reparam:
+        model = reparameterize_model(model)
 
     param_count = sum([m.numel() for m in model.parameters()])
     _logger.info('Model %s created, param count: %d' % (args.model, param_count))

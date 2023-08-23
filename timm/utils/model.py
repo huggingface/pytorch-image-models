@@ -3,6 +3,7 @@
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import fnmatch
+from copy import deepcopy
 
 import torch
 from torchvision.ops.misc import FrozenBatchNorm2d
@@ -219,3 +220,21 @@ def unfreeze(root_module, submodules=[], include_bn_running_stats=True):
     See example in docstring for `freeze`.
     """
     _freeze_unfreeze(root_module, submodules, include_bn_running_stats=include_bn_running_stats, mode="unfreeze")
+
+
+def reparameterize_model(model: torch.nn.Module, inplace=False) -> torch.nn.Module:
+    if not inplace:
+        model = deepcopy(model)
+
+    def _fuse(m):
+        for child_name, child in m.named_children():
+            if hasattr(child, 'fuse'):
+                setattr(m, child_name, child.fuse())
+            elif hasattr(child, "reparameterize"):
+                child.reparameterize()
+            elif hasattr(child, "switch_to_deploy"):
+                child.switch_to_deploy()
+            _fuse(child)
+
+    _fuse(model)
+    return model

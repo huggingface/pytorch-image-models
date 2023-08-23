@@ -22,7 +22,8 @@ from timm.data import resolve_data_config
 from timm.layers import set_fast_norm
 from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
-from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs
+from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs,\
+    reparameterize_model
 
 has_apex = False
 try:
@@ -116,6 +117,8 @@ parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
+parser.add_argument('--reparam', default=False, action='store_true',
+                    help='Reparameterize model')
 parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
 
 # codegen (model compilation) options
@@ -222,6 +225,7 @@ class BenchmarkRunner:
             torchscript=False,
             torchcompile=None,
             aot_autograd=False,
+            reparam=False,
             precision='float32',
             fuser='',
             num_warm_iter=10,
@@ -252,10 +256,13 @@ class BenchmarkRunner:
             drop_block_rate=kwargs.pop('drop_block', None),
             **kwargs.pop('model_kwargs', {}),
         )
+        if reparam:
+            self.model = reparameterize_model(self.model)
         self.model.to(
             device=self.device,
             dtype=self.model_dtype,
-            memory_format=torch.channels_last if self.channels_last else None)
+            memory_format=torch.channels_last if self.channels_last else None,
+        )
         self.num_classes = self.model.num_classes
         self.param_count = count_params(self.model)
         _logger.info('Model %s created, param count: %d' % (model_name, self.param_count))
