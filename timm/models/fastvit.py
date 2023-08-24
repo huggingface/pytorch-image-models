@@ -1264,7 +1264,7 @@ def _cfg(url="", **kwargs):
         "interpolation": "bicubic",
         "mean": IMAGENET_DEFAULT_MEAN,
         "std": IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.0.conv_kxk.0.conv',
+        'first_conv': ('stem.0.conv_kxk.0.conv', 'stem.0.conv_scale.conv'),
         "classifier": "head.fc",
         **kwargs,
     }
