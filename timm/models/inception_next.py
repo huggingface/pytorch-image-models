@@ -399,7 +399,7 @@ default_cfgs = generate_default_cfgs({
     'inception_next_base.sail_in1k_384': _cfg(
         hf_hub_id='timm/',
         # url='https://github.com/sail-sg/inceptionnext/releases/download/model/inceptionnext_base_384.pth',
-        input_size=(3, 384, 384), pool_size=(10, 10), crop_pct=1.0,
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
     ),
 })
 
