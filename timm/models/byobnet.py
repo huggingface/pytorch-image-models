@@ -1919,22 +1919,27 @@ default_cfgs = generate_default_cfgs({
     'mobileone_s0.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.875,
+        first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
     ),
     'mobileone_s1.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
+        first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
     ),
     'mobileone_s2.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
+        first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
     ),
     'mobileone_s3.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
+        first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
     ),
     'mobileone_s4.apple_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.9,
+        first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
     ),
 })
 
