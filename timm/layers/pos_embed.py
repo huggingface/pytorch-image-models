@@ -29,7 +29,7 @@ def resample_abs_pos_embed(
     if num_new_tokens == num_pos_tokens and new_size[0] == new_size[1]:
         return posemb
 
-    if not old_size:
+    if old_size is None:
         hw = int(math.sqrt(num_pos_tokens - num_prefix_tokens))
         old_size = hw, hw
 

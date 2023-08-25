@@ -38,7 +38,7 @@ from torch.jit import Final
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, trunc_normal_, lecun_normal_, resample_patch_embed, \
-    resample_abs_pos_embed, RmsNorm, PatchDropout, use_fused_attn, SwiGLUPacked
+    resample_abs_pos_embed, resample_abs_pos_embed_nhwc, RmsNorm, PatchDropout, use_fused_attn, SwiGLUPacked
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -383,6 +383,7 @@ class VisionTransformer(nn.Module):
     A PyTorch impl of : `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale`
         - https://arxiv.org/abs/2010.11929
     """
+    dynamic_size: Final[bool]
 
     def __init__(
             self,
@@ -400,6 +401,7 @@ class VisionTransformer(nn.Module):
             init_values: Optional[float] = None,
             class_token: bool = True,
             no_embed_class: bool = False,
+            dynamic_size: bool = False,
             pre_norm: bool = False,
             fc_norm: Optional[bool] = None,
             drop_rate: float = 0.,
@@ -452,14 +454,23 @@ class VisionTransformer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_prefix_tokens = 1 if class_token else 0
         self.no_embed_class = no_embed_class
+        self.dynamic_size = dynamic_size
         self.grad_checkpointing = False
 
+        embed_args = {}
+        if dynamic_size:
+            embed_args.update(dict(
+                strict_img_size=False,
+                flatten=False,  # flatten deferred until after pos embed
+                output_fmt='NHWC',
+            ))
         self.patch_embed = embed_layer(
             img_size=img_size,
             patch_size=patch_size,
             in_chans=in_chans,
             embed_dim=embed_dim,
             bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+            **embed_args,
         )
         num_patches = self.patch_embed.num_patches
 
@@ -546,10 +557,16 @@ class VisionTransformer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _pos_embed(self, x):
+        if self.dynamic_size:
+            B, H, W, C = x.shape
+            pos_embed = resample_abs_pos_embed(self.pos_embed, (H, W))
+            x = x.view(B, -1, C)
+        else:
+            pos_embed = self.pos_embed
         if self.no_embed_class:
             # deit-3, updated JAX (big vision)
             # position embedding does not overlap with class token, add then concat
-            x = x + self.pos_embed
+            x = x + pos_embed
             if self.cls_token is not None:
                 x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
         else:
@@ -557,7 +574,7 @@ class VisionTransformer(nn.Module):
             # pos_embed has entry for class token, concat then add
             if self.cls_token is not None:
                 x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
-            x = x + self.pos_embed
+            x = x + pos_embed
         return self.pos_drop(x)
 
     def _intermediate_layers(
