@@ -14,13 +14,13 @@ They were moved here to keep file sizes sane.
 Hacked together by / Copyright 2020, Ross Wightman
 """
 from functools import partial
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import StdConv2dSame, StdConv2d, to_2tuple
+from timm.layers import StdConv2dSame, StdConv2d, to_2tuple, Format, nchw_to
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
@@ -40,6 +40,9 @@ class HybridEmbed(nn.Module):
             in_chans=3,
             embed_dim=768,
             bias=True,
+            flatten: bool = True,
+            output_fmt: Optional[str] = None,
+            strict_img_size: bool = True,
     ):
         super().__init__()
         assert isinstance(backbone, nn.Module)
@@ -69,6 +72,15 @@ class HybridEmbed(nn.Module):
         assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
         self.grid_size = (feature_size[0] // patch_size[0], feature_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
+        if output_fmt is not None:
+            self.flatten = False
+            self.output_fmt = Format(output_fmt)
+        else:
+            # flatten spatial dim and transpose to channels last, kept for bwd compat
+            self.flatten = flatten
+            self.output_fmt = Format.NCHW
+        self.strict_img_size = strict_img_size
+
         self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
 
     def forward(self, x):
@@ -76,7 +88,10 @@ class HybridEmbed(nn.Module):
         if isinstance(x, (list, tuple)):
             x = x[-1]  # last feature if backbone outputs list/tuple of features
         x = self.proj(x)
-        x = x.flatten(2).transpose(1, 2)
+        if self.flatten:
+            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
+        elif self.output_fmt != Format.NCHW:
+            x = nchw_to(x, self.output_fmt)
         return x
 
 
