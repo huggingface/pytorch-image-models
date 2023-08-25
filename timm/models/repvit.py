@@ -368,13 +368,16 @@ def _cfg(url='', **kwargs):
 default_cfgs = generate_default_cfgs(
     {
         'repvit_m1.dist_in1k': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_distill_300_timm.pth'
+            hf_hub_id='timm/',
+            # url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_distill_300_timm.pth'
         ),
         'repvit_m2.dist_in1k': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m2_distill_300_timm.pth'
+            hf_hub_id='timm/',
+            # url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m2_distill_300_timm.pth'
         ),
         'repvit_m3.dist_in1k': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m3_distill_300_timm.pth'
+            hf_hub_id='timm/',
+            # url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m3_distill_300_timm.pth'
         ),
     }
 )
