@@ -31,6 +31,8 @@ class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
     Extract feature map from CNN, flatten, project to embedding dim.
     """
+    output_fmt: Format
+
     def __init__(
             self,
             backbone,
