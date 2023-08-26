@@ -459,11 +459,8 @@ class VisionTransformer(nn.Module):
 
         embed_args = {}
         if dynamic_size:
-            embed_args.update(dict(
-                strict_img_size=False,
-                flatten=False,  # flatten deferred until after pos embed
-                output_fmt='NHWC',
-            ))
+            # flatten deferred until after pos embed
+            embed_args.update(dict(strict_img_size=False, output_fmt='NHWC'))
         self.patch_embed = embed_layer(
             img_size=img_size,
             patch_size=patch_size,
@@ -559,7 +556,11 @@ class VisionTransformer(nn.Module):
     def _pos_embed(self, x):
         if self.dynamic_size:
             B, H, W, C = x.shape
-            pos_embed = resample_abs_pos_embed(self.pos_embed, (H, W))
+            pos_embed = resample_abs_pos_embed(
+                self.pos_embed,
+                (H, W),
+                num_prefix_tokens=0 if self.no_embed_class else self.num_prefix_tokens,
+            )
             x = x.view(B, -1, C)
         else:
             pos_embed = self.pos_embed
