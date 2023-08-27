@@ -400,13 +400,12 @@ class RotaryEmbeddingCat(nn.Module):
                     temperature=temperature,
                     step=1,
                 )
-                print(bands)
             self.register_buffer(
                 'bands',
                 bands,
                 persistent=False,
             )
-            self.embed = None
+            self.pos_embed = None
         else:
             # cache full sin/cos embeddings if shape provided up front
             embeds = build_rotary_pos_embed(
@@ -425,17 +424,19 @@ class RotaryEmbeddingCat(nn.Module):
             )
 
     def get_embed(self, shape: Optional[List[int]] = None):
-        if self.bands is not None:
+        if self.bands is not None and shape is not None:
             # rebuild embeddings every call, use if target shape changes
-            _assert(shape is not None, 'valid shape needed')
             embeds = build_rotary_pos_embed(
                 shape,
                 self.bands,
                 in_pixels=self.in_pixels,
+                ref_feat_shape=self.ref_feat_shape,
             )
             return torch.cat(embeds, -1)
-        else:
+        elif self.pos_embed is not None:
             return self.pos_embed
+        else:
+            assert False, "get_embed() requires pre-computed pos_embed or valid shape w/ pre-computed bands"
 
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
