@@ -367,7 +367,8 @@ class Eva(nn.Module):
             use_abs_pos_emb: bool = True,
             use_rot_pos_emb: bool = False,
             use_post_norm: bool = False,
-            dynamic_size: bool = False,
+            dynamic_img_size: bool = False,
+            dynamic_img_pad: bool = False,
             ref_feat_shape: Optional[Union[Tuple[int, int], int]] = None,
             head_init_scale: float = 0.001,
     ):
@@ -407,11 +408,11 @@ class Eva(nn.Module):
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_prefix_tokens = 1 if class_token else 0
-        self.dynamic_size = dynamic_size
+        self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
 
         embed_args = {}
-        if dynamic_size:
+        if dynamic_img_size:
             # flatten deferred until after pos embed
             embed_args.update(dict(strict_img_size=False, output_fmt='NHWC'))
         self.patch_embed = PatchEmbed(
@@ -419,6 +420,7 @@ class Eva(nn.Module):
             patch_size=patch_size,
             in_chans=in_chans,
             embed_dim=embed_dim,
+            dynamic_img_pad=dynamic_img_pad,
             **embed_args,
         )
         num_patches = self.patch_embed.num_patches
@@ -442,7 +444,7 @@ class Eva(nn.Module):
             self.rope = RotaryEmbeddingCat(
                 embed_dim // num_heads,
                 in_pixels=False,
-                feat_shape=None if dynamic_size else self.patch_embed.grid_size,
+                feat_shape=None if dynamic_img_size else self.patch_embed.grid_size,
                 ref_feat_shape=ref_feat_shape,
             )
         else:
@@ -527,7 +529,7 @@ class Eva(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _pos_embed(self, x) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        if self.dynamic_size:
+        if self.dynamic_img_size:
             B, H, W, C = x.shape
             if self.pos_embed is not None:
                 pos_embed = resample_abs_pos_embed(
