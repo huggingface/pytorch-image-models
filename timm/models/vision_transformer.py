@@ -383,7 +383,7 @@ class VisionTransformer(nn.Module):
     A PyTorch impl of : `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale`
         - https://arxiv.org/abs/2010.11929
     """
-    dynamic_size: Final[bool]
+    dynamic_img_size: Final[bool]
 
     def __init__(
             self,
@@ -401,9 +401,10 @@ class VisionTransformer(nn.Module):
             init_values: Optional[float] = None,
             class_token: bool = True,
             no_embed_class: bool = False,
-            dynamic_size: bool = False,
             pre_norm: bool = False,
             fc_norm: Optional[bool] = None,
+            dynamic_img_size: bool = False,
+            dynamic_img_pad: bool = False,
             drop_rate: float = 0.,
             pos_drop_rate: float = 0.,
             patch_drop_rate: float = 0.,
@@ -454,11 +455,11 @@ class VisionTransformer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_prefix_tokens = 1 if class_token else 0
         self.no_embed_class = no_embed_class
-        self.dynamic_size = dynamic_size
+        self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
 
         embed_args = {}
-        if dynamic_size:
+        if dynamic_img_size:
             # flatten deferred until after pos embed
             embed_args.update(dict(strict_img_size=False, output_fmt='NHWC'))
         self.patch_embed = embed_layer(
@@ -467,6 +468,7 @@ class VisionTransformer(nn.Module):
             in_chans=in_chans,
             embed_dim=embed_dim,
             bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+            dynamic_img_pad=dynamic_img_pad,
             **embed_args,
         )
         num_patches = self.patch_embed.num_patches
@@ -554,7 +556,7 @@ class VisionTransformer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _pos_embed(self, x):
-        if self.dynamic_size:
+        if self.dynamic_img_size:
             B, H, W, C = x.shape
             pos_embed = resample_abs_pos_embed(
                 self.pos_embed,

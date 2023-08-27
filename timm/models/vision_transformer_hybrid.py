@@ -18,6 +18,7 @@ from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import StdConv2dSame, StdConv2d, to_2tuple, Format, nchw_to
@@ -32,6 +33,7 @@ class HybridEmbed(nn.Module):
     Extract feature map from CNN, flatten, project to embedding dim.
     """
     output_fmt: Format
+    dynamic_img_pad: torch.jit.Final[bool]
 
     def __init__(
             self,
@@ -45,6 +47,7 @@ class HybridEmbed(nn.Module):
             flatten: bool = True,
             output_fmt: Optional[str] = None,
             strict_img_size: bool = True,
+            dynamic_img_pad: bool = False,
     ):
         super().__init__()
         assert isinstance(backbone, nn.Module)
@@ -71,7 +74,8 @@ class HybridEmbed(nn.Module):
                 feature_dim = self.backbone.feature_info.channels()[-1]
             else:
                 feature_dim = self.backbone.num_features
-        assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
+        if not dynamic_img_pad:
+            assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
         self.grid_size = (feature_size[0] // patch_size[0], feature_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
         if output_fmt is not None:
@@ -82,6 +86,7 @@ class HybridEmbed(nn.Module):
             self.flatten = flatten
             self.output_fmt = Format.NCHW
         self.strict_img_size = strict_img_size
+        self.dynamic_img_pad = dynamic_img_pad
 
         self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
 
@@ -89,6 +94,11 @@ class HybridEmbed(nn.Module):
         x = self.backbone(x)
         if isinstance(x, (list, tuple)):
             x = x[-1]  # last feature if backbone outputs list/tuple of features
+        _, _, H, W = x.shape
+        if self.dynamic_img_pad:
+            pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
+            pad_w = (self.patch_size[1] - W % self.patch_size[1]) % self.patch_size[1]
+            x = F.pad(x, (0, pad_w, 0, pad_h))
         x = self.proj(x)
         if self.flatten:
             x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
