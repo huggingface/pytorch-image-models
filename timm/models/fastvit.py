@@ -1,11 +1,13 @@
 # FastViT for PyTorch
 #
+# Original implementation and weights from https://github.com/apple/ml-fastvit
+#
 # For licensing see accompanying LICENSE file at https://github.com/apple/ml-fastvit/tree/main
 # Original work is copyright (C) 2023 Apple Inc. All Rights Reserved.
 #
 import os
 from functools import partial
-from typing import List, Tuple, Optional, Union
+from typing import Tuple, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -1141,7 +1143,7 @@ class FastVit(nn.Module):
                 mlp_ratio=mlp_ratios[i],
                 act_layer=act_layer,
                 norm_layer=norm_layer,
-                proj_drop_rate=drop_rate,
+                proj_drop_rate=proj_drop_rate,
                 drop_path_rate=dpr[i],
                 layer_scale_init_value=layer_scale_init_value,
                 lkc_use_act=lkc_use_act,
