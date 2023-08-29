@@ -35,6 +35,15 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Aug 28, 2023
+* Add dynamic img size support to models in `vision_transformer.py`, `vision_transformer_hybrid.py`, `deit.py`, and `eva.py` w/o breaking backward compat.
+  * Add `dynamic_img_size=True` to args at model creation time to allow changing the grid size (interpolate abs and/or ROPE pos embed each forward pass).
+  * Add `dynamic_img_pad=True` to allow image sizes that aren't divisible by patch size (pad bottom right to patch size each forward pass).
+  * Enabling either dynamic mode will break FX tracing unless PatchEmbed module added as leaf.
+  * Existing method of resizing position embedding by passing different `img_size` (interpolate pretrained embed weights once) on creation still works.
+  * Existing method of changing `patch_size` (resize pretrained patch_embed weights once) on creation still works.
+  * Example validation cmd `python validate.py /imagenet --model vit_base_patch16_224 --amp --amp-dtype bfloat16 --img-size 255 --crop-pct 1.0 --model-kwargs dynamic_img_size=True dyamic_img_pad=True`
+
 ### Aug 25, 2023
 * Many new models since last release
   * FastViT - https://arxiv.org/abs/2303.14189
