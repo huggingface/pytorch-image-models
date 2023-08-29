@@ -57,6 +57,10 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
   * Including FastViT, MobileOne, RepGhostNet, EfficientViT (MSRA), RepViT, RepVGG, and LeViT
 * Preparing 0.9.6 'back to school' release
 
+### Aug 11, 2023
+* Swin, MaxViT, CoAtNet, and BEiT models support resizing of image/window size on creation with adaptation of pretrained weights
+* Example validation cmd to test w/ non-square resize `python validate.py /imagenet --model swin_base_patch4_window7_224.ms_in22k_ft_in1k --amp --amp-dtype bfloat16 --input-size 3 256 320 --model-kwargs window_size=8,10 img_size=256,320`
+ 
 ### Aug 3, 2023
 * Add GluonCV weights for HRNet w18_small and w18_small_v2. Converted by [SeeFun](https://github.com/seefun)
 * Fix `selecsls*` model naming regression
