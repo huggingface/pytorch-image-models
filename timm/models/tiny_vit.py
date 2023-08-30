@@ -206,6 +206,7 @@ class Attention(torch.nn.Module):
                 idxs.append(attention_offsets[offset])
         self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, len(attention_offsets)))
         self.register_buffer('attention_bias_idxs', torch.LongTensor(idxs).view(N, N), persistent=False)
+        self.attention_bias_cache = {}
 
     @torch.no_grad()
     def train(self, mode=True):
