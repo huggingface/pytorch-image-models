@@ -260,7 +260,7 @@ class LiteMSA(nn.Module):
         v = F.pad(v, (0, 1), mode="constant", value=1.)
 
         if not torch.jit.is_scripting():
-            with torch.amp.autocast(device_type=v.device.type, enabled=False):
+            with torch.autocast(device_type=v.device.type, enabled=False):
                 out = self._attn(q, k, v)
         else:
             out = self._attn(q, k, v)
