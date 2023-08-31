@@ -94,7 +94,7 @@ class MBConv(nn.Module):
 
 
 class PatchMerging(nn.Module):
-    def __init__(self, input_resolution, dim, out_dim, activation):
+    def __init__(self, input_resolution, dim, out_dim, activation, in_fmt='BCHW'):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
@@ -104,18 +104,21 @@ class PatchMerging(nn.Module):
         self.conv2 = ConvNorm(out_dim, out_dim, 3, 2, 1, groups=out_dim)
         self.conv3 = ConvNorm(out_dim, out_dim, 1, 1, 0)
         self.output_resolution = (math.ceil(input_resolution[0] / 2), math.ceil(input_resolution[1] / 2))
+        self.in_fmt = in_fmt
+        assert self.in_fmt in ['BCHW', 'BLC']
 
     def forward(self, x):
-        if x.ndim == 3:
+        if self.in_fmt == 'BLC':
+            # (B, H * W, C) ->  (B, C, H, W)
             H, W = self.input_resolution
-            B = len(x)
-            # (B, C, H, W)
+            B = x.shape[0]
             x = x.view(B, H, W, -1).permute(0, 3, 1, 2)
         x = self.conv1(x)
         x = self.act(x)
         x = self.conv2(x)
         x = self.act(x)
         x = self.conv3(x)
+        # (B, C, H, W) -> (B, H * W, C)
         x = x.flatten(2).transpose(1, 2)
         return x
 
@@ -369,6 +372,7 @@ class TinyVitStage(nn.Module):
         local_conv_size: the kernel size of the depthwise convolution between attention and MLP. Default: 3
         activation: the activation function. Default: nn.GELU
         out_dim: the output dimension of the layer. Default: dim
+        in_fmt: input format ('BCHW' or 'BLC'). Default: 'BCHW'
     """
 
     def __init__(
@@ -385,6 +389,7 @@ class TinyVitStage(nn.Module):
         local_conv_size=3,
         activation=nn.GELU,
         out_dim=None,
+        in_fmt='BCHW'
     ):
 
         super().__init__()
@@ -396,7 +401,7 @@ class TinyVitStage(nn.Module):
         # patch merging layer
         if downsample is not None:
             self.downsample = downsample(
-                input_resolution, dim=input_dim, out_dim=self.out_dim, activation=activation)
+                input_resolution, dim=input_dim, out_dim=self.out_dim, activation=activation, in_fmt=in_fmt)
             input_resolution = self.downsample.output_resolution
         else:
             self.downsample = nn.Identity()
@@ -483,6 +488,10 @@ class TinyVit(nn.Module):
             else:
                 out_dim = embed_dims[stage_idx]
                 drop_path_rate = dpr[sum(depths[:stage_idx]):sum(depths[:stage_idx + 1])]
+                if stage_idx == 1:
+                    in_fmt = 'BCHW'
+                else:
+                    in_fmt = 'BLC'
                 stage = TinyVitStage(
                     num_heads=num_heads[stage_idx],
                     window_size=window_sizes[stage_idx],
@@ -496,6 +505,7 @@ class TinyVit(nn.Module):
                     downsample=PatchMerging,
                     out_dim=out_dim,
                     activation=activation,
+                    in_fmt=in_fmt
                 )
                 input_resolution = (math.ceil(input_resolution[0] / 2), math.ceil(input_resolution[1] / 2))
                 stride *= 2
