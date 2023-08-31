@@ -624,6 +624,7 @@ def _cfg(url='', **kwargs):
         'classifier': 'head.fc',
         'fixed_input_size': True,
         'pool_size': None,
+        'input_size': (3, 224, 224),
         **kwargs,
     }
 
@@ -660,10 +661,12 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_1k.pth'
     ),
     'tiny_vit_21m_384.dist_in22k_ft_in1k': _cfg(
-        url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_384_distill.pth'
+        url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_384_distill.pth',
+        input_size=(3, 384, 384)
     ),
     'tiny_vit_21m_512.dist_in22k_ft_in1k': _cfg(
-        url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_512_distill.pth'
+        url='https://github.com/wkcn/TinyViT-model-zoo/releases/download/checkpoints/tiny_vit_21m_22kto1k_512_distill.pth',
+        input_size=(3, 512, 512)
     ),
 })
 
