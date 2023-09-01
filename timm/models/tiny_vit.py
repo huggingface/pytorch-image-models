@@ -510,10 +510,17 @@ class TinyVit(nn.Module):
         return {'attention_biases'}
 
     @torch.jit.ignore
+    def no_weight_decay(self):
+        return {x for x in self.state_dict().keys() if 'attention_biases' in x}
+
+    @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^patch_embed',
-            blocks=[(r'^stages\.(\d+)', None)]
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
+            ]
         )
         return matcher
 
@@ -523,7 +530,7 @@ class TinyVit(nn.Module):
 
     @torch.jit.ignore
     def get_classifier(self):
-        return self.head
+        return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes

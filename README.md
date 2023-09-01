@@ -35,6 +35,10 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Sep 1, 2023
+* TinyViT added by [SeeFun](https://github.com/seefun)
+* Fix EfficientViT (MIT) to use torch.autocast so it works back to PT 1.10
+
 ### Aug 28, 2023
 * Add dynamic img size support to models in `vision_transformer.py`, `vision_transformer_hybrid.py`, `deit.py`, and `eva.py` w/o breaking backward compat.
   * Add `dynamic_img_size=True` to args at model creation time to allow changing the grid size (interpolate abs and/or ROPE pos embed each forward pass).

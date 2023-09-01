@@ -508,11 +508,10 @@ class EfficientVit(nn.Module):
 
         # stages
         self.feature_info = []
-        stages = []
-        stage_idx = 0
+        self.stages = nn.Sequential()
         in_channels = widths[0]
         for i, (w, d) in enumerate(zip(widths[1:], depths[1:])):
-            stages.append(EfficientVitStage(
+            self.stages.append(EfficientVitStage(
                 in_channels,
                 w,
                 depth=d,
@@ -524,10 +523,8 @@ class EfficientVit(nn.Module):
             ))
             stride *= 2
             in_channels = w
-            self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{stage_idx}')]
-            stage_idx += 1
+            self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
 
-        self.stages = nn.Sequential(*stages)
         self.num_features = in_channels
         self.head_widths = head_widths
         self.head_dropout = drop_rate
@@ -548,8 +545,11 @@ class EfficientVit(nn.Module):
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
-            stem=r'^stem',  # stem and embed
-            blocks=[(r'^stages\.(\d+)', None)]
+            stem=r'^stem',
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
+            ]
         )
         return matcher
 

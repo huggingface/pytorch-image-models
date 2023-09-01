@@ -442,10 +442,17 @@ class EfficientVitMsra(nn.Module):
             self.num_features, num_classes, drop=self.drop_rate) if num_classes > 0 else torch.nn.Identity()
 
     @torch.jit.ignore
+    def no_weight_decay(self):
+        return {x for x in self.state_dict().keys() if 'attention_biases' in x}
+
+    @torch.jit.ignore
     def group_matcher(self, coarse=False):
         matcher = dict(
             stem=r'^patch_embed',
-            blocks=[(r'^stages\.(\d+)', None)]
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.\w+\.(\d+)', None),
+            ]
         )
         return matcher
 
@@ -455,7 +462,7 @@ class EfficientVitMsra(nn.Module):
 
     @torch.jit.ignore
     def get_classifier(self):
-        return self.head
+        return self.head.linear
 
     def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
