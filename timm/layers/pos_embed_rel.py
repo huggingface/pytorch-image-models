@@ -121,6 +121,38 @@ def resize_rel_pos_bias_table_simple(
     return rel_pos_bias
 
 
+def resize_rel_pos_bias_table_levit(
+        position_bias_table,
+        new_size,
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+):
+    """
+    Resample relative position bias table suggested in LeVit
+    Adapted from: https://github.com/microsoft/Cream/blob/main/TinyViT/utils.py
+    """
+    L1, nH1 = position_bias_table.size()
+    L2, nH2 = new_size
+    assert nH1 == nH2
+    if L1 != L2:
+        orig_dtype = position_bias_table.dtype
+        position_bias_table = position_bias_table.float()
+        # bicubic interpolate relative_position_bias_table if not match
+        S1 = int(L1 ** 0.5)
+        S2 = int(L2 ** 0.5)
+        relative_position_bias_table_resized = F.interpolate(
+            position_bias_table.permute(1, 0).view(1, nH1, S1, S1),
+            size=(S2, S2),
+            mode=interpolation,
+            antialias=antialias)
+        relative_position_bias_table_resized = \
+            relative_position_bias_table_resized.view(nH2, L2).permute(1, 0)
+        relative_position_bias_table_resized.to(orig_dtype)
+        return relative_position_bias_table_resized
+    else:
+        return position_bias_table
+
+
 def resize_rel_pos_bias_table(
         rel_pos_bias,
         new_window_size: Tuple[int, int],

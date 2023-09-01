@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import LayerNorm2d, NormMlpClassifierHead, DropPath,\
-    to_2tuple, trunc_normal_, resample_relative_position_bias_table, use_fused_attn
+    trunc_normal_, resize_rel_pos_bias_table_levit, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
@@ -182,6 +182,7 @@ class Attention(torch.nn.Module):
         self.d = int(attn_ratio * key_dim)
         self.dh = int(attn_ratio * key_dim) * num_heads
         self.attn_ratio = attn_ratio
+        self.resolution = resolution
         self.fused_attn = use_fused_attn()
 
         h = self.dh + nh_kd * 2
@@ -551,17 +552,18 @@ def checkpoint_filter_fn(state_dict, model):
     # TODO: temporary use for testing, need change after weight convert
     if 'model' in state_dict.keys():
         state_dict = state_dict['model']
-    targe_sd = model.state_dict()
-    target_keys = list(targe_sd.keys())
+    target_sd = model.state_dict()
+    target_keys = list(target_sd.keys())
     out_dict = {}
     i = 0
     for k, v in state_dict.items():
-        if not k.endswith('attention_bias_idxs'):
-            if 'attention_biases' in k:
-                # dynamic window size by resampling relative_position_bias_table
-                # TODO: whether move this func into model for dynamic input resolution? (high risk)
-                v = resample_relative_position_bias_table(v.T, targe_sd[target_keys[i]].shape[::-1]).T
-            out_dict[target_keys[i]] = v
+        if k.endswith('attention_bias_idxs'):
+            continue
+        tk = target_keys[i]
+        if 'attention_biases' in k:
+            # TODO: whether move this func into model for dynamic input resolution? (high risk)
+            v = resize_rel_pos_bias_table_levit(v.T, target_sd[tk].shape[::-1]).T
+        out_dict[tk] = v
         i += 1
     return out_dict
 
