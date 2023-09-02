@@ -1,5 +1,4 @@
 # PyTorch Image Models
-- [Sponsors](#sponsors)
 - [What's New](#whats-new)
 - [Introduction](#introduction)
 - [Models](#models)
@@ -10,14 +9,6 @@
 - [Awesome PyTorch Resources](#awesome-pytorch-resources)
 - [Licenses](#licenses)
 - [Citing](#citing)
-
-## Sponsors
-
-Thanks to the following for hardware support:
-* TPU Research Cloud (TRC) (https://sites.research.google/trc/about/)
-* Nvidia (https://www.nvidia.com/en-us/)
-
-And a big thanks to all GitHub sponsors who helped with some of my costs before I joined Hugging Face.
 
 ## What's New
 
@@ -38,6 +29,7 @@ And a big thanks to all GitHub sponsors who helped with some of my costs before 
 ### Sep 1, 2023
 * TinyViT added by [SeeFun](https://github.com/seefun)
 * Fix EfficientViT (MIT) to use torch.autocast so it works back to PT 1.10
+* 0.9.7 release
 
 ### Aug 28, 2023
 * Add dynamic img size support to models in `vision_transformer.py`, `vision_transformer_hybrid.py`, `deit.py`, and `eva.py` w/o breaking backward compat.
