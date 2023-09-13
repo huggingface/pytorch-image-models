@@ -603,12 +603,6 @@ class VisionTransformerPacked(nn.Module):
         self.pos_embed_h = nn.Parameter(torch.randn(grid_h, embed_dim) * .02)
         self.pos_embed_w = nn.Parameter(torch.randn(grid_w, embed_dim) * .02)
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
-        if patch_drop_rate > 0:
-            self.patch_drop = PatchDropout(
-                patch_drop_rate,
-            )
-        else:
-            self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
