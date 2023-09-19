@@ -497,6 +497,9 @@ def checkpoint_filter_fn(state_dict, model):
 
 
 def _create_xcit(variant, pretrained=False, default_cfg=None, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for Cross-Covariance Image Transformers models.')
+
     model = build_model_with_cfg(
         Xcit,
         variant,
