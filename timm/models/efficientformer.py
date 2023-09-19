@@ -534,6 +534,9 @@ default_cfgs = generate_default_cfgs({
 
 
 def _create_efficientformer(variant, pretrained=False, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for EfficientFormer models.')
+
     model = build_model_with_cfg(
         EfficientFormer, variant, pretrained,
         pretrained_filter_fn=_checkpoint_filter_fn,

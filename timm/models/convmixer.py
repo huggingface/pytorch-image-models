@@ -101,6 +101,9 @@ class ConvMixer(nn.Module):
 
 
 def _create_convmixer(variant, pretrained=False, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for ConvMixer models.')
+
     return build_model_with_cfg(ConvMixer, variant, pretrained, **kwargs)
 
 
