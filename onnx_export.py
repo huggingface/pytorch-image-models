@@ -90,6 +90,8 @@ def main():
         check_forward=args.check_forward,
         training=args.training,
         verbose=args.verbose,
+        input_size=(3, args.img_size, args.img_size),
+        batch_size=args.batch_size,
     )
 
 
