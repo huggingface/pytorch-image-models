@@ -378,6 +378,7 @@ class TinyVitStage(nn.Module):
 
         super().__init__()
         self.depth = depth
+        self.out_dim =  out_dim
 
         # patch merging layer
         if downsample is not None:
