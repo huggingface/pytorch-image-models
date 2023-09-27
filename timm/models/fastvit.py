@@ -421,8 +421,8 @@ class ReparamLargeKernelConv(nn.Module):
 def convolutional_stem(
         in_chs: int,
         out_chs: int,
-        inference_mode: bool = False,
         act_layer: nn.Module = nn.GELU,
+        inference_mode: bool = False
 ) -> nn.Sequential:
     """Build convolutional stem with MobileOne blocks.
 
@@ -1124,8 +1124,8 @@ class FastVit(nn.Module):
         self.stem = convolutional_stem(
             in_chans,
             embed_dims[0],
+            act_layer,
             inference_mode,
-            act_layer
         )
 
         # Build the main stages of the network architecture
@@ -1187,6 +1187,7 @@ class FastVit(nn.Module):
                 group_size=1,
                 inference_mode=inference_mode,
                 use_se=True,
+                act_layer=act_layer,
                 num_conv_branches=1,
             )
             self.head = ClassifierHead(
