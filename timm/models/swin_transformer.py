@@ -24,7 +24,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
-    _assert, use_fused_attn, resize_rel_pos_bias_table
+    _assert, use_fused_attn, resize_rel_pos_bias_table, resample_patch_embed
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply
@@ -631,6 +631,17 @@ def checkpoint_filter_fn(state_dict, model):
     for k, v in state_dict.items():
         if any([n in k for n in ('relative_position_index', 'attn_mask')]):
             continue  # skip buffers that should not be persistent
+
+        if 'patch_embed.proj.weight' in k:
+            _, _, H, W = model.patch_embed.proj.weight.shape
+            if v.shape[-2] != H or v.shape[-1] != W:
+                v = resample_patch_embed(
+                    v,
+                    (H, W),
+                    interpolation='bicubic',
+                    antialias=True,
+                    verbose=True,
+                )
 
         if k.endswith('relative_position_bias_table'):
             m = model.get_submodule(k[:-29])
