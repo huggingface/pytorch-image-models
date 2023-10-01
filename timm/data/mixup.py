@@ -102,7 +102,7 @@ class Mixup:
         num_classes (int): number of classes for target
     """
     def __init__(self, mixup_alpha=1., cutmix_alpha=0., cutmix_minmax=None, prob=1.0, switch_prob=0.5,
-                 mode='batch', correct_lam=True, label_smoothing=0.1, num_classes=1000):
+                 mode='batch', correct_lam=True, label_smoothing=0.1, num_classes=1000, tied_augment=False):
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
         self.cutmix_minmax = cutmix_minmax
@@ -117,6 +117,7 @@ class Mixup:
         self.mode = mode
         self.correct_lam = correct_lam  # correct lambda based on clipped area for cutmix
         self.mixup_enabled = True  # set to false to disable mixing (intended tp be set by train loop)
+        self.tied_augment = tied_augment
 
     def _params_per_elem(self, batch_size):
         lam = np.ones(batch_size, dtype=np.float32)
@@ -206,7 +207,7 @@ class Mixup:
             x.mul_(lam).add_(x_flipped)
         return lam
 
-    def __call__(self, x, target):
+    def handle_mixup(self, x, target):
         assert len(x) % 2 == 0, 'Batch size should be even when using this'
         if self.mode == 'elem':
             lam = self._mix_elem(x)
@@ -215,8 +216,15 @@ class Mixup:
         else:
             lam = self._mix_batch(x)
         target = mixup_target(target, self.num_classes, lam, self.label_smoothing)
-        return x, target
+        return x, target, lam
 
+    def __call__(self, x, target):
+        if self.tied_augment:
+            input1, input2 = x
+            input1, mixup_target, lam = self.handle_mixup(input1, target.clone())
+            return (input1, input2), (mixup_target, one_hot(target, self.num_classes), lam)
+            
+        return self.handle_mixup(x, target)
 
 class FastCollateMixup(Mixup):
     """ Fast Collate w/ Mixup/Cutmix that applies different params to each element or whole batch

@@ -14,6 +14,7 @@ from typing import Callable
 
 import torch
 import torch.utils.data
+from torch.utils.data import Dataset
 import numpy as np
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -87,7 +88,9 @@ class PrefetchLoader:
             re_prob=0.,
             re_mode='const',
             re_count=1,
-            re_num_splits=0):
+            re_num_splits=0,
+            tied_weight=None,
+            ):
 
         mean = adapt_to_chs(mean, channels)
         std = adapt_to_chs(std, channels)
@@ -125,13 +128,16 @@ class PrefetchLoader:
             stream_context = suppress
 
         for next_input, next_target in self.loader:
+            def _preproccess(image):
+                image = image.to(device=self.device, non_blocking=True)
+                image = image.to(self.img_dtype).sub_(self.mean).div_(self.std)
+                if self.random_erasing is not None:
+                    image = self.random_erasing(image)
+                return image
 
             with stream_context():
-                next_input = next_input.to(device=self.device, non_blocking=True)
+                next_input = _preproccess(next_input)
                 next_target = next_target.to(device=self.device, non_blocking=True)
-                next_input = next_input.to(self.img_dtype).sub_(self.mean).div_(self.std)
-                if self.random_erasing is not None:
-                    next_input = self.random_erasing(next_input)
 
             if not first:
                 yield input, target
@@ -185,6 +191,19 @@ def _worker_init(worker_id, worker_seeding='all'):
         if worker_seeding == 'all':
             np.random.seed(worker_info.seed % (2 ** 32 - 1))
 
+class TiedDatasetWrapper(Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self.transform = self.dataset.transform
+        self.dataset.transform = None
+    
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        input, target = self.dataset[idx]
+        input1, input2 = self.transform(input), self.transform(input)
+        return (input1, input2), target
 
 def create_loader(
         dataset,
@@ -205,6 +224,7 @@ def create_loader(
         auto_augment=None,
         num_aug_repeats=0,
         num_aug_splits=0,
+        tied_weight=None,
         interpolation='bilinear',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
@@ -254,6 +274,9 @@ def create_loader(
         # give Iterable datasets early knowledge of num_workers so that sample estimates
         # are correct before worker processes are launched
         dataset.set_loader_cfg(num_workers=num_workers)
+
+    if tied_weight is not None:
+        dataset = TiedDatasetWrapper(dataset)
 
     sampler = None
     if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
@@ -305,7 +328,8 @@ def create_loader(
             re_prob=prefetch_re_prob,
             re_mode=re_mode,
             re_count=re_count,
-            re_num_splits=re_num_splits
+            re_num_splits=re_num_splits,
+            tied_weight=tied_weight,
         )
 
     return loader

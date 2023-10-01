@@ -32,8 +32,8 @@ from torch.nn.parallel import DistributedDataParallel as NativeDDP
 from timm import utils
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
-from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
-from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, model_parameters
+from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy, TiedLoss
+from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, model_parameters, TiedModelWrapper
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
@@ -288,6 +288,14 @@ group.add_argument('--drop-path', type=float, default=None, metavar='PCT',
                    help='Drop path rate (default: None)')
 group.add_argument('--drop-block', type=float, default=None, metavar='PCT',
                    help='Drop block rate (default: None)')
+group.add_argument('--tied-weight', type=float, default=None,
+                   help='Tied weight enabled only if > 0. If enabled, the script uses Tied-Augment')
+group.add_argument('--tied-double-supervision', action='store_true',
+                   help='If true, both branches of tied-augment will be fed to cross entropy loss.'
+                   'Generally it is advised to set it to true.')
+group.add_argument('--tied-single-pass', action='store_true',
+                   help='If true, two branches of Tied-Augment will be processed by a single forward pass.'
+                        'This can be used to speed the training up if using high end GPUs with high memory.')
 
 # Batch norm parameters (only works with gen_efficientnet based models currently)
 group = parser.add_argument_group('Batch norm parameters', 'Only works with gen_efficientnet based models currently.')
@@ -381,7 +389,7 @@ def main():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
 
-    args.prefetcher = not args.no_prefetcher
+    args.prefetcher = not args.no_prefetcher and args.tied_weight is None
     args.grad_accum_steps = max(1, args.grad_accum_steps)
     device = utils.init_distributed_device(args)
     if args.distributed:
@@ -485,6 +493,9 @@ def main():
             _logger.info(
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
                 'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
+
+    if args.tied_weight is not None:
+        model = TiedModelWrapper(model, single_forward=args.tied_single_pass)
 
     if args.torchscript:
         assert not args.torchcompile
@@ -613,9 +624,10 @@ def main():
             switch_prob=args.mixup_switch_prob,
             mode=args.mixup_mode,
             label_smoothing=args.smoothing,
-            num_classes=args.num_classes
+            num_classes=args.num_classes,
+            tied_augment=(args.tied_weight is not None)
         )
-        if args.prefetcher:
+        if args.prefetcher and args.tied_weight is None:
             assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
             collate_fn = FastCollateMixup(**mixup_args)
         else:
@@ -649,6 +661,7 @@ def main():
         num_aug_repeats=args.aug_repeats,
         num_aug_splits=num_aug_splits,
         interpolation=train_interpolation,
+        tied_weight=args.tied_weight,
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
@@ -699,6 +712,11 @@ def main():
         train_loss_fn = nn.CrossEntropyLoss()
     train_loss_fn = train_loss_fn.to(device=device)
     validate_loss_fn = nn.CrossEntropyLoss().to(device=device)
+    
+    if args.tied_weight is not None:
+        train_loss_fn = TiedLoss(train_loss_fn, 
+                                 args.tied_weight, 
+                                 both_supervised=args.tied_double_supervision)
 
     # setup checkpoint saver and eval metric tracking
     eval_metric = args.eval_metric
@@ -884,15 +902,24 @@ def train_one_epoch(
         last_batch = batch_idx == last_batch_idx
         need_update = last_batch or (batch_idx + 1) % accum_steps == 0
         update_idx = batch_idx // accum_steps
+        size = input.size(0) if args.tied_weight is None else input[0].size(0)
         if batch_idx >= last_batch_idx_to_accum:
             accum_steps = last_accum_steps
 
         if not args.prefetcher:
-            input, target = input.to(device), target.to(device)
-            if mixup_fn is not None:
-                input, target = mixup_fn(input, target)
+            if args.tied_weight is None:
+                input, target = input.to(device), target.to(device)
+                if mixup_fn is not None:
+                    input, target = mixup_fn(input, target)
+            else:
+                input = (input[0].to(device), input[1].to(device))
+                target = target.to(device)
+                if mixup_fn is not None:
+                    (input1, input2), (mixup_target, normal_target, lam) = mixup_fn(input, target)
+
         if args.channels_last:
-            input = input.contiguous(memory_format=torch.channels_last)
+            input = input.contiguous(memory_format=torch.channels_last) if args.tied_weight is None else \
+                    (input[0].contiguous(memory_format=torch.channels_last), input[1].contiguous(memory_format=torch.channels_last))
 
         # multiply by accum steps to get equivalent for full update
         data_time_m.update(accum_steps * (time.time() - data_start_time))
@@ -900,6 +927,11 @@ def train_one_epoch(
         def _forward():
             with amp_autocast():
                 output = model(input)
+                if mixup_fn is not None and args.tied_weight is not None:
+                    feat1, feat2, logit1, logit2 = output
+                    feat2 = lam * feat2 + (1 - lam) * feat2.flip(0)
+                    output = (feat1, feat2, logit1, logit2)
+                    target = (mixup_target, normal_target)
                 loss = loss_fn(output, target)
             if accum_steps > 1:
                 loss /= accum_steps
@@ -936,8 +968,8 @@ def train_one_epoch(
             _backward(loss)
 
         if not args.distributed:
-            losses_m.update(loss.item() * accum_steps, input.size(0))
-        update_sample_count += input.size(0)
+            losses_m.update(loss.item() * accum_steps, size)
+        update_sample_count += size
 
         if not need_update:
             data_start_time = time.time()
@@ -960,7 +992,7 @@ def train_one_epoch(
 
             if args.distributed:
                 reduced_loss = utils.reduce_tensor(loss.data, args.world_size)
-                losses_m.update(reduced_loss.item() * accum_steps, input.size(0))
+                losses_m.update(reduced_loss.item() * accum_steps, size)
                 update_sample_count *= args.world_size
 
             if utils.is_primary(args):
@@ -1012,13 +1044,14 @@ def validate(
     losses_m = utils.AverageMeter()
     top1_m = utils.AverageMeter()
     top5_m = utils.AverageMeter()
-
+    
     model.eval()
 
     end = time.time()
     last_idx = len(loader) - 1
     with torch.no_grad():
         for batch_idx, (input, target) in enumerate(loader):
+            size = input.size(0) if args.tied_weight is None else input[0].size(0)
             last_batch = batch_idx == last_idx
             if not args.prefetcher:
                 input = input.to(device)
@@ -1050,7 +1083,7 @@ def validate(
             if device.type == 'cuda':
                 torch.cuda.synchronize()
 
-            losses_m.update(reduced_loss.item(), input.size(0))
+            losses_m.update(reduced_loss.item(), size)
             top1_m.update(acc1.item(), output.size(0))
             top5_m.update(acc5.item(), output.size(0))
 
