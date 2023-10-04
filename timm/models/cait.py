@@ -50,7 +50,7 @@ class ClassAttn(nn.Module):
         if self.fused_attn:
             x_cls = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale

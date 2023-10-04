@@ -59,14 +59,14 @@ class Attention(nn.Module):
     def forward(self, x):
         """
         x is shape: B (batch_size), T (image blocks), N (seq length per image block), C (embed dim)
-        """ 
+        """
         B, T, N, C = x.shape
         # result of next line is (qkv, B, num (H)eads, T, N, (C')hannels per head)
         qkv = self.qkv(x).reshape(B, T, N, 3, self.num_heads, C // self.num_heads).permute(3, 0, 4, 1, 2, 5)
         q, k, v = qkv.unbind(0)  # make torchscript happy (cannot use tensor as tuple)
 
         if self.fused_attn:
-            x = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p)
+            x = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p if self.training else 0.)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1) # (B, H, T, N, N)
@@ -330,7 +330,7 @@ class Nest(nn.Module):
         # Hint: (img_size // patch_size) gives number of patches along edge of image. sqrt(self.num_blocks[0]) is the
         #  number of blocks along edge of image
         self.block_size = int((img_size // patch_size) // math.sqrt(self.num_blocks[0]))
-        
+
         # Patch embedding
         self.patch_embed = PatchEmbed(
             img_size=img_size,
