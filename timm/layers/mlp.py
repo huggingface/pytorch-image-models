@@ -130,8 +130,6 @@ class SwiGLU(nn.Module):
         self.fc2 = nn.Linear(hidden_features, out_features, bias=bias[1])
         self.drop2 = nn.Dropout(drop_probs[1])
 
-        self.drop = nn.Dropout(drop)
-
     def init_weights(self):
         # override init of fc1 w/ gate portion set to weight near zero, bias=1
         nn.init.ones_(self.fc1_g.bias)
