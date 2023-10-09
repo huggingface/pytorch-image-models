@@ -612,11 +612,18 @@ default_cfgs = generate_default_cfgs({
     'hgnet_tiny.paddle_in1k': _cfg(
         first_conv='stem.0.conv',
         hf_hub_id='timm/'),
+    'hgnet_tiny.ssld_in1k': _cfg(
+        first_conv='stem.0.conv',
+        hf_hub_id='timm/'),
     'hgnet_small.paddle_in1k': _cfg(
         first_conv='stem.0.conv',
         hf_hub_id='timm/'),
-    'hgnet_base': _cfg(
-        first_conv='stem.0.conv'),
+    'hgnet_small.ssld_in1k': _cfg(
+        first_conv='stem.0.conv',
+        hf_hub_id='timm/'),
+    'hgnet_base.ssld_in1k': _cfg(
+        first_conv='stem.0.conv',
+        hf_hub_id='timm/'),
     'hgnetv2_b0.ssld_in1k': _cfg(
         first_conv='stem.stem1.conv',
         hf_hub_id='timm/'),
