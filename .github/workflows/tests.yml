@@ -17,8 +17,11 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python: ['3.10']
-        torch: ['1.13.0']
-        torchvision: ['0.14.0']
+        torch: [{base: '1.13.0', vision: '0.14.0'}]
+        include:
+          - torch: {base: '2.1.0', vision: '0.16.0'}
+            python: '3.11'
+            os: ubuntu-latest
         testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
     runs-on: ${{ matrix.os }}
 
@@ -34,17 +37,17 @@ jobs:
         pip install -r requirements-dev.txt
     - name: Install torch on mac
       if: startsWith(matrix.os, 'macOS')
-      run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
+      run: pip install --no-cache-dir torch==${{ matrix.torch.base }} torchvision==${{ matrix.torch.vision }}
     - name: Install torch on Windows
       if: startsWith(matrix.os, 'windows')
-      run: pip install --no-cache-dir torch==${{ matrix.torch }} torchvision==${{ matrix.torchvision }}
+      run: pip install --no-cache-dir torch==${{ matrix.torch.base }} torchvision==${{ matrix.torch.vision }}
     - name: Install torch on ubuntu
       if: startsWith(matrix.os, 'ubuntu')
       run: |
         sudo sed -i 's/azure\.//' /etc/apt/sources.list
         sudo apt update
         sudo apt install -y google-perftools
-        pip install --no-cache-dir torch==${{ matrix.torch }}+cpu torchvision==${{ matrix.torchvision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+        pip install --no-cache-dir torch==${{ matrix.torch.base }}+cpu torchvision==${{ matrix.torch.vision }}+cpu -f https://download.pytorch.org/whl/torch_stable.html
     - name: Install requirements
       run: |
         pip install -r requirements.txt
