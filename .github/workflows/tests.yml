@@ -9,7 +9,6 @@ on:
 env:
   OMP_NUM_THREADS: 2
   MKL_NUM_THREADS: 2
-  MARK: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
 
 jobs:
   test:
@@ -19,12 +18,13 @@ jobs:
         os: [ubuntu-latest]
         python: ['3.10']
         torch: [{base: '1.13.0', vision: '0.14.0'}]
+        testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
         include:
-          - torch: {base: '2.1.0', vision: '0.16.0'}
+          - os: ubuntu-latest            
             python: '3.11'
-            testmarker: ${{ fromJSON(env.MARK) }}
-            os: ubuntu-latest
-        testmarker: ${{ fromJSON(env.MARK) }}
+            torch: {base: '2.1.0', vision: '0.16.0'}
+            testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
+
     runs-on: ${{ matrix.os }}
 
     steps:
