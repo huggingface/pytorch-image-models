@@ -22,9 +22,9 @@ jobs:
         include:
           - torch: {base: '2.1.0', vision: '0.16.0'}
             python: '3.11'
-            testmarker: ${{ env.MARK }}
+            testmarker: ${{ fromJSON(env.MARK) }}
             os: ubuntu-latest
-        testmarker: ${{ env.MARK }}
+        testmarker: ${{ fromJSON(env.MARK) }}
     runs-on: ${{ matrix.os }}
 
     steps:
