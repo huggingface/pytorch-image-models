@@ -1529,23 +1529,23 @@ default_cfgs = generate_default_cfgs({
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
     
-    'vit_huge_patch14_224_ijepa.in1k': _cfg(
+    'vit_huge_patch14_ijepa_224.in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.14-300e.pth.tar',
         # hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
-    'vit_huge_patch14_224_ijepa.in22k': _cfg(
+    'vit_huge_patch14_ijepa_224.in22k': _cfg(
         url='https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.h.14-900e.pth.tar',
         # hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
-    'vit_huge_patch16_448_ijepa.in1k': _cfg(
+    'vit_huge_patch16_ijepa_448.in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.16-448px-300e.pth.tar',
         # hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         input_size=(3, 448, 448), crop_pct=1.0,
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
-    'vit_gigantic_patch16_224_ijepa.in22k': _cfg(
+    'vit_gigantic_patch16_ijepa_224.in22k': _cfg(
         url='https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar',
         # hf_hub_id='timm/',
         license='cc-by-nc-4.0',
@@ -1589,6 +1589,12 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         input_size=(3, 384, 384),
         num_classes=0),
+
+    'vit_medium_patch16_reg4_256': _cfg(
+        input_size=(3, 256, 256)),
+    'vit_medium_patch16_reg4_gap_256': _cfg(
+        input_size=(3, 256, 256)),
+    'vit_base_patch16_reg8_gap_256': _cfg(input_size=(3, 256, 256)),
 })
 
 
@@ -2185,33 +2191,33 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
 
 
 @register_model
-def vit_huge_patch14_224_ijepa(pretrained=False, **kwargs) -> VisionTransformer:
+def vit_huge_patch14_ijepa_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-Huge model (ViT-H/14) from `I-JEPA` - https://arxiv.org/abs/2301.08243
     """
     model_args = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, class_token=False, global_pool='avg')
     model = _create_vision_transformer(
-        'vit_huge_patch14_224_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_huge_patch14_ijepa_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_huge_patch16_448_ijepa(pretrained=False, **kwargs) -> VisionTransformer:
+def vit_huge_patch16_ijepa_448(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-Huge model (ViT-H/16) from `I-JEPA` - https://arxiv.org/abs/2301.08243
     """
     model_args = dict(
         patch_size=16, embed_dim=1280, depth=32, num_heads=16, class_token=False, global_pool='avg', img_size=448)
     model = _create_vision_transformer(
-        'vit_huge_patch16_448_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_huge_patch16_ijepa_448', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_gigantic_patch16_224_ijepa(pretrained=False, **kwargs) -> VisionTransformer:
+def vit_gigantic_patch16_ijepa_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ ViT-Gigantic (big-G) model (ViT-G/16) from `I-JEPA - https://arxiv.org/abs/2301.08243
     """
     model_args = dict(patch_size=16, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16)
     model = _create_vision_transformer(
-        'vit_gigantic_patch16_224_ijepa', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_gigantic_patch16_ijepa_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -2296,45 +2302,35 @@ def vit_so400m_patch14_siglip_384(pretrained=False, **kwargs) -> VisionTransform
 
 
 @register_model
-def vit_medium_patch16_reg8_224(pretrained=False, **kwargs) -> VisionTransformer:
+def vit_medium_patch16_reg4_256(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(
-        patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=True, no_embed_class=True,
-        reg_tokens=8,
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=True,
+        no_embed_class=True, reg_tokens=4,
     )
     model = _create_vision_transformer(
-        'vit_base_patch16_reg8_224', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_medium_patch16_reg4_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_reg8_224(pretrained=False, **kwargs) -> VisionTransformer:
-    model_args = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=8,
-        class_token=True, no_embed_class=True, reg_tokens=8,
-    )
-    model = _create_vision_transformer(
-        'vit_base_patch16_reg8_224', pretrained=pretrained, **dict(model_args, **kwargs))
-    return model
-
-
-@register_model
-def vit_medium_patch16_reg8_224(pretrained=False, **kwargs) -> VisionTransformer:
+def vit_medium_patch16_reg4_gap_256(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=16, embed_dim=512, depth=12, num_heads=8,
-        class_token=True, no_embed_class=True, reg_tokens=8,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
     )
     model = _create_vision_transformer(
-        'vit_base_patch16_reg8_224', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_medium_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_reg8_gap_224(pretrained=False, **kwargs) -> VisionTransformer:
+def vit_base_patch16_reg8_gap_256(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=8, global_pool='avg', reg_tokens=8,
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, class_token=False,
+        no_embed_class=True, global_pool='avg', reg_tokens=8,
     )
     model = _create_vision_transformer(
-        'vit_base_patch16_reg8_gap_224', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_base_patch16_reg8_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
