@@ -190,7 +190,7 @@ class Attention2d(nn.Module):
                 k.transpose(-1, -2).contiguous(),
                 v.transpose(-1, -2).contiguous(),
                 attn_mask=attn_bias,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             ).transpose(-1, -2).reshape(B, -1, H, W)
         else:
             q = q * self.scale
@@ -259,7 +259,7 @@ class AttentionCl(nn.Module):
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_bias,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale

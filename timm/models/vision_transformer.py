@@ -85,7 +85,7 @@ class Attention(nn.Module):
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale
@@ -285,7 +285,7 @@ class ParallelScalingBlock(nn.Module):
         if self.fused_attn:
             x_attn = F.scaled_dot_product_attention(
                 q, k, v,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale
@@ -1208,7 +1208,7 @@ default_cfgs = generate_default_cfgs({
         url='https://dl.fbaipublicfiles.com/dino/dino_vitbase8_pretrain/dino_vitbase8_pretrain.pth',
         hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
-    
+
     # DINOv2 pretrained - https://arxiv.org/abs/2304.07193 (no classifier head, for fine-tune/features only)
     'vit_small_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth',
@@ -1528,7 +1528,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
-    
+
     'vit_huge_patch14_ijepa_224.in1k': _cfg(
         url='https://dl.fbaipublicfiles.com/ijepa/IN1K-vit.h.14-300e.pth.tar',
         # hf_hub_id='timm/',
@@ -2182,7 +2182,7 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     # With SwiGLUPacked, we need to set hidden_features = 2 * 4096 = 8192
 
     model_args = dict(
-        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1e-5, 
+        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1e-5,
         mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU
     )
     model = _create_vision_transformer(
