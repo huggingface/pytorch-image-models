@@ -160,7 +160,11 @@ def load_pretrained(
         state_dict = pretrained_loc  # pretrained_loc is the actual state dict for this override
     elif load_from == 'file':
         _logger.info(f'Loading pretrained weights from file ({pretrained_loc})')
-        state_dict = load_state_dict(pretrained_loc)
+        if pretrained_cfg.get('custom_load', False):
+            model.load_pretrained(pretrained_loc)
+            return
+        else:
+            state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
         _logger.info(f'Loading pretrained weights from url ({pretrained_loc})')
         if pretrained_cfg.get('custom_load', False):

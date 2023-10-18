@@ -376,7 +376,7 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
     """
     if filename == HF_WEIGHTS_NAME:
         yield HF_SAFE_WEIGHTS_NAME
-    # if filename == HF_OPEN_CLIP_WEIGHTS_NAME:  # FIXME tracking safetensors yet
-    #     yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
+    if filename == HF_OPEN_CLIP_WEIGHTS_NAME:
+        yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
     if filename not in (HF_WEIGHTS_NAME, HF_OPEN_CLIP_WEIGHTS_NAME) and filename.endswith(".bin"):
         yield filename[:-4] + ".safetensors"
