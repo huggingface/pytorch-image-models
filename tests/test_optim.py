@@ -15,6 +15,13 @@ from timm.scheduler import PlateauLRScheduler
 
 from timm.optim import create_optimizer_v2
 
+import importlib
+import os
+
+torch_backend = os.environ.get('TORCH_BACKEND')
+if torch_backend is not None:
+    importlib.import_module(torch_backend)
+torch_device = os.environ.get('TORCH_DEVICE', 'cuda')
 
 # HACK relying on internal PyTorch test functionality for comparisons that I don't want to write
 torch_tc = TestCase()
@@ -61,7 +68,7 @@ def _test_state_dict(weight, bias, input, constructor):
 
     def fn_base(optimizer, weight, bias):
         optimizer.zero_grad()
-        i = input_cuda if weight.is_cuda else input
+        i = input_device if weight.device.type != 'cpu' else input
         loss = (weight.mv(i) + bias).pow(2).sum()
         loss.backward()
         return loss
@@ -97,28 +104,28 @@ def _test_state_dict(weight, bias, input, constructor):
 
     # Check that state dict can be loaded even when we cast parameters
     # to a different type and move to a different device.
-    if not torch.cuda.is_available():
+    if torch_device == 'cpu':
         return
 
     with torch.no_grad():
-        input_cuda = Parameter(input.clone().detach().float().cuda())
-        weight_cuda = Parameter(weight.clone().detach().cuda())
-        bias_cuda = Parameter(bias.clone().detach().cuda())
-    optimizer_cuda = constructor(weight_cuda, bias_cuda)
-    fn_cuda = functools.partial(fn_base, optimizer_cuda, weight_cuda, bias_cuda)
+        input_device = Parameter(input.clone().detach().float().to(torch_device))
+        weight_device = Parameter(weight.clone().detach().to(torch_device))
+        bias_device = Parameter(bias.clone().detach().to(torch_device))
+    optimizer_device = constructor(weight_device, bias_device)
+    fn_device = functools.partial(fn_base, optimizer_device, weight_device, bias_device)
 
     state_dict = deepcopy(optimizer.state_dict())
     state_dict_c = deepcopy(optimizer.state_dict())
-    optimizer_cuda.load_state_dict(state_dict_c)
+    optimizer_device.load_state_dict(state_dict_c)
 
     # Make sure state dict wasn't modified
     torch_tc.assertEqual(state_dict, state_dict_c)
 
     for _i in range(20):
         optimizer.step(fn)
-        optimizer_cuda.step(fn_cuda)
-        torch_tc.assertEqual(weight, weight_cuda)
-        torch_tc.assertEqual(bias, bias_cuda)
+        optimizer_device.step(fn_device)
+        torch_tc.assertEqual(weight, weight_device)
+        torch_tc.assertEqual(bias, bias_device)
 
     # validate deepcopy() copies all public attributes
     def getPublicAttr(obj):
@@ -152,12 +159,12 @@ def _test_basic_cases(constructor, scheduler_constructors=None):
         scheduler_constructors
     )
     # CUDA
-    if not torch.cuda.is_available():
+    if torch_device == 'cpu':
         return
     _test_basic_cases_template(
-        torch.randn(10, 5).cuda(),
-        torch.randn(10).cuda(),
-        torch.randn(5).cuda(),
+        torch.randn(10, 5).to(torch_device),
+        torch.randn(10).to(torch_device),
+        torch.randn(5).to(torch_device),
         constructor,
         scheduler_constructors
     )

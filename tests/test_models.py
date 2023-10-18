@@ -30,6 +30,17 @@ from timm import list_models, create_model, set_scriptable, get_pretrained_cfg_v
 from timm.layers import Format, get_spatial_dim, get_channel_dim
 from timm.models import get_notrace_modules, get_notrace_functions
 
+import importlib
+import os
+
+torch_backend = os.environ.get('TORCH_BACKEND')
+if torch_backend is not None:
+    importlib.import_module(torch_backend)
+torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
+timeout = os.environ.get('TIMEOUT')
+timeout120 = int(timeout) if timeout else 120
+timeout300 = int(timeout) if timeout else 300
+
 if hasattr(torch._C, '_jit_set_profiling_executor'):
     # legacy executor is too slow to compile large models for unit tests
     # no need for the fusion performance here
@@ -100,7 +111,7 @@ def _get_input_size(model=None, model_name='', target=None):
 
 
 @pytest.mark.base
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward(model_name, batch_size):
@@ -112,6 +123,8 @@ def test_model_forward(model_name, batch_size):
     if max(input_size) > MAX_FWD_SIZE:
         pytest.skip("Fixed input size model > limit.")
     inputs = torch.randn((batch_size, *input_size))
+    inputs = inputs.to(torch_device)
+    model.to(torch_device)
     outputs = model(inputs)
 
     assert outputs.shape[0] == batch_size
@@ -119,7 +132,7 @@ def test_model_forward(model_name, batch_size):
 
 
 @pytest.mark.base
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [2])
 def test_model_backward(model_name, batch_size):
@@ -133,6 +146,8 @@ def test_model_backward(model_name, batch_size):
     model.train()
 
     inputs = torch.randn((batch_size, *input_size))
+    inputs = inputs.to(torch_device)
+    model.to(torch_device)
     outputs = model(inputs)
     if isinstance(outputs, tuple):
         outputs = torch.cat(outputs)
@@ -147,7 +162,7 @@ def test_model_backward(model_name, batch_size):
 
 
 @pytest.mark.cfg
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(timeout300)
 @pytest.mark.parametrize('model_name', list_models(
     exclude_filters=EXCLUDE_FILTERS + NON_STD_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
@@ -155,6 +170,7 @@ def test_model_default_cfgs(model_name, batch_size):
     """Run a single forward pass with each model"""
     model = create_model(model_name, pretrained=False)
     model.eval()
+    model.to(torch_device)
     state_dict = model.state_dict()
     cfg = model.default_cfg
 
@@ -169,7 +185,7 @@ def test_model_default_cfgs(model_name, batch_size):
             not any([fnmatch.fnmatch(model_name, x) for x in EXCLUDE_FILTERS]):
         # output sizes only checked if default res <= 448 * 448 to keep resource down
         input_size = tuple([min(x, MAX_FWD_OUT_SIZE) for x in input_size])
-        input_tensor = torch.randn((batch_size, *input_size))
+        input_tensor = torch.randn((batch_size, *input_size), device=torch_device)
 
         # test forward_features (always unpooled)
         outputs = model.forward_features(input_tensor)
@@ -180,12 +196,14 @@ def test_model_default_cfgs(model_name, batch_size):
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
+        model.to(torch_device)
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 2
         assert outputs.shape[1] == model.num_features
 
         # test model forward without pooling and classifier
         model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
+        model.to(torch_device)
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 4
         if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.RepGhostNet, timm.models.VGG)):
@@ -195,6 +213,7 @@ def test_model_default_cfgs(model_name, batch_size):
         if 'pruned' not in model_name:  # FIXME better pruned model handling
             # test classifier + global pool deletion via __init__
             model = create_model(model_name, pretrained=False, num_classes=0, global_pool='').eval()
+            model.to(torch_device)
             outputs = model.forward(input_tensor)
             assert len(outputs.shape) == 4
             if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.RepGhostNet, timm.models.VGG)):
@@ -218,13 +237,14 @@ def test_model_default_cfgs(model_name, batch_size):
 
 
 @pytest.mark.cfg
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(timeout300)
 @pytest.mark.parametrize('model_name', list_models(filter=NON_STD_FILTERS, exclude_filters=NON_STD_EXCLUDE_FILTERS, include_tags=True))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_default_cfgs_non_std(model_name, batch_size):
     """Run a single forward pass with each model"""
     model = create_model(model_name, pretrained=False)
     model.eval()
+    model.to(torch_device)
     state_dict = model.state_dict()
     cfg = model.default_cfg
 
@@ -232,7 +252,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     if max(input_size) > 320:  # FIXME const
         pytest.skip("Fixed input size model > limit.")
 
-    input_tensor = torch.randn((batch_size, *input_size))
+    input_tensor = torch.randn((batch_size, *input_size), device=torch_device)
     feat_dim = getattr(model, 'feature_dim', None)
 
     outputs = model.forward_features(input_tensor)
@@ -246,6 +266,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
+    model.to(torch_device)
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
@@ -254,6 +275,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     assert outputs.shape[feat_dim] == model.num_features, 'pooled num_features != config'
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
+    model.to(torch_device)
     outputs = model.forward(input_tensor)
     if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
@@ -297,7 +319,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
 
 @pytest.mark.torchscript
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(timeout120)
 @pytest.mark.parametrize(
     'model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS, name_matches_cfg=True))
 @pytest.mark.parametrize('batch_size', [1])
@@ -312,6 +334,7 @@ def test_model_forward_torchscript(model_name, batch_size):
     model.eval()
 
     model = torch.jit.script(model)
+    model.to(torch_device)
     outputs = model(torch.randn((batch_size, *input_size)))
 
     assert outputs.shape[0] == batch_size
