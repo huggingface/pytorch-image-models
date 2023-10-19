@@ -106,6 +106,8 @@ def _test_state_dict(weight, bias, input, constructor):
     # to a different type and move to a different device.
     if torch_device == 'cpu':
         return
+    elif torch_device == 'cuda' and not torch.cuda.is_available:
+        return
 
     with torch.no_grad():
         input_device = Parameter(input.clone().detach().float().to(torch_device))
@@ -161,6 +163,9 @@ def _test_basic_cases(constructor, scheduler_constructors=None):
     # CUDA
     if torch_device == 'cpu':
         return
+    elif torch_device == 'cuda' and not torch.cuda.is_available():
+        return
+
     _test_basic_cases_template(
         torch.randn(10, 5).to(torch_device),
         torch.randn(10).to(torch_device),
