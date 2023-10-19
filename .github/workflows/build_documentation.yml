@@ -17,5 +17,4 @@ jobs:
       path_to_docs: pytorch-image-models/hfdocs/source
       version_tag_suffix: ""
     secrets:
-      token: ${{ secrets.HUGGINGFACE_PUSH }}
       hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}
