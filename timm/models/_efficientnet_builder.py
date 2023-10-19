@@ -11,6 +11,7 @@ import math
 import re
 from copy import deepcopy
 from functools import partial
+from typing import Any, Dict, List
 
 import torch.nn as nn
 
@@ -33,6 +34,8 @@ _DEBUG_BUILDER = False
 BN_MOMENTUM_TF_DEFAULT = 1 - 0.99
 BN_EPS_TF_DEFAULT = 1e-3
 _BN_ARGS_TF = dict(momentum=BN_MOMENTUM_TF_DEFAULT, eps=BN_EPS_TF_DEFAULT)
+
+BlockArgs = List[List[Dict[str, Any]]]
 
 
 def get_bn_args_tf():

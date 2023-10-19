@@ -9,7 +9,7 @@ Copyright 2019, Ross Wightman
 """
 import math
 from functools import partial
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -17,22 +17,21 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, create_attn, get_attn, \
-    get_act_layer, get_norm_layer, create_classifier
+from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, LayerType, create_attn, \
+    get_attn, get_act_layer, get_norm_layer, create_classifier
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
-from ._typing import LayerType
 
 __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each entrypoint fn to this
 
 
-def get_padding(kernel_size: int, stride: int, dilation: int = 1):
+def get_padding(kernel_size: int, stride: int, dilation: int = 1) -> int:
     padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
     return padding
 
 
-def create_aa(aa_layer, channels, stride=2, enable=True):
+def create_aa(aa_layer: Type[nn.Module], channels: int, stride: int = 2, enable: bool = True) -> nn.Module:
     if not aa_layer or not enable:
         return nn.Identity()
     if issubclass(aa_layer, nn.AvgPool2d):
@@ -55,11 +54,11 @@ class BasicBlock(nn.Module):
             reduce_first: int = 1,
             dilation: int = 1,
             first_dilation: Optional[int] = None,
-            act_layer: nn.Module = nn.ReLU,
-            norm_layer: nn.Module = nn.BatchNorm2d,
-            attn_layer: Optional[nn.Module] = None,
-            aa_layer: Optional[nn.Module] = None,
-            drop_block: Type[nn.Module] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
             drop_path: Optional[nn.Module] = None,
     ):
         """
@@ -153,11 +152,11 @@ class Bottleneck(nn.Module):
             reduce_first: int = 1,
             dilation: int = 1,
             first_dilation: Optional[int] = None,
-            act_layer: nn.Module = nn.ReLU,
-            norm_layer: nn.Module = nn.BatchNorm2d,
-            attn_layer: Optional[nn.Module] = None,
-            aa_layer: Optional[nn.Module] = None,
-            drop_block: Type[nn.Module] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
             drop_path: Optional[nn.Module] = None,
     ):
         """
@@ -296,7 +295,7 @@ def drop_blocks(drop_prob: float = 0.):
 
 
 def make_blocks(
-        block_fn: nn.Module,
+        block_fn: Union[BasicBlock, Bottleneck],
         channels: List[int],
         block_repeats: List[int],
         inplanes: int,
@@ -395,7 +394,7 @@ class ResNet(nn.Module):
 
     def __init__(
             self,
-            block: nn.Module,
+            block: Union[BasicBlock, Bottleneck],
             layers: List[int],
             num_classes: int = 1000,
             in_chans: int = 3,
@@ -411,7 +410,7 @@ class ResNet(nn.Module):
             avg_down: bool = False,
             act_layer: LayerType = nn.ReLU,
             norm_layer: LayerType = nn.BatchNorm2d,
-            aa_layer: Optional[nn.Module] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
             drop_rate: float = 0.0,
             drop_path_rate: float = 0.,
             drop_block_rate: float = 0.,

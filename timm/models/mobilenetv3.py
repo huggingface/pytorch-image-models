@@ -16,15 +16,14 @@ from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import SelectAdaptivePool2d, Linear, create_conv2d, get_norm_act_layer
+from timm.layers import SelectAdaptivePool2d, Linear, LayerType, PadType, create_conv2d, get_norm_act_layer
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
-from ._efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
+from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from ._features import FeatureInfo, FeatureHooks
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
-from ._typing import BlockArgs, LayerType, PadType
 
 __all__ = ['MobileNetV3', 'MobileNetV3Features']
 
