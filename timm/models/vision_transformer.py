@@ -1603,11 +1603,17 @@ def _create_vision_transformer(variant, pretrained=False, **kwargs):
     else:
         _filter_fn = checkpoint_filter_fn
 
+    # FIXME attn pool (currently only in siglip) params removed if pool disabled, is there a better soln?
+    strict = True
+    if 'siglip' in variant and kwargs.get('global_pool', None) != 'map':
+        strict = False
+
     return build_model_with_cfg(
         VisionTransformer,
         variant,
         pretrained,
         pretrained_filter_fn=_filter_fn,
+        pretrained_strict=strict,
         **kwargs,
     )
 
