@@ -7,10 +7,12 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.models import build_model_with_cfg
-from timm.models._registry import generate_default_cfgs, register_model
+
 from timm.models.layers import trunc_normal_, DropPath, to_2tuple
-from timm.models.vision_transformer import checkpoint_filter_fn
+from .vision_transformer import checkpoint_filter_fn
+from ._builder import build_model_with_cfg
+
+from ._registry import generate_default_cfgs, register_model
 
 layer_scale = False
 init_value = 1e-6
