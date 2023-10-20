@@ -26,6 +26,14 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Oct 20, 2023
+* [SigLIP](https://huggingface.co/papers/2303.15343) image tower weights supported in `vision_transformer.py`.
+  * Great potential for fine-tune and downstream feature use.
+* Experimental 'register' support in vit models as per [Vision Transformers Need Registers](https://huggingface.co/papers/2309.16588)
+* Updated RepViT with new weight release. Thanks [wangao](https://github.com/jameslahm)
+* Add patch resizing support (on pretrained weight load) to Swin models
+* 0.9.8 release pending
+
 ### Sep 1, 2023
 * TinyViT added by [SeeFun](https://github.com/seefun)
 * Fix EfficientViT (MIT) to use torch.autocast so it works back to PT 1.10
