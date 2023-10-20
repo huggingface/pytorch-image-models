@@ -62,6 +62,7 @@ from .tiny_vit import *
 from .tnt import *
 from .tresnet import *
 from .twins import *
+from .uniformer import *
 from .vgg import *
 from .visformer import *
 from .vision_transformer import *
