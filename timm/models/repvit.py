@@ -394,35 +394,35 @@ default_cfgs = generate_default_cfgs(
         'repvit_m3.dist_in1k': _cfg(
             hf_hub_id='timm/',
         ),
-        'repvit_m0_9.dist_in1k_300e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m0_9_distill_300e_timm.pth'
+        'repvit_m0_9.dist_300e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m0_9.dist_in1k_450e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m0_9_distill_450e_timm.pth'
+        'repvit_m0_9.dist_450e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m1_0.dist_in1k_300e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_0_distill_300e_timm.pth'
+        'repvit_m1_0.dist_300e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m1_0.dist_in1k_450e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_0_distill_450e_timm.pth'
+        'repvit_m1_0.dist_450e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m1_1.dist_in1k_300e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_1_distill_300e_timm.pth'
+        'repvit_m1_1.dist_300e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m1_1.dist_in1k_450e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_1_distill_450e_timm.pth'
+        'repvit_m1_1.dist_450e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m1_5.dist_in1k_300e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_5_distill_300e_timm.pth'
+        'repvit_m1_5.dist_300e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m1_5.dist_in1k_450e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m1_5_distill_450e_timm.pth'
+        'repvit_m1_5.dist_450e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m2_3.dist_in1k_300e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m2_3_distill_300e_timm.pth'
+        'repvit_m2_3.dist_300e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
-        'repvit_m2_3.dist_in1k_450e': _cfg(
-            url='https://github.com/THU-MIG/RepViT/releases/download/v1.0/repvit_m2_3_distill_450e_timm.pth'
+        'repvit_m2_3.dist_450e_in1k': _cfg(
+            hf_hub_id='timm/',
         ),
     }
 )
