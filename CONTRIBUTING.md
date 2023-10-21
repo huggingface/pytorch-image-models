@@ -1,6 +1,6 @@
 *This guideline is very much a work-in-progress.*
 
-Contriubtions to `timm` for code, documentation, tests are more than welcome!
+Contributions to `timm` for code, documentation, tests are more than welcome!
 
 There haven't been any formal guidelines to date so please bear with me, and feel free to add to this guide.
 
