@@ -106,7 +106,7 @@ def _test_state_dict(weight, bias, input, constructor):
     # to a different type and move to a different device.
     if torch_device == 'cpu':
         return
-    elif torch_device == 'cuda' and not torch.cuda.is_available:
+    elif torch_device == 'cuda' and not torch.cuda.is_available():
         return
 
     with torch.no_grad():
