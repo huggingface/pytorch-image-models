@@ -573,7 +573,7 @@ class VisionTransformer(nn.Module):
 
     def _pos_embed(self, x):
         if self.dynamic_img_size:
-            B, H, W, C = x.shape
+            B, C, H, W = x.shape
             pos_embed = resample_abs_pos_embed(
                 self.pos_embed,
                 (H, W),
