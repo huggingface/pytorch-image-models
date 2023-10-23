@@ -23,7 +23,7 @@ def clean_state_dict(state_dict: Dict[str, Any]) -> Dict[str, Any]:
     # 'clean' checkpoint by removing .module prefix from state dict if it exists from parallel training
     cleaned_state_dict = {}
     for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
+        name = k[7:] if k.startswith('module.') else k[10:] if k.startswith('_orig_mod.') else k
         cleaned_state_dict[name] = v
     return cleaned_state_dict
 
