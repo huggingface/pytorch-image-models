@@ -624,6 +624,7 @@ One of the greatest assets of PyTorch is the community and their contributions. 
 
 ### Metric Learning
 * PyTorch Metric Learning - https://github.com/KevinMusgrave/pytorch-metric-learning
+* Open Metric Learning -  https://github.com/OML-Team/open-metric-learning
 
 ### Training / Frameworks
 * fastai - https://github.com/fastai/fastai
