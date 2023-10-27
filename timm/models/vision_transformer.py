@@ -486,7 +486,7 @@ class VisionTransformer(nn.Module):
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
         pos_embed_len = num_patches
         if not no_embed_class:
-            pos_embed_len += 1
+            pos_embed_len += 1 if self.cls_token is not None else 0
         if not no_embed_register:
             pos_embed_len += reg_tokens
         self.pos_embed = nn.Parameter(torch.randn(1, pos_embed_len, embed_dim) * .02)
@@ -585,7 +585,7 @@ class VisionTransformer(nn.Module):
             B, H, W, C = x.shape
             num_prefix_tokens = 0
             if not self.no_embed_class:
-                num_prefix_tokens += 1
+                num_prefix_tokens += 1 if self.cls_token is not None else 0
             if not self.no_embed_register:
                 num_prefix_tokens += self.reg_tokens
             print(num_prefix_tokens)
