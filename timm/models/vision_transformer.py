@@ -1207,25 +1207,25 @@ default_cfgs = generate_default_cfgs({
     'vit_small_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth',
         hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
     'vit_base_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth',
         hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
     'vit_large_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth',
         hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
     'vit_giant_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitg14/dinov2_vitg14_pretrain.pth',
         hf_hub_id='timm/',
-        license='cc-by-nc-4.0',
+        license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
 
