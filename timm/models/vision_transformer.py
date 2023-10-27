@@ -401,6 +401,7 @@ class VisionTransformer(nn.Module):
             init_values: Optional[float] = None,
             class_token: bool = True,
             no_embed_class: bool = False,
+            no_embed_register: bool = False,
             reg_tokens: int = 0,
             pre_norm: bool = False,
             fc_norm: Optional[bool] = None,
@@ -433,7 +434,8 @@ class VisionTransformer(nn.Module):
             qkv_bias: Enable bias for qkv projections if True.
             init_values: Layer-scale init values (layer-scale enabled if not None).
             class_token: Use class token.
-            no_embed_class: Don't include position embeddings for class (or reg) tokens.
+            no_embed_class: Don't include position embeddings for class tokens.
+            no_embed_register: Don't include position embeddings for register tokens.
             reg_tokens: Number of register tokens.
             fc_norm: Pre head norm after pool (instead of before), if None, enabled when global_pool == 'avg'.
             drop_rate: Head dropout rate.
@@ -460,7 +462,8 @@ class VisionTransformer(nn.Module):
         self.num_prefix_tokens += reg_tokens
         self.num_reg_tokens = reg_tokens
         self.has_class_token = class_token
-        self.no_embed_class = no_embed_class  # don't embed prefix positions (includes reg)
+        self.no_embed_class = no_embed_class  # don't embed class positions
+        self.no_embed_register = no_embed_register  # don't embed register positions
         self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
 
@@ -481,8 +484,12 @@ class VisionTransformer(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
-        embed_len = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
-        self.pos_embed = nn.Parameter(torch.randn(1, embed_len, embed_dim) * .02)
+        pos_embed_len = num_patches
+        if not no_embed_class:
+            pos_embed_len += 1
+        if not no_embed_register:
+            pos_embed_len += reg_tokens
+        self.pos_embed = nn.Parameter(torch.randn(1, pos_embed_len, embed_dim) * .02)
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
         if patch_drop_rate > 0:
             self.patch_drop = PatchDropout(
@@ -535,6 +542,8 @@ class VisionTransformer(nn.Module):
         trunc_normal_(self.pos_embed, std=.02)
         if self.cls_token is not None:
             nn.init.normal_(self.cls_token, std=1e-6)
+        if self.reg_token is not None:
+            nn.init.normal_(self.reg_token, std=1e-6)
         named_apply(get_init_weights_vit(mode, head_bias), self)
 
     def _init_weights(self, m):
@@ -574,32 +583,45 @@ class VisionTransformer(nn.Module):
     def _pos_embed(self, x):
         if self.dynamic_img_size:
             B, H, W, C = x.shape
+            num_prefix_tokens = 0
+            if not self.no_embed_class:
+                num_prefix_tokens += 1
+            if not self.no_embed_register:
+                num_prefix_tokens += self.reg_tokens
+            print(num_prefix_tokens)
             pos_embed = resample_abs_pos_embed(
                 self.pos_embed,
                 (H, W),
-                num_prefix_tokens=0 if self.no_embed_class else self.num_prefix_tokens,
+                num_prefix_tokens=num_prefix_tokens,
             )
             x = x.view(B, -1, C)
         else:
             pos_embed = self.pos_embed
 
-        to_cat = []
+        x_cls = []
+        x_reg = []
         if self.cls_token is not None:
-            to_cat.append(self.cls_token.expand(x.shape[0], -1, -1))
+            x_cls = [self.cls_token.expand(x.shape[0], -1, -1)]
         if self.reg_token is not None:
-            to_cat.append(self.reg_token.expand(x.shape[0], -1, -1))
+            x_reg = [self.reg_token.expand(x.shape[0], -1, -1)]
 
-        if self.no_embed_class:
+        if self.no_embed_class and self.no_embed_register:
             # deit-3, updated JAX (big vision)
             # position embedding does not overlap with class token, add then concat
             x = x + pos_embed
-            if to_cat:
-                x = torch.cat(to_cat + [x], dim=1)
-        else:
+            x = torch.cat(x_cls + x_reg + [x], dim=1)
+        elif self.no_embed_class and not self.no_embed_register:
+            x = torch.cat(x_reg + [x], dim=1)
+            x = x + pos_embed
+            x = torch.cat(x_cls + [x], dim=1)
+        elif not self.no_embed_class and self.no_embed_register:
+            x = torch.cat(x_cls + [x], dim=1)
+            x = x + pos_embed
+            x = torch.cat([x[:, :1]] + x_reg + [x[:, 1:]], dim=1)
+        else:  # not self.no_embed_class and not self.no_embed_register
             # original timm, JAX, and deit vit impl
             # pos_embed has entry for class token, concat then add
-            if to_cat:
-                x = torch.cat(to_cat + [x], dim=1)
+            x = torch.cat(x_cls + x_reg + [x], dim=1)
             x = x + pos_embed
 
         return self.pos_drop(x)
@@ -940,6 +962,9 @@ def _convert_dinov2(state_dict, model):
     for k, v in state_dict.items():
         if k == "mask_token":
             continue
+        elif k == "register_tokens":
+            out_dict["reg_token"] = v
+            continue
         elif re.match(r"blocks\.(\d+)\.mlp\.w12\.(?:weight|bias)", k):
             out_dict[k.replace("w12", "fc1")] = v
             continue
@@ -1225,6 +1250,28 @@ default_cfgs = generate_default_cfgs({
     'vit_giant_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitg14/dinov2_vitg14_pretrain.pth',
         hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
+        input_size=(3, 518, 518), crop_pct=1.0),
+
+    # DINOv2 with registers pretrained - https://arxiv.org/abs/2309.16588 (no classifier head, for fine-tune/features only)
+    'vit_small_patch14_reg4_dinov2.lvd142m': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_reg4_pretrain.pth',
+        license='apache-2.0',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
+        input_size=(3, 518, 518), crop_pct=1.0),
+    'vit_base_patch14_reg4_dinov2.lvd142m': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_reg4_pretrain.pth',
+        license='apache-2.0',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
+        input_size=(3, 518, 518), crop_pct=1.0),
+    'vit_large_patch14_reg4_dinov2.lvd142m': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_reg4_pretrain.pth',
+        license='apache-2.0',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
+        input_size=(3, 518, 518), crop_pct=1.0),
+    'vit_giant_patch14_reg4_dinov2.lvd142m': _cfg(
+        url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vitg14/dinov2_vitg14_reg4_pretrain.pth',
         license='apache-2.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
@@ -2221,6 +2268,61 @@ def vit_giant_patch14_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
     )
     model = _create_vision_transformer(
         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_small_patch14_reg4_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-S/14 with registers for DINOv2
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5, img_size=518, no_embed_register=True, reg_tokens=4,
+    )
+    model = _create_vision_transformer(
+        'vit_small_patch14_reg4_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch14_reg4_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-B/14 with registers for DINOv2
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5, img_size=518, no_embed_register=True, reg_tokens=4,
+    )
+    model = _create_vision_transformer(
+        'vit_base_patch14_reg4_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_large_patch14_reg4_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-L/14 with registers for DINOv2
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, img_size=518, no_embed_register=True, reg_tokens=4,
+    )
+    model = _create_vision_transformer(
+        'vit_large_patch14_reg4_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giant_patch14_reg4_dinov2(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-G/14 with registers for DINOv2
+    """
+
+    # The hidden_features of SwiGLU is calculated by:
+    # hidden_features = (int(hidden_features * 2 / 3) + 7) // 8 * 8
+    # When embed_dim=1536, hidden_features=4096
+    # With SwiGLUPacked, we need to set hidden_features = 2 * 4096 = 8192
+
+    model_args = dict(
+        patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1e-5,
+        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU, no_embed_register=True, reg_tokens=4,
+    )
+    model = _create_vision_transformer(
+        'vit_giant_patch14_reg4_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
