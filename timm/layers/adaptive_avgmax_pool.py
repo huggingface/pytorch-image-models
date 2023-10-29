@@ -172,7 +172,7 @@ class SelectAdaptivePool2d(nn.Module):
         return adaptive_pool_feat_mult(self.pool_type)
 
     def __repr__(self):
-        return self.__class__.__name__ + ' (' \
+        return self.__class__.__name__ + '(' \
                + 'pool_type=' + self.pool_type \
                + ', flatten=' + str(self.flatten) + ')'
 
