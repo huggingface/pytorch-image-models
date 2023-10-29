@@ -12,7 +12,6 @@ from typing import Callable, List, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
@@ -151,7 +150,7 @@ class MobileNetV3(nn.Module):
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x: Tensor) -> Tensor:
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv_stem(x)
         x = self.bn1(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -160,7 +159,7 @@ class MobileNetV3(nn.Module):
             x = self.blocks(x)
         return x
 
-    def forward_head(self, x: Tensor, pre_logits: bool = False) -> Tensor:
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
@@ -171,7 +170,7 @@ class MobileNetV3(nn.Module):
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return self.classifier(x)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
@@ -262,7 +261,7 @@ class MobileNetV3Features(nn.Module):
     def set_grad_checkpointing(self, enable: bool = True):
         self.grad_checkpointing = enable
 
-    def forward(self, x: Tensor) -> List[Tensor]:
+    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)

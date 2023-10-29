@@ -1,9 +1,7 @@
-import functools
-import types
-from typing import Tuple, Union
+from typing import Callable, Tuple, Type, Union
 
-import torch.nn
+import torch
 
 
-LayerType = Union[type, str, types.FunctionType, functools.partial, torch.nn.Module]
+LayerType = Union[str, Callable, Type[torch.nn.Module]]
 PadType = Union[str, int, Tuple[int, int]]

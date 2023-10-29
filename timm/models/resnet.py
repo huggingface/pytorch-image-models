@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, LayerType, create_attn, \
@@ -112,7 +111,7 @@ class BasicBlock(nn.Module):
         if getattr(self.bn2, 'weight', None) is not None:
             nn.init.zeros_(self.bn2.weight)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         shortcut = x
 
         x = self.conv1(x)
@@ -212,7 +211,7 @@ class Bottleneck(nn.Module):
         if getattr(self.bn3, 'weight', None) is not None:
             nn.init.zeros_(self.bn3.weight)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         shortcut = x
 
         x = self.conv1(x)
@@ -554,7 +553,7 @@ class ResNet(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
-    def forward_features(self, x: Tensor) -> Tensor:
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act1(x)
@@ -569,13 +568,13 @@ class ResNet(nn.Module):
             x = self.layer4(x)
         return x
 
-    def forward_head(self, x: Tensor, pre_logits: bool = False) -> Tensor:
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.global_pool(x)
         if self.drop_rate:
             x = F.dropout(x, p=float(self.drop_rate), training=self.training)
         return x if pre_logits else self.fc(x)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
