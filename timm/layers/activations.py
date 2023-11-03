@@ -157,3 +157,17 @@ class GELUTanh(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.gelu(input, approximate='tanh')
+
+
+def quick_gelu(x: torch.Tensor, inplace: bool = False) -> torch.Tensor:
+    return x * torch.sigmoid(1.702 * x)
+
+
+class QuickGELU(nn.Module):
+    """Applies the Gaussian Error Linear Units function (w/ dummy inplace arg)
+    """
+    def __init__(self, inplace: bool = False):
+        super(QuickGELU, self).__init__()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return quick_gelu(input)
