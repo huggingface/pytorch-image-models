@@ -1435,11 +1435,11 @@ default_cfgs = generate_default_cfgs({
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
 
     'vit_base_patch32_clip_224.datacompxl': _cfg(
-        hf_hub_id='laion/',
+        hf_hub_id='laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch32_clip_256.datacompxl': _cfg(
-        hf_hub_id='laion/',
+        hf_hub_id='laion/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 256, 256), num_classes=512),
@@ -1991,6 +1991,17 @@ def vit_base_patch32_clip_224(pretrained=False, **kwargs) -> VisionTransformer:
         patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
     model = _create_vision_transformer(
         'vit_base_patch32_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch32_clip_256(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-B/32 CLIP image tower @ 256x256
+    """
+    model_args = dict(
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch32_clip_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
