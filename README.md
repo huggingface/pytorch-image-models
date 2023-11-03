@@ -31,6 +31,7 @@
 * DINOv2 'register' ViT model weights added
 * Add `quickgelu` ViT variants for OpenAI, DFN, MetaCLIP weights that use it (less efficient)
 * Improved typing added to ResNet, MobileNet-v3 thanks to [Aryan](https://github.com/a-r-r-o-w)
+* ImageNet-12k fine-tuned (from LAION-2B CLIP) `convnext_xxlarge`
 * 0.9.9 release
 
 ### Oct 20, 2023

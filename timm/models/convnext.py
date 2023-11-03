@@ -828,6 +828,10 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821,
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, crop_mode='squash'),
+    'convnext_xxlarge.clip_laion2b_soup_ft_in12k': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821,
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0),
 
     # CLIP original image tower weights
     'convnext_base.clip_laion2b': _cfg(
