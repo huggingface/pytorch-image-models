@@ -34,8 +34,7 @@ def create_norm_layer(layer_name, num_features, **kwargs):
 
 
 def get_norm_layer(norm_layer):
-    if not norm_layer:
-        # None or '' should return None
+    if norm_layer is None:
         return None
     assert isinstance(norm_layer, (type, str, types.FunctionType, functools.partial))
     norm_kwargs = {}
@@ -46,6 +45,8 @@ def get_norm_layer(norm_layer):
         norm_layer = norm_layer.func
 
     if isinstance(norm_layer, str):
+        if not norm_layer:
+            return None
         layer_name = norm_layer.replace('_', '')
         norm_layer = _NORM_MAP[layer_name]
     else:
