@@ -132,11 +132,13 @@ def get_act_layer(name: Union[Type[nn.Module], str] = 'relu'):
     Fetching activation layers by name with this function allows export or torch script friendly
     functions to be returned dynamically based on current config.
     """
-    if not name:
+    if name is None:
         return None
     if not isinstance(name, str):
         # callable, module, etc
         return name
+    if not name:
+        return None
     if not (is_no_jit() or is_exportable() or is_scriptable()):
         if name in _ACT_LAYER_ME:
             return _ACT_LAYER_ME[name]
