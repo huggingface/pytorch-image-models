@@ -29,6 +29,7 @@ _ACT_FN_DEFAULT = dict(
     selu=F.selu,
     gelu=gelu,
     gelu_tanh=gelu_tanh,
+    quick_gelu=quick_gelu,
     sigmoid=sigmoid,
     tanh=tanh,
     hard_sigmoid=F.hardsigmoid if _has_hardsigmoid else hard_sigmoid,
@@ -42,7 +43,7 @@ _ACT_FN_JIT = dict(
     mish=F.mish if _has_mish else mish_jit,
     hard_sigmoid=F.hardsigmoid if _has_hardsigmoid else hard_sigmoid_jit,
     hard_swish=F.hardswish if _has_hardswish else hard_swish_jit,
-    hard_mish=hard_mish_jit
+    hard_mish=hard_mish_jit,
 )
 
 _ACT_FN_ME = dict(
@@ -73,6 +74,7 @@ _ACT_LAYER_DEFAULT = dict(
     selu=nn.SELU,
     gelu=GELU,
     gelu_tanh=GELUTanh,
+    quick_gelu=QuickGELU,
     sigmoid=Sigmoid,
     tanh=Tanh,
     hard_sigmoid=nn.Hardsigmoid if _has_hardsigmoid else HardSigmoid,
@@ -87,7 +89,7 @@ _ACT_LAYER_JIT = dict(
     mish=nn.Mish if _has_mish else MishJit,
     hard_sigmoid=nn.Hardsigmoid if _has_hardsigmoid else HardSigmoidJit,
     hard_swish=nn.Hardswish if _has_hardswish else HardSwishJit,
-    hard_mish=HardMishJit
+    hard_mish=HardMishJit,
 )
 
 _ACT_LAYER_ME = dict(

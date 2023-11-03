@@ -27,7 +27,7 @@ import logging
 import math
 from collections import OrderedDict
 from functools import partial
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Optional, Sequence, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -35,10 +35,12 @@ import torch.nn.functional as F
 import torch.utils.checkpoint
 from torch.jit import Final
 
+
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, SwiGLUPacked, \
-    trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn
+    trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
+    get_act_layer, get_norm_layer, LayerType
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -414,10 +416,10 @@ class VisionTransformer(nn.Module):
             drop_path_rate: float = 0.,
             weight_init: str = '',
             embed_layer: Callable = PatchEmbed,
-            norm_layer: Optional[Callable] = None,
-            act_layer: Optional[Callable] = None,
-            block_fn: Callable = Block,
-            mlp_layer: Callable = Mlp,
+            norm_layer: Optional[LayerType] = None,
+            act_layer: Optional[LayerType] = None,
+            block_fn: Type[nn.Module] = Block,
+            mlp_layer: Type[nn.Module] = Mlp,
     ):
         """
         Args:
@@ -450,8 +452,8 @@ class VisionTransformer(nn.Module):
         assert global_pool in ('', 'avg', 'token', 'map')
         assert class_token or global_pool != 'token'
         use_fc_norm = global_pool == 'avg' if fc_norm is None else fc_norm
-        norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
-        act_layer = act_layer or nn.GELU
+        norm_layer = get_norm_layer(norm_layer) or partial(nn.LayerNorm, eps=1e-6)
+        act_layer = get_act_layer(act_layer) or nn.GELU
 
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -1415,36 +1417,12 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
-    'vit_base_patch16_clip_224.datacompxl': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-16-DataComp.XL-s13B-b90K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
-    'vit_base_patch16_clip_224.dfn2b': _cfg(
-        hf_hub_id='apple/DFN2B-CLIP-ViT-B-16',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.laion2b': _cfg(
         hf_hub_id='laion/CLIP-ViT-L-14-laion2B-s32B-b82K',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=768),
-    'vit_large_patch14_clip_224.datacompxl': _cfg(
-        hf_hub_id='laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
-    'vit_large_patch14_clip_224.dfn2b': _cfg(
-        hf_hub_id='apple/DFN2B-CLIP-ViT-L-14',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.laion2b': _cfg(
         hf_hub_id='laion/CLIP-ViT-H-14-laion2B-s32B-b79K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
-    'vit_huge_patch14_clip_224.dfn5b': _cfg(
-        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
-    'vit_huge_patch14_clip_378.dfn5b': _cfg(
-        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14-378',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
     'vit_giant_patch14_clip_224.laion2b': _cfg(
@@ -1455,6 +1433,59 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='laion/CLIP-ViT-bigG-14-laion2B-39B-b160k',
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
+
+    'vit_base_patch32_clip_224.datacompxl': _cfg(
+        hf_hub_id='laion/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_base_patch32_clip_256.datacompxl': _cfg(
+        hf_hub_id='laion/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 256, 256), num_classes=512),
+    'vit_base_patch16_clip_224.datacompxl': _cfg(
+        hf_hub_id='laion/CLIP-ViT-B-16-DataComp.XL-s13B-b90K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.datacompxl': _cfg(
+        hf_hub_id='laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+
+    'vit_base_patch16_clip_224.dfn2b': _cfg(
+        hf_hub_id='apple/DFN2B-CLIP-ViT-B-16',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.dfn2b': _cfg(
+        hf_hub_id='apple/DFN2B-CLIP-ViT-L-14',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+    'vit_huge_patch14_clip_224.dfn5b': _cfg(
+        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
+    'vit_huge_patch14_clip_378.dfn5b': _cfg(
+        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14-378',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        crop_pct=1.0, input_size=(3, 378, 378), num_classes=1024),
+
+    'vit_base_patch32_clip_224.metaclip_2pt5b': _cfg(
+        hf_hub_id='facebook/metaclip-b32-fullcc2.5b',
+        hf_hub_filename='metaclip_b32_fullcc2.5b.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_base_patch16_clip_224.metaclip_2pt5b': _cfg(
+        hf_hub_id='facebook/metaclip-b16-fullcc2.5b',
+        hf_hub_filename='metaclip_b16_fullcc2.5b.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.metaclip_2pt5b': _cfg(
+        hf_hub_id='facebook/metaclip-l14-fullcc2.5b',
+        hf_hub_filename='metaclip_l14_fullcc2.5b.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+    'vit_huge_patch14_clip_224.metaclip_2pt5b': _cfg(
+        hf_hub_id='facebook/metaclip-h14-fullcc2.5b',
+        hf_hub_filename='metaclip_h14_fullcc2.5b.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
 
     'vit_base_patch32_clip_224.openai': _cfg(
         hf_hub_id='timm/',
@@ -2077,6 +2108,80 @@ def vit_gigantic_patch14_clip_224(pretrained=False, **kwargs) -> VisionTransform
     model = _create_vision_transformer(
         'vit_gigantic_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+@register_model
+def vit_base_patch32_clip_quickgelu_224(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-B/32 CLIP image tower @ 224x224
+    """
+    model_args = dict(
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_base_patch32_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch16_clip_quickgelu_224(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-B/16 CLIP image tower w/ QuickGELU act
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_base_patch16_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_large_patch14_clip_quickgelu_224(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-Large model (ViT-L/14) CLIP image tower w/ QuickGELU act
+    """
+    from timm.layers import get_act_layer
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_large_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_large_patch14_clip_quickgelu_336(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-Large model (ViT-L/14) CLIP image tower @ 336x336 w/ QuickGELU act
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=16, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_large_patch14_clip_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_huge_patch14_clip_quickgelu_224(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-Huge model (ViT-H/14) CLIP image tower w/ QuickGELU act.
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_huge_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_huge_patch14_clip_quickgelu_378(pretrained=False, **kwargs) -> VisionTransformer:
+    """ ViT-Huge model (ViT-H/14) CLIP image tower @ 378x378 w/ QuickGELU act
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1280, depth=32, num_heads=16, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_huge_patch14_clip_378', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
 
 # Experimental models below
 
