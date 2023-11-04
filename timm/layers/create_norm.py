@@ -11,7 +11,7 @@ from typing import Type
 import torch.nn as nn
 
 from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm
-from torchvision.ops import FrozenBatchNorm2d
+from torchvision.ops.misc import FrozenBatchNorm2d
 
 _NORM_MAP = dict(
     batchnorm=nn.BatchNorm2d,
