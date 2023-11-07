@@ -28,7 +28,7 @@
 
 ### Nov 3, 2023
 * [DFN (Data Filtering Networks)](https://huggingface.co/papers/2309.17425) and [MetaCLIP](https://huggingface.co/papers/2309.16671) ViT weights added
-* DINOv2 'register' ViT model weights added
+* DINOv2 'register' ViT model weights added (https://huggingface.co/papers/2309.16588, https://huggingface.co/papers/2304.07193)
 * Add `quickgelu` ViT variants for OpenAI, DFN, MetaCLIP weights that use it (less efficient)
 * Improved typing added to ResNet, MobileNet-v3 thanks to [Aryan](https://github.com/a-r-r-o-w)
 * ImageNet-12k fine-tuned (from LAION-2B CLIP) `convnext_xxlarge`
