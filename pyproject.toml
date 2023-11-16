@@ -1,14 +1,78 @@
 [tool.pytest.ini_options]
 markers = [
-    "base: marker for model tests using the basic setup",
-    "cfg: marker for model tests checking the config",
-    "torchscript: marker for model tests using torchscript",
-    "features: marker for model tests checking feature extraction",
-    "fxforward: marker for model tests using torch fx (only forward)",
-    "fxbackward: marker for model tests using torch fx (only backward)",
+  "base: marker for model tests using the basic setup",
+  "cfg: marker for model tests checking the config",
+  "torchscript: marker for model tests using torchscript",
+  "features: marker for model tests checking feature extraction",
+  "fxforward: marker for model tests using torch fx (only forward)",
+  "fxbackward: marker for model tests using torch fx (only backward)",
 ]
 
-[tool.black]
+[tool.ruff]
+target-version = "py38"
 line-length = 120
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
-skip-string-normalization = true
+indent-width = 4
+ignore-init-module-imports = true
+
+include = [
+  "*.py",              # regular python files
+  "*.pyi",             # python stub files
+  "*.ipynb",           # jupyter notebooks
+  "**/pyproject.toml", # python config files
+]
+ignore = [
+  "E501",   # Line too long
+  "EM102",  # Exception must not use an f-string literal
+  "G004",   # Logging statement uses f-string
+  "N812",   # Lowercase imported as non lowercase
+  "RET504", # Unnecessary assignment before return statement
+]
+select = [
+  "A",   # flake8-builtins
+  "B",   # flake8-bugbear
+  "C90", # mccabe
+  "COM", # flake8-commas
+  "D",   # pydocstyle
+  "EM",  # flake8-errmsg
+  "E",   # pycodestyle errors
+  "FIX", # flake8-fixme
+  "F",   # Pyflakes
+  "G",   # flake8-logging-format
+  "I",   # isort
+  "N",   # pep8-naming
+  "NPY", # numpy
+  "PIE", # flake8-pie
+  "PTH", # flake8-use-pathlib
+  "RET", # flake8-return
+  "RUF", # ruff
+  "S",   # flake8-bandit
+  "TCH", # flake8-type-checking
+  "TD",  # flake8-todo
+  "TID", # flake8-tidy-imports
+  "UP",  # pyupgrade
+  "W",   # pycodestyle warnings
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = [
+  "E402", # Module level import not at top of file
+  "F401", # Imported but unused
+  "F403", # Import * used
+  "F811", # Redefinition of unused
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.ruff.isort]
+known-first-party = ["timm"]
+lines-after-imports = 2
+
+[tool.ruff.mccabe]
+max-complexity = 5 # C901
+
+[tool.ruff.format]
+quote-style = "double"            # Like Black, use double quotes for strings
+indent-style = "space"            # Like Black, indent with spaces, rather than tabs
+skip-magic-trailing-comma = false # Like Black, respect magic trailing commas
+line-ending = "lf"                # Use `\n` line endings for all files
