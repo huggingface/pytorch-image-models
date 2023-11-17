@@ -1149,15 +1149,26 @@ default_cfgs = {
     'vit_giant_patch14_224.untrained': _cfg(url=''),
     'vit_gigantic_patch14_224.untrained': _cfg(url=''),
 
-    # patch models, imagenet21k (weights from official Google JAX impl)
+    # patch models, imagenet21k (weights from official Google JAX impl), classifier not valid
+    'vit_base_patch32_224.orig_in21k': _cfg(
+        #url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch32_224_in21k-8db57226.pth',
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_base_patch16_224.orig_in21k': _cfg(
+        #url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch16_224_in21k-e5005f0a.pth',
+        hf_hub_id='timm/',
+        num_classes=0),
     'vit_large_patch32_224.orig_in21k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth',
+        #url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth',
         hf_hub_id='timm/',
-        num_classes=21843),
+        num_classes=0),
+    'vit_large_patch16_224.orig_in21k': _cfg(
+        #url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch16_224_in21k-606da67d.pth',
+        hf_hub_id='timm/',
+        num_classes=0),
     'vit_huge_patch14_224.orig_in21k': _cfg(
-        url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-H_14.npz',
         hf_hub_id='timm/',
-        custom_load=True, num_classes=21843),
+        num_classes=0),
 
     # How to train your ViT (augreg) weights, pretrained on in21k
     'vit_tiny_patch16_224.augreg_in21k': _cfg(
@@ -1498,19 +1509,19 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
 
     'vit_base_patch32_clip_224.openai': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='timm/vit_base_patch32_clip_224.openai',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.openai': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='timm/vit_base_patch16_clip_224.openai',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_large_patch14_clip_224.openai': _cfg(
-        hf_hub_id='timm/',
+        hf_hub_id='timm/vit_large_patch14_clip_224.openai',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_large_patch14_clip_336.openai': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/vit_large_patch14_clip_336.openai', hf_hub_filename='open_clip_pytorch_model.bin',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
