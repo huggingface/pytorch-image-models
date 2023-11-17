@@ -217,9 +217,9 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         num_classes=21843, crop_pct=0.9, custom_load=True),
     'vit_base_r50_s16_224.orig_in21k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_224_in21k-6f7c7740.pth',
+        #url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_224_in21k-6f7c7740.pth',
         hf_hub_id='timm/',
-        num_classes=21843, crop_pct=0.9),
+        num_classes=0, crop_pct=0.9),
     'vit_large_r50_s32_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R50_L_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0.npz',
         hf_hub_id='timm/',
