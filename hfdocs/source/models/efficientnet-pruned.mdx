@@ -1,6 +1,6 @@
 # EfficientNet (Knapsack Pruned)
 
-**EfficientNet** is a convolutional neural network architecture and scaling method that uniformly scales all dimensions of depth/width/resolution using a *compound coefficient*. Unlike conventional practice that arbitrary scales  these factors, the EfficientNet scaling method uniformly scales network width, depth, and resolution with a set of fixed scaling coefficients. For example, if we want to use $2^N$ times more computational resources, then we can simply increase the network depth by $\alpha ^ N$,  width by $\beta ^ N$, and image size by $\gamma ^ N$, where $\alpha, \beta, \gamma$ are constant coefficients determined by a small grid search on the original small model. EfficientNet uses a compound coefficient $\phi$ to uniformly scales network width, depth, and resolution in a  principled way.
+**EfficientNet** is a convolutional neural network architecture and scaling method that uniformly scales all dimensions of depth/width/resolution using a *compound coefficient*. Unlike conventional practice that arbitrary scales  these factors, the EfficientNet scaling method uniformly scales network width, depth, and resolution with a set of fixed scaling coefficients. For example, if we want to use \\( 2^N \\) times more computational resources, then we can simply increase the network depth by \\( \alpha ^ N \\),  width by \\( \beta ^ N \\), and image size by \\( \gamma ^ N \\), where \\( \alpha, \beta, \gamma \\) are constant coefficients determined by a small grid search on the original small model. EfficientNet uses a compound coefficient \\( \phi \\) to uniformly scales network width, depth, and resolution in a principled way.
 
 The compound scaling method is justified by the intuition that if the input image is bigger, then the network needs more layers to increase the receptive field and more channels to capture more fine-grained patterns on the bigger image.
 
@@ -20,7 +20,7 @@ To load a pretrained model:
 
 To load and preprocess the image:
 
-```py 
+```py
 >>> import urllib
 >>> from PIL import Image
 >>> from timm.data import resolve_data_config
@@ -51,7 +51,7 @@ To get the top-5 predictions class names:
 ```py
 >>> # Get imagenet class mappings
 >>> url, filename = ("https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt", "imagenet_classes.txt")
->>> urllib.request.urlretrieve(url, filename) 
+>>> urllib.request.urlretrieve(url, filename)
 >>> with open("imagenet_classes.txt", "r") as f:
 ...     categories = [s.strip() for s in f.readlines()]
 
@@ -85,7 +85,7 @@ You can follow the [timm recipe scripts](../scripts) for training a new model af
 
 ```BibTeX
 @misc{tan2020efficientnet,
-      title={EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks}, 
+      title={EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks},
       author={Mingxing Tan and Quoc V. Le},
       year={2020},
       eprint={1905.11946},
