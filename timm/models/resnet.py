@@ -1317,7 +1317,7 @@ def resnet26d(pretrained: bool = False, **kwargs) -> ResNet:
 def resnet50(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-50 model.
     """
-    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3],  **kwargs)
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3])
     return _create_resnet('resnet50', pretrained, **dict(model_args, **kwargs))
 
 
@@ -1460,8 +1460,8 @@ def wide_resnet101_2(pretrained: bool = False, **kwargs) -> ResNet:
 def resnet50_gn(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-50 model w/ GroupNorm
     """
-    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3],  **kwargs)
-    return _create_resnet('resnet50_gn', pretrained, norm_layer=GroupNorm, **model_args)
+    model_args = dict(block=Bottleneck, layers=[3, 4, 6, 3], norm_layer='groupnorm')
+    return _create_resnet('resnet50_gn', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model

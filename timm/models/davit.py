@@ -648,41 +648,35 @@ default_cfgs = generate_default_cfgs({
 
 @register_model
 def davit_tiny(pretrained=False, **kwargs) -> DaVit:
-    model_kwargs = dict(
-        depths=(1, 1, 3, 1), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_davit('davit_tiny', pretrained=pretrained, **model_kwargs)
+    model_args = dict(depths=(1, 1, 3, 1), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24))
+    return _create_davit('davit_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def davit_small(pretrained=False, **kwargs) -> DaVit:
-    model_kwargs = dict(
-        depths=(1, 1, 9, 1), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24), **kwargs)
-    return _create_davit('davit_small', pretrained=pretrained, **model_kwargs)
+    model_args = dict(depths=(1, 1, 9, 1), embed_dims=(96, 192, 384, 768), num_heads=(3, 6, 12, 24))
+    return _create_davit('davit_small', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def davit_base(pretrained=False, **kwargs) -> DaVit:
-    model_kwargs = dict(
-        depths=(1, 1, 9, 1), embed_dims=(128, 256, 512, 1024), num_heads=(4, 8, 16, 32), **kwargs)
-    return _create_davit('davit_base', pretrained=pretrained, **model_kwargs)
+    model_args = dict(depths=(1, 1, 9, 1), embed_dims=(128, 256, 512, 1024), num_heads=(4, 8, 16, 32))
+    return _create_davit('davit_base', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def davit_large(pretrained=False, **kwargs) -> DaVit:
-    model_kwargs = dict(
-        depths=(1, 1, 9, 1), embed_dims=(192, 384, 768, 1536), num_heads=(6, 12, 24, 48), **kwargs)
-    return _create_davit('davit_large', pretrained=pretrained, **model_kwargs)
+    model_args = dict(depths=(1, 1, 9, 1), embed_dims=(192, 384, 768, 1536), num_heads=(6, 12, 24, 48))
+    return _create_davit('davit_large', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def davit_huge(pretrained=False, **kwargs) -> DaVit:
-    model_kwargs = dict(
-        depths=(1, 1, 9, 1), embed_dims=(256, 512, 1024, 2048), num_heads=(8, 16, 32, 64), **kwargs)
-    return _create_davit('davit_huge', pretrained=pretrained, **model_kwargs)
+    model_args = dict(depths=(1, 1, 9, 1), embed_dims=(256, 512, 1024, 2048), num_heads=(8, 16, 32, 64))
+    return _create_davit('davit_huge', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def davit_giant(pretrained=False, **kwargs) -> DaVit:
-    model_kwargs = dict(
-        depths=(1, 1, 12, 3), embed_dims=(384, 768, 1536, 3072), num_heads=(12, 24, 48, 96), **kwargs)
-    return _create_davit('davit_giant', pretrained=pretrained, **model_kwargs)
+    model_args = dict(depths=(1, 1, 12, 3), embed_dims=(384, 768, 1536, 3072), num_heads=(12, 24, 48, 96))
+    return _create_davit('davit_giant', pretrained=pretrained, **dict(model_args, **kwargs))

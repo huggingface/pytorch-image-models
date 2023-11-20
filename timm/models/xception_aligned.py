@@ -334,8 +334,8 @@ def xception41(pretrained=False, **kwargs) -> XceptionAligned:
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True, start_with_relu=False),
     ]
-    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
-    return _xception('xception41', pretrained=pretrained, **model_args)
+    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1))
+    return _xception('xception41', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -353,8 +353,8 @@ def xception65(pretrained=False, **kwargs) -> XceptionAligned:
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True, start_with_relu=False),
     ]
-    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
-    return _xception('xception65', pretrained=pretrained, **model_args)
+    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1))
+    return _xception('xception65', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -374,8 +374,8 @@ def xception71(pretrained=False, **kwargs) -> XceptionAligned:
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True, start_with_relu=False),
     ]
-    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
-    return _xception('xception71', pretrained=pretrained, **model_args)
+    model_args = dict(block_cfg=block_cfg, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1))
+    return _xception('xception71', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -393,8 +393,8 @@ def xception41p(pretrained=False, **kwargs) -> XceptionAligned:
         dict(in_chs=728, out_chs=(728, 1024, 1024), stride=2),
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), no_skip=True, stride=1),
     ]
-    model_args = dict(block_cfg=block_cfg, preact=True, norm_layer=nn.BatchNorm2d, **kwargs)
-    return _xception('xception41p', pretrained=pretrained, **model_args)
+    model_args = dict(block_cfg=block_cfg, preact=True, norm_layer=nn.BatchNorm2d)
+    return _xception('xception41p', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -413,5 +413,5 @@ def xception65p(pretrained=False, **kwargs) -> XceptionAligned:
         dict(in_chs=1024, out_chs=(1536, 1536, 2048), stride=1, no_skip=True),
     ]
     model_args = dict(
-        block_cfg=block_cfg, preact=True, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1), **kwargs)
-    return _xception('xception65p', pretrained=pretrained, **model_args)
+        block_cfg=block_cfg, preact=True, norm_layer=partial(nn.BatchNorm2d, eps=.001, momentum=.1))
+    return _xception('xception65p', pretrained=pretrained, **dict(model_args, **kwargs))

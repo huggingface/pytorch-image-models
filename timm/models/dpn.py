@@ -317,55 +317,55 @@ default_cfgs = generate_default_cfgs({
 
 @register_model
 def dpn48b(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 6, 3), inc_sec=(16, 32, 32, 64), act_layer='silu')
-    return _create_dpn('dpn48b', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn48b', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def dpn68(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
         k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64))
-    return _create_dpn('dpn68', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn68', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def dpn68b(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         small=True, num_init_features=10, k_r=128, groups=32,
         b=True, k_sec=(3, 4, 12, 3), inc_sec=(16, 32, 32, 64))
-    return _create_dpn('dpn68b', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn68b', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def dpn92(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         num_init_features=64, k_r=96, groups=32,
         k_sec=(3, 4, 20, 3), inc_sec=(16, 32, 24, 128))
-    return _create_dpn('dpn92', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn92', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def dpn98(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         num_init_features=96, k_r=160, groups=40,
         k_sec=(3, 6, 20, 3), inc_sec=(16, 32, 32, 128))
-    return _create_dpn('dpn98', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn98', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def dpn131(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         num_init_features=128, k_r=160, groups=40,
         k_sec=(4, 8, 28, 3), inc_sec=(16, 32, 32, 128))
-    return _create_dpn('dpn131', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn131', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def dpn107(pretrained=False, **kwargs) -> DPN:
-    model_kwargs = dict(
+    model_args = dict(
         num_init_features=128, k_r=200, groups=50,
         k_sec=(4, 8, 20, 3), inc_sec=(20, 64, 64, 128))
-    return _create_dpn('dpn107', pretrained=pretrained, **dict(model_kwargs, **kwargs))
+    return _create_dpn('dpn107', pretrained=pretrained, **dict(model_args, **kwargs))
