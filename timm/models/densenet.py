@@ -361,8 +361,8 @@ def densenet121(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _create_densenet(
-        'densenet121', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained, **kwargs)
+    model_args = dict(growth_rate=32, block_config=(6, 12, 24, 16))
+    model = _create_densenet('densenet121', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -371,9 +371,8 @@ def densenetblur121d(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-121 w/ blur-pooling & 3-layer 3x3 stem
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _create_densenet(
-        'densenetblur121d', growth_rate=32, block_config=(6, 12, 24, 16), pretrained=pretrained,
-        stem_type='deep', aa_layer=BlurPool2d, **kwargs)
+    model_args = dict(growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep', aa_layer=BlurPool2d)
+    model = _create_densenet('densenetblur121d', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -382,8 +381,8 @@ def densenet169(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-169 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _create_densenet(
-        'densenet169', growth_rate=32, block_config=(6, 12, 32, 32), pretrained=pretrained, **kwargs)
+    model_args = dict(growth_rate=32, block_config=(6, 12, 32, 32))
+    model = _create_densenet('densenet169', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -392,8 +391,8 @@ def densenet201(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-201 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _create_densenet(
-        'densenet201', growth_rate=32, block_config=(6, 12, 48, 32), pretrained=pretrained, **kwargs)
+    model_args = dict(growth_rate=32, block_config=(6, 12, 48, 32))
+    model = _create_densenet('densenet201', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -402,8 +401,8 @@ def densenet161(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-161 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _create_densenet(
-        'densenet161', growth_rate=48, block_config=(6, 12, 36, 24), pretrained=pretrained, **kwargs)
+    model_args = dict(growth_rate=48, block_config=(6, 12, 36, 24))
+    model = _create_densenet('densenet161', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -412,7 +411,7 @@ def densenet264d(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-264 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
     """
-    model = _create_densenet(
-        'densenet264d', growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep', pretrained=pretrained, **kwargs)
+    model_args = dict(growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep')
+    model = _create_densenet('densenet264d', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 

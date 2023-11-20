@@ -723,9 +723,7 @@ def mobilenetv3_small_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def mobilenetv3_rw(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    if pretrained:
-        # pretrained model trained with non-default BN epsilon
-        kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
     model = _gen_mobilenet_v3_rw('mobilenetv3_rw', 1.0, pretrained=pretrained, **kwargs)
     return model
 
@@ -733,8 +731,8 @@ def mobilenetv3_rw(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def tf_mobilenetv3_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
+    kwargs.setdefault('pad_type', 'same')
     model = _gen_mobilenet_v3('tf_mobilenetv3_large_075', 0.75, pretrained=pretrained, **kwargs)
     return model
 
@@ -742,8 +740,8 @@ def tf_mobilenetv3_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def tf_mobilenetv3_large_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
+    kwargs.setdefault('pad_type', 'same')
     model = _gen_mobilenet_v3('tf_mobilenetv3_large_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
@@ -751,8 +749,8 @@ def tf_mobilenetv3_large_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def tf_mobilenetv3_large_minimal_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
+    kwargs.setdefault('pad_type', 'same')
     model = _gen_mobilenet_v3('tf_mobilenetv3_large_minimal_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
@@ -760,8 +758,8 @@ def tf_mobilenetv3_large_minimal_100(pretrained: bool = False, **kwargs) -> Mobi
 @register_model
 def tf_mobilenetv3_small_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
+    kwargs.setdefault('pad_type', 'same')
     model = _gen_mobilenet_v3('tf_mobilenetv3_small_075', 0.75, pretrained=pretrained, **kwargs)
     return model
 
@@ -769,8 +767,8 @@ def tf_mobilenetv3_small_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def tf_mobilenetv3_small_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
+    kwargs.setdefault('pad_type', 'same')
     model = _gen_mobilenet_v3('tf_mobilenetv3_small_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
@@ -778,8 +776,8 @@ def tf_mobilenetv3_small_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def tf_mobilenetv3_small_minimal_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    kwargs['bn_eps'] = BN_EPS_TF_DEFAULT
-    kwargs['pad_type'] = 'same'
+    kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
+    kwargs.setdefault('pad_type', 'same')
     model = _gen_mobilenet_v3('tf_mobilenetv3_small_minimal_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
