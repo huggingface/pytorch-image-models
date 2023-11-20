@@ -1442,12 +1442,6 @@ def mnasnet_100(pretrained=False, **kwargs) -> EfficientNet:
 
 
 @register_model
-def mnasnet_b1(pretrained=False, **kwargs) -> EfficientNet:
-    """ MNASNet B1, depth multiplier of 1.0. """
-    return mnasnet_100(pretrained, **kwargs)
-
-
-@register_model
 def mnasnet_140(pretrained=False, **kwargs) -> EfficientNet:
     """ MNASNet B1,  depth multiplier of 1.4 """
     model = _gen_mnasnet_b1('mnasnet_140', 1.4, pretrained=pretrained, **kwargs)
@@ -1473,12 +1467,6 @@ def semnasnet_100(pretrained=False, **kwargs) -> EfficientNet:
     """ MNASNet A1 (w/ SE), depth multiplier of 1.0. """
     model = _gen_mnasnet_a1('semnasnet_100', 1.0, pretrained=pretrained, **kwargs)
     return model
-
-
-@register_model
-def mnasnet_a1(pretrained=False, **kwargs) -> EfficientNet:
-    """ MNASNet A1 (w/ SE), depth multiplier of 1.0. """
-    return semnasnet_100(pretrained, **kwargs)
 
 
 @register_model
@@ -1591,26 +1579,12 @@ def efficientnet_b2(pretrained=False, **kwargs) -> EfficientNet:
 
 
 @register_model
-def efficientnet_b2a(pretrained=False, **kwargs) -> EfficientNet:
-    """ EfficientNet-B2 @ 288x288 w/ 1.0 test crop"""
-    # WARN this model def is deprecated, different train/test res + test crop handled by default_cfg now
-    return efficientnet_b2(pretrained=pretrained, **kwargs)
-
-
-@register_model
 def efficientnet_b3(pretrained=False, **kwargs) -> EfficientNet:
     """ EfficientNet-B3 """
     # NOTE for train, drop_rate should be 0.3, drop_path_rate should be 0.2
     model = _gen_efficientnet(
         'efficientnet_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
     return model
-
-
-@register_model
-def efficientnet_b3a(pretrained=False, **kwargs) -> EfficientNet:
-    """ EfficientNet-B3 @ 320x320 w/ 1.0 test crop-pct """
-    # WARN this model def is deprecated, different train/test res + test crop handled by default_cfg now
-    return efficientnet_b3(pretrained=pretrained, **kwargs)
 
 
 @register_model
@@ -2361,4 +2335,8 @@ register_model_deprecations(__name__, {
     'tf_efficientnetv2_m_in21k': 'tf_efficientnetv2_m.in21k',
     'tf_efficientnetv2_l_in21k': 'tf_efficientnetv2_l.in21k',
     'tf_efficientnetv2_xl_in21k': 'tf_efficientnetv2_xl.in21k',
+    'efficientnet_b2a': 'efficientnet_b2',
+    'efficientnet_b3a': 'efficientnet_b3',
+    'mnasnet_a1': 'semnasnet_100',
+    'mnasnet_b1': 'mnasnet_100',
 })

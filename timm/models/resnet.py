@@ -1116,6 +1116,7 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnetblur50-84f4748f.pth'),
     'resnetblur50d.untrained': _ttcfg(first_conv='conv1.0'),
     'resnetblur101d.untrained': _ttcfg(first_conv='conv1.0'),
+    'resnetaa34d.untrained': _ttcfg(first_conv='conv1.0'),
     'resnetaa50.a1h_in1k': _rcfg(
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnetaa50_a1h-4cf422b3.pth'),
@@ -1731,15 +1732,6 @@ def seresnext26t_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
 
 
 @register_model
-def seresnext26tn_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
-    """Constructs a SE-ResNeXt-26-T model.
-    NOTE I deprecated previous 't' model defs and replaced 't' with 'tn', this was the only tn model of note
-    so keeping this def for backwards compat with any uses out there. Old 't' model is lost.
-    """
-    return seresnext26t_32x4d(pretrained=pretrained, **kwargs)
-
-
-@register_model
 def seresnext50_32x4d(pretrained: bool = False, **kwargs) -> ResNet:
     model_args = dict(
         block=Bottleneck, layers=[3, 4, 6, 3], cardinality=32, base_width=4,
@@ -2028,4 +2020,5 @@ register_model_deprecations(__name__, {
     'gluon_seresnext101_32x4d': 'seresnext101_32x4d.gluon_in1k',
     'gluon_seresnext101_64x4d': 'seresnext101_64x4d.gluon_in1k',
     'gluon_senet154': 'senet154.gluon_in1k',
+    'seresnext26tn_32x4d': 'seresnext26t_32x4d',
 })
