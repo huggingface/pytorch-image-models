@@ -27,7 +27,11 @@ import logging
 import math
 from collections import OrderedDict
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple, Type, Union, Literal, List
+from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple, Type, Union, List
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
 
 import torch
 import torch.nn as nn

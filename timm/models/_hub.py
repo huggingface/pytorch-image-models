@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import os
-import sys
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,9 +21,9 @@ try:
 except ImportError:
     _has_safetensors = False
 
-if sys.version_info >= (3, 8):
+try:
     from typing import Literal
-else:
+except ImportError:
     from typing_extensions import Literal
 
 from timm import __version__
