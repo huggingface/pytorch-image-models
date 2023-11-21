@@ -947,31 +947,56 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
     ),
     'efficientvit_l1.r224_in1k': _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
+        crop_pct=1.0,
     ),
     'efficientvit_l2.r224_in1k': _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
+        crop_pct=1.0,
+    ),
+    'efficientvit_l2.r256_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
+    ),
+    'efficientvit_l2.r288_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 288, 288), pool_size=(9, 9), crop_pct=1.0,
     ),
     'efficientvit_l2.r384_in1k': _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
     ),
     'efficientvit_l3.r224_in1k': _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
+        crop_pct=1.0,
+    ),
+    'efficientvit_l3.r256_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0,
+    ),
+    'efficientvit_l3.r320_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 320, 320), pool_size=(10, 10), crop_pct=1.0,
     ),
     'efficientvit_l3.r384_in1k': _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0,
     ),
-    'efficientvit_l0_sam.sam': _cfg(
-        # hf_hub_id='timm/',
-    ),
-    'efficientvit_l1_sam.sam': _cfg(
-        # hf_hub_id='timm/',
-    ),
-    'efficientvit_l2_sam.sam': _cfg(
-        # hf_hub_id='timm/',
-    ),
+    # 'efficientvit_l0_sam.sam': _cfg(
+    #     # hf_hub_id='timm/',
+    #     input_size=(3, 512, 512), crop_pct=1.0,
+    #     num_classes=0,
+    # ),
+    # 'efficientvit_l1_sam.sam': _cfg(
+    #     # hf_hub_id='timm/',
+    #     input_size=(3, 512, 512), crop_pct=1.0,
+    #     num_classes=0,
+    # ),
+    # 'efficientvit_l2_sam.sam': _cfg(
+    #     # hf_hub_id='timm/',f
+    #     input_size=(3, 512, 512), crop_pct=1.0,
+    #     num_classes=0,
+    # ),
 })
 
 
@@ -1048,22 +1073,26 @@ def efficientvit_l3(pretrained=False, **kwargs):
     return _create_efficientvit_large('efficientvit_l3', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-@register_model
-def efficientvit_l0_sam(pretrained=False, **kwargs):
-    model_args = dict(
-        widths=(32, 64, 128, 256, 512), depths=(1, 1, 1, 4, 4), head_dim=32, num_classes=0, norm_eps=1e-6)  # only backbone for segment-anything-model weights
-    return _create_efficientvit_large('efficientvit_l0_sam', pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def efficientvit_l1_sam(pretrained=False, **kwargs):
-    model_args = dict(
-        widths=(32, 64, 128, 256, 512), depths=(1, 1, 1, 6, 6), head_dim=32, num_classes=0, norm_eps=1e-6)  # only backbone for segment-anything-model weights
-    return _create_efficientvit_large('efficientvit_l1_sam', pretrained=pretrained, **dict(model_args, **kwargs))
-
-
-@register_model
-def efficientvit_l2_sam(pretrained=False, **kwargs):
-    model_args = dict(
-        widths=(32, 64, 128, 256, 512), depths=(1, 2, 2, 8, 8), head_dim=32, num_classes=0, norm_eps=1e-6)  # only backbone for segment-anything-model weights
-    return _create_efficientvit_large('efficientvit_l2_sam', pretrained=pretrained, **dict(model_args, **kwargs))
+# FIXME will wait for v2 SAM models which are pending
+# @register_model
+# def efficientvit_l0_sam(pretrained=False, **kwargs):
+#     # only backbone for segment-anything-model weights
+#     model_args = dict(
+#         widths=(32, 64, 128, 256, 512), depths=(1, 1, 1, 4, 4), head_dim=32, num_classes=0, norm_eps=1e-6)
+#     return _create_efficientvit_large('efficientvit_l0_sam', pretrained=pretrained, **dict(model_args, **kwargs))
+#
+#
+# @register_model
+# def efficientvit_l1_sam(pretrained=False, **kwargs):
+#     # only backbone for segment-anything-model weights
+#     model_args = dict(
+#         widths=(32, 64, 128, 256, 512), depths=(1, 1, 1, 6, 6), head_dim=32, num_classes=0, norm_eps=1e-6)
+#     return _create_efficientvit_large('efficientvit_l1_sam', pretrained=pretrained, **dict(model_args, **kwargs))
+#
+#
+# @register_model
+# def efficientvit_l2_sam(pretrained=False, **kwargs):
+#     # only backbone for segment-anything-model weights
+#     model_args = dict(
+#         widths=(32, 64, 128, 256, 512), depths=(1, 2, 2, 8, 8), head_dim=32, num_classes=0, norm_eps=1e-6)
+#     return _create_efficientvit_large('efficientvit_l2_sam', pretrained=pretrained, **dict(model_args, **kwargs))
