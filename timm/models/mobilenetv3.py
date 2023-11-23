@@ -625,6 +625,7 @@ default_cfgs = generate_default_cfgs({
 
     'mobilenetv3_rw.rmsp_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_100-35495452.pth',
+        hf_hub_id='timm/',
         interpolation='bicubic'),
 
     'tf_mobilenetv3_large_075.in1k': _cfg(
