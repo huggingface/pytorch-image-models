@@ -26,6 +26,12 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Nov 23, 2023
+* Added EfficientViT-Large models, thanks [SeeFun](https://github.com/seefun)
+* Fix Python 3.7 compat, will be dropping support for it soon
+* Other misc fixes
+* Release 0.9.12
+
 ### Nov 20, 2023
 * Added significant flexibility for Hugging Face Hub based timm models via `model_args` config entry. `model_args` will be passed as kwargs through to models on creation. 
   * See example at https://huggingface.co/gaunernst/vit_base_patch16_1024_128.audiomae_as2m_ft_as20k/blob/main/config.json
