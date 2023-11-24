@@ -731,6 +731,7 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50d_a1_0-e20cff14.pth',
         first_conv='conv1.0'),
     'resnet50d.a2_in1k': _rcfg(
+        hf_hub_id='timm/',
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50d_a2_0-a3adc64d.pth',
         first_conv='conv1.0'),
     'resnet50d.a3_in1k': _r3cfg(

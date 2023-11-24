@@ -1205,27 +1205,27 @@ default_cfgs = generate_default_cfgs({
 
     'tf_efficientnet_b0.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b0-0af12548.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 224, 224)),
     'tf_efficientnet_b1.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b1-5c1377c4.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
     'tf_efficientnet_b2.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b2-e393ef04.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 260, 260), pool_size=(9, 9), crop_pct=0.890),
     'tf_efficientnet_b3.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b3-e3bd6955.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
     'tf_efficientnet_b4.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b4-74ee3bed.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 380, 380), pool_size=(12, 12), crop_pct=0.922),
     'tf_efficientnet_b5.in1k': _cfg(
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_b5-c6949ce9.pth',
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         input_size=(3, 456, 456), pool_size=(15, 15), crop_pct=0.934),
 
 
