@@ -42,7 +42,7 @@ class TransformerDecoderLayerOptimal(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.dropout3 = nn.Dropout(dropout)
 
-        self.multihead_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
 
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward)
@@ -64,7 +64,7 @@ class TransformerDecoderLayerOptimal(nn.Module):
                 memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
         tgt = tgt + self.dropout1(tgt)
         tgt = self.norm1(tgt)
-        tgt2 = self.multihead_attn(tgt, memory, memory)[0]
+        tgt2 = self.self_attn(tgt, memory, memory)[0]
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
         tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
