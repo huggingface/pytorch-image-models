@@ -196,7 +196,7 @@ def resample_patch_embed(
         return np.stack(mat).T
 
     resize_mat = get_resize_mat(old_size, new_size)
-    resize_mat_pinv = torch.Tensor(np.linalg.pinv(resize_mat.T))
+    resize_mat_pinv = torch.tensor(np.linalg.pinv(resize_mat.T), device=patch_embed.device)
 
     def resample_kernel(kernel):
         resampled_kernel = resize_mat_pinv @ kernel.reshape(-1)
