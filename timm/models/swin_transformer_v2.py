@@ -378,6 +378,7 @@ class SwinTransformerV2Stage(nn.Module):
         """
         Args:
             dim: Number of input channels.
+            out_dim: Number of output channels.
             input_resolution: Input resolution.
             depth: Number of blocks.
             num_heads: Number of attention heads.
@@ -640,7 +641,7 @@ def checkpoint_filter_fn(state_dict, model):
             k = re.sub(r'layers.(\d+).downsample', lambda x: f'layers.{int(x.group(1)) + 1}.downsample', k)
             k = k.replace('head.', 'head.fc.')
         out_dict[k] = v
-      
+
     return out_dict
 
 
