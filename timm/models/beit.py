@@ -343,7 +343,7 @@ class Beit(nn.Module):
                 window_size=self.patch_embed.grid_size if use_rel_pos_bias else None,
             )
             for i in range(depth)])
-            
+
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
             
@@ -518,13 +518,16 @@ class Beit(nn.Module):
                 x = checkpoint(blk, x, shared_rel_pos_bias=rel_pos_bias)
             else:
                 x = blk(x, shared_rel_pos_bias=rel_pos_bias)
-        #x = self.norm(x)
+        x = self.norm(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        # feed in token outputs if pooling, otherwise take cls token features
-        x = x[:, self.num_prefix_tokens:] if self.global_pool else x[:, 0]
-        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
+        if self.global_pool:
+            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        x = self.fc_norm(x)
+        x = self.head_drop(x)
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
         x = self.forward_head(x)
