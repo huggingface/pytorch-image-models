@@ -49,7 +49,6 @@ from torch.utils.checkpoint import checkpoint
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_, use_fused_attn
 from timm.layers import resample_patch_embed, resample_abs_pos_embed, resize_rel_pos_bias_table
-from timm.layers import NormMlpClassifierHead
 
 
 from ._builder import build_model_with_cfg
@@ -336,22 +335,12 @@ class Beit(nn.Module):
                 window_size=self.patch_embed.grid_size if use_rel_pos_bias else None,
             )
             for i in range(depth)])
-            
-        # pre_norm if using cls token features, fc_norm otherwise
-        # cls -> norm -> ...
-        # pool -> norm -> ...
-        #use_fc_norm = self.global_pool == 'avg'
-        #self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
-        #self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
-        #self.head_drop = nn.Dropout(drop_rate)
-        #self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        self.head = NormMlpClassifierHead(
-                self.num_features,
-                num_classes,
-                pool_type=global_pool,
-                drop_rate=drop_rate,
-                norm_layer=norm_layer,
-            )
+
+        use_fc_norm = self.global_pool == 'avg'
+        self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
+        self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
+        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
         if self.pos_embed is not None:
@@ -424,13 +413,16 @@ class Beit(nn.Module):
                 x = checkpoint(blk, x, shared_rel_pos_bias=rel_pos_bias)
             else:
                 x = blk(x, shared_rel_pos_bias=rel_pos_bias)
-        #x = self.norm(x)
+        x = self.norm(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        # feed in token outputs if pooling, otherwise take cls token features
-        x = x[:, self.num_prefix_tokens:] if self.global_pool else x[:, 0]
-        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
+        if self.global_pool:
+            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        x = self.fc_norm(x)
+        x = self.head_drop(x)
+        return x if pre_logits else self.head(x)
+
     def forward(self, x):
         x = self.forward_features(x)
         x = self.forward_head(x)
