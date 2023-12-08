@@ -561,6 +561,7 @@ class Beit(nn.Module):
                 **dd,
             )
             for i in range(depth)])
+            
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
