@@ -561,7 +561,7 @@ class Beit(nn.Module):
                 **dd,
             )
             for i in range(depth)])
-            
+
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
@@ -800,7 +800,7 @@ class Beit(nn.Module):
                 x = checkpoint(blk, x, shared_rel_pos_bias=rel_pos_bias)
             else:
                 x = blk(x, shared_rel_pos_bias=rel_pos_bias)
-        #x = self.norm(x)
+        x = self.norm(x)
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
