@@ -15,32 +15,9 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['VGG']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bilinear',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'features.0', 'classifier': 'head.fc',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'vgg11': _cfg(url='https://download.pytorch.org/models/vgg11-bbd30ac9.pth'),
-    'vgg13': _cfg(url='https://download.pytorch.org/models/vgg13-c768596a.pth'),
-    'vgg16': _cfg(url='https://download.pytorch.org/models/vgg16-397923af.pth'),
-    'vgg19': _cfg(url='https://download.pytorch.org/models/vgg19-dcbb9e9d.pth'),
-    'vgg11_bn': _cfg(url='https://download.pytorch.org/models/vgg11_bn-6002323d.pth'),
-    'vgg13_bn': _cfg(url='https://download.pytorch.org/models/vgg13_bn-abd245e5.pth'),
-    'vgg16_bn': _cfg(url='https://download.pytorch.org/models/vgg16_bn-6c64b313.pth'),
-    'vgg19_bn': _cfg(url='https://download.pytorch.org/models/vgg19_bn-c79401a0.pth'),
-}
 
 
 cfgs: Dict[str, List[Union[str, int]]] = {
@@ -55,8 +32,15 @@ cfgs: Dict[str, List[Union[str, int]]] = {
 class ConvMlp(nn.Module):
 
     def __init__(
-            self, in_features=512, out_features=4096, kernel_size=7, mlp_ratio=1.0,
-            drop_rate: float = 0.2, act_layer: nn.Module = None, conv_layer: nn.Module = None):
+            self,
+            in_features=512,
+            out_features=4096,
+            kernel_size=7,
+            mlp_ratio=1.0,
+            drop_rate: float = 0.2,
+            act_layer: nn.Module = None,
+            conv_layer: nn.Module = None,
+    ):
         super(ConvMlp, self).__init__()
         self.input_kernel_size = kernel_size
         mid_features = int(out_features * mlp_ratio)
@@ -124,10 +108,20 @@ class VGG(nn.Module):
         self.feature_info.append(dict(num_chs=prev_chs, reduction=net_stride, module=f'features.{len(layers) - 1}'))
 
         self.pre_logits = ConvMlp(
-            prev_chs, self.num_features, 7, mlp_ratio=mlp_ratio,
-            drop_rate=drop_rate, act_layer=act_layer, conv_layer=conv_layer)
+            prev_chs,
+            self.num_features,
+            7,
+            mlp_ratio=mlp_ratio,
+            drop_rate=drop_rate,
+            act_layer=act_layer,
+            conv_layer=conv_layer,
+        )
         self.head = ClassifierHead(
-            self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            self.num_features,
+            num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+        )
 
         self._initialize_weights()
 
@@ -147,7 +141,11 @@ class VGG(nn.Module):
     def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
         self.head = ClassifierHead(
-            self.num_features, self.num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+            self.num_features,
+            self.num_classes,
+            pool_type=global_pool,
+            drop_rate=self.drop_rate,
+        )
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
@@ -197,12 +195,38 @@ def _create_vgg(variant: str, pretrained: bool, **kwargs: Any) -> VGG:
     # NOTE: VGG is one of few models with stride==1 features w/ 6 out_indices [0..5]
     out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4, 5))
     model = build_model_with_cfg(
-        VGG, variant, pretrained,
+        VGG,
+        variant,
+        pretrained,
         model_cfg=cfgs[cfg],
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         pretrained_filter_fn=_filter_fn,
-        **kwargs)
+        **kwargs,
+    )
     return model
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bilinear',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'features.0', 'classifier': 'head.fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'vgg11.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg13.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg16.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg19.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg11_bn.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg13_bn.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg16_bn.tv_in1k': _cfg(hf_hub_id='timm/'),
+    'vgg19_bn.tv_in1k': _cfg(hf_hub_id='timm/'),
+})
 
 
 @register_model

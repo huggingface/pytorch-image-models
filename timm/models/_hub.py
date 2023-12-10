@@ -2,7 +2,6 @@ import hashlib
 import json
 import logging
 import os
-import sys
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,9 +21,9 @@ try:
 except ImportError:
     _has_safetensors = False
 
-if sys.version_info >= (3, 8):
+try:
     from typing import Literal
-else:
+except ImportError:
     from typing_extensions import Literal
 
 from timm import __version__
@@ -50,6 +49,8 @@ __all__ = ['get_cache_dir', 'download_cached_file', 'has_hf_hub', 'hf_split', 'l
 # Default name for a weights file hosted on the Huggingface Hub.
 HF_WEIGHTS_NAME = "pytorch_model.bin"  # default pytorch pkl
 HF_SAFE_WEIGHTS_NAME = "model.safetensors"  # safetensors version
+HF_OPEN_CLIP_WEIGHTS_NAME = "open_clip_pytorch_model.bin"  # default pytorch pkl
+HF_OPEN_CLIP_SAFE_WEIGHTS_NAME = "open_clip_model.safetensors"  # safetensors version
 
 
 def get_cache_dir(child_dir=''):
@@ -162,8 +163,9 @@ def load_model_config_from_hf(model_id: str):
     if 'label_descriptions' in hf_config:
         pretrained_cfg['label_descriptions'] = hf_config.pop('label_descriptions')
 
+    model_args = hf_config.get('model_args', {})
     model_name = hf_config['architecture']
-    return pretrained_cfg, model_name
+    return pretrained_cfg, model_name, model_args
 
 
 def load_state_dict_from_hf(model_id: str, filename: str = HF_WEIGHTS_NAME):
@@ -191,19 +193,23 @@ def load_state_dict_from_hf(model_id: str, filename: str = HF_WEIGHTS_NAME):
 def save_config_for_hf(
         model,
         config_path: str,
-        model_config: Optional[dict] = None
+        model_config: Optional[dict] = None,
+        model_args: Optional[dict] = None
 ):
     model_config = model_config or {}
     hf_config = {}
     pretrained_cfg = filter_pretrained_cfg(model.pretrained_cfg, remove_source=True, remove_null=True)
     # set some values at root config level
     hf_config['architecture'] = pretrained_cfg.pop('architecture')
-    hf_config['num_classes'] = model_config.get('num_classes', model.num_classes)
-    hf_config['num_features'] = model_config.get('num_features', model.num_features)
-    global_pool_type = model_config.get('global_pool', getattr(model, 'global_pool', None))
+    hf_config['num_classes'] = model_config.pop('num_classes', model.num_classes)
+
+    # NOTE these attr saved for informational purposes, do not impact model build
+    hf_config['num_features'] = model_config.pop('num_features', model.num_features)
+    global_pool_type = model_config.pop('global_pool', getattr(model, 'global_pool', None))
     if isinstance(global_pool_type, str) and global_pool_type:
         hf_config['global_pool'] = global_pool_type
 
+    # Save class label info
     if 'labels' in model_config:
         _logger.warning(
             "'labels' as a config field for is deprecated. Please use 'label_names' and 'label_descriptions'."
@@ -223,6 +229,9 @@ def save_config_for_hf(
         # maps label names -> descriptions
         hf_config['label_descriptions'] = label_descriptions
 
+    if model_args:
+        hf_config['model_args'] = model_args
+
     hf_config['pretrained_cfg'] = pretrained_cfg
     hf_config.update(model_config)
 
@@ -234,6 +243,7 @@ def save_for_hf(
         model,
         save_directory: str,
         model_config: Optional[dict] = None,
+        model_args: Optional[dict] = None,
         safe_serialization: Union[bool, Literal["both"]] = False,
 ):
     assert has_hf_hub(True)
@@ -249,11 +259,16 @@ def save_for_hf(
         torch.save(tensors, save_directory / HF_WEIGHTS_NAME)
 
     config_path = save_directory / 'config.json'
-    save_config_for_hf(model, config_path, model_config=model_config)
+    save_config_for_hf(
+        model,
+        config_path,
+        model_config=model_config,
+        model_args=model_args,
+    )
 
 
 def push_to_hf_hub(
-        model,
+        model: torch.nn.Module,
         repo_id: str,
         commit_message: str = 'Add model',
         token: Optional[str] = None,
@@ -262,6 +277,7 @@ def push_to_hf_hub(
         create_pr: bool = False,
         model_config: Optional[dict] = None,
         model_card: Optional[dict] = None,
+        model_args: Optional[dict] = None,
         safe_serialization: Union[bool, Literal["both"]] = False,
 ):
     """
@@ -289,7 +305,13 @@ def push_to_hf_hub(
     # Dump model and push to Hub
     with TemporaryDirectory() as tmpdir:
         # Save model weights and config.
-        save_for_hf(model, tmpdir, model_config=model_config, safe_serialization=safe_serialization)
+        save_for_hf(
+            model,
+            tmpdir,
+            model_config=model_config,
+            model_args=model_args,
+            safe_serialization=safe_serialization,
+        )
 
         # Add readme if it does not exist
         if not has_readme:
@@ -312,13 +334,21 @@ def push_to_hf_hub(
 def generate_readme(model_card: dict, model_name: str):
     readme_text = "---\n"
     readme_text += "tags:\n- image-classification\n- timm\n"
-    readme_text += "library_tag: timm\n"
+    readme_text += "library_name: timm\n"
     readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
     if 'details' in model_card and 'Dataset' in model_card['details']:
         readme_text += 'datasets:\n'
-        readme_text += f"- {model_card['details']['Dataset'].lower()}\n"
+        if isinstance(model_card['details']['Dataset'], (tuple, list)):
+            for d in model_card['details']['Dataset']:
+                readme_text += f"- {d.lower()}\n"
+        else:
+            readme_text += f"- {model_card['details']['Dataset'].lower()}\n"
         if 'Pretrain Dataset' in model_card['details']:
-            readme_text += f"- {model_card['details']['Pretrain Dataset'].lower()}\n"
+            if isinstance(model_card['details']['Pretrain Dataset'], (tuple, list)):
+                for d in model_card['details']['Pretrain Dataset']:
+                    readme_text += f"- {d.lower()}\n"
+            else:
+                readme_text += f"- {model_card['details']['Pretrain Dataset'].lower()}\n"
     readme_text += "---\n"
     readme_text += f"# Model card for {model_name}\n"
     if 'description' in model_card:
@@ -366,5 +396,7 @@ def _get_safe_alternatives(filename: str) -> Iterable[str]:
     """
     if filename == HF_WEIGHTS_NAME:
         yield HF_SAFE_WEIGHTS_NAME
-    if filename != HF_WEIGHTS_NAME and filename.endswith(".bin"):
-        return filename[:-4] + ".safetensors"
+    if filename == HF_OPEN_CLIP_WEIGHTS_NAME:
+        yield HF_OPEN_CLIP_SAFE_WEIGHTS_NAME
+    if filename not in (HF_WEIGHTS_NAME, HF_OPEN_CLIP_WEIGHTS_NAME) and filename.endswith(".bin"):
+        yield filename[:-4] + ".safetensors"

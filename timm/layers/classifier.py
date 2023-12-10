@@ -15,13 +15,23 @@ from .create_act import get_act_layer
 from .create_norm import get_norm_layer
 
 
-def _create_pool(num_features, num_classes, pool_type='avg', use_conv=False):
+def _create_pool(
+        num_features: int,
+        num_classes: int,
+        pool_type: str = 'avg',
+        use_conv: bool = False,
+        input_fmt: Optional[str] = None,
+):
     flatten_in_pool = not use_conv  # flatten when we use a Linear layer after pooling
     if not pool_type:
         assert num_classes == 0 or use_conv,\
             'Pooling can only be disabled if classifier is also removed or conv classifier is used'
         flatten_in_pool = False  # disable flattening if pooling is pass-through (no pooling)
-    global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=flatten_in_pool)
+    global_pool = SelectAdaptivePool2d(
+        pool_type=pool_type,
+        flatten=flatten_in_pool,
+        input_fmt=input_fmt,
+    )
     num_pooled_features = num_features * global_pool.feat_mult()
     return global_pool, num_pooled_features
 
@@ -36,9 +46,29 @@ def _create_fc(num_features, num_classes, use_conv=False):
     return fc
 
 
-def create_classifier(num_features, num_classes, pool_type='avg', use_conv=False):
-    global_pool, num_pooled_features = _create_pool(num_features, num_classes, pool_type, use_conv=use_conv)
-    fc = _create_fc(num_pooled_features, num_classes, use_conv=use_conv)
+def create_classifier(
+        num_features: int,
+        num_classes: int,
+        pool_type: str = 'avg',
+        use_conv: bool = False,
+        input_fmt: str = 'NCHW',
+        drop_rate: Optional[float] = None,
+):
+    global_pool, num_pooled_features = _create_pool(
+        num_features,
+        num_classes,
+        pool_type,
+        use_conv=use_conv,
+        input_fmt=input_fmt,
+    )
+    fc = _create_fc(
+        num_pooled_features,
+        num_classes,
+        use_conv=use_conv,
+    )
+    if drop_rate is not None:
+        dropout = nn.Dropout(drop_rate)
+        return global_pool, dropout, fc
     return global_pool, fc
 
 
@@ -52,6 +82,7 @@ class ClassifierHead(nn.Module):
             pool_type: str = 'avg',
             drop_rate: float = 0.,
             use_conv: bool = False,
+            input_fmt: str = 'NCHW',
     ):
         """
         Args:
@@ -61,31 +92,47 @@ class ClassifierHead(nn.Module):
             drop_rate: Pre-classifier dropout rate.
         """
         super(ClassifierHead, self).__init__()
-        self.drop_rate = drop_rate
         self.in_features = in_features
         self.use_conv = use_conv
+        self.input_fmt = input_fmt
 
-        self.global_pool, num_pooled_features = _create_pool(in_features, num_classes, pool_type, use_conv=use_conv)
-        self.fc = _create_fc(num_pooled_features, num_classes, use_conv=use_conv)
+        global_pool, fc = create_classifier(
+            in_features,
+            num_classes,
+            pool_type,
+            use_conv=use_conv,
+            input_fmt=input_fmt,
+        )
+        self.global_pool = global_pool
+        self.drop = nn.Dropout(drop_rate)
+        self.fc = fc
         self.flatten = nn.Flatten(1) if use_conv and pool_type else nn.Identity()
 
-    def reset(self, num_classes, global_pool=None):
-        if global_pool is not None:
-            if global_pool != self.global_pool.pool_type:
-                self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv)
-            self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
-        num_pooled_features = self.in_features * self.global_pool.feat_mult()
-        self.fc = _create_fc(num_pooled_features, num_classes, use_conv=self.use_conv)
+    def reset(self, num_classes, pool_type=None):
+        if pool_type is not None and pool_type != self.global_pool.pool_type:
+            self.global_pool, self.fc = create_classifier(
+                self.in_features,
+                num_classes,
+                pool_type=pool_type,
+                use_conv=self.use_conv,
+                input_fmt=self.input_fmt,
+            )
+            self.flatten = nn.Flatten(1) if self.use_conv and pool_type else nn.Identity()
+        else:
+            num_pooled_features = self.in_features * self.global_pool.feat_mult()
+            self.fc = _create_fc(
+                num_pooled_features,
+                num_classes,
+                use_conv=self.use_conv,
+            )
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
-        if self.drop_rate:
-            x = F.dropout(x, p=float(self.drop_rate), training=self.training)
+        x = self.drop(x)
         if pre_logits:
-            return x.flatten(1)
-        else:
-            x = self.fc(x)
             return self.flatten(x)
+        x = self.fc(x)
+        return self.flatten(x)
 
 
 class NormMlpClassifierHead(nn.Module):
@@ -111,7 +158,6 @@ class NormMlpClassifierHead(nn.Module):
             act_layer: MLP activation layer type (only used if hidden_size is not None).
         """
         super().__init__()
-        self.drop_rate = drop_rate
         self.in_features = in_features
         self.hidden_size = hidden_size
         self.num_features = in_features
@@ -131,7 +177,7 @@ class NormMlpClassifierHead(nn.Module):
             self.num_features = hidden_size
         else:
             self.pre_logits = nn.Identity()
-        self.drop = nn.Dropout(self.drop_rate)
+        self.drop = nn.Dropout(drop_rate)
         self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def reset(self, num_classes, global_pool=None):
@@ -155,6 +201,7 @@ class NormMlpClassifierHead(nn.Module):
         x = self.norm(x)
         x = self.flatten(x)
         x = self.pre_logits(x)
+        x = self.drop(x)
         if pre_logits:
             return x
         x = self.fc(x)

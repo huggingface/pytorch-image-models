@@ -4,18 +4,19 @@ from dataclasses import dataclass, field, replace, asdict
 from typing import Any, Deque, Dict, Tuple, Optional, Union
 
 
-__all__ = ['PretrainedCfg', 'filter_pretrained_cfg', 'DefaultCfg', 'split_model_name_tag', 'generate_default_cfgs']
+__all__ = ['PretrainedCfg', 'filter_pretrained_cfg', 'DefaultCfg']
 
 
 @dataclass
 class PretrainedCfg:
     """
     """
-    # weight locations
-    url: Optional[Union[str, Tuple[str, str]]] = None
-    file: Optional[str] = None
-    hf_hub_id: Optional[str] = None
-    hf_hub_filename: Optional[str] = None
+    # weight source locations
+    url: Optional[Union[str, Tuple[str, str]]] = None  # remote URL
+    file: Optional[str] = None  # local / shared filesystem path
+    state_dict: Optional[Dict[str, Any]] = None  # in-memory state dict
+    hf_hub_id: Optional[str] = None  # Hugging Face Hub model id ('organization/model')
+    hf_hub_filename: Optional[str] = None  # Hugging Face Hub filename (overrides default)
 
     source: Optional[str] = None  # source of cfg / weight location used (url, file, hf-hub)
     architecture: Optional[str] = None  # architecture variant can be set when not implicit
@@ -91,41 +92,3 @@ class DefaultCfg:
     def default_with_tag(self):
         tag = self.tags[0]
         return tag, self.cfgs[tag]
-
-
-def split_model_name_tag(model_name: str, no_tag: str = '') -> Tuple[str, str]:
-    model_name, *tag_list = model_name.split('.', 1)
-    tag = tag_list[0] if tag_list else no_tag
-    return model_name, tag
-
-
-def generate_default_cfgs(cfgs: Dict[str, Union[Dict[str, Any], PretrainedCfg]]):
-    out = defaultdict(DefaultCfg)
-    default_set = set()  # no tag and tags ending with * are prioritized as default
-
-    for k, v in cfgs.items():
-        if isinstance(v, dict):
-            v = PretrainedCfg(**v)
-        has_weights = v.has_weights
-
-        model, tag = split_model_name_tag(k)
-        is_default_set = model in default_set
-        priority = (has_weights and not tag) or (tag.endswith('*') and not is_default_set)
-        tag = tag.strip('*')
-
-        default_cfg = out[model]
-
-        if priority:
-            default_cfg.tags.appendleft(tag)
-            default_set.add(model)
-        elif has_weights and not default_cfg.is_pretrained:
-            default_cfg.tags.appendleft(tag)
-        else:
-            default_cfg.tags.append(tag)
-
-        if has_weights:
-            default_cfg.is_pretrained = True
-
-        default_cfg.cfgs[tag] = v
-
-    return out

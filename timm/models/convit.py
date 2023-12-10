@@ -28,41 +28,27 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp
+from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp, LayerNorm
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .vision_transformer_hybrid import HybridEmbed
 
 
-__all__ = ['ConViT']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
-        'first_conv': 'patch_embed.proj', 'classifier': 'head',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    # ConViT
-    'convit_tiny': _cfg(
-        url="https://dl.fbaipublicfiles.com/convit/convit_tiny.pth"),
-    'convit_small': _cfg(
-        url="https://dl.fbaipublicfiles.com/convit/convit_small.pth"),
-    'convit_base': _cfg(
-        url="https://dl.fbaipublicfiles.com/convit/convit_base.pth")
-}
+__all__ = ['ConVit']
 
 
 @register_notrace_module  # reason: FX can't symbolically trace control flow in forward method
 class GPSA(nn.Module):
     def __init__(
-            self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0., locality_strength=1.):
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+            locality_strength=1.,
+    ):
         super().__init__()
         self.num_heads = num_heads
         self.dim = dim
@@ -145,7 +131,14 @@ class GPSA(nn.Module):
 
 
 class MHSA(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
+    def __init__(
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=False,
+            attn_drop=0.,
+            proj_drop=0.,
+    ):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -195,20 +188,48 @@ class MHSA(nn.Module):
 class Block(nn.Module):
 
     def __init__(
-            self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
-            drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, use_gpsa=True, **kwargs):
+            self,
+            dim,
+            num_heads,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            proj_drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            act_layer=nn.GELU,
+            norm_layer=LayerNorm,
+            use_gpsa=True,
+            locality_strength=1.,
+    ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.use_gpsa = use_gpsa
         if self.use_gpsa:
             self.attn = GPSA(
-                dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop, **kwargs)
+                dim,
+                num_heads=num_heads,
+                qkv_bias=qkv_bias,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                locality_strength=locality_strength,
+            )
         else:
-            self.attn = MHSA(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+            self.attn = MHSA(
+                dim,
+                num_heads=num_heads,
+                qkv_bias=qkv_bias,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+            )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
 
     def forward(self, x):
         x = x + self.drop_path(self.attn(self.norm1(x)))
@@ -216,15 +237,33 @@ class Block(nn.Module):
         return x
 
 
-class ConViT(nn.Module):
+class ConVit(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
 
     def __init__(
-            self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
-            embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False, drop_rate=0., attn_drop_rate=0.,
-            drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm,
-            local_up_to_layer=3, locality_strength=1., use_pos_embed=True):
+            self,
+            img_size=224,
+            patch_size=16,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='token',
+            embed_dim=768,
+            depth=12,
+            num_heads=12,
+            mlp_ratio=4.,
+            qkv_bias=False,
+            drop_rate=0.,
+            pos_drop_rate=0.,
+            proj_drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.,
+            hybrid_backbone=None,
+            norm_layer=LayerNorm,
+            local_up_to_layer=3,
+            locality_strength=1.,
+            use_pos_embed=True,
+    ):
         super().__init__()
         assert global_pool in ('', 'avg', 'token')
         embed_dim *= num_heads
@@ -240,12 +279,16 @@ class ConViT(nn.Module):
                 hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
         else:
             self.patch_embed = PatchEmbed(
-                img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+                img_size=img_size,
+                patch_size=patch_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+            )
         num_patches = self.patch_embed.num_patches
         self.num_patches = num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         if self.use_pos_embed:
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
@@ -254,20 +297,22 @@ class ConViT(nn.Module):
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
-                use_gpsa=True,
-                locality_strength=locality_strength)
-            if i < local_up_to_layer else
-            Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
-                use_gpsa=False)
-            for i in range(depth)])
+                dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                proj_drop=proj_drop_rate,
+                attn_drop=attn_drop_rate,
+                drop_path=dpr[i],
+                norm_layer=norm_layer,
+                use_gpsa=i < local_up_to_layer,
+                locality_strength=locality_strength,
+            ) for i in range(depth)])
         self.norm = norm_layer(embed_dim)
 
         # Classifier head
         self.feature_info = [dict(num_chs=embed_dim, reduction=0, module='head')]
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.cls_token, std=.02)
@@ -327,6 +372,7 @@ class ConViT(nn.Module):
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
             x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -339,31 +385,46 @@ def _create_convit(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-    return build_model_with_cfg(ConViT, variant, pretrained, **kwargs)
+    return build_model_with_cfg(ConVit, variant, pretrained, **kwargs)
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'fixed_input_size': True,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    # ConViT
+    'convit_tiny.fb_in1k': _cfg(hf_hub_id='timm/'),
+    'convit_small.fb_in1k': _cfg(hf_hub_id='timm/'),
+    'convit_base.fb_in1k': _cfg(hf_hub_id='timm/')
+})
 
 
 @register_model
-def convit_tiny(pretrained=False, **kwargs):
+def convit_tiny(pretrained=False, **kwargs) -> ConVit:
     model_args = dict(
-        local_up_to_layer=10, locality_strength=1.0, embed_dim=48,
-        num_heads=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model = _create_convit(variant='convit_tiny', pretrained=pretrained, **model_args)
+        local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=4)
+    model = _create_convit(variant='convit_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convit_small(pretrained=False, **kwargs):
+def convit_small(pretrained=False, **kwargs) -> ConVit:
     model_args = dict(
-        local_up_to_layer=10, locality_strength=1.0, embed_dim=48,
-        num_heads=9, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model = _create_convit(variant='convit_small', pretrained=pretrained, **model_args)
+        local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=9)
+    model = _create_convit(variant='convit_small', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def convit_base(pretrained=False, **kwargs):
+def convit_base(pretrained=False, **kwargs) -> ConVit:
     model_args = dict(
-        local_up_to_layer=10, locality_strength=1.0, embed_dim=48,
-        num_heads=16, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model = _create_convit(variant='convit_base', pretrained=pretrained, **model_args)
+        local_up_to_layer=10, locality_strength=1.0, embed_dim=48, num_heads=16)
+    model = _create_convit(variant='convit_base', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

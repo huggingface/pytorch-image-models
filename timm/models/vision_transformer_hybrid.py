@@ -14,23 +14,27 @@ They were moved here to keep file sizes sane.
 Hacked together by / Copyright 2020, Ross Wightman
 """
 from functools import partial
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import StdConv2dSame, StdConv2d, to_2tuple
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from timm.layers import StdConv2dSame, StdConv2d, to_2tuple, Format, nchw_to
+from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
-from .vision_transformer import _create_vision_transformer
+from .vision_transformer import _create_vision_transformer, VisionTransformer
 
 
 class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
     Extract feature map from CNN, flatten, project to embedding dim.
     """
+    output_fmt: Format
+    dynamic_img_pad: torch.jit.Final[bool]
+
     def __init__(
             self,
             backbone,
@@ -40,6 +44,10 @@ class HybridEmbed(nn.Module):
             in_chans=3,
             embed_dim=768,
             bias=True,
+            flatten: bool = True,
+            output_fmt: Optional[str] = None,
+            strict_img_size: bool = True,
+            dynamic_img_pad: bool = False,
     ):
         super().__init__()
         assert isinstance(backbone, nn.Module)
@@ -66,17 +74,69 @@ class HybridEmbed(nn.Module):
                 feature_dim = self.backbone.feature_info.channels()[-1]
             else:
                 feature_dim = self.backbone.num_features
-        assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
+        if not dynamic_img_pad:
+            assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
         self.grid_size = (feature_size[0] // patch_size[0], feature_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
+        if output_fmt is not None:
+            self.flatten = False
+            self.output_fmt = Format(output_fmt)
+        else:
+            # flatten spatial dim and transpose to channels last, kept for bwd compat
+            self.flatten = flatten
+            self.output_fmt = Format.NCHW
+        self.strict_img_size = strict_img_size
+        self.dynamic_img_pad = dynamic_img_pad
+
         self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
 
     def forward(self, x):
         x = self.backbone(x)
         if isinstance(x, (list, tuple)):
             x = x[-1]  # last feature if backbone outputs list/tuple of features
-        x = self.proj(x).flatten(2).transpose(1, 2)
+        _, _, H, W = x.shape
+        if self.dynamic_img_pad:
+            pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
+            pad_w = (self.patch_size[1] - W % self.patch_size[1]) % self.patch_size[1]
+            x = F.pad(x, (0, pad_w, 0, pad_h))
+        x = self.proj(x)
+        if self.flatten:
+            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
+        elif self.output_fmt != Format.NCHW:
+            x = nchw_to(x, self.output_fmt)
         return x
+
+
+class HybridEmbedWithSize(nn.Module):
+    """ CNN Feature Map Embedding
+    Extract feature map from CNN, flatten, project to embedding dim.
+    """
+    def __init__(
+            self,
+            backbone,
+            img_size=224,
+            patch_size=1,
+            feature_size=None,
+            in_chans=3,
+            embed_dim=768,
+            bias=True,
+    ):
+        super().__init__(
+            backbone=backbone,
+            img_size=img_size,
+            patch_size=patch_size,
+            feature_size=feature_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+            bias=bias,
+        )
+
+    def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
+        x = self.backbone(x)
+        if isinstance(x, (list, tuple)):
+            x = x[-1]  # last feature if backbone outputs list/tuple of features
+        x = self.proj(x)
+        return x.flatten(2).transpose(1, 2), x.shape[-2:]
 
 
 def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwargs):
@@ -157,9 +217,9 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         num_classes=21843, crop_pct=0.9, custom_load=True),
     'vit_base_r50_s16_224.orig_in21k': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_224_in21k-6f7c7740.pth',
+        #url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_resnet50_224_in21k-6f7c7740.pth',
         hf_hub_id='timm/',
-        num_classes=21843, crop_pct=0.9),
+        num_classes=0, crop_pct=0.9),
     'vit_large_r50_s32_224.augreg_in21k': _cfg(
         url='https://storage.googleapis.com/vit_models/augreg/R50_L_32-i21k-300ep-lr_0.001-aug_medium2-wd_0.1-do_0.0-sd_0.0.npz',
         hf_hub_id='timm/',
@@ -178,144 +238,154 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def vit_tiny_r_s16_p8_224(pretrained=False, **kwargs):
+def vit_tiny_r_s16_p8_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R+ViT-Ti/S16 w/ 8x8 patch hybrid @ 224 x 224.
     """
     backbone = _resnetv2(layers=(), **kwargs)
-    model_kwargs = dict(patch_size=8, embed_dim=192, depth=12, num_heads=3, **kwargs)
+    model_args = dict(patch_size=8, embed_dim=192, depth=12, num_heads=3)
     model = _create_vision_transformer_hybrid(
-        'vit_tiny_r_s16_p8_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_tiny_r_s16_p8_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_tiny_r_s16_p8_384(pretrained=False, **kwargs):
+def vit_tiny_r_s16_p8_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R+ViT-Ti/S16 w/ 8x8 patch hybrid @ 384 x 384.
     """
     backbone = _resnetv2(layers=(), **kwargs)
-    model_kwargs = dict(patch_size=8, embed_dim=192, depth=12, num_heads=3, **kwargs)
+    model_args = dict(patch_size=8, embed_dim=192, depth=12, num_heads=3)
     model = _create_vision_transformer_hybrid(
-        'vit_tiny_r_s16_p8_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_tiny_r_s16_p8_384', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_r26_s32_224(pretrained=False, **kwargs):
+def vit_small_r26_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R26+ViT-S/S32 hybrid.
     """
     backbone = _resnetv2((2, 2, 2, 2), **kwargs)
-    model_kwargs = dict(embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model_args = dict(embed_dim=384, depth=12, num_heads=6)
     model = _create_vision_transformer_hybrid(
-        'vit_small_r26_s32_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_small_r26_s32_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_r26_s32_384(pretrained=False, **kwargs):
+def vit_small_r26_s32_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R26+ViT-S/S32 hybrid.
     """
     backbone = _resnetv2((2, 2, 2, 2), **kwargs)
-    model_kwargs = dict(embed_dim=384, depth=12, num_heads=6, **kwargs)
+    model_args = dict(embed_dim=384, depth=12, num_heads=6)
     model = _create_vision_transformer_hybrid(
-        'vit_small_r26_s32_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_small_r26_s32_384', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_r26_s32_224(pretrained=False, **kwargs):
+def vit_base_r26_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R26+ViT-B/S32 hybrid.
     """
     backbone = _resnetv2((2, 2, 2, 2), **kwargs)
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
-        'vit_base_r26_s32_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_base_r26_s32_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_r50_s16_224(pretrained=False, **kwargs):
+def vit_base_r50_s16_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-B/S16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
     """
     backbone = _resnetv2((3, 4, 9), **kwargs)
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
-        'vit_base_r50_s16_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_base_r50_s16_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_r50_s16_384(pretrained=False, **kwargs):
+def vit_base_r50_s16_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-B/16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
     backbone = _resnetv2((3, 4, 9), **kwargs)
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
-        'vit_base_r50_s16_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_base_r50_s16_384', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_r50_s32_224(pretrained=False, **kwargs):
+def vit_large_r50_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-L/S32 hybrid.
     """
     backbone = _resnetv2((3, 4, 6, 3), **kwargs)
-    model_kwargs = dict(embed_dim=1024, depth=24, num_heads=16, **kwargs)
+    model_args = dict(embed_dim=1024, depth=24, num_heads=16)
     model = _create_vision_transformer_hybrid(
-        'vit_large_r50_s32_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_large_r50_s32_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_r50_s32_384(pretrained=False, **kwargs):
+def vit_large_r50_s32_384(pretrained=False, **kwargs) -> VisionTransformer:
     """ R50+ViT-L/S32 hybrid.
     """
     backbone = _resnetv2((3, 4, 6, 3), **kwargs)
-    model_kwargs = dict(embed_dim=1024, depth=24, num_heads=16, **kwargs)
+    model_args = dict(embed_dim=1024, depth=24, num_heads=16)
     model = _create_vision_transformer_hybrid(
-        'vit_large_r50_s32_384', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_large_r50_s32_384', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_resnet26d_224(pretrained=False, **kwargs):
+def vit_small_resnet26d_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT small hybrid w/ ResNet26D stride 32. No pretrained weights.
     """
     backbone = resnet26d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
-    model_kwargs = dict(embed_dim=768, depth=8, num_heads=8, mlp_ratio=3, **kwargs)
+    model_args = dict(embed_dim=768, depth=8, num_heads=8, mlp_ratio=3)
     model = _create_vision_transformer_hybrid(
-        'vit_small_resnet26d_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_small_resnet26d_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_small_resnet50d_s16_224(pretrained=False, **kwargs):
+def vit_small_resnet50d_s16_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT small hybrid w/ ResNet50D 3-stages, stride 16. No pretrained weights.
     """
     backbone = resnet50d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[3])
-    model_kwargs = dict(embed_dim=768, depth=8, num_heads=8, mlp_ratio=3, **kwargs)
+    model_args = dict(embed_dim=768, depth=8, num_heads=8, mlp_ratio=3)
     model = _create_vision_transformer_hybrid(
-        'vit_small_resnet50d_s16_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_small_resnet50d_s16_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_resnet26d_224(pretrained=False, **kwargs):
+def vit_base_resnet26d_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT base hybrid w/ ResNet26D stride 32. No pretrained weights.
     """
     backbone = resnet26d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
-        'vit_base_resnet26d_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_base_resnet26d_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_resnet50d_224(pretrained=False, **kwargs):
+def vit_base_resnet50d_224(pretrained=False, **kwargs) -> VisionTransformer:
     """ Custom ViT base hybrid w/ ResNet50D stride 32. No pretrained weights.
     """
     backbone = resnet50d(pretrained=pretrained, in_chans=kwargs.get('in_chans', 3), features_only=True, out_indices=[4])
-    model_kwargs = dict(embed_dim=768, depth=12, num_heads=12, **kwargs)
+    model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
-        'vit_base_resnet50d_224', backbone=backbone, pretrained=pretrained, **model_kwargs)
+        'vit_base_resnet50d_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+register_model_deprecations(__name__, {
+    'vit_tiny_r_s16_p8_224_in21k': 'vit_tiny_r_s16_p8_224.augreg_in21k',
+    'vit_small_r26_s32_224_in21k': 'vit_small_r26_s32_224.augreg_in21k',
+    'vit_base_r50_s16_224_in21k': 'vit_base_r50_s16_224.orig_in21k',
+    'vit_base_resnet50_224_in21k': 'vit_base_r50_s16_224.orig_in21k',
+    'vit_large_r50_s32_224_in21k': 'vit_large_r50_s32_224.augreg_in21k',
+    'vit_base_resnet50_384': 'vit_base_r50_s16_384.orig_in21k_ft_in1k'
+})

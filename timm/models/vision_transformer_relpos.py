@@ -15,10 +15,9 @@ from torch.jit import Final
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias
+from timm.layers import PatchEmbed, Mlp, DropPath, RelPosMlp, RelPosBias, use_fused_attn
 from ._builder import build_model_with_cfg
-from ._pretrained import generate_default_cfgs
-from ._registry import register_model
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['VisionTransformerRelPos']  # model_registry will add each entrypoint fn to this
 
@@ -26,7 +25,7 @@ _logger = logging.getLogger(__name__)
 
 
 class RelPosAttention(nn.Module):
-    fast_attn: Final[bool]
+    fused_attn: Final[bool]
 
     def __init__(
             self,
@@ -44,7 +43,7 @@ class RelPosAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.fast_attn = hasattr(torch.nn.functional, 'scaled_dot_product_attention')  # FIXME
+        self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -61,17 +60,18 @@ class RelPosAttention(nn.Module):
         q = self.q_norm(q)
         k = self.k_norm(k)
 
-        if self.fast_attn:
+        if self.fused_attn:
             if self.rel_pos is not None:
                 attn_bias = self.rel_pos.get_bias()
             elif shared_rel_pos is not None:
                 attn_bias = shared_rel_pos
             else:
                 attn_bias = None
+
             x = torch.nn.functional.scaled_dot_product_attention(
                 q, k, v,
                 attn_mask=attn_bias,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale
@@ -111,7 +111,7 @@ class RelPosBlock(nn.Module):
             qk_norm=False,
             rel_pos_cls=None,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -126,7 +126,7 @@ class RelPosBlock(nn.Module):
             qk_norm=qk_norm,
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -137,7 +137,7 @@ class RelPosBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -159,7 +159,7 @@ class ResPostRelPosBlock(nn.Module):
             qk_norm=False,
             rel_pos_cls=None,
             init_values=None,
-            drop=0.,
+            proj_drop=0.,
             attn_drop=0.,
             drop_path=0.,
             act_layer=nn.GELU,
@@ -175,7 +175,7 @@ class ResPostRelPosBlock(nn.Module):
             qk_norm=qk_norm,
             rel_pos_cls=rel_pos_cls,
             attn_drop=attn_drop,
-            proj_drop=drop,
+            proj_drop=proj_drop,
         )
         self.norm1 = norm_layer(dim)
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -184,7 +184,7 @@ class ResPostRelPosBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            drop=drop,
+            drop=proj_drop,
         )
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -233,6 +233,7 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_dim=None,
             shared_rel_pos=False,
             drop_rate=0.,
+            proj_drop_rate=0.,
             attn_drop_rate=0.,
             drop_path_rate=0.,
             weight_init='skip',
@@ -260,6 +261,7 @@ class VisionTransformerRelPos(nn.Module):
             rel_pos_ty pe (str): type of relative position
             shared_rel_pos (bool): share relative pos across all blocks
             drop_rate (float): dropout rate
+            proj_drop_rate (float): projection dropout rate
             attn_drop_rate (float): attention dropout rate
             drop_path_rate (float): stochastic depth rate
             weight_init (str): weight init scheme
@@ -314,7 +316,7 @@ class VisionTransformerRelPos(nn.Module):
                 qk_norm=qk_norm,
                 rel_pos_cls=rel_pos_cls,
                 init_values=init_values,
-                drop=drop_rate,
+                proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
@@ -325,6 +327,7 @@ class VisionTransformerRelPos(nn.Module):
 
         # Classifier Head
         self.fc_norm = norm_layer(embed_dim) if fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         if weight_init != 'skip':
@@ -381,6 +384,7 @@ class VisionTransformerRelPos(nn.Module):
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -449,141 +453,145 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def vit_relpos_base_patch32_plus_rpn_256(pretrained=False, **kwargs):
+def vit_relpos_base_patch32_plus_rpn_256(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/32+) w/ relative log-coord position and residual post-norm, no class token
     """
-    model_kwargs = dict(
-        patch_size=32, embed_dim=896, depth=12, num_heads=14, block_fn=ResPostRelPosBlock, **kwargs)
+    model_args = dict(patch_size=32, embed_dim=896, depth=12, num_heads=14, block_fn=ResPostRelPosBlock)
     model = _create_vision_transformer_relpos(
-        'vit_relpos_base_patch32_plus_rpn_256', pretrained=pretrained, **model_kwargs)
+        'vit_relpos_base_patch32_plus_rpn_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_base_patch16_plus_240(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_plus_240(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16+) w/ relative log-coord position, no class token
     """
-    model_kwargs = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_plus_240', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_relpos_small_patch16_224(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
-    """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=True, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_small_patch16_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_relpos_medium_patch16_224(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
-    """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=True, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_medium_patch16_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_relpos_base_patch16_224(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
-    """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, fc_norm=True, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_srelpos_small_patch16_224(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
-    """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=False,
-        rel_pos_dim=384, shared_rel_pos=True, **kwargs)
-    model = _create_vision_transformer_relpos('vit_srelpos_small_patch16_224', pretrained=pretrained, **model_kwargs)
-    return model
-
-
-@register_model
-def vit_srelpos_medium_patch16_224(pretrained=False, **kwargs):
-    """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
-    """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=False,
-        rel_pos_dim=512, shared_rel_pos=True, **kwargs)
+    model_args = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14)
     model = _create_vision_transformer_relpos(
-        'vit_srelpos_medium_patch16_224', pretrained=pretrained, **model_kwargs)
+        'vit_relpos_base_patch16_plus_240', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_medium_patch16_cls_224(pretrained=False, **kwargs):
+def vit_relpos_small_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
+    """
+    model_args = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=True)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_small_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_relpos_medium_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=True)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_medium_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_relpos_base_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
+    """ ViT-Base (ViT-B/16) w/ relative log-coord position, no class token
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, fc_norm=True)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_srelpos_small_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
+    """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, fc_norm=False,
+        rel_pos_dim=384, shared_rel_pos=True)
+    model = _create_vision_transformer_relpos(
+        'vit_srelpos_small_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_srelpos_medium_patch16_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
+    """ ViT-Base (ViT-B/16) w/ shared relative log-coord position, no class token
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=False,
+        rel_pos_dim=512, shared_rel_pos=True)
+    model = _create_vision_transformer_relpos(
+        'vit_srelpos_medium_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_relpos_medium_patch16_cls_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-M/16) w/ relative log-coord position, class token present
     """
-    model_kwargs = dict(
+    model_args = dict(
         patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, fc_norm=False,
-        rel_pos_dim=256, class_token=True, global_pool='token', **kwargs)
+        rel_pos_dim=256, class_token=True, global_pool='token')
     model = _create_vision_transformer_relpos(
-        'vit_relpos_medium_patch16_cls_224', pretrained=pretrained, **model_kwargs)
+        'vit_relpos_medium_patch16_cls_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_cls_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False,
-        class_token=True, global_pool='token', **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_cls_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, class_token=True, global_pool='token')
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_base_patch16_cls_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_base_patch16_clsgap_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_clsgap_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position, class token present
     NOTE this config is a bit of a mistake, class token was enabled but global avg-pool w/ fc-norm was not disabled
     Leaving here for comparisons w/ a future re-train as it performs quite well.
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, fc_norm=True, class_token=True, **kwargs)
-    model = _create_vision_transformer_relpos('vit_relpos_base_patch16_clsgap_224', pretrained=pretrained, **model_kwargs)
+    model_args = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, fc_norm=True, class_token=True)
+    model = _create_vision_transformer_relpos(
+        'vit_relpos_base_patch16_clsgap_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_small_patch16_rpn_224(pretrained=False, **kwargs):
+def vit_relpos_small_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, block_fn=ResPostRelPosBlock, **kwargs)
+    model_args = dict(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, qkv_bias=False, block_fn=ResPostRelPosBlock)
     model = _create_vision_transformer_relpos(
-        'vit_relpos_small_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+        'vit_relpos_small_patch16_rpn_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_medium_patch16_rpn_224(pretrained=False, **kwargs):
+def vit_relpos_medium_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, block_fn=ResPostRelPosBlock, **kwargs)
+    model_args = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, qkv_bias=False, block_fn=ResPostRelPosBlock)
     model = _create_vision_transformer_relpos(
-        'vit_relpos_medium_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+        'vit_relpos_medium_patch16_rpn_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs):
+def vit_relpos_base_patch16_rpn_224(pretrained=False, **kwargs) -> VisionTransformerRelPos:
     """ ViT-Base (ViT-B/16) w/ relative log-coord position and residual post-norm, no class token
     """
-    model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, block_fn=ResPostRelPosBlock, **kwargs)
+    model_args = dict(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False, block_fn=ResPostRelPosBlock)
     model = _create_vision_transformer_relpos(
-        'vit_relpos_base_patch16_rpn_224', pretrained=pretrained, **model_kwargs)
+        'vit_relpos_base_patch16_rpn_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

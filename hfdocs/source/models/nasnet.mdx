@@ -14,7 +14,7 @@ To load a pretrained model:
 
 To load and preprocess the image:
 
-```py 
+```py
 >>> import urllib
 >>> from PIL import Image
 >>> from timm.data import resolve_data_config
@@ -45,7 +45,7 @@ To get the top-5 predictions class names:
 ```py
 >>> # Get imagenet class mappings
 >>> url, filename = ("https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt", "imagenet_classes.txt")
->>> urllib.request.urlretrieve(url, filename) 
+>>> urllib.request.urlretrieve(url, filename)
 >>> with open("imagenet_classes.txt", "r") as f:
 ...     categories = [s.strip() for s in f.readlines()]
 
@@ -79,7 +79,7 @@ You can follow the [timm recipe scripts](../scripts) for training a new model af
 
 ```BibTeX
 @misc{zoph2018learning,
-      title={Learning Transferable Architectures for Scalable Image Recognition}, 
+      title={Learning Transferable Architectures for Scalable Image Recognition},
       author={Barret Zoph and Vijay Vasudevan and Jonathon Shlens and Quoc V. Le},
       year={2018},
       eprint={1707.07012},
@@ -125,7 +125,7 @@ Models:
     Image Size: '331'
     Interpolation: bicubic
     Label Smoothing: 0.1
-    RMSProp $\epsilon$: 1.0
+    RMSProp \\( \epsilon \\): 1.0
   Code: https://github.com/rwightman/pytorch-image-models/blob/d8e69206be253892b2956341fea09fdebfaae4e3/timm/models/nasnet.py#L562
   Weights: http://data.lip6.fr/cadene/pretrainedmodels/nasnetalarge-a1897284.pth
   Results:

@@ -15,32 +15,8 @@ from torch import nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectiveKernel, ConvNormAct, create_attn
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from .resnet import ResNet
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'conv1', 'classifier': 'fc',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'skresnet18': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet18_ra-4eec2804.pth'),
-    'skresnet34': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnet34_ra-bdc0ccde.pth'),
-    'skresnet50': _cfg(),
-    'skresnet50d': _cfg(
-        first_conv='conv1.0'),
-    'skresnext50_32x4d': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/skresnext50_ra-f40e40bf.pth'),
-}
 
 
 class SelectiveKernelBasic(nn.Module):
@@ -166,11 +142,37 @@ class SelectiveKernelBottleneck(nn.Module):
 
 
 def _create_skresnet(variant, pretrained=False, **kwargs):
-    return build_model_with_cfg(ResNet, variant, pretrained, **kwargs)
+    return build_model_with_cfg(
+        ResNet,
+        variant,
+        pretrained,
+        **kwargs,
+    )
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'conv1', 'classifier': 'fc',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'skresnet18.ra_in1k': _cfg(hf_hub_id='timm/'),
+    'skresnet34.ra_in1k': _cfg(hf_hub_id='timm/'),
+    'skresnet50.untrained': _cfg(),
+    'skresnet50d.untrained': _cfg(
+        first_conv='conv1.0'),
+    'skresnext50_32x4d.ra_in1k': _cfg(hf_hub_id='timm/'),
+})
 
 
 @register_model
-def skresnet18(pretrained=False, **kwargs):
+def skresnet18(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Selective Kernel ResNet-18 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -184,7 +186,7 @@ def skresnet18(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnet34(pretrained=False, **kwargs):
+def skresnet34(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Selective Kernel ResNet-34 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -198,7 +200,7 @@ def skresnet34(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnet50(pretrained=False, **kwargs):
+def skresnet50(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Select Kernel ResNet-50 model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -212,7 +214,7 @@ def skresnet50(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnet50d(pretrained=False, **kwargs):
+def skresnet50d(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Select Kernel ResNet-50-D model.
 
     Different from configs in Select Kernel paper or "Compounding the Performance Improvements..." this
@@ -226,7 +228,7 @@ def skresnet50d(pretrained=False, **kwargs):
 
 
 @register_model
-def skresnext50_32x4d(pretrained=False, **kwargs):
+def skresnext50_32x4d(pretrained=False, **kwargs) -> ResNet:
     """Constructs a Select Kernel ResNeXt50-32x4d model. This should be equivalent to
     the SKNet-50 model in the Select Kernel Paper
     """

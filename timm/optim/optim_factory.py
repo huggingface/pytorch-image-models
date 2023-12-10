@@ -22,16 +22,12 @@ from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
 from .nadam import Nadam
+from .nadamw import NAdamW
 from .nvnovograd import NvNovoGrad
 from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 
-try:
-    from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
-    has_apex = True
-except ImportError:
-    has_apex = False
 
 _logger = logging.getLogger(__name__)
 
@@ -254,8 +250,22 @@ def create_optimizer_v2(
     opt_lower = opt.lower()
     opt_split = opt_lower.split('_')
     opt_lower = opt_split[-1]
-    if 'fused' in opt_lower:
+
+    if opt_lower.startswith('fused'):
+        try:
+            from apex.optimizers import FusedNovoGrad, FusedAdam, FusedLAMB, FusedSGD
+            has_apex = True
+        except ImportError:
+            has_apex = False
         assert has_apex and torch.cuda.is_available(), 'APEX and CUDA required for fused optimizers'
+
+    if opt_lower.startswith('bnb'):
+        try:
+            import bitsandbytes as bnb
+            has_bnb = True
+        except ImportError:
+            has_bnb = False
+        assert has_bnb and torch.cuda.is_available(), 'bitsandbytes and CUDA required for bnb optimizers'
 
     opt_args = dict(weight_decay=weight_decay, **kwargs)
 
@@ -292,6 +302,8 @@ def create_optimizer_v2(
             optimizer = optim.Nadam(parameters, **opt_args)
         except AttributeError:
             optimizer = Nadam(parameters, **opt_args)
+    elif opt_lower == 'nadamw':
+        optimizer = NAdamW(parameters, **opt_args)
     elif opt_lower == 'radam':
         optimizer = RAdam(parameters, **opt_args)
     elif opt_lower == 'adamax':
@@ -334,6 +346,7 @@ def create_optimizer_v2(
     elif opt_lower == 'rmsproptf':
         optimizer = RMSpropTF(parameters, alpha=0.9, momentum=momentum, **opt_args)
     elif opt_lower == 'lion':
+        opt_args.pop('eps', None)
         optimizer = Lion(parameters, **opt_args)
 
     # second order
@@ -356,6 +369,40 @@ def create_optimizer_v2(
     elif opt_lower == 'fusednovograd':
         opt_args.setdefault('betas', (0.95, 0.98))
         optimizer = FusedNovoGrad(parameters, **opt_args)
+
+    # bitsandbytes optimizers, require bitsandbytes to be installed
+    elif opt_lower == 'bnbsgd':
+        opt_args.pop('eps', None)
+        optimizer = bnb.optim.SGD(parameters, momentum=momentum, nesterov=True, **opt_args)
+    elif opt_lower == 'bnbsgd8bit':
+        opt_args.pop('eps', None)
+        optimizer = bnb.optim.SGD8bit(parameters, momentum=momentum, nesterov=True, **opt_args)
+    elif opt_lower == 'bnbmomentum':
+        opt_args.pop('eps', None)
+        optimizer = bnb.optim.SGD(parameters, momentum=momentum, **opt_args)
+    elif opt_lower == 'bnbmomentum8bit':
+        opt_args.pop('eps', None)
+        optimizer = bnb.optim.SGD8bit(parameters, momentum=momentum, **opt_args)
+    elif opt_lower == 'bnbadam':
+        optimizer = bnb.optim.Adam(parameters, **opt_args)
+    elif opt_lower == 'bnbadam8bit':
+        optimizer = bnb.optim.Adam8bit(parameters, **opt_args)
+    elif opt_lower == 'bnbadamw':
+        optimizer = bnb.optim.AdamW(parameters, **opt_args)
+    elif opt_lower == 'bnbadamw8bit':
+        optimizer = bnb.optim.AdamW8bit(parameters, **opt_args)
+    elif opt_lower == 'bnblamb':
+        optimizer = bnb.optim.LAMB(parameters, **opt_args)
+    elif opt_lower == 'bnblamb8bit':
+        optimizer = bnb.optim.LAMB8bit(parameters, **opt_args)
+    elif opt_lower == 'bnblars':
+        optimizer = bnb.optim.LARS(parameters, **opt_args)
+    elif opt_lower == 'bnblarsb8bit':
+        optimizer = bnb.optim.LAMB8bit(parameters, **opt_args)
+    elif opt_lower == 'bnblion':
+        optimizer = bnb.optim.Lion(parameters, **opt_args)
+    elif opt_lower == 'bnblion8bit':
+        optimizer = bnb.optim.Lion8bit(parameters, **opt_args)
 
     else:
         assert False and "Invalid optimizer"

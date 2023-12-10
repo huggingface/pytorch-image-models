@@ -11,6 +11,7 @@ import math
 import re
 from copy import deepcopy
 from functools import partial
+from typing import Any, Dict, List
 
 import torch.nn as nn
 
@@ -33,6 +34,8 @@ _DEBUG_BUILDER = False
 BN_MOMENTUM_TF_DEFAULT = 1 - 0.99
 BN_EPS_TF_DEFAULT = 1e-3
 _BN_ARGS_TF = dict(momentum=BN_MOMENTUM_TF_DEFAULT, eps=BN_EPS_TF_DEFAULT)
+
+BlockArgs = List[List[Dict[str, Any]]]
 
 
 def get_bn_args_tf():
@@ -370,9 +373,7 @@ class EfficientNetBuilder:
         stages = []
         if model_block_args[0][0]['stride'] > 1:
             # if the first block starts with a stride, we need to extract first level feat from stem
-            feature_info = dict(
-                module='act1', num_chs=in_chs, stage=0, reduction=current_stride,
-                hook_type='forward' if self.feature_location != 'bottleneck' else '')
+            feature_info = dict(module='bn1', num_chs=in_chs, stage=0, reduction=current_stride)
             self.features.append(feature_info)
 
         # outer list of block_args defines the stacks
@@ -418,10 +419,16 @@ class EfficientNetBuilder:
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
                     feature_info = dict(
-                        stage=stack_idx + 1, reduction=current_stride, **block.feature_info(self.feature_location))
-                    module_name = f'blocks.{stack_idx}.{block_idx}'
+                        stage=stack_idx + 1,
+                        reduction=current_stride,
+                        **block.feature_info(self.feature_location),
+                    )
                     leaf_name = feature_info.get('module', '')
-                    feature_info['module'] = '.'.join([module_name, leaf_name]) if leaf_name else module_name
+                    if leaf_name:
+                        feature_info['module'] = '.'.join([f'blocks.{stack_idx}.{block_idx}', leaf_name])
+                    else:
+                        assert last_block
+                        feature_info['module'] = f'blocks.{stack_idx}'
                     self.features.append(feature_info)
 
                 total_block_idx += 1  # incr global block idx (across all stacks)

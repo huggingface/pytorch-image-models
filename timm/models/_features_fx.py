@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Union, Type
 import torch
 from torch import nn
 
-from ._features import _get_feature_info
+from ._features import _get_feature_info, _get_return_layers
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor as _create_feature_extractor
@@ -18,6 +18,20 @@ except ImportError:
 from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame
 from timm.layers.non_local_attn import BilinearAttnTransform
 from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
+from timm.layers.norm_act import (
+    BatchNormAct2d,
+    SyncBatchNormAct,
+    FrozenBatchNormAct2d,
+    GroupNormAct,
+    GroupNorm1Act,
+    LayerNormAct,
+    LayerNormAct2d
+)
+
+__all__ = ['register_notrace_module', 'is_notrace_module', 'get_notrace_modules',
+           'register_notrace_function', 'is_notrace_function', 'get_notrace_functions',
+           'create_feature_extractor', 'FeatureGraphNet', 'GraphExtractNet']
+
 
 # NOTE: By default, any modules from timm.models.layers that we want to treat as leaf modules go here
 # BUT modules from timm.models should use the registration mechanism below
@@ -25,7 +39,14 @@ _leaf_modules = {
     BilinearAttnTransform,  # reason: flow control t <= 1
     # Reason: get_same_padding has a max which raises a control flow error
     Conv2dSame, MaxPool2dSame, ScaledStdConv2dSame, StdConv2dSame, AvgPool2dSame,
-    CondConv2d,  # reason: TypeError: F.conv2d received Proxy in groups=self.groups * B (because B = x.shape[0])
+    CondConv2d,  # reason: TypeError: F.conv2d received Proxy in groups=self.groups * B (because B = x.shape[0]),
+    BatchNormAct2d,
+    SyncBatchNormAct,
+    FrozenBatchNormAct2d,
+    GroupNormAct,
+    GroupNorm1Act,
+    LayerNormAct,
+    LayerNormAct2d,
 }
 
 try:
@@ -35,16 +56,20 @@ except ImportError:
     pass
 
 
-__all__ = ['register_notrace_module', 'register_notrace_function', 'create_feature_extractor',
-           'FeatureGraphNet', 'GraphExtractNet']
-
-
 def register_notrace_module(module: Type[nn.Module]):
     """
     Any module not under timm.models.layers should get this decorator if we don't want to trace through it.
     """
     _leaf_modules.add(module)
     return module
+
+
+def is_notrace_module(module: Type[nn.Module]):
+    return module in _leaf_modules
+
+
+def get_notrace_modules():
+    return list(_leaf_modules)
 
 
 # Functions we want to autowrap (treat them as leaves)
@@ -57,6 +82,14 @@ def register_notrace_function(func: Callable):
     """
     _autowrap_functions.add(func)
     return func
+
+
+def is_notrace_function(func: Callable):
+    return func in _autowrap_functions
+
+
+def get_notrace_functions():
+    return list(_autowrap_functions)
 
 
 def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str], List[str]]):
@@ -76,9 +109,7 @@ class FeatureGraphNet(nn.Module):
         self.feature_info = _get_feature_info(model, out_indices)
         if out_map is not None:
             assert len(out_map) == len(out_indices)
-        return_nodes = {
-            info['module']: out_map[i] if out_map is not None else info['module']
-            for i, info in enumerate(self.feature_info) if i in out_indices}
+        return_nodes = _get_return_layers(self.feature_info, out_map)
         self.graph_module = create_feature_extractor(model, return_nodes)
 
     def forward(self, x):

@@ -1,6 +1,6 @@
 *This guideline is very much a work-in-progress.*
 
-Contriubtions to `timm` for code, documentation, tests are more than welcome!
+Contributions to `timm` for code, documentation, tests are more than welcome!
 
 There haven't been any formal guidelines to date so please bear with me, and feel free to add to this guide.
 
@@ -49,7 +49,7 @@ This is YES:
    }
 ```
 
-When there is descrepancy in a given source file (there are many origins for various bits of code and not all have been updated to what I consider current goal), please follow the style in a given file.
+When there is discrepancy in a given source file (there are many origins for various bits of code and not all have been updated to what I consider current goal), please follow the style in a given file.
 
 In general, if you add new code, formatting it with black using the following options should result in a style that is compatible with the rest of the code base:
 
@@ -80,7 +80,6 @@ Then install the remaining dependencies:
 ```
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt  # for testing
-python -m pip install --no-cache-dir git+https://github.com/mapillary/inplace_abn.git
 python -m pip install -e .
 ```
 

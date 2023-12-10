@@ -29,39 +29,13 @@ import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
-    get_attn, get_act_layer, get_norm_layer, _assert
+    get_attn, get_act_layer, get_norm_layer, RelPosBias, _assert
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply
-from ._registry import register_model
-from .vision_transformer_relpos import RelPosBias  # FIXME move to common location
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['GlobalContextVit']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
-        'crop_pct': 0.875, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv1', 'classifier': 'head.fc',
-        'fixed_input_size': True,
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'gcvit_xxtiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xxtiny_224_nvidia-d1d86009.pth'),
-    'gcvit_xtiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xtiny_224_nvidia-274b92b7.pth'),
-    'gcvit_tiny': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_tiny_224_nvidia-ac783954.pth'),
-    'gcvit_small': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_small_224_nvidia-4e98afa2.pth'),
-    'gcvit_base': _cfg(
-        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_base_224_nvidia-f009139b.pth'),
-}
 
 
 class MbConvBlock(nn.Module):
@@ -222,7 +196,7 @@ class WindowAttentionGlobal(nn.Module):
             q, k, v = qkv.unbind(0)
         q = q * self.scale
 
-        attn = (q @ k.transpose(-2, -1))
+        attn = q @ k.transpose(-2, -1).contiguous()  # NOTE contiguous() fixes an odd jit bug in PyTorch 2.0
         attn = self.rel_pos(attn)
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -542,8 +516,33 @@ def _create_gcvit(variant, pretrained=False, **kwargs):
     return model
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv1', 'classifier': 'head.fc',
+        'fixed_input_size': True,
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'gcvit_xxtiny.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xxtiny_224_nvidia-d1d86009.pth'),
+    'gcvit_xtiny.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_xtiny_224_nvidia-274b92b7.pth'),
+    'gcvit_tiny.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_tiny_224_nvidia-ac783954.pth'),
+    'gcvit_small.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_small_224_nvidia-4e98afa2.pth'),
+    'gcvit_base.in1k': _cfg(
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights-morevit/gcvit_base_224_nvidia-f009139b.pth'),
+})
+
+
 @register_model
-def gcvit_xxtiny(pretrained=False, **kwargs):
+def gcvit_xxtiny(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(2, 2, 6, 2),
         num_heads=(2, 4, 8, 16),
@@ -552,7 +551,7 @@ def gcvit_xxtiny(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_xtiny(pretrained=False, **kwargs):
+def gcvit_xtiny(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 6, 5),
         num_heads=(2, 4, 8, 16),
@@ -561,7 +560,7 @@ def gcvit_xtiny(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_tiny(pretrained=False, **kwargs):
+def gcvit_tiny(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 19, 5),
         num_heads=(2, 4, 8, 16),
@@ -570,7 +569,7 @@ def gcvit_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_small(pretrained=False, **kwargs):
+def gcvit_small(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 19, 5),
         num_heads=(3, 6, 12, 24),
@@ -582,7 +581,7 @@ def gcvit_small(pretrained=False, **kwargs):
 
 
 @register_model
-def gcvit_base(pretrained=False, **kwargs):
+def gcvit_base(pretrained=False, **kwargs) -> GlobalContextVit:
     model_kwargs = dict(
         depths=(3, 4, 19, 5),
         num_heads=(4, 8, 16, 32),

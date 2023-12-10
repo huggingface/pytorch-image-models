@@ -9,7 +9,7 @@ from .jit import set_jit_legacy, set_jit_fuser
 from .log import setup_default_logging, FormatterNoInfo
 from .metrics import AverageMeter, accuracy
 from .misc import natural_key, add_bool_arg, ParseKwargs
-from .model import unwrap_model, get_state_dict, freeze, unfreeze
+from .model import unwrap_model, get_state_dict, freeze, unfreeze, reparameterize_model
 from .model_ema import ModelEma, ModelEmaV2
 from .random import random_seed
 from .summary import update_summary, get_outdir

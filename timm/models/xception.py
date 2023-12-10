@@ -27,25 +27,9 @@ import torch.nn.functional as F
 
 from timm.layers import create_classifier
 from ._builder import build_model_with_cfg
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['Xception']
-
-default_cfgs = {
-    'xception': {
-        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/xception-43020ad28.pth',
-        'input_size': (3, 299, 299),
-        'pool_size': (10, 10),
-        'crop_pct': 0.8975,
-        'interpolation': 'bicubic',
-        'mean': (0.5, 0.5, 0.5),
-        'std': (0.5, 0.5, 0.5),
-        'num_classes': 1000,
-        'first_conv': 'conv1',
-        'classifier': 'fc'
-        # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
-    }
-}
 
 
 class SeparableConv2d(nn.Module):
@@ -244,6 +228,28 @@ def _xception(variant, pretrained=False, **kwargs):
         **kwargs)
 
 
+default_cfgs = generate_default_cfgs({
+    'legacy_xception.tf_in1k': {
+        'url': 'https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-cadene/xception-43020ad28.pth',
+        'input_size': (3, 299, 299),
+        'pool_size': (10, 10),
+        'crop_pct': 0.8975,
+        'interpolation': 'bicubic',
+        'mean': (0.5, 0.5, 0.5),
+        'std': (0.5, 0.5, 0.5),
+        'num_classes': 1000,
+        'first_conv': 'conv1',
+        'classifier': 'fc'
+        # The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
+    }
+})
+
+
 @register_model
-def xception(pretrained=False, **kwargs):
-    return _xception('xception', pretrained=pretrained, **kwargs)
+def legacy_xception(pretrained=False, **kwargs) -> Xception:
+    return _xception('legacy_xception', pretrained=pretrained, **kwargs)
+
+
+register_model_deprecations(__name__, {
+    'xception': 'legacy_xception',
+})

@@ -6,29 +6,11 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectAdaptivePool2d
-from ._registry import register_model
+from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 
 __all__ = ['ConvMixer']
-
-
-def _cfg(url='', **kwargs):
-    return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .96, 'interpolation': 'bicubic',
-        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'classifier': 'head',
-        'first_conv': 'stem.0',
-        **kwargs
-    }
-
-
-default_cfgs = {
-    'convmixer_1536_20': _cfg(url='https://github.com/tmp-iclr/convmixer/releases/download/timm-v1.0/convmixer_1536_20_ks9_p7.pth.tar'),
-    'convmixer_768_32': _cfg(url='https://github.com/tmp-iclr/convmixer/releases/download/timm-v1.0/convmixer_768_32_ks7_p7_relu.pth.tar'),
-    'convmixer_1024_20_ks9_p14': _cfg(url='https://github.com/tmp-iclr/convmixer/releases/download/timm-v1.0/convmixer_1024_20_ks9_p14.pth.tar')
-}
 
 
 class Residual(nn.Module):
@@ -42,8 +24,18 @@ class Residual(nn.Module):
 
 class ConvMixer(nn.Module):
     def __init__(
-            self, dim, depth, kernel_size=9, patch_size=7, in_chans=3, num_classes=1000, global_pool='avg',
-            act_layer=nn.GELU, **kwargs):
+            self,
+            dim,
+            depth,
+            kernel_size=9,
+            patch_size=7,
+            in_chans=3,
+            num_classes=1000,
+            global_pool='avg',
+            drop_rate=0.,
+            act_layer=nn.GELU,
+            **kwargs,
+    ):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = dim
@@ -67,6 +59,7 @@ class ConvMixer(nn.Module):
             ) for i in range(depth)]
         )
         self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
+        self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(dim, num_classes) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
@@ -98,6 +91,7 @@ class ConvMixer(nn.Module):
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.pooling(x)
+        x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
     def forward(self, x):
@@ -107,22 +101,44 @@ class ConvMixer(nn.Module):
 
 
 def _create_convmixer(variant, pretrained=False, **kwargs):
+    if kwargs.get('features_only', None):
+        raise RuntimeError('features_only not implemented for ConvMixer models.')
+
     return build_model_with_cfg(ConvMixer, variant, pretrained, **kwargs)
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
+        'crop_pct': .96, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD, 'classifier': 'head',
+        'first_conv': 'stem.0',
+        **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'convmixer_1536_20.in1k': _cfg(hf_hub_id='timm/'),
+    'convmixer_768_32.in1k': _cfg(hf_hub_id='timm/'),
+    'convmixer_1024_20_ks9_p14.in1k': _cfg(hf_hub_id='timm/')
+})
+
+
+
 @register_model
-def convmixer_1536_20(pretrained=False, **kwargs):
+def convmixer_1536_20(pretrained=False, **kwargs) -> ConvMixer:
     model_args = dict(dim=1536, depth=20, kernel_size=9, patch_size=7, **kwargs)
     return _create_convmixer('convmixer_1536_20', pretrained, **model_args)
 
 
 @register_model
-def convmixer_768_32(pretrained=False, **kwargs):
+def convmixer_768_32(pretrained=False, **kwargs) -> ConvMixer:
     model_args = dict(dim=768, depth=32, kernel_size=7, patch_size=7, act_layer=nn.ReLU, **kwargs)
     return _create_convmixer('convmixer_768_32', pretrained, **model_args)
 
 
 @register_model
-def convmixer_1024_20_ks9_p14(pretrained=False, **kwargs):
+def convmixer_1024_20_ks9_p14(pretrained=False, **kwargs) -> ConvMixer:
     model_args = dict(dim=1024, depth=20, kernel_size=9, patch_size=14, **kwargs)
     return _create_convmixer('convmixer_1024_20_ks9_p14', pretrained, **model_args)
