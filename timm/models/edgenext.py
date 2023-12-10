@@ -18,7 +18,7 @@ from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d, \
-    use_fused_attn
+    use_fused_attn, NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._manipulate import named_apply, checkpoint_seq
@@ -416,10 +416,7 @@ class EdgeNeXt(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes=0, global_pool=None):
-        if global_pool is not None:
-            self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-            self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
-        self.head.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
