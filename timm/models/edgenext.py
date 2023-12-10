@@ -374,6 +374,7 @@ class EdgeNeXt(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         self.num_features = self.head_hidden_size = dims[-1]
+
         if head_norm_first:
             self.norm_pre = norm_layer(self.num_features)
             self.head = ClassifierHead(
