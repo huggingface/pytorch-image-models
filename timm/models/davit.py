@@ -570,11 +570,7 @@ class DaVit(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        x = self.head.global_pool(x)
-        x = self.head.norm(x)
-        x = self.head.flatten(x)
-        x = self.head.drop(x)
-        return x if pre_logits else self.head.fc(x)
+        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
