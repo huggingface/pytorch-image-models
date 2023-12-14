@@ -383,6 +383,7 @@ class SwinTransformerStage(nn.Module):
         """
         Args:
             dim: Number of input channels.
+            out_dim: Number of output channels.
             input_resolution: Input resolution.
             depth: Number of blocks.
             downsample: Downsample layer at the end of the layer.

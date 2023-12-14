@@ -27,6 +27,7 @@ from .nvnovograd import NvNovoGrad
 from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
+from .sgdw import SGDW
 
 
 _logger = logging.getLogger(__name__)
@@ -288,6 +289,13 @@ def create_optimizer_v2(
         optimizer = optim.SGD(parameters, momentum=momentum, nesterov=False, **opt_args)
     elif opt_lower == 'sgdp':
         optimizer = SGDP(parameters, momentum=momentum, nesterov=True, **opt_args)
+    elif opt_lower == 'sgdw' or opt_lower == 'nesterovw':
+        # NOTE 'sgd' refers to SGD + nesterov momentum for legacy / backwards compat reasons
+        opt_args.pop('eps', None)
+        optimizer = SGDW(parameters, momentum=momentum, nesterov=True, **opt_args)
+    elif opt_lower == 'momentumw':
+        opt_args.pop('eps', None)
+        optimizer = SGDW(parameters, momentum=momentum, nesterov=False, **opt_args)
 
     # adaptive
     elif opt_lower == 'adam':

@@ -234,7 +234,15 @@ def load_pretrained(
                 classifier_bias = state_dict[classifier_name + '.bias']
                 state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
 
-    model.load_state_dict(state_dict, strict=strict)
+    load_result = model.load_state_dict(state_dict, strict=strict)
+    if load_result.missing_keys:
+        _logger.info(
+            f'Missing keys ({", ".join(load_result.missing_keys)}) discovered while loading pretrained weights.'
+            f' This is expected if model is being adapted.')
+    if load_result.unexpected_keys:
+        _logger.warning(
+            f'Unexpected keys ({", ".join(load_result.unexpected_keys)}) found while loading pretrained weights.'
+            f' This may be expected if model is being adapted.')
 
 
 def pretrained_cfg_for_features(pretrained_cfg):
