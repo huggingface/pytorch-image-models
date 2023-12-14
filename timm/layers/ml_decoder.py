@@ -87,34 +87,22 @@ class TransformerDecoderLayerOptimal(nn.Module):
 #         out = out.view((h.shape[0], self.group_size * self.num_queries))
 #         return out
 
-'''
+
 @torch.jit.script
 class GroupFC(object):
     def __init__(self, embed_len_decoder: int):
         self.embed_len_decoder = embed_len_decoder
 
-    def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor):
-        for i in range(self.embed_len_decoder):
-            h_i = h[:, i, :]
-            w_i = duplicate_pooling[i, :, :]
-            out_extrap[:, i, :] = torch.matmul(h_i, w_i)
-'''
-class GroupFC(object):
-    def __init__(self, embed_len_decoder: int):
-        self.embed_len_decoder = embed_len_decoder
-    '''
     def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor): # [B, K, C], [K, C, N/K], [B, K, N/K]
         for i in range(self.embed_len_decoder):
             h_i = h[:, i, :] # [B, 1, C]
             w_i = duplicate_pooling[i, :, :] # [1, C, N/K]
             out_extrap[:, i, :] = torch.matmul(h_i, w_i) # [B, 1, N/K]
-    '''
-    def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor):
-        out_extrap = (h.permute(1, 0, 2) @ duplicate_pooling).permute(1,0,2)
 
-class MLDecoder(nn.Module):
-    def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, initial_num_features=2048):
-        super(MLDecoder, self).__init__()
+
+class MLDecoderLegacy(nn.Module):
+    def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, initial_num_features=2048, simple_group_fc = True):
+        super(MLDecoderLegacy, self).__init__()
         embed_len_decoder = 100 if num_of_groups < 0 else num_of_groups
         if embed_len_decoder > num_classes:
             embed_len_decoder = num_classes
@@ -137,6 +125,7 @@ class MLDecoder(nn.Module):
         self.query_embed.requires_grad_(False)
 
         # group fully-connected
+        self.simple_group_fc = simple_group_fc
         self.num_classes = num_classes
         self.duplicate_factor = int(num_classes / embed_len_decoder + 0.999)
         self.duplicate_pooling = torch.nn.Parameter(
@@ -144,6 +133,7 @@ class MLDecoder(nn.Module):
         self.duplicate_pooling_bias = torch.nn.Parameter(torch.Tensor(num_classes))
         torch.nn.init.xavier_normal_(self.duplicate_pooling)
         torch.nn.init.constant_(self.duplicate_pooling_bias, 0)
+        self.group_fc = None if simple_group_fc else GroupFC(embed_len_decoder)
 
     def forward(self, x):
         if len(x.shape) == 4:  # [bs,2048, 7,7]
@@ -158,10 +148,14 @@ class MLDecoder(nn.Module):
         # tgt = query_embed.unsqueeze(1).repeat(1, bs, 1)
         tgt = query_embed.unsqueeze(1).expand(-1, bs, -1)  # no allocation of memory with expand
         h = self.decoder(tgt, embedding_spatial_786.transpose(0, 1))  # [embed_len_decoder, batch, 768]
-        h = h.transpose(0, 1)
-        #out_extrap = torch.zeros(h.shape[0], h.shape[1], self.duplicate_factor, device=h.device, dtype=h.dtype)
-        #self.group_fc(h, self.duplicate_pooling, out_extrap)
-        out_extrap = (h.permute(1, 0, 2) @ self.duplicate_pooling).permute(1,0,2) # [B, K, N/K]
+
+        if(self.simple_group_fc):
+            out_extrap = (h @ self.duplicate_pooling).permute(1,0,2) # [B, K, N/K]
+        else:
+            h = h.transpose(0, 1)
+            out_extrap = torch.zeros(h.shape[0], h.shape[1], self.duplicate_factor, device=h.device, dtype=h.dtype)
+            self.group_fc(h, self.duplicate_pooling, out_extrap)
+
         h_out = out_extrap.flatten(1)[:, :self.num_classes]
         h_out += self.duplicate_pooling_bias
         logits = h_out
