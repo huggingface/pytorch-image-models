@@ -250,14 +250,10 @@ class MLDecoder(nn.Module):
         # tgt = query_embed.unsqueeze(1).repeat(1, bs, 1)
         tgt = query_embed.unsqueeze(1).expand(-1, bs, -1)  # no allocation of memory with expand
         h = self.decoder(tgt, embedding_spatial_786.transpose(0, 1))  # [embed_len_decoder, batch, 768]
-        
-        if(self.simple_group_fc):
-            out_extrap = (h @ self.duplicate_pooling).permute(1,0,2) # [B, K, N/K]
-        else:
-            h = h.transpose(0, 1)
-            out_extrap = torch.zeros(h.shape[0], h.shape[1], self.duplicate_factor, device=h.device, dtype=h.dtype)
-            self.group_fc(h, self.duplicate_pooling, out_extrap)
-        
+        h = h.transpose(0, 1)
+        #out_extrap = torch.zeros(h.shape[0], h.shape[1], self.duplicate_factor, device=h.device, dtype=h.dtype)
+        #self.group_fc(h, self.duplicate_pooling, out_extrap)
+        out_extrap = (h.permute(1, 0, 2) @ duplicate_pooling).permute(1,0,2) # [B, K, N/K]
         h_out = out_extrap.flatten(1)[:, :self.num_classes]
         h_out += self.duplicate_pooling_bias
         logits = h_out
