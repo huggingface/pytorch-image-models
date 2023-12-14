@@ -87,6 +87,31 @@ class TransformerDecoderLayerOptimal(nn.Module):
 #         out = out.view((h.shape[0], self.group_size * self.num_queries))
 #         return out
 
+'''
+@torch.jit.script
+class GroupFC(object):
+    def __init__(self, embed_len_decoder: int):
+        self.embed_len_decoder = embed_len_decoder
+
+    def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor):
+        for i in range(self.embed_len_decoder):
+            h_i = h[:, i, :]
+            w_i = duplicate_pooling[i, :, :]
+            out_extrap[:, i, :] = torch.matmul(h_i, w_i)
+'''
+class GroupFC(object):
+    def __init__(self, embed_len_decoder: int):
+        self.embed_len_decoder = embed_len_decoder
+    '''
+    def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor): # [B, K, C], [K, C, N/K], [B, K, N/K]
+        for i in range(self.embed_len_decoder):
+            h_i = h[:, i, :] # [B, 1, C]
+            w_i = duplicate_pooling[i, :, :] # [1, C, N/K]
+            out_extrap[:, i, :] = torch.matmul(h_i, w_i) # [B, 1, N/K]
+    '''
+    def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor):
+        out_extrap = (h.permute(1, 0, 2) @ duplicate_pooling).permute(1,0,2)
+
 class MLDecoder(nn.Module):
     def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, initial_num_features=2048):
         super(MLDecoder, self).__init__()
