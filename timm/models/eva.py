@@ -479,7 +479,7 @@ class Eva(nn.Module):
         self.apply(self._init_weights)
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=.02)
-        if self.cls_token:
+        if self.cls_token is not None:
             trunc_normal_(self.cls_token, std=.02)
 
         self.fix_init_weight()
