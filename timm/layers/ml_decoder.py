@@ -224,7 +224,7 @@ class MLDecoder(nn.Module):
     
     def forward(self, x):
         # BCHW to BNC
-        if(len(x.shape) = 4):
+        if(len(x.shape) == 4):
             x = x.flatten(2).transpose(1, 2)
                 
         
