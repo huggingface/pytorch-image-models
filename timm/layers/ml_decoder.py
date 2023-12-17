@@ -1,9 +1,10 @@
 from typing import Optional
 
 import torch
-from torch import nn
 from torch import nn, Tensor
+import torch.nn.functional as F
 from torch.nn.modules.transformer import _get_activation_fn
+from timm.layers import Mlp
 
 
 def add_ml_decoder_head(model):
@@ -160,3 +161,146 @@ class MLDecoderLegacy(nn.Module):
         h_out += self.duplicate_pooling_bias
         logits = h_out
         return logits
+
+class GroupLinear(nn.Module):
+    def __init__(
+        self,
+        dim
+        num_classes,
+        num_groups,
+    ):
+        super().__init__()
+        self.num_classes = num_classes
+        duplicate_factor = int(num_classes / num_groups + 0.999)
+        self.weight = nn.Parameter(torch.Tensor(num_groups, dim, duplicate_factor))
+        self.bias = nn.Parameter(torch.Tensor(num_classes))
+        nn.init.xavier_normal_(self.weight)
+        nn.init.constant_(self.bias, 0)
+    
+    def forward(self, x):
+        x = (x @ self.weight).permute(1, 0, 2).flatten(1)[:, :self.num_classes]
+        x += self.bias
+        return x
+
+class MLDecoder(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        num_classes: int,
+        dim: int = 768,
+        num_groups: int = 100,
+        num_heads: int = 8,
+        embed_drop: float = 0.1,
+        embed_norm: bool = True,
+        k_norm: bool = False,
+        attn_drop: float = 0.1,
+        mlp_ratio: float = 8/3,
+        proj_drop: float = 0.1,
+        norm_layer: nn.Module = nn.LayerNorm,
+        act_layer: nn.Module = nn.GELU,
+        
+    ):
+        super().__init__()
+        
+        
+        # non-learnable queries
+        self.query_embed = nn.Embedding(num_groups, dim)
+        self.query_embed.requires_grad_(False)
+        self.embed_drop = nn.Dropout(embed_drop)
+        self.embed_norm = norm_layer(dim)
+        
+        self.norm1 = norm_layer(dim)
+        
+        
+        self.attn = nn.MultiheadAttention(dim, num_heads, dropout=attn_drop)
+        self.norm2 = norm_layer(dim)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=int(dim * mlp_ratio),
+            act_layer=act_layer,
+            drop=proj_drop,
+        )
+]
+    
+    def forward(self, x):
+        # BCHW to BNC
+        if(len(x.shape) = 4):
+            x = x.flatten(2).transpose(1, 2)
+                
+        
+        q = self.embed_norm(self.embed_drop(self.query_embed.weight))
+        xN = self.norm1(x)
+        x = x + self.attn(q, xN, xN)[0]
+        x = x + self.mlp(self.norm2(x))
+        
+
+            
+class CrossAttention(nn.Module):
+    fused_attn: Final[bool]
+
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = True,
+            qk_norm: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            norm_layer: nn.Module = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
+        
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, q, x) -> torch.Tensor:
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)
+        q, k = self.q_norm(q), self.k_norm(k)
+
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+        '''
+        q = self.embed_norm(self.embed_drop(self.query_embed.weight))
+        q = self.q(q).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        else:
+            kv = self.kv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+            k, v = kv.unbind(0)
+        
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+        '''
