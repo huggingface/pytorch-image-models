@@ -104,7 +104,7 @@ class GroupFC(object):
 
 
 class MLDecoderLegacy(nn.Module):
-    def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, initial_num_features=2048, simple_group_fc = True):
+    def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, in_features=2048, simple_group_fc = True):
         super(MLDecoderLegacy, self).__init__()
         embed_len_decoder = 100 if num_of_groups < 0 else num_of_groups
         if embed_len_decoder > num_classes:
