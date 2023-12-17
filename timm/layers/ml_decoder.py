@@ -220,6 +220,7 @@ class MLDecoder(nn.Module):
             act_layer=act_layer,
             drop=proj_drop,
         )
+        self.fc = GroupLinear(dim, num_classes, num_groups)
 ]
     
     def forward(self, x):
@@ -232,6 +233,7 @@ class MLDecoder(nn.Module):
         xN = self.norm1(x)
         x = x + self.attn(q, xN, xN)[0]
         x = x + self.mlp(self.norm2(x))
+        x = self.fc(x)
         
 
             
