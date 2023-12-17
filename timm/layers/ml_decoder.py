@@ -234,7 +234,7 @@ class MLDecoder(nn.Module):
         x = x + self.mlp(self.norm2(x))
         x = self.fc(x)
         
-
+'''
             
 class CrossAttention(nn.Module):
     fused_attn: Final[bool]
@@ -286,7 +286,7 @@ class CrossAttention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
-        '''
+        
         q = self.embed_norm(self.embed_drop(self.query_embed.weight))
         q = self.q(q).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         else:
@@ -304,4 +304,5 @@ class CrossAttention(nn.Module):
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x = attn @ v
-        '''
+        
+'''
