@@ -209,6 +209,8 @@ class MLDecoder(nn.Module):
         self.embed_drop = nn.Dropout(embed_drop)
         self.embed_norm = norm_layer(dim)
         
+        self.proj = nn.Linear(in_features, dim)
+        self.act = act_layer()
         self.norm1 = norm_layer(dim)
         
         
@@ -227,7 +229,7 @@ class MLDecoder(nn.Module):
         if(len(x.shape) == 4):
             x = x.flatten(2).transpose(1, 2)
                 
-        
+        x = self.act(self.proj(x))
         q = self.embed_norm(self.embed_drop(self.query_embed.weight))
         xN = self.norm1(x)
         x = x + self.attn(q, xN, xN)[0]
