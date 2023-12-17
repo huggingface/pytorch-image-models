@@ -251,7 +251,7 @@ class MLDecoderLegacy(nn.Module):
 class GroupLinear(nn.Module):
     def __init__(
         self,
-        dim
+        dim,
         num_classes,
         num_groups,
     ):
