@@ -113,7 +113,7 @@ class MLDecoderLegacy(nn.Module):
 
         # switching to 768 initial embeddings
         decoder_embedding = 768 if decoder_embedding < 0 else decoder_embedding
-        self.embed_standart = nn.Linear(initial_num_features, decoder_embedding)
+        self.embed_standart = nn.Linear(in_features, decoder_embedding)
 
         # decoder
         decoder_dropout = 0.1
