@@ -221,7 +221,6 @@ class MLDecoder(nn.Module):
             drop=proj_drop,
         )
         self.fc = GroupLinear(dim, num_classes, num_groups)
-]
     
     def forward(self, x):
         # BCHW to BNC
