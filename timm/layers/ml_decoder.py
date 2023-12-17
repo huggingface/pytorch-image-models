@@ -4,10 +4,7 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 from torch.nn.modules.transformer import _get_activation_fn
-from torch.jit import Final
-
-from timm.layers import Mlp, use_fused_attn
-from timm.layers.classifier import _create_pool
+from timm.layers import Mlp
 
 
 class MLDecoderHead(nn.Module):
@@ -251,67 +248,10 @@ class MLDecoderLegacy(nn.Module):
         logits = h_out
         return logits
 
-
-class CrossAttention(nn.Module):
-    fused_attn: Final[bool]
-
-    def __init__(
-            self,
-            dim: int,
-            query_dim: Optional[int] = None,
-            num_heads: int = 8,
-            qkv_bias: bool = True,
-            qk_norm: bool = False,
-            attn_drop: float = 0.1,
-            proj_drop: float = 0.1,
-            norm_layer: nn.Module = nn.LayerNorm,
-    ) -> None:
-        super().__init__()
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
-        self.num_heads = num_heads
-        self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
-        self.fused_attn = use_fused_attn()
-        self.query_dim = dim if query_dim is None else query_dim
-        
-        self.q = nn.Linear(query_dim, dim, bias=qkv_bias)
-        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, q, x) -> torch.Tensor:
-        K, _ = q.shape # [K, C_q]
-        B, N, C = x.shape # [B, N, C]
-        q = self.q(q).reshape(1, K, self.num_heads, self.head_dim).permute(0, 2, 1, 3) # [1, n_h, K, d_h]
-        kv = self.kv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4) # [2, B, n_h, N, d_h]
-        k, v = kv.unbind(0)
-        q, k = self.q_norm(q), self.k_norm(k)
-
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-            )
-        else:
-            q = q * self.scale
-            attn = q @ k.transpose(-2, -1) # [B, n_h, K, N]
-            attn = attn.softmax(dim=-1)
-            attn = self.attn_drop(attn)
-            x = attn @ v # [B, n_h, K, d_h]
-
-        x = x.permute(2, 0, 1, 3).reshape(K, B, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
-
-
 class GroupLinear(nn.Module):
     def __init__(
         self,
-        dim,
+        dim
         num_classes,
         num_groups,
     ):
@@ -323,7 +263,7 @@ class GroupLinear(nn.Module):
         nn.init.xavier_normal_(self.weight)
         nn.init.constant_(self.bias, 0)
     
-    def forward(self, x): # [B, K, C]
+    def forward(self, x):
         x = (x @ self.weight).permute(1, 0, 2).flatten(1)[:, :self.num_classes]
         x += self.bias
         return x
@@ -336,13 +276,9 @@ class MLDecoder(nn.Module):
         dim: int = 768,
         num_groups: int = 100,
         num_heads: int = 8,
-        class_embed: Optional[torch.Tensor] = None,
-        concat_class_embed: bool = True,
-        learnable_embed: bool = False,
-        learnable_class_embed: bool = False,
         embed_drop: float = 0.1,
         embed_norm: bool = True,
-        qk_norm: bool = False,
+        k_norm: bool = False,
         attn_drop: float = 0.1,
         mlp_ratio: float = 8/3,
         proj_drop: float = 0.1,
@@ -351,46 +287,18 @@ class MLDecoder(nn.Module):
         
     ):
         super().__init__()
-        have_class_embed = class_embed is not None
-        self.concat_class_embed = have_class_embed and concat_class_embed
-        self.class_embed = None
-        self.query_embed = None
-        self.query_dim = 0
-        if have_class_embed:
-            assert len(class_embed) == num_classes, 'ML-Decoder got class_embed where dim 0 != num_classes'
-            class_embed = class_embed.clone().detach() # copy instead of reference, detach gradient flow
-            self.query_dim += class_embed.shape[1]
-            duplicate_factor = int(num_classes / num_groups + 0.999)
-            class_embed_pad_length = (duplicate_factor - num_classes % duplicate_factor) % duplicate_factor
-            
-            # pad and reshape into groups
-            class_embed = torch.cat([class_embed, torch.zeros(class_embed_pad_length, class_embed.shape[1])])
-            class_embed = class_embed.reshape(num_groups, duplicate_factor, -1)
-            
-            # reduce each group to a single embed with mean
-            class_embed = class_embed.mean(1)
-            self.class_embed = nn.Embedding.from_pretrained(class_embed)
-            
-            
-            # TODO can use tensor instead of nn.Embedding and simply register as either a parameter or a buffer for learnability
-            self.class_embed.requires_grad_(learnable_class_embed)
-            
-        # case no class embed or using both
-        if not have_class_embed or concat_class_embed:
-            self.query_dim += dim
-            self.query_embed = nn.Embedding(num_groups, dim)
-            # TODO can use tensor instead of nn.Embedding and simply register as either a parameter or a buffer for learnability
-            self.query_embed.requires_grad_(learnable_embed)
-                    
-        self.embed_drop = nn.Dropout(embed_drop)
-        self.embed_norm = norm_layer(self.query_dim)
         
-        self.proj = nn.Linear(in_features, dim)
-        self.act = act_layer()
+        
+        # non-learnable queries
+        self.query_embed = nn.Embedding(num_groups, dim)
+        self.query_embed.requires_grad_(False)
+        self.embed_drop = nn.Dropout(embed_drop)
+        self.embed_norm = norm_layer(dim)
+        
         self.norm1 = norm_layer(dim)
         
         
-        self.attn = CrossAttention(dim, query_dim=self.query_dim, num_heads=num_heads)
+        self.attn = nn.MultiheadAttention(dim, num_heads, dropout=attn_drop)
         self.norm2 = norm_layer(dim)
         self.mlp = Mlp(
             in_features=dim,
@@ -398,24 +306,87 @@ class MLDecoder(nn.Module):
             act_layer=act_layer,
             drop=proj_drop,
         )
-        self.fc = GroupLinear(dim, num_classes, num_groups)
+]
     
     def forward(self, x):
         # BCHW to BNC
-        if(len(x.shape) == 4):
+        if(len(x.shape) = 4):
             x = x.flatten(2).transpose(1, 2)
                 
-        x = self.act(self.proj(x))
-        q = torch.cat([x.weight for x in [self.query_embed, self.class_embed] if x is not None], dim=1)
-        q = self.embed_norm(self.embed_drop(q))
-        x = self.attn(q, self.norm1(x))# + q.unsqueeze(1)
+        
+        q = self.embed_norm(self.embed_drop(self.query_embed.weight))
+        xN = self.norm1(x)
+        x = x + self.attn(q, xN, xN)[0]
         x = x + self.mlp(self.norm2(x))
-        x = self.fc(x)
-        return x
         
 
             
+class CrossAttention(nn.Module):
+    fused_attn: Final[bool]
 
+    def __init__(
+            self,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = True,
+            qk_norm: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
+            norm_layer: nn.Module = nn.LayerNorm,
+    ) -> None:
+        super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim ** -0.5
+        self.fused_attn = use_fused_attn()
         
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
 
+    def forward(self, q, x) -> torch.Tensor:
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)
+        q, k = self.q_norm(q), self.k_norm(k)
+
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+        '''
+        q = self.embed_norm(self.embed_drop(self.query_embed.weight))
+        q = self.q(q).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        else:
+            kv = self.kv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+            k, v = kv.unbind(0)
         
+        if self.fused_attn:
+            x = F.scaled_dot_product_attention(
+                q, k, v,
+                dropout_p=self.attn_drop.p if self.training else 0.,
+            )
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = self.attn_drop(attn)
+            x = attn @ v
+        '''
