@@ -4,7 +4,9 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 from torch.nn.modules.transformer import _get_activation_fn
-from timm.layers import Mlp
+from torch.jit import Final
+
+from timm.layers import Mlp, use_fused_attn
 
 
 def add_ml_decoder_head(model):
