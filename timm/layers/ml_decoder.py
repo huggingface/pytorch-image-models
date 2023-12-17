@@ -236,6 +236,7 @@ class MLDecoder(nn.Module):
         x = self.attn(q, self.norm1(x))
         x = x + self.mlp(self.norm2(x))
         x = self.fc(x)
+        return x
         
 
             
