@@ -11,6 +11,7 @@ from .cspnet import *
 from .davit import *
 from .deit import *
 from .densenet import *
+from .dependencyvit import *
 from .dla import *
 from .dpn import *
 from .edgenext import *
