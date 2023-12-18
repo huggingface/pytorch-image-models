@@ -113,7 +113,7 @@ class DependencyViTBlock(nn.Module):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = ReversedAttention(
-            dim,
+            dim=dim,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
