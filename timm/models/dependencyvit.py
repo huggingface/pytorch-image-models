@@ -184,10 +184,9 @@ class DependencyViT(VisionTransformer):
         else:
             x, m = self.blocks((x, m))
         
-
-        x = self.norm(x)
         x = x * m.transpose(1, 3).squeeze(-1) # FIXME before or after norm
 
+        x = self.norm(x)
         return x
 
 
