@@ -142,6 +142,10 @@ class DependencyViTBlock(nn.Module):
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return (x, m)
 
+# FIXME lite model variants
+# FIXME toggle and retrieve dependency masks
+# FIXME verify against reference impl
+
 class DependencyViT(VisionTransformer):
     def __init__(self, *args, **kwargs):
         super().__init__(
@@ -208,6 +212,12 @@ def _create_dependencyvit(variant: str, pretrained: bool = False, **kwargs) -> D
 
 @register_model
 def dependencyvit_tiny_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
-    model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3)
+    model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=12)
+    model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+@register_model
+def dependencyvit_small_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
+    model_args = dict(patch_size=16, embed_dim=384, depth=12, num_heads=12)
     model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
