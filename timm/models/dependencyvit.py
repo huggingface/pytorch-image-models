@@ -196,14 +196,10 @@ def _create_dependencyvit(variant: str, pretrained: bool = False, **kwargs) -> D
     if kwargs.get('features_only', None):
         raise RuntimeError('features_only not implemented for Vision Transformer models.')
 
-        _filter_fn = checkpoint_filter_fn
-
     return build_model_with_cfg(
         DependencyViT,
         variant,
         pretrained,
-        pretrained_filter_fn=_filter_fn,
-        pretrained_strict=strict,
         **kwargs,
     )
 
