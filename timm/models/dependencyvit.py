@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from torch.jit import Final
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import Mlp
+from timm.layers import DropPath, Mlp
 from timm.models.vision_transformer import VisionTransformer
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
