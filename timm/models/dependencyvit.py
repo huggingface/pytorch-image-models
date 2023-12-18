@@ -94,7 +94,7 @@ class LayerScale(nn.Module):
         return x.mul_(self.gamma) if self.inplace else x * self.gamma
 
 
-class DependencyVitBlock(nn.Module):
+class DependencyViTBlock(nn.Module):
     def __init__(
             self,
             dim: int,
