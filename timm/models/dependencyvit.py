@@ -10,6 +10,7 @@ from timm.layers import Mlp
 from timm.models.vision_transformer import VisionTransformer
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['DependencyViT']
 
@@ -203,7 +204,7 @@ def _create_dependencyvit(variant: str, pretrained: bool = False, **kwargs) -> D
         **kwargs,
     )
 
-
+@register_model
 def dependencyvit_tiny_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
     model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=3)
     model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
