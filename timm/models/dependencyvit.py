@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -34,7 +34,7 @@ class ReversedAttention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.track_dependency_mask = False
-        self.dependency_mask = None
+        self.dependency_mask: Optional[Tensor] = None
 
         self.head_selector = nn.Linear(dim, num_heads, bias=False) # paper only mentions a weight matrix, assuming no bias
 
