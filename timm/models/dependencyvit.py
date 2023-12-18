@@ -180,10 +180,11 @@ class DependencyViT(VisionTransformer):
         x = self.norm_pre(x)
         m = torch.Tensor(1).to(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x, _ = checkpoint_seq(self.blocks, (x, m))
+            x, m = checkpoint_seq(self.blocks, (x, m))
         else:
-            x, _ = self.blocks((x, m))
+            x, m = self.blocks((x, m))
         x = self.norm(x)
+        x = x * m.transpose(1, 3).squeeze(-1)
         return x
 
 
