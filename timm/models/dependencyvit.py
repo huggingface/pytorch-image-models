@@ -48,7 +48,7 @@ class ReversedAttention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.track_dependency_mask = False
         self.dependency_mask = None
-        self.head_selector_temperature = 1.0 # appendix D.1, causes nan when 0.1, 0 when 10.0
+        self.head_selector_temperature = 0.1 # appendix D.1, causes nan when 0.1, 0 when 10.0
 
         self.head_selector = nn.Linear(dim, num_heads, bias=False) # paper only mentions a weight matrix, assuming no bias
 
@@ -78,7 +78,7 @@ class ReversedAttention(nn.Module):
         p = (self.head_selector(x) / self.head_selector_temperature).softmax(dim=-1)
         p = p.transpose(-2, -1).reshape(B, self.num_heads, 1, N)
 
-        m = m * self.message_controller(x).sigmoid().reshape(B, 1, 1, N)
+        m = self.message_controller(x).sigmoid().reshape(B, 1, 1, N)
 
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
