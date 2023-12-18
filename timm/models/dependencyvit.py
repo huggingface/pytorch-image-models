@@ -9,7 +9,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp
 from timm.models.vision_transformer import VisionTransformer
 from ._builder import build_model_with_cfg
-from ._manipulate import checkpoint_seq, 
+from ._manipulate import checkpoint_seq
 
 __all__ = ['DependencyViT']
 
