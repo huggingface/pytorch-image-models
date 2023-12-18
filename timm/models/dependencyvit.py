@@ -184,7 +184,7 @@ class DependencyViT(VisionTransformer):
         else:
             x, m = self.blocks((x, m))
         x = self.norm(x)
-        x = x * m.transpose(1, 3).squeeze(-1)
+        #x = x * m.transpose(1, 3).squeeze(-1)
         return x
 
 
