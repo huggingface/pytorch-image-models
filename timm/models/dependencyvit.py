@@ -38,9 +38,10 @@ class ReversedAttention(nn.Module):
 
         self.head_selector = nn.Linear(dim, num_heads, bias=False) # paper only mentions a weight matrix, assuming no bias
 
+        print(dim)
         self.message_controller = Mlp(
             in_features = dim,
-            hidden_features = dim/2,
+            hidden_features = int(dim/2),
             out_features = 1,
             act_layer = nn.GELU,
             bias = False, # FIXME is there a bias term?
