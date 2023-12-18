@@ -54,7 +54,7 @@ class ReversedAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     # m is cumulative over all layers (m = m_i * m_i-1 * ... * m_1)
-    def forward(self, in_tuple: Tuple[torch.Tensor, Union[int, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, in_tuple: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, m = in_tuple # [B, N, C], [B, 1, 1, N]
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
@@ -134,7 +134,7 @@ class DependencyViTBlock(nn.Module):
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, in_tuple: Tuple[torch.Tensor, Union[int, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, in_tuple: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, m = in_tuple
         x, m = self.attn((self.norm1(x), m))
         x = x + self.drop_path1(self.ls1(x))
@@ -159,10 +159,11 @@ class DependencyViT(VisionTransformer):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
+        m = torch.Tensor(1).to(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x, _ = checkpoint_seq(self.blocks, (x,1))
+            x, _ = checkpoint_seq(self.blocks, (x, m))
         else:
-            x, _ = self.blocks((x, 1))
+            x, _ = self.blocks((x, m))
         x = self.norm(x)
         return x
 
