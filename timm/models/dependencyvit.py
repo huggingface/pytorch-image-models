@@ -183,8 +183,10 @@ class DependencyViT(VisionTransformer):
             x, m = checkpoint_seq(self.blocks, (x, m))
         else:
             x, m = self.blocks((x, m))
+        
+        x = x * m.transpose(1, 3).squeeze(-1) # FIXME before or after norm
+
         x = self.norm(x)
-        #x = x * m.transpose(1, 3).squeeze(-1) # FIXME before or after norm
         return x
 
 
