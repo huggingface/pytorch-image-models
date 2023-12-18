@@ -75,7 +75,7 @@ class ReversedAttention(nn.Module):
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        p = (self.head_selector(x) / self.head_selector_temperature).softmax(dim=-1)
+        p = (self.head_selector(x) * self.head_selector_temperature).softmax(dim=-1)
         p = p.transpose(-2, -1).reshape(B, self.num_heads, 1, N)
 
         m = m * self.message_controller(x).sigmoid().reshape(B, 1, 1, N)
@@ -184,7 +184,7 @@ class DependencyViT(VisionTransformer):
         else:
             x, m = self.blocks((x, m))
         x = self.norm(x)
-        #x = x * m.transpose(1, 3).squeeze(-1)
+        x = x * m.transpose(1, 3).squeeze(-1)
         return x
 
 
