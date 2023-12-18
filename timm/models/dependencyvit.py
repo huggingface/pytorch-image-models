@@ -50,14 +50,14 @@ class ReversedAttention(nn.Module):
         self.dependency_mask = None
         self.head_selector_temperature = 0.1 # appendix D.1, causes nan when 0.1, 0 when 10.0
 
-        self.head_selector = nn.Linear(dim, num_heads, bias=False) # paper only mentions a weight matrix, assuming no bias
+        self.head_selector = nn.Linear(dim, num_heads)
 
         self.message_controller = Mlp(
             in_features = dim,
             hidden_features = int(dim/2),
             out_features = 1,
             act_layer = nn.GELU,
-            bias = False, # FIXME is there a bias term?
+            bias = True, # FIXME is there a bias term?
         )
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
