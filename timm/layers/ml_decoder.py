@@ -288,7 +288,7 @@ class MLDecoder(nn.Module):
                 
         x = self.act(self.proj(x))
         q = self.embed_norm(self.embed_drop(self.query_embed.weight))
-        x = self.attn(q, self.norm1(x)) + q
+        x = self.attn(q, self.norm1(x))# + q.unsqueeze(1)
         x = x + self.mlp(self.norm2(x))
         x = self.fc(x)
         return x
