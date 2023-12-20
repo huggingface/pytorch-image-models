@@ -48,7 +48,7 @@ class ReversedAttention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.track_dependency_mask = False
         self.dependency_mask = None
-        self.head_selector_temperature = 0.1 # appendix D.1, causes nan when 0.1, 0 when 10.0
+        self.head_selector_temperature = 1.0 # appendix D.1, causes nan when 0.1, 0 when 10.0
 
         self.head_selector = nn.Linear(dim, num_heads)
 
