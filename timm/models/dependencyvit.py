@@ -79,6 +79,7 @@ class ReversedAttention(nn.Module):
         p = p.transpose(-2, -1).reshape(B, self.num_heads, 1, N)
 
         m = self.message_controller(x).sigmoid().reshape(B, 1, 1, N) * m
+        print(m)
 
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
@@ -154,7 +155,7 @@ class DependencyViTBlock(nn.Module):
         x_new, m = self.attn((self.norm1(x), m))
         x = x + self.drop_path1(self.ls1(x_new))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
-        print((x, m))
+        #print((x, m))
         return (x, m)
 
 # FIXME lite model variants
