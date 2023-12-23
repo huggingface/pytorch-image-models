@@ -77,7 +77,7 @@ class ReversedAttention(nn.Module):
 
         p = (self.head_selector(x) / self.head_selector_temperature).softmax(dim=-1)
         p = p.transpose(-2, -1).reshape(B, self.num_heads, 1, N)
-        
+        print(m)
         m = m * self.message_controller(x).sigmoid().reshape(B, 1, 1, N)
 
         q = q * self.scale
@@ -179,7 +179,8 @@ class DependencyViT(VisionTransformer):
         x = self.patch_drop(x)
         x = self.norm_pre(x)
         B, N, _ = x.shape
-        m = torch.ones(B, 1, 1, N).to(x)
+        #m = torch.ones(B, 1, 1, N).to(x)
+        m = torch.Tensor([1]).to(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x, m = checkpoint_seq(self.blocks, (x, m))
         else:
