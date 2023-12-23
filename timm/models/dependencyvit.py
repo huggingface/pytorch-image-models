@@ -169,7 +169,7 @@ class DependencyViT(VisionTransformer):
             class_token=False,
             global_pool='avg', 
             qkv_bias=False, 
-            init_values=None, 
+            init_values=1e-6, 
             fc_norm=False,
         )
 
