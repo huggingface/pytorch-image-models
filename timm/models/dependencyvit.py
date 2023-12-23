@@ -77,9 +77,8 @@ class ReversedAttention(nn.Module):
 
         p = (self.head_selector(x) / self.head_selector_temperature).softmax(dim=-1)
         p = p.transpose(-2, -1).reshape(B, self.num_heads, 1, N)
-        print(m)
-        m = m * self.message_controller(x).sigmoid().reshape(B, 1, 1, N)# * m
-        print(m)
+        
+        m = m * self.message_controller(x).sigmoid().reshape(B, 1, 1, N)
 
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
@@ -155,7 +154,6 @@ class DependencyViTBlock(nn.Module):
         x_new, m = self.attn((self.norm1(x), m))
         x = x + self.drop_path1(self.ls1(x_new))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
-        #print((x, m))
         return (x, m)
 
 # FIXME lite model variants
