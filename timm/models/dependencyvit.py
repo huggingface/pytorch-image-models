@@ -154,6 +154,7 @@ class DependencyViTBlock(nn.Module):
         x_new, m = self.attn((self.norm1(x), m))
         x = x + self.drop_path1(self.ls1(x_new))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        print((x, m))
         return (x, m)
 
 # FIXME lite model variants
