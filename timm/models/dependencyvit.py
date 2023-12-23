@@ -48,16 +48,16 @@ class ReversedAttention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.track_dependency_mask = False
         self.dependency_mask = None
-        self.head_selector_temperature = 1.0 # appendix D.1, causes nan when 0.1, 0 when 10.0
+        self.head_selector_temperature = 0.1 # appendix D.1, causes nan when 0.1, 0 when 10.0
 
-        self.head_selector = nn.Linear(dim, num_heads)
+        self.head_selector = nn.Linear(dim, num_heads, bias=False)
 
         self.message_controller = Mlp(
             in_features = dim,
             hidden_features = int(dim/2),
             out_features = 1,
             act_layer = nn.GELU,
-            bias = True, # FIXME is there a bias term?
+            bias = False, # FIXME is there a bias term?
         )
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
@@ -169,7 +169,7 @@ class DependencyViT(VisionTransformer):
             class_token=False,
             global_pool='avg', 
             qkv_bias=False, 
-            init_values=1e-6, 
+            init_values=None, 
             fc_norm=False,
         )
 
