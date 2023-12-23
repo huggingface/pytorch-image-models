@@ -83,7 +83,7 @@ class ReversedAttention(nn.Module):
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
         attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn).transpose(-2, -1)
+        attn = self.attn_drop(attn).transpose(-2, -1) # this transpose prevents use of sdpa
         attn = attn * p * m # [B, n_h, N, N]
         x = attn @ v
 
