@@ -180,7 +180,8 @@ class DependencyViT(VisionTransformer):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        m = torch.Tensor(1).to(x)
+        B, N, _ = x.shape
+        m = torch.ones(B, 1, 1, N).to(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x, m = checkpoint_seq(self.blocks, (x, m))
         else:
