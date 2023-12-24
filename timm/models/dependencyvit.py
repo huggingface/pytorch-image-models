@@ -247,7 +247,7 @@ class DependencyViT(VisionTransformer):
         # L' * [B, N, N]
         # L' * [B, N', N']
         result = []
-        layers = range(len(self.blocks)) if not layers
+        layers = layers if layers else range(len(self.blocks))
         for layer in layers:
             result.append(self.blocks[layer].attn.dependency_mask)
         return result
