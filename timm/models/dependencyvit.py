@@ -10,7 +10,8 @@ ReversedAttention implementation derived from timm's Vision Transformer implemen
 Implementation for timm by / Copyright 2023, Fredo Guan
 """
 
-from typing import Any, Dict, Optional, Tuple
+import math
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -26,8 +27,22 @@ from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['DependencyViT']
 
+class TokenPruner(nn.Module):
+    def __init__(
+        self,
+        prune_ratio: float,
+        prune_index: int,
+    ):
+        super().__init__()
+        self.pct_kept_tokens = (1 - prune_index * prune_ratio) / (1 - (prune_index - 1) * prune_ratio)
+    
+    def forward(self, x: torch.Tensor, scores: torch.Tensor): # [B, N, C], [B, N]
+        _, N, C = x.shape
+        topk_indices = scores.topk(math.floor(self.pct_kept_tokens * N), sorted=False) # [B, N']
+        topk_indices = topk_indices.unsqueeze(-1).expand(-1, -1, C) # [B, N', C]
+        return x.gather(1, topk_indices)
 
-# FIXME there is nearly no difference between this and stock attn, allowing sdpa to be used if a workaround can be found
+
 class ReversedAttention(nn.Module):
     dependency_mask: Optional[torch.Tensor]
 
@@ -48,9 +63,9 @@ class ReversedAttention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.track_dependency_mask = False
         self.dependency_mask = None
-        self.head_selector_temperature = 0.1 # appendix D.1, causes nan when 0.1, 0 when 10.0
+        self.head_selector_temperature = 0.1 # appendix D.1
 
-        self.head_selector = nn.Linear(dim, num_heads, bias=False)
+        self.head_selector = nn.Linear(dim, num_heads, bias=False) # FIXME is there a bias term?
 
         self.message_controller = Mlp(
             in_features = dim,
@@ -59,7 +74,9 @@ class ReversedAttention(nn.Module):
             act_layer = nn.GELU,
             bias = False, # FIXME is there a bias term?
         )
-
+        
+        self.token_pruner = None
+        
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -86,8 +103,17 @@ class ReversedAttention(nn.Module):
         attn = self.attn_drop(attn).transpose(-2, -1) # this transpose prevents use of sdpa
         attn = attn * p * m # [B, n_h, N, N]
         x = attn @ v
-
-        self.dependency_mask = attn.sum(1) if self.track_dependency_mask else None
+        
+        # FIXME messy way to handle
+        if self.track_dependency_mask or not isinstance(self.token_pruner, nn.Identity()):
+            dependency_mask = attn.detach().sum(1) # [B, N, N]
+            self.dependency_mask = dependency_mask if self.track_dependency_mask else None
+            #FIXME how to prune
+            x = self.token_pruner(x, dependency_mask.sum(-1)) if self.token_pruner else x # dependency mask weights(sum)
+            #x = self.token_pruner(x, dependency_mask.abs().sum(-1)) if self.token_pruner else x # dependency mask weights(abs-sum)
+            #x = self.token_pruner(x, attn.detach().abs().sum(1).abs().sum(-1)) if self.token_pruner else x # attn weights(abs-sum-abs-sum)
+            #x = self.token_pruner(x, m.reshape(B, N)) if self.token_pruner else x # m
+            
 
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
@@ -161,7 +187,13 @@ class DependencyViTBlock(nn.Module):
 # FIXME verify against reference impl
 
 class DependencyViT(VisionTransformer):
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        prune_layers: Optional[Union[List[int], Tuple[int]]] = None,
+        prune_ratio: Optional[float] = None,
+        *args,
+        **kwargs
+    ):
         super().__init__(
             *args, 
             **kwargs,
@@ -172,6 +204,19 @@ class DependencyViT(VisionTransformer):
             init_values=1e-6, 
             fc_norm=False,
         )
+        
+        if prune_layers is not None:
+            self.prune_layers = sorted(list(dict.fromkeys(prune_layers)))
+            self.prune_ratio = prune_ratio
+            
+            # FIXME reword these assertions
+            assert max(self.prune_layers) <= len(self.blocks), "1 or more pruned layer indices are greater than model depth"
+            assert self.prune_ratio * len(self.prune_layers) < 1, "prune_ratio too big, ensure len(prune_layers) * prune_ratio is less than 1"
+            
+            self.prune_layers = [x-1 for x in self.prune_layers] # convert counting numbers to nn.Sequential indicess
+            for prune_index, layer in enumerate(prune_layers, 1):
+                self.blocks[layer].attn.token_pruner = TokenPruner(self.prune_ratio, prune_index)
+        
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -191,6 +236,23 @@ class DependencyViT(VisionTransformer):
         x = self.norm(x)
         x = x * m.transpose(1, 3).squeeze(-1)
         return x
+    
+    def track_dependency_mask(self, track: bool = True):
+        for block in self.blocks:
+            if block.attn.track_dependency_mask is not track:
+                block.attn.dependency_mask = None
+            block.attn.track_dependency_mask = track
+            
+    def get_dependency_mask(self, layers: Optional[Union[List[int], Tuple[int]]] = None):
+        # L' * [B, N, N]
+        # L' * [B, N', N']
+        result = []
+        layers = range(len(self.blocks)) if not layers
+        for layer in layers:
+            result.append(self.blocks[layer].attn.dependency_mask)
+        return result
+        
+            
 
 
 def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
@@ -212,6 +274,9 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 
 default_cfgs = {
     'dependencyvit_tiny_patch16_224.untrained': _cfg(url=''),
+    'dependencyvit_small_patch16_224.untrained': _cfg(url=''),
+    
+    'dependencyvit_lite_tiny_patch16_224.untrained': _cfg(url=''),
 }
 
 
@@ -239,5 +304,11 @@ def dependencyvit_tiny_patch16_224(pretrained: bool = False, **kwargs) -> Depend
 @register_model
 def dependencyvit_small_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
     model_args = dict(patch_size=16, embed_dim=384, depth=12, num_heads=12)
+    model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+    
+@register_model
+def dependencyvit_lite_tiny_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
+    model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=12, prune_layers=[2, 5, 8, 11], prune_ratio=0.16)
     model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
