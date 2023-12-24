@@ -36,11 +36,12 @@ class TokenPruner(nn.Module):
         super().__init__()
         self.pct_kept_tokens = (1 - prune_index * prune_ratio) / (1 - (prune_index - 1) * prune_ratio)
     
-    def forward(self, x: torch.Tensor, scores: torch.Tensor): # [B, N, C], [B, N]
-        _, N, C = x.shape
+    def forward(self, x: torch.Tensor, m: torch.Tensor, scores: torch.Tensor): # [B, N, C], [B, 1, 1, N], [B, N]
+        B, N, C = x.shape
         topk_indices = scores.topk(math.floor(self.pct_kept_tokens * N), sorted=False)[1] # [B, N']
-        topk_indices = topk_indices.unsqueeze(-1).expand(-1, -1, C) # [B, N', C]
-        return x.gather(1, topk_indices)
+        x = x.gather(1, topk_indices.unsqueeze(-1).expand(-1, -1, C)) # [B, N', C]
+        m = m.gather(3, topk_indices.unsqueeze(1).unsqueeze(1)) # [B, 1, 1, N']
+        return (x, m)
 
 
 class ReversedAttention(nn.Module):
@@ -188,7 +189,7 @@ class DependencyViTBlock(nn.Module):
         x, m = in_tuple
         x_new, m, prune_mask = self.attn((self.norm1(x), m))
         x = x + self.drop_path1(self.ls1(x_new))
-        x = self.token_pruner(x, prune_mask) if self.token_pruner else x
+        x, m = self.token_pruner(x, m, prune_mask) if self.token_pruner else (x, m)
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return (x, m)
 
