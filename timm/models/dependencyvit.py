@@ -103,6 +103,8 @@ class ReversedAttention(nn.Module):
         attn = self.attn_drop(attn).transpose(-2, -1) # this transpose prevents use of sdpa
         attn = attn * p * m # [B, n_h, N, N]
         x = attn @ v
+        x = x.transpose(1, 2).reshape(B, N, C)
+        
         
         # FIXME messy way to handle
         if self.track_dependency_mask or self.token_pruner:
@@ -115,7 +117,7 @@ class ReversedAttention(nn.Module):
             #x = self.token_pruner(x, m.reshape(B, N)) if self.token_pruner else x # m
             
 
-        x = x.transpose(1, 2).reshape(B, N, C)
+        
         x = self.proj(x)
         x = self.proj_drop(x)
         return (x, m)
