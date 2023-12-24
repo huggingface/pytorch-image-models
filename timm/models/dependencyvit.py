@@ -11,7 +11,7 @@ Implementation for timm by / Copyright 2023, Fredo Guan
 """
 
 import math
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
