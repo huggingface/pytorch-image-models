@@ -105,7 +105,7 @@ class ReversedAttention(nn.Module):
         x = attn @ v
         
         # FIXME messy way to handle
-        if self.track_dependency_mask or not isinstance(self.token_pruner, nn.Identity()):
+        if self.track_dependency_mask or self.token_pruner:
             dependency_mask = attn.detach().sum(1) # [B, N, N]
             self.dependency_mask = dependency_mask if self.track_dependency_mask else None
             #FIXME how to prune
