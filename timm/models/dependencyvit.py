@@ -38,7 +38,7 @@ class TokenPruner(nn.Module):
     
     def forward(self, x: torch.Tensor, scores: torch.Tensor): # [B, N, C], [B, N]
         _, N, C = x.shape
-        topk_indices = scores.topk(math.floor(self.pct_kept_tokens * N), sorted=False) # [B, N']
+        topk_indices = scores.topk(math.floor(self.pct_kept_tokens * N), sorted=False)[1] # [B, N']
         topk_indices = topk_indices.unsqueeze(-1).expand(-1, -1, C) # [B, N', C]
         return x.gather(1, topk_indices)
 
