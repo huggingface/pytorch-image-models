@@ -75,7 +75,7 @@ class ReversedAttention(nn.Module):
             bias = False, # FIXME is there a bias term?
         )
         
-        self.token_pruner = None
+        #self.token_pruner = None
         
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -105,7 +105,7 @@ class ReversedAttention(nn.Module):
         x = attn @ v
         x = x.transpose(1, 2).reshape(B, N, C)
         
-        
+        '''
         # FIXME messy way to handle
         if self.track_dependency_mask or self.token_pruner:
             dependency_mask = attn.detach().sum(1) # [B, N, N]
@@ -115,12 +115,17 @@ class ReversedAttention(nn.Module):
             #x = self.token_pruner(x, dependency_mask.abs().sum(-1)) if self.token_pruner else x # dependency mask weights(abs-sum)
             #x = self.token_pruner(x, attn.detach().abs().sum(1).abs().sum(-1)) if self.token_pruner else x # attn weights(abs-sum-abs-sum)
             #x = self.token_pruner(x, m.reshape(B, N)) if self.token_pruner else x # m
-            
-
+        '''
+        self.dependency_mask = attn.detach().sum(1) if self.track_dependency_mask else None # [B, N, N]
+        
+        prune_mask = attn.detach().sum(1).sum(-1)
+        #prune_mask = attn.detach().sum(1).abs().sum(-1)
+        #prune_mask = attn.detach().abs().sum(1).sum(-1)
+        #prune_mask = m.reshape(B, N)
         
         x = self.proj(x)
         x = self.proj_drop(x)
-        return (x, m)
+        return (x, m, prune_mask)
 
 class LayerScale(nn.Module):
     def __init__(
@@ -166,6 +171,8 @@ class DependencyViTBlock(nn.Module):
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        
+        self.token_pruner = None
 
         self.norm2 = norm_layer(dim)
         self.mlp = mlp_layer(
@@ -179,8 +186,9 @@ class DependencyViTBlock(nn.Module):
 
     def forward(self, in_tuple: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, m = in_tuple
-        x_new, m = self.attn((self.norm1(x), m))
+        x_new, m, prune_mask = self.attn((self.norm1(x), m))
         x = x + self.drop_path1(self.ls1(x_new))
+        x = self.token_pruner(x, prune_mask) if self.token_pruner else x
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return (x, m)
 
@@ -217,7 +225,7 @@ class DependencyViT(VisionTransformer):
             
             self.prune_layers = [x-1 for x in self.prune_layers] # convert counting numbers to nn.Sequential indicess
             for prune_index, layer in enumerate(prune_layers, 1):
-                self.blocks[layer].attn.token_pruner = TokenPruner(self.prune_ratio, prune_index)
+                self.blocks[layer].token_pruner = TokenPruner(self.prune_ratio, prune_index)
         
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
