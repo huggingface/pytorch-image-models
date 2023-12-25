@@ -242,8 +242,8 @@ class GroupLinear(nn.Module):
 class MLDecoder(nn.Module):
     def __init__(
         self,
-        in_features: int,
         num_classes: int,
+        in_features: int,
         dim: int = 768,
         num_groups: int = 100,
         num_heads: int = 8,
