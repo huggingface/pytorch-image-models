@@ -225,7 +225,7 @@ class DependencyViT(VisionTransformer):
             assert self.prune_ratio * len(self.prune_layers) < 1, "prune_ratio too big, ensure len(prune_layers) * prune_ratio is less than 1"
             
             self.prune_layers = [x-1 for x in self.prune_layers] # convert counting numbers to nn.Sequential indicess
-            for prune_index, layer in enumerate(prune_layers, 1):
+            for prune_index, layer in enumerate(self.prune_layers, 1):
                 self.blocks[layer].token_pruner = TokenPruner(self.prune_ratio, prune_index)
         
 
