@@ -119,12 +119,12 @@ class ReversedAttention(nn.Module):
         '''
         self.dependency_mask = attn.detach().sum(1) if self.track_dependency_mask else None # [B, N, N]
         
-        prune_mask = attn.detach().sum(1).sum(-1)
+        #prune_mask = attn.detach().sum(1).sum(-1)
         #prune_mask = attn.detach().sum(1).abs().sum(-1)
         #prune_mask = attn.detach().abs().sum((1, -1))
         #prune_mask = attn.sum(1).sum(-1)
         #prune_mask = attn.sum(1).abs().sum(-1)
-        #prune_mask = attn.abs().sum((1, -1))
+        prune_mask = attn.abs().sum((1, -1))
         #prune_mask = m.reshape(B, N)
         
         x = self.proj(x)
