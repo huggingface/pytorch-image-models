@@ -1,4 +1,4 @@
-""" DependencyViT (FIXME WIP)
+""" DependencyViT
 
 From-scratch implementation of DependencyViT in PyTorch
 
@@ -106,19 +106,13 @@ class ReversedAttention(nn.Module):
         x = attn @ v
         x = x.transpose(1, 2).reshape(B, N, C)
         
-        '''
-        # FIXME messy way to handle
-        if self.track_dependency_mask or self.token_pruner:
-            dependency_mask = attn.detach().sum(1) # [B, N, N]
-            self.dependency_mask = dependency_mask if self.track_dependency_mask else None
-            #FIXME how to prune
-            x = self.token_pruner(x, dependency_mask.sum(-1)) if self.token_pruner else x # dependency mask weights(sum)
-            #x = self.token_pruner(x, dependency_mask.abs().sum(-1)) if self.token_pruner else x # dependency mask weights(abs-sum)
-            #x = self.token_pruner(x, attn.detach().abs().sum(1).abs().sum(-1)) if self.token_pruner else x # attn weights(abs-sum-abs-sum)
-            #x = self.token_pruner(x, m.reshape(B, N)) if self.token_pruner else x # m
-        '''
+        
+        #FIXME absolute value?
         self.dependency_mask = attn.detach().sum(1) if self.track_dependency_mask else None # [B, N, N]
         
+        #FIXME which pruning mask?
+        
+        # [B, N]
         #prune_mask = attn.detach().sum(1).sum(-1)
         #prune_mask = attn.detach().sum(1).abs().sum(-1)
         #prune_mask = attn.detach().abs().sum((1, -1))
@@ -196,9 +190,9 @@ class DependencyViTBlock(nn.Module):
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return (x, m)
 
-# FIXME lite model variants
-# FIXME toggle and retrieve dependency masks
+
 # FIXME verify against reference impl
+# FIXME train weights that meet or exceed results from paper
 
 class DependencyViT(VisionTransformer):
     def __init__(
@@ -207,15 +201,15 @@ class DependencyViT(VisionTransformer):
         prune_ratio: Optional[float] = None,
         *args,
         **kwargs
-    ):
+    ): -> None:
         super().__init__(
-            *args, 
+            *args,
             **kwargs,
-            block_fn = DependencyViTBlock, 
+            block_fn = DependencyViTBlock,
             class_token=False,
-            global_pool='avg', 
-            qkv_bias=False, 
-            init_values=1e-6, 
+            global_pool='avg',
+            qkv_bias=False,
+            init_values=1e-6,
             fc_norm=False,
         )
         
@@ -223,8 +217,7 @@ class DependencyViT(VisionTransformer):
             self.prune_layers = sorted(list(dict.fromkeys(prune_layers)))
             self.prune_ratio = prune_ratio
             
-            # FIXME reword these assertions
-            assert max(self.prune_layers) <= len(self.blocks), "1 or more pruned layer indices are greater than model depth"
+            assert max(self.prune_layers) <= len(self.blocks), "1 or more pruned layer indices exceed model depth"
             assert self.prune_ratio * len(self.prune_layers) < 1, "prune_ratio too big, ensure len(prune_layers) * prune_ratio is less than 1"
             
             self.prune_layers = [x-1 for x in self.prune_layers] # convert counting numbers to nn.Sequential indicess
