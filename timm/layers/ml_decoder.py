@@ -45,7 +45,7 @@ class MLDecoderHead(nn.Module):
             return self.flatten(x)
 
 def add_ml_decoder_head(model):
-
+    #FIXME toggle between implementations?
     # ignore CoaT, crossvit
     # ignore distillation models: deit_distilled, efficientformer V2
     num_classes = model.num_classes
