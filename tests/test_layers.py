@@ -339,6 +339,7 @@ def test_hard_mish_grad():
     for _ in range(100):
         _run_act_layer_grad('hard_mish')
 
+
 def test_get_act_layer_empty_string():
     # Empty string should return None
     assert get_act_layer('') is None
