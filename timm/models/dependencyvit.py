@@ -32,11 +32,12 @@ class TokenPruner(nn.Module):
         self,
         prune_ratio: float,
         prune_index: int,
-    ):
+    ) -> None:
         super().__init__()
         self.pct_kept_tokens = (1 - prune_index * prune_ratio) / (1 - (prune_index - 1) * prune_ratio)
     
-    def forward(self, x: torch.Tensor, m: torch.Tensor, scores: torch.Tensor): # [B, N, C], [B, 1, 1, N], [B, N]
+     # [B, N, C], [B, 1, 1, N], [B, N] -> [B, N', C], [B, 1, 1, N']
+    def forward(self, x: torch.Tensor, m: torch.Tensor, scores: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         B, N, C = x.shape
         topk_indices = scores.topk(math.floor(self.pct_kept_tokens * N), sorted=False)[1] # [B, N']
         x = x.gather(1, topk_indices.unsqueeze(-1).expand(-1, -1, C)) # [B, N', C]
@@ -86,8 +87,8 @@ class ReversedAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     # m is cumulative over all layers (m = m_i * m_i-1 * ... * m_1)
-    def forward(self, in_tuple: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        x, m = in_tuple # [B, N, C], [B, 1, 1, N]
+    # [B, N, C], [B, 1, 1, N] -> [B, N, C], [B, 1, 1, N], [B, N]
+    def forward(self, x: torch.Tensor, m: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
@@ -112,7 +113,6 @@ class ReversedAttention(nn.Module):
         
         #FIXME which pruning mask?
         
-        # [B, N]
         #prune_mask = attn.detach().sum(1).sum(-1)
         #prune_mask = attn.detach().sum(1).abs().sum(-1)
         #prune_mask = attn.detach().abs().sum((1, -1))
@@ -184,7 +184,7 @@ class DependencyViTBlock(nn.Module):
 
     def forward(self, in_tuple: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, m = in_tuple
-        x_new, m, prune_mask = self.attn((self.norm1(x), m))
+        x_new, m, prune_mask = self.attn(self.norm1(x), m)
         x = x + self.drop_path1(self.ls1(x_new))
         x, m = self.token_pruner(x, m, prune_mask) if self.token_pruner else (x, m)
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
@@ -201,7 +201,7 @@ class DependencyViT(VisionTransformer):
         prune_ratio: Optional[float] = None,
         *args,
         **kwargs
-    ): -> None:
+    ) -> None:
         super().__init__(
             *args,
             **kwargs,
@@ -244,13 +244,13 @@ class DependencyViT(VisionTransformer):
         x = x * m.transpose(1, 3).squeeze(-1)
         return x
     
-    def track_dependency_mask(self, track: bool = True):
+    def track_dependency_mask(self, track: bool = True) -> None:
         for block in self.blocks:
             if block.attn.track_dependency_mask is not track:
                 block.attn.dependency_mask = None
             block.attn.track_dependency_mask = track
             
-    def get_dependency_mask(self, layers: Optional[Union[List[int], Tuple[int]]] = None):
+    def get_dependency_mask(self, layers: Optional[Union[List[int], Tuple[int]]] = None) -> List[torch.Tensor]:
         # L' * [B, N, N]
         # L' * [B, N', N']
         result = []
