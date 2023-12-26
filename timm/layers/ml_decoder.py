@@ -7,19 +7,20 @@ from torch.nn.modules.transformer import _get_activation_fn
 from torch.jit import Final
 
 from timm.layers import Mlp, use_fused_attn
+from timm.layers.classifier import _create_pool
 
 
 class MLDecoderHead(nn.Module):
     """MLDecoder wrapper with forward compatible with ClassifierHead"""
 
-    def __init__(self, head, in_features, num_classes, pool_type='avg', use_conv=False, input_fmt='NCHW'):
+    def __init__(self, in_features, num_classes, pool_type='avg', use_conv=False, input_fmt='NCHW'):
         super(MLDecoderHead, self).__init__()
         self.in_features = in_features
         self.use_conv = use_conv
         self.input_fmt = input_fmt
 
         self.global_pool, num_pooled_features = _create_pool(in_features, num_classes, pool_type, use_conv=use_conv, input_fmt=input_fmt)
-        self.head = head
+        self.head = MLDecoder(in_features=in_features, num_classes=num_classes)
         self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
 
 
@@ -29,8 +30,7 @@ class MLDecoderHead(nn.Module):
                 self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv)
             self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
         num_pooled_features = self.in_features * self.global_pool.feat_mult()
-        # TODO fix this it is incorrect, need to impl a reset for mldecoder itself i think
-        self.head = type(self.head)(in_features=in_features, num_classes=num_classes)
+        self.head = MLDecoder(in_features=in_features, num_classes=num_classes)
 
 
     def forward(self, x, pre_logits: bool = False):
@@ -44,18 +44,12 @@ class MLDecoderHead(nn.Module):
             x = self.head(x)
             return self.flatten(x)
 
-def add_ml_decoder_head(model, head_version='new', **kwargs):
+def add_ml_decoder_head(model):
+
     # ignore CoaT, crossvit
     # ignore distillation models: deit_distilled, efficientformer V2
     num_classes = model.num_classes
     num_features = model.num_features
-    
-    if head_version == 'old':
-        head_fn = MLDecoderLegacy
-    else:
-        head_fn = MLDecoder
-    
-    head = head_fn(num_features, num_classes, **kwargs)
 
     assert num_classes > 0, "MLDecoder requires a model to have num_classes > 0"
 
@@ -63,14 +57,14 @@ def add_ml_decoder_head(model, head_version='new', **kwargs):
         model.global_pool = nn.Identity()
         del model.fc
 
-        model.fc = head
+        model.fc = MLDecoder(num_classes=num_classes, in_features=num_features)
 
     elif hasattr(model, 'fc_norm') or 'Cait' in model._get_name(): # ViT, BEiT, EVA
         model.global_pool = None # disable any pooling, model instantiation leaves 1 norm layer after features, [B, n + K x K, C]
         if hasattr(model, 'attn_pool'):
             model.attn_pool = None
         model.head_drop = nn.Identity()
-        model.head = head
+        model.head = MLDecoder(num_classes=num_classes, in_features=num_features)
 
     elif 'MetaFormer' in model._get_name():
         if hasattr(model.head, 'flatten'):  # ConvNext case
@@ -78,12 +72,12 @@ def add_ml_decoder_head(model, head_version='new', **kwargs):
         model.head.global_pool = nn.Identity()
         model.head.drop = nn.Identity()
         del model.head.fc
-        model.head.fc = head
+        model.head.fc = MLDecoder(num_classes=num_classes, in_features=num_features)
 
     # maybe  and isinstance(model.head, (NormMlpClassifierHead, ClassifierHead) ?
     elif hasattr(model, 'head'):    # ClassifierHead, nn.Sequential
         input_fmt = getattr(model.head, 'input_fmt', 'NCHW')
-        model.head = MLDecoderHead(head, num_features, num_classes)
+        model.head = MLDecoderHead(num_features, num_classes)
         if hasattr(model, 'global_pool'):
             if(isinstance(model.global_pool, nn.Module)):
                 model.global_pool = nn.Identity()
@@ -96,21 +90,21 @@ def add_ml_decoder_head(model, head_version='new', **kwargs):
 
         model.flatten = nn.Identity()
         del model.classifier
-        model.classifier = head
+        model.classifier = MLDecoder(num_classes=num_classes, in_features=num_features)
 
     elif hasattr(model, 'global_pool') and hasattr(model, 'classifier'):  # EfficientNet
         model.global_pool = nn.Identity()
         del model.classifier
-        model.classifier = head
+        model.classifier = MLDecoder(num_classes=num_classes, in_features=num_features)
     elif hasattr(model, 'global_pool') and hasattr(model, 'last_linear'):  # InceptionV4
         model.global_pool = nn.Identity()
         del model.last_linear
-        model.last_linear = head
+        model.last_linear = MLDecoder(num_classes=num_classes, in_features=num_features)
 
     elif hasattr(model, 'global_pool') and hasattr(model, 'classif'):  # InceptionResnetV2
         model.global_pool = nn.Identity()
         del model.classif
-        model.classif = head
+        model.classif = MLDecoder(num_classes=num_classes, in_features=num_features)
 
     else:
         raise Exception("Model code-writing is not aligned currently with ml-decoder")
