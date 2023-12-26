@@ -76,3 +76,18 @@ def test_hard_swish_grad():
 def test_hard_mish_grad():
     for _ in range(100):
         _run_act_layer_grad('hard_mish')
+
+
+MLDECODER_EXCLUDE_FILTERS = [
+    '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
+    '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
+    '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
+    '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
+
+def test_ml_decoder():
+    for modelName in timm.list_models(pretrained=False, exclude_filters = MLDECODER_EXCLUDE_FILTERS):
+        model = timm.create_model(modelName, num_classes=1000)
+        model = add_ml_decoder_head(model)
+        model.eval()
+        with torch.set_grad_enabled(False):
+            model(torch.randn([1,*model.default_cfg['input_size']]))
