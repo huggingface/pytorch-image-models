@@ -99,7 +99,10 @@ def create_model(
         assert not pretrained_cfg, 'pretrained_cfg should not be set when sourcing model from Hugging Face Hub.'
         # For model names specified in the form `hf-hub:path/architecture_name@revision`,
         # load model weights + pretrained_cfg from Hugging Face hub.
-        pretrained_cfg, model_name = load_model_config_from_hf(model_name)
+        pretrained_cfg, model_name, model_args = load_model_config_from_hf(model_name)
+        if model_args:
+            for k, v in model_args.items():
+                kwargs.setdefault(k, v)
     else:
         model_name, pretrained_tag = split_model_name_tag(model_name)
         if pretrained_tag and not pretrained_cfg:

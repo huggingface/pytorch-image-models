@@ -383,6 +383,7 @@ class SwinTransformerStage(nn.Module):
         """
         Args:
             dim: Number of input channels.
+            out_dim: Number of output channels.
             input_resolution: Input resolution.
             depth: Number of blocks.
             downsample: Downsample layer at the end of the layer.
@@ -469,6 +470,7 @@ class SwinTransformer(nn.Module):
             proj_drop_rate: float = 0.,
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.1,
+            embed_layer: Callable = PatchEmbed,
             norm_layer: Union[str, Callable] = nn.LayerNorm,
             weight_init: str = '',
             **kwargs,
@@ -489,6 +491,7 @@ class SwinTransformer(nn.Module):
             drop_rate: Dropout rate.
             attn_drop_rate (float): Attention dropout rate.
             drop_path_rate (float): Stochastic depth rate.
+            embed_layer: Patch embedding layer.
             norm_layer (nn.Module): Normalization layer.
         """
         super().__init__()
@@ -506,7 +509,7 @@ class SwinTransformer(nn.Module):
             embed_dim = [int(embed_dim * 2 ** i) for i in range(self.num_layers)]
 
         # split image into non-overlapping patches
-        self.patch_embed = PatchEmbed(
+        self.patch_embed = embed_layer(
             img_size=img_size,
             patch_size=patch_size,
             in_chans=in_chans,

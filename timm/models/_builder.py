@@ -160,7 +160,11 @@ def load_pretrained(
         state_dict = pretrained_loc  # pretrained_loc is the actual state dict for this override
     elif load_from == 'file':
         _logger.info(f'Loading pretrained weights from file ({pretrained_loc})')
-        state_dict = load_state_dict(pretrained_loc)
+        if pretrained_cfg.get('custom_load', False):
+            model.load_pretrained(pretrained_loc)
+            return
+        else:
+            state_dict = load_state_dict(pretrained_loc)
     elif load_from == 'url':
         _logger.info(f'Loading pretrained weights from url ({pretrained_loc})')
         if pretrained_cfg.get('custom_load', False):
@@ -230,7 +234,15 @@ def load_pretrained(
                 classifier_bias = state_dict[classifier_name + '.bias']
                 state_dict[classifier_name + '.bias'] = classifier_bias[label_offset:]
 
-    model.load_state_dict(state_dict, strict=strict)
+    load_result = model.load_state_dict(state_dict, strict=strict)
+    if load_result.missing_keys:
+        _logger.info(
+            f'Missing keys ({", ".join(load_result.missing_keys)}) discovered while loading pretrained weights.'
+            f' This is expected if model is being adapted.')
+    if load_result.unexpected_keys:
+        _logger.warning(
+            f'Unexpected keys ({", ".join(load_result.unexpected_keys)}) found while loading pretrained weights.'
+            f' This may be expected if model is being adapted.')
 
 
 def pretrained_cfg_for_features(pretrained_cfg):
@@ -249,7 +261,7 @@ def _filter_kwargs(kwargs, names):
         kwargs.pop(n, None)
 
 
-def _update_default_kwargs(pretrained_cfg, kwargs, kwargs_filter):
+def _update_default_model_kwargs(pretrained_cfg, kwargs, kwargs_filter):
     """ Update the default_cfg and kwargs before passing to model
 
     Args:
@@ -276,6 +288,11 @@ def _update_default_kwargs(pretrained_cfg, kwargs, kwargs_filter):
             if input_size is not None:
                 assert len(input_size) == 3
                 kwargs.setdefault(n, input_size[0])
+        elif n == 'num_classes':
+            default_val = pretrained_cfg.get(n, None)
+            # if default is < 0, don't pass through to model
+            if default_val is not None and default_val >= 0:
+                kwargs.setdefault(n, pretrained_cfg[n])
         else:
             default_val = pretrained_cfg.get(n, None)
             if default_val is not None:
@@ -367,7 +384,7 @@ def build_model_with_cfg(
     # FIXME converting back to dict, PretrainedCfg use should be propagated further, but not into model
     pretrained_cfg = pretrained_cfg.to_dict()
 
-    _update_default_kwargs(pretrained_cfg, kwargs, kwargs_filter)
+    _update_default_model_kwargs(pretrained_cfg, kwargs, kwargs_filter)
 
     # Setup for feature extraction wrapper done at end of this fn
     if kwargs.pop('features_only', False):

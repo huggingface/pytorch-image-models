@@ -1,6 +1,6 @@
 # ResNeSt
 
-A **ResNeSt** is a variant on a [ResNet](https://paperswithcode.com/method/resnet), which instead stacks [Split-Attention blocks](https://paperswithcode.com/method/split-attention). The cardinal group representations are then concatenated along the channel dimension: $V = \text{Concat}${$V^{1},V^{2},\cdots{V}^{K}$}. As in standard residual blocks, the final output $Y$ of otheur Split-Attention block is produced using a shortcut connection: $Y=V+X$, if the input and output feature-map share the same shape.  For blocks with a stride, an appropriate transformation $\mathcal{T}$ is applied to the shortcut connection to align the output shapes:  $Y=V+\mathcal{T}(X)$. For example, $\mathcal{T}$ can be strided convolution or combined convolution-with-pooling.
+A **ResNeSt** is a variant on a [ResNet](https://paperswithcode.com/method/resnet), which instead stacks [Split-Attention blocks](https://paperswithcode.com/method/split-attention). The cardinal group representations are then concatenated along the channel dimension: \\( V = \text{Concat} \\){\\( V^{1},V^{2},\cdots{V}^{K} \\)}. As in standard residual blocks, the final output \\( Y \\) of otheur Split-Attention block is produced using a shortcut connection: \\( Y=V+X \\), if the input and output feature-map share the same shape.  For blocks with a stride, an appropriate transformation \\( \mathcal{T} \\) is applied to the shortcut connection to align the output shapes:  \\( Y=V+\mathcal{T}(X) \\). For example, \\( \mathcal{T} \\) can be strided convolution or combined convolution-with-pooling.
 
 ## How do I use this model on an image?
 
@@ -14,7 +14,7 @@ To load a pretrained model:
 
 To load and preprocess the image:
 
-```py 
+```py
 >>> import urllib
 >>> from PIL import Image
 >>> from timm.data import resolve_data_config
@@ -45,7 +45,7 @@ To get the top-5 predictions class names:
 ```py
 >>> # Get imagenet class mappings
 >>> url, filename = ("https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt", "imagenet_classes.txt")
->>> urllib.request.urlretrieve(url, filename) 
+>>> urllib.request.urlretrieve(url, filename)
 >>> with open("imagenet_classes.txt", "r") as f:
 ...     categories = [s.strip() for s in f.readlines()]
 
@@ -79,7 +79,7 @@ You can follow the [timm recipe scripts](../scripts) for training a new model af
 
 ```BibTeX
 @misc{zhang2020resnest,
-      title={ResNeSt: Split-Attention Networks}, 
+      title={ResNeSt: Split-Attention Networks},
       author={Hang Zhang and Chongruo Wu and Zhongyue Zhang and Yi Zhu and Haibin Lin and Zhi Zhang and Yue Sun and Tong He and Jonas Mueller and R. Manmatha and Mu Li and Alexander Smola},
       year={2020},
       eprint={2004.08955},

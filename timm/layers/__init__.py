@@ -1,6 +1,7 @@
 from .activations import *
 from .adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
+from .attention_pool import AttentionPoolLatent
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
 from .blur_pool import BlurPool2d
 from .classifier import ClassifierHead, create_classifier, NormMlpClassifierHead
@@ -51,4 +52,5 @@ from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .trace_utils import _assert, _float_to_int
+from .typing import LayerType, PadType
 from .weight_init import trunc_normal_, trunc_normal_tf_, variance_scaling_, lecun_normal_

@@ -3,6 +3,13 @@ import torch.nn as nn
 
 from timm.layers import create_act_layer, set_layer_config
 
+import importlib
+import os
+
+torch_backend = os.environ.get('TORCH_BACKEND')
+if torch_backend is not None:
+    importlib.import_module(torch_backend)
+torch_device = os.environ.get('TORCH_DEVICE', 'cpu')
 
 class MLP(nn.Module):
     def __init__(self, act_layer="relu", inplace=True):
@@ -29,6 +36,9 @@ def _run_act_layer_grad(act_type, inplace=True):
         out = m(x)
         l = (out - 0).pow(2).sum()
         return l
+
+    x = x.to(device=torch_device)
+    m.to(device=torch_device)
 
     out_me = _run(x)
 

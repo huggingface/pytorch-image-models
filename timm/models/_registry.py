@@ -86,6 +86,12 @@ def register_model(fn: Callable[..., Any]) -> Callable[..., Any]:
         mod.__all__ = [model_name]  # type: ignore
 
     # add entries to registry dict/sets
+    if model_name in _model_entrypoints:
+        warnings.warn(
+            f'Overwriting {model_name} in registry with {fn.__module__}.{model_name}. This is because the name being '
+            'registered conflicts with an existing name. Please check if this is not expected.',
+            stacklevel=2,
+        )
     _model_entrypoints[model_name] = fn
     _model_to_module[model_name] = module_name
     _module_to_models[module_name].add(model_name)

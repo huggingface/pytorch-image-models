@@ -1,6 +1,6 @@
 # HRNet
 
-**HRNet**, or **High-Resolution Net**, is a general purpose convolutional neural network for tasks like semantic segmentation, object detection and image classification. It is able to maintain high resolution representations through the whole process. We start from a high-resolution convolution stream, gradually add high-to-low resolution convolution streams one by one, and connect the multi-resolution streams in parallel. The resulting network consists of several ($4$ in the paper) stages and the $n$th stage contains $n$ streams corresponding to $n$ resolutions. The authors conduct repeated multi-resolution fusions by exchanging the information across the parallel streams over and over.
+**HRNet**, or **High-Resolution Net**, is a general purpose convolutional neural network for tasks like semantic segmentation, object detection and image classification. It is able to maintain high resolution representations through the whole process. We start from a high-resolution convolution stream, gradually add high-to-low resolution convolution streams one by one, and connect the multi-resolution streams in parallel. The resulting network consists of several (\\( 4 \\) in the paper) stages and the \\( n \\)th stage contains \\( n \\) streams corresponding to \\( n \\) resolutions. The authors conduct repeated multi-resolution fusions by exchanging the information across the parallel streams over and over.
 
 ## How do I use this model on an image?
 
@@ -14,7 +14,7 @@ To load a pretrained model:
 
 To load and preprocess the image:
 
-```py 
+```py
 >>> import urllib
 >>> from PIL import Image
 >>> from timm.data import resolve_data_config
@@ -45,7 +45,7 @@ To get the top-5 predictions class names:
 ```py
 >>> # Get imagenet class mappings
 >>> url, filename = ("https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt", "imagenet_classes.txt")
->>> urllib.request.urlretrieve(url, filename) 
+>>> urllib.request.urlretrieve(url, filename)
 >>> with open("imagenet_classes.txt", "r") as f:
 ...     categories = [s.strip() for s in f.readlines()]
 
@@ -79,7 +79,7 @@ You can follow the [timm recipe scripts](../scripts) for training a new model af
 
 ```BibTeX
 @misc{sun2019highresolution,
-      title={High-Resolution Representations for Labeling Pixels and Regions}, 
+      title={High-Resolution Representations for Labeling Pixels and Regions},
       author={Ke Sun and Yang Zhao and Borui Jiang and Tianheng Cheng and Bin Xiao and Dong Liu and Yadong Mu and Xinggang Wang and Wenyu Liu and Jingdong Wang},
       year={2019},
       eprint={1904.04514},

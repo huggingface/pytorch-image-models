@@ -1,6 +1,6 @@
 # (Gluon) ResNeXt
 
-A **ResNeXt** repeats a [building block](https://paperswithcode.com/method/resnext-block) that aggregates a set of transformations with the same topology. Compared to a [ResNet](https://paperswithcode.com/method/resnet), it exposes a new dimension,  *cardinality* (the size of the set of transformations) $C$, as an essential factor in addition to the dimensions of depth and width. 
+A **ResNeXt** repeats a [building block](https://paperswithcode.com/method/resnext-block) that aggregates a set of transformations with the same topology. Compared to a [ResNet](https://paperswithcode.com/method/resnet), it exposes a new dimension,  *cardinality* (the size of the set of transformations) \\( C \\), as an essential factor in addition to the dimensions of depth and width.
 
 The weights from this model were ported from [Gluon](https://cv.gluon.ai/model_zoo/classification.html).
 
@@ -16,7 +16,7 @@ To load a pretrained model:
 
 To load and preprocess the image:
 
-```py 
+```py
 >>> import urllib
 >>> from PIL import Image
 >>> from timm.data import resolve_data_config
@@ -47,7 +47,7 @@ To get the top-5 predictions class names:
 ```py
 >>> # Get imagenet class mappings
 >>> url, filename = ("https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt", "imagenet_classes.txt")
->>> urllib.request.urlretrieve(url, filename) 
+>>> urllib.request.urlretrieve(url, filename)
 >>> with open("imagenet_classes.txt", "r") as f:
 ...     categories = [s.strip() for s in f.readlines()]
 

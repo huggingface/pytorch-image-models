@@ -15,6 +15,7 @@ NVIDIA CUDA specific speedups adopted from NVIDIA Apex examples
 Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
+import json
 import logging
 import os
 import time
@@ -103,8 +104,10 @@ group.add_argument('--model', default='resnet50', type=str, metavar='MODEL',
                    help='Name of model to train (default: "resnet50")')
 group.add_argument('--pretrained', action='store_true', default=False,
                    help='Start with pretrained version of specified network (if avail)')
+group.add_argument('--pretrained-path', default=None, type=str,
+                   help='Load this checkpoint as if they were the pretrained weights (with adaptation).')
 group.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH',
-                   help='Initialize model from this checkpoint (default: none)')
+                   help='Load this checkpoint into model after initialization (default: none)')
 group.add_argument('--resume', default='', type=str, metavar='PATH',
                    help='Resume full model and optimizer state from checkpoint (default: none)')
 group.add_argument('--no-resume-opt', action='store_true', default=False,
@@ -420,6 +423,14 @@ def main():
     elif args.input_size is not None:
         in_chans = args.input_size[0]
 
+    factory_kwargs = {}
+    if args.pretrained_path:
+        # merge with pretrained_cfg of model, 'file' has priority over 'url' and 'hf_hub'.
+        factory_kwargs['pretrained_cfg_overlay'] = dict(
+            file=args.pretrained_path,
+            num_classes=-1,  # force head adaptation
+        )
+
     model = create_model(
         args.model,
         pretrained=args.pretrained,
@@ -433,6 +444,7 @@ def main():
         bn_eps=args.bn_eps,
         scriptable=args.torchscript,
         checkpoint_path=args.initial_checkpoint,
+        **factory_kwargs,
         **args.model_kwargs,
     )
     if args.head_init_scale is not None:
@@ -762,6 +774,7 @@ def main():
         _logger.info(
             f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
+    results = []
     try:
         for epoch in range(start_epoch, num_epochs):
             if hasattr(dataset_train, 'set_epoch'):
@@ -833,11 +846,20 @@ def main():
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
 
+            results.append({
+                'epoch': epoch,
+                'train': train_metrics,
+                'validation': eval_metrics,
+            })
+
     except KeyboardInterrupt:
         pass
 
+    results = {'all': results}
     if best_metric is not None:
+        results['best'] = results['all'][best_epoch]
         _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
+    print(f'--result\n{json.dumps(results, indent=4)}')
 
 
 def train_one_epoch(

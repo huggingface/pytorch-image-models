@@ -26,6 +26,36 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Nov 23, 2023
+* Added EfficientViT-Large models, thanks [SeeFun](https://github.com/seefun)
+* Fix Python 3.7 compat, will be dropping support for it soon
+* Other misc fixes
+* Release 0.9.12
+
+### Nov 20, 2023
+* Added significant flexibility for Hugging Face Hub based timm models via `model_args` config entry. `model_args` will be passed as kwargs through to models on creation. 
+  * See example at https://huggingface.co/gaunernst/vit_base_patch16_1024_128.audiomae_as2m_ft_as20k/blob/main/config.json
+  * Usage: https://github.com/huggingface/pytorch-image-models/discussions/2035
+* Updated imagenet eval and test set csv files with latest models
+* `vision_transformer.py` typing and doc cleanup by [Laureηt](https://github.com/Laurent2916)
+* 0.9.11 release
+
+### Nov 3, 2023
+* [DFN (Data Filtering Networks)](https://huggingface.co/papers/2309.17425) and [MetaCLIP](https://huggingface.co/papers/2309.16671) ViT weights added
+* DINOv2 'register' ViT model weights added (https://huggingface.co/papers/2309.16588, https://huggingface.co/papers/2304.07193)
+* Add `quickgelu` ViT variants for OpenAI, DFN, MetaCLIP weights that use it (less efficient)
+* Improved typing added to ResNet, MobileNet-v3 thanks to [Aryan](https://github.com/a-r-r-o-w)
+* ImageNet-12k fine-tuned (from LAION-2B CLIP) `convnext_xxlarge`
+* 0.9.9 release
+
+### Oct 20, 2023
+* [SigLIP](https://huggingface.co/papers/2303.15343) image tower weights supported in `vision_transformer.py`.
+  * Great potential for fine-tune and downstream feature use.
+* Experimental 'register' support in vit models as per [Vision Transformers Need Registers](https://huggingface.co/papers/2309.16588)
+* Updated RepViT with new weight release. Thanks [wangao](https://github.com/jameslahm)
+* Add patch resizing support (on pretrained weight load) to Swin models
+* 0.9.8 release pending
+
 ### Sep 1, 2023
 * TinyViT added by [SeeFun](https://github.com/seefun)
 * Fix EfficientViT (MIT) to use torch.autocast so it works back to PT 1.10

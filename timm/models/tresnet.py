@@ -325,26 +325,26 @@ default_cfgs = generate_default_cfgs({
 
 @register_model
 def tresnet_m(pretrained=False, **kwargs) -> TResNet:
-    model_kwargs = dict(layers=[3, 4, 11, 3], **kwargs)
-    return _create_tresnet('tresnet_m', pretrained=pretrained, **model_kwargs)
+    model_args = dict(layers=[3, 4, 11, 3])
+    return _create_tresnet('tresnet_m', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def tresnet_l(pretrained=False, **kwargs) -> TResNet:
-    model_kwargs = dict(layers=[4, 5, 18, 3], width_factor=1.2, **kwargs)
-    return _create_tresnet('tresnet_l', pretrained=pretrained, **model_kwargs)
+    model_args = dict(layers=[4, 5, 18, 3], width_factor=1.2)
+    return _create_tresnet('tresnet_l', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def tresnet_xl(pretrained=False, **kwargs) -> TResNet:
-    model_kwargs = dict(layers=[4, 5, 24, 3], width_factor=1.3, **kwargs)
-    return _create_tresnet('tresnet_xl', pretrained=pretrained, **model_kwargs)
+    model_args = dict(layers=[4, 5, 24, 3], width_factor=1.3)
+    return _create_tresnet('tresnet_xl', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def tresnet_v2_l(pretrained=False, **kwargs) -> TResNet:
-    model_kwargs = dict(layers=[3, 4, 23, 3], width_factor=1.0, v2=True, **kwargs)
-    return _create_tresnet('tresnet_v2_l', pretrained=pretrained, **model_kwargs)
+    model_args = dict(layers=[3, 4, 23, 3], width_factor=1.0, v2=True)
+    return _create_tresnet('tresnet_v2_l', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 register_model_deprecations(__name__, {
