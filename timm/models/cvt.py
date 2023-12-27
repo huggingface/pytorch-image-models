@@ -12,7 +12,7 @@ class ConvEmbed(nn.Module):
         kernel_size=7,
         stride=4,
         padding=2,
-        norm_layer=None
+        norm_layer=LayerNorm2d,
     ):
         super().__init__()
         
@@ -26,7 +26,7 @@ class ConvEmbed(nn.Module):
         
         self.norm = norm_layer(out_chs) if norm_layer else nn.Identity()
         
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor): # [B, C, H, W] -> [B, C, H, W]
         x = self.conv(x)
         x = self.norm(x)
         return x
@@ -95,7 +95,7 @@ class Attention(nn.Module):
             act_layer=conv_act_layer
         )
         
-        # better way to do this? iirc 1 is better than 3
+        # FIXME better way to do this? iirc 1 is better than 3
         self.proj_q = nn.Linear(in_chs, out_chs, bias=qkv_bias)
         self.proj_k = nn.Linear(in_chs, out_chs, bias=qkv_bias)
         self.proj_v = nn.Linear(in_chs, out_chs, bias=qkv_bias)
@@ -111,11 +111,12 @@ class Attention(nn.Module):
         
         # need to handle cls token here
         
-        # [B, H*W, C_out] -> 
+        # [B, H*W, C_out] -> [B, H*W, n_h, d_h] -> [B, n_h, H*W, d_h]
         q = self.proj_q(q).reshape(B, q.shape[2], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         k = self.proj_k(k).reshape(B, k.shape[2], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         v = self.proj_v(v).reshape(B, v.shape[2], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         
+        # FIXME F.sdpa
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
         attn = attn.softmax(dim=-1)
