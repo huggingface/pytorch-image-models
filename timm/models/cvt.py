@@ -46,6 +46,7 @@ class ConvProj(nn.Module):
         norm_layer: nn.Module = nn.BatchNorm2d,
         act_layer: nn.Module = nn.Identity(),
     ) -> None:
+        super().__init__()
         self.dim = dim
 
         self.conv_q = ConvNormAct(
@@ -98,7 +99,7 @@ class Attention(nn.Module):
     def __init__(
             self,
             dim: int,
-            num_heads: int = 8,
+            num_heads: int = 1,
             qkv_bias: bool = True,
             qk_norm: bool = False,
             attn_drop: float = 0.,
@@ -159,7 +160,7 @@ class CvTBlock(nn.Module):
         conv_bias: bool = False,
         conv_norm_layer: nn.Module = nn.BatchNorm2d,
         conv_act_layer: nn.Module = nn.Identity(),
-        num_heads: int = 8,
+        num_heads: int = 1,
         qkv_bias: bool = True,
         qk_norm: bool = False,
         attn_drop: float = 0.,
@@ -173,6 +174,7 @@ class CvTBlock(nn.Module):
         mlp_act_layer: nn.Module = QuickGELU,
         use_cls_token: bool = False,
     ) -> None:
+        super().__init__()
         self.use_cls_token = use_cls_token
 
         self.norm1 = norm_layer(dim)
@@ -242,7 +244,7 @@ class CvTStage(nn.Module):
         depth: int,
         embed_kernel_size: int = 7,
         embed_stride: int = 4,
-        embed_padding: int 2,
+        embed_padding: int = 2,
         kernel_size: int = 3,
         stride_q: int = 1,
         stride_kv: int = 2,
@@ -250,7 +252,7 @@ class CvTStage(nn.Module):
         conv_bias: bool = False,
         conv_norm_layer: nn.Module = nn.BatchNorm2d,
         conv_act_layer: nn.Module = nn.Identity(),
-        num_heads: int = 8,
+        num_heads: int = 1,
         qkv_bias: bool = True,
         qk_norm: bool = False,
         attn_drop: float = 0.,
@@ -258,12 +260,14 @@ class CvTStage(nn.Module):
         input_norm_layer = LayerNorm2d,
         norm_layer: nn.Module = nn.LayerNorm,
         init_values: Optional[float] = None,
-        drop_path: float = 0.,
+        drop_path_rates: List[float] = [0.],
         mlp_layer: nn.Module = Mlp,
         mlp_ratio: float = 4.,
         mlp_act_layer: nn.Module = QuickGELU,
         use_cls_token: bool = False,
     ) -> None:
+        super().__init__()
+        
         self.conv_embed = ConvEmbed(
             in_chs = in_chs,
             out_chs = dim,
@@ -278,31 +282,30 @@ class CvTStage(nn.Module):
 
         blocks = []
         for i in range(depth):
-            blocks.append(
-                CvTBlock(
-                    dim = dim,
-                    kernel_size = kernel_size,
-                    stride_q = stride_q,
-                    stride_kv = stride_kv,
-                    padding = padding,
-                    conv_bias = conv_bias,
-                    conv_norm_layer = conv_norm_layer,
-                    conv_act_layer = conv_act_layer,
-                    num_heads = num_heads,
-                    qkv_bias = qkv_bias,
-                    qk_norm = qk_norm,
-                    attn_drop = attn_drop,
-                    proj_drop = proj_drop,
-                    input_norm_layer input_norm_layer,
-                    norm_layer = norm_layer,
-                    init_values = init_values,
-                    drop_path = drop_path,
-                    mlp_layer = mlp_layer,
-                    mlp_ratio = mlp_ratio,
-                    mlp_act_layer = mlp_act_layer,
-                    use_cls_token = use_cls_token,
-                )
+            block = CvTBlock(
+                dim = dim,
+                kernel_size = kernel_size,
+                stride_q = stride_q,
+                stride_kv = stride_kv,
+                padding = padding,
+                conv_bias = conv_bias,
+                conv_norm_layer = conv_norm_layer,
+                conv_act_layer = conv_act_layer,
+                num_heads = num_heads,
+                qkv_bias = qkv_bias,
+                qk_norm = qk_norm,
+                attn_drop = attn_drop,
+                proj_drop = proj_drop,
+                input_norm_layer input_norm_layer,
+                norm_layer = norm_layer,
+                init_values = init_values,
+                drop_path = drop_path_rates[i],
+                mlp_layer = mlp_layer,
+                mlp_ratio = mlp_ratio,
+                mlp_act_layer = mlp_act_layer,
+                use_cls_token = use_cls_token,
             )
+            blocks.append(block)
         self.blocks = nn.ModuleList(blocks)
 
         if self.cls_token is not None:
@@ -313,10 +316,83 @@ class CvTStage(nn.Module):
         x = self.embed_drop(x)
 
         cls_token = self.cls_token
-        for block in self.blocks:
+        for block in self.blocks: # technically possible to exploit nn.Sequential's untyped intermediate results if each block takes in a tensor
             x, cls_token = block(x, cls_token)
         
         return x, cls_token
 
 class CvT(nn.Module):
-    
+    def __init__(
+        in_chans: int = 3,
+        num_classes: int = 1000,
+        dims: Tuple[int, ...] = (64, 192, 384),
+        depths: Tuple[int, ...] = (1, 2, 10),
+        embed_kernel_size: Tuple[int, ...] = (7, 3, 3),
+        embed_stride: Tuple[int, ...] = (4, 2, 2),
+        embed_padding: Tuple[int, ...] = (2, 1, 1),
+        kernel_size: int = 3,
+        stride_q: int = 1,
+        stride_kv: int = 2,
+        padding: int = 1,
+        conv_bias: bool = False,
+        conv_norm_layer: nn.Module = nn.BatchNorm2d,
+        conv_act_layer: nn.Module = nn.Identity(),
+        num_heads: Tuple[int, ...] = (1, 3, 6),
+        qkv_bias: bool = True,
+        qk_norm: bool = False,
+        attn_drop: float = 0.,
+        proj_drop: float = 0.,
+        input_norm_layer = LayerNorm2d,
+        norm_layer: nn.Module = nn.LayerNorm,
+        init_values: Optional[float] = None,
+        drop_path_rate: float = 0.,
+        mlp_layer: nn.Module = Mlp,
+        mlp_ratio: float = 4.,
+        mlp_act_layer: nn.Module = QuickGELU,
+        use_cls_token: Tuple[bool, ...] = (False, False, True),
+    ) -> None:
+        super().__init__()
+        num_stages = len(dims)
+        assert num_stages == len(depths) == len(embed_kernel_size) == len(embed_stride)
+        assert num_stages == len(embed_padding) == len(num_heads) == len(use_cls_token)
+        self.num_classes = num_classes
+        self.num_features = dims[-1]
+        self.drop_rate = drop_rate
+        
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        
+        in_chs = in_chans
+        
+        stages = []
+        for stage_idx in range(num_stages):
+            dim = dims[stage_idx]
+            stage = CvTStage(
+                in_chs = in_chs,
+                dim = dim,
+                depth = depths[stage_idx],
+                embed_kernel_size = embed_kernel_size[stage_idx],
+                embed_stride = embed_stride[stage_idx],
+                embed_padding = embed_padding[stage_idx],
+                kernel_size = kernel_size,
+                stride_q = stride_q,
+                stride_kv = stride_kv,
+                padding = padding,
+                conv_bias = conv_bias,
+                conv_norm_layer = conv_norm_layer,
+                conv_act_layer = conv_act_layer,
+                num_heads = num_heads[stage_idx],
+                qkv_bias = qkv_bias,
+                qk_norm = qk_norm,
+                attn_drop = attn_drop,
+                proj_drop = proj_drop,
+                input_norm_layer = input_norm_layer,
+                norm_layer = norm_layer,
+                init_values = init_values,
+                drop_path_rates = dpr[stage_idx],
+                mlp_layer = mlp_layer,
+                mlp_ratio = mlp_ratio,
+                mlp_act_layer = mlp_act_layer,
+                use_cls_token = use_cls_token[stage_idx],
+            )
+            in_chs = dim
+            stages.append(stage)
