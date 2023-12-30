@@ -255,8 +255,12 @@ group.add_argument('--jsd-loss', action='store_true', default=False,
                    help='Enable Jensen-Shannon Divergence + CE loss. Use with `--aug-splits`.')
 group.add_argument('--bce-loss', action='store_true', default=False,
                    help='Enable BCE loss w/ Mixup/CutMix use.')
+group.add_argument('--bce-sum', action='store_true', default=False,
+                   help='Sum over classes when using BCE loss.')
 group.add_argument('--bce-target-thresh', type=float, default=None,
-                   help='Threshold for binarizing softened BCE targets (default: None, disabled)')
+                   help='Threshold for binarizing softened BCE targets (default: None, disabled).')
+group.add_argument('--bce-pos-weight', type=float, default=None,
+                   help='Positive weighting for BCE loss.')
 group.add_argument('--reprob', type=float, default=0., metavar='PCT',
                    help='Random erase prob (default: 0.)')
 group.add_argument('--remode', type=str, default='pixel',
@@ -699,12 +703,21 @@ def main():
     elif mixup_active:
         # smoothing is handled with mixup target transform which outputs sparse, soft targets
         if args.bce_loss:
-            train_loss_fn = BinaryCrossEntropy(target_threshold=args.bce_target_thresh)
+            train_loss_fn = BinaryCrossEntropy(
+                target_threshold=args.bce_target_thresh,
+                sum_classes=args.bce_sum,
+                pos_weight=args.bce_pos_weight,
+            )
         else:
             train_loss_fn = SoftTargetCrossEntropy()
     elif args.smoothing:
         if args.bce_loss:
-            train_loss_fn = BinaryCrossEntropy(smoothing=args.smoothing, target_threshold=args.bce_target_thresh)
+            train_loss_fn = BinaryCrossEntropy(
+                smoothing=args.smoothing,
+                target_threshold=args.bce_target_thresh,
+                sum_classes=args.bce_sum,
+                pos_weight=args.bce_pos_weight,
+            )
         else:
             train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
