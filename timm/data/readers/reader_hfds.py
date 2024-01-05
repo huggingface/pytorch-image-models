@@ -4,6 +4,8 @@ Hacked together by / Copyright 2022 Ross Wightman
 """
 import io
 import math
+from typing import Optional
+
 import torch
 import torch.distributed as dist
 from PIL import Image
@@ -12,7 +14,7 @@ try:
     import datasets
 except ImportError as e:
     print("Please install Hugging Face datasets package `pip install datasets`.")
-    exit(1)
+    raise e
 from .class_map import load_class_map
 from .reader import Reader
 
@@ -29,12 +31,13 @@ class ReaderHfds(Reader):
 
     def __init__(
             self,
-            root,
-            name,
-            split='train',
-            class_map=None,
-            label_key='label',
-            download=False,
+            name: str,
+            root: Optional[str] = None,
+            split: str = 'train',
+            class_map: dict = None,
+            image_key: str = 'image',
+            target_key: str = 'label',
+            download: bool = False,
     ):
         """
         """
@@ -47,9 +50,10 @@ class ReaderHfds(Reader):
             cache_dir=self.root,  # timm doesn't expect hidden cache dir for datasets, specify a path
         )
         # leave decode for caller, plus we want easy access to original path names...
-        self.dataset = self.dataset.cast_column('image', datasets.Image(decode=False))
+        self.dataset = self.dataset.cast_column(image_key, datasets.Image(decode=False))
 
-        self.label_key = label_key
+        self.image_key = image_key
+        self.label_key = target_key
         self.remap_class = False
         if class_map:
             self.class_to_idx = load_class_map(class_map)
@@ -61,7 +65,7 @@ class ReaderHfds(Reader):
 
     def __getitem__(self, index):
         item = self.dataset[index]
-        image = item['image']
+        image = item[self.image_key]
         if 'bytes' in image and image['bytes']:
             image = io.BytesIO(image['bytes'])
         else:
@@ -77,4 +81,4 @@ class ReaderHfds(Reader):
 
     def _filename(self, index, basename=False, absolute=False):
         item = self.dataset[index]
-        return item['image']['path']
+        return item[self.image_key]['path']

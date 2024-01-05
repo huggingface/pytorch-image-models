@@ -10,14 +10,14 @@ import random
 from contextlib import suppress
 from functools import partial
 from itertools import repeat
-from typing import Callable
+from typing import Callable, Optional, Tuple, Union
 
 import torch
 import torch.utils.data
 import numpy as np
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .dataset import IterableImageDataset
+from .dataset import IterableImageDataset, ImageDataset
 from .distributed_sampler import OrderedDistributedSampler, RepeatAugSampler
 from .random_erasing import RandomErasing
 from .mixup import FastCollateMixup
@@ -187,41 +187,91 @@ def _worker_init(worker_id, worker_seeding='all'):
 
 
 def create_loader(
-        dataset,
-        input_size,
-        batch_size,
-        is_training=False,
-        use_prefetcher=True,
-        no_aug=False,
-        re_prob=0.,
-        re_mode='const',
-        re_count=1,
-        re_split=False,
-        scale=None,
-        ratio=None,
-        hflip=0.5,
-        vflip=0.,
-        color_jitter=0.4,
-        auto_augment=None,
-        num_aug_repeats=0,
-        num_aug_splits=0,
-        interpolation='bilinear',
-        mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD,
-        num_workers=1,
-        distributed=False,
-        crop_pct=None,
-        crop_mode=None,
-        collate_fn=None,
-        pin_memory=False,
-        fp16=False,  # deprecated, use img_dtype
-        img_dtype=torch.float32,
-        device=torch.device('cuda'),
-        tf_preprocessing=False,
-        use_multi_epochs_loader=False,
-        persistent_workers=True,
-        worker_seeding='all',
+        dataset: Union[ImageDataset, IterableImageDataset],
+        input_size: Union[int, Tuple[int, int], Tuple[int, int, int]],
+        batch_size: int,
+        is_training: bool = False,
+        no_aug: bool = False,
+        re_prob: float = 0.,
+        re_mode: str = 'const',
+        re_count: int = 1,
+        re_split: bool = False,
+        scale: Optional[Tuple[float, float]] = None,
+        ratio: Optional[Tuple[float, float]] = None,
+        hflip: float = 0.5,
+        vflip: float = 0.,
+        color_jitter: float = 0.4,
+        color_jitter_prob: Optional[float] = None,
+        grayscale_prob: float = 0.,
+        gaussian_blur_prob: float = 0.,
+        auto_augment: Optional[str] = None,
+        num_aug_repeats: int = 0,
+        num_aug_splits: int = 0,
+        interpolation: str = 'bilinear',
+        mean: Tuple[float, ...] = IMAGENET_DEFAULT_MEAN,
+        std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
+        num_workers: int = 1,
+        distributed: bool = False,
+        crop_pct: Optional[float] = None,
+        crop_mode: Optional[str] = None,
+        crop_border_pixels: Optional[int] = None,
+        collate_fn: Optional[Callable] = None,
+        pin_memory: bool = False,
+        fp16: bool = False,  # deprecated, use img_dtype
+        img_dtype: torch.dtype = torch.float32,
+        device: torch.device = torch.device('cuda'),
+        use_prefetcher: bool = True,
+        use_multi_epochs_loader: bool = False,
+        persistent_workers: bool = True,
+        worker_seeding: str = 'all',
+        tf_preprocessing: bool = False,
 ):
+    """
+
+    Args:
+        dataset: The image dataset to load.
+        input_size: Target input size (channels, height, width) tuple or size scalar.
+        batch_size: Number of samples in a batch.
+        is_training: Return training (random) transforms.
+        no_aug: Disable augmentation for training (useful for debug).
+        re_prob: Random erasing probability.
+        re_mode: Random erasing fill mode.
+        re_count: Number of random erasing regions.
+        re_split: Control split of random erasing across batch size.
+        scale: Random resize scale range (crop area, < 1.0 => zoom in).
+        ratio: Random aspect ratio range (crop ratio for RRC, ratio adjustment factor for RKR).
+        hflip: Horizontal flip probability.
+        vflip: Vertical flip probability.
+        color_jitter: Random color jitter component factors (brightness, contrast, saturation, hue).
+            Scalar is applied as (scalar,) * 3 (no hue).
+        color_jitter_prob: Apply color jitter with this probability if not None (for SimlCLR-like aug
+        grayscale_prob: Probability of converting image to grayscale (for SimCLR-like aug).
+        gaussian_blur_prob: Probability of applying gaussian blur (for SimCLR-like aug).
+        auto_augment: Auto augment configuration string (see auto_augment.py).
+        num_aug_repeats: Enable special sampler to repeat same augmentation across distributed GPUs.
+        num_aug_splits: Enable mode where augmentations can be split across the batch.
+        interpolation: Image interpolation mode.
+        mean: Image normalization mean.
+        std: Image normalization standard deviation.
+        num_workers: Num worker processes per DataLoader.
+        distributed: Enable dataloading for distributed training.
+        crop_pct: Inference crop percentage (output size / resize size).
+        crop_mode: Inference crop mode. One of ['squash', 'border', 'center']. Defaults to 'center' when None.
+        crop_border_pixels: Inference crop border of specified # pixels around edge of original image.
+        collate_fn: Override default collate_fn.
+        pin_memory: Pin memory for device transfer.
+        fp16: Deprecated argument for half-precision input dtype. Use img_dtype.
+        img_dtype: Data type for input image.
+        device: Device to transfer inputs and targets to.
+        use_prefetcher: Use efficient pre-fetcher to load samples onto device.
+        use_multi_epochs_loader:
+        persistent_workers: Enable persistent worker processes.
+        worker_seeding: Control worker random seeding at init.
+        tf_preprocessing: Use TF 1.0 inference preprocessing for testing model ports.
+
+    Returns:
+        DataLoader
+    """
     re_num_splits = 0
     if re_split:
         # apply RE to second half of batch if no aug split otherwise line up with aug split
@@ -229,24 +279,28 @@ def create_loader(
     dataset.transform = create_transform(
         input_size,
         is_training=is_training,
-        use_prefetcher=use_prefetcher,
         no_aug=no_aug,
         scale=scale,
         ratio=ratio,
         hflip=hflip,
         vflip=vflip,
         color_jitter=color_jitter,
+        color_jitter_prob=color_jitter_prob,
+        grayscale_prob=grayscale_prob,
+        gaussian_blur_prob=gaussian_blur_prob,
         auto_augment=auto_augment,
         interpolation=interpolation,
         mean=mean,
         std=std,
         crop_pct=crop_pct,
         crop_mode=crop_mode,
-        tf_preprocessing=tf_preprocessing,
+        crop_border_pixels=crop_border_pixels,
         re_prob=re_prob,
         re_mode=re_mode,
         re_count=re_count,
         re_num_splits=re_num_splits,
+        tf_preprocessing=tf_preprocessing,
+        use_prefetcher=use_prefetcher,
         separate=num_aug_splits > 0,
     )
 

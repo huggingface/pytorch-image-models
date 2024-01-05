@@ -3,6 +3,7 @@
 Hacked together by / Copyright 2021, Ross Wightman
 """
 import os
+from typing import Optional
 
 from torchvision.datasets import CIFAR100, CIFAR10, MNIST, KMNIST, FashionMNIST, ImageFolder
 try:
@@ -60,22 +61,24 @@ def _search_split(root, split):
 
 
 def create_dataset(
-        name,
-        root,
-        split='validation',
-        search_split=True,
-        class_map=None,
-        load_bytes=False,
-        is_training=False,
-        download=False,
-        batch_size=None,
-        seed=42,
-        repeats=0,
-        **kwargs
+        name: str,
+        root: Optional[str] = None,
+        split: str = 'validation',
+        search_split: bool = True,
+        class_map: dict = None,
+        load_bytes: bool = False,
+        is_training: bool = False,
+        download: bool = False,
+        batch_size: int = 1,
+        num_samples: Optional[int] = None,
+        seed: int = 42,
+        repeats: int = 0,
+        input_img_mode: str = 'RGB',
+        **kwargs,
 ):
     """ Dataset factory method
 
-    In parenthesis after each arg are the type of dataset supported for each arg, one of:
+    In parentheses after each arg are the type of dataset supported for each arg, one of:
       * folder - default, timm folder (or tar) based ImageDataset
       * torch - torchvision based datasets
       * HFDS - Hugging Face Datasets
@@ -97,11 +100,13 @@ def create_dataset(
         batch_size: batch size hint for (TFDS, WDS)
         seed: seed for iterable datasets (TFDS, WDS)
         repeats: dataset repeats per iteration i.e. epoch (TFDS, WDS)
+        input_img_mode: Input image color conversion mode e.g. 'RGB', 'L' (folder, TFDS, WDS, HFDS)
         **kwargs: other args to pass to dataset
 
     Returns:
         Dataset object
     """
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
     name = name.lower()
     if name.startswith('torch/'):
         name = name.split('/', 2)[-1]
@@ -151,7 +156,29 @@ def create_dataset(
     elif name.startswith('hfds/'):
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
-        ds = ImageDataset(root, reader=name, split=split, class_map=class_map, **kwargs)
+        ds = ImageDataset(
+            root,
+            reader=name,
+            split=split,
+            class_map=class_map,
+            input_img_mode=input_img_mode,
+            **kwargs,
+        )
+    elif name.startswith('hfids/'):
+        ds = IterableImageDataset(
+            root,
+            reader=name,
+            split=split,
+            class_map=class_map,
+            is_training=is_training,
+            download=download,
+            batch_size=batch_size,
+            num_samples=num_samples,
+            repeats=repeats,
+            seed=seed,
+            input_img_mode=input_img_mode,
+            **kwargs
+        )
     elif name.startswith('tfds/'):
         ds = IterableImageDataset(
             root,
@@ -161,8 +188,10 @@ def create_dataset(
             is_training=is_training,
             download=download,
             batch_size=batch_size,
+            num_samples=num_samples,
             repeats=repeats,
             seed=seed,
+            input_img_mode=input_img_mode,
             **kwargs
         )
     elif name.startswith('wds/'):
@@ -173,8 +202,10 @@ def create_dataset(
             class_map=class_map,
             is_training=is_training,
             batch_size=batch_size,
+            num_samples=num_samples,
             repeats=repeats,
             seed=seed,
+            input_img_mode=input_img_mode,
             **kwargs
         )
     else:
@@ -182,5 +213,12 @@ def create_dataset(
         if search_split and os.path.isdir(root):
             # look for split specific sub-folder in root
             root = _search_split(root, split)
-        ds = ImageDataset(root, reader=name, class_map=class_map, load_bytes=load_bytes, **kwargs)
+        ds = ImageDataset(
+            root,
+            reader=name,
+            class_map=class_map,
+            load_bytes=load_bytes,
+            input_img_mode=input_img_mode,
+            **kwargs,
+        )
     return ds

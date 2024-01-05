@@ -93,10 +93,20 @@ group.add_argument('--train-split', metavar='NAME', default='train',
                    help='dataset train split (default: train)')
 group.add_argument('--val-split', metavar='NAME', default='validation',
                    help='dataset validation split (default: validation)')
+parser.add_argument('--train-num-samples', default=None, type=int,
+                    metavar='N', help='Manually specify num samples in train split, for IterableDatasets.')
+parser.add_argument('--val-num-samples', default=None, type=int,
+                    metavar='N', help='Manually specify num samples in validation split, for IterableDatasets.')
 group.add_argument('--dataset-download', action='store_true', default=False,
                    help='Allow download of dataset for torch/ and tfds/ datasets that support it.')
 group.add_argument('--class-map', default='', type=str, metavar='FILENAME',
                    help='path to class to idx mapping file (default: "")')
+group.add_argument('--input-img-mode', default=None, type=str,
+                   help='Dataset image conversion mode for input images.')
+group.add_argument('--input-key', default=None, type=str,
+                   help='Dataset key for input images.')
+group.add_argument('--target-key', default=None, type=str,
+                   help='Dataset key for target labels.')
 
 # Model parameters
 group = parser.add_argument_group('Model parameters')
@@ -245,6 +255,12 @@ group.add_argument('--vflip', type=float, default=0.,
                    help='Vertical flip training aug probability')
 group.add_argument('--color-jitter', type=float, default=0.4, metavar='PCT',
                    help='Color jitter factor (default: 0.4)')
+group.add_argument('--color-jitter-prob', type=float, default=None, metavar='PCT',
+                   help='Probability of applying any color jitter.')
+group.add_argument('--grayscale-prob', type=float, default=None, metavar='PCT',
+                   help='Probability of applying random grayscale conversion.')
+group.add_argument('--gaussian-blur-prob', type=float, default=None, metavar='PCT',
+                   help='Probability of applying gaussian blur.')
 group.add_argument('--aa', type=str, default=None, metavar='NAME',
                    help='Use AutoAugment policy. "v0" or "original". (default: None)'),
 group.add_argument('--aug-repeats', type=float, default=0,
@@ -594,6 +610,10 @@ def main():
     # create the train and eval datasets
     if args.data and not args.data_dir:
         args.data_dir = args.data
+    if args.input_img_mode is None:
+        input_img_mode = 'RGB' if data_config['input_size'][0] == 3 else 'L'
+    else:
+        input_img_mode = args.input_img_mode
     dataset_train = create_dataset(
         args.dataset,
         root=args.data_dir,
@@ -604,6 +624,10 @@ def main():
         batch_size=args.batch_size,
         seed=args.seed,
         repeats=args.epoch_repeats,
+        input_img_mode=input_img_mode,
+        input_key=args.input_key,
+        target_key=args.target_key,
+        num_samples=args.train_num_samples,
     )
 
     dataset_eval = create_dataset(
@@ -614,6 +638,10 @@ def main():
         class_map=args.class_map,
         download=args.dataset_download,
         batch_size=args.batch_size,
+        input_img_mode=input_img_mode,
+        input_key=args.input_key,
+        target_key=args.target_key,
+        num_samples=args.val_num_samples,
     )
 
     # setup mixup / cutmix
@@ -650,7 +678,6 @@ def main():
         input_size=data_config['input_size'],
         batch_size=args.batch_size,
         is_training=True,
-        use_prefetcher=args.prefetcher,
         no_aug=args.no_aug,
         re_prob=args.reprob,
         re_mode=args.remode,
@@ -661,6 +688,9 @@ def main():
         hflip=args.hflip,
         vflip=args.vflip,
         color_jitter=args.color_jitter,
+        color_jitter_prob=args.color_jitter_prob,
+        grayscale_prob=args.grayscale_prob,
+        gaussian_blur_prob=args.gaussian_blur_prob,
         auto_augment=args.aa,
         num_aug_repeats=args.aug_repeats,
         num_aug_splits=num_aug_splits,
@@ -672,6 +702,7 @@ def main():
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
         device=device,
+        use_prefetcher=args.prefetcher,
         use_multi_epochs_loader=args.use_multi_epochs_loader,
         worker_seeding=args.worker_seeding,
     )
@@ -685,7 +716,6 @@ def main():
         input_size=data_config['input_size'],
         batch_size=args.validation_batch_size or args.batch_size,
         is_training=False,
-        use_prefetcher=args.prefetcher,
         interpolation=data_config['interpolation'],
         mean=data_config['mean'],
         std=data_config['std'],
@@ -694,6 +724,7 @@ def main():
         crop_pct=data_config['crop_pct'],
         pin_memory=args.pin_mem,
         device=device,
+        use_prefetcher=args.prefetcher,
     )
 
     # setup loss function

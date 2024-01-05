@@ -8,6 +8,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import math
 import os
+import sys
 from typing import Optional
 
 import torch
@@ -32,7 +33,7 @@ try:
 except ImportError as e:
     print(e)
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
-    exit(1)
+    raise e
 
 from .class_map import load_class_map
 from .reader import Reader
@@ -45,10 +46,10 @@ PREFETCH_SIZE = int(os.environ.get('TFDS_PREFETCH_SIZE', 2048))  # samples to pr
 
 
 @tfds.decode.make_decoder()
-def decode_example(serialized_image, feature, dct_method='INTEGER_ACCURATE'):
+def decode_example(serialized_image, feature, dct_method='INTEGER_ACCURATE', channels=3):
     return tf.image.decode_jpeg(
         serialized_image,
-        channels=3,
+        channels=channels,
         dct_method=dct_method,
     )
 
@@ -92,18 +93,18 @@ class ReaderTfds(Reader):
 
     def __init__(
             self,
-            root,
             name,
+            root=None,
             split='train',
             class_map=None,
             is_training=False,
-            batch_size=None,
+            batch_size=1,
             download=False,
             repeats=0,
             seed=42,
-            input_name='image',
+            input_key='image',
             input_img_mode='RGB',
-            target_name='label',
+            target_key='label',
             target_img_mode='',
             prefetch_size=None,
             shuffle_size=None,
@@ -120,9 +121,9 @@ class ReaderTfds(Reader):
             download: download and build TFDS dataset if set, otherwise must use tfds CLI
             repeats: iterate through (repeat) the dataset this many times per iteration (once if 0 or 1)
             seed: common seed for shard shuffle across all distributed/worker instances
-            input_name: name of Feature to return as data (input)
+            input_key: name of Feature to return as data (input)
             input_img_mode: image mode if input is an image (currently PIL mode string)
-            target_name: name of Feature to return as target (label)
+            target_key: name of Feature to return as target (label)
             target_img_mode: image mode if target is an image (currently PIL mode string)
             prefetch_size: override default tf.data prefetch buffer size
             shuffle_size: override default tf.data shuffle buffer size
@@ -132,9 +133,6 @@ class ReaderTfds(Reader):
         self.root = root
         self.split = split
         self.is_training = is_training
-        if self.is_training:
-            assert batch_size is not None, \
-                "Must specify batch_size in training mode for reasonable behaviour w/ TFDS wrapper"
         self.batch_size = batch_size
         self.repeats = repeats
         self.common_seed = seed  # a seed that's fixed across all worker / distributed instances
@@ -145,10 +143,10 @@ class ReaderTfds(Reader):
         self.max_threadpool_size = max_threadpool_size or MAX_TP_SIZE
 
         # TFDS builder and split information
-        self.input_name = input_name  # FIXME support tuples / lists of inputs and targets and full range of Feature
+        self.input_key = input_key  # FIXME support tuples / lists of inputs and targets and full range of Feature
         self.input_img_mode = input_img_mode
-        self.target_name = target_name
-        self.target_img_mode = target_img_mode
+        self.target_key = target_key
+        self.target_img_mode = target_img_mode  # for dense pixel targets
         self.builder = tfds.builder(name, data_dir=root)
         # NOTE: the tfds command line app can be used download & prepare datasets if you don't enable download flag
         if download:
@@ -158,7 +156,7 @@ class ReaderTfds(Reader):
             self.class_to_idx = load_class_map(class_map)
             self.remap_class = True
         else:
-            self.class_to_idx = get_class_labels(self.builder.info) if self.target_name == 'label' else {}
+            self.class_to_idx = get_class_labels(self.builder.info) if self.target_key == 'label' else {}
         self.split_info = self.builder.info.splits[split]
         self.num_samples = self.split_info.num_examples
 
@@ -258,7 +256,7 @@ class ReaderTfds(Reader):
         ds = self.builder.as_dataset(
             split=self.subsplit or self.split,
             shuffle_files=self.is_training,
-            decoders=dict(image=decode_example()),
+            decoders=dict(image=decode_example(channels=1 if self.input_img_mode == 'L' else 3)),
             read_config=read_config,
         )
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
@@ -282,7 +280,7 @@ class ReaderTfds(Reader):
             max(1, self.repeats) * self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
         if self.is_training or self.dist_num_replicas > 1:
             num_worker_samples = math.ceil(num_worker_samples)
-        if self.is_training and self.batch_size is not None:
+        if self.is_training:
             num_worker_samples = math.ceil(num_worker_samples / self.batch_size) * self.batch_size
         return int(num_worker_samples)
 
@@ -300,11 +298,14 @@ class ReaderTfds(Reader):
         # Iterate until exhausted or sample count hits target when training (ds.repeat enabled)
         sample_count = 0
         for sample in self.ds:
-            input_data = sample[self.input_name]
+            input_data = sample[self.input_key]
             if self.input_img_mode:
+                if self.input_img_mode == 'L' and input_data.ndim == 3:
+                    input_data = input_data[:, :, 0]
                 input_data = Image.fromarray(input_data, mode=self.input_img_mode)
-            target_data = sample[self.target_name]
+            target_data = sample[self.target_key]
             if self.target_img_mode:
+                # dense pixel target
                 target_data = Image.fromarray(target_data, mode=self.target_img_mode)
             elif self.remap_class:
                 target_data = self.class_to_idx[target_data]

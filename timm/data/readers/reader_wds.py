@@ -22,7 +22,7 @@ from torch.utils.data import Dataset, IterableDataset, get_worker_info
 
 try:
     import webdataset as wds
-    from webdataset.filters import _shuffle
+    from webdataset.filters import _shuffle, getfirst
     from webdataset.shardlists import expand_urls
     from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander, valid_sample
 except ImportError:
@@ -35,27 +35,30 @@ from .shared_count import SharedCount
 
 _logger = logging.getLogger(__name__)
 
-SHUFFLE_SIZE = int(os.environ.get('WDS_SHUFFLE_SIZE', 8192))
+SAMPLE_SHUFFLE_SIZE = int(os.environ.get('WDS_SHUFFLE_SIZE', 8192))
+SAMPLE_INITIAL_SIZE = int(os.environ.get('WDS_INITIAL_SIZE', 2048))
 
 
-def _load_info(root, basename='info'):
-    info_json = os.path.join(root, basename + '.json')
-    info_yaml = os.path.join(root, basename + '.yaml')
+def _load_info(root, names=('_info.json', 'info.json')):
+    if isinstance(names, str):
+        names = (names,)
+    tried = []
     err_str = ''
-    try:
-        with wds.gopen(info_json) as f:
-            info_dict = json.load(f)
-        return info_dict
-    except Exception as e:
-        err_str = str(e)
-    try:
-        with wds.gopen(info_yaml) as f:
-            info_dict = yaml.safe_load(f)
-        return info_dict
-    except Exception:
-        pass
+    for n in names:
+        full_path = os.path.join(root, n)
+        try:
+            tried.append(full_path)
+            with wds.gopen(full_path) as f:
+                if n.endswith('.json'):
+                    info_dict = json.load(f)
+                else:
+                    info_dict = yaml.safe_load(f)
+            return info_dict
+        except Exception as e:
+            err_str = str(e)
+
     _logger.warning(
-        f'Dataset info file not found at {info_json} or {info_yaml}. Error: {err_str}. '
+        f'Dataset info file not found at {tried}. Error: {err_str}. '
         'Falling back to provided split and size arg.')
     return {}
 
@@ -121,15 +124,18 @@ def _parse_split_info(split: str, info: Dict):
 
 
 def log_and_continue(exn):
-    """Call in an exception handler to ignore any exception, isssue a warning, and continue."""
+    """Call in an exception handler to ignore exceptions, isssue a warning, and continue."""
     _logger.warning(f'Handling webdataset error ({repr(exn)}). Ignoring.')
+    # NOTE: try force an exit on errors that are clearly code / config and not transient
+    if isinstance(exn, TypeError):
+        raise exn
     return True
 
 
 def _decode(
         sample,
         image_key='jpg',
-        image_format='RGB',
+        image_mode='RGB',
         target_key='cls',
         alt_label=''
 ):
@@ -150,45 +156,16 @@ def _decode(
         class_label = int(sample[target_key])
 
     # decode image
-    with io.BytesIO(sample[image_key]) as b:
+    img = getfirst(sample, image_key)
+    with io.BytesIO(img) as b:
         img = Image.open(b)
         img.load()
-    if image_format:
-        img = img.convert(image_format)
+    if image_mode:
+        img = img.convert(image_mode)
 
     # json passed through in undecoded state
     decoded = dict(jpg=img, cls=class_label, json=sample.get('json', None))
     return decoded
-
-
-def _decode_samples(
-        data,
-        image_key='jpg',
-        image_format='RGB',
-        target_key='cls',
-        alt_label='',
-        handler=log_and_continue):
-    """Decode samples with skip."""
-    for sample in data:
-        try:
-            result = _decode(
-                sample,
-                image_key=image_key,
-                image_format=image_format,
-                target_key=target_key,
-                alt_label=alt_label
-            )
-        except Exception as exn:
-            if handler(exn):
-                continue
-            else:
-                break
-
-        # null results are skipped
-        if result is not None:
-            if isinstance(sample, dict) and isinstance(result, dict):
-                result["__key__"] = sample.get("__key__")
-            yield result
 
 
 def pytorch_worker_seed():
@@ -203,6 +180,7 @@ def pytorch_worker_seed():
 
 if wds is not None:
     # conditional to avoid mandatory wds import (via inheritance of wds.PipelineStage)
+
     class detshuffle2(wds.PipelineStage):
         def __init__(
                 self,
@@ -284,20 +262,22 @@ class ResampledShards2(IterableDataset):
 class ReaderWds(Reader):
     def __init__(
             self,
-            root,
-            name,
-            split,
-            is_training=False,
-            batch_size=None,
-            repeats=0,
-            seed=42,
-            class_map=None,
-            input_name='jpg',
-            input_image='RGB',
-            target_name='cls',
-            target_image='',
-            prefetch_size=None,
-            shuffle_size=None,
+            root: str,
+            name: Optional[str] = None,
+            split: str = 'train',
+            is_training: bool = False,
+            num_samples: Optional[int] = None,
+            batch_size: int = 1,
+            repeats: int = 0,
+            seed: int = 42,
+            class_map: Optional[dict] = None,
+            input_key: str = 'jpg;png;webp',
+            input_img_mode: str = 'RGB',
+            target_key: str = 'cls',
+            target_img_mode: str = '',
+            filename_key: str = 'filename',
+            sample_shuffle_size: Optional[int] = None,
+            smaple_initial_size: Optional[int] = None,
     ):
         super().__init__()
         if wds is None:
@@ -309,19 +289,23 @@ class ReaderWds(Reader):
         self.repeats = repeats
         self.common_seed = seed  # a seed that's fixed across all worker / distributed instances
         self.shard_shuffle_size = 500
-        self.sample_shuffle_size = shuffle_size or SHUFFLE_SIZE
+        self.sample_shuffle_size = sample_shuffle_size or SAMPLE_SHUFFLE_SIZE
+        self.sample_initial_size = smaple_initial_size or SAMPLE_INITIAL_SIZE
 
-        self.image_key = input_name
-        self.image_format = input_image
-        self.target_key = target_name
-        self.filename_key = 'filename'
+        self.input_key = input_key
+        self.input_img_mode = input_img_mode
+        self.target_key = target_key
+        self.filename_key = filename_key
         self.key_ext = '.JPEG'  # extension to add to key for original filenames (DS specific, default ImageNet)
 
         self.info = _load_info(self.root)
         self.split_info = _parse_split_info(split, self.info)
-        self.num_samples = self.split_info.num_samples
+        if num_samples is not None:
+            self.num_samples = num_samples
+        else:
+            self.num_samples = self.split_info.num_samples
         if not self.num_samples:
-            raise RuntimeError(f'Invalid split definition, no samples found.')
+            raise RuntimeError(f'Invalid split definition, num_samples not specified.')
         self.remap_class = False
         if class_map:
             self.class_to_idx = load_class_map(class_map)
@@ -346,7 +330,7 @@ class ReaderWds(Reader):
         self.init_count = 0
         self.epoch_count = SharedCount()
 
-        # DataPipeline is lazy init, majority of WDS DataPipeline could be init here, BUT, shuffle seed
+        # DataPipeline is lazy init, the majority of WDS DataPipeline could be init here, BUT, shuffle seed
         # is not handled in manner where it can be deterministic for each worker AND initialized up front
         self.ds = None
 
@@ -382,13 +366,19 @@ class ReaderWds(Reader):
         # at this point we have an iterator over all the shards
         if self.is_training:
             pipeline.extend([
-                detshuffle2(self.shard_shuffle_size, seed=self.common_seed, epoch=self.epoch_count),
+                detshuffle2(
+                    self.shard_shuffle_size,
+                    seed=self.common_seed,
+                    epoch=self.epoch_count,
+                ),
                 self._split_by_node_and_worker,
                 # at this point, we have an iterator over the shards assigned to each worker
                 wds.tarfile_to_samples(handler=log_and_continue),
                 wds.shuffle(
-                    self.sample_shuffle_size,
-                    rng=random.Random(self.worker_seed)),  # this is why we lazy-init whole DataPipeline
+                    bufsize=self.sample_shuffle_size,
+                    initial=self.sample_initial_size,
+                    rng=random.Random(self.worker_seed) # this is why we lazy-init whole DataPipeline
+                ),
             ])
         else:
             pipeline.extend([
@@ -397,12 +387,16 @@ class ReaderWds(Reader):
                 wds.tarfile_to_samples(handler=log_and_continue),
             ])
         pipeline.extend([
-            partial(
-                _decode_samples,
-                image_key=self.image_key,
-                image_format=self.image_format,
-                alt_label=self.split_info.alt_label
-            )
+            wds.map(
+                partial(
+                    _decode,
+                    image_key=self.input_key,
+                    image_mode=self.input_img_mode,
+                    alt_label=self.split_info.alt_label,
+                ),
+                handler=log_and_continue,
+            ),
+            wds.rename(image=self.input_key, target=self.target_key)
         ])
         self.ds = wds.DataPipeline(*pipeline)
 
@@ -418,7 +412,7 @@ class ReaderWds(Reader):
         num_worker_samples = self.num_samples / max(self.global_num_workers, self.dist_num_replicas)
         if self.is_training or self.dist_num_replicas > 1:
             num_worker_samples = math.ceil(num_worker_samples)
-        if self.is_training and self.batch_size is not None:
+        if self.is_training:
             num_worker_samples = math.ceil(num_worker_samples / self.batch_size) * self.batch_size
         return int(num_worker_samples)
 
@@ -439,10 +433,10 @@ class ReaderWds(Reader):
         i = 0
         # _logger.info(f'start {i}, {self.worker_id}')  # FIXME temporary debug
         for sample in ds:
-            target = sample[self.target_key]
+            target = sample['target']
             if self.remap_class:
                 target = self.class_to_idx[target]
-            yield sample[self.image_key], target
+            yield sample['image'], target
             i += 1
         # _logger.info(f'end {i}, {self.worker_id}')  # FIXME temporary debug
 
