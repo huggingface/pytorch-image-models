@@ -296,7 +296,7 @@ class CvTStage(nn.Module):
                 qk_norm = qk_norm,
                 attn_drop = attn_drop,
                 proj_drop = proj_drop,
-                input_norm_layer input_norm_layer,
+                input_norm_layer = input_norm_layer,
                 norm_layer = norm_layer,
                 init_values = init_values,
                 drop_path = drop_path_rates[i],
