@@ -1,3 +1,4 @@
+from .tied_model import TiedModelWrapper
 from .beit import *
 from .byoanet import *
 from .byobnet import *

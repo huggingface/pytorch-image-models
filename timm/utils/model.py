@@ -10,12 +10,15 @@ from torchvision.ops.misc import FrozenBatchNorm2d
 
 from timm.layers import BatchNormAct2d, SyncBatchNormAct, FrozenBatchNormAct2d,\
     freeze_batch_norm_2d, unfreeze_batch_norm_2d
+from timm.models import TiedModelWrapper 
 from .model_ema import ModelEma
 
 
 def unwrap_model(model):
     if isinstance(model, ModelEma):
         return unwrap_model(model.ema)
+    elif isinstance(model, TiedModelWrapper):
+        return model.model
     else:
         return model.module if hasattr(model, 'module') else model
 
