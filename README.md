@@ -26,6 +26,17 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Jan 8, 2024
+Datasets & transform refactoring
+* HuggingFace streaming (iterable) dataset support (`--dataset hfids:org/dataset`)
+* Webdataset wrapper tweaks for improved split info fetching, can auto fetch splits from supported HF hub webdataset
+* Tested HF `datasets` and webdataset wrapper streaming from HF hub with recent `timm` ImageNet uploads to https://huggingface.co/timm
+* Make input & target column/field keys consistent across datasets and pass via args
+* Full monochrome support when using e:g: `--input-size 1 224 224` or `--in-chans 1`, sets PIL image conversion appropriately in dataset
+* Improved several alternate crop & resize transforms (ResizeKeepRatio, RandomCropOrPad, etc) for use in PixParse document AI project
+* Add SimCLR style color jitter prob along with grayscale and gaussian blur options to augmentations and args
+* Allow train without validation set (`--val-split ''`) in train script
+
 ### Nov 23, 2023
 * Added EfficientViT-Large models, thanks [SeeFun](https://github.com/seefun)
 * Fix Python 3.7 compat, will be dropping support for it soon
