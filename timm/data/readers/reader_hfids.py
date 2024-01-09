@@ -167,9 +167,11 @@ class ReaderHfids(Reader):
 
         target_sample_count = self._num_samples_per_worker()
         sample_count = 0
-        ds_iter = iter(self.ds)
+
         if self.is_training:
-            ds_iter = chain.from_iterable(repeat(ds_iter))
+            ds_iter = chain.from_iterable(repeat(self.ds))
+        else:
+            ds_iter = iter(self.ds)
         for sample in ds_iter:
             input_data: Image.Image = sample[self.input_key]
             if self.input_img_mode and input_data.mode != self.input_img_mode:
