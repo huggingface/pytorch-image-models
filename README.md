@@ -36,6 +36,7 @@ Datasets & transform refactoring
 * Improved several alternate crop & resize transforms (ResizeKeepRatio, RandomCropOrPad, etc) for use in PixParse document AI project
 * Add SimCLR style color jitter prob along with grayscale and gaussian blur options to augmentations and args
 * Allow train without validation set (`--val-split ''`) in train script
+* Add `--bce-sum` (sum over class dim) and `--bce-pos-weight` (positive weighting) args for training as they're common BCE loss tweaks I was often hard coding 
 
 ### Nov 23, 2023
 * Added EfficientViT-Large models, thanks [SeeFun](https://github.com/seefun)
