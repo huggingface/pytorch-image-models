@@ -912,7 +912,7 @@ def main():
 
     results = {'all': results}
     if best_metric is not None:
-        results['best'] = results['all'][best_epoch]
+        results['best'] = results['all'][best_epoch - start_epoch]
         _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
     print(f'--result\n{json.dumps(results, indent=4)}')
 
