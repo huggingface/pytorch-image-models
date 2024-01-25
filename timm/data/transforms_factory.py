@@ -83,6 +83,7 @@ def transforms_imagenet_train(
 
     Args:
         img_size: Target image size.
+        train_crop_mode: Training random crop mode ('rrc', 'rkrc', 'rkrr').
         scale: Random resize scale range (crop area, < 1.0 => zoom in).
         ratio: Random aspect ratio range (crop ratio for RRC, ratio adjustment factor for RKR).
         hflip: Horizontal flip probability.
@@ -112,6 +113,7 @@ def transforms_imagenet_train(
          * normalizes and converts the branches above with the third, final transform
     """
     train_crop_mode = train_crop_mode or 'rrc'
+    assert train_crop_mode in {'rrc', 'rkrc', 'rkrr'}
     if train_crop_mode in ('rkrc', 'rkrr'):
         # FIXME integration of RKR is a WIP
         scale = tuple(scale or (0.8, 1.00))
@@ -318,6 +320,7 @@ def create_transform(
         input_size: Union[int, Tuple[int, int], Tuple[int, int, int]] = 224,
         is_training: bool = False,
         no_aug: bool = False,
+        train_crop_mode: Optional[str] = None,
         scale: Optional[Tuple[float, float]] = None,
         ratio: Optional[Tuple[float, float]] = None,
         hflip: float = 0.5,
@@ -347,6 +350,7 @@ def create_transform(
         input_size: Target input size (channels, height, width) tuple or size scalar.
         is_training: Return training (random) transforms.
         no_aug: Disable augmentation for training (useful for debug).
+        train_crop_mode: Training random crop mode ('rrc', 'rkrc', 'rkrr').
         scale: Random resize scale range (crop area, < 1.0 => zoom in).
         ratio: Random aspect ratio range (crop ratio for RRC, ratio adjustment factor for RKR).
         hflip: Horizontal flip probability.
@@ -400,6 +404,7 @@ def create_transform(
         elif is_training:
             transform = transforms_imagenet_train(
                 img_size,
+                train_crop_mode=train_crop_mode,
                 scale=scale,
                 ratio=ratio,
                 hflip=hflip,

@@ -245,6 +245,8 @@ group.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RAT
 group = parser.add_argument_group('Augmentation and regularization parameters')
 group.add_argument('--no-aug', action='store_true', default=False,
                    help='Disable all training augmentation, override other train aug args')
+group.add_argument('--train-crop-mode', type=str, default=None,
+                   help='Crop-mode in train'),
 group.add_argument('--scale', type=float, nargs='+', default=[0.08, 1.0], metavar='PCT',
                    help='Random resize scale (default: 0.08 1.0)')
 group.add_argument('--ratio', type=float, nargs='+', default=[3. / 4., 4. / 3.], metavar='RATIO',
@@ -685,6 +687,7 @@ def main():
         re_mode=args.remode,
         re_count=args.recount,
         re_split=args.resplit,
+        train_crop_mode=args.train_crop_mode,
         scale=args.scale,
         ratio=args.ratio,
         hflip=args.hflip,
