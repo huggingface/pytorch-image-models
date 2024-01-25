@@ -15,7 +15,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
 from ._builder import build_model_with_cfg
 from ._manipulate import MATCH_PREV_GROUP
-from ._registry import register_model, generate_default_cfgs
+from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['DenseNet']
 
@@ -415,3 +415,7 @@ def densenet264d(pretrained=False, **kwargs) -> DenseNet:
     model = _create_densenet('densenet264d', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
+
+register_model_deprecations(__name__, {
+    'tv_densenet121': 'densenet121.tv_in1k',
+})
