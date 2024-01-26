@@ -41,13 +41,13 @@ class PositionalEncodingFourier(nn.Module):
         device = self.token_projection.weight.device
         dtype = self.token_projection.weight.dtype
         inv_mask = ~torch.zeros(shape).to(device=device, dtype=torch.bool)
-        y_embed = inv_mask.cumsum(1, dtype=dtype)
-        x_embed = inv_mask.cumsum(2, dtype=dtype)
+        y_embed = inv_mask.cumsum(1, dtype=torch.float32)
+        x_embed = inv_mask.cumsum(2, dtype=torch.float32)
         eps = 1e-6
         y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
         x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
-        dim_t = torch.arange(self.hidden_dim, dtype=dtype, device=device)
+        dim_t = torch.arange(self.hidden_dim, dtype=torch.int64, device=device).to(torch.float32)
         dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode='floor') / self.hidden_dim)
 
         pos_x = x_embed[:, :, :, None] / dim_t
@@ -59,7 +59,7 @@ class PositionalEncodingFourier(nn.Module):
             (pos_y[:, :, :, 0::2].sin(),
              pos_y[:, :, :, 1::2].cos()), dim=4).flatten(3)
         pos = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
-        pos = self.token_projection(pos)
+        pos = self.token_projection(pos.to(dtype))
 
         return pos
 

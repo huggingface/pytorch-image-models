@@ -311,8 +311,8 @@ def gen_relative_log_coords(
 ):
     assert mode in ('swin', 'cr')
     # as per official swin-v2 impl, supporting timm specific 'cr' log coords as well
-    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0], dtype=torch.float32)
-    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1], dtype=torch.float32)
+    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0]).to(torch.float32)
+    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1]).to(torch.float32)
     relative_coords_table = torch.stack(torch.meshgrid([relative_coords_h, relative_coords_w]))
     relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous()  # 2*Wh-1, 2*Ww-1, 2
     if mode == 'swin':
