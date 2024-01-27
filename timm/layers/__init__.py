@@ -24,6 +24,7 @@ from .filter_response_norm import FilterResponseNormTlu2d, FilterResponseNormAct
 from .format import Format, get_channel_dim, get_spatial_dim, nchw_to, nhwc_to
 from .gather_excite import GatherExcite
 from .global_context import GlobalContext
+from .grid import ndgrid, meshgrid
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
 from .inplace_abn import InplaceAbn
 from .linear import Linear

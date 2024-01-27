@@ -24,13 +24,14 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from .grid import ndgrid
 from .helpers import to_2tuple, make_divisible
 from .weight_init import trunc_normal_
 
 
 def rel_pos_indices(size):
     size = to_2tuple(size)
-    pos = torch.stack(torch.meshgrid(torch.arange(size[0]), torch.arange(size[1]))).flatten(1)
+    pos = torch.stack(ndgrid(torch.arange(size[0]), torch.arange(size[1]))).flatten(1)
     rel_pos = pos[:, None, :] - pos[:, :, None]
     rel_pos[0] += size[0] - 1
     rel_pos[1] += size[1] - 1
