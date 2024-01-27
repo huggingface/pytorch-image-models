@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .grid import ndgrid
 from .interpolate import RegularGridInterpolator
 from .mlp import Mlp
 from .weight_init import trunc_normal_
@@ -26,12 +27,7 @@ def gen_relative_position_index(
     # get pair-wise relative position index for each token inside the window
     assert k_size is None, 'Different q & k sizes not currently supported'  # FIXME
 
-    coords = torch.stack(
-        torch.meshgrid([
-            torch.arange(q_size[0]),
-            torch.arange(q_size[1])
-        ])
-    ).flatten(1)  # 2, Wh, Ww
+    coords = torch.stack(ndgrid(torch.arange(q_size[0]), torch.arange(q_size[1]))).flatten(1)  # 2, Wh, Ww
     relative_coords = coords[:, :, None] - coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
     relative_coords = relative_coords.permute(1, 2, 0)  # Qh*Qw, Kh*Kw, 2
     relative_coords[:, :, 0] += q_size[0] - 1  # shift to start from 0
@@ -42,16 +38,16 @@ def gen_relative_position_index(
     # else:
     #     # FIXME different q vs k sizes is a WIP, need to better offset the two grids?
     #     q_coords = torch.stack(
-    #         torch.meshgrid([
+    #         ndgrid(
     #             torch.arange(q_size[0]),
     #             torch.arange(q_size[1])
-    #         ])
+    #         )
     #     ).flatten(1)  # 2, Wh, Ww
     #     k_coords = torch.stack(
-    #         torch.meshgrid([
+    #         ndgrid(
     #             torch.arange(k_size[0]),
     #             torch.arange(k_size[1])
-    #         ])
+    #         )
     #     ).flatten(1)
     #     relative_coords = q_coords[:, :, None] - k_coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
     #     relative_coords = relative_coords.permute(1, 2, 0)  # Qh*Qw, Kh*Kw, 2
@@ -232,7 +228,7 @@ def resize_rel_pos_bias_table(
         tx = dst_size[1] // 2.0
         dy = torch.arange(-ty, ty + 0.1, 1.0)
         dx = torch.arange(-tx, tx + 0.1, 1.0)
-        dyx = torch.meshgrid([dy, dx])
+        dyx = ndgrid(dy, dx)
         # print("Target positions = %s" % str(dx))
 
         all_rel_pos_bias = []
@@ -313,7 +309,7 @@ def gen_relative_log_coords(
     # as per official swin-v2 impl, supporting timm specific 'cr' log coords as well
     relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0]).to(torch.float32)
     relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1]).to(torch.float32)
-    relative_coords_table = torch.stack(torch.meshgrid([relative_coords_h, relative_coords_w]))
+    relative_coords_table = torch.stack(ndgrid(relative_coords_h, relative_coords_w))
     relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous()  # 2*Wh-1, 2*Ww-1, 2
     if mode == 'swin':
         if pretrained_win_size[0] > 0:

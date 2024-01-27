@@ -8,6 +8,7 @@ from typing import List, Tuple, Optional, Union
 import torch
 from torch import nn as nn
 
+from .grid import ndgrid
 from .trace_utils import _assert
 
 
@@ -64,10 +65,10 @@ def build_sincos2d_pos_embed(
 
     if reverse_coord:
         feat_shape = feat_shape[::-1]  # stack W, H instead of H, W
-    grid = torch.stack(torch.meshgrid(
-        [torch.arange(s, device=device, dtype=torch.int64).to(torch.float32)
-         for s in feat_shape])
-    ).flatten(1).transpose(0, 1)
+    grid = torch.stack(ndgrid([
+        torch.arange(s, device=device, dtype=torch.int64).to(torch.float32)
+        for s in feat_shape
+    ])).flatten(1).transpose(0, 1)
     pos2 = grid.unsqueeze(-1) * bands.unsqueeze(0)
     # FIXME add support for unflattened spatial dim?
 
@@ -137,7 +138,7 @@ def build_fourier_pos_embed(
         # eva's scheme for resizing rope embeddings (ref shape = pretrain)
         t = [x / f * r for x, f, r in zip(t, feat_shape, ref_feat_shape)]
 
-    grid = torch.stack(torch.meshgrid(t), dim=-1)
+    grid = torch.stack(ndgrid(t), dim=-1)
     grid = grid.unsqueeze(-1)
     pos = grid * bands
 
