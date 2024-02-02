@@ -586,8 +586,12 @@ def main():
     model_ema = None
     if args.model_ema:
         # Important to create EMA model after cuda(), DP wrapper, and AMP but before DDP wrapper
-        model_ema = utils.ModelEmaV2(
-            model, decay=args.model_ema_decay, device='cpu' if args.model_ema_force_cpu else None)
+        model_ema = utils.ModelEmaV3(
+            model,
+            decay=args.model_ema_decay,
+            use_warmup=True,
+            device='cpu' if args.model_ema_force_cpu else None,
+        )
         if args.resume:
             load_checkpoint(model_ema.module, args.resume, use_ema=True)
 
@@ -847,6 +851,7 @@ def main():
                 loss_scaler=loss_scaler,
                 model_ema=model_ema,
                 mixup_fn=mixup_fn,
+                num_updates_total=num_epochs * updates_per_epoch,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -935,6 +940,7 @@ def train_one_epoch(
         loss_scaler=None,
         model_ema=None,
         mixup_fn=None,
+        num_updates_total=None,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -981,6 +987,27 @@ def train_one_epoch(
             with amp_autocast():
                 output = model(input)
                 loss = loss_fn(output, target)
+
+                if num_updates / num_updates_total > 0.25:
+                    with torch.no_grad():
+                        output_mesa = model_ema.module(input)
+
+                    # loss_mesa = torch.nn.functional.binary_cross_entropy_with_logits(
+                    #     output,
+                    #     torch.sigmoid(output_mesa).detach(),
+                    #     reduction='none',
+                    # ).mean()
+
+                    # loss_mesa = loss_fn(
+                    #     output, torch.sigmoid(output_mesa).detach())
+
+                    loss_mesa = torch.nn.functional.kl_div(
+                        (output / 5).log_softmax(-1),
+                        (output_mesa / 5).log_softmax(-1).detach(),
+                        log_target=True,
+                        reduction='none').sum(-1).mean()
+                    loss += 5 * loss_mesa
+
             if accum_steps > 1:
                 loss /= accum_steps
             return loss
@@ -1026,7 +1053,7 @@ def train_one_epoch(
         num_updates += 1
         optimizer.zero_grad()
         if model_ema is not None:
-            model_ema.update(model)
+            model_ema.update(model, step=num_updates)
 
         if args.synchronize_step and device.type == 'cuda':
             torch.cuda.synchronize()
