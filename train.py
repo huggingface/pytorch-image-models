@@ -881,6 +881,7 @@ def main():
                     loader_eval,
                     validate_loss_fn,
                     args,
+                    device=device,
                     amp_autocast=amp_autocast,
                 )
 
@@ -893,6 +894,7 @@ def main():
                         loader_eval,
                         validate_loss_fn,
                         args,
+                        device=device,
                         amp_autocast=amp_autocast,
                         log_suffix=' (EMA)',
                     )
