@@ -349,11 +349,13 @@ group.add_argument('--split-bn', action='store_true',
 # Model Exponential Moving Average
 group = parser.add_argument_group('Model exponential moving average parameters')
 group.add_argument('--model-ema', action='store_true', default=False,
-                   help='Enable tracking moving average of model weights')
+                   help='Enable tracking moving average of model weights.')
 group.add_argument('--model-ema-force-cpu', action='store_true', default=False,
                    help='Force ema to be tracked on CPU, rank=0 node only. Disables EMA validation.')
 group.add_argument('--model-ema-decay', type=float, default=0.9998,
-                   help='decay factor for model weights moving average (default: 0.9998)')
+                   help='Decay factor for model weights moving average (default: 0.9998)')
+group.add_argument('--model-ema-warmup', action='store_true',
+                   help='Enable warmup for model EMA decay.')
 
 # Misc
 group = parser.add_argument_group('Miscellaneous parameters')
@@ -601,11 +603,13 @@ def main():
         model_ema = utils.ModelEmaV3(
             model,
             decay=args.model_ema_decay,
-            use_warmup=True,
+            use_warmup=args.model_ema_warmup,
             device='cpu' if args.model_ema_force_cpu else None,
         )
         if args.resume:
             load_checkpoint(model_ema.module, args.resume, use_ema=True)
+        if args.torchcompile:
+            model_ema = torch.compile(model_ema, backend=args.torchcompile)
 
     # setup distributed training
     if args.distributed:
@@ -885,7 +889,7 @@ def main():
                         utils.distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
 
                     ema_eval_metrics = validate(
-                        model_ema.module,
+                        model_ema,
                         loader_eval,
                         validate_loss_fn,
                         args,
@@ -1002,7 +1006,7 @@ def train_one_epoch(
 
                 if num_updates / num_updates_total > 0.25:
                     with torch.no_grad():
-                        output_mesa = model_ema.module(input)
+                        output_mesa = model_ema(input)
 
                     # loss_mesa = torch.nn.functional.binary_cross_entropy_with_logits(
                     #     output,
@@ -1018,7 +1022,7 @@ def train_one_epoch(
                         (output_mesa / 5).log_softmax(-1).detach(),
                         log_target=True,
                         reduction='none').sum(-1).mean()
-                    loss += 5 * loss_mesa
+                    loss += 10 * loss_mesa
 
             if accum_steps > 1:
                 loss /= accum_steps
