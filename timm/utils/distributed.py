@@ -92,6 +92,7 @@ def init_distributed_device(args):
     args.world_size = result['world_size']
     args.rank = result['global_rank']
     args.local_rank = result['local_rank']
+    args.distributed = args.world_size > 1
     device = torch.device(args.device)
     return device
 
