@@ -548,6 +548,17 @@ class DaVit(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        return dict(
+            stem=r'^stem',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^norm_pre', (99999,)),
+            ]
+        )
+
+    @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
         for stage in self.stages:
