@@ -263,7 +263,7 @@ class EfficientAttention(nn.Module):
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
-                dropout_p=self.attn_drop if self.training else 0.,
+                dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale
