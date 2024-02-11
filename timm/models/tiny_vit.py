@@ -535,7 +535,7 @@ class TinyVit(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool=global_pool)
+        self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
         x = self.patch_embed(x)

@@ -569,7 +569,7 @@ class DaVit(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool=None):
-        self.head.reset(num_classes, global_pool=global_pool)
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
