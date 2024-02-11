@@ -421,6 +421,7 @@ class VisionTransformer(nn.Module):
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             weight_init: Literal['skip', 'jax', 'jax_nlhb', 'moco', ''] = '',
+            fix_init: bool = False,
             embed_layer: Callable = PatchEmbed,
             norm_layer: Optional[LayerType] = None,
             act_layer: Optional[LayerType] = None,
@@ -449,6 +450,7 @@ class VisionTransformer(nn.Module):
             attn_drop_rate: Attention dropout rate.
             drop_path_rate: Stochastic depth rate.
             weight_init: Weight initialization scheme.
+            fix_init: Apply weight initialization fix (scaling w/ layer index).
             embed_layer: Patch embedding layer.
             norm_layer: Normalization layer.
             act_layer: MLP activation layer.
@@ -536,8 +538,18 @@ class VisionTransformer(nn.Module):
 
         if weight_init != 'skip':
             self.init_weights(weight_init)
+        if fix_init:
+            self.fix_init_weight()
 
-    def init_weights(self, mode: Literal['jax', 'jax_nlhb', 'moco', ''] = '') -> None:
+    def fix_init_weight(self):
+        def rescale(param, _layer_id):
+            param.div_(math.sqrt(2.0 * _layer_id))
+
+        for layer_id, layer in enumerate(self.blocks):
+            rescale(layer.attn.proj.weight.data, layer_id + 1)
+            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
+
+    def init_weights(self, mode: str = '') -> None:
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         trunc_normal_(self.pos_embed, std=.02)
@@ -737,7 +749,7 @@ def init_weights_vit_moco(module: nn.Module, name: str = '') -> None:
         module.init_weights()
 
 
-def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> None:
+def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> Callable:
     if 'jax' in mode:
         return partial(init_weights_vit_jax, head_bias=head_bias)
     elif 'moco' in mode:
@@ -1723,7 +1735,12 @@ default_cfgs = {
         input_size=(3, 256, 256)),
     'vit_medium_patch16_reg4_gap_256': _cfg(
         input_size=(3, 256, 256)),
-    'vit_base_patch16_reg8_gap_256': _cfg(input_size=(3, 256, 256)),
+    'vit_base_patch16_reg4_gap_256': _cfg(
+        input_size=(3, 256, 256)),
+    'vit_so150m_patch16_reg4_gap_256': _cfg(
+        input_size=(3, 256, 256)),
+    'vit_so150m_patch16_reg4_map_256': _cfg(
+        input_size=(3, 256, 256)),
 }
 
 _quick_gelu_cfgs = [
@@ -2623,13 +2640,35 @@ def vit_medium_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
 
 
 @register_model
-def vit_base_patch16_reg8_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+def vit_base_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, class_token=False,
-        no_embed_class=True, global_pool='avg', reg_tokens=8,
+        no_embed_class=True, global_pool='avg', reg_tokens=4,
     )
     model = _create_vision_transformer(
-        'vit_base_patch16_reg8_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_base_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m_patch16_reg4_map_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=896, depth=18, num_heads=14, mlp_ratio=2.572,
+        class_token=False, reg_tokens=4, global_pool='map',
+    )
+    model = _create_vision_transformer(
+        'vit_so150m_patch16_reg4_map_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=896, depth=18, num_heads=14, mlp_ratio=2.572,
+        class_token=False, reg_tokens=4, global_pool='avg', fc_norm=False,
+    )
+    model = _create_vision_transformer(
+        'vit_so150m_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

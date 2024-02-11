@@ -15,6 +15,7 @@ NVIDIA CUDA specific speedups adopted from NVIDIA Apex examples
 Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
+import importlib
 import json
 import logging
 import os
@@ -167,6 +168,24 @@ scripting_group.add_argument('--torchscript', dest='torchscript', action='store_
                              help='torch.jit.script the full model')
 scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
                              help="Enable compilation w/ specified backend (default: inductor).")
+
+# Device & distributed
+group = parser.add_argument_group('Device parameters')
+group.add_argument('--device', default='cuda', type=str,
+                    help="Device (accelerator) to use.")
+group.add_argument('--amp', action='store_true', default=False,
+                   help='use NVIDIA Apex AMP or Native AMP for mixed precision training')
+group.add_argument('--amp-dtype', default='float16', type=str,
+                   help='lower precision AMP dtype (default: float16)')
+group.add_argument('--amp-impl', default='native', type=str,
+                   help='AMP impl to use, "native" or "apex" (default: native)')
+group.add_argument('--no-ddp-bb', action='store_true', default=False,
+                   help='Force broadcast buffers for native DDP to off.')
+group.add_argument('--synchronize-step', action='store_true', default=False,
+                   help='torch.cuda.synchronize() end of each step')
+group.add_argument("--local_rank", default=0, type=int)
+parser.add_argument('--device-modules', default=None, type=str, nargs='+',
+                    help="Python imports for device backend modules.")
 
 # Optimizer parameters
 group = parser.add_argument_group('Optimizer parameters')
@@ -330,11 +349,13 @@ group.add_argument('--split-bn', action='store_true',
 # Model Exponential Moving Average
 group = parser.add_argument_group('Model exponential moving average parameters')
 group.add_argument('--model-ema', action='store_true', default=False,
-                   help='Enable tracking moving average of model weights')
+                   help='Enable tracking moving average of model weights.')
 group.add_argument('--model-ema-force-cpu', action='store_true', default=False,
                    help='Force ema to be tracked on CPU, rank=0 node only. Disables EMA validation.')
 group.add_argument('--model-ema-decay', type=float, default=0.9998,
-                   help='decay factor for model weights moving average (default: 0.9998)')
+                   help='Decay factor for model weights moving average (default: 0.9998)')
+group.add_argument('--model-ema-warmup', action='store_true',
+                   help='Enable warmup for model EMA decay.')
 
 # Misc
 group = parser.add_argument_group('Miscellaneous parameters')
@@ -352,16 +373,6 @@ group.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                    help='how many training processes to use (default: 4)')
 group.add_argument('--save-images', action='store_true', default=False,
                    help='save images of input bathes every log interval for debugging')
-group.add_argument('--amp', action='store_true', default=False,
-                   help='use NVIDIA Apex AMP or Native AMP for mixed precision training')
-group.add_argument('--amp-dtype', default='float16', type=str,
-                   help='lower precision AMP dtype (default: float16)')
-group.add_argument('--amp-impl', default='native', type=str,
-                   help='AMP impl to use, "native" or "apex" (default: native)')
-group.add_argument('--no-ddp-bb', action='store_true', default=False,
-                   help='Force broadcast buffers for native DDP to off.')
-group.add_argument('--synchronize-step', action='store_true', default=False,
-                   help='torch.cuda.synchronize() end of each step')
 group.add_argument('--pin-mem', action='store_true', default=False,
                    help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 group.add_argument('--no-prefetcher', action='store_true', default=False,
@@ -374,7 +385,6 @@ group.add_argument('--eval-metric', default='top1', type=str, metavar='EVAL_METR
                    help='Best metric (default: "top1"')
 group.add_argument('--tta', type=int, default=0, metavar='N',
                    help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
-group.add_argument("--local_rank", default=0, type=int)
 group.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
                    help='use the multi-epochs-loader to save time at the beginning of every epoch')
 group.add_argument('--log-wandb', action='store_true', default=False,
@@ -401,6 +411,10 @@ def _parse_args():
 def main():
     utils.setup_default_logging()
     args, args_text = _parse_args()
+
+    if args.device_modules:
+        for module in args.device_modules:
+            importlib.import_module(module)
 
     if torch.cuda.is_available():
         torch.backends.cuda.matmul.allow_tf32 = True
@@ -586,10 +600,16 @@ def main():
     model_ema = None
     if args.model_ema:
         # Important to create EMA model after cuda(), DP wrapper, and AMP but before DDP wrapper
-        model_ema = utils.ModelEmaV2(
-            model, decay=args.model_ema_decay, device='cpu' if args.model_ema_force_cpu else None)
+        model_ema = utils.ModelEmaV3(
+            model,
+            decay=args.model_ema_decay,
+            use_warmup=args.model_ema_warmup,
+            device='cpu' if args.model_ema_force_cpu else None,
+        )
         if args.resume:
             load_checkpoint(model_ema.module, args.resume, use_ema=True)
+        if args.torchcompile:
+            model_ema = torch.compile(model_ema, backend=args.torchcompile)
 
     # setup distributed training
     if args.distributed:
@@ -847,6 +867,7 @@ def main():
                 loss_scaler=loss_scaler,
                 model_ema=model_ema,
                 mixup_fn=mixup_fn,
+                num_updates_total=num_epochs * updates_per_epoch,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -860,6 +881,7 @@ def main():
                     loader_eval,
                     validate_loss_fn,
                     args,
+                    device=device,
                     amp_autocast=amp_autocast,
                 )
 
@@ -868,10 +890,11 @@ def main():
                         utils.distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
 
                     ema_eval_metrics = validate(
-                        model_ema.module,
+                        model_ema,
                         loader_eval,
                         validate_loss_fn,
                         args,
+                        device=device,
                         amp_autocast=amp_autocast,
                         log_suffix=' (EMA)',
                     )
@@ -935,6 +958,7 @@ def train_one_epoch(
         loss_scaler=None,
         model_ema=None,
         mixup_fn=None,
+        num_updates_total=None,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -1026,7 +1050,7 @@ def train_one_epoch(
         num_updates += 1
         optimizer.zero_grad()
         if model_ema is not None:
-            model_ema.update(model)
+            model_ema.update(model, step=num_updates)
 
         if args.synchronize_step and device.type == 'cuda':
             torch.cuda.synchronize()

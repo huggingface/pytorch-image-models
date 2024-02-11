@@ -180,10 +180,10 @@ class NormMlpClassifierHead(nn.Module):
         self.drop = nn.Dropout(drop_rate)
         self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes, global_pool=None):
-        if global_pool is not None:
-            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-            self.flatten = nn.Flatten(1) if global_pool else nn.Identity()
+    def reset(self, num_classes, pool_type=None):
+        if pool_type is not None:
+            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+            self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
         self.use_conv = self.global_pool.is_identity()
         linear_layer = partial(nn.Conv2d, kernel_size=1) if self.use_conv else nn.Linear
         if self.hidden_size:
