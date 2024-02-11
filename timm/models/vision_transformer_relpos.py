@@ -7,7 +7,8 @@ Hacked together by / Copyright 2022, Ross Wightman
 import logging
 import math
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple, Type, Union, List
+from typing import Optional, Tuple, Type, Union
+
 try:
     from typing import Literal
 except ImportError:
