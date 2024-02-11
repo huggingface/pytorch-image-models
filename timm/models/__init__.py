@@ -39,6 +39,7 @@ from .mobilevit import *
 from .mvitv2 import *
 from .nasnet import *
 from .nest import *
+from .nextvit import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
