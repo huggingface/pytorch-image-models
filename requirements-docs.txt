@@ -1,5 +1,0 @@
-mkdocs
-mkdocs-material
-mkdocs-redirects
-mdx_truly_sane_lists
-mkdocs-awesome-pages-plugin
