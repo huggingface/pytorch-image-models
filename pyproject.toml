@@ -1,4 +1,62 @@
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[project]
+name = "timm"
+authors = [
+    {name = "Ross Wightman", email = "ross@huggingface.co"},
+]
+description = "PyTorch Image Models"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["pytorch", "image-classification"]
+license = {text = "Apache-2.0"}
+classifiers = [
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Education',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Topic :: Scientific/Engineering',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
+        'Topic :: Software Development',
+        'Topic :: Software Development :: Libraries',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+]
+dependencies = [
+        'torch',
+        'torchvision',
+        'pyyaml',
+        'huggingface_hub',
+        'safetensors',
+]
+dynamic = ["version"]
+
+[project.urls]
+homepage = "https://github.com/huggingface/pytorch-image-models"
+documentation = "https://huggingface.co/docs/timm/en/index"
+repository = "https://github.com/huggingface/pytorch-image-models"
+
+[tool.pdm.dev-dependencies]
+test = [
+        'pytest',
+        'pytest-timeout',
+        'pytest-xdist',
+        'pytest-forked',
+        'expecttest',
+]
+
+[tool.pdm.version]
+source = "file"
+path = "timm/version.py"
+
 [tool.pytest.ini_options]
+testpaths = ['tests']
 markers = [
     "base: marker for model tests using the basic setup",
     "cfg: marker for model tests checking the config",
@@ -7,8 +65,3 @@ markers = [
     "fxforward: marker for model tests using torch fx (only forward)",
     "fxbackward: marker for model tests using torch fx (only backward)",
 ]
-
-[tool.black]
-line-length = 120
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
-skip-string-normalization = true
