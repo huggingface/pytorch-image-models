@@ -33,6 +33,7 @@
 * Add updated model EMA impl using _for_each for less overhead
 * Support device args in train script for non GPU devices
 * Other misc fixes and small additions
+* Min supported Python version increased to 3.8
 * Release 0.9.16
 
 ### Jan 8, 2024
