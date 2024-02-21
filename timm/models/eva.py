@@ -110,7 +110,10 @@ class EvaAttention(nn.Module):
 
         if self.qkv is not None:
             qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias)) if self.q_bias is not None else None
-            qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+            qkv = self.qkv(x)
+            if qkv_bias is not None:
+                qkv += qkv_bias
+
             qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
             q, k, v = qkv.unbind(0)  # B, num_heads, N, head_dim
         else:
