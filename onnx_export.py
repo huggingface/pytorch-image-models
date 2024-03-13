@@ -57,6 +57,8 @@ parser.add_argument('--training', default=False, action='store_true',
                     help='Export in training mode (default is eval)')
 parser.add_argument('--verbose', default=False, action='store_true',
                     help='Extra stdout output')
+parser.add_argument('--dynamo', default=False, action='store_true',
+                    help='Use torch dynamo export.')
 
 def main():
     args = parser.parse_args()
@@ -90,6 +92,7 @@ def main():
         check_forward=args.check_forward,
         training=args.training,
         verbose=args.verbose,
+        use_dynamo=args.dynamo,
         input_size=(3, args.img_size, args.img_size),
         batch_size=args.batch_size,
     )
