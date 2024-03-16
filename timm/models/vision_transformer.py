@@ -667,9 +667,12 @@ class VisionTransformer(nn.Module):
         outputs = [out[:, self.num_prefix_tokens:] for out in outputs]
 
         if reshape:
-            grid_size = self.patch_embed.grid_size
+            patch_size = self.patch_embed.patch_size
+            batch, _, height, width = x.size()
             outputs = [
-                out.reshape(x.shape[0], grid_size[0], grid_size[1], -1).permute(0, 3, 1, 2).contiguous()
+                out.reshape(batch, int(math.ceil(height / patch_size[0])), int(math.ceil(width / patch_size[1])), -1)
+                .permute(0, 3, 1, 2)
+                .contiguous()
                 for out in outputs
             ]
 
