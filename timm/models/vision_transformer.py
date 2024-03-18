@@ -1739,6 +1739,19 @@ default_cfgs = {
 
     'vit_8m_patch16_tinyclip_224.yfcc15m': _cfg(
         url='https://github.com/wkcn/TinyCLIP-model-zoo/releases/download/checkpoints/TinyCLIP-ViT-8M-16-Text-3M-YFCC15M.pt',
+        license='mit',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_39m_patch16_tinyclip_224.yfcc15m': _cfg(
+        url='https://github.com/wkcn/TinyCLIP-model-zoo/releases/download/checkpoints/TinyCLIP-ViT-39M-16-Text-19M-YFCC15M.pt',
+        license='mit',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_40m_patch32_tinyclip_224.laion400m': _cfg(
+        url='https://github.com/wkcn/TinyCLIP-model-zoo/releases/download/checkpoints/TinyCLIP-ViT-40M-32-Text-19M-LAION400M.pt',
+        license='mit',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_61m_patch32_tinyclip_224.laion400m': _cfg(
+        url='https://github.com/wkcn/TinyCLIP-model-zoo/releases/download/checkpoints/TinyCLIP-ViT-61M-32-Text-29M-LAION400M.pt',
+        license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
     'vit_medium_patch16_reg4_256': _cfg(
@@ -2632,6 +2645,32 @@ def vit_8m_patch16_tinyclip_224(pretrained: bool = False, **kwargs) -> VisionTra
     model_args = dict(embed_dim=256, depth=10, num_heads=4, pre_norm=True, norm_layer=nn.LayerNorm)
     model = _create_vision_transformer(
         'vit_8m_patch16_tinyclip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_39m_patch16_tinyclip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(embed_dim=512, depth=12, num_heads=8, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_39m_patch16_tinyclip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_40m_patch32_tinyclip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=32, embed_dim=512, depth=12, num_heads=8, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_40m_patch32_tinyclip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_61m_patch32_tinyclip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=32, embed_dim=640, depth=12, num_heads=10, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_61m_patch32_tinyclip_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
