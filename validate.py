@@ -27,6 +27,9 @@ from timm.layers import apply_test_time_pool, set_fast_norm
 from timm.models import create_model, load_checkpoint, is_model, list_models
 from timm.utils import accuracy, AverageMeter, natural_key, setup_default_logging, set_jit_fuser, \
     decay_batch_step, check_batch_size_retry, ParseKwargs, reparameterize_model
+from timm.utils.distributed import is_torch_npu_available
+
+has_torch_npu = is_torch_npu_available()
 
 try:
     from apex import amp
@@ -396,6 +399,8 @@ def _try_run(args, initial_batch_size):
         try:
             if torch.cuda.is_available() and 'cuda' in args.device:
                 torch.cuda.empty_cache()
+            if torch.npu.is_available() and 'npu' in args.device:
+                torch.npu.empty_cache()
             results = validate(args)
             return results
         except RuntimeError as e:

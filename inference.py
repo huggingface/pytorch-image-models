@@ -21,6 +21,10 @@ from timm.data import create_dataset, create_loader, resolve_data_config, ImageN
 from timm.layers import apply_test_time_pool
 from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
+from timm.utils.distributed import is_torch_npu_available
+
+has_torch_npu = is_torch_npu_available()
+
 
 try:
     from apex import amp
@@ -241,6 +245,7 @@ def main():
         batch_size=args.batch_size,
         use_prefetcher=True,
         num_workers=workers,
+        device=device,
         **data_config,
     )
 

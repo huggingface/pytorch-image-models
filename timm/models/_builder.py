@@ -15,6 +15,7 @@ from timm.models._manipulate import adapt_input_conv
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
 from timm.models._registry import get_pretrained_cfg
+from timm.utils.distributed import is_torch_npu_available
 
 _logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ _logger = logging.getLogger(__name__)
 _DOWNLOAD_PROGRESS = False
 _CHECK_HASH = False
 _USE_OLD_CACHE = int(os.environ.get('TIMM_USE_OLD_CACHE', 0)) > 0
+has_torch_npu = is_torch_npu_available()
 
 __all__ = ['set_pretrained_download_progress', 'set_pretrained_check_hash', 'load_custom_pretrained', 'load_pretrained',
            'pretrained_cfg_for_features', 'resolve_pretrained_cfg', 'build_model_with_cfg']

@@ -7,6 +7,9 @@ from ._helpers import load_checkpoint
 from ._hub import load_model_config_from_hf
 from ._pretrained import PretrainedCfg
 from ._registry import is_model, model_entrypoint, split_model_name_tag
+from timm.utils.distributed import is_torch_npu_available
+
+has_torch_npu = is_torch_npu_available()
 
 
 __all__ = ['parse_model_name', 'safe_model_name', 'create_model']
