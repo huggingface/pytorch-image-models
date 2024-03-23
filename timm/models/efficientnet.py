@@ -799,6 +799,88 @@ def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0
     return model
 
 
+def _gen_efficientnet_x(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, channel_divisor=8,
+        group_size=None, version=1, pretrained=False, **kwargs):
+    """Creates an EfficientNet model.
+
+    Ref impl: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
+    Paper: https://arxiv.org/abs/1905.11946
+
+    EfficientNet params
+    name: (channel_multiplier, depth_multiplier, resolution, dropout_rate)
+    'efficientnet-x-b0': (1.0, 1.0, 224, 0.2),
+    'efficientnet-x-b1': (1.0, 1.1, 240, 0.2),
+    'efficientnet-x-b2': (1.1, 1.2, 260, 0.3),
+    'efficientnet-x-b3': (1.2, 1.4, 300, 0.3),
+    'efficientnet-x-b4': (1.4, 1.8, 380, 0.4),
+    'efficientnet-x-b5': (1.6, 2.2, 456, 0.4),
+    'efficientnet-x-b6': (1.8, 2.6, 528, 0.5),
+    'efficientnet-x-b7': (2.0, 3.1, 600, 0.5),
+    'efficientnet-x-b8': (2.2, 3.6, 672, 0.5),
+    'efficientnet-l2': (4.3, 5.3, 800, 0.5),
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer
+      depth_multiplier: multiplier to number of repeats per stage
+
+    """
+    """
+      if version == 1:
+    blocks_args = [
+        'r1_k3_s11_e1_i32_o16_se0.25_d1_a0',
+        'r2_k3_s22_e6_i16_o24_se0.25_f1_d2_a1',
+        'r2_k5_s22_e6_i24_o40_se0.25_f1_a1',
+        'r3_k3_s22_e6_i40_o80_se0.25_a0',
+        'r3_k5_s11_e6_i80_o112_se0.25_a0',
+        'r4_k5_s22_e6_i112_o192_se0.25_a0',
+        'r1_k3_s11_e6_i192_o320_se0.25_a0',
+    ]
+  elif version == 2:
+    blocks_args = [
+        'r1_k3_s11_e1_i32_o16_se0.25_d1_a0',
+        'r2_k3_s22_e4_i16_o24_se0.25_f1_d2_a1',
+        'r2_k5_s22_e4_i24_o40_se0.25_f1_a1',
+        'r3_k3_s22_e4_i40_o80_se0.25_a0',
+        'r3_k5_s11_e6_i80_o112_se0.25_a0',
+        'r4_k5_s22_e6_i112_o192_se0.25_a0',
+        'r1_k3_s11_e6_i192_o320_se0.25_a0',
+    ]
+    """
+    if version == 1:
+        arch_def = [
+            ['ds_r1_k3_s1_e1_c16_se0.25_d1'],
+            ['er_r2_k3_s2_e6_c24_se0.25_nre'],
+            ['er_r2_k5_s2_e6_c40_se0.25_nre'],
+            ['ir_r3_k3_s2_e6_c80_se0.25'],
+            ['ir_r3_k5_s1_e6_c112_se0.25'],
+            ['ir_r4_k5_s2_e6_c192_se0.25'],
+            ['ir_r1_k3_s1_e6_c320_se0.25'],
+        ]
+    else:
+        arch_def = [
+            ['ds_r1_k3_s1_e1_c16_se0.25_d1'],
+            ['er_r2_k3_s2_e4_c24_se0.25_nre'],
+            ['er_r2_k5_s2_e4_c40_se0.25_nre'],
+            ['ir_r3_k3_s2_e4_c80_se0.25'],
+            ['ir_r3_k5_s1_e6_c112_se0.25'],
+            ['ir_r4_k5_s2_e6_c192_se0.25'],
+            ['ir_r1_k3_s1_e6_c320_se0.25'],
+        ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, divisor=channel_divisor)
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
+        num_features=round_chs_fn(1280),
+        stem_size=32,
+        round_chs_fn=round_chs_fn,
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _gen_mixnet_s(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """Creates a MixNet Small model.
 
@@ -2194,6 +2276,31 @@ def tf_efficientnetv2_b3(pretrained=False, **kwargs) -> EfficientNet:
     kwargs.setdefault('pad_type', 'same')
     model = _gen_efficientnetv2_base(
         'tf_efficientnetv2_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_x_b3(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B3 """
+    # NOTE for train, drop_rate should be 0.3, drop_path_rate should be 0.2
+    model = _gen_efficientnet_x(
+        'efficientnet_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_x_b5(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B5 """
+    model = _gen_efficientnet_x(
+        'efficientnet_b5', channel_multiplier=1.6, depth_multiplier=2.2, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_h_b5(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B5 """
+    model = _gen_efficientnet_x(
+        'efficientnet_b5', channel_multiplier=1.92, depth_multiplier=2.2, version=2, pretrained=pretrained, **kwargs)
     return model
 
 
