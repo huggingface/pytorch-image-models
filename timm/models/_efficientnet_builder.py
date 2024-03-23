@@ -24,7 +24,7 @@ __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"
 _logger = logging.getLogger(__name__)
 
 
-_DEBUG_BUILDER = False
+_DEBUG_BUILDER = True
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
@@ -143,6 +143,7 @@ def _decode_block_str(block_str):
     pw_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
     force_in_chs = int(options['fc']) if 'fc' in options else 0  # FIXME hack to deal with in_chs issue in TPU def
     num_repeat = int(options['r'])
+    s2d = int(options['d']) if 'd' in options else 0
 
     # each type of block has different valid arguments, fill accordingly
     block_args = dict(
@@ -159,6 +160,7 @@ def _decode_block_str(block_str):
             exp_ratio=float(options['e']),
             se_ratio=float(options['se']) if 'se' in options else 0.,
             noskip=skip is False,
+            s2d=s2d > 0,
         ))
         if 'cc' in options:
             block_args['num_experts'] = int(options['cc'])
@@ -169,6 +171,7 @@ def _decode_block_str(block_str):
             se_ratio=float(options['se']) if 'se' in options else 0.,
             pw_act=block_type == 'dsa',
             noskip=block_type == 'dsa' or skip is False,
+            s2d=s2d > 0,
         ))
     elif block_type == 'er':
         block_args.update(dict(
@@ -285,8 +288,18 @@ class EfficientNetBuilder:
     https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/modeling/backbone/fbnet_builder.py
 
     """
-    def __init__(self, output_stride=32, pad_type='', round_chs_fn=round_channels, se_from_exp=False,
-                 act_layer=None, norm_layer=None, se_layer=None, drop_path_rate=0., feature_location=''):
+    def __init__(
+            self,
+            output_stride=32,
+            pad_type='',
+            round_chs_fn=round_channels,
+            se_from_exp=False,
+            act_layer=None,
+            norm_layer=None,
+            se_layer=None,
+            drop_path_rate=0.,
+            feature_location='',
+    ):
         self.output_stride = output_stride
         self.pad_type = pad_type
         self.round_chs_fn = round_chs_fn
@@ -317,6 +330,11 @@ class EfficientNetBuilder:
         bt = ba.pop('block_type')
         ba['in_chs'] = self.in_chs
         ba['out_chs'] = self.round_chs_fn(ba['out_chs'])
+        s2d = ba.get('s2d', 0)
+        if s2d:
+            ba['out_chs'] *= 4
+        if s2d == 1:
+            ba['dw_kernel_size'] = (ba['dw_kernel_size'] + 1) // 2
         if 'force_in_chs' in ba and ba['force_in_chs']:
             # NOTE this is a hack to work around mismatch in TF EdgeEffNet impl
             ba['force_in_chs'] = self.round_chs_fn(ba['force_in_chs'])
@@ -332,6 +350,9 @@ class EfficientNetBuilder:
                 if not self.se_from_exp:
                     # adjust se_ratio by expansion ratio if calculating se channels from block input
                     se_ratio /= ba.get('exp_ratio', 1.0)
+                # adjust space2depth
+                if s2d == 1:
+                    se_ratio /= 4
                 if self.se_has_ratio:
                     ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
                 else:
@@ -377,6 +398,7 @@ class EfficientNetBuilder:
             self.features.append(feature_info)
 
         # outer list of block_args defines the stacks
+        space2depth = 0
         for stack_idx, stack_args in enumerate(model_block_args):
             last_stack = stack_idx + 1 == len(model_block_args)
             _log_info_if('Stack: {}'.format(stack_idx), self.verbose)
@@ -391,6 +413,21 @@ class EfficientNetBuilder:
                 assert block_args['stride'] in (1, 2)
                 if block_idx >= 1:   # only the first block in any stack can have a stride > 1
                     block_args['stride'] = 1
+
+                if not space2depth and block_args.pop('s2d', False):
+                    assert block_args['stride'] == 1
+                    space2depth = 1
+
+                if space2depth > 0:
+                    if space2depth == 2 and block_args['stride'] == 2:
+                        space2depth = 0
+                        block_args['stride'] = 1
+                        # to end s2d region, need to correct expansion and se ratio relative to input
+                        # FIXME unify with _make_block logic? this is rather meh
+                        block_args['exp_ratio'] /= 4
+                        #block_args['se_ratio'] /= 4
+                    else:
+                        block_args['s2d'] = space2depth
 
                 extract_features = False
                 if last_block:
@@ -415,6 +452,9 @@ class EfficientNetBuilder:
                 # create the block
                 block = self._make_block(block_args, total_block_idx, total_block_count)
                 blocks.append(block)
+
+                if space2depth == 1:
+                    space2depth = 2
 
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
