@@ -65,10 +65,10 @@ class Scheduler(ABC):
         self.__dict__.update(state_dict)
 
     @abc.abstractmethod
-    def _get_lr(self, t: int) -> float:
+    def _get_lr(self, t: int) -> List[float]:
         pass
 
-    def _get_values(self, t: int, on_epoch: bool = True) -> Optional[float]:
+    def _get_values(self, t: int, on_epoch: bool = True) -> Optional[List[float]]:
         proceed = (on_epoch and self.t_in_epochs) or (not on_epoch and not self.t_in_epochs)
         if not proceed:
             return None
