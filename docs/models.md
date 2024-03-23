@@ -142,6 +142,10 @@ NOTE: I am deprecating this version of the networks, the new ones are part of `r
 * Paper: `Squeeze-and-Excitation Networks` - https://arxiv.org/abs/1709.01507
 * Code: https://github.com/Cadene/pretrained-models.pytorch 
 
+## SimpleNet [[simplenet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/simplenet.py)]
+* Paper: `Lets Keep it simple, Using simple architectures to outperform deeper and more complex architectures` - https://arxiv.org/abs/1608.06037
+* Code: https://github.com/Coderx7/SimpleNet_Pytorch
+
 ## TResNet [[tresnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/tresnet.py)]
 * Paper: `TResNet: High Performance GPU-Dedicated Architecture` - https://arxiv.org/abs/2003.13630
 * Code: https://github.com/mrT23/TResNet
