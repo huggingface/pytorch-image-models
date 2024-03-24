@@ -10,8 +10,8 @@ class Scheduler(ABC):
     A scheduler base class that can be used to schedule any optimizer parameter groups.
 
     Unlike the builtin PyTorch schedulers, this is intended to be consistently called
-    * At the END of each epoch, before incrementing the epoch count, to calculate next epoch's value
-    * At the END of each optimizer update, after incrementing the update count, to calculate next update's value
+    * At the START of each epoch, before calling optimizer or incrementing the epoch count, to calculate current epoch's value
+    * At the START of each optimizer update, before calling optimizer or incrementing the update count, to calculate current update's value
 
     The schedulers built on this should try to remain as stateless as possible (for simplicity).
 
