@@ -8,6 +8,7 @@ import logging
 import math
 import numpy as np
 import torch
+from typing import List
 
 from .scheduler import Scheduler
 
@@ -75,7 +76,7 @@ class TanhLRScheduler(Scheduler):
         else:
             self.warmup_steps = [1 for _ in self.base_values]
 
-    def _get_lr(self, t):
+    def _get_lr(self, t: int) -> List[float]:
         if t < self.warmup_t:
             lrs = [self.warmup_lr_init + t * s for s in self.warmup_steps]
         else:

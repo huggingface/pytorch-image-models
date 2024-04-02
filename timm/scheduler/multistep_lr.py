@@ -53,7 +53,7 @@ class MultiStepLRScheduler(Scheduler):
         # assumes self.decay_t is sorted
         return bisect.bisect_right(self.decay_t, t + 1)
 
-    def _get_lr(self, t):
+    def _get_lr(self, t: int) -> List[float]:
         if t < self.warmup_t:
             lrs = [self.warmup_lr_init + t * s for s in self.warmup_steps]
         else:
