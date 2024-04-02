@@ -1,6 +1,6 @@
 import abc
 from abc import ABC
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 
