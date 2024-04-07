@@ -11,7 +11,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from functools import partial
-from typing import Dict, List, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -23,9 +23,24 @@ from timm.layers import Format
 __all__ = ['FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet']
 
 
+def _out_indices_as_tuple(x: Union[int, Tuple[int, ...]]) -> Tuple[int, ...]:
+    if isinstance(x, int):
+        # if indices is an int, take last N features
+        return tuple(range(-x, 0))
+    return tuple(x)
+
+
+OutIndicesT = Union[int, Tuple[int, ...]]
+
+
 class FeatureInfo:
 
-    def __init__(self, feature_info: List[Dict], out_indices: Tuple[int]):
+    def __init__(
+            self,
+            feature_info: List[Dict],
+            out_indices: OutIndicesT,
+    ):
+        out_indices = _out_indices_as_tuple(out_indices)
         prev_reduction = 1
         for i, fi in enumerate(feature_info):
             # sanity check the mandatory fields, there may be additional fields depending on the model
@@ -37,14 +52,15 @@ class FeatureInfo:
         self.out_indices = out_indices
         self.info = feature_info
 
-    def from_other(self, out_indices: Tuple[int]):
+    def from_other(self, out_indices: OutIndicesT):
+        out_indices = _out_indices_as_tuple(out_indices)
         return FeatureInfo(deepcopy(self.info), out_indices)
 
-    def get(self, key, idx=None):
+    def get(self, key: str, idx: Optional[Union[int, List[int]]] = None):
         """ Get value by key at specified index (indices)
         if idx == None, returns value for key at each output index
         if idx is an integer, return value for that feature module index (ignoring output indices)
-        if idx is a list/tupple, return value for each module index (ignoring output indices)
+        if idx is a list/tuple, return value for each module index (ignoring output indices)
         """
         if idx is None:
             return [self.info[i][key] for i in self.out_indices]
@@ -53,7 +69,7 @@ class FeatureInfo:
         else:
             return self.info[idx][key]
 
-    def get_dicts(self, keys=None, idx=None):
+    def get_dicts(self, keys: Optional[List[str]] = None, idx: Optional[Union[int, List[int]]] = None):
         """ return info dicts for specified keys (or all if None) at specified indices (or out_indices if None)
         """
         if idx is None:
@@ -66,17 +82,17 @@ class FeatureInfo:
         else:
             return self.info[idx] if keys is None else {k: self.info[idx][k] for k in keys}
 
-    def channels(self, idx=None):
+    def channels(self, idx: Optional[Union[int, List[int]]] = None):
         """ feature channels accessor
         """
         return self.get('num_chs', idx)
 
-    def reduction(self, idx=None):
+    def reduction(self, idx: Optional[Union[int, List[int]]] = None):
         """ feature reduction (output stride) accessor
         """
         return self.get('reduction', idx)
 
-    def module_name(self, idx=None):
+    def module_name(self, idx: Optional[Union[int, List[int]]] = None):
         """ feature module name accessor
         """
         return self.get('module', idx)
@@ -146,7 +162,7 @@ def _module_list(module, flatten_sequential=False):
     return ml
 
 
-def _get_feature_info(net, out_indices):
+def _get_feature_info(net, out_indices: OutIndicesT):
     feature_info = getattr(net, 'feature_info')
     if isinstance(feature_info, FeatureInfo):
         return feature_info.from_other(out_indices)
@@ -182,7 +198,7 @@ class FeatureDictNet(nn.ModuleDict):
     def __init__(
             self,
             model: nn.Module,
-            out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
+            out_indices: OutIndicesT = (0, 1, 2, 3, 4),
             out_map: Sequence[Union[int, str]] = None,
             output_fmt: str = 'NCHW',
             feature_concat: bool = False,
@@ -257,7 +273,7 @@ class FeatureListNet(FeatureDictNet):
     def __init__(
             self,
             model: nn.Module,
-            out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
+            out_indices: OutIndicesT = (0, 1, 2, 3, 4),
             output_fmt: str = 'NCHW',
             feature_concat: bool = False,
             flatten_sequential: bool = False,
@@ -298,8 +314,8 @@ class FeatureHookNet(nn.ModuleDict):
     def __init__(
             self,
             model: nn.Module,
-            out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
-            out_map: Sequence[Union[int, str]] = None,
+            out_indices: OutIndicesT = (0, 1, 2, 3, 4),
+            out_map: Optional[Sequence[Union[int, str]]] = None,
             return_dict: bool = False,
             output_fmt: str = 'NCHW',
             no_rewrite: bool = False,
@@ -366,3 +382,44 @@ class FeatureHookNet(nn.ModuleDict):
                 x = module(x)
         out = self.hooks.get_output(x.device)
         return out if self.return_dict else list(out.values())
+
+
+class FeatureGetterNet(nn.ModuleDict):
+    """ FeatureGetterNet
+
+    Wrap models with a feature getter method, like 'get_intermediate_layers'
+
+    """
+    def __init__(
+            self,
+            model: nn.Module,
+            out_indices: OutIndicesT = 4,
+            out_map: Optional[Sequence[Union[int, str]]] = None,
+            return_dict: bool = False,
+            output_fmt: str = 'NCHW',
+    ):
+        super().__init__()
+        self.model = model
+        self.feature_info = _get_feature_info(model, out_indices)
+        self.out_indices = out_indices
+        self.out_map = out_map
+        self.return_dict = return_dict
+        self.output_fmt = output_fmt
+
+    def forward(self, *args, **kwargs):
+        """
+        def get_intermediate_layers(
+            self,
+            x: torch.Tensor,
+            n: Union[int, Sequence] = 1,
+            reshape: bool = False,
+            return_prefix_tokens: bool = False,
+            norm: bool = False,
+        """
+        out = self.model.get_intermediate_layers(
+            *args,
+            n=self.out_indices,
+            reshape=True,
+            **kwargs,
+        )
+        return out
