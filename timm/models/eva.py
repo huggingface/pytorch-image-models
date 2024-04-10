@@ -24,9 +24,8 @@ Modifications by / Copyright 2023 Ross Wightman, original copyrights below
 """
 # EVA models Copyright (c) 2022 BAAI-Vision
 # EVA02 models Copyright (c) 2023 BAAI-Vision
-
 import math
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -39,6 +38,7 @@ from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, Pa
     to_2tuple, use_fused_attn
 
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['Eva']
@@ -469,6 +469,8 @@ class Eva(nn.Module):
                 init_values=init_values,
             )
             for i in range(depth)])
+        self.feature_info = [
+            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=patch_size) for i in range(depth)]
 
         use_fc_norm = self.global_pool == 'avg'
         self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
@@ -558,6 +560,85 @@ class Eva(nn.Module):
             if rot_pos_embed is not None and keep_indices is not None:
                 rot_pos_embed = apply_keep_indices_nlc(x, rot_pos_embed, keep_indices)
         return x, rot_pos_embed
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            n: Optional[Union[int, List[int], Tuple[int]]] = None,
+            return_prefix_tokens: bool = False,
+            norm: bool = False,
+            stop_early: bool = True,
+            output_fmt: str = 'NCHW',
+            features_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+        Args:
+            x: Input image tensor
+            n: Take last n blocks if n is an int, if in is a sequence, select by matching indices
+            return_prefix_tokens: Return both prefix and spatial intermediate tokens
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            features_only: Only return intermediate features
+        """
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format for EVA-ViT features must be one of NCHW or NLC.'
+        reshape = output_fmt == 'NCHW'
+        intermediates = []
+        num_blocks = len(self.blocks)
+        if n is None:
+            n = num_blocks
+        take_indices, max_index = feature_take_indices(n, num_blocks)
+
+        # forward pass
+        B, _, height, width = x.shape
+        x = self.patch_embed(x)
+        x, rot_pos_embed = self._pos_embed(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index + 1]
+        for i, blk in enumerate(blocks):
+            x = blk(x, rope=rot_pos_embed)
+            if i in take_indices:
+                intermediates.append(self.norm(x) if norm else x)
+
+        # process intermediates
+        if self.num_prefix_tokens:
+            # split prefix (e.g. class, distill) and spatial feature tokens
+            prefix_tokens = [y[:, 0:self.num_prefix_tokens] for y in intermediates]
+            intermediates = [y[:, self.num_prefix_tokens:] for y in intermediates]
+        if reshape:
+            # reshape == True => BCHW output format
+            patch_size = self.patch_embed.patch_size
+            H = int(math.ceil(height / patch_size[0]))
+            W = int(math.ceil(width / patch_size[1]))
+            intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+        if not torch.jit.is_scripting() and return_prefix_tokens:
+            # return_prefix not support in torchscript due to poor type handling
+            intermediates = list(zip(intermediates, prefix_tokens))
+
+        if features_only:
+            return intermediates
+
+        x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            n: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(n, len(self.blocks))
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.fc_norm = nn.Identity()
+            self.head = nn.Identity()
 
     def forward_features(self, x):
         x = self.patch_embed(x)
@@ -663,13 +744,13 @@ def checkpoint_filter_fn(
 
 
 def _create_eva(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Eva models.')
-
+    out_indices = kwargs.pop('out_indices', 3)
     model = build_model_with_cfg(
         Eva, variant, pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        **kwargs)
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
     return model
 
 

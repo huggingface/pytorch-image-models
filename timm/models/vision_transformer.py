@@ -45,6 +45,7 @@ from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm,
     trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
     get_act_layer, get_norm_layer, LayerType
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -473,7 +474,6 @@ class VisionTransformer(nn.Module):
         self.no_embed_class = no_embed_class  # don't embed prefix positions (includes reg)
         self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
-        self.feature_info = []
 
         embed_args = {}
         if dynamic_img_size:
@@ -631,58 +631,111 @@ class VisionTransformer(nn.Module):
 
         return self.pos_drop(x)
 
-    def _intermediate_layers(
+    def forward_intermediates(
             self,
             x: torch.Tensor,
-            n: Union[int, Sequence] = 1,
-    ) -> List[torch.Tensor]:
-        outputs, num_blocks = [], len(self.blocks)
-        take_indices = set(range(num_blocks - n, num_blocks) if isinstance(n, int) else n)
-        last_index_to_take = max(take_indices)
+            n: Optional[Union[int, List[int], Tuple[int]]] = None,
+            return_prefix_tokens: bool = False,
+            norm: bool = False,
+            stop_early: bool = True,
+            output_fmt: str = 'NCHW',
+            features_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            n: Take last n blocks if n is an int, if in is a sequence, select by matching indices
+            return_prefix_tokens: Return both prefix and spatial intermediate tokens
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            features_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format for ViT features must be one of NCHW or NLC.'
+        reshape = output_fmt == 'NCHW'
+        intermediates = []
+        num_blocks = len(self.blocks)
+        if n is None:
+            n = num_blocks
+        take_indices, max_index = feature_take_indices(n, num_blocks)
 
         # forward pass
+        B, _, height, width = x.shape
         x = self.patch_embed(x)
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        for i, blk in enumerate(self.blocks[: last_index_to_take + 1]):
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index + 1]
+        for i, blk in enumerate(blocks):
             x = blk(x)
             if i in take_indices:
-                outputs.append(x)
+                # normalize intermediates with final norm layer if enabled
+                intermediates.append(self.norm(x) if norm else x)
 
-        return outputs
+        # process intermediates
+        if self.num_prefix_tokens:
+            # split prefix (e.g. class, distill) and spatial feature tokens
+            prefix_tokens = [y[:, 0:self.num_prefix_tokens] for y in intermediates]
+            intermediates = [y[:, self.num_prefix_tokens:] for y in intermediates]
+        if reshape:
+            # reshape == True => BCHW output format
+            patch_size = self.patch_embed.patch_size
+            H = int(math.ceil(height / patch_size[0]))
+            W = int(math.ceil(width / patch_size[1]))
+            intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+        if not torch.jit.is_scripting() and return_prefix_tokens:
+            # return_prefix not support in torchscript due to poor type handling
+            intermediates = list(zip(intermediates, prefix_tokens))
+
+        if features_only:
+            return intermediates
+
+        x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            n: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(n, len(self.blocks))
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            if self.attn_pool is not None:
+                self.attn_pool = None
+            self.fc_norm = nn.Identity()
+            self.head = nn.Identity()
 
     def get_intermediate_layers(
             self,
             x: torch.Tensor,
-            n: Union[int, Sequence] = 1,
+            n: Union[int, List[int], Tuple[int]] = 1,
             reshape: bool = False,
             return_prefix_tokens: bool = False,
             norm: bool = False,
-    ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]:
-        """ Intermediate layer accessor (NOTE: This is a WIP experiment).
-        Inspired by DINO / DINOv2 interface
+    ) -> List[torch.Tensor]:
+        """ Intermediate layer accessor inspired by DINO / DINOv2 interface.
+        NOTE: This API is for backwards compat, favour using forward_intermediates() directly.
         """
-        # take last n blocks if n is an int, if in is a sequence, select by matching indices
-        outputs = self._intermediate_layers(x, n)
-        if norm:
-            outputs = [self.norm(out) for out in outputs]
-        prefix_tokens = [out[:, 0:self.num_prefix_tokens] for out in outputs]
-        outputs = [out[:, self.num_prefix_tokens:] for out in outputs]
-
-        if reshape:
-            patch_size = self.patch_embed.patch_size
-            batch, _, height, width = x.size()
-            outputs = [
-                out.reshape(batch, int(math.ceil(height / patch_size[0])), int(math.ceil(width / patch_size[1])), -1)
-                .permute(0, 3, 1, 2)
-                .contiguous()
-                for out in outputs
-            ]
-
-        if return_prefix_tokens:
-            return tuple(zip(outputs, prefix_tokens))
-        return tuple(outputs)
+        return self.forward_intermediates(
+            x, n,
+            return_prefix_tokens=return_prefix_tokens,
+            norm=norm,
+            output_fmt='NCHW' if reshape else 'NLC',
+            features_only=True,
+        )
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -2485,7 +2538,7 @@ def vit_huge_patch14_xp_224(pretrained: bool = False, **kwargs) -> VisionTransfo
 def vit_small_patch14_dinov2(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-S/14 for DINOv2
     """
-    model_args = dict(patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5, img_size=518)
+    model_args = dict(patch_size=14, embed_dim=384, depth=12, num_heads=6, init_values=1e-5)
     model = _create_vision_transformer(
         'vit_small_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -2495,7 +2548,7 @@ def vit_small_patch14_dinov2(pretrained: bool = False, **kwargs) -> VisionTransf
 def vit_base_patch14_dinov2(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-B/14 for DINOv2
     """
-    model_args = dict(patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5, img_size=518)
+    model_args = dict(patch_size=14, embed_dim=768, depth=12, num_heads=12, init_values=1e-5)
     model = _create_vision_transformer(
         'vit_base_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -2505,7 +2558,7 @@ def vit_base_patch14_dinov2(pretrained: bool = False, **kwargs) -> VisionTransfo
 def vit_large_patch14_dinov2(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-L/14 for DINOv2
     """
-    model_args = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5, img_size=518)
+    model_args = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, init_values=1e-5)
     model = _create_vision_transformer(
         'vit_large_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -2521,7 +2574,7 @@ def vit_giant_patch14_dinov2(pretrained: bool = False, **kwargs) -> VisionTransf
     # With SwiGLUPacked, we need to set hidden_features = 2 * 4096 = 8192
     model_args = dict(
         patch_size=14, embed_dim=1536, depth=40, num_heads=24, init_values=1e-5,
-        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, img_size=518, act_layer=nn.SiLU
+        mlp_ratio=2.66667 * 2, mlp_layer=SwiGLUPacked, act_layer=nn.SiLU
     )
     model = _create_vision_transformer(
         'vit_giant_patch14_dinov2', pretrained=pretrained, **dict(model_args, **kwargs))

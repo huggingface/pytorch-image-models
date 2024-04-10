@@ -11,7 +11,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from functools import partial
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -20,7 +20,39 @@ from torch.utils.checkpoint import checkpoint
 from timm.layers import Format
 
 
-__all__ = ['FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet']
+__all__ = [
+    'FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet', 'FeatureGetterNet',
+    'feature_take_indices'
+]
+
+
+def _take_indices(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tuple[Set[int], int]:
+    if isinstance(n, int):
+        assert n >= 0
+        take_indices = {x for x in range(num_blocks - n, num_blocks)}
+    else:
+        take_indices = {num_blocks + idx if idx < 0 else idx for idx in n}
+    return take_indices, max(take_indices)
+
+
+def _take_indices_jit(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tuple[List[int], int]:
+    if isinstance(n, int):
+        assert n >= 0
+        take_indices = [num_blocks - n + i for i in range(n)]
+    elif isinstance(n, tuple):
+        # splitting this up is silly, but needed for torchscript type resolution of n
+        take_indices = [num_blocks + idx if idx < 0 else idx for idx in n]
+    else:
+        take_indices = [num_blocks + idx if idx < 0 else idx for idx in n]
+    return take_indices, max(take_indices)
+
+
+def feature_take_indices(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tuple[List[int], int]:
+    if torch.jit.is_scripting():
+        return _take_indices_jit(n, num_blocks)
+    else:
+        # NOTE non-jit returns Set[int] instead of List[int] but torchscript can't handle that anno
+        return _take_indices(n, num_blocks)
 
 
 def _out_indices_as_tuple(x: Union[int, Tuple[int, ...]]) -> Tuple[int, ...]:
@@ -397,29 +429,38 @@ class FeatureGetterNet(nn.ModuleDict):
             out_map: Optional[Sequence[Union[int, str]]] = None,
             return_dict: bool = False,
             output_fmt: str = 'NCHW',
+            norm: bool = False,
+            prune: bool = True,
     ):
+        """
+
+        Args:
+            model: Model to wrap.
+            out_indices: Indices of features to extract.
+            out_map: Remap feature names for dict output (WIP, not supported).
+            return_dict: Return features as dictionary instead of list (WIP, not supported).
+            norm: Apply final model norm to all output features (if possible).
+        """
         super().__init__()
-        self.model = model
+        if prune and hasattr(model, 'prune_intermediate_layers'):
+            model.prune_intermediate_layers(
+                out_indices,
+                prune_norm=not norm,
+            )
         self.feature_info = _get_feature_info(model, out_indices)
+        self.model = model
         self.out_indices = out_indices
         self.out_map = out_map
         self.return_dict = return_dict
         self.output_fmt = output_fmt
+        self.norm = norm
 
-    def forward(self, *args, **kwargs):
-        """
-        def get_intermediate_layers(
-            self,
-            x: torch.Tensor,
-            n: Union[int, Sequence] = 1,
-            reshape: bool = False,
-            return_prefix_tokens: bool = False,
-            norm: bool = False,
-        """
-        out = self.model.get_intermediate_layers(
-            *args,
+    def forward(self, x):
+        features = self.model.forward_intermediates(
+            x,
             n=self.out_indices,
-            reshape=True,
-            **kwargs,
+            norm=self.norm,
+            output_fmt=self.output_fmt,
+            features_only=True,
         )
-        return out
+        return features

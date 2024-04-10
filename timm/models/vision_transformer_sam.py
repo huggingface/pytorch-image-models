@@ -11,21 +11,22 @@ A PyTorch implement of Vision Transformers as described in:
 """
 import logging
 from functools import partial
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.layers import PatchEmbed, Mlp, DropPath, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead, \
+    Format, resample_abs_pos_embed_nhwc, RotaryEmbeddingCat, apply_rot_embed_cat, to_2tuple, use_fused_attn
 from torch.jit import Final
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead,\
-    Format, resample_abs_pos_embed_nhwc, RotaryEmbeddingCat, apply_rot_embed_cat, to_2tuple, use_fused_attn
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
+from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
-from ._features_fx import register_notrace_function
 
 # model_registry will add each entrypoint fn to this
 __all__ = ['VisionTransformerSAM']
@@ -343,8 +344,7 @@ class VisionTransformerSAM(nn.Module):
             attn_drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             weight_init: str = '',
-            embed_layer: Callable = partial(
-                PatchEmbed, output_fmt=Format.NHWC, strict_img_size=False),
+            embed_layer: Callable = partial(PatchEmbed, output_fmt=Format.NHWC, strict_img_size=False),
             norm_layer: Optional[Callable] = nn.LayerNorm,
             act_layer: Optional[Callable] = nn.GELU,
             block_fn: Callable = Block,
@@ -469,6 +469,8 @@ class VisionTransformerSAM(nn.Module):
                 rope=self.rope_window if i not in global_attn_indexes else self.rope_global,
             )
             for i in range(depth)])
+        self.feature_info = [
+            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=patch_size) for i in range(depth)]
 
         if neck_chans:
             self.neck = nn.Sequential(
@@ -535,6 +537,52 @@ class VisionTransformerSAM(nn.Module):
 
     def reset_classifier(self, num_classes=0, global_pool=None):
         self.head.reset(num_classes, global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            n: Union[int, List[int], Tuple[int]] = None,
+            norm: bool = False,
+            stop_early: bool = True,
+            output_fmt: str = 'NCHW',
+            features_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        assert output_fmt == 'NCHW', 'Output shape for ViT-SAM must be NCHW.'
+        intermediates = []
+        num_blocks = len(self.blocks)
+        if n is None:
+            n = num_blocks
+        take_indices, max_index = feature_take_indices(n, num_blocks)
+
+        # forward pass, collect intermediates
+        x = self.patch_embed(x)
+        if self.pos_embed is not None:
+            # dynamically resize abs pos embedding if needed
+            x = x + resample_abs_pos_embed_nhwc(self.pos_embed, x.shape[1:3])
+        x = self.pos_drop(x)
+        x = self.patch_drop(x)
+        x = self.norm_pre(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index + 1]
+        for i, blk in enumerate(blocks):
+            x = blk(x)
+            if i in take_indices:
+                # make output BCHW
+                if norm:
+                    # norm is intertwined with neck convs so apply both, changes the dim
+                    # FIXME only apply to final? Need experiments
+                    intermediates.append(self.neck(x.permute(0, 3, 1, 2)))
+                else:
+                    intermediates.append(x.permute(0, 3, 1, 2))
+
+        if features_only:
+            return intermediates
+
+        x = self.neck(x.permute(0, 3, 1, 2))
+
+        return x, intermediates
 
     def forward_features(self, x):
         x = self.patch_embed(x)
@@ -618,15 +666,13 @@ default_cfgs = generate_default_cfgs({
 
 
 def _create_vision_transformer(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError(
-            'features_only not implemented for Vision Transformer models.')
-
+    out_indices = kwargs.pop('out_indices', 3)
     return build_model_with_cfg(
         VisionTransformerSAM,
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
 
