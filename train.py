@@ -684,7 +684,7 @@ def main():
             num_classes=args.num_classes
         )
         if args.prefetcher:
-            assert not num_aug_splits  # collate conflict (need to support deinterleaving in collate mixup)
+            assert not num_aug_splits  # collate conflict (need to support de-interleaving in collate mixup)
             collate_fn = FastCollateMixup(**mixup_args)
         else:
             mixup_fn = Mixup(**mixup_args)
@@ -693,7 +693,7 @@ def main():
     if num_aug_splits > 1:
         dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
 
-    # create data loaders w/ augmentation pipeiine
+    # create data loaders w/ augmentation pipeline
     train_interpolation = args.train_interpolation
     if args.no_aug or not train_interpolation:
         train_interpolation = data_config['interpolation']
