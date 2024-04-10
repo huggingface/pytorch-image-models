@@ -47,6 +47,11 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_executor(True)
     torch._C._jit_set_profiling_mode(False)
 
+# models with forward_intermediates() and support for FeatureGetterNet features_only wrapper
+FEAT_INTER_FILTERS = [
+    'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'
+]
+
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
@@ -373,6 +378,72 @@ def test_model_forward_features(model_name, batch_size):
     assert len(expected_channels) == len(outputs)
     spatial_size = input_size[-2:]
     for e, r, o in zip(expected_channels, expected_reduction, outputs):
+        assert e == o.shape[feat_axis]
+        assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
+        assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
+        assert o.shape[0] == batch_size
+        assert not torch.isnan(o).any()
+
+
+@pytest.mark.features
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(FEAT_INTER_FILTERS, include_tags=True))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_intermediates_features(model_name, batch_size):
+    """Run a single forward pass with each model in feature extraction mode"""
+    model = create_model(model_name, pretrained=False, features_only=True)
+    model.eval()
+    print(model.feature_info.out_indices)
+    expected_channels = model.feature_info.channels()
+    expected_reduction = model.feature_info.reduction()
+
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    output_fmt = getattr(model, 'output_fmt', 'NCHW')
+    feat_axis = get_channel_dim(output_fmt)
+    spatial_axis = get_spatial_dim(output_fmt)
+    import math
+
+    outputs = model(torch.randn((batch_size, *input_size)))
+    assert len(expected_channels) == len(outputs)
+    spatial_size = input_size[-2:]
+    for e, r, o in zip(expected_channels, expected_reduction, outputs):
+        print(o.shape)
+        assert e == o.shape[feat_axis]
+        assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
+        assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
+        assert o.shape[0] == batch_size
+        assert not torch.isnan(o).any()
+
+
+@pytest.mark.features
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(FEAT_INTER_FILTERS, include_tags=True))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_intermediates(model_name, batch_size):
+    """Run a single forward pass with each model in feature extraction mode"""
+    model = create_model(model_name, pretrained=False)
+    model.eval()
+    feature_info = timm.models.FeatureInfo(model.feature_info, len(model.feature_info))
+    expected_channels = feature_info.channels()
+    expected_reduction = feature_info.reduction()
+    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
+
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    output_fmt = getattr(model, 'output_fmt', 'NCHW')
+    feat_axis = get_channel_dim(output_fmt)
+    spatial_axis = get_spatial_dim(output_fmt)
+    import math
+
+    output, intermediates = model.forward_intermediates(
+        torch.randn((batch_size, *input_size)),
+    )
+    assert len(expected_channels) == len(intermediates)
+    spatial_size = input_size[-2:]
+    for e, r, o in zip(expected_channels, expected_reduction, intermediates):
         assert e == o.shape[feat_axis]
         assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
         assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1

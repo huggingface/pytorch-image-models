@@ -407,18 +407,26 @@ class Twins(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            n: Union[int, List[int], Tuple[int]] = None,
+            indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = True,
             output_fmt: str = 'NCHW',
-            features_only: bool = False,
+            intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
         assert output_fmt == 'NCHW', 'Output shape for Twins must be NCHW.'
         intermediates = []
-        num_stages = len(self.blocks)  # block list is two-tiered, first tier == stage
-        if n is None:
-            n = num_stages
-        take_indices, max_index = feature_take_indices(n, num_stages)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
         # FIXME slice block/pos_block if < max
 
@@ -444,7 +452,7 @@ class Twins(nn.Module):
                     x_feat = self.norm(x) if norm else x
                     intermediates.append(x_feat.reshape(B, *size, -1).permute(0, 3, 1, 2).contiguous())
 
-        if features_only:
+        if intermediates_only:
             return intermediates
 
         x = self.norm(x)

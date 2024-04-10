@@ -837,19 +837,28 @@ class MultiScaleVit(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            n: Union[int, List[int], Tuple[int]] = None,
+            indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = True,
             output_fmt: str = 'NCHW',
-            features_only: bool = False,
+            intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
         assert output_fmt in ('NCHW', 'NLC'), 'Output shape for MViT-V2 must be NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
-        num_stages = len(self.stages)  # block list is two-tiered, first tier == stage
-        if n is None:
-            n = num_stages
-        take_indices, max_index = feature_take_indices(n, num_stages)
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
 
         # FIXME slice block/pos_block if < max
 
@@ -869,10 +878,13 @@ class MultiScaleVit(nn.Module):
                 else:
                     x_inter = x
                 if reshape:
+                    if self.cls_token is not None:
+                        # possible to allow return of class tokens, TBD
+                        x_inter = x_inter[:, 1:]
                     x_inter = x_inter.reshape(B, feat_size[0], feat_size[1], -1).permute(0, 3, 1, 2)
                 intermediates.append(x_inter)
 
-        if features_only:
+        if intermediates_only:
             return intermediates
 
         x = self.norm(x)

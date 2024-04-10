@@ -26,7 +26,10 @@ __all__ = [
 ]
 
 
-def _take_indices(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tuple[Set[int], int]:
+def _take_indices(
+        num_blocks: int,
+        n: Optional[Union[int, List[int], Tuple[int]]],
+) -> Tuple[Set[int], int]:
     if isinstance(n, int):
         assert n >= 0
         take_indices = {x for x in range(num_blocks - n, num_blocks)}
@@ -35,7 +38,10 @@ def _take_indices(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tupl
     return take_indices, max(take_indices)
 
 
-def _take_indices_jit(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tuple[List[int], int]:
+def _take_indices_jit(
+        num_blocks: int,
+        n: Union[int, List[int], Tuple[int]],
+) -> Tuple[List[int], int]:
     if isinstance(n, int):
         assert n >= 0
         take_indices = [num_blocks - n + i for i in range(n)]
@@ -47,12 +53,17 @@ def _take_indices_jit(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> 
     return take_indices, max(take_indices)
 
 
-def feature_take_indices(n: Union[int, List[int], Tuple[int]], num_blocks: int) -> Tuple[List[int], int]:
+def feature_take_indices(
+        num_blocks: int,
+        indices: Optional[Union[int, List[int], Tuple[int]]] = None,
+) -> Tuple[List[int], int]:
+    if indices is None:
+        indices = num_blocks  # all blocks if None
     if torch.jit.is_scripting():
-        return _take_indices_jit(n, num_blocks)
+        return _take_indices_jit(num_blocks, indices)
     else:
         # NOTE non-jit returns Set[int] instead of List[int] but torchscript can't handle that anno
-        return _take_indices(n, num_blocks)
+        return _take_indices(num_blocks, indices)
 
 
 def _out_indices_as_tuple(x: Union[int, Tuple[int, ...]]) -> Tuple[int, ...]:
@@ -443,10 +454,12 @@ class FeatureGetterNet(nn.ModuleDict):
         """
         super().__init__()
         if prune and hasattr(model, 'prune_intermediate_layers'):
-            model.prune_intermediate_layers(
+            # replace out_indices after they've been normalized, -ve indices will be invalid after prune
+            out_indices = model.prune_intermediate_layers(
                 out_indices,
                 prune_norm=not norm,
             )
+            out_indices = list(out_indices)
         self.feature_info = _get_feature_info(model, out_indices)
         self.model = model
         self.out_indices = out_indices
@@ -458,9 +471,9 @@ class FeatureGetterNet(nn.ModuleDict):
     def forward(self, x):
         features = self.model.forward_intermediates(
             x,
-            n=self.out_indices,
+            indices=self.out_indices,
             norm=self.norm,
             output_fmt=self.output_fmt,
-            features_only=True,
+            intermediates_only=True,
         )
         return features

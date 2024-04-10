@@ -9,6 +9,7 @@ Based on code in:
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import logging
+import math
 from typing import Callable, List, Optional, Tuple, Union
 
 import torch
@@ -64,6 +65,21 @@ class PatchEmbed(nn.Module):
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+
+    def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
+        if as_scalar:
+            return max(self.patch_size)
+        else:
+            return self.patch_size
+
+    def dynamic_feat_size(self, img_size: Tuple[int, int]) -> Tuple[int, int]:
+        """ Get grid (feature) size for given image size taking account of dynamic padding.
+        NOTE: must be torchscript compatible so using fixed tuple indexing
+        """
+        if self.dynamic_img_pad:
+            return math.ceil(img_size[0] / self.patch_size[0]), math.ceil(img_size[1] / self.patch_size[1])
+        else:
+            return img_size[0] // self.patch_size[0], img_size[1] // self.patch_size[1]
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -127,13 +143,13 @@ class PatchEmbedWithSize(PatchEmbed):
             _assert(W % self.patch_size[1] == 0, f"Input image width ({W}) must be divisible by patch size ({self.patch_size[1]}).")
 
         x = self.proj(x)
-        grid_size = x.shape[-2:]
+        feat_size = x.shape[-2:]
         if self.flatten:
             x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
         elif self.output_fmt != Format.NCHW:
             x = nchw_to(x, self.output_fmt)
         x = self.norm(x)
-        return x, grid_size
+        return x, feat_size
 
 
 def resample_patch_embed(

@@ -27,7 +27,7 @@ import logging
 import math
 from collections import OrderedDict
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple, Type, Union, List
+from typing import Any, Callable, Dict, Optional, Set, Tuple, Type, Union, List
 try:
     from typing import Literal
 except ImportError:
@@ -489,6 +489,7 @@ class VisionTransformer(nn.Module):
             **embed_args,
         )
         num_patches = self.patch_embed.num_patches
+        r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
@@ -522,7 +523,7 @@ class VisionTransformer(nn.Module):
             )
             for i in range(depth)])
         self.feature_info = [
-            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=patch_size) for i in range(depth)]
+            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
 
         # Classifier Head
@@ -634,33 +635,30 @@ class VisionTransformer(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            n: Optional[Union[int, List[int], Tuple[int]]] = None,
+            indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
             stop_early: bool = True,
             output_fmt: str = 'NCHW',
-            features_only: bool = False,
+            intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
         Args:
             x: Input image tensor
-            n: Take last n blocks if n is an int, if in is a sequence, select by matching indices
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
             return_prefix_tokens: Return both prefix and spatial intermediate tokens
             norm: Apply norm layer to all intermediates
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
-            features_only: Only return intermediate features
+            intermediates_only: Only return intermediate features
         Returns:
 
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format for ViT features must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
-        num_blocks = len(self.blocks)
-        if n is None:
-            n = num_blocks
-        take_indices, max_index = feature_take_indices(n, num_blocks)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
         # forward pass
         B, _, height, width = x.shape
@@ -684,16 +682,14 @@ class VisionTransformer(nn.Module):
             prefix_tokens = [y[:, 0:self.num_prefix_tokens] for y in intermediates]
             intermediates = [y[:, self.num_prefix_tokens:] for y in intermediates]
         if reshape:
-            # reshape == True => BCHW output format
-            patch_size = self.patch_embed.patch_size
-            H = int(math.ceil(height / patch_size[0]))
-            W = int(math.ceil(width / patch_size[1]))
+            # reshape to BCHW output format
+            H, W = self.patch_embed.dynamic_feat_size((height, width))
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
         if not torch.jit.is_scripting() and return_prefix_tokens:
             # return_prefix not support in torchscript due to poor type handling
             intermediates = list(zip(intermediates, prefix_tokens))
 
-        if features_only:
+        if intermediates_only:
             return intermediates
 
         x = self.norm(x)
@@ -708,7 +704,7 @@ class VisionTransformer(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(n, len(self.blocks))
+        take_indices, max_index = feature_take_indices(len(self.blocks), n)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_norm:
             self.norm = nn.Identity()
@@ -717,6 +713,7 @@ class VisionTransformer(nn.Module):
                 self.attn_pool = None
             self.fc_norm = nn.Identity()
             self.head = nn.Identity()
+        return take_indices
 
     def get_intermediate_layers(
             self,
@@ -734,7 +731,7 @@ class VisionTransformer(nn.Module):
             return_prefix_tokens=return_prefix_tokens,
             norm=norm,
             output_fmt='NCHW' if reshape else 'NLC',
-            features_only=True,
+            intermediates_only=True,
         )
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

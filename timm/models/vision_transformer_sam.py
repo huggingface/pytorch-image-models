@@ -408,6 +408,8 @@ class VisionTransformerSAM(nn.Module):
             bias=not pre_norm,  # disable bias if pre-norm is used
         )
         grid_size = self.patch_embed.grid_size
+        r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
+
         if use_abs_pos:
             # Initialize absolute positional embedding with pretrain image size.
             self.pos_embed = nn.Parameter(torch.zeros(1, grid_size[0], grid_size[1], embed_dim))
@@ -470,7 +472,7 @@ class VisionTransformerSAM(nn.Module):
             )
             for i in range(depth)])
         self.feature_info = [
-            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=patch_size) for i in range(depth)]
+            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
         if neck_chans:
             self.neck = nn.Sequential(
@@ -541,18 +543,27 @@ class VisionTransformerSAM(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            n: Union[int, List[int], Tuple[int]] = None,
+            indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = True,
             output_fmt: str = 'NCHW',
-            features_only: bool = False,
+            intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
         assert output_fmt == 'NCHW', 'Output shape for ViT-SAM must be NCHW.'
         intermediates = []
-        num_blocks = len(self.blocks)
-        if n is None:
-            n = num_blocks
-        take_indices, max_index = feature_take_indices(n, num_blocks)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
         # forward pass, collect intermediates
         x = self.patch_embed(x)
@@ -577,12 +588,29 @@ class VisionTransformerSAM(nn.Module):
                 else:
                     intermediates.append(x.permute(0, 3, 1, 2))
 
-        if features_only:
+        if intermediates_only:
             return intermediates
 
         x = self.neck(x.permute(0, 3, 1, 2))
 
         return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            n: Union[int, List[int], Tuple[int]] = None,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.blocks), n)
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_norm:
+            # neck is being treated as equivalent to final norm here
+            self.neck = nn.Identity()
+        if prune_head:
+            self.head = nn.Identity()
+        return take_indices
 
     def forward_features(self, x):
         x = self.patch_embed(x)
