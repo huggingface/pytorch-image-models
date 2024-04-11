@@ -1,7 +1,7 @@
 """ PyTorch FX Based Feature Extraction Helpers
 Using https://pytorch.org/vision/stable/feature_extraction.html
 """
-from typing import Callable, List, Dict, Union, Type
+from typing import Callable, Dict, List, Optional, Union, Tuple, Type
 
 import torch
 from torch import nn
@@ -103,7 +103,12 @@ def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str
 class FeatureGraphNet(nn.Module):
     """ A FX Graph based feature extractor that works with the model feature_info metadata
     """
-    def __init__(self, model, out_indices, out_map=None):
+    def __init__(
+            self,
+            model: nn.Module,
+            out_indices: Tuple[int, ...],
+            out_map: Optional[Dict] = None,
+    ):
         super().__init__()
         assert has_fx_feature_extraction, 'Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction'
         self.feature_info = _get_feature_info(model, out_indices)
@@ -129,7 +134,12 @@ class GraphExtractNet(nn.Module):
         return_nodes: node names to return features from (dict or list)
         squeeze_out: if only one output, and output in list format, flatten to single tensor
     """
-    def __init__(self, model, return_nodes: Union[Dict[str, str], List[str]], squeeze_out: bool = True):
+    def __init__(
+            self,
+            model: nn.Module,
+            return_nodes: Union[Dict[str, str], List[str]],
+            squeeze_out: bool = True,
+    ):
         super().__init__()
         self.squeeze_out = squeeze_out
         self.graph_module = create_feature_extractor(model, return_nodes)

@@ -119,14 +119,14 @@ class VisionTransformerDistilled(VisionTransformer):
 
 
 def _create_deit(variant, pretrained=False, distilled=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+    out_indices = kwargs.pop('out_indices', 3)
     model_cls = VisionTransformerDistilled if distilled else VisionTransformer
     model = build_model_with_cfg(
         model_cls,
         variant,
         pretrained,
         pretrained_filter_fn=partial(checkpoint_filter_fn, adapt_layer_scale=True),
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
     return model

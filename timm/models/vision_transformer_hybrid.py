@@ -13,8 +13,9 @@ They were moved here to keep file sizes sane.
 
 Hacked together by / Copyright 2020, Ross Wightman
 """
+import math
 from functools import partial
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -41,6 +42,7 @@ class HybridEmbed(nn.Module):
             img_size=224,
             patch_size=1,
             feature_size=None,
+            feature_ratio=None,
             in_chans=3,
             embed_dim=768,
             bias=True,
@@ -68,15 +70,20 @@ class HybridEmbed(nn.Module):
                 feature_size = o.shape[-2:]
                 feature_dim = o.shape[1]
                 backbone.train(training)
+            feature_ratio = tuple([s // f for s, f in zip(img_size, feature_size)])
         else:
+
             feature_size = to_2tuple(feature_size)
+            feature_ratio = to_2tuple(feature_ratio or 16)
             if hasattr(self.backbone, 'feature_info'):
                 feature_dim = self.backbone.feature_info.channels()[-1]
             else:
                 feature_dim = self.backbone.num_features
         if not dynamic_img_pad:
             assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
-        self.grid_size = (feature_size[0] // patch_size[0], feature_size[1] // patch_size[1])
+        self.feature_size = feature_size
+        self.feature_ratio = feature_ratio
+        self.grid_size = tuple([f // p for f, p in zip(self.feature_size, self.patch_size)])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
         if output_fmt is not None:
             self.flatten = False
@@ -89,6 +96,25 @@ class HybridEmbed(nn.Module):
         self.dynamic_img_pad = dynamic_img_pad
 
         self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
+
+    def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
+        total_reduction = (
+            self.feature_ratio[0] * self.patch_size[0],
+            self.feature_ratio[1] * self.patch_size[1]
+        )
+        if as_scalar:
+            return max(total_reduction)
+        else:
+            return total_reduction
+
+    def dynamic_feat_size(self, img_size: Tuple[int, int]) -> Tuple[int, int]:
+        """ Get feature grid size taking account dynamic padding and backbone network feat reduction
+        """
+        feat_size = (img_size[0] // self.feature_ratio[0], img_size[1] // self.feature_ratio[1])
+        if self.dynamic_img_pad:
+            return math.ceil(feat_size[0] / self.patch_size[0]), math.ceil(feat_size[1] / self.patch_size[1])
+        else:
+            return feat_size[0] // self.patch_size[0], feat_size[1] // self.patch_size[1]
 
     def forward(self, x):
         x = self.backbone(x)

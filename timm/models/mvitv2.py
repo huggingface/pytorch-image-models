@@ -26,6 +26,7 @@ from torch import nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tuple
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
 from ._registry import register_model, register_model_deprecations, generate_default_cfgs
 
@@ -747,8 +748,10 @@ class MultiScaleVit(nn.Module):
 
         num_stages = len(cfg.embed_dim)
         feat_size = patch_dims
+        curr_stride = max(cfg.patch_stride)
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
         self.stages = nn.ModuleList()
+        self.feature_info = []
         for i in range(num_stages):
             if cfg.expand_attn:
                 dim_out = cfg.embed_dim[i]
@@ -775,6 +778,8 @@ class MultiScaleVit(nn.Module):
                 norm_layer=norm_layer,
                 drop_path=dpr[i],
             )
+            curr_stride *= max(cfg.stride_q[i])
+            self.feature_info += [dict(module=f'block.{i}', num_chs=dim_out, reduction=curr_stride)]
             embed_dim = dim_out
             feat_size = stage.feat_size
             self.stages.append(stage)
@@ -829,6 +834,63 @@ class MultiScaleVit(nn.Module):
             ('fc', nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())
         ]))
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Union[int, List[int], Tuple[int]] = None,
+            norm: bool = False,
+            stop_early: bool = True,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW', 'NLC'), 'Output shape for MViT-V2 must be NCHW or NLC.'
+        reshape = output_fmt == 'NCHW'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        # FIXME slice block/pos_block if < max
+
+        # forward pass
+        x, feat_size = self.patch_embed(x)
+        B = x.shape[0]
+        if self.cls_token is not None:
+            cls_tokens = self.cls_token.expand(B, -1, -1)
+            x = torch.cat((cls_tokens, x), dim=1)
+        if self.pos_embed is not None:
+            x = x + self.pos_embed
+        for i, stage in enumerate(self.stages):
+            x, feat_size = stage(x, feat_size)
+            if i in take_indices:
+                if norm and i == (len(self.stages) - 1):
+                    x_inter = self.norm(x)  # applying final norm last intermediate
+                else:
+                    x_inter = x
+                if reshape:
+                    if self.cls_token is not None:
+                        # possible to allow return of class tokens, TBD
+                        x_inter = x_inter[:, 1:]
+                    x_inter = x_inter.reshape(B, feat_size[0], feat_size[1], -1).permute(0, 3, 1, 2)
+                intermediates.append(x_inter)
+
+        if intermediates_only:
+            return intermediates
+
+        x = self.norm(x)
+
+        return x, intermediates
+
     def forward_features(self, x):
         x, feat_size = self.patch_embed(x)
         B, N, C = x.shape
@@ -862,6 +924,18 @@ class MultiScaleVit(nn.Module):
 
 def checkpoint_filter_fn(state_dict, model):
     if 'stages.0.blocks.0.norm1.weight' in state_dict:
+        # native checkpoint, look for rel_pos interpolations
+        for k in state_dict.keys():
+            if 'rel_pos' in k:
+                rel_pos = state_dict[k]
+                dest_rel_pos_shape = model.state_dict()[k].shape
+                if rel_pos.shape[0] != dest_rel_pos_shape[0]:
+                    rel_pos_resized = torch.nn.functional.interpolate(
+                        rel_pos.reshape(1, rel_pos.shape[0], -1).permute(0, 2, 1),
+                        size=dest_rel_pos_shape[0],
+                        mode="linear",
+                    )
+                    state_dict[k] = rel_pos_resized.reshape(-1, dest_rel_pos_shape[0]).permute(1, 0)
         return state_dict
 
     import re
@@ -891,16 +965,6 @@ def checkpoint_filter_fn(state_dict, model):
         if 'head' in k:
             k = k.replace('head.projection', 'head.fc')
         out_dict[k] = v
-
-    # for k, v in state_dict.items():
-    #     if model.pos_embed is not None and k == 'pos_embed' and v.shape[1] != model.pos_embed.shape[1]:
-    #         # To resize pos embedding when using model at different size from pretrained weights
-    #         v = resize_pos_embed(
-    #             v,
-    #             model.pos_embed,
-    #             0 if getattr(model, 'no_embed_class') else getattr(model, 'num_prefix_tokens', 1),
-    #             model.patch_embed.grid_size
-    #         )
 
     return out_dict
 
@@ -948,16 +1012,14 @@ model_cfgs = dict(
 
 
 def _create_mvitv2(variant, cfg_variant=None, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Multiscale Vision Transformer models.')
-
+    out_indices = kwargs.pop('out_indices', 4)
     return build_model_with_cfg(
         MultiScaleVit,
         variant,
         pretrained,
         model_cfg=model_cfgs[variant] if not cfg_variant else model_cfgs[cfg_variant],
         pretrained_filter_fn=checkpoint_filter_fn,
-        feature_cfg=dict(flatten_sequential=True),
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
 

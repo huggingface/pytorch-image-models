@@ -7,7 +7,7 @@ from typing import Optional, Dict, Callable, Any, Tuple
 from torch import nn as nn
 from torch.hub import load_state_dict_from_url
 
-from timm.models._features import FeatureListNet, FeatureHookNet
+from timm.models._features import FeatureListNet, FeatureDictNet, FeatureHookNet, FeatureGetterNet
 from timm.models._features_fx import FeatureGraphNet
 from timm.models._helpers import load_state_dict
 from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf
@@ -428,8 +428,12 @@ def build_model_with_cfg(
                 feature_cls = feature_cls.lower()
                 if 'hook' in feature_cls:
                     feature_cls = FeatureHookNet
+                elif feature_cls == 'dict':
+                    feature_cls = FeatureDictNet
                 elif feature_cls == 'fx':
                     feature_cls = FeatureGraphNet
+                elif feature_cls == 'getter':
+                    feature_cls = FeatureGetterNet
                 else:
                     assert False, f'Unknown feature class {feature_cls}'
         model = feature_cls(model, **feature_cfg)
