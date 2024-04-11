@@ -26,6 +26,48 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### April 11, 2024
+* Prepping for a long overdue 1.0 release, things have been stable for a while now.
+* Significant feature that's been missing for a while, `features_only=True` support for ViT models with flat hidden states or non-std module layouts (so far covering  `'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'`)
+* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or direclty.
+```python
+model = timm.create_model('vit_base_patch16_224')
+final_feat, intermediates = model.forward_intermediates(input) 
+output = model.forward_head(final_feat)  # pooling + classifier head
+
+print(final_feat.shape)
+torch.Size([2, 197, 768])
+
+for f in intermediates:
+    print(f.shape)
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+
+print(output.shape)
+torch.Size([2, 1000])
+```
+
+```python
+model = timm.create_model('eva02_base_patch16_clip_224', pretrained=True, img_size=512, features_only=True, out_indices=(-3, -2,))
+output = model(torch.randn(2, 3, 512, 512))
+
+for o in output:    
+    print(o.shape)   
+torch.Size([2, 768, 32, 32])
+torch.Size([2, 768, 32, 32])
+```
+* TinyCLIP vision tower weights added, thx [Thien Tran](https://github.com/gau-nernst)
+
 ### Feb 19, 2024
 * Next-ViT models added. Adapted from https://github.com/bytedance/Next-ViT
 * HGNet and PP-HGNetV2 models added. Adapted from https://github.com/PaddlePaddle/PaddleClas by [SeeFun](https://github.com/seefun)
