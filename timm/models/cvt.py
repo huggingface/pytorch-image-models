@@ -61,6 +61,9 @@ class ConvProj(nn.Module):
             act_layer=act_layer
         )
         
+        # TODO fuse kv conv?
+        # TODO if act_layer is id and not cls_token (gap model?), is later projection in attn necessary?
+        
         self.conv_k = ConvNormAct(
             dim,
             dim,
@@ -235,6 +238,8 @@ class CvTBlock(nn.Module):
         if self.use_cls_token:
             cls_token, x = torch.split(x, [1, H*W], 1)
         
+        x = x.transpose(1, 2).reshape(B, C, H, W)
+        
         return x, cls_token
 
 class CvTStage(nn.Module):
@@ -359,6 +364,9 @@ class CvT(nn.Module):
         self.num_features = dims[-1]
         self.drop_rate = drop_rate
         
+        # FIXME only on last stage, no need for tuple
+        self.use_cls_token = use_cls_token[-1]
+        
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
         
         in_chs = in_chans
@@ -397,4 +405,19 @@ class CvT(nn.Module):
             in_chs = dim
             stages.append(stage)
         self.stages = nn.ModuleList(stages)
+        
+        self.head_norm = norm_layer(dims[-1])
+        self.head = nn.Linear(dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        
+        for stage in self.stages:
+            x, cls_token = stage(x)
+            
+        
+        if self.use_cls_token:
+            return self.head(self.head_norm(cls_token))
+        else:
+            return self.head(self.head_norm(x.mean(dim=(2,3))))
+            
         
