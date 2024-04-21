@@ -8,6 +8,7 @@ from .convmixer import *
 from .convnext import *
 from .crossvit import *
 from .cspnet import *
+from .cvt import *
 from .davit import *
 from .deit import *
 from .densenet import *

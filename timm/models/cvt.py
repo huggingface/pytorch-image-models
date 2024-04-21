@@ -1,11 +1,28 @@
-from typing import Optional, Tuple
+""" CvT: Convolutional Vision Transformer
+
+From-scratch implementation of CvT in PyTorch
+
+'CvT: Introducing Convolutions to Vision Transformers'
+    - https://arxiv.org/abs/2103.15808
+
+Implementation for timm by / Copyright 2024, Fredo Guan
+"""
+
+from functools import partial
+from typing import List, Final, Optional, Tuple
 
 import torch
-import torch.nn
+import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.layers import ConvNormAct, LayerNorm2d, Mlp, QuickGELU, trunc_normal_, use_fused_attn
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.layers import ConvNormAct, LayerNorm, LayerNorm2d, Mlp, QuickGELU, trunc_normal_, use_fused_attn
+from ._builder import build_model_with_cfg
+from ._registry import generate_default_cfgs, register_model
 
+
+
+__all__ = ['CvT']
 
 class ConvEmbed(nn.Module):
     def __init__(
@@ -15,7 +32,7 @@ class ConvEmbed(nn.Module):
         kernel_size: int = 7,
         stride: int = 4,
         padding: int = 2,
-        norm_layer: nn.Module = nn.LayerNorm2d,
+        norm_layer: nn.Module = LayerNorm2d,
     ) -> None:
         super().__init__()
         
@@ -44,7 +61,7 @@ class ConvProj(nn.Module):
         padding: int = 1,
         bias: bool = False,
         norm_layer: nn.Module = nn.BatchNorm2d,
-        act_layer: nn.Module = nn.Identity(),
+        act_layer: nn.Module = nn.Identity,
     ) -> None:
         super().__init__()
         self.dim = dim
@@ -55,7 +72,7 @@ class ConvProj(nn.Module):
             kernel_size,
             stride=stride_q,
             padding=padding,
-            groups=in_chs,
+            groups=dim,
             bias=bias,
             norm_layer=norm_layer,
             act_layer=act_layer
@@ -70,8 +87,8 @@ class ConvProj(nn.Module):
             kernel_size,
             stride=stride_kv,
             padding=padding,
-            groups=in_chs,
-            bias=conv_bias,
+            groups=dim,
+            bias=bias,
             norm_layer=norm_layer,
             act_layer=act_layer
         )
@@ -82,8 +99,8 @@ class ConvProj(nn.Module):
             kernel_size,
             stride=stride_kv,
             padding=padding,
-            groups=in_chs,
-            bias=conv_bias,
+            groups=dim,
+            bias=bias,
             norm_layer=norm_layer,
             act_layer=act_layer
         )
@@ -107,7 +124,7 @@ class Attention(nn.Module):
             qk_norm: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
-            norm_layer: nn.Module = nn.LayerNorm,
+            norm_layer: nn.Module = LayerNorm,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -122,16 +139,16 @@ class Attention(nn.Module):
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(out_chs, out_chs)
+        self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
         
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         B, N, C = q.shape
         
         # [B, H*W, C] -> [B, H*W, n_h, d_h] -> [B, n_h, H*W, d_h]
-        q = self.proj_q(q).reshape(B, q.shape[2], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-        k = self.proj_k(k).reshape(B, k.shape[2], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-        v = self.proj_v(v).reshape(B, v.shape[2], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        q = self.proj_q(q).reshape(B, q.shape[1], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        k = self.proj_k(k).reshape(B, k.shape[1], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        v = self.proj_v(v).reshape(B, v.shape[1], self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         q, k = self.q_norm(q), self.k_norm(k)
         # [B, n_h, H*W, d_h], [B, n_h, H*W/4, d_h], [B, n_h, H*W/4, d_h]
 
@@ -162,14 +179,14 @@ class CvTBlock(nn.Module):
         padding: int = 1,
         conv_bias: bool = False,
         conv_norm_layer: nn.Module = nn.BatchNorm2d,
-        conv_act_layer: nn.Module = nn.Identity(),
+        conv_act_layer: nn.Module = nn.Identity,
         num_heads: int = 1,
         qkv_bias: bool = True,
         qk_norm: bool = False,
         attn_drop: float = 0.,
         proj_drop: float = 0.,
-        input_norm_layer = LayerNorm2d,
-        norm_layer: nn.Module = nn.LayerNorm,
+        input_norm_layer: nn.Module = partial(LayerNorm2d, eps=1e-5),
+        norm_layer: nn.Module = partial(LayerNorm, eps=1e-5),
         init_values: Optional[float] = None,
         drop_path: float = 0.,
         mlp_layer: nn.Module = Mlp,
@@ -180,7 +197,7 @@ class CvTBlock(nn.Module):
         super().__init__()
         self.use_cls_token = use_cls_token
 
-        self.norm1 = norm_layer(dim)
+        self.norm1 = input_norm_layer(dim)
         self.conv_proj = ConvProj(
             dim = dim,
             kernel_size = kernel_size,
@@ -207,7 +224,7 @@ class CvTBlock(nn.Module):
         self.mlp = mlp_layer(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
-            act_layer=act_layer,
+            act_layer=mlp_act_layer,
             drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
@@ -232,7 +249,8 @@ class CvTBlock(nn.Module):
     def forward(self, x: torch.Tensor, cls_token: Optional[torch.Tensor]) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         B, C, H, W = x.shape
 
-        x = x.flatten(2).transpose(1, 2) + self.drop_path1(self.ls1(self.fw_attn(self.norm1(x))))
+        x = torch.cat((cls_token, x.flatten(2).transpose(1, 2)), dim=1) if cls_token is not None else x.flatten(2).transpose(1, 2) \
+            + self.drop_path1(self.ls1(self.fw_attn(self.norm1(x), cls_token)))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
 
         if self.use_cls_token:
@@ -244,6 +262,7 @@ class CvTBlock(nn.Module):
 
 class CvTStage(nn.Module):
     def __init__(
+        self,
         in_chs: int,
         dim: int,
         depth: int,
@@ -256,14 +275,14 @@ class CvTStage(nn.Module):
         padding: int = 1,
         conv_bias: bool = False,
         conv_norm_layer: nn.Module = nn.BatchNorm2d,
-        conv_act_layer: nn.Module = nn.Identity(),
+        conv_act_layer: nn.Module = nn.Identity,
         num_heads: int = 1,
         qkv_bias: bool = True,
         qk_norm: bool = False,
         attn_drop: float = 0.,
         proj_drop: float = 0.,
         input_norm_layer = LayerNorm2d,
-        norm_layer: nn.Module = nn.LayerNorm,
+        norm_layer: nn.Module = LayerNorm,
         init_values: Optional[float] = None,
         drop_path_rates: List[float] = [0.],
         mlp_layer: nn.Module = Mlp,
@@ -320,7 +339,7 @@ class CvTStage(nn.Module):
         x = self.conv_embed(x)
         x = self.embed_drop(x)
 
-        cls_token = self.cls_token
+        cls_token = self.cls_token.expand(x.shape[0], -1, -1) if self.cls_token is not None else None
         for block in self.blocks: # technically possible to exploit nn.Sequential's untyped intermediate results if each block takes in a tensor
             x, cls_token = block(x, cls_token)
         
@@ -328,6 +347,7 @@ class CvTStage(nn.Module):
 
 class CvT(nn.Module):
     def __init__(
+        self,
         in_chans: int = 3,
         num_classes: int = 1000,
         dims: Tuple[int, ...] = (64, 192, 384),
@@ -341,14 +361,14 @@ class CvT(nn.Module):
         padding: int = 1,
         conv_bias: bool = False,
         conv_norm_layer: nn.Module = nn.BatchNorm2d,
-        conv_act_layer: nn.Module = nn.Identity(),
+        conv_act_layer: nn.Module = nn.Identity,
         num_heads: Tuple[int, ...] = (1, 3, 6),
         qkv_bias: bool = True,
         qk_norm: bool = False,
         attn_drop: float = 0.,
         proj_drop: float = 0.,
         input_norm_layer = LayerNorm2d,
-        norm_layer: nn.Module = nn.LayerNorm,
+        norm_layer: nn.Module = LayerNorm,
         init_values: Optional[float] = None,
         drop_path_rate: float = 0.,
         mlp_layer: nn.Module = Mlp,
@@ -362,7 +382,6 @@ class CvT(nn.Module):
         assert num_stages == len(embed_padding) == len(num_heads) == len(use_cls_token)
         self.num_classes = num_classes
         self.num_features = dims[-1]
-        self.drop_rate = drop_rate
         
         # FIXME only on last stage, no need for tuple
         self.use_cls_token = use_cls_token[-1]
@@ -370,6 +389,8 @@ class CvT(nn.Module):
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
         
         in_chs = in_chans
+        
+        # TODO move stem
         
         stages = []
         for stage_idx in range(num_stages):
@@ -406,7 +427,7 @@ class CvT(nn.Module):
             stages.append(stage)
         self.stages = nn.ModuleList(stages)
         
-        self.head_norm = norm_layer(dims[-1])
+        self.norm = norm_layer(dims[-1])
         self.head = nn.Linear(dims[-1], num_classes) if num_classes > 0 else nn.Identity()
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -416,8 +437,62 @@ class CvT(nn.Module):
             
         
         if self.use_cls_token:
-            return self.head(self.head_norm(cls_token))
+            return self.head(self.norm(cls_token.flatten(1)))
         else:
-            return self.head(self.head_norm(x.mean(dim=(2,3))))
+            return self.head(self.norm(x.mean(dim=(2,3))))
             
         
+        
+def checkpoint_filter_fn(state_dict, model):
+    """ Remap MSFT checkpoints -> timm """
+    if 'head.fc.weight' in state_dict:
+        return state_dict  # non-MSFT checkpoint
+
+    if 'state_dict' in state_dict:
+        state_dict = state_dict['state_dict']
+
+    import re
+    out_dict = {}
+    for k, v in state_dict.items():
+        k = re.sub(r'stage([0-9]+)', r'stages.\1', k)
+        k = k.replace('patch_embed', 'conv_embed')
+        k = k.replace('conv_embed.proj', 'conv_embed.conv')
+        k = k.replace('attn.conv_proj', 'conv_proj.conv')
+        out_dict[k] = v
+    return out_dict
+    
+    
+def _create_cvt(variant, pretrained=False, **kwargs):
+    default_out_indices = tuple(i for i, _ in enumerate(kwargs.get('depths', (1, 2, 10))))
+    out_indices = kwargs.pop('out_indices', default_out_indices)
+
+    model = build_model_with_cfg(
+        CvT,
+        variant,
+        pretrained,
+        pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
+        **kwargs)
+
+    return model
+
+# TODO update first_conv
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (14, 14),
+        'crop_pct': 0.95, 'interpolation': 'bicubic',
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'stem.conv', 'classifier': 'head',
+        **kwargs
+    }
+    
+default_cfgs = generate_default_cfgs({
+    'cvt_13.msft_in1k': _cfg(url='https://files.catbox.moe/xz97kh.pth'),
+})
+
+
+@register_model
+def cvt_13(pretrained=False, **kwargs) -> CvT:
+    model_args = dict(depths=(1, 2, 10), dims=(64, 192, 384), num_heads=(1, 3, 6))
+    return _create_cvt('cvt_13', pretrained=pretrained, **dict(model_args, **kwargs))
