@@ -130,8 +130,8 @@ class Attention(nn.Module):
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
-        self.fused_attn = use_fused_attn()
+        self.scale = dim ** -0.5
+        self.fused_attn = False #use_fused_attn()
         
         self.proj_q = nn.Linear(dim, dim, bias=qkv_bias)
         self.proj_k = nn.Linear(dim, dim, bias=qkv_bias)
