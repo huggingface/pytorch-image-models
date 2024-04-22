@@ -8,6 +8,7 @@ From-scratch implementation of CvT in PyTorch
 Implementation for timm by / Copyright 2024, Fredo Guan
 """
 
+from collections import OrderedDict
 from functools import partial
 from typing import List, Final, Optional, Tuple
 
@@ -51,6 +52,8 @@ class ConvEmbed(nn.Module):
         x = self.norm(x)
         return x
 
+
+
 class ConvProj(nn.Module):
     def __init__(
         self,
@@ -65,7 +68,9 @@ class ConvProj(nn.Module):
     ) -> None:
         super().__init__()
         self.dim = dim
-
+        
+        # FIXME not working, bn layer outputs are incorrect
+        '''
         self.conv_q = ConvNormAct(
             dim,
             dim,
@@ -78,7 +83,7 @@ class ConvProj(nn.Module):
             act_layer=act_layer
         )
         
-        # TODO fuse kv conv?
+        # TODO fuse kv conv? don't wanna do weight remap
         # TODO if act_layer is id and not cls_token (gap model?), is later projection in attn necessary?
         
         self.conv_k = ConvNormAct(
@@ -104,6 +109,40 @@ class ConvProj(nn.Module):
             norm_layer=norm_layer,
             act_layer=act_layer
         )
+        '''
+        self.conv_q = nn.Sequential(OrderedDict([
+                ('conv', nn.Conv2d(
+                    dim,
+                    dim,
+                    kernel_size=kernel_size,
+                    padding=padding,
+                    stride=stride_q,
+                    bias=bias,
+                    groups=dim
+                )),
+                ('bn', nn.BatchNorm2d(dim)),]))
+        self.conv_k = nn.Sequential(OrderedDict([
+                ('conv', nn.Conv2d(
+                    dim,
+                    dim,
+                    kernel_size=kernel_size,
+                    padding=padding,
+                    stride=stride_kv,
+                    bias=bias,
+                    groups=dim
+                )),
+                ('bn', nn.BatchNorm2d(dim)),]))
+        self.conv_v = nn.Sequential(OrderedDict([
+                ('conv', nn.Conv2d(
+                    dim,
+                    dim,
+                    kernel_size=kernel_size,
+                    padding=padding,
+                    stride=stride_kv,
+                    bias=bias,
+                    groups=dim
+                )),
+                ('bn', nn.BatchNorm2d(dim)),]))
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         B, C, H, W = x.shape
