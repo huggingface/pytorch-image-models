@@ -2,8 +2,6 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
-import importlib
-import importlib.metadata as imp_meta
 import logging
 import os
 from typing import Optional
@@ -46,19 +44,6 @@ def is_local_primary(args):
 
 def is_primary(args, local=False):
     return is_local_primary(args) if local else is_global_primary(args)
-
-
-def is_torch_npu_available():
-    _torch_npu_available = importlib.util.find_spec("torch_npu") is not None
-    if _torch_npu_available:
-        try:
-            torch_npu_version = imp_meta.version("torch_npu")
-            import torch_npu  # noqa: F401
-            torch.npu.set_device(0)
-            _logger.info(f"torch_npu version {torch_npu_version} is available.")
-        except ImportError:
-            _torch_npu_available = False
-    return _torch_npu_available
 
 
 def is_distributed_env():
@@ -170,7 +155,11 @@ def init_distributed_device_so(
     if 'cuda' in device:
         assert torch.cuda.is_available(), f'CUDA is not available but {device} was specified.'
     if 'npu' in device:
-        assert is_torch_npu_available(), f'NPU is not available but {device} was specified.'
+        try:
+            TORCH_NPU_AVAILABLE = torch.npu.is_available()
+            assert TORCH_NPU_AVAILABLE, f'NPU is not available but {device} was specified.'
+        except ImportError:
+            _logger.info(f"NPU is not available but {device} was specified.")
 
     if distributed and device != 'cpu':
         device, *device_idx = device.split(':', maxsplit=1)

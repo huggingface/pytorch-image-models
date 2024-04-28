@@ -24,9 +24,6 @@ from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
 from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs,\
     reparameterize_model
-from timm.utils.distributed import is_torch_npu_available
-
-has_torch_npu = is_torch_npu_available()
 
 has_apex = False
 try:

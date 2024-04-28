@@ -1,0 +1,3 @@
+{
+    "ascend_npu_modules": ["torch_npu"]
+}
