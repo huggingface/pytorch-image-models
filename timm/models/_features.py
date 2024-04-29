@@ -165,6 +165,7 @@ class FeatureHooks:
     ):
         # setup feature hooks
         self._feature_outputs = defaultdict(OrderedDict)
+        self._handles = []
         modules = {k: v for k, v in named_modules}
         for i, h in enumerate(hooks):
             hook_name = h['module']
@@ -173,11 +174,12 @@ class FeatureHooks:
             hook_fn = partial(self._collect_output_hook, hook_id)
             hook_type = h.get('hook_type', default_hook_type)
             if hook_type == 'forward_pre':
-                m.register_forward_pre_hook(hook_fn)
+                handle = m.register_forward_pre_hook(hook_fn)
             elif hook_type == 'forward':
-                m.register_forward_hook(hook_fn)
+                handle = m.register_forward_hook(hook_fn)
             else:
                 assert False, "Unsupported hook type"
+            self._handles.append(handle)
 
     def _collect_output_hook(self, hook_id, *args):
         x = args[-1]  # tensor we want is last argument, output for fwd, input for fwd_pre
