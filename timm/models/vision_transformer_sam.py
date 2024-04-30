@@ -543,9 +543,10 @@ class VisionTransformerSAM(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
+            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
-            stop_early: bool = True,
+            stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
@@ -597,13 +598,13 @@ class VisionTransformerSAM(nn.Module):
 
     def prune_intermediate_layers(
             self,
-            n: Union[int, List[int], Tuple[int]] = None,
+            indices: Union[int, List[int], Tuple[int]] = None,
             prune_norm: bool = False,
             prune_head: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.blocks), n)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_norm:
             # neck is being treated as equivalent to final norm here

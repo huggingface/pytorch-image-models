@@ -15,7 +15,7 @@ except ImportError:
     has_fx_feature_extraction = False
 
 # Layers we went to treat as leaf modules
-from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame
+from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame, Format
 from timm.layers.non_local_attn import BilinearAttnTransform
 from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 from timm.layers.norm_act import (
@@ -108,12 +108,14 @@ class FeatureGraphNet(nn.Module):
             model: nn.Module,
             out_indices: Tuple[int, ...],
             out_map: Optional[Dict] = None,
+            output_fmt: str = 'NCHW',
     ):
         super().__init__()
         assert has_fx_feature_extraction, 'Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction'
         self.feature_info = _get_feature_info(model, out_indices)
         if out_map is not None:
             assert len(out_map) == len(out_indices)
+        self.output_fmt = Format(output_fmt)
         return_nodes = _get_return_layers(self.feature_info, out_map)
         self.graph_module = create_feature_extractor(model, return_nodes)
 

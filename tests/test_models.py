@@ -50,7 +50,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # models with forward_intermediates() and support for FeatureGetterNet features_only wrapper
 FEAT_INTER_FILTERS = [
     'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*',
-    'cait_*', 'xcit_*', 'volo_*',
+    'cait_*', 'xcit_*', 'volo_*', 'swin*', 'max*vit_*', 'coatne*t_*'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -392,9 +392,8 @@ def test_model_forward_features(model_name, batch_size):
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
-    model = create_model(model_name, pretrained=False, features_only=True)
+    model = create_model(model_name, pretrained=False, features_only=True, feature_cls='getter')
     model.eval()
-    print(model.feature_info.out_indices)
     expected_channels = model.feature_info.channels()
     expected_reduction = model.feature_info.reduction()
 
@@ -434,13 +433,14 @@ def test_model_forward_intermediates(model_name, batch_size):
     input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
     if max(input_size) > MAX_FFEAT_SIZE:
         pytest.skip("Fixed input size model > limit.")
-    output_fmt = getattr(model, 'output_fmt', 'NCHW')
+    output_fmt = 'NCHW'  # NOTE output_fmt determined by forward_intermediates() arg, not model attribute
     feat_axis = get_channel_dim(output_fmt)
     spatial_axis = get_spatial_dim(output_fmt)
     import math
 
     output, intermediates = model.forward_intermediates(
         torch.randn((batch_size, *input_size)),
+        output_fmt=output_fmt,
     )
     assert len(expected_channels) == len(intermediates)
     spatial_size = input_size[-2:]

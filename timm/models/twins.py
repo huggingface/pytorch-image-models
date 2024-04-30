@@ -407,9 +407,10 @@ class Twins(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
+            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
-            stop_early: bool = True,
+            stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
