@@ -49,10 +49,11 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 
 # models with forward_intermediates() and support for FeatureGetterNet features_only wrapper
 FEAT_INTER_FILTERS = [
-    'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'
+    'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*',
+    'cait_*', 'xcit_*', 'volo_*',
 ]
 
-# transformer models don't support many of the spatial / feature based model functionalities
+# transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*',
