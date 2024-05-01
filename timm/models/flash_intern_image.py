@@ -27,16 +27,19 @@ import torch.nn.functional as F
 from ._manipulate import checkpoint_seq
 from typing import Dict, Any
 import warnings
+import logging
 
 __all__ = ['FlashInternImage']
+
+_logger = logging.getLogger(__name__)
 
 dcn_version = 'DCNv4'
 try:
     import DCNv4
 except ImportError:
     dcn_version = 'DCNv3'
-    warnings.warn('FlashInternImage requires DCNv4, but not found in current enviroment.\
-                  By default using DCNv3 pure pytorch implementation instead, which will affect the performance.\
+    warnings.warn('FlashInternImage requires DCNv4, but not found in current enviroment.\n\
+                  By default using DCNv3 pure pytorch implementation instead, which will affect the performance.\n\
                   Suggesting install DCNv4 by `pip install DCNv4`')
     
 
@@ -897,6 +900,11 @@ class FlashInternImage(nn.Module):
                  out_indices=(0, 1, 2, 3),
                  **kwargs):
         super().__init__()
+        if dcn_version == 'DCNv4' and core_op == 'DCNv4':
+            core_op = 'DCNv4'
+        else:
+            warnings.warn('DCNv4 is not installed, use DCNv3 instead')
+            core_op = 'DCNv3'
         self.core_op = core_op
         self.num_classes = num_classes
         self.num_levels = len(depths)
@@ -908,13 +916,13 @@ class FlashInternImage(nn.Module):
         self.use_clip_projector = use_clip_projector
         self.level2_post_norm_block_ids = level2_post_norm_block_ids
         self.out_indices = out_indices
-        print(f'using core type: {core_op}')
-        print(f'using activation layer: {act_layer}')
-        print(f'using main norm layer: {norm_layer}')
-        print(f'using dpr: {drop_path_type}, {drop_path_rate}')
-        print(f"level2_post_norm: {level2_post_norm}")
-        print(f"level2_post_norm_block_ids: {level2_post_norm_block_ids}")
-        print(f"res_post_norm: {res_post_norm}")
+        _logger.info(f'use core type: {core_op}')
+        _logger.info(f'using activation layer: {act_layer}')
+        _logger.info(f'using main norm layer: {norm_layer}')
+        _logger.info(f'using dpr: {drop_path_type}, {drop_path_rate}')
+        _logger.info(f'level2_post_norm: {level2_post_norm}')
+        _logger.info(f'level2_post_norm_block_ids: {level2_post_norm_block_ids}')
+        _logger.info(f'res_post_norm: {res_post_norm}')
 
         in_chans = 3
         self.patch_embed = StemLayer(in_chans=in_chans,
@@ -1008,7 +1016,7 @@ class FlashInternImage(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def _init_deform_weights(self, m):
-        if isinstance(m, getattr(DCNv4, self.core_op)):
+        if dcn_version == 'DCNv4' and isinstance(m, getattr(DCNv4, self.core_op)):
             m._reset_parameters()
         elif isinstance(m, DCNv3_pytorch):
             m._reset_parameters()
@@ -1213,7 +1221,7 @@ default_cfgs = generate_default_cfgs({
     'dino_4scale_flash_intern_image_large.1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/dino_4scale_flash_internimage_l_1x_coco.pth',
         hf_hub_id='timm/',
-        img_size=(3, 384, 384),
+        input_size=(3, 384, 384),
         num_classes=21841,
     ),
     'mask_rcnn_flash_intern_image_tiny.fpn_1x_coco': _cfg(
@@ -1243,42 +1251,42 @@ default_cfgs = generate_default_cfgs({
     'mask2former_flash_intern_image_tiny.512_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_t_512_160k_ade20k_ss.pth',
         hf_hub_id='timm/',
-        img_size=(3, 512, 512),
+        input_size=(3, 512, 512),
     ),
     'mask2former_flash_intern_image_small.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_s_640_160k_ade20k_ss.pth',
         hf_hub_id='timm/',
-        img_size=(3, 640, 640),
+        input_size=(3, 640, 640),
     ),
     'mask2former_flash_intern_image_base.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_b_640_160k_ade20k_ss.pth',
         hf_hub_id='timm/',
-        img_size=(3, 640, 640),
+        input_size=(3, 640, 640),
     ),
     'mask2former_flash_intern_image_large.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_l_640_160k_ade20k_ss.pth',
         hf_hub_id='timm/',
-        img_size=(3, 640, 640),
+        input_size=(3, 640, 640),
     ),
     'upernet_flash_intern_image_tiny.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_t_512_160k_ade20k.pth',
         hf_hub_id='timm/',
-        img_size=(3, 512, 512),
+        input_size=(3, 512, 512),
     ),
     'upernet_flash_intern_image_small.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_s_512_160k_ade20k.pth',
         hf_hub_id='timm/',
-        img_size=(3, 512, 512),
+        input_size=(3, 512, 512),
     ),
     'upernet_flash_intern_image_base.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_b_512_160k_ade20k.pth',
         hf_hub_id='timm/',
-        img_size=(3, 512, 512),
+        input_size=(3, 512, 512),
     ),
     'upernet_flash_intern_image_large.640_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_l_640_160k_ade20k.pth',
         hf_hub_id='timm/',
-        img_size=(3, 640, 640),
+        input_size=(3, 640, 640),
     ),
 })
 
@@ -1295,12 +1303,21 @@ def _create_flash_intern_image(variant: str, pretrained: bool = False, **kwargs)
         **kwargs
     )
 
+
+def _check_pretrained_available(pretrained: bool):
+    if dcn_version == 'DCNv4':
+        return pretrained
+
+    warnings.warn('DCNv4 is not installed, cannot load pretrained weights')
+    return False
+
+
 @register_model
 def flash_intern_image_tiny(pretrained=False, **kwarg):
     """ 
     FlashInternImage-T, trained on ImageNet-1k, for classification.
     """
-    pretrained = pretrained and dcn_version == 'DCNv4'
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=64,
@@ -1318,7 +1335,7 @@ def flash_intern_image_small(pretrained=False, **kwarg):
     """
     FlashInternImage-S, trained on ImageNet-1k, for classification.
     """
-    pretrained = pretrained and dcn_version == 'DCNv4'
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=80,
@@ -1339,7 +1356,7 @@ def flash_intern_image_base(pretrained=False, **kwarg):
     """
     FlashInternImage-B, trained on ImageNet-1k, for classification.
     """
-    pretrained = pretrained and dcn_version == 'DCNv4'
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=112,
@@ -1360,7 +1377,7 @@ def flash_intern_image_large(pretrained=False, **kwarg):
     """
     FlashInternImage-L, trained on ImageNet-1k, for classification.
     """
-    pretrained = pretrained and dcn_version == 'DCNv4'
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=160,
@@ -1383,6 +1400,7 @@ def cascade_flash_intern_image_large(pretrained=False, **kwargs):
     """
     CascadeFlashInternImage-L, trained on COCO, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=160,
@@ -1406,6 +1424,7 @@ def dino_4scale_flash_intern_image_tiny(pretrained=False, **kwargs):
     """
     FlashInternImage-T, trained on ImageNet-1K, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=64,
@@ -1427,6 +1446,7 @@ def dino_4scale_flash_intern_image_small(pretrained=False, **kwargs):
     """
     FlashInternImage-S, trained on ImageNet-1K, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=80,
@@ -1449,6 +1469,7 @@ def dino_4scale_flash_intern_image_base(pretrained=False, **kwargs):
     """
     FlashInternImage-B, trained on ImageNet-1K, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=112,
@@ -1471,6 +1492,7 @@ def dino_4scale_flash_intern_image_large(pretrained=False, **kwargs):
     """
     FlashInternImage-L, trained on ImageNet-22K, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=160,
@@ -1495,6 +1517,7 @@ def mask_rcnn_flash_intern_image_tiny(pretrained=False, **kwargs):
     """
     FlashInternImage-T, trained on COCO, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=64,
@@ -1516,6 +1539,7 @@ def mask_rcnn_flash_intern_image_small(pretrained=False, **kwargs):
     """
     FlashInternImage-S, trained on COCO, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=80,
@@ -1538,6 +1562,7 @@ def mask_rcnn_flash_intern_image_base(pretrained=False, **kwargs):
     """
     FlashInternImage-B, trained on COCO, used as backbone for detection.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=112,
@@ -1560,6 +1585,7 @@ def mask2former_flash_intern_image_tiny(pretrained=False, **kwargs):
     """
     FlashInternImage-T, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=64,
@@ -1581,6 +1607,7 @@ def mask2former_flash_intern_image_small(pretrained=False, **kwargs):
     """
     FlashInternImage-S, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=80,
@@ -1603,6 +1630,7 @@ def mask2former_flash_intern_image_base(pretrained=False, **kwargs):
     """
     FlashInternImage-B, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=112,
@@ -1625,6 +1653,7 @@ def mask2former_flash_intern_image_large(pretrained=False, **kwargs):
     """
     FlashInternImage-L, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=160,
@@ -1649,6 +1678,7 @@ def upernet_flash_intern_image_tiny(pretrained=False, **kwargs):
     """
     FlashInternImage-T, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=64,
@@ -1670,6 +1700,7 @@ def upernet_flash_intern_image_small(pretrained=False, **kwargs):
     """
     FlashInternImage-S, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=80,
@@ -1692,6 +1723,7 @@ def upernet_flash_intern_image_base(pretrained=False, **kwargs):
     """
     FlashInternImage-B, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=112,
@@ -1714,6 +1746,7 @@ def upernet_flash_intern_image_large(pretrained=False, **kwargs):
     """
     FlashInternImage-L, trained on ADE20K, used as backbone for segmentation.
     """
+    pretrained = _check_pretrained_available(pretrained)
     model_arg = dict(
         core_op='DCNv4',
         channels=160,

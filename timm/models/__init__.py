@@ -21,6 +21,7 @@ from .efficientvit_mit import *
 from .efficientvit_msra import *
 from .eva import *
 from .fastvit import *
+from .flash_intern_image import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
