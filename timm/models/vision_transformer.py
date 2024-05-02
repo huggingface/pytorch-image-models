@@ -1791,6 +1791,12 @@ default_cfgs = {
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
+    'vit_wee_patch16_reg1_gap_256': _cfg(
+        file='',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_little_patch16_reg4_gap_256': _cfg(
+        file='',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg1_gap_256': _cfg(
         file='vit_medium_gap1-in1k-20231118-8.pth',
         input_size=(3, 256, 256), crop_pct=0.95),
@@ -2744,6 +2750,28 @@ def vit_so400m_patch14_siglip_384(pretrained: bool = False, **kwargs) -> VisionT
 #     model = _create_vision_transformer(
 #         'vit_medium_patch16_reg4_256', pretrained=pretrained, **dict(model_args, **kwargs))
 #     return model
+
+
+@register_model
+def vit_wee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=256, depth=14, num_heads=4, init_values=1e-5, mlp_ratio=5,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg', block_fn=ParallelScalingBlock,
+    )
+    model = _create_vision_transformer(
+        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_little_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=320, depth=14, num_heads=5, init_values=1e-5, mlp_ratio=5.6,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
 
 
 @register_model
