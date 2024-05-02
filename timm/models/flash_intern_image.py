@@ -303,17 +303,23 @@ class DCNv3_pytorch(nn.Module):
         xavier_uniform_(self.output_proj.weight.data)
         constant_(self.output_proj.bias.data, 0.)
 
-    def forward(self, input):
+    def forward(self, input, shape=None):
         """
         :param query                       (N, H, W, C)
         :return output                     (N, H, W, C)
         """
-        N, H, W, _ = input.shape
+        # N, H, W, _ = input.shape
+        N, L, C = input.shape
+        if shape is not None:
+            H, W = shape
+        else:
+            H, W = int(L**0.5), int(L**0.5)
 
-        x = self.input_proj(input)
+        x = input.reshape(N, H, W, -1)
+        x = self.input_proj(x)
         x_proj = x
 
-        x1 = input.permute(0, 3, 1, 2)
+        x1 = input.reshape(N, H, W, -1).permute(0, 3, 1, 2)
         x1 = self.dw_conv(x1)
         offset = self.offset(x1)
         mask = self.mask(x1).reshape(N, H, W, self.group, -1)
@@ -335,7 +341,7 @@ class DCNv3_pytorch(nn.Module):
                 1, 1, 1, 1, self.channels // self.group).flatten(-2)
             x = x * (1 - center_feature_scale) + x_proj * center_feature_scale
         x = self.output_proj(x)
-
+        x = x.reshape(N, L, -1)
         return x
     
 # --- DCNv3 pure pytorch implementation finished --- #
@@ -700,14 +706,14 @@ class InternImageLayer(nn.Module):
         def _inner_forward(x, shape, level_idx):
             if not self.layer_scale:
                 if self.post_norm:
-                    x = x + self.drop_path(self.norm1(self.dcn(x, shape, level_idx)))
+                    x = x + self.drop_path(self.norm1(self.dcn(x, shape)))
                     x = x + self.drop_path(self.norm2(self.mlp(x, shape, level_idx)))
                 elif self.res_post_norm: # for InternImage-H/G
-                    x = x + self.drop_path(self.res_post_norm1(self.dcn(self.norm1(x), shape, level_idx)))
+                    x = x + self.drop_path(self.res_post_norm1(self.dcn(self.norm1(x), shape)))
                     x = x + self.drop_path(self.res_post_norm2(self.mlp(self.norm2(x), shape, level_idx)))
 
                 else:
-                    x = x + self.drop_path(self.dcn(self.norm1(x), shape, level_idx))
+                    x = x + self.drop_path(self.dcn(self.norm1(x), shape))
                     x = x + self.drop_path(self.mlp(self.norm2(x), shape, level_idx))
                 return x
             if self.post_norm:
@@ -1086,8 +1092,8 @@ class FlashInternImage(nn.Module):
         h, w = shape
         x = x.view(N, h, w, -1)
         x = self.conv_head(x.permute(0, 3, 1, 2))
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+        # x = self.avgpool(x)
+        # x = torch.flatten(x, 1)
         return x
 
     def forward_features_seq_out(self, x): # for detection or segmentation
@@ -1117,9 +1123,9 @@ class FlashInternImage(nn.Module):
         x3 = self.dcnv3_head_x3(x3)
         x = x + x3
 
-        x = x.flatten(-2).transpose(1, 2).contiguous()
-        x = self.clip_projector(x)
-        x = self.fc_norm(x)
+        # x = x.flatten(-2).transpose(1, 2).contiguous()
+        # x = self.clip_projector(x)
+        # x = self.fc_norm(x)
         
         return x
     
@@ -1132,6 +1138,13 @@ class FlashInternImage(nn.Module):
     
     def forward(self, x):
         x = self.forward_features(x)
+        if self.use_clip_projector:
+            x = x.flatten(-2).transpose(1, 2).contiguous()
+            x = self.clip_projector(x)
+            x = self.fc_norm(x)
+        else:
+            x = self.avgpool(x)
+            x = torch.flatten(x, 1)
         x = self.head(x)
         return x
 
