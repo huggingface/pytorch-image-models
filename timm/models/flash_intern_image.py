@@ -38,9 +38,6 @@ try:
     import DCNv4
 except ImportError:
     dcn_version = 'DCNv3'
-    warnings.warn('FlashInternImage requires DCNv4, but not found in current enviroment.\n\
-                  By default using DCNv3 pure pytorch implementation instead, which will affect the performance.\n\
-                  Suggesting install DCNv4 by `pip install DCNv4`')
     
 
 class to_channels_first(nn.Module):
@@ -782,6 +779,7 @@ class InternImageBlock(nn.Module):
         self.depth = depth
         self.post_norm = post_norm
         self.center_feature_scale = center_feature_scale
+        self.grad_checkpoint = False
 
         self.blocks = nn.ModuleList([
             InternImageLayer(
@@ -903,7 +901,9 @@ class FlashInternImage(nn.Module):
         if dcn_version == 'DCNv4' and core_op == 'DCNv4':
             core_op = 'DCNv4'
         else:
-            warnings.warn('DCNv4 is not installed, use DCNv3 instead')
+            warnings.warn('FlashInternImage requires DCNv4, but not found in current enviroment.\n\
+                By default using DCNv3 pure pytorch implementation instead, which will affect the performance.\n\
+                Suggesting install DCNv4 by `pip install DCNv4`')
             core_op = 'DCNv3'
         self.core_op = core_op
         self.num_classes = num_classes
@@ -1177,115 +1177,140 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 default_cfgs = generate_default_cfgs({
     'flash_intern_image_tiny.224_in1k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_t_1k_224.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='flash_intern_image_t_1k_224.pth'
     ),
     'flash_intern_image_small.224_in1k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_s_1k_224.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='flash_intern_image_s_1k_224.pth'
     ),
     'flash_intern_image_base.224_in1k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_b_1k_224.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='flash_intern_image_b_1k_224.pth'
     ),
     'flash_intern_image_large.384_in22k_ft_1k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_l_22kto1k_384.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='flash_intern_image_l_22kto1k_384.pth',
         input_size=(3, 384, 384),
     ),
     'flash_intern_image_large.384_in22k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_l_22k_384.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='flash_intern_image_l_22k_384.pth',
         input_size=(3, 384, 384),
         num_classes=21841,
     ),
     'cascade_flash_intern_image_large.fpn_1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/cascade_flash_internimage_l_fpn_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='cascade_flash_internimage_l_fpn_1x_coco.pth',
     ),
     'cascade_flash_intern_image_large.fpn_3x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/cascade_flash_internimage_l_fpn_3x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='cascade_flash_internimage_l_fpn_3x_coco.pth',
     ),
     'dino_4scale_flash_intern_image_tiny.1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/dino_4scale_flash_internimage_t_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='dino_4scale_flash_internimage_t_1x_coco.pth',
     ),
     'dino_4scale_flash_intern_image_small.1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/dino_4scale_flash_internimage_s_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='dino_4scale_flash_internimage_s_1x_coco.pth',
     ),
     'dino_4scale_flash_intern_image_base.1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/dino_4scale_flash_internimage_b_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='dino_4scale_flash_internimage_b_1x_coco.pth',
     ),
     'dino_4scale_flash_intern_image_large.1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/dino_4scale_flash_internimage_l_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='dino_4scale_flash_internimage_l_1x_coco.pth',
         input_size=(3, 384, 384),
         num_classes=21841,
     ),
     'mask_rcnn_flash_intern_image_tiny.fpn_1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask_rcnn_flash_internimage_t_fpn_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask_rcnn_flash_internimage_t_fpn_1x_coco.pth',
     ),
     'mask_rcnn_flash_intern_image_tiny.fpn_3x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask_rcnn_flash_internimage_s_fpn_3x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask_rcnn_flash_internimage_s_fpn_3x_coco.pth',
     ),
     'mask_rcnn_flash_intern_image_small.fpn_1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask_rcnn_flash_internimage_s_fpn_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask_rcnn_flash_internimage_s_fpn_1x_coco.pth',
     ),
     'mask_rcnn_flash_intern_image_small.fpn_3x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask_rcnn_flash_internimage_s_fpn_3x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask_rcnn_flash_internimage_s_fpn_3x_coco.pth',
     ),
     'mask_rcnn_flash_intern_image_base.fpn_1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask_rcnn_flash_internimage_b_fpn_1x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask_rcnn_flash_internimage_b_fpn_1x_coco.pth',
     ),
     'mask_rcnn_flash_intern_image_base.fpn_3x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask_rcnn_flash_internimage_b_fpn_3x_coco.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask_rcnn_flash_internimage_b_fpn_3x_coco.pth',
     ),
     'mask2former_flash_intern_image_tiny.512_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_t_512_160k_ade20k_ss.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask2former_flash_internimage_t_512_160k_ade20k_ss.pth',
         input_size=(3, 512, 512),
     ),
     'mask2former_flash_intern_image_small.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_s_640_160k_ade20k_ss.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask2former_flash_internimage_s_640_160k_ade20k_ss.pth',
         input_size=(3, 640, 640),
     ),
     'mask2former_flash_intern_image_base.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_b_640_160k_ade20k_ss.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask2former_flash_internimage_b_640_160k_ade20k_ss.pth',
         input_size=(3, 640, 640),
     ),
     'mask2former_flash_intern_image_large.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_l_640_160k_ade20k_ss.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='mask2former_flash_internimage_l_640_160k_ade20k_ss.pth',
         input_size=(3, 640, 640),
     ),
     'upernet_flash_intern_image_tiny.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_t_512_160k_ade20k.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='upernet_flash_internimage_t_512_160k_ade20k.pth',
         input_size=(3, 512, 512),
     ),
     'upernet_flash_intern_image_small.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_s_512_160k_ade20k.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='upernet_flash_internimage_s_512_160k_ade20k.pth',
         input_size=(3, 512, 512),
     ),
     'upernet_flash_intern_image_base.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_b_512_160k_ade20k.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='upernet_flash_internimage_b_512_160k_ade20k.pth',
         input_size=(3, 512, 512),
     ),
     'upernet_flash_intern_image_large.640_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_l_640_160k_ade20k.pth',
-        hf_hub_id='timm/',
+        hf_hub_id='OpenGVLab/DCNv4',
+        hf_hub_filename='upernet_flash_internimage_l_640_160k_ade20k.pth',
         input_size=(3, 640, 640),
     ),
 })
@@ -1299,6 +1324,7 @@ def _create_flash_intern_image(variant: str, pretrained: bool = False, **kwargs)
         variant,
         pretrained=pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        pretrained_strict=False,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs
     )
