@@ -20,12 +20,13 @@ from torch.nn.init import xavier_uniform_, constant_
 from collections import OrderedDict
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import trunc_normal_, DropPath
+from timm.layers import SelectAdaptivePool2d
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ._registry import register_model, generate_default_cfgs
 from ._builder import build_model_with_cfg
 import torch.nn.functional as F
 from ._manipulate import checkpoint_seq
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, Optional, List
 import warnings
 import logging
 
@@ -58,11 +59,13 @@ class to_channels_last(nn.Module):
         return x.permute(0, 2, 3, 1)
     
 
-def build_norm_layer(dim,
-                     norm_layer,
-                     in_format='channels_last',
-                     out_format='channels_last',
-                     eps=1e-6):
+def build_norm_layer(
+        dim,
+        norm_layer,
+        in_format='channels_last',
+        out_format='channels_last',
+        eps=1e-6
+    ):
     layers = []
     if norm_layer == 'BN':
         if in_format == 'channels_last':
@@ -93,7 +96,18 @@ def build_act_layer(act_layer):
     raise NotImplementedError(f'build_act_layer does not support {act_layer}')
 
 
-def _get_reference_points(spatial_shapes, device, kernel_h, kernel_w, dilation_h, dilation_w, pad_h=0, pad_w=0, stride_h=1, stride_w=1):
+def _get_reference_points(
+        spatial_shapes: List[int],
+        device: Optional[torch.device], 
+        kernel_h: int, 
+        kernel_w: int, 
+        dilation_h: int, 
+        dilation_w: int, 
+        pad_h: int=0, 
+        pad_w: int=0, 
+        stride_h: int=1, 
+        stride_w: int=1
+    ):
     _, H_, W_, _ = spatial_shapes
     H_out = (H_ - (dilation_h * (kernel_h - 1) + 1)) // stride_h + 1
     W_out = (W_ - (dilation_w * (kernel_w - 1) + 1)) // stride_w + 1
@@ -124,7 +138,15 @@ def _get_reference_points(spatial_shapes, device, kernel_h, kernel_w, dilation_h
     return ref
 
 
-def _generate_dilation_grids(spatial_shapes, kernel_h, kernel_w, dilation_h, dilation_w, group, device):
+def _generate_dilation_grids(
+        spatial_shapes: List[int], 
+        kernel_h: int, 
+        kernel_w: int, 
+        dilation_h: int, 
+        dilation_w: int, 
+        group: int, 
+        device: Optional[torch.device],
+    ):
     _, H_, W_, _ = spatial_shapes
     points_list = []
     x, y = torch.meshgrid(
@@ -150,10 +172,20 @@ def _generate_dilation_grids(spatial_shapes, kernel_h, kernel_w, dilation_h, dil
 
 
 def dcnv3_core_pytorch(
-        input, offset, mask, kernel_h,
-        kernel_w, stride_h, stride_w, pad_h,
-        pad_w, dilation_h, dilation_w, group,
-        group_channels, offset_scale):
+        input, 
+        offset, 
+        mask, 
+        kernel_h: int,
+        kernel_w: int, 
+        stride_h: int, 
+        stride_w: int, 
+        pad_h: int,
+        pad_w: int, 
+        dilation_h: int, 
+        dilation_w: int, 
+        group: int,
+        group_channels: int, 
+        offset_scale: float):
     # for debug and test only,
     # need to use cuda version instead
     input = F.pad(
@@ -285,6 +317,9 @@ class DCNv3_pytorch(nn.Module):
         self.input_proj = nn.Linear(channels, channels)
         self.output_proj = nn.Linear(channels, channels)
         self._reset_parameters()
+        self.center_feature_scale_module = CenterFeatureScaleModule()
+        self.center_feature_scale_proj_weight = torch.zeros((group, channels), dtype=torch.float)
+        self.center_feature_scale_proj_bias = torch.tensor(0.0, dtype=torch.float).view((1,)).repeat(group, )
         
         if center_feature_scale:
             self.center_feature_scale_proj_weight = nn.Parameter(
@@ -303,17 +338,21 @@ class DCNv3_pytorch(nn.Module):
         xavier_uniform_(self.output_proj.weight.data)
         constant_(self.output_proj.bias.data, 0.)
 
-    def forward(self, input, shape=None):
+    def forward(self, input, shape: Optional[Tuple[int, int]]=None):
         """
         :param query                       (N, H, W, C)
         :return output                     (N, H, W, C)
         """
         # N, H, W, _ = input.shape
-        N, L, C = input.shape
-        if shape is not None:
-            H, W = shape
+        if len(input.shape) == 3:
+            N, L, C = input.shape
+            if shape is not None:
+                H, W = shape
+            else:
+                H, W = int(L**0.5), int(L**0.5)
         else:
-            H, W = int(L**0.5), int(L**0.5)
+            N, H, W, C = input.shape
+            L = H * W
 
         x = input.reshape(N, H, W, -1)
         x = self.input_proj(x)
@@ -341,7 +380,8 @@ class DCNv3_pytorch(nn.Module):
                 1, 1, 1, 1, self.channels // self.group).flatten(-2)
             x = x * (1 - center_feature_scale) + x_proj * center_feature_scale
         x = self.output_proj(x)
-        x = x.reshape(N, L, -1)
+        if len(input.shape) == 3:
+            x = x.reshape(N, L, -1)
         return x
     
 # --- DCNv3 pure pytorch implementation finished --- #
@@ -570,14 +610,25 @@ class DownsampleLayer(nn.Module):
                                      'channels_first', 'channels_first')
 
 
-    def forward(self, x, shape=None):
-        H, W = shape
-        N, HW, C = x.shape
+    def forward(self, x, shape: Optional[Tuple[int, int]]=None):
+        input_shape = len(x.shape)
+        if input_shape == 3:
+            N, HW, C = x.shape
+            if shape is not None:
+                H, W = shape
+            else:
+                H, W = int(HW**0.5), int(HW**0.5)
+        else:
+            N, H, W, C = x.shape
+            HW = H * W
         x = x.view(N, H, W, C)
         x = self.conv(x.permute(0, 3, 1, 2))
         x = self.norm(x) # B C H W
-        H, W = x.size(2), x.size(3)
-        x = x.flatten(2).permute(0, 2, 1)
+        if input_shape == 3:
+            H, W = x.size(2), x.size(3)
+            x = x.flatten(2).permute(0, 2, 1)
+        else:
+            x = x.permute(0, 2, 3, 1)
 
         return x, (H, W)
     
@@ -608,7 +659,7 @@ class MLPLayer(nn.Module):
         self.drop = nn.Dropout(drop)
 
 
-    def forward(self, x, shape, level_idx=0):
+    def forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)
@@ -692,42 +743,52 @@ class InternImageLayer(nn.Module):
                             mlp_fc2_bias=mlp_fc2_bias
                             )
         self.layer_scale = layer_scale is not None
+        self.gamma1 = torch.ones(channels)
+        self.gamma2 = torch.ones(channels)
         if self.layer_scale:
             self.gamma1 = nn.Parameter(layer_scale * torch.ones(channels),
                                        requires_grad=True)
             self.gamma2 = nn.Parameter(layer_scale * torch.ones(channels),
                                        requires_grad=True)
+        
         self.res_post_norm = res_post_norm
+        self.res_post_norm1 = nn.Sequential()
+        self.res_post_norm2 = nn.Sequential()
         if res_post_norm:
             self.res_post_norm1 = build_norm_layer(channels, 'LN')
             self.res_post_norm2 = build_norm_layer(channels, 'LN')
-    def forward(self, x, shape, level_idx=0):
 
-        def _inner_forward(x, shape, level_idx):
-            if not self.layer_scale:
-                if self.post_norm:
-                    x = x + self.drop_path(self.norm1(self.dcn(x, shape)))
-                    x = x + self.drop_path(self.norm2(self.mlp(x, shape, level_idx)))
-                elif self.res_post_norm: # for InternImage-H/G
-                    x = x + self.drop_path(self.res_post_norm1(self.dcn(self.norm1(x), shape)))
-                    x = x + self.drop_path(self.res_post_norm2(self.mlp(self.norm2(x), shape, level_idx)))
-
-                else:
-                    x = x + self.drop_path(self.dcn(self.norm1(x), shape))
-                    x = x + self.drop_path(self.mlp(self.norm2(x), shape, level_idx))
-                return x
+    def _inner_forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int):
+        if not self.layer_scale:
             if self.post_norm:
-                x = x + self.drop_path(self.gamma1 * self.norm1(self.dcn(x, shape)))
-                x = x + self.drop_path(self.gamma2 * self.norm2(self.mlp(x, shape, level_idx)))
-            else:
-                x = x + self.drop_path(self.gamma1 * self.dcn(self.norm1(x), shape))
-                x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x), shape, level_idx))
-            return x
+                x = x + self.drop_path(self.norm1(self.dcn(x, shape)))
+                x = x + self.drop_path(self.norm2(self.mlp(x, shape, level_idx)))
+            elif self.res_post_norm: # for InternImage-H/G
+                x = x + self.drop_path(self.res_post_norm1(self.dcn(self.norm1(x), shape)))
+                x = x + self.drop_path(self.res_post_norm2(self.mlp(self.norm2(x), shape, level_idx)))
 
-        if self.with_cp and x.requires_grad:
-            x = checkpoint.checkpoint(_inner_forward, x, shape, level_idx)
+            else:
+                x = x + self.drop_path(self.dcn(self.norm1(x), shape))
+                x = x + self.drop_path(self.mlp(self.norm2(x), shape, level_idx))
+            return x
+        if self.post_norm:
+            x = x + self.drop_path(self.gamma1 * self.norm1(self.dcn(x, shape)))
+            x = x + self.drop_path(self.gamma2 * self.norm2(self.mlp(x, shape, level_idx)))
         else:
-            x = _inner_forward(x, shape, level_idx)
+            x = x + self.drop_path(self.gamma1 * self.dcn(self.norm1(x), shape))
+            x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x), shape, level_idx))
+        return x
+    
+    @torch.jit.ignore
+    def forward_checkpoint(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
+        x = checkpoint.checkpoint(self._inner_forward, x, shape, level_idx)
+        return x
+
+    def forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
+        if self.with_cp and x.requires_grad:
+            x = self.forward_checkpoint(x, shape, level_idx)
+        else:
+            x = self._inner_forward(x, shape, level_idx)
 
         return x
 
@@ -777,7 +838,7 @@ class InternImageBlock(nn.Module):
                  dcn_output_bias=False,
                  mlp_fc2_bias=False,
                  dw_kernel_size=None, # for InternImage-H/G
-                 post_norm_block_ids=None, # for InternImage-H/G
+                 post_norm_block_ids: Optional[List[int]]=None, # for InternImage-H/G
                  res_post_norm=False, # for InternImage-H/G
                  center_feature_scale=False): # for InternImage-H/G
         super().__init__()
@@ -811,35 +872,74 @@ class InternImageBlock(nn.Module):
         ])
         if not self.post_norm or center_feature_scale:
             self.norm = build_norm_layer(channels, 'LN')
-        self.post_norm_block_ids = post_norm_block_ids
+        
+        self.if_post_norm = post_norm_block_ids is not None
+        self.post_norm_block_ids: List[int] = [0]
+        self.post_norms = nn.ModuleList()
         if post_norm_block_ids is not None: # for InternImage-H/G
+            self.post_norm_block_ids = post_norm_block_ids
             self.post_norms = nn.ModuleList(
                 [build_norm_layer(channels, 'LN', eps=1e-6) for _ in post_norm_block_ids]
             )
         self.downsample = downsample_layer(
             channels=channels, norm_layer=norm_layer) if downsample else None
 
-
-    def forward(self, x, return_wo_downsample=False, shape=None, level_idx=0
-    ):
+    @torch.jit.ignore
+    def _forward_post_norm(self, x, i: int):
+        index = self.post_norm_block_ids.index(i)
+        x = self.post_norms[index](x) # for InternImage-H/G
+        return x
+    
+    @torch.jit.ignore
+    def forward_return_wo_downsample(self, x, shape: Optional[Tuple[int, int]]=None, level_idx: int=0):
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpoint and not torch.jit.is_scripting():
                 x = checkpoint_seq(blk, x)
             else:
                 x = blk(x, shape=shape, level_idx=level_idx)
-            if (self.post_norm_block_ids is not None) and (i in self.post_norm_block_ids):
-                index = self.post_norm_block_ids.index(i)
-                x = self.post_norms[index](x) # for InternImage-H/G
+            if self.if_post_norm and (i in self.post_norm_block_ids):
+                self._forward_post_norm(x, i)
         if not self.post_norm or self.center_feature_scale:
             x = self.norm(x)
-        if return_wo_downsample:
-            x_ = x.clone()
+        
+        x_ = x.clone()
+
         if self.downsample is not None:
             x, shape = self.downsample(x, shape=shape)
 
-        if return_wo_downsample:
-            return x, x_, shape
+        return x, x_, shape
+
+    def forward_shape(self, x, shape: Tuple[int, int], level_idx: int=0):
+        for i, blk in enumerate(self.blocks):
+            if self.grad_checkpoint and not torch.jit.is_scripting():
+                x = checkpoint_seq(blk, x)
+            else:
+                x = blk(x, shape=shape, level_idx=level_idx)
+            if self.if_post_norm and (i in self.post_norm_block_ids):
+                self._forward_post_norm(x, i)
+        if not self.post_norm or self.center_feature_scale:
+            x = self.norm(x)
+
+        if self.downsample is not None:
+            x, shape = self.downsample(x, shape=shape)
+
         return x, shape
+
+    def forward(self, x, shape: Optional[Tuple[int, int]]=None, level_idx: int=0):
+        for i, blk in enumerate(self.blocks):
+            if self.grad_checkpoint and not torch.jit.is_scripting():
+                x = checkpoint_seq(blk, x)
+            else:
+                x = blk(x, shape=shape, level_idx=level_idx)
+            if self.if_post_norm and (i in self.post_norm_block_ids):
+                self._forward_post_norm(x, i)
+        if not self.post_norm or self.center_feature_scale:
+            x = self.norm(x)
+
+        if self.downsample is not None:
+            x, shape = self.downsample(x, shape=shape)
+        
+        return x
     
 
 class FlashInternImage(nn.Module):
@@ -868,6 +968,7 @@ class FlashInternImage(nn.Module):
         mlp_fc2_bias (bool): Whether to use mlp fc2 bias. Default: False
         dcn_output_bias (bool): Whether to use dcn output bias. Default: False
         dw_kernel_size (int): Size of the dwconv. Default: None
+        global_pool (str): Global pooling type. Default: 'avg'
         use_clip_projector (bool): Whether to use clip projector. Default: False
         level2_post_norm (bool): Whether to use level2 post norm. Default: False
         level2_post_norm_block_ids (list): Indexes of post norm blocks. Default: None
@@ -896,6 +997,7 @@ class FlashInternImage(nn.Module):
                  mlp_fc2_bias=False,
                  dcn_output_bias=False,
                  dw_kernel_size=None,
+                 global_pool='avg',
                  use_clip_projector=False, # for InternImage-H/G
                  level2_post_norm=False, # for InternImage-H/G
                  level2_post_norm_block_ids=None, # for InternImage-H/G
@@ -904,7 +1006,7 @@ class FlashInternImage(nn.Module):
                  out_indices=(0, 1, 2, 3),
                  **kwargs):
         super().__init__()
-        if dcn_version == 'DCNv4' and core_op == 'DCNv4':
+        if dcn_version == 'DCNv4':
             core_op = 'DCNv4'
         else:
             warnings.warn('FlashInternImage requires DCNv4, but not found in current enviroment.\n\
@@ -919,9 +1021,12 @@ class FlashInternImage(nn.Module):
         self.num_features = int(channels * 2**(self.num_levels - 1))
         self.post_norm = post_norm
         self.mlp_ratio = mlp_ratio
+        self.act_layer = act_layer
         self.use_clip_projector = use_clip_projector
         self.level2_post_norm_block_ids = level2_post_norm_block_ids
         self.out_indices = out_indices
+        self.output_fmt = 'NHWC'
+        self.feature_info = []
         _logger.info(f'use core type: {core_op}')
         _logger.info(f'using activation layer: {act_layer}')
         _logger.info(f'using main norm layer: {norm_layer}')
@@ -936,6 +1041,7 @@ class FlashInternImage(nn.Module):
                                      act_layer=act_layer,
                                      norm_layer=norm_layer)
         self.pos_drop = nn.Dropout(p=drop_rate)
+        self.feature_info.append(dict(num_chs=channels, reduction=2, module='patch_embed'))
 
         dpr = [
             x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))
@@ -944,7 +1050,7 @@ class FlashInternImage(nn.Module):
             for i in range(len(dpr)):
                 dpr[i] = drop_path_rate
    
-        self.levels = nn.ModuleList()
+        self.levels = nn.Sequential()
         for i in range(self.num_levels):
             post_norm_block_ids = level2_post_norm_block_ids if level2_post_norm and (
                 i == 2) else None # for InternImage-H/G
@@ -972,7 +1078,13 @@ class FlashInternImage(nn.Module):
                 res_post_norm=res_post_norm, # for InternImage-H/G
                 center_feature_scale=center_feature_scale # for InternImage-H/G
             )
-            self.levels.append(level)
+            self.levels.add_module(str(i), level)
+            if i < self.num_levels - 1:
+                self.feature_info.append(
+                    dict(num_chs=int(channels * 2 ** (i + 1)), reduction=2 ** (i + 2), module=f'levels.{i}'))
+            else:
+                self.feature_info.append(
+                    dict(num_chs=int(channels * 2 ** i), reduction=2 ** (i + 1), module=f'levels.{i}'))
         
         if not use_clip_projector: # for InternImage-T/S/B/L/XL
             self.conv_head = nn.Sequential(
@@ -1007,7 +1119,10 @@ class FlashInternImage(nn.Module):
             self.head = nn.Linear(
                 clip_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
             
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.pool_type = global_pool
+        self.global_pool = SelectAdaptivePool2d(output_size=(1, 1), pool_type=global_pool)
+        self.flatten = nn.Flatten(1) if global_pool != '' else nn.Identity()
         self.num_layers = len(depths)
         self.apply(self._init_weights)
         self.apply(self._init_deform_weights)
@@ -1027,6 +1142,7 @@ class FlashInternImage(nn.Module):
         elif isinstance(m, DCNv3_pytorch):
             m._reset_parameters()
 
+    @torch.jit.ignore
     def init_weights(self):
         self.apply(self._init_weights)
         self.apply(self._init_deform_weights)
@@ -1035,8 +1151,21 @@ class FlashInternImage(nn.Module):
     def get_classifier(self):
         return self.head
     
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes, global_pool='avg'):
         self.num_classes = num_classes
+        if num_classes == 0:
+            self.conv_head = nn.Sequential(
+                nn.Conv2d(self.num_features,
+                            int(self.num_features),
+                            kernel_size=1,
+                            bias=False),
+                build_norm_layer(int(self.num_features), 'BN',
+                                    'channels_first', 'channels_first'),
+                build_act_layer(self.act_layer))
+            
+        self.global_pool = SelectAdaptivePool2d(output_size=(1, 1), pool_type=global_pool)
+        self.pool_type = global_pool
+        self.flatten = nn.Flatten(1) if global_pool != '' else nn.Identity()
         self.head = nn.Linear(self.num_features, num_classes) \
             if num_classes > 0 else nn.Identity()
         
@@ -1085,17 +1214,17 @@ class FlashInternImage(nn.Module):
         x = x.view(N, H*W, C)
 
         shape=(H, W)
-        seq_out = []
         for level_idx, level in enumerate(self.levels):
-            old_shape = shape
-            x, shape = level(x, shape=shape)   
+            # old_shape = shape
+            x, shape = level.forward_shape(x, shape=shape)   
         h, w = shape
         x = x.view(N, h, w, -1)
-        x = self.conv_head(x.permute(0, 3, 1, 2))
+        # x = self.conv_head(x)
         # x = self.avgpool(x)
         # x = torch.flatten(x, 1)
         return x
 
+    @torch.jit.ignore
     def forward_features_seq_out(self, x): # for detection or segmentation
         x = self.patch_embed(x)
         N, H, W, C = x.shape
@@ -1104,11 +1233,12 @@ class FlashInternImage(nn.Module):
         seq_out = []
         for level_idx, level in enumerate(self.levels):
             old_shape = shape
-            x, x_ , shape = level(x, return_wo_downsample=True, shape=shape, level_idx=level_idx) 
+            x, x_ , shape = level.forward_return_wo_downsample(x, shape=shape, level_idx=level_idx) 
             h, w= old_shape
             seq_out.append(x_.reshape(N, h, w, -1).permute(0, 3, 1, 2))
         return seq_out
     
+    @torch.jit.ignore
     def forward_clip_projector(self, x): # for InternImage-H/G
         xs = self.forward_features_seq_out(x)
         x1, x2, x3, x4 = xs
@@ -1128,7 +1258,7 @@ class FlashInternImage(nn.Module):
         # x = self.fc_norm(x)
         
         return x
-    
+
     def forward_features(self, x):
         if self.use_clip_projector: # for InternImage-H/G
             x = self.forward_clip_projector(x)
@@ -1136,16 +1266,33 @@ class FlashInternImage(nn.Module):
             x = self.forward_features_no_clip_projector(x)
         return x
     
+    def forward_head_no_clip_projector(self, x):
+        x = self.conv_head(x.permute(0, 3, 1, 2))
+        x = self.global_pool(x)
+        x = self.flatten(x)
+        if self.pool_type == '':
+            x = x.permute(0, 2, 3, 1)
+        x = self.head(x)
+        return x
+    
+    @torch.jit.ignore
+    def forward_head_clip_projector(self, x):
+        x = x.flatten(-2).transpose(1, 2).contiguous()
+        x = self.clip_projector(x)
+        x = self.fc_norm(x)
+        x = self.head(x)
+        return x
+
+    def forward_head(self, x):
+        if self.use_clip_projector:
+            x = self.forward_head_clip_projector(x)
+        else:
+            x = self.forward_head_no_clip_projector(x)
+        return x
+
     def forward(self, x):
         x = self.forward_features(x)
-        if self.use_clip_projector:
-            x = x.flatten(-2).transpose(1, 2).contiguous()
-            x = self.clip_projector(x)
-            x = self.fc_norm(x)
-        else:
-            x = self.avgpool(x)
-            x = torch.flatten(x, 1)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
 
@@ -1175,7 +1322,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
         'url': url,
         'num_classes': 1000,
         'input_size': (3, 224, 224),
-        'pool_size': None,
+        'pool_size': (7, 7),
         'crop_pct': 0.9,
         'interpolation': 'bicubic',
         'fixed_input_size': True,
@@ -1208,18 +1355,21 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='flash_intern_image_l_22kto1k_384.pth',
         input_size=(3, 384, 384),
+        pool_size=(12, 12),
     ),
     'flash_intern_image_large.384_in22k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_l_22k_384.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='flash_intern_image_l_22k_384.pth',
         input_size=(3, 384, 384),
+        pool_size=(12, 12),
         num_classes=21841,
     ),
     'cascade_flash_intern_image_large.fpn_1x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/cascade_flash_internimage_l_fpn_1x_coco.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='cascade_flash_internimage_l_fpn_1x_coco.pth',
+
     ),
     'cascade_flash_intern_image_large.fpn_3x_coco': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/cascade_flash_internimage_l_fpn_3x_coco.pth',
@@ -1246,6 +1396,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='dino_4scale_flash_internimage_l_1x_coco.pth',
         input_size=(3, 384, 384),
+        pool_size=(12, 12),
         num_classes=21841,
     ),
     'mask_rcnn_flash_intern_image_tiny.fpn_1x_coco': _cfg(
@@ -1283,48 +1434,56 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='mask2former_flash_internimage_t_512_160k_ade20k_ss.pth',
         input_size=(3, 512, 512),
+        pool_size=(16, 16),
     ),
     'mask2former_flash_intern_image_small.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_s_640_160k_ade20k_ss.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='mask2former_flash_internimage_s_640_160k_ade20k_ss.pth',
         input_size=(3, 640, 640),
+        pool_size=(20, 20),
     ),
     'mask2former_flash_intern_image_base.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_b_640_160k_ade20k_ss.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='mask2former_flash_internimage_b_640_160k_ade20k_ss.pth',
         input_size=(3, 640, 640),
+        pool_size=(20, 20),
     ),
     'mask2former_flash_intern_image_large.640_160k_ade20k_ss': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/mask2former_flash_internimage_l_640_160k_ade20k_ss.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='mask2former_flash_internimage_l_640_160k_ade20k_ss.pth',
         input_size=(3, 640, 640),
+        pool_size=(20, 20),
     ),
     'upernet_flash_intern_image_tiny.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_t_512_160k_ade20k.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='upernet_flash_internimage_t_512_160k_ade20k.pth',
         input_size=(3, 512, 512),
+        pool_size=(16, 16),
     ),
     'upernet_flash_intern_image_small.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_s_512_160k_ade20k.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='upernet_flash_internimage_s_512_160k_ade20k.pth',
         input_size=(3, 512, 512),
+        pool_size=(16, 16),
     ),
     'upernet_flash_intern_image_base.512_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_b_512_160k_ade20k.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='upernet_flash_internimage_b_512_160k_ade20k.pth',
         input_size=(3, 512, 512),
+        pool_size=(16, 16),
     ),
     'upernet_flash_intern_image_large.640_160k_ade20k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/upernet_flash_internimage_l_640_160k_ade20k.pth',
         hf_hub_id='OpenGVLab/DCNv4',
         hf_hub_filename='upernet_flash_internimage_l_640_160k_ade20k.pth',
         input_size=(3, 640, 640),
+        pool_size=(20, 20),
     ),
 })
 
