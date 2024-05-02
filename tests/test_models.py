@@ -49,8 +49,9 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 
 # models with forward_intermediates() and support for FeatureGetterNet features_only wrapper
 FEAT_INTER_FILTERS = [
-    'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*',
-    'cait_*', 'xcit_*', 'volo_*', 'swin*', 'max*vit_*', 'coatne*t_*'
+    'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
+    'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
+    'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -388,7 +389,7 @@ def test_model_forward_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
@@ -419,7 +420,7 @@ def test_model_forward_intermediates_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""

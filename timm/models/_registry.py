@@ -184,7 +184,7 @@ def _expand_filter(filter: str):
 
 def list_models(
         filter: Union[str, List[str]] = '',
-        module: str = '',
+        module: Union[str, List[str]] = '',
         pretrained: bool = False,
         exclude_filters: Union[str, List[str]] = '',
         name_matches_cfg: bool = False,
@@ -217,7 +217,16 @@ def list_models(
         # FIXME should this be default behaviour? or default to include_tags=True?
         include_tags = pretrained
 
-    all_models: Set[str] = _module_to_models[module] if module else set(_model_entrypoints.keys())
+    if not module:
+        all_models: Set[str] = set(_model_entrypoints.keys())
+    else:
+        if isinstance(module, str):
+            all_models: Set[str] = _module_to_models[module]
+        else:
+            assert isinstance(module, Sequence)
+            all_models: Set[str] = set()
+            for m in module:
+                all_models.update(_module_to_models[m])
     all_models = all_models - _deprecated_models.keys()  # remove deprecated models from listings
 
     if include_tags:

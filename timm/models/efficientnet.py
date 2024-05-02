@@ -36,7 +36,7 @@ the models and weights open source!
 Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
-from typing import List
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -49,7 +49,7 @@ from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
 from ._efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
-from ._features import FeatureInfo, FeatureHooks
+from ._features import FeatureInfo, FeatureHooks, feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -118,6 +118,7 @@ class EfficientNet(nn.Module):
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
+        self.stage_ends = [f['stage'] for f in self.feature_info]
         head_chs = builder.in_chs
 
         # Head + Pooling
@@ -157,6 +158,86 @@ class EfficientNet(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            *,
+            indices: Union[int, List[int], Tuple[int]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+            extra_blocks: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+            extra_blocks: Include outputs of all blocks and head conv in output, does not align with feature_info
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        if stop_early:
+            assert intermediates_only, 'Must use intermediates_only for early stopping.'
+        intermediates = []
+        if extra_blocks:
+            take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
+        else:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            take_indices = [self.stage_ends[i] for i in take_indices]
+            max_index = self.stage_ends[max_index]
+        # forward pass
+        feat_idx = 0  # stem is index 0
+        x = self.conv_stem(x)
+        x = self.bn1(x)
+        if feat_idx in take_indices:
+            intermediates.append(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index]
+        for blk in blocks:
+            feat_idx += 1
+            x = blk(x)
+            if feat_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        x = self.conv_head(x)
+        x = self.bn2(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+            extra_blocks: bool = False,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        if extra_blocks:
+            take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
+        else:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            max_index = self.stage_ends[max_index]
+        self.blocks = self.blocks[:max_index]  # truncate blocks w/ stem as idx 0
+        if prune_norm or max_index < len(self.blocks):
+            self.conv_head = nn.Identity()
+            self.bn2 = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -272,7 +353,7 @@ def _create_effnet(variant, pretrained=False, **kwargs):
     model_cls = EfficientNet
     kwargs_filter = None
     if kwargs.pop('features_only', False):
-        if 'feature_cfg' in kwargs:
+        if 'feature_cfg' in kwargs or 'feature_cls' in kwargs:
             features_mode = 'cfg'
         else:
             kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
