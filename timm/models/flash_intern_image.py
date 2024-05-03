@@ -858,6 +858,8 @@ class InternImageBlock(nn.Module):
                 center_feature_scale=center_feature_scale # for InternImage-H/G
             ) for i in range(depth)
         ])
+
+        self.norm = nn.Sequential()
         if not self.post_norm or center_feature_scale:
             self.norm = build_norm_layer(channels, 'LN')
         
