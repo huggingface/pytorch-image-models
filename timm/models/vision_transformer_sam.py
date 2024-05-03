@@ -543,7 +543,6 @@ class VisionTransformerSAM(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -574,6 +573,7 @@ class VisionTransformerSAM(nn.Module):
         x = self.pos_drop(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
@@ -610,7 +610,7 @@ class VisionTransformerSAM(nn.Module):
             # neck is being treated as equivalent to final norm here
             self.neck = nn.Identity()
         if prune_head:
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):

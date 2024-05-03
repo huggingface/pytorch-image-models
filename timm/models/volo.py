@@ -711,7 +711,6 @@ class VOLO(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -786,7 +785,7 @@ class VOLO(nn.Module):
             self.norm = nn.Identity()
         if prune_head:
             self.post_network = nn.ModuleList()  # prune token blocks with head
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):

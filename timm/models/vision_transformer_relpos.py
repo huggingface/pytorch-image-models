@@ -391,7 +391,6 @@ class VisionTransformerRelPos(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
@@ -412,7 +411,7 @@ class VisionTransformerRelPos(nn.Module):
         Returns:
 
         """
-        assert output_fmt in ('NCHW', 'NLC'), 'Output format for ViT features must be one of NCHW or NLC.'
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -468,7 +467,7 @@ class VisionTransformerRelPos(nn.Module):
             self.norm = nn.Identity()
         if prune_head:
             self.fc_norm = nn.Identity()
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):

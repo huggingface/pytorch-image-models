@@ -407,7 +407,6 @@ class Twins(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -459,6 +458,22 @@ class Twins(nn.Module):
         x = self.norm(x)
 
         return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        # FIXME add block pruning
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         B = x.shape[0]

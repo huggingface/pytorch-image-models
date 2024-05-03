@@ -1255,7 +1255,6 @@ class MaxxVit(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -1283,6 +1282,7 @@ class MaxxVit(nn.Module):
         x = self.stem(x)
         if feat_idx in take_indices:
             intermediates.append(x)
+
         last_idx = len(self.stages)
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
@@ -1318,7 +1318,7 @@ class MaxxVit(nn.Module):
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
-            self.head = nn.Identity()
+            self.head = self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):

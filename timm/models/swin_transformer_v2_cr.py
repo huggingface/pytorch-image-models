@@ -722,7 +722,6 @@ class SwinTransformerV2Cr(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -747,6 +746,7 @@ class SwinTransformerV2Cr(nn.Module):
 
         # forward pass
         x = self.patch_embed(x)
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
         else:
@@ -772,7 +772,7 @@ class SwinTransformerV2Cr(nn.Module):
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks
         if prune_head:
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:

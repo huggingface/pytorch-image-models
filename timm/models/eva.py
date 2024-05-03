@@ -587,7 +587,6 @@ class Eva(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
@@ -657,7 +656,7 @@ class Eva(nn.Module):
             self.norm = nn.Identity()
         if prune_head:
             self.fc_norm = nn.Identity()
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):
@@ -718,7 +717,7 @@ def checkpoint_filter_fn(
             # fixed embedding no need to load buffer from checkpoint
             continue
 
-        # FIXME
+        # FIXME here while import new weights, to remove
         # if k == 'cls_token':
         #     print('DEBUG: cls token -> reg')
         #     k = 'reg_token'

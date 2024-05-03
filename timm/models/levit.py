@@ -25,7 +25,7 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # Copyright 2020 Ross Wightman, Apache-2.0 License
 from collections import OrderedDict
 from functools import partial
-from typing import Dict
+from typing import Dict, List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -33,6 +33,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
 from timm.layers import to_ntuple, to_2tuple, get_act_layer, DropPath, trunc_normal_, ndgrid
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
@@ -634,6 +635,70 @@ class Levit(nn.Module):
         self.head = NormLinear(
             self.embed_dim[-1], num_classes, drop=self.drop_rate) if num_classes > 0 else nn.Identity()
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Union[int, List[int], Tuple[int]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        # forward pass
+        x = self.stem(x)
+        B, C, H, W = x.shape
+        if not self.use_conv:
+            x = x.flatten(2).transpose(1, 2)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                if self.use_conv:
+                    intermediates.append(x)
+                else:
+                    intermediates.append(x.reshape(B, H, W, -1).permute(0, 3, 1, 2))
+            H = (H + 2 - 1) // 2
+            W = (W + 2 - 1) // 2
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
+
     def forward_features(self, x):
         x = self.stem(x)
         if not self.use_conv:
@@ -746,9 +811,8 @@ model_cfgs = dict(
 def create_levit(variant, cfg_variant=None, pretrained=False, distilled=True, **kwargs):
     is_conv = '_conv' in variant
     out_indices = kwargs.pop('out_indices', (0, 1, 2))
-    if kwargs.get('features_only', None):
-        if not is_conv:
-            raise RuntimeError('features_only not implemented for LeVit in non-convolutional mode.')
+    if kwargs.get('features_only', False) and not is_conv:
+        kwargs.setdefault('feature_cls', 'getter')
     if cfg_variant is None:
         if variant in model_cfgs:
             cfg_variant = variant

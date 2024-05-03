@@ -837,7 +837,6 @@ class MultiScaleVit(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -856,13 +855,12 @@ class MultiScaleVit(nn.Module):
         Returns:
 
         """
-        assert output_fmt in ('NCHW', 'NLC'), 'Output shape for MViT-V2 must be NCHW or NLC.'
+        assert output_fmt in ('NCHW', 'NLC'), 'Output shape must be NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
 
         # FIXME slice block/pos_block if < max
-
         # forward pass
         x, feat_size = self.patch_embed(x)
         B = x.shape[0]
@@ -871,6 +869,7 @@ class MultiScaleVit(nn.Module):
             x = torch.cat((cls_tokens, x), dim=1)
         if self.pos_embed is not None:
             x = x + self.pos_embed
+
         for i, stage in enumerate(self.stages):
             x, feat_size = stage(x, feat_size)
             if i in take_indices:
@@ -891,6 +890,23 @@ class MultiScaleVit(nn.Module):
         x = self.norm(x)
 
         return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        # FIXME add stage pruning
+        # self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x, feat_size = self.patch_embed(x)

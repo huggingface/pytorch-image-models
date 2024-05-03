@@ -655,7 +655,7 @@ class VisionTransformer(nn.Module):
         Returns:
 
         """
-        assert output_fmt in ('NCHW', 'NLC'), 'Output format for ViT features must be one of NCHW or NLC.'
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -666,6 +666,7 @@ class VisionTransformer(nn.Module):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
@@ -709,10 +710,8 @@ class VisionTransformer(nn.Module):
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
-            if self.attn_pool is not None:
-                self.attn_pool = None
             self.fc_norm = nn.Identity()
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def get_intermediate_layers(

@@ -51,7 +51,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 FEAT_INTER_FILTERS = [
     'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
     'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
-    'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3'
+    'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -429,7 +429,7 @@ def test_model_forward_intermediates(model_name, batch_size):
     feature_info = timm.models.FeatureInfo(model.feature_info, len(model.feature_info))
     expected_channels = feature_info.channels()
     expected_reduction = feature_info.reduction()
-    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
+    assert len(expected_channels) >= 3  # all models here should have at least 3 feature levels
 
     input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
     if max(input_size) > MAX_FFEAT_SIZE:

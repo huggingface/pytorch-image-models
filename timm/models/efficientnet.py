@@ -162,7 +162,6 @@ class EfficientNet(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            *,
             indices: Union[int, List[int], Tuple[int]] = None,
             norm: bool = False,
             stop_early: bool = False,
@@ -199,6 +198,7 @@ class EfficientNet(nn.Module):
         x = self.bn1(x)
         if feat_idx in take_indices:
             intermediates.append(x)
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
