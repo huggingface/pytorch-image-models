@@ -33,6 +33,7 @@ import logging
 __all__ = ['FlashInternImage']
 
 _logger = logging.getLogger(__name__)
+torch.fx.wrap('len')
 
 dcn_version = 'DCNv4'
 try:
@@ -114,16 +115,12 @@ def _get_reference_points(
 
     ref_y, ref_x = torch.meshgrid(
         torch.linspace(
-            # pad_h + 0.5,
-            # H_ - pad_h - 0.5,
             (dilation_h * (kernel_h - 1)) // 2 + 0.5,
             (dilation_h * (kernel_h - 1)) // 2 + 0.5 + (H_out - 1) * stride_h,
             H_out,
             dtype=torch.float32,
             device=device),
         torch.linspace(
-            # pad_w + 0.5,
-            # W_ - pad_w - 0.5,
             (dilation_w * (kernel_w - 1)) // 2 + 0.5,
             (dilation_w * (kernel_w - 1)) // 2 + 0.5 + (W_out - 1) * stride_w,
             W_out,
@@ -152,14 +149,14 @@ def _generate_dilation_grids(
     x, y = torch.meshgrid(
         torch.linspace(
             -((dilation_w * (kernel_w - 1)) // 2),
-            -((dilation_w * (kernel_w - 1)) // 2) +
-            (kernel_w - 1) * dilation_w, kernel_w,
+            -((dilation_w * (kernel_w - 1)) // 2) + (kernel_w - 1) * dilation_w, 
+            kernel_w,
             dtype=torch.float32,
             device=device),
         torch.linspace(
             -((dilation_h * (kernel_h - 1)) // 2),
-            -((dilation_h * (kernel_h - 1)) // 2) +
-            (kernel_h - 1) * dilation_h, kernel_h,
+            -((dilation_h * (kernel_h - 1)) // 2) + (kernel_h - 1) * dilation_h, 
+            kernel_h,
             dtype=torch.float32,
             device=device))
 
@@ -344,21 +341,13 @@ class DCNv3_pytorch(nn.Module):
         :return output                     (N, H, W, C)
         """
         # N, H, W, _ = input.shape
-        if len(input.shape) == 3:
-            N, L, C = input.shape
-            if shape is not None:
-                H, W = shape
-            else:
-                H, W = int(L**0.5), int(L**0.5)
-        else:
-            N, H, W, C = input.shape
-            L = H * W
+        N, H, W, C = input.shape
+        L = H * W
 
-        x = input.reshape(N, H, W, -1)
-        x = self.input_proj(x)
+        x = self.input_proj(input)
         x_proj = x
 
-        x1 = input.reshape(N, H, W, -1).permute(0, 3, 1, 2)
+        x1 = input.permute(0, 3, 1, 2)
         x1 = self.dw_conv(x1)
         offset = self.offset(x1)
         mask = self.mask(x1).reshape(N, H, W, self.group, -1)
@@ -380,8 +369,6 @@ class DCNv3_pytorch(nn.Module):
                 1, 1, 1, 1, self.channels // self.group).flatten(-2)
             x = x * (1 - center_feature_scale) + x_proj * center_feature_scale
         x = self.output_proj(x)
-        if len(input.shape) == 3:
-            x = x.reshape(N, L, -1)
         return x
     
 # --- DCNv3 pure pytorch implementation finished --- #
@@ -608,11 +595,11 @@ class DownsampleLayer(nn.Module):
                               bias=False)
         self.norm = build_norm_layer(2 * channels, norm_layer,
                                      'channels_first', 'channels_first')
+        self.dcn_version = dcn_version
 
 
     def forward(self, x, shape: Optional[Tuple[int, int]]=None):
-        input_shape = len(x.shape)
-        if input_shape == 3:
+        if self.dcn_version == 'DCNv4':
             N, HW, C = x.shape
             if shape is not None:
                 H, W = shape
@@ -624,11 +611,12 @@ class DownsampleLayer(nn.Module):
         x = x.view(N, H, W, C)
         x = self.conv(x.permute(0, 3, 1, 2))
         x = self.norm(x) # B C H W
-        if input_shape == 3:
+        if self.dcn_version == 'DCNv4':
             H, W = x.size(2), x.size(3)
             x = x.flatten(2).permute(0, 2, 1)
         else:
             x = x.permute(0, 2, 3, 1)
+            H, W = x.size(1), x.size(2)
 
         return x, (H, W)
     
@@ -780,12 +768,12 @@ class InternImageLayer(nn.Module):
         return x
     
     @torch.jit.ignore
-    def forward_checkpoint(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
+    def forward_checkpoint(self, x, shape: Optional[Tuple[int, int]], level_idx: int = 0):
         x = checkpoint.checkpoint(self._inner_forward, x, shape, level_idx)
         return x
 
     def forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
-        if self.with_cp and x.requires_grad:
+        if self.with_cp: #
             x = self.forward_checkpoint(x, shape, level_idx)
         else:
             x = self._inner_forward(x, shape, level_idx)
@@ -1006,6 +994,7 @@ class FlashInternImage(nn.Module):
                  out_indices=(0, 1, 2, 3),
                  **kwargs):
         super().__init__()
+        self.dcn_version = dcn_version
         if dcn_version == 'DCNv4':
             core_op = 'DCNv4'
         else:
@@ -1211,7 +1200,9 @@ class FlashInternImage(nn.Module):
     def forward_features_no_clip_projector(self, x):
         x = self.patch_embed(x)
         N, H, W, C = x.shape
-        x = x.view(N, H*W, C)
+
+        if self.dcn_version == 'DCNv4':
+            x = x.view(N, H * W, C)
 
         shape=(H, W)
         for level_idx, level in enumerate(self.levels):
@@ -1228,7 +1219,8 @@ class FlashInternImage(nn.Module):
     def forward_features_seq_out(self, x): # for detection or segmentation
         x = self.patch_embed(x)
         N, H, W, C = x.shape
-        x = x.view(N, H*W, C)
+        if self.dcn_version == 'DCNv4':
+            x = x.view(N, H * W, C)
         shape=(H, W)
         seq_out = []
         for level_idx, level in enumerate(self.levels):
