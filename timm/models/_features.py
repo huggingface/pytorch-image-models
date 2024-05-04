@@ -158,7 +158,7 @@ class FeatureHooks:
 
     def __init__(
             self,
-            hooks: Sequence[str],
+            hooks: Sequence[Union[str, Dict]],
             named_modules: dict,
             out_map: Sequence[Union[int, str]] = None,
             default_hook_type: str = 'forward',
@@ -168,11 +168,13 @@ class FeatureHooks:
         self._handles = []
         modules = {k: v for k, v in named_modules}
         for i, h in enumerate(hooks):
-            hook_name = h['module']
+            hook_name = h if isinstance(h, str) else h['module']
             m = modules[hook_name]
             hook_id = out_map[i] if out_map else hook_name
             hook_fn = partial(self._collect_output_hook, hook_id)
-            hook_type = h.get('hook_type', default_hook_type)
+            hook_type = default_hook_type
+            if isinstance(h, dict):
+                hook_type = h.get('hook_type', default_hook_type)
             if hook_type == 'forward_pre':
                 handle = m.register_forward_pre_hook(hook_fn)
             elif hook_type == 'forward':

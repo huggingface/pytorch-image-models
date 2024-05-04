@@ -1,4 +1,5 @@
 from .agc import adaptive_clip_grad
+from .attention_extract import AttentionExtract
 from .checkpoint_saver import CheckpointSaver
 from .clip_grad import dispatch_clip_grad
 from .cuda import ApexScaler, NativeScaler
