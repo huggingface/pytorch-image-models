@@ -1791,22 +1791,22 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
     'vit_wee_patch16_reg1_gap_256': _cfg(
-        file='',
+        #file='',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_little_patch16_reg4_gap_256': _cfg(
-        file='',
+        #file='',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg1_gap_256': _cfg(
-        file='vit_medium_gap1-in1k-20231118-8.pth',
+        #file='vit_medium_gap1-in1k-20231118-8.pth',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg4_gap_256': _cfg(
-        file='vit_medium_gap4-in1k-20231115-8.pth',
+        #file='vit_medium_gap4-in1k-20231115-8.pth',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg1_gap_256': _cfg(
-        file='vit_betwixt_gap1-in1k-20231121-8.pth',
+        #file='vit_betwixt_gap1-in1k-20231121-8.pth',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256': _cfg(
-        file='vit_betwixt_gap4-in1k-20231106-8.pth',
+        #file='vit_betwixt_gap4-in1k-20231106-8.pth',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_base_patch16_reg4_gap_256': _cfg(
         input_size=(3, 256, 256)),
