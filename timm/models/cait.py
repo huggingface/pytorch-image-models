@@ -343,7 +343,7 @@ class Cait(nn.Module):
             x: torch.Tensor,
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             norm: bool = False,
-            stop_early: bool = True,
+            stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
@@ -357,7 +357,7 @@ class Cait(nn.Module):
             output_fmt: Shape of intermediate feature outputs
             intermediates_only: Only return intermediate features
         """
-        assert output_fmt in ('NCHW', 'NLC'), 'Output format for ViT features must be one of NCHW or NLC.'
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -367,6 +367,7 @@ class Cait(nn.Module):
         x = self.patch_embed(x)
         x = x + self.pos_embed
         x = self.pos_drop(x)
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
@@ -397,19 +398,19 @@ class Cait(nn.Module):
 
     def prune_intermediate_layers(
             self,
-            n: Union[int, List[int], Tuple[int]] = 1,
+            indices: Union[int, List[int], Tuple[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.blocks), n)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
             self.blocks_token_only = nn.ModuleList()  # prune token blocks with head
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):

@@ -49,8 +49,9 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 
 # models with forward_intermediates() and support for FeatureGetterNet features_only wrapper
 FEAT_INTER_FILTERS = [
-    'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*',
-    'cait_*', 'xcit_*', 'volo_*',
+    'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
+    'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
+    'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -388,13 +389,12 @@ def test_model_forward_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
-    model = create_model(model_name, pretrained=False, features_only=True)
+    model = create_model(model_name, pretrained=False, features_only=True, feature_cls='getter')
     model.eval()
-    print(model.feature_info.out_indices)
     expected_channels = model.feature_info.channels()
     expected_reduction = model.feature_info.reduction()
 
@@ -420,7 +420,7 @@ def test_model_forward_intermediates_features(model_name, batch_size):
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS))
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_intermediates(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
@@ -429,18 +429,19 @@ def test_model_forward_intermediates(model_name, batch_size):
     feature_info = timm.models.FeatureInfo(model.feature_info, len(model.feature_info))
     expected_channels = feature_info.channels()
     expected_reduction = feature_info.reduction()
-    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
+    assert len(expected_channels) >= 3  # all models here should have at least 3 feature levels
 
     input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
     if max(input_size) > MAX_FFEAT_SIZE:
         pytest.skip("Fixed input size model > limit.")
-    output_fmt = getattr(model, 'output_fmt', 'NCHW')
+    output_fmt = 'NCHW'  # NOTE output_fmt determined by forward_intermediates() arg, not model attribute
     feat_axis = get_channel_dim(output_fmt)
     spatial_axis = get_spatial_dim(output_fmt)
     import math
 
     output, intermediates = model.forward_intermediates(
         torch.randn((batch_size, *input_size)),
+        output_fmt=output_fmt,
     )
     assert len(expected_channels) == len(intermediates)
     spatial_size = input_size[-2:]

@@ -713,7 +713,7 @@ class VOLO(nn.Module):
             x: torch.Tensor,
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             norm: bool = False,
-            stop_early: bool = True,
+            stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
@@ -751,8 +751,11 @@ class VOLO(nn.Module):
                 x = self.pos_drop(x)
             x = block(x)
             if idx in take_indices:
-                # normalize intermediates with final norm layer if enabled
-                intermediates.append(x.permute(0, 3, 1, 2))
+                if norm and idx >= 2:
+                    x_inter = self.norm(x)
+                else:
+                    x_inter = x
+                intermediates.append(x_inter.permute(0, 3, 1, 2))
 
         if intermediates_only:
             return intermediates
@@ -769,20 +772,20 @@ class VOLO(nn.Module):
 
     def prune_intermediate_layers(
             self,
-            n: Union[int, List[int], Tuple[int]] = 1,
+            indices: Union[int, List[int], Tuple[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.stage_ends), n)
+        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
         max_index = self.stage_ends[max_index]
         self.network = self.network[:max_index + 1]  # truncate blocks
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
             self.post_network = nn.ModuleList()  # prune token blocks with head
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):

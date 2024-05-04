@@ -638,7 +638,7 @@ class VisionTransformer(nn.Module):
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
-            stop_early: bool = True,
+            stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
@@ -655,7 +655,7 @@ class VisionTransformer(nn.Module):
         Returns:
 
         """
-        assert output_fmt in ('NCHW', 'NLC'), 'Output format for ViT features must be one of NCHW or NLC.'
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
@@ -666,6 +666,7 @@ class VisionTransformer(nn.Module):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
+
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.blocks
         else:
@@ -698,21 +699,19 @@ class VisionTransformer(nn.Module):
 
     def prune_intermediate_layers(
             self,
-            n: Union[int, List[int], Tuple[int]] = 1,
+            indices: Union[int, List[int], Tuple[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.blocks), n)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
-            if self.attn_pool is not None:
-                self.attn_pool = None
             self.fc_norm = nn.Identity()
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def get_intermediate_layers(
@@ -1791,12 +1790,27 @@ default_cfgs = {
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
-    'vit_medium_patch16_reg4_256': _cfg(
-        input_size=(3, 256, 256)),
+    'vit_wee_patch16_reg1_gap_256': _cfg(
+        file='',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_little_patch16_reg4_gap_256': _cfg(
+        file='',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_medium_patch16_reg1_gap_256': _cfg(
+        file='vit_medium_gap1-in1k-20231118-8.pth',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg4_gap_256': _cfg(
-        input_size=(3, 256, 256)),
+        file='vit_medium_gap4-in1k-20231115-8.pth',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg1_gap_256': _cfg(
+        file='vit_betwixt_gap1-in1k-20231121-8.pth',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256': _cfg(
+        file='vit_betwixt_gap4-in1k-20231106-8.pth',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_base_patch16_reg4_gap_256': _cfg(
         input_size=(3, 256, 256)),
+
     'vit_so150m_patch16_reg4_gap_256': _cfg(
         input_size=(3, 256, 256)),
     'vit_so150m_patch16_reg4_map_256': _cfg(
@@ -2080,6 +2094,18 @@ def vit_medium_patch16_gap_384(pretrained: bool = False, **kwargs) -> VisionTran
         global_pool='avg', qkv_bias=False, init_values=1e-6, fc_norm=False)
     model = _create_vision_transformer(
         'vit_medium_patch16_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_betwixt_patch16_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-Betwixt (ViT-b/16) w/o class token, w/ avg-pool @ 256x256
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=640, depth=12, num_heads=10, class_token=False,
+        global_pool='avg', qkv_bias=False, init_values=1e-6, fc_norm=False)
+    model = _create_vision_transformer(
+        'vit_medium_patch16_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -2714,25 +2740,80 @@ def vit_so400m_patch14_siglip_384(pretrained: bool = False, **kwargs) -> VisionT
     return model
 
 
+# @register_model
+# def vit_medium_patch16_reg4_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+#     model_args = dict(
+#         patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=True,
+#         no_embed_class=True, reg_tokens=4,
+#     )
+#     model = _create_vision_transformer(
+#         'vit_medium_patch16_reg4_256', pretrained=pretrained, **dict(model_args, **kwargs))
+#     return model
+
+
 @register_model
-def vit_medium_patch16_reg4_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+def vit_wee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
-        patch_size=16, embed_dim=512, depth=12, num_heads=8, class_token=True,
-        no_embed_class=True, reg_tokens=4,
+        patch_size=16, embed_dim=256, depth=14, num_heads=4, init_values=1e-5, mlp_ratio=5,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg', block_fn=ParallelScalingBlock,
     )
     model = _create_vision_transformer(
-        'vit_medium_patch16_reg4_256', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_little_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=320, depth=14, num_heads=5, init_values=1e-5, mlp_ratio=5.6,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_medium_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, init_values=1e-5,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
 def vit_medium_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
-        patch_size=16, embed_dim=512, depth=12, num_heads=8,
+        patch_size=16, embed_dim=512, depth=12, num_heads=8, init_values=1e-5,
         class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
     )
     model = _create_vision_transformer(
         'vit_medium_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_betwixt_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=640, depth=12, num_heads=10, init_values=1e-5,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_betwixt_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_betwixt_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=640, depth=12, num_heads=10, init_values=1e-5,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_betwixt_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

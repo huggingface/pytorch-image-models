@@ -50,6 +50,7 @@ from timm.layers import create_attn, get_act_layer, get_norm_layer, get_norm_act
 from timm.layers import trunc_normal_tf_, to_2tuple, extend_tuple, make_divisible, _assert
 from timm.layers import RelPosMlp, RelPosBias, RelPosBiasTf, use_fused_attn, resize_rel_pos_bias_table
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
 from ._manipulate import named_apply, checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
@@ -1250,6 +1251,75 @@ class MaxxVit(nn.Module):
     def reset_classifier(self, num_classes, global_pool=None):
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Union[int, List[int], Tuple[int]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+
+        # forward pass
+        feat_idx = 0  # stem is index 0
+        x = self.stem(x)
+        if feat_idx in take_indices:
+            intermediates.append(x)
+
+        last_idx = len(self.stages)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index]
+        for stage in stages:
+            feat_idx += 1
+            x = stage(x)
+            if feat_idx in take_indices:
+                if norm and feat_idx == last_idx:
+                    x_inter = self.norm(x)  # applying final norm to last intermediate
+                else:
+                    x_inter = x
+                intermediates.append(x_inter)
+
+        if intermediates_only:
+            return intermediates
+
+        x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int], Tuple[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+        self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.head = self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)

@@ -363,7 +363,7 @@ class FeatureHookNet(nn.ModuleDict):
             out_map: Optional[Sequence[Union[int, str]]] = None,
             return_dict: bool = False,
             output_fmt: str = 'NCHW',
-            no_rewrite: bool = False,
+            no_rewrite: Optional[bool] = None,
             flatten_sequential: bool = False,
             default_hook_type: str = 'forward',
     ):
@@ -385,7 +385,8 @@ class FeatureHookNet(nn.ModuleDict):
         self.return_dict = return_dict
         self.output_fmt = Format(output_fmt)
         self.grad_checkpointing = False
-
+        if no_rewrite is None:
+            no_rewrite = not flatten_sequential
         layers = OrderedDict()
         hooks = []
         if no_rewrite:
@@ -467,7 +468,7 @@ class FeatureGetterNet(nn.ModuleDict):
         self.out_indices = out_indices
         self.out_map = out_map
         self.return_dict = return_dict
-        self.output_fmt = output_fmt
+        self.output_fmt = Format(output_fmt)
         self.norm = norm
 
     def forward(self, x):
