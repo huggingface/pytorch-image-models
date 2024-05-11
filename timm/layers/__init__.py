@@ -47,7 +47,7 @@ from .pos_embed_sincos import pixel_freq_bands, freq_bands, build_sincos2d_pos_e
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvNormAct
-from .space_to_depth import SpaceToDepthModule, SpaceToDepth, DepthToSpace
+from .space_to_depth import SpaceToDepth, DepthToSpace
 from .split_attn import SplitAttn
 from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame

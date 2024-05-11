@@ -18,29 +18,6 @@ class SpaceToDepth(nn.Module):
         return x
 
 
-@torch.jit.script
-class SpaceToDepthJit:
-    def __call__(self, x: torch.Tensor):
-        # assuming hard-coded that block_size==4 for acceleration
-        N, C, H, W = x.size()
-        x = x.view(N, C, H // 4, 4, W // 4, 4)  # (N, C, H//bs, bs, W//bs, bs)
-        x = x.permute(0, 3, 5, 1, 2, 4).contiguous()  # (N, bs, bs, C, H//bs, W//bs)
-        x = x.view(N, C * 16, H // 4, W // 4)  # (N, C*bs^2, H//bs, W//bs)
-        return x
-
-
-class SpaceToDepthModule(nn.Module):
-    def __init__(self, no_jit=False):
-        super().__init__()
-        if not no_jit:
-            self.op = SpaceToDepthJit()
-        else:
-            self.op = SpaceToDepth()
-
-    def forward(self, x):
-        return self.op(x)
-
-
 class DepthToSpace(nn.Module):
 
     def __init__(self, block_size):

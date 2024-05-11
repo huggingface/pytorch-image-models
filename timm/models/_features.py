@@ -158,26 +158,30 @@ class FeatureHooks:
 
     def __init__(
             self,
-            hooks: Sequence[str],
+            hooks: Sequence[Union[str, Dict]],
             named_modules: dict,
             out_map: Sequence[Union[int, str]] = None,
             default_hook_type: str = 'forward',
     ):
         # setup feature hooks
         self._feature_outputs = defaultdict(OrderedDict)
+        self._handles = []
         modules = {k: v for k, v in named_modules}
         for i, h in enumerate(hooks):
-            hook_name = h['module']
+            hook_name = h if isinstance(h, str) else h['module']
             m = modules[hook_name]
             hook_id = out_map[i] if out_map else hook_name
             hook_fn = partial(self._collect_output_hook, hook_id)
-            hook_type = h.get('hook_type', default_hook_type)
+            hook_type = default_hook_type
+            if isinstance(h, dict):
+                hook_type = h.get('hook_type', default_hook_type)
             if hook_type == 'forward_pre':
-                m.register_forward_pre_hook(hook_fn)
+                handle = m.register_forward_pre_hook(hook_fn)
             elif hook_type == 'forward':
-                m.register_forward_hook(hook_fn)
+                handle = m.register_forward_hook(hook_fn)
             else:
                 assert False, "Unsupported hook type"
+            self._handles.append(handle)
 
     def _collect_output_hook(self, hook_id, *args):
         x = args[-1]  # tensor we want is last argument, output for fwd, input for fwd_pre
@@ -361,7 +365,7 @@ class FeatureHookNet(nn.ModuleDict):
             out_map: Optional[Sequence[Union[int, str]]] = None,
             return_dict: bool = False,
             output_fmt: str = 'NCHW',
-            no_rewrite: bool = False,
+            no_rewrite: Optional[bool] = None,
             flatten_sequential: bool = False,
             default_hook_type: str = 'forward',
     ):
@@ -383,7 +387,8 @@ class FeatureHookNet(nn.ModuleDict):
         self.return_dict = return_dict
         self.output_fmt = Format(output_fmt)
         self.grad_checkpointing = False
-
+        if no_rewrite is None:
+            no_rewrite = not flatten_sequential
         layers = OrderedDict()
         hooks = []
         if no_rewrite:
@@ -465,7 +470,7 @@ class FeatureGetterNet(nn.ModuleDict):
         self.out_indices = out_indices
         self.out_map = out_map
         self.return_dict = return_dict
-        self.output_fmt = output_fmt
+        self.output_fmt = Format(output_fmt)
         self.norm = norm
 
     def forward(self, x):

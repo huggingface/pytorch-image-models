@@ -53,6 +53,7 @@ class EvaAttention(nn.Module):
             num_heads: int = 8,
             qkv_bias: bool = True,
             qkv_fused: bool = True,
+            num_prefix_tokens: int = 1,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             attn_head_dim: Optional[int] = None,
@@ -77,6 +78,7 @@ class EvaAttention(nn.Module):
             head_dim = attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = head_dim ** -0.5
+        self.num_prefix_tokens = num_prefix_tokens
         self.fused_attn = use_fused_attn()
 
         if qkv_fused:
@@ -119,8 +121,9 @@ class EvaAttention(nn.Module):
             v = self.v_proj(x).reshape(B, N, self.num_heads, -1).transpose(1, 2)
 
         if rope is not None:
-            q = torch.cat([q[:, :, :1, :], apply_rot_embed_cat(q[:, :, 1:, :], rope)], 2).type_as(v)
-            k = torch.cat([k[:, :, :1, :], apply_rot_embed_cat(k[:, :, 1:, :], rope)], 2).type_as(v)
+            npt = self.num_prefix_tokens
+            q = torch.cat([q[:, :, :npt, :], apply_rot_embed_cat(q[:, :, npt:, :], rope)], dim=2).type_as(v)
+            k = torch.cat([k[:, :, :npt, :], apply_rot_embed_cat(k[:, :, npt:, :], rope)], dim=2).type_as(v)
 
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
@@ -157,6 +160,7 @@ class EvaBlock(nn.Module):
             swiglu_mlp: bool = False,
             scale_mlp: bool = False,
             scale_attn_inner: bool = False,
+            num_prefix_tokens: int = 1,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
@@ -191,6 +195,7 @@ class EvaBlock(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qkv_fused=qkv_fused,
+            num_prefix_tokens=num_prefix_tokens,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             attn_head_dim=attn_head_dim,
@@ -253,6 +258,7 @@ class EvaBlockPostNorm(nn.Module):
             swiglu_mlp: bool = False,
             scale_mlp: bool = False,
             scale_attn_inner: bool = False,
+            num_prefix_tokens: int = 1,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
@@ -286,6 +292,7 @@ class EvaBlockPostNorm(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qkv_fused=qkv_fused,
+            num_prefix_tokens=num_prefix_tokens,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             attn_head_dim=attn_head_dim,
@@ -364,6 +371,7 @@ class Eva(nn.Module):
             norm_layer: Callable = LayerNorm,
             init_values: Optional[float] = None,
             class_token: bool = True,
+            num_reg_tokens: int = 0,
             use_abs_pos_emb: bool = True,
             use_rot_pos_emb: bool = False,
             use_post_norm: bool = False,
@@ -407,7 +415,7 @@ class Eva(nn.Module):
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.num_prefix_tokens = 1 if class_token else 0
+        self.num_prefix_tokens = (1 if class_token else 0) + num_reg_tokens
         self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
 
@@ -427,6 +435,8 @@ class Eva(nn.Module):
         r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
+        self.reg_token = nn.Parameter(torch.zeros(1, num_reg_tokens, embed_dim)) if num_reg_tokens else None
+        self.cls_embed = class_token and self.reg_token is None
 
         self.pos_embed = nn.Parameter(
             torch.zeros(1, num_patches + self.num_prefix_tokens, embed_dim)) if use_abs_pos_emb else None
@@ -463,6 +473,7 @@ class Eva(nn.Module):
                 swiglu_mlp=swiglu_mlp,
                 scale_mlp=scale_mlp,
                 scale_attn_inner=scale_attn_inner,
+                num_prefix_tokens=self.num_prefix_tokens,
                 proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
                 drop_path=dpr[i],
@@ -484,6 +495,8 @@ class Eva(nn.Module):
             trunc_normal_(self.pos_embed, std=.02)
         if self.cls_token is not None:
             trunc_normal_(self.cls_token, std=.02)
+        if self.reg_token is not None:
+            trunc_normal_(self.reg_token, std=.02)
 
         self.fix_init_weight()
         if isinstance(self.head, nn.Linear):
@@ -551,8 +564,17 @@ class Eva(nn.Module):
 
         if self.cls_token is not None:
             x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+
         if pos_embed is not None:
             x = x + pos_embed
+
+        if self.reg_token is not None:
+            to_cat = []
+            if self.cls_token is not None:
+                to_cat.append(self.cls_token.expand(x.shape[0], -1, -1))
+            to_cat.append(self.reg_token.expand(x.shape[0], -1, -1))
+            x = torch.cat(to_cat + [x], dim=1)
+
         x = self.pos_drop(x)
 
         # obtain shared rotary position embedding and apply patch dropout
@@ -568,7 +590,7 @@ class Eva(nn.Module):
             indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
-            stop_early: bool = True,
+            stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
@@ -622,19 +644,19 @@ class Eva(nn.Module):
 
     def prune_intermediate_layers(
             self,
-            n: Union[int, List[int], Tuple[int]] = 1,
+            indices: Union[int, List[int], Tuple[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.blocks), n)
+        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
             self.fc_norm = nn.Identity()
-            self.head = nn.Identity()
+            self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x):
@@ -923,6 +945,25 @@ default_cfgs = generate_default_cfgs({
         num_classes=0,
     ),
 
+    'vit_medium_patch16_rope_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95,
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)
+    ),
+    'vit_mediumd_patch16_rope_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95,
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)
+    ),
+    'vit_betwixt_patch16_rope_reg4_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95,
+    ),
+    'vit_base_patch16_rope_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95,
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)
+    ),
 })
 
 
@@ -1184,4 +1225,88 @@ def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
         global_pool=kwargs.pop('global_pool', 'token'),
     )
     model = _create_eva('eva02_enormous_patch14_clip_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_medium_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
+    model_args = dict(
+        img_size=256,
+        patch_size=16,
+        embed_dim=512,
+        depth=12,
+        num_heads=8,
+        qkv_fused=True,
+        qkv_bias=True,
+        init_values=1e-5,
+        class_token=False,
+        num_reg_tokens=1,
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        ref_feat_shape=(16, 16),  # 224/14
+    )
+    model = _create_eva('vit_medium_patch16_rope_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_mediumd_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
+    model_args = dict(
+        img_size=256,
+        patch_size=16,
+        embed_dim=512,
+        depth=20,
+        num_heads=8,
+        qkv_fused=True,
+        qkv_bias=False,
+        init_values=1e-5,
+        class_token=False,
+        num_reg_tokens=1,
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        ref_feat_shape=(16, 16),  # 224/14
+    )
+    model = _create_eva('vit_mediumd_patch16_rope_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_betwixt_patch16_rope_reg4_gap_256(pretrained=False, **kwargs) -> Eva:
+    model_args = dict(
+        img_size=256,
+        patch_size=16,
+        embed_dim=640,
+        depth=12,
+        num_heads=10,
+        qkv_fused=True,
+        qkv_bias=True,
+        init_values=1e-5,
+        class_token=False,
+        num_reg_tokens=4,
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        ref_feat_shape=(16, 16),  # 224/14
+    )
+    model = _create_eva('vit_betwixt_patch16_rope_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
+    model_args = dict(
+        img_size=256,
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        qkv_fused=True,
+        qkv_bias=True,
+        init_values=1e-5,
+        class_token=False,
+        num_reg_tokens=1,
+        use_rot_pos_emb=True,
+        use_abs_pos_emb=False,
+        ref_feat_shape=(16, 16),  # 224/14
+    )
+    model = _create_eva('vit_base_patch16_rope_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
