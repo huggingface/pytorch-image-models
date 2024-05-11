@@ -1791,47 +1791,36 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
     'vit_wee_patch16_reg1_gap_256.sbb_in1k': _cfg(
-        #file='',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_pwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
-        #file='./vit_pwee-in1k-8.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_little_patch16_reg4_gap_256.sbb_in1k': _cfg(
-        #file='vit_little_patch16-in1k-8a.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg1_gap_256.sbb_in1k': _cfg(
-        #file='vit_medium_gap1-in1k-20231118-8.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_medium_patch16_reg4_gap_256.sbb_in1k': _cfg(
-        #file='vit_medium_gap4-in1k-20231115-8.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_mediumd_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
-        #file='vit_mp_patch16_reg4-in1k-5a.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_mediumd_patch16_reg4_gap_256.sbb_in12k': _cfg(
-        #file='vit_mp_patch16_reg4-in12k-8.pth',
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg1_gap_256.sbb_in1k': _cfg(
-        #file='vit_betwixt_gap1-in1k-20231121-8.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
-        #file='vit_betwixt_patch16_reg4-ft-in1k-8b.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in1k': _cfg(
-        #file='vit_betwixt_gap4-in1k-20231106-8.pth',
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in12k': _cfg(
-        #file='vit_betwixt_gap4-in12k-8.pth',
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
