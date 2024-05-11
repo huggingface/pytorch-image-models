@@ -717,12 +717,6 @@ def checkpoint_filter_fn(
             # fixed embedding no need to load buffer from checkpoint
             continue
 
-        # FIXME here while import new weights, to remove
-        # if k == 'cls_token':
-        #     print('DEBUG: cls token -> reg')
-        #     k = 'reg_token'
-        #     #v = v + state_dict['pos_embed'][0, :]
-
         if 'patch_embed.proj.weight' in k:
             _, _, H, W = model.patch_embed.proj.weight.shape
             if v.shape[-1] != W or v.shape[-2] != H:
@@ -951,26 +945,22 @@ default_cfgs = generate_default_cfgs({
         num_classes=0,
     ),
 
-    'vit_medium_patch16_rope_reg1_gap_256.in1k': _cfg(
-        #hf_hub_id='timm/',
-        #file='vit_medium_gap1_rope-in1k-20230920-5.pth',
+    'vit_medium_patch16_rope_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95,
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)
     ),
-    'vit_mediumd_patch16_rope_reg1_gap_256.in1k': _cfg(
-        #hf_hub_id='timm/',
-        #file='vit_mediumd_gap1_rope-in1k-20230926-5.pth',
+    'vit_mediumd_patch16_rope_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95,
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)
     ),
-    'vit_betwixt_patch16_rope_reg4_gap_256.in1k': _cfg(
-        #hf_hub_id='timm/',
-        #file='vit_betwixt_gap4_rope-in1k-20231005-5.pth',
+    'vit_betwixt_patch16_rope_reg4_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95,
     ),
-    'vit_base_patch16_rope_reg1_gap_256.in1k': _cfg(
-        #hf_hub_id='timm/',
-        #file='vit_base_gap1_rope-in1k-20230930-5.pth',
+    'vit_base_patch16_rope_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95,
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)
     ),

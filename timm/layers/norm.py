@@ -82,7 +82,6 @@ def _is_contiguous(tensor: torch.Tensor) -> bool:
         return tensor.is_contiguous(memory_format=torch.contiguous_format)
 
 
-@torch.jit.script
 def _layer_norm_cf(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor, eps: float):
     s, u = torch.var_mean(x, dim=1, unbiased=False, keepdim=True)
     x = (x - u) * torch.rsqrt(s + eps)

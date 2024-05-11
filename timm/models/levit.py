@@ -25,7 +25,7 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # Copyright 2020 Ross Wightman, Apache-2.0 License
 from collections import OrderedDict
 from functools import partial
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -638,7 +638,7 @@ class Levit(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            indices: Union[int, List[int], Tuple[int]] = None,
+            indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             norm: bool = False,
             stop_early: bool = False,
             output_fmt: str = 'NCHW',

@@ -73,7 +73,6 @@ class TransformerDecoderLayerOptimal(nn.Module):
         return tgt
 
 
-# @torch.jit.script
 # class ExtrapClasses(object):
 #     def __init__(self, num_queries: int, group_size: int):
 #         self.num_queries = num_queries
@@ -88,24 +87,13 @@ class TransformerDecoderLayerOptimal(nn.Module):
 #         out = out.view((h.shape[0], self.group_size * self.num_queries))
 #         return out
 
-@torch.jit.script
-class GroupFC(object):
-    def __init__(self, embed_len_decoder: int):
-        self.embed_len_decoder = embed_len_decoder
-
-    def __call__(self, h: torch.Tensor, duplicate_pooling: torch.Tensor, out_extrap: torch.Tensor):
-        for i in range(self.embed_len_decoder):
-            h_i = h[:, i, :]
-            w_i = duplicate_pooling[i, :, :]
-            out_extrap[:, i, :] = torch.matmul(h_i, w_i)
-
-
 class MLDecoder(nn.Module):
     def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, initial_num_features=2048):
         super(MLDecoder, self).__init__()
         embed_len_decoder = 100 if num_of_groups < 0 else num_of_groups
         if embed_len_decoder > num_classes:
             embed_len_decoder = num_classes
+        self.embed_len_decoder = embed_len_decoder
 
         # switching to 768 initial embeddings
         decoder_embedding = 768 if decoder_embedding < 0 else decoder_embedding
@@ -131,7 +119,6 @@ class MLDecoder(nn.Module):
         self.duplicate_pooling_bias = torch.nn.Parameter(torch.Tensor(num_classes))
         torch.nn.init.xavier_normal_(self.duplicate_pooling)
         torch.nn.init.constant_(self.duplicate_pooling_bias, 0)
-        self.group_fc = GroupFC(embed_len_decoder)
 
     def forward(self, x):
         if len(x.shape) == 4:  # [bs,2048, 7,7]
@@ -149,7 +136,10 @@ class MLDecoder(nn.Module):
         h = h.transpose(0, 1)
 
         out_extrap = torch.zeros(h.shape[0], h.shape[1], self.duplicate_factor, device=h.device, dtype=h.dtype)
-        self.group_fc(h, self.duplicate_pooling, out_extrap)
+        for i in range(self.embed_len_decoder):  # group FC
+            h_i = h[:, i, :]
+            w_i = self.duplicate_pooling[i, :, :]
+            out_extrap[:, i, :] = torch.matmul(h_i, w_i)
         h_out = out_extrap.flatten(1)[:, :self.num_classes]
         h_out += self.duplicate_pooling_bias
         logits = h_out

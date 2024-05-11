@@ -489,7 +489,7 @@ class VisionTransformer(nn.Module):
             **embed_args,
         )
         num_patches = self.patch_embed.num_patches
-        r = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
+        reduction = self.patch_embed.feat_ratio() if hasattr(self.patch_embed, 'feat_ratio') else patch_size
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
@@ -523,7 +523,7 @@ class VisionTransformer(nn.Module):
             )
             for i in range(depth)])
         self.feature_info = [
-            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
+            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=reduction) for i in range(depth)]
         self.norm = norm_layer(embed_dim) if not use_fc_norm else nn.Identity()
 
         # Classifier Head
@@ -1790,23 +1790,39 @@ default_cfgs = {
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
-    'vit_wee_patch16_reg1_gap_256': _cfg(
-        #file='',
+    'vit_wee_patch16_reg1_gap_256.sbb_in1k': _cfg(
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_little_patch16_reg4_gap_256': _cfg(
-        #file='',
+    'vit_pwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_medium_patch16_reg1_gap_256': _cfg(
-        #file='vit_medium_gap1-in1k-20231118-8.pth',
+    'vit_little_patch16_reg4_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_medium_patch16_reg4_gap_256': _cfg(
-        #file='vit_medium_gap4-in1k-20231115-8.pth',
+    'vit_medium_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_betwixt_patch16_reg1_gap_256': _cfg(
-        #file='vit_betwixt_gap1-in1k-20231121-8.pth',
+    'vit_medium_patch16_reg4_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_betwixt_patch16_reg4_gap_256': _cfg(
-        #file='vit_betwixt_gap4-in1k-20231106-8.pth',
+    'vit_mediumd_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_mediumd_patch16_reg4_gap_256.sbb_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256.sbb_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_base_patch16_reg4_gap_256': _cfg(
         input_size=(3, 256, 256)),
@@ -2755,10 +2771,21 @@ def vit_so400m_patch14_siglip_384(pretrained: bool = False, **kwargs) -> VisionT
 def vit_wee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=16, embed_dim=256, depth=14, num_heads=4, init_values=1e-5, mlp_ratio=5,
+        class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_wee_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_pwee_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=256, depth=16, num_heads=4, init_values=1e-5, mlp_ratio=5,
         class_token=False, no_embed_class=True, reg_tokens=1, global_pool='avg', block_fn=ParallelScalingBlock,
     )
     model = _create_vision_transformer(
-        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_pwee_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -2769,7 +2796,7 @@ def vit_little_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
         class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
     )
     model = _create_vision_transformer(
-        'vit_medium_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+        'vit_little_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -2792,6 +2819,17 @@ def vit_medium_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
     )
     model = _create_vision_transformer(
         'vit_medium_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_mediumd_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=512, depth=20, num_heads=8, init_values=1e-5,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_mediumd_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

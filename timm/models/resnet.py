@@ -557,7 +557,7 @@ class ResNet(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            indices: Union[int, List[int], Tuple[int]] = None,
+            indices: Optional[Union[int, List[int], Tuple[int]]] = None,
             norm: bool = False,
             stop_early: bool = False,
             output_fmt: str = 'NCHW',
@@ -576,8 +576,6 @@ class ResNet(nn.Module):
 
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
-        if stop_early:
-            assert intermediates_only, 'Must use intermediates_only for early stopping.'
         intermediates = []
         take_indices, max_index = feature_take_indices(5, indices)
 

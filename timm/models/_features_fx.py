@@ -9,7 +9,9 @@ from torch import nn
 from ._features import _get_feature_info, _get_return_layers
 
 try:
+    # NOTE we wrap torchvision fns to use timm leaf / no trace definitions
     from torchvision.models.feature_extraction import create_feature_extractor as _create_feature_extractor
+    from torchvision.models.feature_extraction import get_graph_node_names as _get_graph_node_names
     has_fx_feature_extraction = True
 except ImportError:
     has_fx_feature_extraction = False
@@ -30,7 +32,7 @@ from timm.layers.norm_act import (
 
 __all__ = ['register_notrace_module', 'is_notrace_module', 'get_notrace_modules',
            'register_notrace_function', 'is_notrace_function', 'get_notrace_functions',
-           'create_feature_extractor', 'FeatureGraphNet', 'GraphExtractNet']
+           'create_feature_extractor', 'get_graph_node_names', 'FeatureGraphNet', 'GraphExtractNet']
 
 
 # NOTE: By default, any modules from timm.models.layers that we want to treat as leaf modules go here
@@ -90,6 +92,13 @@ def is_notrace_function(func: Callable):
 
 def get_notrace_functions():
     return list(_autowrap_functions)
+
+
+def get_graph_node_names(model: nn.Module) -> Tuple[List[str], List[str]]:
+    return _get_graph_node_names(
+        model,
+        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)}
+    )
 
 
 def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str], List[str]]):
