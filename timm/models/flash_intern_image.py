@@ -2,7 +2,7 @@
 A Pytorch Implementation of Flash Intern Image as decribed in:
 
 `InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions`
-    - https://arxiv.org/pdf/2103.14030
+    - https://arxiv.org/pdf/2211.05778
 
 `DCNv4`
     - https://arxiv.org/pdf/2401.06197
@@ -35,15 +35,14 @@ __all__ = ['FlashInternImage']
 _logger = logging.getLogger(__name__)
 torch.fx.wrap('len')
 
-dcn_version = 'DCNv4'
+dcn_version = 'CUDA'
 try:
     import DCNv4
 except ImportError:
-    dcn_version = 'DCNv3'
+    dcn_version = 'pytorch'
     
 
 class to_channels_first(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -52,7 +51,6 @@ class to_channels_first(nn.Module):
 
 
 class to_channels_last(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -83,6 +81,7 @@ def build_norm_layer(
     else:
         raise NotImplementedError(
             f'build_norm_layer does not support {norm_layer}')
+    
     return nn.Sequential(*layers)
 
 
@@ -119,18 +118,20 @@ def _get_reference_points(
             (dilation_h * (kernel_h - 1)) // 2 + 0.5 + (H_out - 1) * stride_h,
             H_out,
             dtype=torch.float32,
-            device=device),
+            device=device
+        ),
         torch.linspace(
             (dilation_w * (kernel_w - 1)) // 2 + 0.5,
             (dilation_w * (kernel_w - 1)) // 2 + 0.5 + (W_out - 1) * stride_w,
             W_out,
             dtype=torch.float32,
-            device=device))
+            device=device
+        )
+    )
     ref_y = ref_y.reshape(-1)[None] / H_
     ref_x = ref_x.reshape(-1)[None] / W_
 
-    ref = torch.stack((ref_x, ref_y), -1).reshape(
-        1, H_out, W_out, 1, 2)
+    ref = torch.stack((ref_x, ref_y), -1).reshape(1, H_out, W_out, 1, 2)
 
     return ref
 
@@ -152,13 +153,16 @@ def _generate_dilation_grids(
             -((dilation_w * (kernel_w - 1)) // 2) + (kernel_w - 1) * dilation_w, 
             kernel_w,
             dtype=torch.float32,
-            device=device),
+            device=device
+        ),
         torch.linspace(
             -((dilation_h * (kernel_h - 1)) // 2),
             -((dilation_h * (kernel_h - 1)) // 2) + (kernel_h - 1) * dilation_h, 
             kernel_h,
             dtype=torch.float32,
-            device=device))
+            device=device
+        )
+    )
 
     points_list.extend([x / W_, y / H_])
     grid = torch.stack(points_list, -1).reshape(-1, 1, 2).\
@@ -168,9 +172,9 @@ def _generate_dilation_grids(
     return grid
 
 
-def dcnv3_core_pytorch(
+def dcnv4_core_pytorch(
         input, 
-        offset, 
+        offset,
         mask, 
         kernel_h: int,
         kernel_w: int, 
@@ -182,42 +186,76 @@ def dcnv3_core_pytorch(
         dilation_w: int, 
         group: int,
         group_channels: int, 
-        offset_scale: float):
-    # for debug and test only,
-    # need to use cuda version instead
+        offset_scale: float
+    ):
     input = F.pad(
         input,
-        [0, 0, pad_h, pad_h, pad_w, pad_w])
+        [0, 0, pad_h, pad_h, pad_w, pad_w]
+    )
     N_, H_in, W_in, _ = input.shape
     _, H_out, W_out, _ = offset.shape
+    # _, H_out, W_out, C_ = offset_mask.shape
+    # offset = offset_mask[:, :, :, : (C_ * 2) // 3]
+    # mask = offset_mask[:, :, :, (C_ * 2) // 3:]
 
     ref = _get_reference_points(
-        input.shape, input.device, kernel_h, kernel_w, dilation_h, dilation_w, pad_h, pad_w, stride_h, stride_w)
+        input.shape, 
+        input.device, 
+        kernel_h, 
+        kernel_w, 
+        dilation_h, 
+        dilation_w, 
+        pad_h, 
+        pad_w, 
+        stride_h, 
+        stride_w
+    )
     grid = _generate_dilation_grids(
-        input.shape, kernel_h, kernel_w, dilation_h, dilation_w, group, input.device)
+        input.shape, 
+        kernel_h, 
+        kernel_w, 
+        dilation_h, 
+        dilation_w, 
+        group, 
+        input.device
+    )
     spatial_norm = torch.tensor([W_in, H_in]).reshape(1, 1, 1, 2).\
-        repeat(1, 1, 1, group*kernel_h*kernel_w).to(input.device)
+        repeat(1, 1, 1, group * kernel_h * kernel_w).to(input.device)
 
     sampling_locations = (ref + grid * offset_scale).repeat(N_, 1, 1, 1, 1).flatten(3, 4) + \
         offset * offset_scale / spatial_norm
 
     P_ = kernel_h * kernel_w
     sampling_grids = 2 * sampling_locations - 1
-    # N_, H_in, W_in, group*group_channels -> N_, H_in*W_in, group*group_channels -> N_, group*group_channels, H_in*W_in -> N_*group, group_channels, H_in, W_in
-    input_ = input.view(N_, H_in*W_in, group*group_channels).transpose(1, 2).\
-        reshape(N_*group, group_channels, H_in, W_in)
-    # N_, H_out, W_out, group*P_*2 -> N_, H_out*W_out, group, P_, 2 -> N_, group, H_out*W_out, P_, 2 -> N_*group, H_out*W_out, P_, 2
-    sampling_grid_ = sampling_grids.view(N_, H_out*W_out, group, P_, 2).transpose(1, 2).\
+    #    N_, H_in, W_in, group * group_channels 
+    # -> N_, H_in * W_in, group * group_channels 
+    # -> N_, group * group_channels, H_in * W_in 
+    # -> N_ * group, group_channels, H_in, W_in
+    input_ = input.view(N_, H_in * W_in, group * group_channels).transpose(1, 2).\
+        reshape(N_ * group, group_channels, H_in, W_in)
+    #    N_, H_out, W_out, group * P_ * 2 
+    # -> N_, H_out * W_out, group, P_, 2 
+    # -> N_, group, H_out * W_out, P_, 2 
+    # -> N_ * group, H_out * W_out, P_, 2
+    sampling_grid_ = sampling_grids.view(N_, H_out * W_out, group, P_, 2).transpose(1, 2).\
         flatten(0, 1)
-    # N_*group, group_channels, H_out*W_out, P_
+    # N_ * group, group_channels, H_out * W_out, P_
     sampling_input_ = F.grid_sample(
-        input_, sampling_grid_, mode='bilinear', padding_mode='zeros', align_corners=False)
+        input_, 
+        sampling_grid_, 
+        mode='bilinear', 
+        padding_mode='zeros', 
+        align_corners=False
+    )
 
-    # (N_, H_out, W_out, group*P_) -> N_, H_out*W_out, group, P_ -> (N_, group, H_out*W_out, P_) -> (N_*group, 1, H_out*W_out, P_)
-    mask = mask.view(N_, H_out*W_out, group, P_).transpose(1, 2).\
-        reshape(N_*group, 1, H_out*W_out, P_)
-    output = (sampling_input_ * mask).sum(-1).view(N_,
-                                                   group*group_channels, H_out*W_out)
+    #    (N_, H_out, W_out, group * P_) 
+    # -> (N_, H_out * W_out, group, P_)
+    # -> (N_, group, H_out * W_out, P_) 
+    # -> (N_ * group, 1, H_out * W_out, P_)
+    mask = mask.view(N_, H_out * W_out, group, P_).transpose(1, 2).\
+        reshape(N_ * group, 1, H_out * W_out, P_)
+    output = (sampling_input_ * mask).sum(-1).\
+        view(N_, group * group_channels, H_out * W_out)
 
     return output.transpose(1, 2).reshape(N_, H_out, W_out, -1).contiguous()
 
@@ -231,32 +269,39 @@ def _is_power_of_2(n):
 
 
 class CenterFeatureScaleModule(nn.Module):
-    def forward(self,
+    def forward(
+            self,
+            query,
+            center_feature_scale_proj_weight,
+            center_feature_scale_proj_bias
+        ):
+        center_feature_scale = \
+            F.linear(
                 query,
-                center_feature_scale_proj_weight,
-                center_feature_scale_proj_bias):
-        center_feature_scale = F.linear(query,
-                                        weight=center_feature_scale_proj_weight,
-                                        bias=center_feature_scale_proj_bias).sigmoid()
+                weight=center_feature_scale_proj_weight,
+                bias=center_feature_scale_proj_bias
+            ).sigmoid()
         return center_feature_scale
     
 
-class DCNv3_pytorch(nn.Module):
+class DCNv4_pytorch(nn.Module):
     def __init__(
             self,
             channels=64,
             kernel_size=3,
-            dw_kernel_size=None,
             stride=1,
             pad=1,
             dilation=1,
             group=4,
             offset_scale=1.0,
-            act_layer='GELU',
-            norm_layer='LN',
-            center_feature_scale=False):
+            dw_kernel_size=None,
+            remove_center=False,
+            output_bias=True,
+            without_pointwise=False,
+            **kwargs
+        ):
         """
-        DCNv3 Module
+        DCNv4 Module
         :param channels
         :param kernel_size
         :param stride
@@ -264,114 +309,107 @@ class DCNv3_pytorch(nn.Module):
         :param dilation
         :param group
         :param offset_scale
-        :param act_layer
-        :param norm_layer
+        :param dw_kernel_size
+        :param remove_center
+        :param output_bias
+        :param without_pointwise
         """
         super().__init__()
         if channels % group != 0:
             raise ValueError(
                 f'channels must be divisible by group, but got {channels} and {group}')
         _d_per_group = channels // group
-        dw_kernel_size = dw_kernel_size if dw_kernel_size is not None else kernel_size
+
         # you'd better set _d_per_group to a power of 2 which is more efficient in our CUDA implementation
-        if not _is_power_of_2(_d_per_group):
-            warnings.warn(
-                "You'd better set channels in DCNv3 to make the dimension of each attention head a power of 2 "
-                "which is more efficient in our CUDA implementation.")
+        assert _d_per_group % 16 == 0
 
         self.offset_scale = offset_scale
         self.channels = channels
         self.kernel_size = kernel_size
-        self.dw_kernel_size = dw_kernel_size
         self.stride = stride
         self.dilation = dilation
         self.pad = pad
         self.group = group
         self.group_channels = channels // group
         self.offset_scale = offset_scale
-        self.center_feature_scale = center_feature_scale
+        self.dw_kernel_size = dw_kernel_size
+        self.remove_center = int(remove_center)
+        self.without_pointwise = without_pointwise
 
-        self.dw_conv = nn.Sequential(
-            nn.Conv2d(
-                channels,
-                channels,
-                kernel_size=dw_kernel_size,
-                stride=1,
-                padding=(dw_kernel_size - 1) // 2,
-                groups=channels),
-            build_norm_layer(
-                channels,
-                norm_layer,
-                'channels_first',
-                'channels_last'),
-            build_act_layer(act_layer))
-        self.offset = nn.Linear(
-            channels,
-            group * kernel_size * kernel_size * 2)
-        self.mask = nn.Linear(
-            channels,
-            group * kernel_size * kernel_size)
-        self.input_proj = nn.Linear(channels, channels)
-        self.output_proj = nn.Linear(channels, channels)
+        self.K =  group * (kernel_size * kernel_size - self.remove_center)
+        if dw_kernel_size is not None:
+            self.offset_mask_dw = \
+                nn.Conv2d(channels, channels, dw_kernel_size, stride=1, padding=(dw_kernel_size - 1) // 2, groups=channels)
+        # self.offset_mask = nn.Linear(channels, int(math.ceil((self.K * 3)/8)*8))
+        self.offset = nn.Linear(channels, self.K * 2)
+        self.mask = nn.Linear(channels, self.K)
+        if not without_pointwise:
+            self.value_proj = nn.Linear(channels, channels)
+            self.output_proj = nn.Linear(channels, channels, bias=output_bias)
         self._reset_parameters()
-        self.center_feature_scale_module = CenterFeatureScaleModule()
-        self.center_feature_scale_proj_weight = torch.zeros((group, channels), dtype=torch.float)
-        self.center_feature_scale_proj_bias = torch.tensor(0.0, dtype=torch.float).view((1,)).repeat(group, )
-        
-        if center_feature_scale:
-            self.center_feature_scale_proj_weight = nn.Parameter(
-                torch.zeros((group, channels), dtype=torch.float))
-            self.center_feature_scale_proj_bias = nn.Parameter(
-                torch.tensor(0.0, dtype=torch.float).view((1,)).repeat(group, ))
-            self.center_feature_scale_module = CenterFeatureScaleModule()
 
     def _reset_parameters(self):
+        # constant_(self.offset_mask.weight.data, 0.)
+        # constant_(self.offset_mask.bias.data, 0.)
         constant_(self.offset.weight.data, 0.)
         constant_(self.offset.bias.data, 0.)
         constant_(self.mask.weight.data, 0.)
         constant_(self.mask.bias.data, 0.)
-        xavier_uniform_(self.input_proj.weight.data)
-        constant_(self.input_proj.bias.data, 0.)
-        xavier_uniform_(self.output_proj.weight.data)
-        constant_(self.output_proj.bias.data, 0.)
+        if not self.without_pointwise:
+            xavier_uniform_(self.value_proj.weight.data)
+            constant_(self.value_proj.bias.data, 0.)
+            xavier_uniform_(self.output_proj.weight.data)
+            if self.output_proj.bias is not None:
+                constant_(self.output_proj.bias.data, 0.)
 
-    def forward(self, input, shape: Optional[Tuple[int, int]]=None):
+    def forward(self, input, shape: Optional[Tuple[int, int]] = None):
         """
-        :param query                       (N, H, W, C)
-        :return output                     (N, H, W, C)
+        :param input                       (N, L, C)
+        :param shape                       (H, W) or None
+        :return output                     (N, L, C)
         """
-        # N, H, W, _ = input.shape
-        N, H, W, C = input.shape
-        L = H * W
+        N, L, C = input.shape
+        if shape is not None:
+            H, W = shape
+        else:
+            H, W = int(L ** 0.5), int(L ** 0.5)
+        
+        x = input
+        if not self.without_pointwise:
+            x = self.value_proj(x)
+        x = x.reshape(N, H, W, -1)
+        if self.dw_kernel_size is not None:
+            offset_mask_input = self.offset_mask_dw(input.view(N, H, W, C).permute(0, 3, 1, 2))
+            offset_mask_input = offset_mask_input.permute(0, 2, 3, 1).view(N, L, C)
+        else:
+            offset_mask_input = input
+        # offset_mask = self.offset_mask(offset_mask_input).reshape(N, H, W, -1)
+        offset = self.offset(offset_mask_input).reshape(N, H, W, -1)
+        mask = self.mask(offset_mask_input).reshape(N, H, W, -1)
+        x = dcnv4_core_pytorch(
+            x,
+            offset,
+            mask,
+            self.kernel_size,
+            self.kernel_size,
+            self.stride,
+            self.stride,
+            self.pad,
+            self.pad,
+            self.dilation,
+            self.dilation,
+            self.group,
+            self.group_channels,
+            self.offset_scale
+        )
 
-        x = self.input_proj(input)
-        x_proj = x
-
-        x1 = input.permute(0, 3, 1, 2)
-        x1 = self.dw_conv(x1)
-        offset = self.offset(x1)
-        mask = self.mask(x1).reshape(N, H, W, self.group, -1)
-        mask = F.softmax(mask, -1).reshape(N, H, W, -1)
-
-        x = dcnv3_core_pytorch(
-            x, offset, mask,
-            self.kernel_size, self.kernel_size,
-            self.stride, self.stride,
-            self.pad, self.pad,
-            self.dilation, self.dilation,
-            self.group, self.group_channels,
-            self.offset_scale)
-        if self.center_feature_scale:
-            center_feature_scale = self.center_feature_scale_module(
-                x1, self.center_feature_scale_proj_weight, self.center_feature_scale_proj_bias)
-            # N, H, W, groups -> N, H, W, groups, 1 -> N, H, W, groups, _d_per_group -> N, H, W, channels
-            center_feature_scale = center_feature_scale[..., None].repeat(
-                1, 1, 1, 1, self.channels // self.group).flatten(-2)
-            x = x * (1 - center_feature_scale) + x_proj * center_feature_scale
-        x = self.output_proj(x)
+        x = x.view(N, L, -1)
+        if not self.without_pointwise:
+            x = self.output_proj(x)
         return x
-    
-# --- DCNv3 pure pytorch implementation finished --- #
+
+
+# --- DCNv4 pure pytorch implementation finished --- #
 # --- FlashInternImage implementation start --- #
 class CrossAttention(nn.Module):
     r""" Cross Attention Module
@@ -388,16 +426,17 @@ class CrossAttention(nn.Module):
         attn_head_dim (int, optional): Dimension of attention head.
         out_dim (int, optional): Dimension of output.
     """
-
-    def __init__(self,
-                 dim,
-                 num_heads=8,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 attn_drop=0.,
-                 proj_drop=0.,
-                 attn_head_dim=None,
-                 out_dim=None):
+    def __init__(
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=False,
+            qk_scale=None,
+            attn_drop=0.,
+            proj_drop=0.,
+            attn_head_dim=None,
+            out_dim=None
+        ):
         super().__init__()
         if out_dim is None:
             out_dim = dim
@@ -438,17 +477,19 @@ class CrossAttention(nn.Module):
             v_bias = self.v_bias
 
         q = F.linear(input=x, weight=self.q.weight, bias=q_bias)
-        q = q.reshape(B, N, 1, self.num_heads,
-                      -1).permute(2, 0, 3, 1,
-                                  4).squeeze(0)  # (B, N_head, N_q, dim)
+        q = q.reshape(B, N, 1, self.num_heads, -1) \
+             .permute(2, 0, 3, 1, 4) \
+             .squeeze(0)  # (B, N_head, N_q, dim)
 
         k = F.linear(input=k, weight=self.k.weight, bias=k_bias)
-        k = k.reshape(B, N_k, 1, self.num_heads, -1).permute(2, 0, 3, 1,
-                                                             4).squeeze(0)
+        k = k.reshape(B, N_k, 1, self.num_heads, -1)\
+             .permute(2, 0, 3, 1, 4)\
+             .squeeze(0)
 
         v = F.linear(input=v, weight=self.v.weight, bias=v_bias)
-        v = v.reshape(B, N_v, 1, self.num_heads, -1).permute(2, 0, 3, 1,
-                                                             4).squeeze(0)
+        v = v.reshape(B, N_v, 1, self.num_heads, -1)\
+             .permute(2, 0, 3, 1, 4)\
+             .squeeze(0)
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))  # (B, N_head, N_q, N_k)
@@ -480,42 +521,47 @@ class AttentiveBlock(nn.Module):
         attn_head_dim (int, optional): Dimension of attention head. Default: None.
         out_dim (int, optional): Dimension of output. Default: None.
     """
-
-    def __init__(self,
-                 dim,
-                 num_heads,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 drop=0.,
-                 attn_drop=0.,
-                 drop_path=0.,
-                 norm_layer="LN",
-                 attn_head_dim=None,
-                 out_dim=None):
+    def __init__(
+            self,
+            dim,
+            num_heads,
+            qkv_bias=False,
+            qk_scale=None,
+            drop=0.,
+            attn_drop=0.,
+            drop_path=0.,
+            norm_layer="LN",
+            attn_head_dim=None,
+            out_dim=None
+        ):
         super().__init__()
 
         self.norm1_q = build_norm_layer(dim, norm_layer, eps=1e-6)
         self.norm1_k = build_norm_layer(dim, norm_layer, eps=1e-6)
         self.norm1_v = build_norm_layer(dim, norm_layer, eps=1e-6)
-        self.cross_dcn = CrossAttention(dim,
-                                        num_heads=num_heads,
-                                        qkv_bias=qkv_bias,
-                                        qk_scale=qk_scale,
-                                        attn_drop=attn_drop,
-                                        proj_drop=drop,
-                                        attn_head_dim=attn_head_dim,
-                                        out_dim=out_dim)
+        self.cross_dcn = \
+            CrossAttention(
+                dim,
+                num_heads=num_heads,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                attn_drop=attn_drop,
+                proj_drop=drop,
+                attn_head_dim=attn_head_dim,
+                out_dim=out_dim
+            )
 
-        self.drop_path = DropPath(
-            drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self,
-                x_q,
-                x_kv,
-                pos_q,
-                pos_k,
-                bool_masked_pos,
-                rel_pos_bias=None):
+    def forward(
+            self,
+            x_q,
+            x_kv,
+            pos_q,
+            pos_k,
+            bool_masked_pos,
+            rel_pos_bias=None
+        ):
         x_q = self.norm1_q(x_q + pos_q)
         x_k = self.norm1_k(x_kv + pos_k)
         x_v = self.norm1_v(x_kv)
@@ -526,14 +572,18 @@ class AttentiveBlock(nn.Module):
 
 
 class AttentionPoolingBlock(AttentiveBlock):
-
     def forward(self, x):
         x_q = x.mean(1, keepdim=True)
         x_kv = x
         pos_q, pos_k = 0, 0
-        x = super().forward(x_q, x_kv, pos_q, pos_k,
-                            bool_masked_pos=None,
-                            rel_pos_bias=None)
+        x = super().forward(
+            x_q, 
+            x_kv, 
+            pos_q, 
+            pos_k,
+            bool_masked_pos=None,
+            rel_pos_bias=None
+        )
         x = x.squeeze(1)
         return x
     
@@ -546,28 +596,41 @@ class StemLayer(nn.Module):
         act_layer (str): activation layer
         norm_layer (str): normalization layer
     """
-
-    def __init__(self,
-                 in_chans=3,
-                 out_chans=96,
-                 act_layer='GELU',
-                 norm_layer='BN'):
+    def __init__(
+            self,
+            in_chans=3,
+            out_chans=96,
+            act_layer='GELU',
+            norm_layer='BN'
+        ):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_chans,
-                               out_chans // 2,
-                               kernel_size=3,
-                               stride=2,
-                               padding=1)
-        self.norm1 = build_norm_layer(out_chans // 2, norm_layer,
-                                      'channels_first', 'channels_first')
+        self.conv1 = nn.Conv2d(
+                        in_chans,
+                        out_chans // 2,
+                        kernel_size=3,
+                        stride=2,
+                        padding=1
+                    )
+        self.norm1 = build_norm_layer(
+                        out_chans // 2, 
+                        norm_layer,
+                        'channels_first', 
+                        'channels_first'
+                    )
         self.act = build_act_layer(act_layer)
-        self.conv2 = nn.Conv2d(out_chans // 2,
-                               out_chans,
-                               kernel_size=3,
-                               stride=2,
-                               padding=1)
-        self.norm2 = build_norm_layer(out_chans, norm_layer, 'channels_first',
-                                      'channels_last')
+        self.conv2 = nn.Conv2d(
+                        out_chans // 2,
+                        out_chans,
+                        kernel_size=3,
+                        stride=2,
+                        padding=1
+                    )
+        self.norm2 = build_norm_layer(
+                        out_chans, 
+                        norm_layer, 
+                        'channels_first',
+                        'channels_last'
+                    )
 
     def forward(self, x):
         x = self.conv1(x)
@@ -584,39 +647,34 @@ class DownsampleLayer(nn.Module):
         channels (int): number of input channels
         norm_layer (str): normalization layer
     """
-
     def __init__(self, channels, norm_layer='LN'):
         super().__init__()
-        self.conv = nn.Conv2d(channels,
-                              2 * channels,
-                              kernel_size=3,
-                              stride=2,
-                              padding=1,
-                              bias=False)
-        self.norm = build_norm_layer(2 * channels, norm_layer,
-                                     'channels_first', 'channels_first')
-        self.dcn_version = dcn_version
-
+        self.conv = nn.Conv2d(
+                        channels,
+                        2 * channels,
+                        kernel_size=3,
+                        stride=2,
+                        padding=1,
+                        bias=False
+                    )
+        self.norm = build_norm_layer(
+                        2 * channels, 
+                        norm_layer,
+                        'channels_first', 
+                        'channels_first'
+                    )
 
     def forward(self, x, shape: Optional[Tuple[int, int]]=None):
-        if self.dcn_version == 'DCNv4':
-            N, HW, C = x.shape
-            if shape is not None:
-                H, W = shape
-            else:
-                H, W = int(HW**0.5), int(HW**0.5)
+        N, HW, C = x.shape
+        if shape is not None:
+            H, W = shape
         else:
-            N, H, W, C = x.shape
-            HW = H * W
+            H, W = int(HW ** 0.5), int(HW ** 0.5)
         x = x.view(N, H, W, C)
         x = self.conv(x.permute(0, 3, 1, 2))
         x = self.norm(x) # B C H W
-        if self.dcn_version == 'DCNv4':
-            H, W = x.size(2), x.size(3)
-            x = x.flatten(2).permute(0, 2, 1)
-        else:
-            x = x.permute(0, 2, 3, 1)
-            H, W = x.size(1), x.size(2)
+        H, W = x.size(2), x.size(3)
+        x = x.flatten(2).permute(0, 2, 1)
 
         return x, (H, W)
     
@@ -628,16 +686,18 @@ class MLPLayer(nn.Module):
         hidden_features (int): number of hidden features
         out_features (int): number of output features
         act_layer (str): activation layer
+        mlp_fc2_bias (bool): whether to use mlp fc2 bias
         drop (float): dropout rate
     """
-
-    def __init__(self,
-                 in_features,
-                 hidden_features=None,
-                 out_features=None,
-                 act_layer='GELU',
-                 mlp_fc2_bias=False,
-                 drop=0.):
+    def __init__(
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer='GELU',
+            mlp_fc2_bias=False,
+            drop=0.
+        ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -645,7 +705,6 @@ class MLPLayer(nn.Module):
         self.act = build_act_layer(act_layer)
         self.fc2 = nn.Linear(hidden_features, out_features, bias=mlp_fc2_bias)
         self.drop = nn.Dropout(drop)
-
 
     def forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
         x = self.fc1(x)
@@ -674,28 +733,25 @@ class InternImageLayer(nn.Module):
         dcn_output_bias (bool): whether to use dcn output bias, Default: False.
         mlp_fc2_bias (bool): whether to use mlp fc2 bias, Default: False.
         dw_kernel_size (int): Size of the dwconv, Default: None.
-        res_post_norm (bool): whether to use res post normalization, Default: False.
-        center_feature_scale (bool): whether to use center feature scale, Default: False.
     """
-
-    def __init__(self,
-                 core_op,
-                 channels,
-                 groups,
-                 mlp_ratio=4.,
-                 drop=0.,
-                 drop_path=0.,
-                 act_layer='GELU',
-                 norm_layer='LN',
-                 post_norm=False,
-                 layer_scale=None,
-                 offset_scale=1.0,
-                 with_cp=False,
-                 dcn_output_bias=False,
-                 mlp_fc2_bias=False,
-                 dw_kernel_size=None, # for InternImage-H/G
-                 res_post_norm=False, # for InternImage-H/G
-                 center_feature_scale=False): # for InternImage-H/G
+    def __init__(
+            self,
+            core_op,
+            channels,
+            groups,
+            mlp_ratio=4.,
+            drop=0.,
+            drop_path=0.,
+            act_layer='GELU',
+            norm_layer='LN',
+            post_norm=False,
+            layer_scale=None,
+            offset_scale=1.0,
+            with_cp=False,
+            dcn_output_bias=False,
+            mlp_fc2_bias=False,
+            dw_kernel_size=None
+        ):
         super().__init__()
         self.channels = channels
         self.groups = groups
@@ -704,7 +760,7 @@ class InternImageLayer(nn.Module):
 
         self.norm1 = build_norm_layer(channels, 'LN')
         self.post_norm = post_norm
-        if dcn_version == 'DCNv4' and core_op == 'DCNv4':
+        if dcn_version == 'CUDA' and core_op == 'DCNv4':
             self.dcn = DCNv4.DCNv4(
                 channels=channels,
                 group=groups,
@@ -713,48 +769,41 @@ class InternImageLayer(nn.Module):
                 output_bias=dcn_output_bias,
             )
         else:
-            self.dcn = DCNv3_pytorch(
+            self.dcn = DCNv4_pytorch(
                 channels=channels,
                 group=groups,
                 offset_scale=offset_scale,
                 dw_kernel_size=dw_kernel_size,
-                center_feature_scale=center_feature_scale
+                output_bias=dcn_output_bias,
             )
         
-        self.drop_path = DropPath(drop_path) if drop_path > 0. \
-            else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = build_norm_layer(channels, 'LN')
-        self.mlp = MLPLayer(in_features=channels,
-                            hidden_features=int(channels * mlp_ratio),
-                            act_layer=act_layer,
-                            drop=drop,
-                            mlp_fc2_bias=mlp_fc2_bias
-                            )
+        self.mlp = MLPLayer(
+                    in_features=channels,
+                    hidden_features=int(channels * mlp_ratio),
+                    act_layer=act_layer,
+                    drop=drop,
+                    mlp_fc2_bias=mlp_fc2_bias
+                )
         self.layer_scale = layer_scale is not None
         self.gamma1 = torch.ones(channels)
         self.gamma2 = torch.ones(channels)
         if self.layer_scale:
-            self.gamma1 = nn.Parameter(layer_scale * torch.ones(channels),
-                                       requires_grad=True)
-            self.gamma2 = nn.Parameter(layer_scale * torch.ones(channels),
-                                       requires_grad=True)
-        
-        self.res_post_norm = res_post_norm
-        self.res_post_norm1 = nn.Sequential()
-        self.res_post_norm2 = nn.Sequential()
-        if res_post_norm:
-            self.res_post_norm1 = build_norm_layer(channels, 'LN')
-            self.res_post_norm2 = build_norm_layer(channels, 'LN')
+            self.gamma1 = nn.Parameter(
+                            layer_scale * torch.ones(channels),
+                            requires_grad=True
+                        )
+            self.gamma2 = nn.Parameter(
+                            layer_scale * torch.ones(channels),
+                            requires_grad=True
+                        )
 
     def _inner_forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int):
         if not self.layer_scale:
             if self.post_norm:
                 x = x + self.drop_path(self.norm1(self.dcn(x, shape)))
                 x = x + self.drop_path(self.norm2(self.mlp(x, shape, level_idx)))
-            elif self.res_post_norm: # for InternImage-H/G
-                x = x + self.drop_path(self.res_post_norm1(self.dcn(self.norm1(x), shape)))
-                x = x + self.drop_path(self.res_post_norm2(self.mlp(self.norm2(x), shape, level_idx)))
-
             else:
                 x = x + self.drop_path(self.dcn(self.norm1(x), shape))
                 x = x + self.drop_path(self.mlp(self.norm2(x), shape, level_idx))
@@ -803,37 +852,32 @@ class InternImageBlock(nn.Module):
         mlp_fc2_bias (bool): whether to use mlp fc2 bias, Default: False.
         dw_kernel_size (int): Size of the dwconv, Default: None.
         post_norm_block_ids (list): block ids for post normalization, Default: None.
-        res_post_norm (bool): whether to use res post normalization, Default: False.
-        center_feature_scale (bool): whether to use center feature scale, Default: False.
     """
-
-    def __init__(self,
-                 core_op,
-                 channels,
-                 depth,
-                 groups,
-                 downsample=True,
-                 downsample_layer=DownsampleLayer,
-                 mlp_ratio=4.,
-                 drop=0.,
-                 drop_path=0.,
-                 act_layer='GELU',
-                 norm_layer='LN',
-                 post_norm=False,
-                 offset_scale=0.5,
-                 layer_scale=None,
-                 with_cp=False,
-                 dcn_output_bias=False,
-                 mlp_fc2_bias=False,
-                 dw_kernel_size=None, # for InternImage-H/G
-                 post_norm_block_ids: Optional[List[int]]=None, # for InternImage-H/G
-                 res_post_norm=False, # for InternImage-H/G
-                 center_feature_scale=False): # for InternImage-H/G
+    def __init__(
+            self,
+            core_op,
+            channels,
+            depth,
+            groups,
+            downsample=True,
+            downsample_layer=DownsampleLayer,
+            mlp_ratio=4.,
+            drop=0.,
+            drop_path=0.,
+            act_layer='GELU',
+            norm_layer='LN',
+            post_norm=False,
+            offset_scale=0.5,
+            layer_scale=None,
+            with_cp=False,
+            dcn_output_bias=False,
+            mlp_fc2_bias=False,
+            dw_kernel_size=None,
+        ):
         super().__init__()
         self.channels = channels
         self.depth = depth
         self.post_norm = post_norm
-        self.center_feature_scale = center_feature_scale
         self.grad_checkpoint = False
 
         self.blocks = nn.ModuleList([
@@ -843,8 +887,7 @@ class InternImageBlock(nn.Module):
                 groups=groups,
                 mlp_ratio=mlp_ratio,
                 drop=drop,
-                drop_path=drop_path[i] if isinstance(
-                    drop_path, list) else drop_path,
+                drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
                 post_norm=post_norm,
@@ -853,32 +896,18 @@ class InternImageBlock(nn.Module):
                 with_cp=with_cp,
                 dcn_output_bias=dcn_output_bias,
                 mlp_fc2_bias=mlp_fc2_bias,
-                dw_kernel_size=dw_kernel_size, # for InternImage-H/G
-                res_post_norm=res_post_norm, # for InternImage-H/G
-                center_feature_scale=center_feature_scale # for InternImage-H/G
+                dw_kernel_size=dw_kernel_size,
             ) for i in range(depth)
         ])
 
         self.norm = nn.Sequential()
-        if not self.post_norm or center_feature_scale:
+        if not self.post_norm:
             self.norm = build_norm_layer(channels, 'LN')
-        
-        self.if_post_norm = post_norm_block_ids is not None
-        self.post_norm_block_ids: List[int] = [0]
-        self.post_norms = nn.ModuleList()
-        if post_norm_block_ids is not None: # for InternImage-H/G
-            self.post_norm_block_ids = post_norm_block_ids
-            self.post_norms = nn.ModuleList(
-                [build_norm_layer(channels, 'LN', eps=1e-6) for _ in post_norm_block_ids]
-            )
-        self.downsample = downsample_layer(
-            channels=channels, norm_layer=norm_layer) if downsample else None
 
-    @torch.jit.ignore
-    def _forward_post_norm(self, x, i: int):
-        index = self.post_norm_block_ids.index(i)
-        x = self.post_norms[index](x) # for InternImage-H/G
-        return x
+        self.downsample = downsample_layer(
+                            channels=channels, 
+                            norm_layer=norm_layer
+                        ) if downsample else None
     
     @torch.jit.ignore
     def forward_return_wo_downsample(self, x, shape: Optional[Tuple[int, int]]=None, level_idx: int=0):
@@ -887,9 +916,8 @@ class InternImageBlock(nn.Module):
                 x = checkpoint_seq(blk, x)
             else:
                 x = blk(x, shape=shape, level_idx=level_idx)
-            if self.if_post_norm and (i in self.post_norm_block_ids):
-                self._forward_post_norm(x, i)
-        if not self.post_norm or self.center_feature_scale:
+
+        if not self.post_norm:
             x = self.norm(x)
         
         x_ = x.clone()
@@ -905,9 +933,8 @@ class InternImageBlock(nn.Module):
                 x = checkpoint_seq(blk, x)
             else:
                 x = blk(x, shape=shape, level_idx=level_idx)
-            if self.if_post_norm and (i in self.post_norm_block_ids):
-                self._forward_post_norm(x, i)
-        if not self.post_norm or self.center_feature_scale:
+
+        if not self.post_norm:
             x = self.norm(x)
 
         if self.downsample is not None:
@@ -916,19 +943,23 @@ class InternImageBlock(nn.Module):
         return x, shape
 
     def forward(self, x, shape: Optional[Tuple[int, int]]=None, level_idx: int=0):
+        N, H, W, C = x.shape
+        x = x.view(N, H * W, C)
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpoint and not torch.jit.is_scripting():
                 x = checkpoint_seq(blk, x)
             else:
                 x = blk(x, shape=shape, level_idx=level_idx)
-            if self.if_post_norm and (i in self.post_norm_block_ids):
-                self._forward_post_norm(x, i)
-        if not self.post_norm or self.center_feature_scale:
+
+        if not self.post_norm:
             x = self.norm(x)
 
         if self.downsample is not None:
             x, shape = self.downsample(x, shape=shape)
         
+        if shape is not None:
+            H, W = shape
+        x = x.view(N, H, W, -1)
         return x
     
 
@@ -936,7 +967,7 @@ class FlashInternImage(nn.Module):
     r""" FlashInternImage
         A PyTorch impl based on :
             `InternImage: Exploring Large-Scale Vision Foundation Models with Deformable Convolutions`  -
-            https://arxiv.org/pdf/2103.14030
+            https://arxiv.org/pdf/2211.05778
             `DCNv4` - https://arxiv.org/pdf/2401.06197
     Args:
         core_op (str): Core operator. Default: 'DCNv4'
@@ -959,51 +990,41 @@ class FlashInternImage(nn.Module):
         dcn_output_bias (bool): Whether to use dcn output bias. Default: False
         dw_kernel_size (int): Size of the dwconv. Default: None
         global_pool (str): Global pooling type. Default: 'avg'
-        use_clip_projector (bool): Whether to use clip projector. Default: False
-        level2_post_norm (bool): Whether to use level2 post norm. Default: False
-        level2_post_norm_block_ids (list): Indexes of post norm blocks. Default: None
-        res_post_norm (bool): Whether to use res post norm. Default: False
-        center_feature_scale (bool): Whether to use center feature scale. Default: False
         out_indices (tuple): Output from which stages. Default: (0, 1, 2, 3)
     """
-
-    def __init__(self,
-                 core_op='DCNv4',
-                 channels=64,
-                 depths=[3, 4, 18, 5],
-                 groups=[3, 6, 12, 24],
-                 num_classes=1000,
-                 mlp_ratio=4.,
-                 drop_rate=0.,
-                 drop_path_rate=0.2,
-                 drop_path_type='linear',
-                 act_layer='GELU',
-                 norm_layer='LN',
-                 layer_scale=None,
-                 offset_scale=0.5,
-                 post_norm=False,
-                 cls_scale=1.5,
-                 with_cp=False,
-                 mlp_fc2_bias=False,
-                 dcn_output_bias=False,
-                 dw_kernel_size=None,
-                 global_pool='avg',
-                 use_clip_projector=False, # for InternImage-H/G
-                 level2_post_norm=False, # for InternImage-H/G
-                 level2_post_norm_block_ids=None, # for InternImage-H/G
-                 res_post_norm=False, # for InternImage-H/G
-                 center_feature_scale=False, # for InternImage-H/G
-                 out_indices=(0, 1, 2, 3),
-                 **kwargs):
+    def __init__(
+            self,
+            core_op='DCNv4',
+            channels=64,
+            depths=[3, 4, 18, 5],
+            groups=[3, 6, 12, 24],
+            num_classes=1000,
+            mlp_ratio=4.,
+            drop_rate=0.,
+            drop_path_rate=0.2,
+            drop_path_type='linear',
+            act_layer='GELU',
+            norm_layer='LN',
+            layer_scale=None,
+            offset_scale=0.5,
+            post_norm=False,
+            cls_scale=1.5,
+            with_cp=False,
+            mlp_fc2_bias=False,
+            dcn_output_bias=False,
+            dw_kernel_size=None,
+            global_pool='avg',
+            out_indices=(0, 1, 2, 3),
+            **kwargs
+        ):
         super().__init__()
-        self.dcn_version = dcn_version
-        if dcn_version == 'DCNv4':
+        if dcn_version == 'CUDA':
             core_op = 'DCNv4'
         else:
-            warnings.warn('FlashInternImage requires DCNv4, but not found in current enviroment.\n\
-                By default using DCNv3 pure pytorch implementation instead, which will affect the performance.\n\
-                Suggesting install DCNv4 by `pip install DCNv4`')
-            core_op = 'DCNv3'
+            warnings.warn('FlashInternImage requires CUDA version of DCNv4, but not found in current enviroment.\n\
+                By default using DCNv4 pure pytorch implementation instead, which will affect the performance.\n\
+                Suggesting install DCNv4 CUDA version by `pip install DCNv4`')
+            core_op = 'DCNv4'
         self.core_op = core_op
         self.num_classes = num_classes
         self.num_levels = len(depths)
@@ -1013,8 +1034,6 @@ class FlashInternImage(nn.Module):
         self.post_norm = post_norm
         self.mlp_ratio = mlp_ratio
         self.act_layer = act_layer
-        self.use_clip_projector = use_clip_projector
-        self.level2_post_norm_block_ids = level2_post_norm_block_ids
         self.out_indices = out_indices
         self.output_fmt = 'NHWC'
         self.feature_info = []
@@ -1022,15 +1041,14 @@ class FlashInternImage(nn.Module):
         _logger.info(f'using activation layer: {act_layer}')
         _logger.info(f'using main norm layer: {norm_layer}')
         _logger.info(f'using dpr: {drop_path_type}, {drop_path_rate}')
-        _logger.info(f'level2_post_norm: {level2_post_norm}')
-        _logger.info(f'level2_post_norm_block_ids: {level2_post_norm_block_ids}')
-        _logger.info(f'res_post_norm: {res_post_norm}')
 
         in_chans = 3
-        self.patch_embed = StemLayer(in_chans=in_chans,
-                                     out_chans=channels,
-                                     act_layer=act_layer,
-                                     norm_layer=norm_layer)
+        self.patch_embed = StemLayer(
+                            in_chans=in_chans,
+                            out_chans=channels,
+                            act_layer=act_layer,
+                            norm_layer=norm_layer
+                        )
         self.pos_drop = nn.Dropout(p=drop_rate)
         self.feature_info.append(dict(num_chs=channels, reduction=2, module='patch_embed'))
 
@@ -1043,9 +1061,6 @@ class FlashInternImage(nn.Module):
    
         self.levels = nn.Sequential()
         for i in range(self.num_levels):
-            post_norm_block_ids = level2_post_norm_block_ids if level2_post_norm and (
-                i == 2) else None # for InternImage-H/G
-
             level = InternImageBlock(
                 core_op=core_op,
                 channels=int(channels * 2**i),
@@ -1064,53 +1079,42 @@ class FlashInternImage(nn.Module):
                 with_cp=with_cp,
                 mlp_fc2_bias=mlp_fc2_bias,
                 dcn_output_bias=dcn_output_bias,
-                dw_kernel_size=dw_kernel_size,  # for InternImage-H/G
-                post_norm_block_ids=post_norm_block_ids, # for InternImage-H/G
-                res_post_norm=res_post_norm, # for InternImage-H/G
-                center_feature_scale=center_feature_scale # for InternImage-H/G
+                dw_kernel_size=dw_kernel_size,
             )
             self.levels.add_module(str(i), level)
             if i < self.num_levels - 1:
                 self.feature_info.append(
-                    dict(num_chs=int(channels * 2 ** (i + 1)), reduction=2 ** (i + 2), module=f'levels.{i}'))
+                    dict(
+                        num_chs=int(channels * 2 ** (i + 1)), 
+                        reduction=2 ** (i + 2), 
+                        module=f'levels.{i}'
+                    ))
             else:
                 self.feature_info.append(
-                    dict(num_chs=int(channels * 2 ** i), reduction=2 ** (i + 1), module=f'levels.{i}'))
+                    dict(
+                        num_chs=int(channels * 2 ** i), 
+                        reduction=2 ** (i + 1), 
+                        module=f'levels.{i}'
+                    ))
         
-        if not use_clip_projector: # for InternImage-T/S/B/L/XL
-            self.conv_head = nn.Sequential(
-                nn.Conv2d(self.num_features,
-                          int(self.num_features * cls_scale),
-                          kernel_size=1,
-                          bias=False),
-                build_norm_layer(int(self.num_features * cls_scale), 'BN',
-                                 'channels_first', 'channels_first'),
-                build_act_layer(act_layer))
-            self.head = nn.Linear(int(self.num_features * cls_scale), num_classes) \
-                if num_classes > 0 else nn.Identity()
-        else: # for InternImage-H/G
-            pretrain_embed_dim, _stride, attnpool_num_heads, clip_embed_dim = 1024, 2, 16, 768
-            self.dcnv3_head_x4 = nn.Sequential(
-                nn.Conv2d(in_channels=self.num_features,
-                          out_channels=pretrain_embed_dim * (_stride ** 2),
-                          kernel_size=1), nn.PixelShuffle(_stride))
-            self.dcnv3_head_x3 = nn.Conv2d(in_channels=self.num_features // 2,
-                                           out_channels=pretrain_embed_dim,
-                                           kernel_size=1)
-            self.clip_projector = AttentionPoolingBlock(
-                dim=pretrain_embed_dim,
-                num_heads=attnpool_num_heads,
-                qkv_bias=True,
-                qk_scale=None,
-                drop=0.,
-                attn_drop=0.,
-                norm_layer=norm_layer,
-                out_dim=clip_embed_dim)
-            self.fc_norm = build_norm_layer(clip_embed_dim, norm_layer, eps=1e-6)
-            self.head = nn.Linear(
-                clip_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.conv_head = nn.Sequential(
+            nn.Conv2d(
+                self.num_features,
+                int(self.num_features * cls_scale),
+                kernel_size=1,
+                bias=False
+            ),
+            build_norm_layer(
+                int(self.num_features * cls_scale), 
+                'BN',
+                'channels_first', 
+                'channels_first'
+            ),
+            build_act_layer(act_layer)
+        )
+        self.head = nn.Linear(int(self.num_features * cls_scale), num_classes) \
+            if num_classes > 0 else nn.Identity()
             
-        # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.pool_type = global_pool
         self.global_pool = SelectAdaptivePool2d(output_size=(1, 1), pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool != '' else nn.Identity()
@@ -1128,9 +1132,9 @@ class FlashInternImage(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def _init_deform_weights(self, m):
-        if dcn_version == 'DCNv4' and isinstance(m, getattr(DCNv4, self.core_op)):
+        if dcn_version == 'CUDA' and isinstance(m, getattr(DCNv4, self.core_op)):
             m._reset_parameters()
-        elif isinstance(m, DCNv3_pytorch):
+        elif isinstance(m, DCNv4_pytorch):
             m._reset_parameters()
 
     @torch.jit.ignore
@@ -1146,13 +1150,20 @@ class FlashInternImage(nn.Module):
         self.num_classes = num_classes
         if num_classes == 0:
             self.conv_head = nn.Sequential(
-                nn.Conv2d(self.num_features,
-                            int(self.num_features),
-                            kernel_size=1,
-                            bias=False),
-                build_norm_layer(int(self.num_features), 'BN',
-                                    'channels_first', 'channels_first'),
-                build_act_layer(self.act_layer))
+                nn.Conv2d(
+                    self.num_features,
+                    int(self.num_features),
+                    kernel_size=1,
+                    bias=False
+                ),
+                build_norm_layer(
+                    int(self.num_features), 
+                    'BN',
+                    'channels_first', 
+                    'channels_first'
+                ),
+                build_act_layer(self.act_layer)
+            )
             
         self.global_pool = SelectAdaptivePool2d(output_size=(1, 1), pool_type=global_pool)
         self.pool_type = global_pool
@@ -1199,14 +1210,11 @@ class FlashInternImage(nn.Module):
         lr_ratios["levels.2.norm"] = lr_ratios['levels.3.blocks.0.']
         return lr_ratios
 
-    def forward_features_no_clip_projector(self, x):
+    def forward_features(self, x):
         x = self.patch_embed(x)
         N, H, W, C = x.shape
-
-        if self.dcn_version == 'DCNv4':
-            x = x.view(N, H * W, C)
-
-        shape=(H, W)
+        x = x.view(N, H * W, C)
+        shape = (H, W)
         for level_idx, level in enumerate(self.levels):
             # old_shape = shape
             x, shape = level.forward_shape(x, shape=shape)   
@@ -1219,69 +1227,25 @@ class FlashInternImage(nn.Module):
 
     @torch.jit.ignore
     def forward_features_seq_out(self, x): # for detection or segmentation
-        x = self.patch_embed(x)
+        x = self.patch_embed(x) 
         N, H, W, C = x.shape
-        if self.dcn_version == 'DCNv4':
-            x = x.view(N, H * W, C)
-        shape=(H, W)
+        x = x.view(N, H * W, C)
+        shape = (H, W)
         seq_out = []
         for level_idx, level in enumerate(self.levels):
             old_shape = shape
             x, x_ , shape = level.forward_return_wo_downsample(x, shape=shape, level_idx=level_idx) 
-            h, w= old_shape
+            h, w = old_shape
             seq_out.append(x_.reshape(N, h, w, -1).permute(0, 3, 1, 2))
         return seq_out
     
-    @torch.jit.ignore
-    def forward_clip_projector(self, x): # for InternImage-H/G
-        xs = self.forward_features_seq_out(x)
-        x1, x2, x3, x4 = xs
-        
-        x1 = x1.permute(0, 3, 1, 2) # NHWC -> NCHW
-        x2 = x2.permute(0, 3, 1, 2) # NHWC -> NCHW
-        x3 = x3.permute(0, 3, 1, 2) # NHWC -> NCHW
-        x4 = x4.permute(0, 3, 1, 2) # NHWC -> NCHW
-
-        x4 = self.dcnv3_head_x4(x4)
-        x = x4
-        x3 = self.dcnv3_head_x3(x3)
-        x = x + x3
-
-        # x = x.flatten(-2).transpose(1, 2).contiguous()
-        # x = self.clip_projector(x)
-        # x = self.fc_norm(x)
-        
-        return x
-
-    def forward_features(self, x):
-        if self.use_clip_projector: # for InternImage-H/G
-            x = self.forward_clip_projector(x)
-        else: # for InternImage-T/S/B/L/XL
-            x = self.forward_features_no_clip_projector(x)
-        return x
-    
-    def forward_head_no_clip_projector(self, x):
+    def forward_head(self, x):
         x = self.conv_head(x.permute(0, 3, 1, 2))
         x = self.global_pool(x)
         x = self.flatten(x)
         if self.pool_type == '':
             x = x.permute(0, 2, 3, 1)
         x = self.head(x)
-        return x
-    
-    @torch.jit.ignore
-    def forward_head_clip_projector(self, x):
-        x = x.flatten(-2).transpose(1, 2).contiguous()
-        x = self.clip_projector(x)
-        x = self.fc_norm(x)
-        x = self.head(x)
-        return x
-
-    def forward_head(self, x):
-        if self.use_clip_projector:
-            x = self.forward_head_clip_projector(x)
-        else:
-            x = self.forward_head_no_clip_projector(x)
         return x
 
     def forward(self, x):
@@ -1350,6 +1314,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='flash_intern_image_l_22kto1k_384.pth',
         input_size=(3, 384, 384),
         pool_size=(12, 12),
+        num_classes=21841,
     ),
     'flash_intern_image_large.384_in22k': _cfg(
         url='https://huggingface.co/OpenGVLab/DCNv4/blob/main/flash_intern_image_l_22k_384.pth',
@@ -1497,10 +1462,10 @@ def _create_flash_intern_image(variant: str, pretrained: bool = False, **kwargs)
 
 
 def _check_pretrained_available(pretrained: bool):
-    if dcn_version == 'DCNv4':
+    if dcn_version == 'CUDA':
         return pretrained
 
-    warnings.warn('DCNv4 is not installed, cannot load pretrained weights')
+    warnings.warn('CUDA version of DCNv4 is not installed, cannot load pretrained weights')
     return False
 
 
