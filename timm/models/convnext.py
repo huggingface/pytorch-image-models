@@ -37,7 +37,6 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # LICENSE file in the root directory of this source tree (Attribution-NonCommercial 4.0 International (CC BY-NC 4.0))
 # No code was used directly from ConvNeXt-V2, however the weights are CC BY-NC 4.0 so beware if using commercially.
 
-from collections import OrderedDict
 from functools import partial
 from typing import Callable, List, Optional, Tuple, Union
 

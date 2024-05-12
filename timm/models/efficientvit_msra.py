@@ -9,7 +9,7 @@ Adapted from official impl at https://github.com/microsoft/Cream/tree/main/Effic
 __all__ = ['EfficientVitMsra']
 import itertools
 from collections import OrderedDict
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -464,7 +464,7 @@ class EfficientVitMsra(nn.Module):
     def get_classifier(self):
         return self.head.linear
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             if global_pool == 'avg':

@@ -25,8 +25,7 @@ Modifed from Timm. https://github.com/rwightman/pytorch-image-models/blob/master
 
 """
 from functools import partial
-from typing import List
-from typing import Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.hub
@@ -419,7 +418,7 @@ class CrossVit(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('token', 'avg')

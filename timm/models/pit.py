@@ -14,13 +14,13 @@ Modifications for timm by / Copyright 2020 Ross Wightman
 import math
 import re
 from functools import partial
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, to_2tuple, LayerNorm
+from timm.layers import trunc_normal_, to_2tuple
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Block
@@ -246,7 +246,7 @@ class PoolingVisionTransformer(nn.Module):
         else:
             return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         if self.head_dist is not None:
