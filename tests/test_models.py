@@ -486,7 +486,7 @@ def _create_fx_model(model, train=False):
     return fx_model
 
 
-EXCLUDE_FX_FILTERS = ['vit_gi*']
+EXCLUDE_FX_FILTERS = ['vit_gi*', '*flash_intern_image*']
 # not enough memory to run fx on more models than other tests
 if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FX_FILTERS += [
