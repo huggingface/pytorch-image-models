@@ -448,18 +448,9 @@ class CrossAttention(nn.Module):
         self.scale = qk_scale or head_dim ** -0.5
         assert all_head_dim == dim
 
-        self.q = nn.Linear(dim, all_head_dim, bias=False)
-        self.k = nn.Linear(dim, all_head_dim, bias=False)
-        self.v = nn.Linear(dim, all_head_dim, bias=False)
-
-        if qkv_bias:
-            self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-            self.k_bias = nn.Parameter(torch.zeros(all_head_dim))
-            self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
-        else:
-            self.q_bias = None
-            self.k_bias = None
-            self.v_bias = None
+        self.q = nn.Linear(dim, all_head_dim, bias=qkv_bias)
+        self.k = nn.Linear(dim, all_head_dim, bias=qkv_bias)
+        self.v = nn.Linear(dim, all_head_dim, bias=qkv_bias)
 
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(all_head_dim, out_dim)
@@ -470,23 +461,17 @@ class CrossAttention(nn.Module):
         N_k = k.shape[1]
         N_v = v.shape[1]
 
-        q_bias, k_bias, v_bias = None, None, None
-        if self.q_bias is not None:
-            q_bias = self.q_bias
-            k_bias = self.k_bias
-            v_bias = self.v_bias
-
-        q = F.linear(input=x, weight=self.q.weight, bias=q_bias)
+        q = self.q(x)
         q = q.reshape(B, N, 1, self.num_heads, -1) \
              .permute(2, 0, 3, 1, 4) \
              .squeeze(0)  # (B, N_head, N_q, dim)
 
-        k = F.linear(input=k, weight=self.k.weight, bias=k_bias)
+        k = self.k(k)
         k = k.reshape(B, N_k, 1, self.num_heads, -1)\
              .permute(2, 0, 3, 1, 4)\
              .squeeze(0)
 
-        v = F.linear(input=v, weight=self.v.weight, bias=v_bias)
+        v = self.v(v)
         v = v.reshape(B, N_v, 1, self.num_heads, -1)\
              .permute(2, 0, 3, 1, 4)\
              .squeeze(0)
@@ -941,9 +926,12 @@ class InternImageStage(nn.Module):
 
         return x, shape
 
+    # duplicated implementation of forward_shape inside forward to avoid torchscript error
+    # and the forward function is to allow feature extraction
     def forward(self, x, shape: Optional[Tuple[int, int]]=None):
         N, H, W, C = x.shape
         x = x.view(N, H * W, C)
+
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpoint and not torch.jit.is_scripting():
                 x = checkpoint_seq(blk, x)
