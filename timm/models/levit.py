@@ -628,7 +628,7 @@ class Levit(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation=None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -730,7 +730,7 @@ class LevitDistilled(Levit):
     def get_classifier(self):
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation=None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool

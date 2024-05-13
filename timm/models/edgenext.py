@@ -8,7 +8,6 @@ Original code and weights from https://github.com/mmaaz60/EdgeNeXt
 Modifications and additions for timm by / Copyright 2022, Ross Wightman
 """
 import math
-from collections import OrderedDict
 from functools import partial
 from typing import Tuple
 
@@ -17,7 +16,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d, \
+from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, create_conv2d, \
     use_fused_attn, NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module

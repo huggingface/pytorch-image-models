@@ -6,6 +6,7 @@ Next-ViT model defs and weights adapted from https://github.com/bytedance/Next-V
 """
 # Copyright (c) ByteDance Inc. All rights reserved.
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -553,7 +554,7 @@ class NextViT(nn.Module):
     def get_classifier(self):
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):

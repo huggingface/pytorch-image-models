@@ -16,7 +16,7 @@ Modifications and timm support by / Copyright 2022, Ross Wightman
 """
 
 import math
-from typing import Tuple, List, Callable, Union
+from typing import Callable, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -379,7 +379,7 @@ class PyramidVisionTransformerV2(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('avg', '')

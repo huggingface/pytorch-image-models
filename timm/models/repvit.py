@@ -16,15 +16,16 @@ Adapted from official impl at https://github.com/jameslahm/RepViT
 """
 
 __all__ = ['RepVit']
-
-import torch.nn as nn
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from ._registry import register_model, generate_default_cfgs
-from ._builder import build_model_with_cfg
-from timm.layers import SqueezeExcite, trunc_normal_, to_ntuple, to_2tuple
-from ._manipulate import checkpoint_seq
+from typing import Optional
 
 import torch
+import torch.nn as nn
+
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.layers import SqueezeExcite, trunc_normal_, to_ntuple, to_2tuple
+from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint_seq
+from ._registry import register_model, generate_default_cfgs
 
 
 class ConvNorm(nn.Sequential):
@@ -322,7 +323,7 @@ class RepVit(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None, distillation=False):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation=False):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
