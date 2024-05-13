@@ -1791,6 +1791,7 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
     'vit_wee_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_pwee_patch16_reg1_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
