@@ -1255,7 +1255,7 @@ def checkpoint_filter_fn(state_dict, model):
         if k.startswith('backbone.'):
             k = k[9:]
         if k.startswith('levels.'):
-            k[:7] = 'stages.'
+            k = 'stages.' + k[7:]
         state_dict[k] = v
 
     if list(state_dict.keys())[0].startswith('module.'):
