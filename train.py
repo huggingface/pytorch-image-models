@@ -171,7 +171,7 @@ scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None
 
 # Device & distributed
 group = parser.add_argument_group('Device parameters')
-group.add_argument('--dist-backend', default='nccl', type=str,
+group.add_argument('--dist-backend', default=None, type=str,
                     help="Distributed backend to use for multi-gpu")
 group.add_argument('--device', default='cuda', type=str,
                     help="Device (accelerator) to use.")
