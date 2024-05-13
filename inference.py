@@ -241,6 +241,7 @@ def main():
         batch_size=args.batch_size,
         use_prefetcher=True,
         num_workers=workers,
+        device=device,
         **data_config,
     )
 

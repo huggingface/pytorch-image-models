@@ -80,7 +80,7 @@ from ._builder import build_model_with_cfg, load_pretrained, load_custom_pretrai
     set_pretrained_download_progress, set_pretrained_check_hash
 from ._factory import create_model, parse_model_name, safe_model_name
 from ._features import FeatureInfo, FeatureHooks, FeatureHookNet, FeatureListNet, FeatureDictNet
-from ._features_fx import FeatureGraphNet, GraphExtractNet, create_feature_extractor, \
+from ._features_fx import FeatureGraphNet, GraphExtractNet, create_feature_extractor, get_graph_node_names, \
     register_notrace_module, is_notrace_module, get_notrace_modules, \
     register_notrace_function, is_notrace_function, get_notrace_functions
 from ._helpers import clean_state_dict, load_state_dict, load_checkpoint, remap_state_dict, resume_checkpoint

@@ -6,6 +6,7 @@ Hacked together by / Copyright 2021 Ross Wightman
 """
 import math
 import logging
+from typing import List
 
 import torch
 
@@ -73,7 +74,7 @@ class PolyLRScheduler(Scheduler):
         else:
             self.warmup_steps = [1 for _ in self.base_values]
 
-    def _get_lr(self, t):
+    def _get_lr(self, t: int) -> List[float]:
         if t < self.warmup_t:
             lrs = [self.warmup_lr_init + t * s for s in self.warmup_steps]
         else:

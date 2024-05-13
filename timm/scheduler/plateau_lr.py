@@ -5,6 +5,7 @@ Adapts PyTorch plateau scheduler and allows application of noise, warmup.
 Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch
+from typing import List
 
 from .scheduler import Scheduler
 
@@ -106,5 +107,5 @@ class PlateauLRScheduler(Scheduler):
             param_group['lr'] = new_lr
         self.restore_lr = restore_lr
 
-    def _get_lr(self, t: int) -> float:
+    def _get_lr(self, t: int) -> List[float]:
         assert False, 'should not be called as step is overridden'

@@ -37,7 +37,6 @@ from timm.layers.pool2d_same import AvgPool2dSame, create_pool2d
 from timm.layers.squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from timm.layers.selective_kernel import SelectiveKernel
 from timm.layers.separable_conv import SeparableConv2d, SeparableConvNormAct
-from timm.layers.space_to_depth import SpaceToDepthModule
 from timm.layers.split_attn import SplitAttn
 from timm.layers.split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from timm.layers.std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame

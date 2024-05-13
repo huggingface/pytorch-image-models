@@ -1,7 +1,7 @@
 """ PyTorch FX Based Feature Extraction Helpers
 Using https://pytorch.org/vision/stable/feature_extraction.html
 """
-from typing import Callable, List, Dict, Union, Type
+from typing import Callable, Dict, List, Optional, Union, Tuple, Type
 
 import torch
 from torch import nn
@@ -9,13 +9,15 @@ from torch import nn
 from ._features import _get_feature_info, _get_return_layers
 
 try:
+    # NOTE we wrap torchvision fns to use timm leaf / no trace definitions
     from torchvision.models.feature_extraction import create_feature_extractor as _create_feature_extractor
+    from torchvision.models.feature_extraction import get_graph_node_names as _get_graph_node_names
     has_fx_feature_extraction = True
 except ImportError:
     has_fx_feature_extraction = False
 
 # Layers we went to treat as leaf modules
-from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame
+from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame, Format
 from timm.layers.non_local_attn import BilinearAttnTransform
 from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 from timm.layers.norm_act import (
@@ -30,7 +32,7 @@ from timm.layers.norm_act import (
 
 __all__ = ['register_notrace_module', 'is_notrace_module', 'get_notrace_modules',
            'register_notrace_function', 'is_notrace_function', 'get_notrace_functions',
-           'create_feature_extractor', 'FeatureGraphNet', 'GraphExtractNet']
+           'create_feature_extractor', 'get_graph_node_names', 'FeatureGraphNet', 'GraphExtractNet']
 
 
 # NOTE: By default, any modules from timm.models.layers that we want to treat as leaf modules go here
@@ -92,6 +94,13 @@ def get_notrace_functions():
     return list(_autowrap_functions)
 
 
+def get_graph_node_names(model: nn.Module) -> Tuple[List[str], List[str]]:
+    return _get_graph_node_names(
+        model,
+        tracer_kwargs={'leaf_modules': list(_leaf_modules), 'autowrap_functions': list(_autowrap_functions)}
+    )
+
+
 def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str], List[str]]):
     assert has_fx_feature_extraction, 'Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction'
     return _create_feature_extractor(
@@ -103,12 +112,19 @@ def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str
 class FeatureGraphNet(nn.Module):
     """ A FX Graph based feature extractor that works with the model feature_info metadata
     """
-    def __init__(self, model, out_indices, out_map=None):
+    def __init__(
+            self,
+            model: nn.Module,
+            out_indices: Tuple[int, ...],
+            out_map: Optional[Dict] = None,
+            output_fmt: str = 'NCHW',
+    ):
         super().__init__()
         assert has_fx_feature_extraction, 'Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction'
         self.feature_info = _get_feature_info(model, out_indices)
         if out_map is not None:
             assert len(out_map) == len(out_indices)
+        self.output_fmt = Format(output_fmt)
         return_nodes = _get_return_layers(self.feature_info, out_map)
         self.graph_module = create_feature_extractor(model, return_nodes)
 
@@ -129,7 +145,12 @@ class GraphExtractNet(nn.Module):
         return_nodes: node names to return features from (dict or list)
         squeeze_out: if only one output, and output in list format, flatten to single tensor
     """
-    def __init__(self, model, return_nodes: Union[Dict[str, str], List[str]], squeeze_out: bool = True):
+    def __init__(
+            self,
+            model: nn.Module,
+            return_nodes: Union[Dict[str, str], List[str]],
+            squeeze_out: bool = True,
+    ):
         super().__init__()
         self.squeeze_out = squeeze_out
         self.graph_module = create_feature_extractor(model, return_nodes)

@@ -47,11 +47,19 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
     torch._C._jit_set_profiling_executor(True)
     torch._C._jit_set_profiling_mode(False)
 
-# transformer models don't support many of the spatial / feature based model functionalities
+# models with forward_intermediates() and support for FeatureGetterNet features_only wrapper
+FEAT_INTER_FILTERS = [
+    'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
+    'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
+    'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet',
+    'regnet', 'byobnet', 'byoanet', 'mlp_mixer'
+]
+
+# transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
-    'poolformer_*', 'volo_*', 'sequencer2d_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*',
+    'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*',
     'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*'
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
@@ -351,7 +359,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
 
 @pytest.mark.features
 @pytest.mark.timeout(120)
-@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS, include_tags=True))
+@pytest.mark.parametrize('model_name', list_models(exclude_filters=EXCLUDE_FILTERS + EXCLUDE_FEAT_FILTERS))
 @pytest.mark.parametrize('batch_size', [1])
 def test_model_forward_features(model_name, batch_size):
     """Run a single forward pass with each model in feature extraction mode"""
@@ -359,7 +367,7 @@ def test_model_forward_features(model_name, batch_size):
     model.eval()
     expected_channels = model.feature_info.channels()
     expected_reduction = model.feature_info.reduction()
-    assert len(expected_channels) >= 4  # all models here should have at least 4 feature levels by default, some 5 or 6
+    assert len(expected_channels) >= 3  # all models here should have at least 3 default feat levels
 
     input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
     if max(input_size) > MAX_FFEAT_SIZE:
@@ -373,6 +381,72 @@ def test_model_forward_features(model_name, batch_size):
     assert len(expected_channels) == len(outputs)
     spatial_size = input_size[-2:]
     for e, r, o in zip(expected_channels, expected_reduction, outputs):
+        assert e == o.shape[feat_axis]
+        assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
+        assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
+        assert o.shape[0] == batch_size
+        assert not torch.isnan(o).any()
+
+
+@pytest.mark.features
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_intermediates_features(model_name, batch_size):
+    """Run a single forward pass with each model in feature extraction mode"""
+    model = create_model(model_name, pretrained=False, features_only=True, feature_cls='getter')
+    model.eval()
+    expected_channels = model.feature_info.channels()
+    expected_reduction = model.feature_info.reduction()
+
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    output_fmt = getattr(model, 'output_fmt', 'NCHW')
+    feat_axis = get_channel_dim(output_fmt)
+    spatial_axis = get_spatial_dim(output_fmt)
+    import math
+
+    outputs = model(torch.randn((batch_size, *input_size)))
+    assert len(expected_channels) == len(outputs)
+    spatial_size = input_size[-2:]
+    for e, r, o in zip(expected_channels, expected_reduction, outputs):
+        print(o.shape)
+        assert e == o.shape[feat_axis]
+        assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
+        assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
+        assert o.shape[0] == batch_size
+        assert not torch.isnan(o).any()
+
+
+@pytest.mark.features
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize('model_name', list_models(module=FEAT_INTER_FILTERS, exclude_filters=EXCLUDE_FILTERS + ['*pruned*']))
+@pytest.mark.parametrize('batch_size', [1])
+def test_model_forward_intermediates(model_name, batch_size):
+    """Run a single forward pass with each model in feature extraction mode"""
+    model = create_model(model_name, pretrained=False)
+    model.eval()
+    feature_info = timm.models.FeatureInfo(model.feature_info, len(model.feature_info))
+    expected_channels = feature_info.channels()
+    expected_reduction = feature_info.reduction()
+    assert len(expected_channels) >= 3  # all models here should have at least 3 feature levels
+
+    input_size = _get_input_size(model=model, target=TARGET_FFEAT_SIZE)
+    if max(input_size) > MAX_FFEAT_SIZE:
+        pytest.skip("Fixed input size model > limit.")
+    output_fmt = 'NCHW'  # NOTE output_fmt determined by forward_intermediates() arg, not model attribute
+    feat_axis = get_channel_dim(output_fmt)
+    spatial_axis = get_spatial_dim(output_fmt)
+    import math
+
+    output, intermediates = model.forward_intermediates(
+        torch.randn((batch_size, *input_size)),
+        output_fmt=output_fmt,
+    )
+    assert len(expected_channels) == len(intermediates)
+    spatial_size = input_size[-2:]
+    for e, r, o in zip(expected_channels, expected_reduction, intermediates):
         assert e == o.shape[feat_axis]
         assert o.shape[spatial_axis[0]] <= math.ceil(spatial_size[0] / r) + 1
         assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
