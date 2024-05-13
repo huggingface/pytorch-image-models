@@ -706,7 +706,7 @@ class MLPLayer(nn.Module):
         self.fc2 = nn.Linear(hidden_features, out_features, bias=mlp_fc2_bias)
         self.drop = nn.Dropout(drop)
 
-    def forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
+    def forward(self, x):
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)
@@ -715,8 +715,8 @@ class MLPLayer(nn.Module):
         return x
     
 
-class InternImageLayer(nn.Module):
-    r""" Basic layer of InternImage
+class InternImageBlock(nn.Module):
+    r""" Basic Block of InternImage
     Args:
         core_op (str): core operation of InternImage
         channels (int): number of input channels
@@ -799,43 +799,43 @@ class InternImageLayer(nn.Module):
                             requires_grad=True
                         )
 
-    def _inner_forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int):
+    def _inner_forward(self, x, shape: Optional[Tuple[int, int]]):
         if not self.layer_scale:
             if self.post_norm:
                 x = x + self.drop_path(self.norm1(self.dcn(x, shape)))
-                x = x + self.drop_path(self.norm2(self.mlp(x, shape, level_idx)))
+                x = x + self.drop_path(self.norm2(self.mlp(x)))
             else:
                 x = x + self.drop_path(self.dcn(self.norm1(x), shape))
-                x = x + self.drop_path(self.mlp(self.norm2(x), shape, level_idx))
+                x = x + self.drop_path(self.mlp(self.norm2(x)))
             return x
         if self.post_norm:
             x = x + self.drop_path(self.gamma1 * self.norm1(self.dcn(x, shape)))
-            x = x + self.drop_path(self.gamma2 * self.norm2(self.mlp(x, shape, level_idx)))
+            x = x + self.drop_path(self.gamma2 * self.norm2(self.mlp(x)))
         else:
             x = x + self.drop_path(self.gamma1 * self.dcn(self.norm1(x), shape))
-            x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x), shape, level_idx))
+            x = x + self.drop_path(self.gamma2 * self.mlp(self.norm2(x)))
         return x
     
     @torch.jit.ignore
-    def forward_checkpoint(self, x, shape: Optional[Tuple[int, int]], level_idx: int = 0):
-        x = checkpoint.checkpoint(self._inner_forward, x, shape, level_idx)
+    def forward_checkpoint(self, x, shape: Optional[Tuple[int, int]]):
+        x = checkpoint.checkpoint(self._inner_forward, x, shape)
         return x
 
-    def forward(self, x, shape: Optional[Tuple[int, int]], level_idx: int=0):
+    def forward(self, x, shape: Optional[Tuple[int, int]]):
         if self.with_cp: #
-            x = self.forward_checkpoint(x, shape, level_idx)
+            x = self.forward_checkpoint(x, shape)
         else:
-            x = self._inner_forward(x, shape, level_idx)
+            x = self._inner_forward(x, shape)
 
         return x
 
 
-class InternImageBlock(nn.Module):
-    r""" Block of InternImage
+class InternImageStage(nn.Module):
+    r""" Stage of InternImage
     Args:
         core_op (str): core operation of InternImage
         channels (int): number of input channels
-        depth (int): Depth of each block.
+        depth (int): Depth of each stage.
         groups (int): Groups of each block.
         downsample (bool): Whether to use downsample, Default: True.
         downsample_layer (nn.Module): Downsample layer, Default: DownsampleLayer.
@@ -851,7 +851,6 @@ class InternImageBlock(nn.Module):
         dcn_output_bias (bool): whether to use dcn output bias, Default: False.
         mlp_fc2_bias (bool): whether to use mlp fc2 bias, Default: False.
         dw_kernel_size (int): Size of the dwconv, Default: None.
-        post_norm_block_ids (list): block ids for post normalization, Default: None.
     """
     def __init__(
             self,
@@ -881,7 +880,7 @@ class InternImageBlock(nn.Module):
         self.grad_checkpoint = False
 
         self.blocks = nn.ModuleList([
-            InternImageLayer(
+            InternImageBlock(
                 core_op=core_op,
                 channels=channels,
                 groups=groups,
@@ -910,12 +909,12 @@ class InternImageBlock(nn.Module):
                         ) if downsample else None
     
     @torch.jit.ignore
-    def forward_return_wo_downsample(self, x, shape: Optional[Tuple[int, int]]=None, level_idx: int=0):
+    def forward_return_wo_downsample(self, x, shape: Optional[Tuple[int, int]]=None):
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpoint and not torch.jit.is_scripting():
                 x = checkpoint_seq(blk, x)
             else:
-                x = blk(x, shape=shape, level_idx=level_idx)
+                x = blk(x, shape=shape)
 
         if not self.post_norm:
             x = self.norm(x)
@@ -927,12 +926,12 @@ class InternImageBlock(nn.Module):
 
         return x, x_, shape
 
-    def forward_shape(self, x, shape: Tuple[int, int], level_idx: int=0):
+    def forward_shape(self, x, shape: Tuple[int, int]):
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpoint and not torch.jit.is_scripting():
                 x = checkpoint_seq(blk, x)
             else:
-                x = blk(x, shape=shape, level_idx=level_idx)
+                x = blk(x, shape=shape)
 
         if not self.post_norm:
             x = self.norm(x)
@@ -942,14 +941,14 @@ class InternImageBlock(nn.Module):
 
         return x, shape
 
-    def forward(self, x, shape: Optional[Tuple[int, int]]=None, level_idx: int=0):
+    def forward(self, x, shape: Optional[Tuple[int, int]]=None):
         N, H, W, C = x.shape
         x = x.view(N, H * W, C)
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpoint and not torch.jit.is_scripting():
                 x = checkpoint_seq(blk, x)
             else:
-                x = blk(x, shape=shape, level_idx=level_idx)
+                x = blk(x, shape=shape)
 
         if not self.post_norm:
             x = self.norm(x)
@@ -1027,10 +1026,10 @@ class FlashInternImage(nn.Module):
             core_op = 'DCNv4'
         self.core_op = core_op
         self.num_classes = num_classes
-        self.num_levels = len(depths)
+        self.num_stages = len(depths)
         self.depths = depths
         self.channels = channels
-        self.num_features = int(channels * 2**(self.num_levels - 1))
+        self.num_features = int(channels * 2**(self.num_stages - 1))
         self.post_norm = post_norm
         self.mlp_ratio = mlp_ratio
         self.act_layer = act_layer
@@ -1059,9 +1058,9 @@ class FlashInternImage(nn.Module):
             for i in range(len(dpr)):
                 dpr[i] = drop_path_rate
    
-        self.levels = nn.Sequential()
-        for i in range(self.num_levels):
-            level = InternImageBlock(
+        self.stages = nn.Sequential()
+        for i in range(self.num_stages):
+            stage = InternImageStage(
                 core_op=core_op,
                 channels=int(channels * 2**i),
                 depth=depths[i],
@@ -1072,7 +1071,7 @@ class FlashInternImage(nn.Module):
                 act_layer=act_layer,
                 norm_layer=norm_layer,
                 post_norm=post_norm,
-                downsample=(i < self.num_levels - 1),
+                downsample=(i < self.num_stages - 1),
                 downsample_layer = DownsampleLayer,
                 layer_scale=layer_scale,
                 offset_scale=offset_scale,
@@ -1081,20 +1080,20 @@ class FlashInternImage(nn.Module):
                 dcn_output_bias=dcn_output_bias,
                 dw_kernel_size=dw_kernel_size,
             )
-            self.levels.add_module(str(i), level)
-            if i < self.num_levels - 1:
+            self.stages.add_module(str(i), stage)
+            if i < self.num_stages - 1:
                 self.feature_info.append(
                     dict(
                         num_chs=int(channels * 2 ** (i + 1)), 
                         reduction=2 ** (i + 2), 
-                        module=f'levels.{i}'
+                        module=f'stages.{i}'
                     ))
             else:
                 self.feature_info.append(
                     dict(
                         num_chs=int(channels * 2 ** i), 
                         reduction=2 ** (i + 1), 
-                        module=f'levels.{i}'
+                        module=f'stages.{i}'
                     ))
         
         self.conv_head = nn.Sequential(
@@ -1175,12 +1174,12 @@ class FlashInternImage(nn.Module):
     def group_matcher(self, coarse: bool = False) -> Dict:
         return dict(
             stem=r'^patch_embed',  # stem and embed
-            blocks=[(r'^levels\.(\d+)', None)]
+            blocks=r'^stages\.(\d+)' if coarse else r'^stages\.(\d+).blocks\.(\d+)'
         )
     
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
-        for l in self.levels:
+        for l in self.stages:
             l.grad_checkpointing = enable
 
     @torch.jit.ignore
@@ -1193,21 +1192,21 @@ class FlashInternImage(nn.Module):
             layer_num = 3 - i  # 3 2 1 0
             for j in range(self.depths[layer_num]):
                 block_num = self.depths[layer_num] - j - 1
-                tag = 'levels.{}.blocks.{}.'.format(layer_num, block_num)
+                tag = 'stages.{}.blocks.{}.'.format(layer_num, block_num)
                 decay = 1.0 * (decay_ratio**idx)
                 lr_ratios[tag] = decay
                 idx += 1
         # patch_embed (before stage-1)
-        lr_ratios["patch_embed"] = lr_ratios['levels.0.blocks.0.']
-        # levels.0.downsample (between stage-1 and stage-2)
-        lr_ratios["levels.0.downsample"] = lr_ratios['levels.1.blocks.0.']
-        lr_ratios["levels.0.norm"] = lr_ratios['levels.1.blocks.0.']
-        # levels.1.downsample (between stage-2 and stage-3)
-        lr_ratios["levels.1.downsample"] = lr_ratios['levels.2.blocks.0.']
-        lr_ratios["levels.1.norm"] = lr_ratios['levels.2.blocks.0.']
-        # levels.2.downsample (between stage-3 and stage-4)
-        lr_ratios["levels.2.downsample"] = lr_ratios['levels.3.blocks.0.']
-        lr_ratios["levels.2.norm"] = lr_ratios['levels.3.blocks.0.']
+        lr_ratios["patch_embed"] = lr_ratios['stages.0.blocks.0.']
+        # stages.0.downsample (between stage-1 and stage-2)
+        lr_ratios["stages.0.downsample"] = lr_ratios['stages.1.blocks.0.']
+        lr_ratios["stages.0.norm"] = lr_ratios['stages.1.blocks.0.']
+        # stages.1.downsample (between stage-2 and stage-3)
+        lr_ratios["stages.1.downsample"] = lr_ratios['stages.2.blocks.0.']
+        lr_ratios["stages.1.norm"] = lr_ratios['stages.2.blocks.0.']
+        # stages.2.downsample (between stage-3 and stage-4)
+        lr_ratios["stages.2.downsample"] = lr_ratios['stages.3.blocks.0.']
+        lr_ratios["stages.2.norm"] = lr_ratios['stages.3.blocks.0.']
         return lr_ratios
 
     def forward_features(self, x):
@@ -1215,9 +1214,9 @@ class FlashInternImage(nn.Module):
         N, H, W, C = x.shape
         x = x.view(N, H * W, C)
         shape = (H, W)
-        for level_idx, level in enumerate(self.levels):
+        for _, stage in enumerate(self.stages):
             # old_shape = shape
-            x, shape = level.forward_shape(x, shape=shape)   
+            x, shape = stage.forward_shape(x, shape=shape)   
         h, w = shape
         x = x.view(N, h, w, -1)
         # x = self.conv_head(x)
@@ -1232,9 +1231,9 @@ class FlashInternImage(nn.Module):
         x = x.view(N, H * W, C)
         shape = (H, W)
         seq_out = []
-        for level_idx, level in enumerate(self.levels):
+        for stage_idx, stage in enumerate(self.stages):
             old_shape = shape
-            x, x_ , shape = level.forward_return_wo_downsample(x, shape=shape, level_idx=level_idx) 
+            x, x_ , shape = stage.forward_return_wo_downsample(x, shape=shape) 
             h, w = old_shape
             seq_out.append(x_.reshape(N, h, w, -1).permute(0, 3, 1, 2))
         return seq_out
@@ -1267,6 +1266,8 @@ def checkpoint_filter_fn(state_dict, model):
     for k, v in _state_dict.items():
         if k.startswith('backbone.'):
             k = k[9:]
+        if k.startswith('levels.'):
+            k[:7] = 'stages.'
         state_dict[k] = v
 
     if list(state_dict.keys())[0].startswith('module.'):
@@ -1591,7 +1592,7 @@ def dino_4scale_flash_intern_image_tiny(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.2,
-        pose_norm=False,
+        post_norm=False,
         with_cp=True,
         output_indices=(1, 2, 3),
     )
@@ -1613,7 +1614,7 @@ def dino_4scale_flash_intern_image_small(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         output_indices=(1, 2, 3),
@@ -1636,7 +1637,7 @@ def dino_4scale_flash_intern_image_base(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         output_indices=(1, 2, 3),
@@ -1659,7 +1660,7 @@ def dino_4scale_flash_intern_image_large(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.4,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         dcn_output_bias=True,
@@ -1684,7 +1685,7 @@ def mask_rcnn_flash_intern_image_tiny(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.2,
-        pose_norm=False,
+        post_norm=False,
         with_cp=True,
         output_indices=(0, 1, 2, 3),
     )
@@ -1706,7 +1707,7 @@ def mask_rcnn_flash_intern_image_small(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         output_indices=(0, 1, 2, 3),
@@ -1729,7 +1730,7 @@ def mask_rcnn_flash_intern_image_base(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         output_indices=(0, 1, 2, 3),
@@ -1752,7 +1753,7 @@ def mask2former_flash_intern_image_tiny(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.2,
-        pose_norm=False,
+        post_norm=False,
         with_cp=False,
         output_indices=(0, 1, 2, 3),
     )
@@ -1774,7 +1775,7 @@ def mask2former_flash_intern_image_small(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=False,
         dw_kernel_size=3,
         output_indices=(0, 1, 2, 3),
@@ -1797,7 +1798,7 @@ def mask2former_flash_intern_image_base(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.4,
-        pose_norm=True,
+        post_norm=True,
         with_cp=False,
         dw_kernel_size=3,
         output_indices=(0, 1, 2, 3),
@@ -1820,7 +1821,7 @@ def mask2former_flash_intern_image_large(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.5,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         dcn_output_bias=True,
@@ -1845,7 +1846,7 @@ def upernet_flash_intern_image_tiny(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.2,
-        pose_norm=False,
+        post_norm=False,
         with_cp=True,
         output_indices=(0, 1, 2, 3),
     )
@@ -1867,7 +1868,7 @@ def upernet_flash_intern_image_small(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=True,
         dw_kernel_size=3,
         output_indices=(0, 1, 2, 3),
@@ -1890,7 +1891,7 @@ def upernet_flash_intern_image_base(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.3,
-        pose_norm=True,
+        post_norm=True,
         with_cp=False,
         dw_kernel_size=3,
         output_indices=(0, 1, 2, 3),
@@ -1913,7 +1914,7 @@ def upernet_flash_intern_image_large(pretrained=False, **kwargs):
         layer_scale=1.,
         mlp_ratio=4.,
         drop_path_rate=0.4,
-        pose_norm=True,
+        post_norm=True,
         with_cp=False,
         dw_kernel_size=3,
         dcn_output_bias=True,
