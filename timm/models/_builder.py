@@ -10,7 +10,8 @@ from torch.hub import load_state_dict_from_url
 from timm.models._features import FeatureListNet, FeatureDictNet, FeatureHookNet, FeatureGetterNet
 from timm.models._features_fx import FeatureGraphNet
 from timm.models._helpers import load_state_dict
-from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf
+from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf,\
+    load_custom_from_hf
 from timm.models._manipulate import adapt_input_conv
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
@@ -185,7 +186,12 @@ def load_pretrained(
     elif load_from == 'hf-hub':
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         if isinstance(pretrained_loc, (list, tuple)):
-            state_dict = load_state_dict_from_hf(*pretrained_loc)
+            custom_load = pretrained_cfg.get('custom_load', False)
+            if isinstance(custom_load, str) and custom_load == 'hf':
+                load_custom_from_hf(*pretrained_loc, model)
+                return
+            else:
+                state_dict = load_state_dict_from_hf(*pretrained_loc)
         else:
             state_dict = load_state_dict_from_hf(pretrained_loc)
     else:
