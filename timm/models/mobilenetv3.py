@@ -622,43 +622,6 @@ def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool =
     return model
 
 
-def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs):
-    """ LCNet
-    Essentially a MobileNet-V3 crossed with a MobileNet-V1
-
-    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
-
-    Args:
-      channel_multiplier: multiplier to number of channels per layer.
-    """
-    arch_def = [
-        # stage 0, 112x112 in
-        ['dsa_r1_k3_s1_c32'],
-        # stage 1, 112x112 in
-        ['dsa_r2_k3_s2_c64'],
-        # stage 2, 56x56 in
-        ['dsa_r2_k3_s2_c128'],
-        # stage 3, 28x28 in
-        ['dsa_r1_k3_s2_c256', 'dsa_r1_k5_s1_c256'],
-        # stage 4, 14x14in
-        ['dsa_r4_k5_s1_c256'],
-        # stage 5, 14x14in
-        ['dsa_r2_k5_s2_c512_se0.25'],
-        # 7x7
-    ]
-    model_kwargs = dict(
-        block_args=decode_arch_def(arch_def),
-        stem_size=16,
-        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
-        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
-        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU),
-        num_features=1280,
-        **kwargs,
-    )
-    model = _create_mnv3(variant, pretrained, **model_kwargs)
-    return model
-
 
 def _cfg(url: str = '', **kwargs):
     return {
