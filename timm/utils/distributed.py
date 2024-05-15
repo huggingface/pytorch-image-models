@@ -111,6 +111,8 @@ def init_distributed_device_so(
     if dist_backend is None:
         # FIXME sane defaults for other device backends?
         dist_backend = 'nccl' if 'cuda' in device else 'gloo'
+        if 'npu' in device:
+            dist_backend = 'hccl'
     dist_url = dist_url or 'env://'
 
     # TBD, support horovod?
@@ -152,6 +154,12 @@ def init_distributed_device_so(
 
     if 'cuda' in device:
         assert torch.cuda.is_available(), f'CUDA is not available but {device} was specified.'
+    if 'npu' in device:
+        try:
+            TORCH_NPU_AVAILABLE = torch.npu.is_available()
+            assert TORCH_NPU_AVAILABLE, f'NPU is not available but {device} was specified.'
+        except ImportError:
+            _logger.info(f"NPU is not available but {device} was specified.")
 
     if distributed and device != 'cpu':
         device, *device_idx = device.split(':', maxsplit=1)

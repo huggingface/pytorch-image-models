@@ -396,6 +396,12 @@ def _try_run(args, initial_batch_size):
         try:
             if torch.cuda.is_available() and 'cuda' in args.device:
                 torch.cuda.empty_cache()
+            if 'npu' in args.device:
+                try:
+                    torch.npu.is_available()
+                    torch.npu.empty_cache()
+                except ImportError:
+                    _logger.info("NPU is not available but {args.device} was specified.")
             results = validate(args)
             return results
         except RuntimeError as e:

@@ -22,6 +22,7 @@ from timm.layers import apply_test_time_pool
 from timm.models import create_model
 from timm.utils import AverageMeter, setup_default_logging, set_jit_fuser, ParseKwargs
 
+
 try:
     from apex import amp
     has_apex = True
