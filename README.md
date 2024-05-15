@@ -30,6 +30,7 @@
 * Support loading PaliGemma jax weights into SigLIP ViT models with average pooling.
 * Add Hiera models from Meta (https://github.com/facebookresearch/hiera).
 * Add `normalize=` flag for transorms, return non-normalized torch.Tensor with original dytpe (for `chug`)
+* Version 1.0.3 release
 
 ### May 11, 2024
 * `Searching for Better ViT Baselines (For the GPU Poor)` weights and vit variants released. Exploring model shapes between Tiny and Base.
