@@ -1,18 +1,18 @@
 """ ViTamin
 
 Paper: Designing Scalable Vison Models in the Vision-Language Era
+Model Weights on Huggingface: https://huggingface.co/collections/jienengchen/vitamin-family-661048126b72debdaca060bf
 
-@misc{chen2023designing,
-      title={Designing Scalable Vison Models in the Vision-Language Era},
-      author={Jieneng Chen and Qihang Yu and Xiaohui Shen and Alan Yuille and Liang-Cheih Chen},
-      year={2023},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@inproceedings{chen2024vitamin,
+  title={ViTamin: Designing Scalable Vision Models in the Vision-language Era},
+  author={Chen, Jieneng and Yu, Qihang and Shen, Xiaohui and Yuille, Alan and Chen, Liang-Chieh},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  year={2024}
 }
 
 Based on Apache 2.0 licensed code at https://github.com/ViTamin/ViTamin
 
-Modifications and timm support by Jieneng Chen 2023
+Modifications and timm support by Jieneng Chen 2024
 
 Reference:
 https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
@@ -121,7 +121,6 @@ class Downsample2d(nn.Module):
     ):
         super().__init__()
         self.pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
-
 
         if dim != dim_out:
             self.expand = nn.Conv2d(dim, dim_out, 1, bias=bias) # 1x1 conv
@@ -531,3 +530,10 @@ def vitamin_xlarge_384(pretrained=False, **kwargs) -> VisionTransformer:
     model = _create_vision_transformer_hybrid(
         'vitamin_xlarge_384', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+if __name__ == "__main__":
+    model = timm.create_model('vitamin_large', num_classes=10).cuda()
+    x = torch.rand([2,3,224,224]).cuda()
+    y = model(x)
+    print(y.shape)
