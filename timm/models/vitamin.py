@@ -1,7 +1,7 @@
 """ ViTamin
 
 Paper: Designing Scalable Vison Models in the Vision-Language Era
-Model Weights on Huggingface: https://huggingface.co/collections/jienengchen/vitamin-family-661048126b72debdaca060bf
+A family of model weights on Huggingface: https://huggingface.co/collections/jienengchen/vitamin-family-661048126b72debdaca060bf
 
 @inproceedings{chen2024vitamin,
   title={ViTamin: Designing Scalable Vision Models in the Vision-language Era},
@@ -530,10 +530,3 @@ def vitamin_xlarge_384(pretrained=False, **kwargs) -> VisionTransformer:
     model = _create_vision_transformer_hybrid(
         'vitamin_xlarge_384', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
     return model
-
-
-if __name__ == "__main__":
-    model = timm.create_model('vitamin_large', num_classes=10).cuda()
-    x = torch.rand([2,3,224,224]).cuda()
-    y = model(x)
-    print(y.shape)
