@@ -343,6 +343,7 @@ class DCNv4_pytorch(nn.Module):
         self.remove_center = int(remove_center)
         self.without_pointwise = without_pointwise
 
+        self.P = int(kernel_size * kernel_size - self.remove_center)
         self.K =  group * (kernel_size * kernel_size - self.remove_center)
         if dw_kernel_size is not None:
             self.offset_mask_dw = \
@@ -391,8 +392,10 @@ class DCNv4_pytorch(nn.Module):
         else:
             offset_mask_input = input
         offset_mask = self.offset_mask(offset_mask_input).reshape(N, H, W, -1)
-        offset = offset_mask[:, :, :, :self.K * 2]
-        mask = offset_mask[:, :, :, self.K * 2: self.K * 3]
+        offset_mask_no_pad = offset_mask[:, :, :, : self.K * 3]
+        offset_mask_no_pad = offset_mask_no_pad.unflatten(-1, (self.group, self.P * 3))
+        offset = offset_mask_no_pad[:, :, :, :, : self.P * 2].flatten(-2)
+        mask = offset_mask_no_pad[:, :, :, :, self.P * 2: self.P * 3].flatten(-2)
         # offset = self.offset(offset_mask_input).reshape(N, H, W, -1)
         # mask = self.mask(offset_mask_input).reshape(N, H, W, -1)
         x = dcnv4_core_pytorch(
