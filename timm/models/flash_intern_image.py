@@ -29,6 +29,7 @@ from ._manipulate import checkpoint_seq
 from typing import Dict, Any, Tuple, Optional, List
 import warnings
 import logging
+import math
 
 __all__ = ['FlashInternImage']
 
@@ -40,6 +41,12 @@ try:
     import DCNv4
 except ImportError:
     dcn_version = 'pytorch'
+
+has_yacs = True
+try:
+    import yacs
+except ImportError:
+    has_yacs = False
     
 
 class to_channels_first(nn.Module):
@@ -340,21 +347,21 @@ class DCNv4_pytorch(nn.Module):
         if dw_kernel_size is not None:
             self.offset_mask_dw = \
                 nn.Conv2d(channels, channels, dw_kernel_size, stride=1, padding=(dw_kernel_size - 1) // 2, groups=channels)
-        # self.offset_mask = nn.Linear(channels, int(math.ceil((self.K * 3)/8)*8))
-        self.offset = nn.Linear(channels, self.K * 2)
-        self.mask = nn.Linear(channels, self.K)
+        self.offset_mask = nn.Linear(channels, int(math.ceil((self.K * 3)/8)*8))
+        # self.offset = nn.Linear(channels, self.K * 2)
+        # self.mask = nn.Linear(channels, self.K)
         if not without_pointwise:
             self.value_proj = nn.Linear(channels, channels)
             self.output_proj = nn.Linear(channels, channels, bias=output_bias)
         self._reset_parameters()
 
     def _reset_parameters(self):
-        # constant_(self.offset_mask.weight.data, 0.)
-        # constant_(self.offset_mask.bias.data, 0.)
-        constant_(self.offset.weight.data, 0.)
-        constant_(self.offset.bias.data, 0.)
-        constant_(self.mask.weight.data, 0.)
-        constant_(self.mask.bias.data, 0.)
+        constant_(self.offset_mask.weight.data, 0.)
+        constant_(self.offset_mask.bias.data, 0.)
+        # constant_(self.offset.weight.data, 0.)
+        # constant_(self.offset.bias.data, 0.)
+        # constant_(self.mask.weight.data, 0.)
+        # constant_(self.mask.bias.data, 0.)
         if not self.without_pointwise:
             xavier_uniform_(self.value_proj.weight.data)
             constant_(self.value_proj.bias.data, 0.)
@@ -383,9 +390,11 @@ class DCNv4_pytorch(nn.Module):
             offset_mask_input = offset_mask_input.permute(0, 2, 3, 1).view(N, L, C)
         else:
             offset_mask_input = input
-        # offset_mask = self.offset_mask(offset_mask_input).reshape(N, H, W, -1)
-        offset = self.offset(offset_mask_input).reshape(N, H, W, -1)
-        mask = self.mask(offset_mask_input).reshape(N, H, W, -1)
+        offset_mask = self.offset_mask(offset_mask_input).reshape(N, H, W, -1)
+        offset = offset_mask[:, :, :, :self.K * 2]
+        mask = offset_mask[:, :, :, self.K * 2: self.K * 3]
+        # offset = self.offset(offset_mask_input).reshape(N, H, W, -1)
+        # mask = self.mask(offset_mask_input).reshape(N, H, W, -1)
         x = dcnv4_core_pytorch(
             x,
             offset,
@@ -1002,6 +1011,7 @@ class FlashInternImage(nn.Module):
             dw_kernel_size=None,
             global_pool='avg',
             out_indices=(0, 1, 2, 3),
+            show_model_info=False,
             **kwargs
         ):
         super().__init__()
@@ -1024,10 +1034,19 @@ class FlashInternImage(nn.Module):
         self.out_indices = out_indices
         self.output_fmt = 'NHWC'
         self.feature_info = []
-        _logger.info(f'use core type: {core_op}')
-        _logger.info(f'using activation layer: {act_layer}')
-        _logger.info(f'using main norm layer: {norm_layer}')
-        _logger.info(f'using dpr: {drop_path_type}, {drop_path_rate}')
+        if show_model_info:
+            _logger.info(f'use core type: {core_op}')
+            _logger.info(f'num_classes: {num_classes}')
+            _logger.info(f'num_stages: {self.num_stages}')
+            _logger.info(f'depths: {depths}')
+            _logger.info(f'groups: {groups}')
+            _logger.info(f'channels: {channels}')
+            _logger.info(f'num_features: {self.num_features}')
+            _logger.info(f'mlp_ratio: {mlp_ratio}')
+            _logger.info(f'drop_rate: {drop_rate}')
+            _logger.info(f'using activation layer: {act_layer}')
+            _logger.info(f'using main norm layer: {norm_layer}')
+            _logger.info(f'using dpr: {drop_path_type}, {drop_path_rate}')
 
         in_chans = 3
         self.patch_embed = StemLayer(
@@ -1451,10 +1470,10 @@ def _create_flash_intern_image(variant: str, pretrained: bool = False, **kwargs)
 
 
 def _check_pretrained_available(pretrained: bool):
-    if dcn_version == 'CUDA':
+    if has_yacs:
         return pretrained
 
-    warnings.warn('CUDA version of DCNv4 is not installed, cannot load pretrained weights')
+    warnings.warn('Current pretrained weights need `yacs` to load, but not found in current enviroment.\n')
     return False
 
 
