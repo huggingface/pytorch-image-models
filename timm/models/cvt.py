@@ -378,11 +378,14 @@ class CvTStage(nn.Module):
             trunc_normal_(self.cls_token, std=.02)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.probe(x)
+        
         x = self.conv_embed(x)
+        x = self.probe(x)
         x = self.embed_drop(x)
 
-        cls_token = self.cls_token.expand(x.shape[0], -1, -1) if self.cls_token is not None else None
+        cls_token = self.embed_drop(
+            self.cls_token.expand(x.shape[0], -1, -1)
+        ) if self.cls_token is not None else None
         for block in self.blocks: # technically possible to exploit nn.Sequential's untyped intermediate results if each block takes in a tensor
             x, cls_token = block(x, cls_token)
         
