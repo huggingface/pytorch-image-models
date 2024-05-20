@@ -378,7 +378,7 @@ class CvTStage(nn.Module):
             trunc_normal_(self.cls_token, std=.02)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.probe(x)
+        x = self.probe(x)
         x = self.conv_embed(x)
         x = self.embed_drop(x)
 
