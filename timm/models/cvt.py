@@ -297,7 +297,7 @@ class CvTBlock(nn.Module):
             cls_token, x = torch.split(x, [1, H*W], 1)
         
         x = x.transpose(1, 2).reshape(B, C, H, W)
-        self.probe(x)
+        x = self.probe(x)
         
         return x, cls_token
 
