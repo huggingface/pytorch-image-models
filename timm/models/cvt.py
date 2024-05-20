@@ -268,6 +268,7 @@ class CvTBlock(nn.Module):
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.probe = nn.Identity()
 
     def add_cls_token(
         self, 
@@ -296,6 +297,7 @@ class CvTBlock(nn.Module):
             cls_token, x = torch.split(x, [1, H*W], 1)
         
         x = x.transpose(1, 2).reshape(B, C, H, W)
+        self.probe(x)
         
         return x, cls_token
 
