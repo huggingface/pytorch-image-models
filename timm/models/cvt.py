@@ -268,7 +268,6 @@ class CvTBlock(nn.Module):
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.probe = nn.Identity()
 
     def add_cls_token(
         self, 
@@ -301,7 +300,6 @@ class CvTBlock(nn.Module):
             cls_token, x = torch.split(x, [1, H*W], 1)
         
         x = x.transpose(1, 2).reshape(B, C, H, W)
-        x = self.probe(x)
         
         return x, cls_token
 
@@ -377,15 +375,12 @@ class CvTStage(nn.Module):
             )
             blocks.append(block)
         self.blocks = nn.ModuleList(blocks)
-        self.probe = nn.Identity()
 
         if self.cls_token is not None:
             trunc_normal_(self.cls_token, std=.02)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        
         x = self.conv_embed(x)
-        x = self.probe(x)
         x = self.embed_drop(x)
 
         cls_token = self.embed_drop(
