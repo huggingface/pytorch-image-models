@@ -10,7 +10,7 @@ Implementation for timm by / Copyright 2024, Fredo Guan
 
 from collections import OrderedDict
 from functools import partial
-from typing import List, Final, Optional, Tuple
+from typing import List, Final, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -379,17 +379,17 @@ class CvTStage(nn.Module):
         if self.cls_token is not None:
             trunc_normal_(self.cls_token, std=.02)
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         x = self.conv_embed(x)
         x = self.embed_drop(x)
 
         cls_token = self.embed_drop(
             self.cls_token.expand(x.shape[0], -1, -1)
         ) if self.cls_token is not None else None
-        for block in self.blocks: # technically possible to exploit nn.Sequential's untyped intermediate results if each block takes in a tensor
+        for block in self.blocks: # TODO technically possible to exploit nn.Sequential's untyped intermediate results if each block takes in a tuple
             x, cls_token = block(x, cls_token)
         
-        return x, cls_token
+        return (x, cls_token) if self.cls_token is not None else x
 
 class CvT(nn.Module):
     def __init__(
@@ -429,8 +429,8 @@ class CvT(nn.Module):
         assert num_stages == len(embed_padding) == len(num_heads) == len(use_cls_token)
         self.num_classes = num_classes
         self.num_features = dims[-1]
+        self.feature_info = []
         
-        # FIXME only on last stage, no need for tuple
         self.use_cls_token = use_cls_token[-1]
         
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
@@ -473,7 +473,8 @@ class CvT(nn.Module):
             )
             in_chs = dim
             stages.append(stage)
-        self.stages = nn.ModuleList(stages)
+            self.feature_info += [dict(num_chs=dim, reduction=2, module=f'stages.{stage_idx}')]
+        self.stages = nn.Sequential(*stages)
         
         self.norm = norm_layer(dims[-1])
         self.head = nn.Linear(dims[-1], num_classes) if num_classes > 0 else nn.Identity()
@@ -481,11 +482,11 @@ class CvT(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         
         for stage in self.stages:
-            x, cls_token = stage(x)
+            x = stage(x)
             
         
         if self.use_cls_token:
-            return self.head(self.norm(cls_token.flatten(1)))
+            return self.head(self.norm(x[1].flatten(1)))
         else:
             return self.head(self.norm(x.mean(dim=(2,3))))
             
@@ -493,8 +494,6 @@ class CvT(nn.Module):
         
 def checkpoint_filter_fn(state_dict, model):
     """ Remap MSFT checkpoints -> timm """
-    if 'head.fc.weight' in state_dict:
-        return state_dict  # non-MSFT checkpoint
 
     if 'state_dict' in state_dict:
         state_dict = state_dict['state_dict']
@@ -524,14 +523,13 @@ def _create_cvt(variant, pretrained=False, **kwargs):
 
     return model
 
-# TODO update first_conv
 def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (14, 14),
         'crop_pct': 0.95, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stem.conv', 'classifier': 'head',
+        'first_conv': 'stages.0.conv_embed.conv', 'classifier': 'head',
         **kwargs
     }
     
