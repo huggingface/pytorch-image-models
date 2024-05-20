@@ -288,9 +288,13 @@ class CvTBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, cls_token: Optional[torch.Tensor]) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         B, C, H, W = x.shape
-
-        x = (torch.cat((cls_token, x.flatten(2).transpose(1, 2)), dim=1) if cls_token is not None else x.flatten(2).transpose(1, 2)) \
-            + self.drop_path1(self.ls1(self.fw_attn(self.norm1(x), cls_token)))
+        res = torch.cat((cls_token, x.flatten(2).transpose(1, 2)), dim=1) if cls_token is not None else x.flatten(2).transpose(1, 2)
+        
+        x = self.norm1(torch.cat((cls_token, x.flatten(2).transpose(1, 2)), dim=1) if cls_token is not None else x.flatten(2).transpose(1, 2))
+        if self.use_cls_token:
+            cls_token, x = torch.split(x, [1, H*W], 1)
+        
+        x = res + self.drop_path1(self.ls1(self.fw_attn(x.transpose(1, 2).reshape(B, C, H, W), cls_token)))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
 
         if self.use_cls_token:
