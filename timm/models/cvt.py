@@ -344,7 +344,7 @@ class CvTStage(nn.Module):
             kernel_size = embed_kernel_size,
             stride = embed_stride,
             padding = embed_padding,
-            norm_layer = input_norm_layer,
+            norm_layer = embed_norm_layer,
         )
         self.embed_drop = nn.Dropout(proj_drop)
         
