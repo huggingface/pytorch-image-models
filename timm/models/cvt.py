@@ -70,7 +70,7 @@ class ConvProj(nn.Module):
         self.dim = dim
         
         # FIXME not working, bn layer outputs are incorrect
-        '''
+        
         self.conv_q = ConvNormAct(
             dim,
             dim,
@@ -143,7 +143,8 @@ class ConvProj(nn.Module):
                     groups=dim
                 )),
                 ('bn', nn.BatchNorm2d(dim)),]))
-
+        '''
+        
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         B, C, H, W = x.shape
         # [B, C, H, W] -> [B, H*W, C]
@@ -170,7 +171,7 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = dim ** -0.5
-        self.fused_attn = False #use_fused_attn()
+        self.fused_attn = use_fused_attn()
         
         self.proj_q = nn.Linear(dim, dim, bias=qkv_bias)
         self.proj_k = nn.Linear(dim, dim, bias=qkv_bias)
@@ -534,7 +535,22 @@ def _cfg(url='', **kwargs):
     }
     
 default_cfgs = generate_default_cfgs({
-    'cvt_13.msft_in1k': _cfg(url='https://files.catbox.moe/xz97kh.pth'),
+    'cvt_13.msft_in1k': _cfg(
+        url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-13-224x224-IN-1k.pth'),
+    'cvt_13.msft_in1k_384': _cfg(
+        url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-13-384x384-IN-1k.pth',
+        input_size=(3, 384, 384), pool_size=(24, 24)),
+    'cvt_13.msft_in22k_ft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-13-384x384-IN-22k.pth',
+        input_size=(3, 384, 384), pool_size=(24, 24)),
+    
+    'cvt_21.msft_in1k': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-21-224x224-IN-1k.pth'),
+    'cvt_21.msft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-21-384x384-IN-1k.pth',
+        input_size=(3, 384, 384), pool_size=(24, 24)),
+    'cvt_21.msft_in22k_ft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-21-384x384-IN-22k.pth',
+        input_size=(3, 384, 384), pool_size=(24, 24)),
+    
+    'cvt_w24.msft_in22k_ft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-w24-384x384-IN-22k.pth',
+        input_size=(3, 384, 384), pool_size=(24, 24)),
 })
 
 
@@ -542,3 +558,13 @@ default_cfgs = generate_default_cfgs({
 def cvt_13(pretrained=False, **kwargs) -> CvT:
     model_args = dict(depths=(1, 2, 10), dims=(64, 192, 384), num_heads=(1, 3, 6))
     return _create_cvt('cvt_13', pretrained=pretrained, **dict(model_args, **kwargs))
+
+@register_model
+def cvt_21(pretrained=False, **kwargs) -> CvT:
+    model_args = dict(depths=(1, 4, 16), dims=(64, 192, 384), num_heads=(1, 3, 6))
+    return _create_cvt('cvt_21', pretrained=pretrained, **dict(model_args, **kwargs))
+    
+@register_model
+def cvt_w24(pretrained=False, **kwargs) -> CvT:
+    model_args = dict(depths=(2, 2, 20), dims=(192, 768, 1024), num_heads=(3, 12, 16))
+    return _create_cvt('cvt_w24', pretrained=pretrained, **dict(model_args, **kwargs))
