@@ -109,41 +109,7 @@ class ConvProj(nn.Module):
             norm_layer=norm_layer,
             act_layer=act_layer
         )
-        '''
-        self.conv_q = nn.Sequential(OrderedDict([
-                ('conv', nn.Conv2d(
-                    dim,
-                    dim,
-                    kernel_size=kernel_size,
-                    padding=padding,
-                    stride=stride_q,
-                    bias=bias,
-                    groups=dim
-                )),
-                ('bn', nn.BatchNorm2d(dim)),]))
-        self.conv_k = nn.Sequential(OrderedDict([
-                ('conv', nn.Conv2d(
-                    dim,
-                    dim,
-                    kernel_size=kernel_size,
-                    padding=padding,
-                    stride=stride_kv,
-                    bias=bias,
-                    groups=dim
-                )),
-                ('bn', nn.BatchNorm2d(dim)),]))
-        self.conv_v = nn.Sequential(OrderedDict([
-                ('conv', nn.Conv2d(
-                    dim,
-                    dim,
-                    kernel_size=kernel_size,
-                    padding=padding,
-                    stride=stride_kv,
-                    bias=bias,
-                    groups=dim
-                )),
-                ('bn', nn.BatchNorm2d(dim)),]))
-        '''
+
         
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         B, C, H, W = x.shape
