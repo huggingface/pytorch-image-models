@@ -638,47 +638,47 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],
+                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
                 # stage 1, 56x56 in
                 [
-                    'uir_r1_a3_k5_s2_e4_c80',
-                    'uir_r1_a3_k3_s1_e2_c80',
+                    'uir_r1_a3_k5_s2_e4_c80',  # ExtraDW
+                    'uir_r1_a3_k3_s1_e2_c80',  # ExtraDW
                 ],
                 # stage 2, 28x28 in
                 [
-                    'uir_r1_a3_k5_s2_e6_c160',
-                    'uir_r1_a0_k0_s1_e2_c160',
-                    'uir_r1_a3_k3_s1_e4_c160',
-                    'uir_r1_a3_k5_s1_e4_c160',
-                    'mqa_r1_k3_h4_s1_v2_d64_c160',
-                    'uir_r1_a3_k3_s1_e4_c160',
-                    'mqa_r1_k3_h4_s1_v2_d64_c160',
-                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
-                    'mqa_r1_k3_h4_s1_v2_d64_c160',
-                    'uir_r1_a3_k3_s1_e4_c160',
-                    'mqa_r1_k3_h4_s1_v2_d64_c160',
-                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
+                    'uir_r1_a3_k5_s2_e6_c160',  # ExtraDW
+                    'uir_r1_a0_k0_s1_e2_c160',  # FFN
+                    'uir_r1_a3_k3_s1_e4_c160',  # ExtraDW
+                    'uir_r1_a3_k5_s1_e4_c160',  # ExtraDW
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',  # MQA w/ KV downsample
+                    'uir_r1_a3_k3_s1_e4_c160',  # ExtraDW
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',  # MQA w/ KV downsample
+                    'uir_r1_a3_k0_s1_e4_c160',  # ConvNeXt
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',  # MQA w/ KV downsample
+                    'uir_r1_a3_k3_s1_e4_c160',  # ExtraDW
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',  # MQA w/ KV downsample
+                    'uir_r1_a3_k0_s1_e4_c160',  # ConvNeXt
                 ],
                 # stage 3, 14x14in
                 [
-                    'uir_r1_a5_k5_s2_e6_c256',
-                    'uir_r1_a5_k5_s1_e4_c256',
-                    'uir_r2_a3_k5_s1_e4_c256',
-                    'uir_r1_a0_k0_s1_e2_c256',
-                    'uir_r1_a3_k5_s1_e2_c256',
-                    'uir_r1_a0_k0_s1_e2_c256',
-                    'uir_r1_a0_k0_s1_e4_c256',
-                    'mqa_r1_k3_h4_s1_d64_c256',
-                    'uir_r1_a3_k0_s1_e4_c256',  # convnext
-                    'mqa_r1_k3_h4_s1_d64_c256',
-                    'uir_r1_a5_k5_s1_e4_c256',
-                    'mqa_r1_k3_h4_s1_d64_c256',
-                    'uir_r1_a5_k0_s1_e4_c256',  # convnext4
-                    'mqa_r1_k3_h4_s1_d64_c256',
-                    'uir_r1_a5_k0_s1_e4_c256',  # convnext4
+                    'uir_r1_a5_k5_s2_e6_c256',  # ExtraDW
+                    'uir_r1_a5_k5_s1_e4_c256',  # ExtraDW
+                    'uir_r2_a3_k5_s1_e4_c256',  # ExtraDW
+                    'uir_r1_a0_k0_s1_e2_c256',  # FFN
+                    'uir_r1_a3_k5_s1_e2_c256',  # ExtraDW
+                    'uir_r1_a0_k0_s1_e2_c256',  # FFN
+                    'uir_r1_a0_k0_s1_e4_c256',  # FFN
+                    'mqa_r1_k3_h4_s1_d64_c256',  # MQA
+                    'uir_r1_a3_k0_s1_e4_c256',  # ConvNeXt
+                    'mqa_r1_k3_h4_s1_d64_c256', # MQA
+                    'uir_r1_a5_k5_s1_e4_c256',  # ExtraDW
+                    'mqa_r1_k3_h4_s1_d64_c256', # MQA
+                    'uir_r1_a5_k0_s1_e4_c256',  # ConvNeXt
+                    'mqa_r1_k3_h4_s1_d64_c256', # MQA
+                    'uir_r1_a5_k0_s1_e4_c256',  # ConvNeXt
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],
+                ['cn_r1_k1_s1_c960'],  # Conv
             ]
         elif 'large' in variant:
             stem_size = 24
@@ -686,43 +686,43 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
             act_layer = resolve_act_layer(kwargs, 'gelu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],
+                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
                 # stage 1, 56x56 in
                 [
-                    'uir_r1_a3_k5_s2_e4_c96',
-                    'uir_r1_a3_k3_s1_e4_c96',
+                    'uir_r1_a3_k5_s2_e4_c96',  # ExtraDW
+                    'uir_r1_a3_k3_s1_e4_c96',  # ExtraDW
                 ],
                 # stage 2, 28x28 in
                 [
-                    'uir_r1_a3_k5_s2_e4_c192',
-                    'uir_r3_a3_k3_s1_e4_c192',
-                    'uir_r1_a3_k5_s1_e4_c192',
-                    'uir_r2_a5_k3_s1_e4_c192',
-                    'mqa_r1_k3_h8_s1_v2_d48_c192',
-                    'uir_r1_a5_k3_s1_e4_c192',
-                    'mqa_r1_k3_h8_s1_v2_d48_c192',
-                    'uir_r1_a5_k3_s1_e4_c192',
-                    'mqa_r1_k3_h8_s1_v2_d48_c192',
-                    'uir_r1_a5_k3_s1_e4_c192',
-                    'mqa_r1_k3_h8_s1_v2_d48_c192',
-                    'uir_r1_a3_k0_s1_e4_c192',  # convnext
+                    'uir_r1_a3_k5_s2_e4_c192',  # ExtraDW
+                    'uir_r3_a3_k3_s1_e4_c192',  # ExtraDW
+                    'uir_r1_a3_k5_s1_e4_c192',  # ExtraDW
+                    'uir_r2_a5_k3_s1_e4_c192',  # ExtraDW
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',  # MQA w/ KV downsample
+                    'uir_r1_a5_k3_s1_e4_c192',  # ExtraDW
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',  # MQA w/ KV downsample
+                    'uir_r1_a5_k3_s1_e4_c192',  # ExtraDW
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',  # MQA w/ KV downsample
+                    'uir_r1_a5_k3_s1_e4_c192',  # ExtraDW
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',  # MQA w/ KV downsample
+                    'uir_r1_a3_k0_s1_e4_c192',  # ConvNeXt
                 ],
                 # stage 3, 14x14in
                 [
-                    'uir_r4_a5_k5_s2_e4_c512',
-                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
-                    'uir_r1_a5_k3_s1_e4_c512',
-                    'uir_r2_a5_k0_s1_e4_c512',  # convnext
-                    'uir_r1_a5_k3_s1_e4_c512',
-                    'uir_r1_a5_k5_s1_e4_c512',
-                    'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
-                    'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
-                    'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
-                    'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r4_a5_k5_s2_e4_c512',  # ExtraDW
+                    'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'uir_r1_a5_k3_s1_e4_c512',  # ExtraDW
+                    'uir_r2_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'uir_r1_a5_k3_s1_e4_c512',  # ExtraDW
+                    'uir_r1_a5_k5_s1_e4_c512',  # ExtraDW
+                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
                 ],
                 # stage 4, 7x7 in
                 ['cn_r1_k1_s1_c960'],
@@ -736,25 +736,31 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['cn_r1_k3_s2_e1_c32', 'cn_r1_k1_s1_e1_c32'],
+                [
+                    'cn_r1_k3_s2_e1_c32',  # Conv
+                    'cn_r1_k1_s1_e1_c32',  # Conv
+                ],
                 # stage 1, 56x56 in
-                ['cn_r1_k3_s2_e1_c96', 'cn_r1_k1_s1_e1_c64'],
+                [
+                    'cn_r1_k3_s2_e1_c96',  # Conv
+                    'cn_r1_k1_s1_e1_c64',  # Conv
+                ],
                 # stage 2, 28x28 in
                 [
-                    'uir_r1_a5_k5_s2_e3_c96',  # start dw
-                    'uir_r4_a0_k3_s1_e2_c96',  # ir
-                    'uir_r1_a3_k0_s1_e4_c96',  # convnext
+                    'uir_r1_a5_k5_s2_e3_c96',  # ExtraDW
+                    'uir_r4_a0_k3_s1_e2_c96',  # IR
+                    'uir_r1_a3_k0_s1_e4_c96',  # ConvNeXt
                 ],
                 # stage 3, 14x14 in
                 [
-                    'uir_r1_a3_k3_s2_e6_c128',  # start dw
-                    'uir_r1_a5_k5_s1_e4_c128',  # start dw
-                    'uir_r1_a0_k5_s1_e4_c128',  # ir
-                    'uir_r1_a0_k5_s1_e3_c128',  # ir
-                    'uir_r2_a0_k5_s1_e4_c128',  # ir
+                    'uir_r1_a3_k3_s2_e6_c128',  # ExtraDW
+                    'uir_r1_a5_k5_s1_e4_c128',  # ExtraDW
+                    'uir_r1_a0_k5_s1_e4_c128',  # IR
+                    'uir_r1_a0_k5_s1_e3_c128',  # IR
+                    'uir_r2_a0_k5_s1_e4_c128',  # IR
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],  # hard-swish
+                ['cn_r1_k1_s1_c960'],  # Conv
             ]
         elif 'medium' in variant:
             stem_size = 32
@@ -762,36 +768,36 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],
+                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
                 # stage 1, 56x56 in
                 [
-                    'uir_r1_a3_k5_s2_e4_c80',
-                    'uir_r1_a3_k3_s1_e2_c80',
+                    'uir_r1_a3_k5_s2_e4_c80',  # ExtraDW
+                    'uir_r1_a3_k3_s1_e2_c80',  # ExtraDW
                 ],
                 # stage 2, 28x28 in
                 [
-                    'uir_r1_a3_k5_s2_e6_c160',
-                    'uir_r2_a3_k3_s1_e4_c160',
-                    'uir_r1_a3_k5_s1_e4_c160',
-                    'uir_r1_a3_k3_s1_e4_c160',
-                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
-                    'uir_r1_a0_k0_s1_e2_c160',
-                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
+                    'uir_r1_a3_k5_s2_e6_c160',  # ExtraDW
+                    'uir_r2_a3_k3_s1_e4_c160',  # ExtraDW
+                    'uir_r1_a3_k5_s1_e4_c160',  # ExtraDW
+                    'uir_r1_a3_k3_s1_e4_c160',  # ExtraDW
+                    'uir_r1_a3_k0_s1_e4_c160',  # ConvNeXt
+                    'uir_r1_a0_k0_s1_e2_c160',  # ExtraDW
+                    'uir_r1_a3_k0_s1_e4_c160',  # ConvNeXt
                 ],
                 # stage 3, 14x14in
                 [
-                    'uir_r1_a5_k5_s2_e6_c256',
-                    'uir_r1_a5_k5_s1_e4_c256',
-                    'uir_r2_a3_k5_s1_e4_c256',
-                    'uir_r1_a0_k0_s1_e4_c256',
-                    'uir_r1_a3_k0_s1_e4_c256',  # convnext
-                    'uir_r1_a3_k5_s1_e2_c256',
-                    'uir_r1_a5_k5_s1_e4_c256',
-                    'uir_r2_a0_k0_s1_e4_c256',
-                    'uir_r1_a5_k0_s1_e2_c256',  # convnext
+                    'uir_r1_a5_k5_s2_e6_c256',  # ExtraDW
+                    'uir_r1_a5_k5_s1_e4_c256',  # ExtraDW
+                    'uir_r2_a3_k5_s1_e4_c256',  # ExtraDW
+                    'uir_r1_a0_k0_s1_e4_c256',  # FFN
+                    'uir_r1_a3_k0_s1_e4_c256',  # ConvNeXt
+                    'uir_r1_a3_k5_s1_e2_c256',  # ExtraDW
+                    'uir_r1_a5_k5_s1_e4_c256',  # ExtraDW
+                    'uir_r2_a0_k0_s1_e4_c256',  # FFN
+                    'uir_r1_a5_k0_s1_e2_c256',  # ConvNeXt
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],
+                ['cn_r1_k1_s1_c960'],  # Conv
             ]
         elif 'large' in variant:
             stem_size = 24
@@ -799,33 +805,33 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],
+                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
                 # stage 1, 56x56 in
                 [
-                    'uir_r1_a3_k5_s2_e4_c96',
-                    'uir_r1_a3_k3_s1_e4_c96',
+                    'uir_r1_a3_k5_s2_e4_c96',  # ExtraDW
+                    'uir_r1_a3_k3_s1_e4_c96',  # ExtraDW
                 ],
                 # stage 2, 28x28 in
                 [
-                    'uir_r1_a3_k5_s2_e4_c192',
-                    'uir_r3_a3_k3_s1_e4_c192',
-                    'uir_r1_a3_k5_s1_e4_c192',
-                    'uir_r5_a5_k3_s1_e4_c192',
-                    'uir_r1_a3_k0_s1_e4_c192',  # convnext
+                    'uir_r1_a3_k5_s2_e4_c192',  # ExtraDW
+                    'uir_r3_a3_k3_s1_e4_c192',  # ExtraDW
+                    'uir_r1_a3_k5_s1_e4_c192',  # ExtraDW
+                    'uir_r5_a5_k3_s1_e4_c192',  # ExtraDW
+                    'uir_r1_a3_k0_s1_e4_c192',  # ConvNeXt
                 ],
                 # stage 3, 14x14in
                 [
-                    'uir_r4_a5_k5_s2_e4_c512',
-                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
-                    'uir_r1_a5_k3_s1_e4_c512',
-                    'uir_r2_a5_k0_s1_e4_c512',  # convnext
-                    'uir_r1_a5_k3_s1_e4_c512',
-                    'uir_r1_a5_k5_s1_e4_c512',
-                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r4_a5_k5_s2_e4_c512',  # ExtraDW
+                    'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'uir_r1_a5_k3_s1_e4_c512',  # ExtraDW
+                    'uir_r2_a5_k0_s1_e4_c512',  # ConvNeXt
+                    'uir_r1_a5_k3_s1_e4_c512',  # ExtraDW
+                    'uir_r1_a5_k5_s1_e4_c512',  # ExtraDW
+                    'uir_r3_a5_k0_s1_e4_c512',  # ConvNeXt
 
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],
+                ['cn_r1_k1_s1_c960'],  # Conv
             ]
         else:
             assert False, f'Unknown variant {variant}.'
