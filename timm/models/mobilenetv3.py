@@ -622,38 +622,215 @@ def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool =
     return model
 
 
-def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs):
-    """ LCNet
-    Essentially a MobileNet-V3 crossed with a MobileNet-V1
 
-    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+
+def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """Creates a MobileNet-V4 model.
+
+    Ref impl: ?
+    Paper: https://arxiv.org/abs/1905.02244
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
     """
-    arch_def = [
-        # stage 0, 112x112 in
-        ['dsa_r1_k3_s1_c32'],
-        # stage 1, 112x112 in
-        ['dsa_r2_k3_s2_c64'],
-        # stage 2, 56x56 in
-        ['dsa_r2_k3_s2_c128'],
-        # stage 3, 28x28 in
-        ['dsa_r1_k3_s2_c256', 'dsa_r1_k5_s1_c256'],
-        # stage 4, 14x14in
-        ['dsa_r4_k5_s1_c256'],
-        # stage 5, 14x14in
-        ['dsa_r2_k5_s2_c512_se0.25'],
-        # 7x7
-    ]
+    if 'hybrid' in variant:
+        if 'medium' in variant:
+            stem_size = 32
+            num_features = 1280
+            act_layer = resolve_act_layer(kwargs, 'relu')
+            arch_def = [
+                # stage 0, 112x112 in
+                ['er_r1_k3_s2_e4_c48'],
+                # stage 1, 56x56 in
+                ['uir_r1_a3_k5_s2_e4_c80', 'uir_r1_a3_k3_s1_e2_c80'],
+                # stage 2, 28x28 in
+                [
+                    'uir_r1_a3_k5_s2_e6_c160',
+                    'uir_r1_a0_k0_s1_e2_c160',
+                    'uir_r1_a3_k3_s1_e4_c160',
+                    'uir_r1_a3_k5_s1_e4_c160',
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',
+                    'uir_r1_a3_k3_s1_e4_c160',
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',
+                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',
+                    'uir_r1_a3_k3_s1_e4_c160',
+                    'mqa_r1_k3_h4_s1_v2_d64_c160',
+                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
+                ],
+                # stage 3, 14x14in
+                [
+                    'uir_r1_a5_k5_s2_e6_c256',
+                    'uir_r1_a5_k5_s1_e4_c256',
+                    'uir_r2_a3_k5_s1_e4_c256',
+                    'uir_r1_a0_k0_s1_e2_c256',
+                    'uir_r1_a3_k5_s1_e2_c256',
+                    'uir_r1_a0_k0_s1_e2_c256',
+                    'uir_r1_a0_k0_s1_e4_c256',
+                    'mqa_r1_k3_h4_s1_d64_c256',
+                    'uir_r1_a3_k0_s1_e4_c256',  # convnext
+                    'mqa_r1_k3_h4_s1_d64_c256',
+                    'uir_r1_a5_k5_s1_e4_c256',
+                    'mqa_r1_k3_h4_s1_d64_c256',
+                    'uir_r1_a5_k0_s1_e4_c256',  # convnext4
+                    'mqa_r1_k3_h4_s1_d64_c256',
+                    'uir_r1_a5_k0_s1_e4_c256',  # convnext4
+                ],
+                # stage 4, 7x7 in
+                ['cn_r1_k1_s1_c960'],
+            ]
+        elif 'large' in variant:
+            stem_size = 24
+            num_features = 1280
+            act_layer = resolve_act_layer(kwargs, 'gelu')
+            arch_def = [
+                # stage 0, 112x112 in
+                ['er_r1_k3_s2_e4_c48'],
+                # stage 1, 56x56 in
+                ['uir_r1_a3_k5_s2_e4_c96', 'uir_r1_a3_k3_s1_e4_c96'],
+                # stage 2, 28x28 in
+                [
+                    'uir_r1_a3_k5_s2_e4_c192',
+                    'uir_r3_a3_k3_s1_e4_c192',
+                    'uir_r1_a3_k5_s1_e4_c192',
+                    'uir_r2_a5_k3_s1_e4_c192',
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',
+                    'uir_r1_a5_k3_s1_e4_c192',
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',
+                    'uir_r1_a5_k3_s1_e4_c192',
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',
+                    'uir_r1_a5_k3_s1_e4_c192',
+                    'mqa_r1_k3_h8_s1_v2_d48_c192',
+                    'uir_r1_a3_k0_s1_e4_c192',  # convnext
+                ],
+                # stage 3, 14x14in
+                [
+                    'uir_r4_a5_k5_s2_e4_c512',
+                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k3_s1_e4_c512',
+                    'uir_r2_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k3_s1_e4_c512',
+                    'uir_r1_a5_k5_s1_e4_c512',
+                    'mqa_r1_k3_h8_s1_d64_c512',
+                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'mqa_r1_k3_h8_s1_d64_c512',
+                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'mqa_r1_k3_h8_s1_d64_c512',
+                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'mqa_r1_k3_h8_s1_d64_c512',
+                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                ],
+                # stage 4, 7x7 in
+                ['cn_r1_k1_s1_c960'],
+            ]
+        else:
+            assert False, f'Unknown variant {variant}.'
+    else:
+        if 'small' in variant:
+            stem_size = 32
+            num_features = 1280
+            act_layer = resolve_act_layer(kwargs, 'relu')
+            arch_def = [
+                # stage 0, 112x112 in
+                ['cn_r1_k3_s2_e1_c32', 'cn_r1_k1_s1_e1_c32'],
+                # stage 1, 56x56 in
+                ['cn_r1_k3_s2_e1_c96', 'cn_r1_k1_s1_e1_c64'],
+                # stage 2, 28x28 in
+                [
+                    'uir_r1_a5_k5_s2_e3_c96',  # start dw
+                    'uir_r4_a0_k3_s1_e2_c96',  # ir
+                    'uir_r1_a3_k0_s1_e4_c96',  # convnext
+                ],
+                # stage 3, 14x14 in
+                [
+                    'uir_r1_a3_k3_s2_e6_c128',  # start dw
+                    'uir_r1_a5_k5_s1_e4_c128',  # start dw
+                    'uir_r1_a0_k5_s1_e4_c128',  # ir
+                    'uir_r1_a0_k5_s1_e3_c128',  # ir
+                    'uir_r2_a0_k5_s1_e4_c128',  # ir
+                ],
+                # stage 4, 7x7 in
+                ['cn_r1_k1_s1_c960'],  # hard-swish
+            ]
+        elif 'medium' in variant:
+            stem_size = 32
+            num_features = 1280
+            act_layer = resolve_act_layer(kwargs, 'relu')
+            arch_def = [
+                # stage 0, 112x112 in
+                ['er_r1_k3_s2_e4_c48'],
+                # stage 1, 56x56 in
+                ['uir_r1_a3_k5_s2_e4_c80', 'uir_r1_a3_k3_s1_e2_c80'],
+                # stage 2, 28x28 in
+                [
+                    'uir_r1_a5_k3_s2_e6_c160',
+                    'uir_r2_a3_k3_s1_e4_c160',
+                    'uir_r1_a3_k3_s1_e4_c160',
+                    'uir_r1_a3_k3_s1_e4_c160',
+                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
+                    'uir_r2_a0_k0_s1_e2_c160',
+                    'uir_r1_a3_k0_s1_e4_c160',  # convnext
+                ],
+                # stage 3, 14x14in
+                [
+                    'uir_r1_a5_k5_s2_e6_c256',
+                    'uir_r1_a5_k5_s1_e4_c256',
+                    'uir_r2_a3_k5_s1_e4_c256',
+                    'uir_r1_a0_k0_s1_e4_c256',
+                    'uir_r1_a3_k0_s1_e4_c256',  # convnext
+                    'uir_r1_a3_k0_s1_e4_c256',  # convnext
+                    'uir_r1_a3_k5_s1_e2_c256',
+                    'uir_r1_a5_k5_s1_e4_c256',
+                    'uir_r2_a0_k0_s1_e4_c256',
+                    'uir_r1_a5_k0_s1_e2_c256',  # convnext
+                ],
+                # stage 4, 7x7 in
+                ['cn_r1_k1_s1_c960'],
+            ]
+        elif 'large' in variant:
+            stem_size = 24
+            num_features = 1280
+            act_layer = resolve_act_layer(kwargs, 'relu')
+            arch_def = [
+                # stage 0, 112x112 in
+                ['er_r1_k3_s2_e4_c48'],
+                # stage 1, 56x56 in
+                ['uir_r1_a3_k5_s2_e4_c96', 'uir_r1_a3_k3_s1_e4_c96'],
+                # stage 2, 28x28 in
+                [
+                    'uir_r1_a3_k5_s2_e4_c192',
+                    'uir_r3_a3_k3_s1_e4_c192',
+                    'uir_r1_a3_k5_s1_e4_c192',
+                    'uir_r5_a5_k3_s1_e4_c192',
+                    'uir_r1_a3_k0_s1_e4_c192',  # convnext
+                ],
+                # stage 3, 14x14in
+                [
+                    'uir_r4_a5_k5_s2_e4_c512',
+                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k3_s1_e4_c512',
+                    'uir_r2_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k3_s1_e4_c512',
+                    'uir_r1_a5_k5_s1_e4_c512',
+                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+
+                ],
+                # stage 4, 7x7 in
+                ['cn_r1_k1_s1_c960'],
+            ]
+        else:
+            assert False, f'Unknown variant {variant}.'
+
+    se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
-        stem_size=16,
+        num_features=num_features,
+        stem_size=stem_size,
+        fix_stem=channel_multiplier < 0.75,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
-        act_layer=resolve_act_layer(kwargs, 'hard_swish'),
-        se_layer=partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU),
-        num_features=1280,
+        act_layer=act_layer,
+        se_layer=se_layer,
         **kwargs,
     )
     model = _create_mnv3(variant, pretrained, **model_kwargs)
@@ -688,6 +865,9 @@ default_cfgs = generate_default_cfgs({
         origin_url='https://github.com/Alibaba-MIIL/ImageNet21K',
         paper_ids='arXiv:2104.10972v4',
         interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=11221),
+    'mobilenetv3_large_150.untrained': _cfg(
+        interpolation='bicubic'),
+
 
     'mobilenetv3_small_050.lamb_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_050_lambc-4b7bbe87.pth',
@@ -762,6 +942,32 @@ default_cfgs = generate_default_cfgs({
         interpolation='bicubic',
     ),
     "lcnet_150.untrained": _cfg(),
+
+    'mobilenetv4_conv_small': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'mobilenetv4_conv_medium': _cfg(
+        #hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'mobilenetv4_conv_large': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
+
+    'mobilenetv4_hybrid_small': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'mobilenetv4_hybrid_medium': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'mobilenetv4_hybrid_large': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'mobilenetv4_hybrid_medium_075': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
+    'mobilenetv4_hybrid_medium_150': _cfg(
+        # hf_hub_id='timm/',
+        interpolation='bicubic'),
 })
 
 
@@ -776,6 +982,13 @@ def mobilenetv3_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
 def mobilenetv3_large_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
     model = _gen_mobilenet_v3('mobilenetv3_large_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv3_large_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V3 """
+    model = _gen_mobilenet_v3('mobilenetv3_large_100', 1.5, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -916,6 +1129,56 @@ def lcnet_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ PP-LCNet 1.5"""
     model = _gen_lcnet('lcnet_150', 1.5, pretrained=pretrained, **kwargs)
     return model
+
+
+@register_model
+def mobilenetv4_conv_small(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_small', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_conv_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_medium', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_conv_large(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_large', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_hybrid_medium_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Hybrid """
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_hybrid_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Hybrid """
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_hybrid_medium_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Hybrid """
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium_150', 1.5, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_hybrid_large(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Hybrid"""
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_large', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
 
 
 register_model_deprecations(__name__, {

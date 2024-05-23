@@ -139,11 +139,10 @@ def _decode_block_str(block_str):
 
     # if act_layer is None, the model default (passed to model init) will be used
     act_layer = options['n'] if 'n' in options else None
-    exp_kernel_size = _parse_ksize(options['a']) if 'a' in options else 1
-    pw_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
+    start_kernel_size = _parse_ksize(options['a']) if 'a' in options else 1
+    end_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
     force_in_chs = int(options['fc']) if 'fc' in options else 0  # FIXME hack to deal with in_chs issue in TPU def
     num_repeat = int(options['r'])
-    s2d = int(options['d']) if 'd' in options else 0
 
     # each type of block has different valid arguments, fill accordingly
     block_args = dict(
@@ -155,37 +154,69 @@ def _decode_block_str(block_str):
     if block_type == 'ir':
         block_args.update(dict(
             dw_kernel_size=_parse_ksize(options['k']),
-            exp_kernel_size=exp_kernel_size,
-            pw_kernel_size=pw_kernel_size,
+            exp_kernel_size=start_kernel_size,
+            pw_kernel_size=end_kernel_size,
             exp_ratio=float(options['e']),
-            se_ratio=float(options['se']) if 'se' in options else 0.,
+            se_ratio=float(options.get('se', 0.)),
             noskip=skip is False,
-            s2d=s2d > 0,
+            s2d=int(options.get('d', 0)) > 0,
         ))
         if 'cc' in options:
             block_args['num_experts'] = int(options['cc'])
     elif block_type == 'ds' or block_type == 'dsa':
         block_args.update(dict(
             dw_kernel_size=_parse_ksize(options['k']),
-            pw_kernel_size=pw_kernel_size,
-            se_ratio=float(options['se']) if 'se' in options else 0.,
+            pw_kernel_size=end_kernel_size,
+            se_ratio=float(options.get('se', 0.)),
             pw_act=block_type == 'dsa',
             noskip=block_type == 'dsa' or skip is False,
-            s2d=s2d > 0,
+            s2d=int(options.get('d', 0)) > 0,
         ))
     elif block_type == 'er':
         block_args.update(dict(
             exp_kernel_size=_parse_ksize(options['k']),
-            pw_kernel_size=pw_kernel_size,
+            pw_kernel_size=end_kernel_size,
             exp_ratio=float(options['e']),
             force_in_chs=force_in_chs,
-            se_ratio=float(options['se']) if 'se' in options else 0.,
+            se_ratio=float(options.get('se', 0.)),
             noskip=skip is False,
         ))
     elif block_type == 'cn':
         block_args.update(dict(
             kernel_size=int(options['k']),
             skip=skip is True,
+        ))
+    elif block_type == 'uir':
+        # override exp / proj kernels for start/end in uir block
+        start_kernel_size = _parse_ksize(options['a']) if 'a' in options else 0
+        end_kernel_size = _parse_ksize(options['p']) if 'p' in options else 0
+        block_args.update(dict(
+            dw_kernel_size_start=start_kernel_size,  # overload exp ks arg for dw start
+            dw_kernel_size_mid=_parse_ksize(options['k']),
+            dw_kernel_size_end=end_kernel_size,  # overload pw ks arg for dw end
+            exp_ratio=float(options['e']),
+            se_ratio=float(options.get('se', 0.)),
+            noskip=skip is False,
+        ))
+    elif block_type == 'mha':
+        kv_dim = int(options['d'])
+        block_args.update(dict(
+            dw_kernel_size=_parse_ksize(options['k']),
+            num_heads=int(options['h']),
+            key_dim=kv_dim,
+            value_dim=kv_dim,
+            kv_stride=int(options.get('v', 1)),
+            noskip=skip is False,
+        ))
+    elif block_type == 'mqa':
+        kv_dim = int(options['d'])
+        block_args.update(dict(
+            dw_kernel_size=_parse_ksize(options['k']),
+            num_heads=int(options['h']),
+            key_dim=kv_dim,
+            value_dim=kv_dim,
+            kv_stride=int(options.get('v', 1)),
+            noskip=skip is False,
         ))
     else:
         assert False, 'Unknown block type (%s)' % block_type
@@ -331,10 +362,9 @@ class EfficientNetBuilder:
         ba['in_chs'] = self.in_chs
         ba['out_chs'] = self.round_chs_fn(ba['out_chs'])
         s2d = ba.get('s2d', 0)
-        if s2d:
+        if s2d > 0:
+            # adjust while space2depth active
             ba['out_chs'] *= 4
-        if s2d == 1:
-            ba['dw_kernel_size'] = (ba['dw_kernel_size'] + 1) // 2
         if 'force_in_chs' in ba and ba['force_in_chs']:
             # NOTE this is a hack to work around mismatch in TF EdgeEffNet impl
             ba['force_in_chs'] = self.round_chs_fn(ba['force_in_chs'])
@@ -344,19 +374,19 @@ class EfficientNetBuilder:
         assert ba['act_layer'] is not None
         ba['norm_layer'] = self.norm_layer
         ba['drop_path_rate'] = drop_path_rate
-        if bt != 'cn':
-            se_ratio = ba.pop('se_ratio')
-            if se_ratio and self.se_layer is not None:
-                if not self.se_from_exp:
-                    # adjust se_ratio by expansion ratio if calculating se channels from block input
-                    se_ratio /= ba.get('exp_ratio', 1.0)
-                # adjust space2depth
-                if s2d == 1:
-                    se_ratio /= 4
-                if self.se_has_ratio:
-                    ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
-                else:
-                    ba['se_layer'] = self.se_layer
+
+        se_ratio = ba.pop('se_ratio', None)
+        if se_ratio and self.se_layer is not None:
+            if not self.se_from_exp:
+                # adjust se_ratio by expansion ratio if calculating se channels from block input
+                se_ratio /= ba.get('exp_ratio', 1.0)
+            if s2d == 1:
+                # adjust for start of space2depth
+                se_ratio /= 4
+            if self.se_has_ratio:
+                ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
+            else:
+                ba['se_layer'] = self.se_layer
 
         if bt == 'ir':
             _log_info_if('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
@@ -370,8 +400,17 @@ class EfficientNetBuilder:
         elif bt == 'cn':
             _log_info_if('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = ConvBnAct(**ba)
+        elif bt == 'uir':
+            _log_info_if('  UniversalInvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = UniversalInvertedResidual(**ba)
+        elif bt == 'mqa':
+            _log_info_if('  MobileMultiQueryAttention {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = MobileAttention(**ba, use_multi_query=True)
+        elif bt == 'mha':
+            _log_info_if('  MobileMultiHeadAttention {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = MobileAttention(**ba)
         else:
-            assert False, 'Uknkown block type (%s) while building model.' % bt
+            assert False, 'Unknown block type (%s) while building model.' % bt
 
         self.in_chs = ba['out_chs']  # update in_chs for arg of next block
         return block
@@ -420,12 +459,10 @@ class EfficientNetBuilder:
 
                 if space2depth > 0:
                     if space2depth == 2 and block_args['stride'] == 2:
-                        space2depth = 0
                         block_args['stride'] = 1
                         # to end s2d region, need to correct expansion and se ratio relative to input
-                        # FIXME unify with _make_block logic? this is rather meh
                         block_args['exp_ratio'] /= 4
-                        #block_args['se_ratio'] /= 4
+                        space2depth = 0
                     else:
                         block_args['s2d'] = space2depth
 
