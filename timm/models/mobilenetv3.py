@@ -640,7 +640,10 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                 # stage 0, 112x112 in
                 ['er_r1_k3_s2_e4_c48'],
                 # stage 1, 56x56 in
-                ['uir_r1_a3_k5_s2_e4_c80', 'uir_r1_a3_k3_s1_e2_c80'],
+                [
+                    'uir_r1_a3_k5_s2_e4_c80',
+                    'uir_r1_a3_k3_s1_e2_c80',
+                ],
                 # stage 2, 28x28 in
                 [
                     'uir_r1_a3_k5_s2_e6_c160',
@@ -685,7 +688,10 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                 # stage 0, 112x112 in
                 ['er_r1_k3_s2_e4_c48'],
                 # stage 1, 56x56 in
-                ['uir_r1_a3_k5_s2_e4_c96', 'uir_r1_a3_k3_s1_e4_c96'],
+                [
+                    'uir_r1_a3_k5_s2_e4_c96',
+                    'uir_r1_a3_k3_s1_e4_c96',
+                ],
                 # stage 2, 28x28 in
                 [
                     'uir_r1_a3_k5_s2_e4_c192',
@@ -710,13 +716,13 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r1_a5_k3_s1_e4_c512',
                     'uir_r1_a5_k5_s1_e4_c512',
                     'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
                     'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
                     'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
                     'mqa_r1_k3_h8_s1_d64_c512',
-                    'uir_r3_a5_k0_s1_e4_c512',  # convnext
+                    'uir_r1_a5_k0_s1_e4_c512',  # convnext
                 ],
                 # stage 4, 7x7 in
                 ['cn_r1_k1_s1_c960'],
@@ -758,15 +764,18 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                 # stage 0, 112x112 in
                 ['er_r1_k3_s2_e4_c48'],
                 # stage 1, 56x56 in
-                ['uir_r1_a3_k5_s2_e4_c80', 'uir_r1_a3_k3_s1_e2_c80'],
+                [
+                    'uir_r1_a3_k5_s2_e4_c80',
+                    'uir_r1_a3_k3_s1_e2_c80',
+                ],
                 # stage 2, 28x28 in
                 [
-                    'uir_r1_a5_k3_s2_e6_c160',
+                    'uir_r1_a3_k5_s2_e6_c160',
                     'uir_r2_a3_k3_s1_e4_c160',
-                    'uir_r1_a3_k3_s1_e4_c160',
+                    'uir_r1_a3_k5_s1_e4_c160',
                     'uir_r1_a3_k3_s1_e4_c160',
                     'uir_r1_a3_k0_s1_e4_c160',  # convnext
-                    'uir_r2_a0_k0_s1_e2_c160',
+                    'uir_r1_a0_k0_s1_e2_c160',
                     'uir_r1_a3_k0_s1_e4_c160',  # convnext
                 ],
                 # stage 3, 14x14in
@@ -775,7 +784,6 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r1_a5_k5_s1_e4_c256',
                     'uir_r2_a3_k5_s1_e4_c256',
                     'uir_r1_a0_k0_s1_e4_c256',
-                    'uir_r1_a3_k0_s1_e4_c256',  # convnext
                     'uir_r1_a3_k0_s1_e4_c256',  # convnext
                     'uir_r1_a3_k5_s1_e2_c256',
                     'uir_r1_a5_k5_s1_e4_c256',
@@ -793,7 +801,10 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                 # stage 0, 112x112 in
                 ['er_r1_k3_s2_e4_c48'],
                 # stage 1, 56x56 in
-                ['uir_r1_a3_k5_s2_e4_c96', 'uir_r1_a3_k3_s1_e4_c96'],
+                [
+                    'uir_r1_a3_k5_s2_e4_c96',
+                    'uir_r1_a3_k3_s1_e4_c96',
+                ],
                 # stage 2, 28x28 in
                 [
                     'uir_r1_a3_k5_s2_e4_c192',
@@ -986,7 +997,7 @@ def mobilenetv3_large_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
 @register_model
 def mobilenetv3_large_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
-    model = _gen_mobilenet_v3('mobilenetv3_large_100', 1.5, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v3('mobilenetv3_large_150', 1.5, pretrained=pretrained, **kwargs)
     return model
 
 
