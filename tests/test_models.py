@@ -52,7 +52,7 @@ FEAT_INTER_FILTERS = [
     'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
     'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
     'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet',
-    'regnet', 'byobnet', 'byoanet', 'mlp_mixer'
+    'regnet', 'byobnet', 'byoanet', 'mlp_mixer', 'hiera',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -60,7 +60,7 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*'
+    'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*', 'hiera_*'
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -77,7 +77,7 @@ else:
     EXCLUDE_FILTERS = ['*enormous*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
 
-EXCLUDE_JIT_FILTERS = []
+EXCLUDE_JIT_FILTERS = ['hiera_*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
@@ -486,7 +486,7 @@ def _create_fx_model(model, train=False):
     return fx_model
 
 
-EXCLUDE_FX_FILTERS = ['vit_gi*']
+EXCLUDE_FX_FILTERS = ['vit_gi*', 'hiera*']
 # not enough memory to run fx on more models than other tests
 if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FX_FILTERS += [

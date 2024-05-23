@@ -13,7 +13,6 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.modules.batchnorm import _BatchNorm
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectAdaptivePool2d, create_conv2d, GELUTanh
@@ -740,7 +739,7 @@ class EfficientVit(nn.Module):
     def get_classifier(self):
         return self.head.classifier[-1]
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -858,7 +857,7 @@ class EfficientVitLarge(nn.Module):
     def get_classifier(self):
         return self.head.classifier[-1]
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool

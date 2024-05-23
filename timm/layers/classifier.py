@@ -108,7 +108,7 @@ class ClassifierHead(nn.Module):
         self.fc = fc
         self.flatten = nn.Flatten(1) if use_conv and pool_type else nn.Identity()
 
-    def reset(self, num_classes, pool_type=None):
+    def reset(self, num_classes: int, pool_type: Optional[str] = None):
         if pool_type is not None and pool_type != self.global_pool.pool_type:
             self.global_pool, self.fc = create_classifier(
                 self.in_features,
@@ -180,7 +180,7 @@ class NormMlpClassifierHead(nn.Module):
         self.drop = nn.Dropout(drop_rate)
         self.fc = linear_layer(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes, pool_type=None):
+    def reset(self, num_classes: int, pool_type: Optional[str] = None):
         if pool_type is not None:
             self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
             self.flatten = nn.Flatten(1) if pool_type else nn.Identity()

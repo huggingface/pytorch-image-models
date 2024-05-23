@@ -118,6 +118,7 @@ class FeatureGraphNet(nn.Module):
             out_indices: Tuple[int, ...],
             out_map: Optional[Dict] = None,
             output_fmt: str = 'NCHW',
+            return_dict: bool = False,
     ):
         super().__init__()
         assert has_fx_feature_extraction, 'Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction'
@@ -127,9 +128,13 @@ class FeatureGraphNet(nn.Module):
         self.output_fmt = Format(output_fmt)
         return_nodes = _get_return_layers(self.feature_info, out_map)
         self.graph_module = create_feature_extractor(model, return_nodes)
+        self.return_dict = return_dict
 
     def forward(self, x):
-        return list(self.graph_module(x).values())
+        out = self.graph_module(x)
+        if self.return_dict:
+            return out
+        return list(out.values())
 
 
 class GraphExtractNet(nn.Module):
@@ -144,19 +149,23 @@ class GraphExtractNet(nn.Module):
         model: model to extract features from
         return_nodes: node names to return features from (dict or list)
         squeeze_out: if only one output, and output in list format, flatten to single tensor
+        return_dict: return as dictionary from extractor with node names as keys, ignores squeeze_out arg
     """
     def __init__(
             self,
             model: nn.Module,
             return_nodes: Union[Dict[str, str], List[str]],
             squeeze_out: bool = True,
+            return_dict: bool = False,
     ):
         super().__init__()
         self.squeeze_out = squeeze_out
         self.graph_module = create_feature_extractor(model, return_nodes)
+        self.return_dict = return_dict
 
     def forward(self, x) -> Union[List[torch.Tensor], torch.Tensor]:
-        out = list(self.graph_module(x).values())
-        if self.squeeze_out and len(out) == 1:
-            return out[0]
-        return out
+        out = self.graph_module(x)
+        if self.return_dict:
+            return out
+        out = list(out.values())
+        return out[0] if self.squeeze_out and len(out) == 1 else out

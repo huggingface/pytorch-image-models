@@ -47,7 +47,7 @@ def get_norm_layer(norm_layer):
     if isinstance(norm_layer, str):
         if not norm_layer:
             return None
-        layer_name = norm_layer.replace('_', '')
+        layer_name = norm_layer.replace('_', '').lower()
         norm_layer = _NORM_MAP[layer_name]
     else:
         norm_layer = norm_layer

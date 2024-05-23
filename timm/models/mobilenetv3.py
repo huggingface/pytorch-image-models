@@ -622,8 +622,6 @@ def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool =
     return model
 
 
-
-
 def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
     """Creates a MobileNet-V4 model.
 

@@ -1248,7 +1248,7 @@ class MaxxVit(nn.Module):
     def get_classifier(self):
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
