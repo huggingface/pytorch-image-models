@@ -385,7 +385,7 @@ def _create_mnv3(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV
         if 'feature_cfg' in kwargs or 'feature_cls' in kwargs:
             features_mode = 'cfg'
         else:
-            kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'head_bias', 'global_pool')
+            kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'head_bias', 'head_norm', 'global_pool')
             model_cls = MobileNetV3Features
             features_mode = 'cls'
 
