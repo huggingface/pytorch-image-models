@@ -51,6 +51,7 @@ class MobileNetV3(nn.Module):
             fix_stem: bool = False,
             num_features: int = 1280,
             head_bias: bool = True,
+            head_norm: bool = False,
             pad_type: PadType = '',
             act_layer: Optional[LayerType] = None,
             norm_layer: Optional[LayerType] = None,
@@ -59,6 +60,7 @@ class MobileNetV3(nn.Module):
             round_chs_fn: Callable = round_channels,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            layer_scale_init_value: Optional[float] = None,
             global_pool: str = 'avg',
     ):
         """
@@ -78,6 +80,7 @@ class MobileNetV3(nn.Module):
             round_chs_fn: Callable to round number of filters based on depth multiplier.
             drop_rate: Dropout rate.
             drop_path_rate: Stochastic depth rate.
+            layer_scale_init_value: Enable layer scale on compatible blocks if not None
             global_pool: Type of pooling to use for global pooling features of the FC head.
         """
         super(MobileNetV3, self).__init__()
@@ -106,6 +109,7 @@ class MobileNetV3(nn.Module):
             norm_layer=norm_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
+            layer_scale_init_value=layer_scale_init_value,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
@@ -115,8 +119,16 @@ class MobileNetV3(nn.Module):
         # Head + Pooling
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         num_pooled_chs = head_chs * self.global_pool.feat_mult()
-        self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
-        self.act2 = act_layer(inplace=True)
+        if head_norm:
+            # mobilenet-v4 post-pooling PW conv is followed by a norm+act layer
+            self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type)  # never bias
+            self.norm_head = norm_act_layer(self.num_features)
+            self.act2 = nn.Identity()
+        else:
+            # mobilenet-v3 and others only have an activation after final PW conv
+            self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
+            self.norm_head = nn.Identity()
+            self.act2 = act_layer(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
@@ -125,7 +137,7 @@ class MobileNetV3(nn.Module):
     def as_sequential(self):
         layers = [self.conv_stem, self.bn1]
         layers.extend(self.blocks)
-        layers.extend([self.global_pool, self.conv_head, self.act2])
+        layers.extend([self.global_pool, self.conv_head, self.norm_head, self.act2])
         layers.extend([nn.Flatten(), nn.Dropout(self.drop_rate), self.classifier])
         return nn.Sequential(*layers)
 
@@ -224,8 +236,10 @@ class MobileNetV3(nn.Module):
         self.blocks = self.blocks[:max_index]  # truncate blocks w/ stem as idx 0
         if max_index < len(self.blocks):
             self.conv_head = nn.Identity()
+            self.norm_head = nn.Identity()
         if prune_head:
             self.conv_head = nn.Identity()
+            self.norm_head = nn.Identity()
             self.reset_classifier(0, '')
         return take_indices
 
@@ -241,6 +255,7 @@ class MobileNetV3(nn.Module):
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
         x = self.global_pool(x)
         x = self.conv_head(x)
+        x = self.norm_head(x)
         x = self.act2(x)
         x = self.flatten(x)
         if pre_logits:
@@ -632,6 +647,7 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
       channel_multiplier: multiplier to number of channels per layer.
     """
     if 'hybrid' in variant:
+        layer_scale_init_value = 1e-5
         if 'medium' in variant:
             stem_size = 32
             num_features = 1280
@@ -730,6 +746,7 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
         else:
             assert False, f'Unknown variant {variant}.'
     else:
+        layer_scale_init_value = None
         if 'small' in variant:
             stem_size = 32
             num_features = 1280
@@ -836,9 +853,12 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
         else:
             assert False, f'Unknown variant {variant}.'
 
+    # NOTE SE not used in initial MobileNet-v4 definitions
     se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
+        head_bias=False,
+        head_norm=True,
         num_features=num_features,
         stem_size=stem_size,
         fix_stem=channel_multiplier < 0.75,
@@ -846,6 +866,7 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=act_layer,
         se_layer=se_layer,
+        layer_scale_init_value=layer_scale_init_value,
         **kwargs,
     )
     model = _create_mnv3(variant, pretrained, **model_kwargs)

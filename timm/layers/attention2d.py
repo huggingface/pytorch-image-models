@@ -107,6 +107,7 @@ class MultiQueryAttention2d(nn.Module):
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: nn.Module = nn.BatchNorm2d,
+            use_bias: bool = False,
     ):
         """Initializer.
 
@@ -130,26 +131,25 @@ class MultiQueryAttention2d(nn.Module):
         self.fused_attn = use_fused_attn()
         self.drop = attn_drop
 
+        self.query = nn.Sequential()
         if self.has_query_strides:
             # FIXME dilation
-            self.query_down_pool = create_pool2d(
-                'avg',
-                kernel_size=self.query_strides,
-                padding=padding,
-            )
-            self.query_down_norm = norm_layer(dim)
-        else:
-            self.query_down_pool = nn.Identity()
-            self.query_down_norm = nn.Identity()
-
-        self.query_proj = create_conv2d(
+            self.query.add_module('down_pool', create_pool2d(
+                    'avg',
+                    kernel_size=self.query_strides,
+                    padding=padding,
+            ))
+            self.query.add_module('norm', norm_layer(dim))
+        self.query.add_module('proj', create_conv2d(
             dim,
             self.num_heads * self.key_dim,
             kernel_size=1,
-        )
+            bias=use_bias,
+        ))
 
+        self.key = nn.Sequential()
         if kv_stride > 1:
-            self.key_down_conv = create_conv2d(
+            self.key.add_module('down_conv', create_conv2d(
                 dim,
                 dim,
                 kernel_size=dw_kernel_size,
@@ -157,21 +157,19 @@ class MultiQueryAttention2d(nn.Module):
                 dilation=dilation,
                 padding=padding,
                 depthwise=True,
-            )
-            self.key_down_norm = norm_layer(dim)
-        else:
-            self.key_down_conv = nn.Identity()
-            self.key_down_norm = nn.Identity()
-
-        self.key_proj = create_conv2d(
+            ))
+            self.key.add_module('norm', norm_layer(dim))
+        self.key.add_module('proj', create_conv2d(
             dim,
             self.key_dim,
             kernel_size=1,
             padding=padding,
-        )
+            bias=use_bias,
+        ))
 
+        self.value = nn.Sequential()
         if kv_stride > 1:
-            self.value_down_conv = create_conv2d(
+            self.value.add_module('down_conv', create_conv2d(
                 dim,
                 dim,
                 kernel_size=dw_kernel_size,
@@ -179,32 +177,28 @@ class MultiQueryAttention2d(nn.Module):
                 dilation=dilation,
                 padding=padding,
                 depthwise=True,
-            )
-            self.value_down_norm = norm_layer(dim)
-        else:
-            self.value_down_conv = nn.Identity()
-            self.value_down_norm = nn.Identity()
-
-        self.value_proj = create_conv2d(
+            ))
+            self.value.add_module('norm', norm_layer(dim))
+        self.value.add_module('proj', create_conv2d(
             dim,
             self.value_dim,
             kernel_size=1,
-        )
+            bias=use_bias,
+        ))
 
         self.attn_drop = nn.Dropout(attn_drop)
 
+        self.output = nn.Sequential()
         if self.has_query_strides:
-            self.upsampling = nn.Upsample(self.query_strides, mode='bilinear', align_corners=False)
-        else:
-            self.upsampling = nn.Identity()
-
-        self.out_proj = create_conv2d(
+            self.output.add_module('upsample', nn.Upsample(self.query_strides, mode='bilinear', align_corners=False))
+        self.output.add_module('proj', create_conv2d(
             self.value_dim * self.num_heads,
             dim_out,
             kernel_size=1,
-        )
+            bias=use_bias,
+        ))
+        self.output.add_module('drop',  nn.Dropout(proj_drop))
 
-        self.proj_drop = nn.Dropout(proj_drop)
         self.einsum = False
 
     def _reshape_input(self, t: torch.Tensor):
@@ -237,21 +231,15 @@ class MultiQueryAttention2d(nn.Module):
         """Run layer computation."""
         B, C, H, W = s = x.shape
 
-        q = self.query_down_pool(x)
-        q = self.query_down_norm(q)
-        q = self.query_proj(q)
+        q = self.query(x)
         # desired q shape: [b, h, k, n x n] - [b, l, h, k]
         q = self._reshape_projected_query(q, self.num_heads, self.key_dim)
 
-        k = self.key_down_conv(x)
-        k = self.key_down_norm(k)
-        k = self.key_proj(k)
+        k = self.key(x)
         # output shape of k: [b, k, p], p = m x m
         k = self._reshape_input(k)
 
-        v = self.value_down_conv(x)
-        v = self.value_down_norm(v)
-        v = self.value_proj(v)
+        v = self.value(x)
         # output shape of v: [ b, p, k], p = m x m
         v = self._reshape_input(v)
 
@@ -285,10 +273,7 @@ class MultiQueryAttention2d(nn.Module):
 
         # reshape o into [b, hk, n, n,]
         o = self._reshape_output(o, self.num_heads, H // self.query_strides[0], W // self.query_strides[1])
-        o = self.upsampling(o)
-
-        x = self.out_proj(o)
-        x = self.proj_drop(x)
+        x = self.output(o)
         return x
 
 

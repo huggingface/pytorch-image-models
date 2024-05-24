@@ -5,6 +5,7 @@ Handles stride, dilation calculations, and selects feature extraction points.
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
+from typing import Callable, Optional
 
 import logging
 import math
@@ -321,15 +322,16 @@ class EfficientNetBuilder:
     """
     def __init__(
             self,
-            output_stride=32,
-            pad_type='',
-            round_chs_fn=round_channels,
-            se_from_exp=False,
-            act_layer=None,
-            norm_layer=None,
-            se_layer=None,
-            drop_path_rate=0.,
-            feature_location='',
+            output_stride: int = 32,
+            pad_type: str = '',
+            round_chs_fn: Callable = round_channels,
+            se_from_exp: bool = False,
+            act_layer: Optional[Callable] = None,
+            norm_layer: Optional[Callable] = None,
+            se_layer: Optional[Callable] = None,
+            drop_path_rate: float = 0.,
+            layer_scale_init_value: Optional[float] = None,
+            feature_location: str = '',
     ):
         self.output_stride = output_stride
         self.pad_type = pad_type
@@ -344,6 +346,7 @@ class EfficientNetBuilder:
         except TypeError:
             self.se_has_ratio = False
         self.drop_path_rate = drop_path_rate
+        self.layer_scale_init_value = layer_scale_init_value
         if feature_location == 'depthwise':
             # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
             _logger.warning("feature_location=='depthwise' is deprecated, using 'expansion'")
@@ -402,13 +405,13 @@ class EfficientNetBuilder:
             block = ConvBnAct(**ba)
         elif bt == 'uir':
             _log_info_if('  UniversalInvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
-            block = UniversalInvertedResidual(**ba)
+            block = UniversalInvertedResidual(**ba, layer_scale_init_value=self.layer_scale_init_value)
         elif bt == 'mqa':
             _log_info_if('  MobileMultiQueryAttention {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
-            block = MobileAttention(**ba, use_multi_query=True)
+            block = MobileAttention(**ba, use_multi_query=True, layer_scale_init_value=self.layer_scale_init_value)
         elif bt == 'mha':
             _log_info_if('  MobileMultiHeadAttention {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
-            block = MobileAttention(**ba)
+            block = MobileAttention(**ba, layer_scale_init_value=self.layer_scale_init_value)
         else:
             assert False, 'Unknown block type (%s) while building model.' % bt
 

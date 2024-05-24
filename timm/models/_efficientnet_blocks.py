@@ -174,13 +174,12 @@ class DepthwiseSeparableConv(nn.Module):
 
     def forward(self, x):
         shortcut = x
-        #print('ii', x.shape)
+        #print('ii', x.shape)  # FIXME debug s2d
         if self.conv_s2d is not None:
             x = self.conv_s2d(x)
             x = self.bn_s2d(x)
-        #print('id', x.shape)
+        #print('id', x.shape)  # FIXME debug s2d
         x = self.conv_dw(x)
-        #print('od', x.shape)
         x = self.bn1(x)
         x = self.se(x)
         x = self.conv_pw(x)
@@ -296,7 +295,8 @@ class LayerScale2d(nn.Module):
 class UniversalInvertedResidual(nn.Module):
     """ Universal Inverted Residual Block
 
-    For MobileNetV4 - https://arxiv.org/abs/
+    For MobileNetV4 - https://arxiv.org/abs/, referenced from
+    https://github.com/tensorflow/models/blob/d93c7e932de27522b2fa3b115f58d06d6f640537/official/vision/modeling/layers/nn_blocks.py#L778
     """
 
     def __init__(
@@ -338,8 +338,9 @@ class UniversalInvertedResidual(nn.Module):
             )
             self.norm_dw_start = dw_norm_act_layer(in_chs, apply_act=False)
         else:
-            self.conv_dw_start = nn.Identity()
-            self.norm_dw_start = nn.Identity()
+            # start is None when not used for cleaner repr
+            self.conv_dw_start = None
+            self.norm_dw_start = None
 
         # Point-wise expansion
         mid_chs = make_divisible(in_chs * exp_ratio)
@@ -359,6 +360,7 @@ class UniversalInvertedResidual(nn.Module):
             )
             self.norm_dw_mid = dw_norm_act_layer(mid_chs, inplace=True)
         else:
+            # keeping mid as identity so it can be hooked more easily for features
             self.conv_dw_mid = nn.Identity()
             self.norm_dw_mid = nn.Identity()
 
@@ -379,7 +381,7 @@ class UniversalInvertedResidual(nn.Module):
             )
             self.norm_dw_end = dw_norm_act_layer(out_chs, apply_act=False)
         else:
-            # dw_end rarely used so keeping it out of repr by not using None instead of nn.Identitty()
+            # end is None when not in use for cleaner repr
             self.conv_dw_end = None
             self.norm_dw_end = None
 
@@ -397,8 +399,9 @@ class UniversalInvertedResidual(nn.Module):
 
     def forward(self, x):
         shortcut = x
-        x = self.conv_dw_start(x)
-        x = self.norm_dw_start(x)
+        if self.conv_dw_start is not None:
+            x = self.conv_dw_start(x)
+            x = self.norm_dw_start(x)
         x = self.conv_pw(x)
         x = self.norm_pw(x)
         x = self.conv_dw_mid(x)
@@ -418,7 +421,8 @@ class UniversalInvertedResidual(nn.Module):
 class MobileAttention(nn.Module):
     """ Mobile Attention Block
 
-    For MobileNetV4 - https://arxiv.org/abs/
+    For MobileNetV4 - https://arxiv.org/abs/, referenced from
+    https://github.com/tensorflow/models/blob/d93c7e932de27522b2fa3b115f58d06d6f640537/official/vision/modeling/layers/nn_blocks.py#L1504
     """
     def __init__(
             self,
@@ -476,34 +480,21 @@ class MobileAttention(nn.Module):
             num_heads = in_chs // key_dim
 
         if use_multi_query:
-            #if self.has_query_stride or self.kv_stride > 1:
-            self.attn = (
-                MultiQueryAttention2d(
-                    in_chs,
-                    dim_out=out_chs,
-                    num_heads=num_heads,
-                    key_dim=key_dim,
-                    value_dim=value_dim,
-                    query_strides=query_strides,
-                    kv_stride=kv_stride,
-                    dilation=dilation,
-                    padding=pad_type,
-                    dw_kernel_size=dw_kernel_size,
-                    attn_drop=attn_drop,
-                    proj_drop=proj_drop,
-                    #bias=use_bias, # why not here if used w/ mhsa?
-                )
+            self.attn = MultiQueryAttention2d(
+                in_chs,
+                dim_out=out_chs,
+                num_heads=num_heads,
+                key_dim=key_dim,
+                value_dim=value_dim,
+                query_strides=query_strides,
+                kv_stride=kv_stride,
+                dilation=dilation,
+                padding=pad_type,
+                dw_kernel_size=dw_kernel_size,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                #bias=use_bias, # why not here if used w/ mhsa?
             )
-            # else:
-            #     self.attn = MultiQueryAttentionV2(
-            #         in_chs,
-            #         dim_out=out_chs,
-            #         num_heads=num_heads,
-            #         key_dim=key_dim,
-            #         value_dim=value_dim,
-            #         attn_drop=attn_drop,
-            #         proj_drop=proj_drop,
-            #     )
         else:
             self.attn = Attention2d(
                 in_chs,
