@@ -80,7 +80,7 @@ class MobileNetV3(nn.Module):
             round_chs_fn: Callable to round number of filters based on depth multiplier.
             drop_rate: Dropout rate.
             drop_path_rate: Stochastic depth rate.
-            layer_scale_init_value: Enable layer scale on compatible blocks if not None
+            layer_scale_init_value: Enable layer scale on compatible blocks if not None.
             global_pool: Type of pooling to use for global pooling features of the FC head.
         """
         super(MobileNetV3, self).__init__()
@@ -294,6 +294,7 @@ class MobileNetV3Features(nn.Module):
             se_layer: Optional[LayerType] = None,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
+            layer_scale_init_value: Optional[float] = None,
     ):
         """
         Args:
@@ -312,6 +313,7 @@ class MobileNetV3Features(nn.Module):
             se_layer: Type of Squeeze-and-Excite layer.
             drop_rate: Dropout rate.
             drop_path_rate: Stochastic depth rate.
+            layer_scale_init_value: Enable layer scale on compatible blocks if not None.
         """
         super(MobileNetV3Features, self).__init__()
         act_layer = act_layer or nn.ReLU
@@ -337,6 +339,7 @@ class MobileNetV3Features(nn.Module):
             norm_layer=norm_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
+            layer_scale_init_value=layer_scale_init_value,
             feature_location=feature_location,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
