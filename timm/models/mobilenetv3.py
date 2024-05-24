@@ -757,7 +757,7 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r1_a5_k5_s1_e4_c128',  # ExtraDW
                     'uir_r1_a0_k5_s1_e4_c128',  # IR
                     'uir_r1_a0_k5_s1_e3_c128',  # IR
-                    'uir_r2_a0_k5_s1_e4_c128',  # IR
+                    'uir_r2_a0_k3_s1_e4_c128',  # IR
                 ],
                 # stage 4, 7x7 in
                 ['cn_r1_k1_s1_c960'],  # Conv
