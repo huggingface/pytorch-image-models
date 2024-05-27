@@ -197,7 +197,7 @@ class NextConvBlock(nn.Module):
     def reparameterize(self):
         if not self.is_fused:
             merge_pre_bn(self.mlp.fc1, self.norm)
-            self.norm = None
+            self.norm = nn.Identity()
             self.is_fused = True
 
     def forward(self, x):
