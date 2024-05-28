@@ -40,6 +40,7 @@ class MobileNetV3(nn.Module):
       * HardCoRe-NAS - https://arxiv.org/abs/2102.11646 (defn in hardcorenas.py uses this class)
       * FBNet-V3 - https://arxiv.org/abs/2006.02049
       * LCNet - https://arxiv.org/abs/2109.15099
+      * MobileNet-V4 - https://arxiv.org/abs/2404.10518
     """
 
     def __init__(
@@ -52,9 +53,10 @@ class MobileNetV3(nn.Module):
             num_features: int = 1280,
             head_bias: bool = True,
             head_norm: bool = False,
-            pad_type: PadType = '',
+            pad_type: str = '',
             act_layer: Optional[LayerType] = None,
             norm_layer: Optional[LayerType] = None,
+            aa_layer: Optional[LayerType] = None,
             se_layer: Optional[LayerType] = None,
             se_from_exp: bool = True,
             round_chs_fn: Callable = round_channels,
@@ -75,6 +77,7 @@ class MobileNetV3(nn.Module):
             pad_type: Type of padding to use for convolution layers.
             act_layer: Type of activation layer.
             norm_layer: Type of normalization layer.
+            aa_layer: Type of anti-aliasing layer.
             se_layer: Type of Squeeze-and-Excite layer.
             se_from_exp: If True, calculate SE channel reduction from expanded mid channels.
             round_chs_fn: Callable to round number of filters based on depth multiplier.
@@ -107,6 +110,7 @@ class MobileNetV3(nn.Module):
             se_from_exp=se_from_exp,
             act_layer=act_layer,
             norm_layer=norm_layer,
+            aa_layer=aa_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
             layer_scale_init_value=layer_scale_init_value,
@@ -291,6 +295,7 @@ class MobileNetV3Features(nn.Module):
             se_from_exp: bool = True,
             act_layer: Optional[LayerType] = None,
             norm_layer: Optional[LayerType] = None,
+            aa_layer: Optional[LayerType] = None,
             se_layer: Optional[LayerType] = None,
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
@@ -337,6 +342,7 @@ class MobileNetV3Features(nn.Module):
             se_from_exp=se_from_exp,
             act_layer=act_layer,
             norm_layer=norm_layer,
+            aa_layer=aa_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
             layer_scale_init_value=layer_scale_init_value,
@@ -649,15 +655,17 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
     Args:
       channel_multiplier: multiplier to number of channels per layer.
     """
+    num_features = 1280
     if 'hybrid' in variant:
         layer_scale_init_value = 1e-5
         if 'medium' in variant:
             stem_size = 32
-            num_features = 1280
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
+                [
+                    'er_r1_k3_s2_e4_c48'  # FusedIB (EdgeResidual)
+                ],
                 # stage 1, 56x56 in
                 [
                     'uir_r1_a3_k5_s2_e4_c80',  # ExtraDW
@@ -689,23 +697,26 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r1_a0_k0_s1_e4_c256',  # FFN
                     'mqa_r1_k3_h4_s1_d64_c256',  # MQA
                     'uir_r1_a3_k0_s1_e4_c256',  # ConvNeXt
-                    'mqa_r1_k3_h4_s1_d64_c256', # MQA
+                    'mqa_r1_k3_h4_s1_d64_c256',  # MQA
                     'uir_r1_a5_k5_s1_e4_c256',  # ExtraDW
-                    'mqa_r1_k3_h4_s1_d64_c256', # MQA
+                    'mqa_r1_k3_h4_s1_d64_c256',  # MQA
                     'uir_r1_a5_k0_s1_e4_c256',  # ConvNeXt
                     'mqa_r1_k3_h4_s1_d64_c256', # MQA
                     'uir_r1_a5_k0_s1_e4_c256',  # ConvNeXt
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],  # Conv
+                [
+                    'cn_r1_k1_s1_c960' # Conv
+                ],
             ]
         elif 'large' in variant:
             stem_size = 24
-            num_features = 1280
             act_layer = resolve_act_layer(kwargs, 'gelu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
+                [
+                    'er_r1_k3_s2_e4_c48',  # FusedIB (EdgeResidual)
+                ],
                 # stage 1, 56x56 in
                 [
                     'uir_r1_a3_k5_s2_e4_c96',  # ExtraDW
@@ -734,17 +745,19 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r2_a5_k0_s1_e4_c512',  # ConvNeXt
                     'uir_r1_a5_k3_s1_e4_c512',  # ExtraDW
                     'uir_r1_a5_k5_s1_e4_c512',  # ExtraDW
-                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'mqa_r1_k3_h8_s1_d64_c512',  # MQA
                     'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
-                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'mqa_r1_k3_h8_s1_d64_c512',  # MQA
                     'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
-                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'mqa_r1_k3_h8_s1_d64_c512',  # MQA
                     'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
-                    'mqa_r1_k3_h8_s1_d64_c512', # MQA
+                    'mqa_r1_k3_h8_s1_d64_c512',  # MQA
                     'uir_r1_a5_k0_s1_e4_c512',  # ConvNeXt
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],
+                [
+                    'cn_r1_k1_s1_c960',  # Conv
+                ],
             ]
         else:
             assert False, f'Unknown variant {variant}.'
@@ -752,7 +765,6 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
         layer_scale_init_value = None
         if 'small' in variant:
             stem_size = 32
-            num_features = 1280
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
@@ -780,15 +792,18 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r2_a0_k3_s1_e4_c128',  # IR
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],  # Conv
+                [
+                    'cn_r1_k1_s1_c960',  # Conv
+                ],
             ]
         elif 'medium' in variant:
             stem_size = 32
-            num_features = 1280
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
+                [
+                    'er_r1_k3_s2_e4_c48',  # FusedIB (EdgeResidual)
+                ],
                 # stage 1, 56x56 in
                 [
                     'uir_r1_a3_k5_s2_e4_c80',  # ExtraDW
@@ -817,15 +832,18 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
                     'uir_r1_a5_k0_s1_e2_c256',  # ConvNeXt
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],  # Conv
+                [
+                    'cn_r1_k1_s1_c960',  # Conv
+                ],
             ]
         elif 'large' in variant:
             stem_size = 24
-            num_features = 1280
             act_layer = resolve_act_layer(kwargs, 'relu')
             arch_def = [
                 # stage 0, 112x112 in
-                ['er_r1_k3_s2_e4_c48'],  # FusedIB (EdgeResidual)
+                [
+                    'er_r1_k3_s2_e4_c48',  # FusedIB (EdgeResidual)
+                ],
                 # stage 1, 56x56 in
                 [
                     'uir_r1_a3_k5_s2_e4_c96',  # ExtraDW
@@ -851,24 +869,23 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
 
                 ],
                 # stage 4, 7x7 in
-                ['cn_r1_k1_s1_c960'],  # Conv
+                [
+                    'cn_r1_k1_s1_c960',  # Conv
+                ],
             ]
         else:
             assert False, f'Unknown variant {variant}.'
 
-    # NOTE SE not used in initial MobileNet-v4 definitions
-    se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def),
         head_bias=False,
         head_norm=True,
         num_features=num_features,
         stem_size=stem_size,
-        fix_stem=channel_multiplier < 0.75,
+        fix_stem=channel_multiplier < 1.0,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=act_layer,
-        se_layer=se_layer,
         layer_scale_init_value=layer_scale_init_value,
         **kwargs,
     )
@@ -904,9 +921,6 @@ default_cfgs = generate_default_cfgs({
         origin_url='https://github.com/Alibaba-MIIL/ImageNet21K',
         paper_ids='arXiv:2104.10972v4',
         interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=11221),
-    'mobilenetv3_large_150.untrained': _cfg(
-        interpolation='bicubic'),
-
 
     'mobilenetv3_small_050.lamb_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_050_lambc-4b7bbe87.pth',
@@ -985,28 +999,48 @@ default_cfgs = generate_default_cfgs({
     'mobilenetv4_conv_small': _cfg(
         # hf_hub_id='timm/',
         interpolation='bicubic'),
-    'mobilenetv4_conv_medium': _cfg(
-        #hf_hub_id='timm/',
-        interpolation='bicubic'),
-    'mobilenetv4_conv_large': _cfg(
+    'mobilenetv4_conv_medium.r224': _cfg(
         # hf_hub_id='timm/',
-        interpolation='bicubic'),
+        crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_conv_medium.r256': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_conv_large.r256': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_conv_large.r384': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=0.95, interpolation='bicubic'),
 
     'mobilenetv4_hybrid_small': _cfg(
         # hf_hub_id='timm/',
         interpolation='bicubic'),
-    'mobilenetv4_hybrid_medium': _cfg(
+    'mobilenetv4_hybrid_medium.r224': _cfg(
         # hf_hub_id='timm/',
-        interpolation='bicubic'),
-    'mobilenetv4_hybrid_large': _cfg(
+        crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_hybrid_medium.r256': _cfg(
         # hf_hub_id='timm/',
-        interpolation='bicubic'),
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_hybrid_large.r256': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_hybrid_large.r384': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=0.95, interpolation='bicubic'),
+
+    # experimental
+    'mobilenetv4_conv_aa_medium.r256': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_conv_blur_medium.r256': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
     'mobilenetv4_hybrid_medium_075': _cfg(
         # hf_hub_id='timm/',
-        interpolation='bicubic'),
-    'mobilenetv4_hybrid_medium_150': _cfg(
+        crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_hybrid_large_075.r256': _cfg(
         # hf_hub_id='timm/',
-        interpolation='bicubic'),
+        input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
 })
 
 
@@ -1021,13 +1055,6 @@ def mobilenetv3_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
 def mobilenetv3_large_100(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V3 """
     model = _gen_mobilenet_v3('mobilenetv3_large_100', 1.0, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def mobilenetv3_large_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
-    """ MobileNet V3 """
-    model = _gen_mobilenet_v3('mobilenetv3_large_150', 1.5, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1192,23 +1219,9 @@ def mobilenetv4_conv_large(pretrained: bool = False, **kwargs) -> MobileNetV3:
 
 
 @register_model
-def mobilenetv4_hybrid_medium_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
-    """ MobileNet V4 Hybrid """
-    model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium_075', 0.75, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
 def mobilenetv4_hybrid_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 Hybrid """
     model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium', 1.0, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def mobilenetv4_hybrid_medium_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
-    """ MobileNet V4 Hybrid """
-    model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium_150', 1.5, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1218,6 +1231,33 @@ def mobilenetv4_hybrid_large(pretrained: bool = False, **kwargs) -> MobileNetV3:
     model = _gen_mobilenet_v4('mobilenetv4_hybrid_large', 1.0, pretrained=pretrained, **kwargs)
     return model
 
+
+@register_model
+def mobilenetv4_conv_aa_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 w/ AvgPool AA """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_aa_medium', 1.0, pretrained=pretrained, aa_layer='avg', **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_conv_blur_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Conv w/ Blur AA """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_blur_medium', 1.0, pretrained=pretrained, aa_layer='blurpc', **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_hybrid_medium_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Hybrid """
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_medium_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_hybrid_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 Hybrid"""
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_large', 0.75, pretrained=pretrained, **kwargs)
+    return model
 
 
 register_model_deprecations(__name__, {

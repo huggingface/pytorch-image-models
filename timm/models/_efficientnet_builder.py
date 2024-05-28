@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 import torch.nn as nn
 
 from ._efficientnet_blocks import *
-from timm.layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible
+from timm.layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible, LayerType
 
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights",
            'resolve_bn_args', 'resolve_act_layer', 'round_channels', 'BN_MOMENTUM_TF_DEFAULT', 'BN_EPS_TF_DEFAULT']
@@ -326,9 +326,10 @@ class EfficientNetBuilder:
             pad_type: str = '',
             round_chs_fn: Callable = round_channels,
             se_from_exp: bool = False,
-            act_layer: Optional[Callable] = None,
-            norm_layer: Optional[Callable] = None,
-            se_layer: Optional[Callable] = None,
+            act_layer: Optional[LayerType] = None,
+            norm_layer: Optional[LayerType] = None,
+            aa_layer: Optional[LayerType] = None,
+            se_layer: Optional[LayerType] = None,
             drop_path_rate: float = 0.,
             layer_scale_init_value: Optional[float] = None,
             feature_location: str = '',
@@ -339,6 +340,7 @@ class EfficientNetBuilder:
         self.se_from_exp = se_from_exp  # calculate se channel reduction from expanded (mid) chs
         self.act_layer = act_layer
         self.norm_layer = norm_layer
+        self.aa_layer = aa_layer
         self.se_layer = get_attn(se_layer)
         try:
             self.se_layer(8, rd_ratio=1.0)  # test if attn layer accepts rd_ratio arg
@@ -377,6 +379,9 @@ class EfficientNetBuilder:
         assert ba['act_layer'] is not None
         ba['norm_layer'] = self.norm_layer
         ba['drop_path_rate'] = drop_path_rate
+
+        if self.aa_layer is not None:
+            ba['aa_layer'] = self.aa_layer
 
         se_ratio = ba.pop('se_ratio', None)
         if se_ratio and self.se_layer is not None:
@@ -461,6 +466,7 @@ class EfficientNetBuilder:
                     space2depth = 1
 
                 if space2depth > 0:
+                    # FIXME s2d is a WIP
                     if space2depth == 2 and block_args['stride'] == 2:
                         block_args['stride'] = 1
                         # to end s2d region, need to correct expansion and se ratio relative to input

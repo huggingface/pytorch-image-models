@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, LayerType, create_attn, \
-    get_attn, get_act_layer, get_norm_layer, create_classifier
+    get_attn, get_act_layer, get_norm_layer, create_classifier, create_aa
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -29,15 +29,6 @@ __all__ = ['ResNet', 'BasicBlock', 'Bottleneck']  # model_registry will add each
 def get_padding(kernel_size: int, stride: int, dilation: int = 1) -> int:
     padding = ((stride - 1) + dilation * (kernel_size - 1)) // 2
     return padding
-
-
-def create_aa(aa_layer: Type[nn.Module], channels: int, stride: int = 2, enable: bool = True) -> nn.Module:
-    if not aa_layer or not enable:
-        return nn.Identity()
-    if issubclass(aa_layer, nn.AvgPool2d):
-        return aa_layer(stride)
-    else:
-        return aa_layer(channels=channels, stride=stride)
 
 
 class BasicBlock(nn.Module):

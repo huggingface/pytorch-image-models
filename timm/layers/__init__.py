@@ -4,7 +4,7 @@ from .adaptive_avgmax_pool import \
 from .attention2d import MultiQueryAttention2d, Attention2d, MultiQueryAttentionV2
 from .attention_pool import AttentionPoolLatent
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
-from .blur_pool import BlurPool2d
+from .blur_pool import BlurPool2d, create_aa
 from .classifier import ClassifierHead, create_classifier, NormMlpClassifierHead
 from .cond_conv2d import CondConv2d, get_condconv_initializer
 from .config import is_exportable, is_scriptable, is_no_jit, use_fused_attn, \
