@@ -1420,7 +1420,7 @@ def _checkpoint_filter_fn(state_dict, model):
         return state_dict  # non-original checkpoint, no remapping needed
 
     state_dict = state_dict.get('state_dict', state_dict)
-    if 'image_encoder.model.head.proj' in state_dict:
+    if 'image_encoder.model.patch_embed.0.rbr_conv.0.conv.weight' in state_dict:
         # remap MobileCLIP checkpoints
         prefix = 'image_encoder.model.'
     else:
@@ -1598,6 +1598,7 @@ def fastvit_mci0(pretrained=False, **kwargs):
         se_downsamples=(False, False, True, True),
         pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
+        lkc_use_act=True,
     )
     return _create_fastvit('fastvit_mci0', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1612,6 +1613,7 @@ def fastvit_mci1(pretrained=False, **kwargs):
         se_downsamples=(False, False, True, True),
         pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
+        lkc_use_act=True,
     )
     return _create_fastvit('fastvit_mci1', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1626,5 +1628,6 @@ def fastvit_mci2(pretrained=False, **kwargs):
         se_downsamples=(False, False, True, True),
         pos_embs=(None, None, None, partial(RepConditionalPosEnc, spatial_shape=(7, 7))),
         token_mixers=("repmixer", "repmixer", "repmixer", "attention"),
+        lkc_use_act=True,
     )
     return _create_fastvit('fastvit_mci2', pretrained=pretrained, **dict(model_args, **kwargs))
