@@ -7,7 +7,7 @@ import math
 from typing import Optional, Tuple, Union
 
 import torch
-from torchvision import transforms
+from torchvision.transforms import v2
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
@@ -41,24 +41,24 @@ def transforms_noaug_train(
         # random interpolation not supported with no-aug
         interpolation = 'bilinear'
     tfl = [
-        transforms.Resize(img_size, interpolation=str_to_interp_mode(interpolation)),
-        transforms.CenterCrop(img_size)
+        v2.Resize(img_size, interpolation=str_to_interp_mode(interpolation)),
+        v2.CenterCrop(img_size)
     ]
     if use_prefetcher:
         # prefetcher and collate will handle tensor conversion and norm
         tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disabled, converted to tensor without scaling, keep original dtype
-        tfl += [transforms.PILToTensor()]
+        tfl += [v2.PILToTensor()]
     else:
         tfl += [
-            transforms.ToTensor(),
-            transforms.Normalize(
+            v2.ToTensor(),
+            v2.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std)
             )
         ]
-    return transforms.Compose(tfl)
+    return v2.Compose(tfl)
 
 
 def transforms_imagenet_train(
@@ -151,9 +151,9 @@ def transforms_imagenet_train(
             )
         ]
     if hflip > 0.:
-        primary_tfl += [transforms.RandomHorizontalFlip(p=hflip)]
+        primary_tfl += [v2.RandomHorizontalFlip(p=hflip)]
     if vflip > 0.:
-        primary_tfl += [transforms.RandomVerticalFlip(p=vflip)]
+        primary_tfl += [v2.RandomVerticalFlip(p=vflip)]
 
     secondary_tfl = []
     disable_color_jitter = False
@@ -191,22 +191,22 @@ def transforms_imagenet_train(
             color_jitter = (float(color_jitter),) * 3
         if color_jitter_prob is not None:
             secondary_tfl += [
-                transforms.RandomApply([
-                        transforms.ColorJitter(*color_jitter),
+                v2.RandomApply([
+                        v2.ColorJitter(*color_jitter),
                     ],
                     p=color_jitter_prob
                 )
             ]
         else:
-            secondary_tfl += [transforms.ColorJitter(*color_jitter)]
+            secondary_tfl += [v2.ColorJitter(*color_jitter)]
 
     if grayscale_prob:
-        secondary_tfl += [transforms.RandomGrayscale(p=grayscale_prob)]
+        secondary_tfl += [v2.RandomGrayscale(p=grayscale_prob)]
 
     if gaussian_blur_prob:
         secondary_tfl += [
-            transforms.RandomApply([
-                    transforms.GaussianBlur(kernel_size=23),  # hardcoded for now
+            v2.RandomApply([
+                    v2.GaussianBlur(kernel_size=23),  # hardcoded for now
                 ],
                 p=gaussian_blur_prob,
             )
@@ -218,11 +218,11 @@ def transforms_imagenet_train(
         final_tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disable, converted to tensor without scaling, keeps original dtype
-        final_tfl += [transforms.PILToTensor()]
+        final_tfl += [v2.PILToTensor()]
     else:
         final_tfl += [
-            transforms.ToTensor(),
-            transforms.Normalize(
+            v2.ToTensor(),
+            v2.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),
             ),
@@ -239,9 +239,9 @@ def transforms_imagenet_train(
             ]
 
     if separate:
-        return transforms.Compose(primary_tfl), transforms.Compose(secondary_tfl), transforms.Compose(final_tfl)
+        return v2.Compose(primary_tfl), v2.Compose(secondary_tfl), v2.Compose(final_tfl)
     else:
-        return transforms.Compose(primary_tfl + secondary_tfl + final_tfl)
+        return v2.Compose(primary_tfl + secondary_tfl + final_tfl)
 
 
 def transforms_imagenet_eval(
@@ -289,8 +289,8 @@ def transforms_imagenet_eval(
         # squash mode scales each edge to 1/pct of target, then crops
         # aspect ratio is not preserved, no img lost if crop_pct == 1.0
         tfl += [
-            transforms.Resize(scale_size, interpolation=str_to_interp_mode(interpolation)),
-            transforms.CenterCrop(img_size),
+            v2.Resize(scale_size, interpolation=str_to_interp_mode(interpolation)),
+            v2.CenterCrop(img_size),
         ]
     elif crop_mode == 'border':
         # scale the longest edge of image to 1/pct of target edge, add borders to pad, then crop
@@ -306,29 +306,29 @@ def transforms_imagenet_eval(
         if scale_size[0] == scale_size[1]:
             # simple case, use torchvision built-in Resize w/ shortest edge mode (scalar size arg)
             tfl += [
-                transforms.Resize(scale_size[0], interpolation=str_to_interp_mode(interpolation))
+                v2.Resize(scale_size[0], interpolation=str_to_interp_mode(interpolation))
             ]
         else:
             # resize the shortest edge to matching target dim for non-square target
             tfl += [ResizeKeepRatio(scale_size)]
-        tfl += [transforms.CenterCrop(img_size)]
+        tfl += [v2.CenterCrop(img_size)]
 
     if use_prefetcher:
         # prefetcher and collate will handle tensor conversion and norm
         tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disabled, converted to tensor without scaling, keeps original dtype
-        tfl += [transforms.PILToTensor()]
+        tfl += [v2.PILToTensor()]
     else:
         tfl += [
-            transforms.ToTensor(),
-            transforms.Normalize(
+            v2.ToTensor(),
+            v2.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),
             ),
         ]
 
-    return transforms.Compose(tfl)
+    return v2.Compose(tfl)
 
 
 def create_transform(
