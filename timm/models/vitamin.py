@@ -279,6 +279,7 @@ class GeGluMlp(nn.Module):
 
 
 def _create_vitamin(variant, pretrained=False, embed_cfg=None, **kwargs):
+    out_indices = kwargs.pop('out_indices', 3)
     assert embed_cfg is not None
     backbone = MbConvStages(cfg=embed_cfg)
     kwargs['embed_layer'] = partial(HybridEmbed, backbone=backbone, proj=False)
@@ -289,6 +290,7 @@ def _create_vitamin(variant, pretrained=False, embed_cfg=None, **kwargs):
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
 
