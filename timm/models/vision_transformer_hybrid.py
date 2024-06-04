@@ -38,14 +38,15 @@ class HybridEmbed(nn.Module):
 
     def __init__(
             self,
-            backbone,
-            img_size=224,
-            patch_size=1,
-            feature_size=None,
-            feature_ratio=None,
-            in_chans=3,
-            embed_dim=768,
-            bias=True,
+            backbone: nn.Module,
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: Union[int, Tuple[int, int]] = 1,
+            feature_size: Optional[Union[int, Tuple[int, int]]] = None,
+            feature_ratio: Optional[Union[int, Tuple[int, int]]] = None,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            bias: bool = True,
+            proj: bool = True,
             flatten: bool = True,
             output_fmt: Optional[str] = None,
             strict_img_size: bool = True,
@@ -95,7 +96,18 @@ class HybridEmbed(nn.Module):
         self.strict_img_size = strict_img_size
         self.dynamic_img_pad = dynamic_img_pad
 
-        self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
+        if proj:
+            self.proj = nn.Conv2d(
+                feature_dim,
+                embed_dim,
+                kernel_size=patch_size,
+                stride=patch_size,
+                bias=bias,
+            )
+        else:
+            assert feature_dim == embed_dim,\
+                f'The feature dim ({feature_dim} must match embed dim ({embed_dim}) when projection disabled.'
+            self.proj = nn.Identity()
 
     def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
         total_reduction = (
@@ -115,6 +127,13 @@ class HybridEmbed(nn.Module):
             return math.ceil(feat_size[0] / self.patch_size[0]), math.ceil(feat_size[1] / self.patch_size[1])
         else:
             return feat_size[0] // self.patch_size[0], feat_size[1] // self.patch_size[1]
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True):
+        if hasattr(self.backbone, 'set_grad_checkpointing'):
+            self.backbone.set_grad_checkpointing(enable=enable)
+        elif hasattr(self.backbone, 'grad_checkpointing'):
+            self.backbone.grad_checkpointing = enable
 
     def forward(self, x):
         x = self.backbone(x)
@@ -156,6 +175,13 @@ class HybridEmbedWithSize(nn.Module):
             embed_dim=embed_dim,
             bias=bias,
         )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable: bool = True):
+        if hasattr(self.backbone, 'set_grad_checkpointing'):
+            self.backbone.set_grad_checkpointing(enable=enable)
+        elif hasattr(self.backbone, 'grad_checkpointing'):
+            self.backbone.grad_checkpointing = enable
 
     def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
         x = self.backbone(x)
