@@ -134,7 +134,7 @@ class MobileNetV3(nn.Module):
             self.norm_head = nn.Identity()
             self.act2 = act_layer(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
 
         efficientnet_init_weights(self)
 
