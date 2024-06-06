@@ -15,14 +15,15 @@ Hacked together by / Copyright 2020, Ross Wightman
 """
 import math
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import StdConv2dSame, StdConv2d, to_2tuple, Format, nchw_to
+from timm.layers import StdConv2dSame, StdConv2d, ConvNormAct, to_2tuple, to_ntuple, Format, nchw_to
+
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
@@ -191,8 +192,52 @@ class HybridEmbedWithSize(nn.Module):
         return x.flatten(2).transpose(1, 2), x.shape[-2:]
 
 
-def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwargs):
-    embed_layer = partial(HybridEmbed, backbone=backbone)
+class ConvStem(nn.Sequential):
+    def __init__(
+            self,
+            in_chans: int = 3,
+            depth: int = 3,
+            channels: Union[int, Tuple[int, ...]] = 64,
+            kernel_size: Union[int, Tuple[int, ...]] = 3,
+            stride: Union[int, Tuple[int, ...]] = (2, 2, 2),
+            padding: Union[str, int, Tuple[int, ...]] = "",
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
+    ):
+        super().__init__()
+        if isinstance(channels, int):
+            if depth == 4:
+                channels = (channels // 8, channels // 4, channels // 2, channels)
+            elif depth == 3:
+                channels = (channels // 4, channels // 2, channels)
+            else:
+                channels = to_ntuple(depth)(channels)
+
+        kernel_size = to_ntuple(depth)(kernel_size)
+        padding = to_ntuple(depth)(padding)
+        assert depth == len(stride) == len(kernel_size) == len(channels)
+
+        in_chs = in_chans
+        for i in range(len(channels)):
+            last_conv = i == len(channels) - 1
+            self.add_module(f'{i}', ConvNormAct(
+                in_chs,
+                channels[i],
+                kernel_size=kernel_size[i],
+                stride=stride[i],
+                padding=padding[i],
+                bias=last_conv,
+                apply_norm=not last_conv,
+                apply_act=not last_conv,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            ))
+            in_chs = channels[i]
+
+
+def _create_vision_transformer_hybrid(variant, backbone, embed_args=None, pretrained=False, **kwargs):
+    embed_args = embed_args or {}
+    embed_layer = partial(HybridEmbed, backbone=backbone, **embed_args)
     kwargs.setdefault('patch_size', 1)  # default patch size for hybrid models if not set
     return _create_vision_transformer(variant, pretrained=pretrained, embed_layer=embed_layer, **kwargs)
 
@@ -430,6 +475,25 @@ def vit_base_resnet50d_224(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
         'vit_base_resnet50d_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_mci_224(pretrained=False, **kwargs) -> VisionTransformer:
+    """ Custom ViT base hybrid w/ ResNet50D stride 32. No pretrained weights.
+    """
+    backbone = ConvStem(
+        channels=(768//4, 768//4, 768),
+        stride=(4, 2, 2),
+        kernel_size=(4, 2, 2),
+        padding=0,
+        act_layer=nn.GELU,
+    )
+    model_args = dict(embed_dim=768, depth=12, num_heads=12, no_embed_class=True)
+    model = _create_vision_transformer_hybrid(
+        'vit_base_resnet50d_224', backbone=backbone, embed_args=dict(proj=False),
+        pretrained=pretrained, **dict(model_args, **kwargs)
+    )
     return model
 
 

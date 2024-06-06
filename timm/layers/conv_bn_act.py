@@ -23,6 +23,7 @@ class ConvNormAct(nn.Module):
             dilation: int = 1,
             groups: int = 1,
             bias: bool = False,
+            apply_norm: bool = True,
             apply_act: bool = True,
             norm_layer: LayerType = nn.BatchNorm2d,
             act_layer: LayerType = nn.ReLU,
@@ -48,17 +49,23 @@ class ConvNormAct(nn.Module):
             **conv_kwargs,
         )
 
-        # NOTE for backwards compatibility with models that use separate norm and act layer definitions
-        norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
-        # NOTE for backwards (weight) compatibility, norm layer name remains `.bn`
-        if drop_layer:
-            norm_kwargs['drop_layer'] = drop_layer
-        self.bn = norm_act_layer(
-            out_channels,
-            apply_act=apply_act,
-            act_kwargs=act_kwargs,
-            **norm_kwargs,
-        )
+        if apply_norm:
+            # NOTE for backwards compatibility with models that use separate norm and act layer definitions
+            norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
+            # NOTE for backwards (weight) compatibility, norm layer name remains `.bn`
+            if drop_layer:
+                norm_kwargs['drop_layer'] = drop_layer
+            self.bn = norm_act_layer(
+                out_channels,
+                apply_act=apply_act,
+                act_kwargs=act_kwargs,
+                **norm_kwargs,
+            )
+        else:
+            self.bn = nn.Sequential()
+            if drop_layer:
+                norm_kwargs['drop_layer'] = drop_layer
+                self.bn.add_module('drop', drop_layer())
 
     @property
     def in_channels(self):
@@ -88,6 +95,7 @@ class ConvNormActAa(nn.Module):
             dilation: int = 1,
             groups: int = 1,
             bias: bool = False,
+            apply_norm: bool = True,
             apply_act: bool = True,
             norm_layer: LayerType = nn.BatchNorm2d,
             act_layer: LayerType = nn.ReLU,
@@ -113,17 +121,24 @@ class ConvNormActAa(nn.Module):
             **conv_kwargs,
         )
 
-        # NOTE for backwards compatibility with models that use separate norm and act layer definitions
-        norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
-        # NOTE for backwards (weight) compatibility, norm layer name remains `.bn`
-        if drop_layer:
-            norm_kwargs['drop_layer'] = drop_layer
-        self.bn = norm_act_layer(
-            out_channels,
-            apply_act=apply_act,
-            act_kwargs=act_kwargs,
-            **norm_kwargs,
-        )
+        if apply_norm:
+            # NOTE for backwards compatibility with models that use separate norm and act layer definitions
+            norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
+            # NOTE for backwards (weight) compatibility, norm layer name remains `.bn`
+            if drop_layer:
+                norm_kwargs['drop_layer'] = drop_layer
+            self.bn = norm_act_layer(
+                out_channels,
+                apply_act=apply_act,
+                act_kwargs=act_kwargs,
+                **norm_kwargs,
+            )
+        else:
+            self.bn = nn.Sequential()
+            if drop_layer:
+                norm_kwargs['drop_layer'] = drop_layer
+                self.bn.add_module('drop', drop_layer())
+
         self.aa = create_aa(aa_layer, out_channels, stride=stride, enable=use_aa)
 
     @property

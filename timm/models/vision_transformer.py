@@ -609,7 +609,7 @@ class VisionTransformer(nn.Module):
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
         if self.pos_embed is None:
-            return x
+            return x.view(x.shape[0], -1, x.shape[-1])
 
         if self.dynamic_img_size:
             B, H, W, C = x.shape
