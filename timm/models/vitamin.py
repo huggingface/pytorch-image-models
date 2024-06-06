@@ -308,33 +308,35 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    'vitamin_small.datacomp1b_clip_ltt': _cfg(
+    'vitamin_small_224.datacomp1b_clip_ltt': _cfg(
         hf_hub_id='jienengchen/ViTamin-S-LTT', num_classes=384),
-    'vitamin_small.datacomp1b_clip': _cfg(
+    'vitamin_small_224.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-S', num_classes=384),
-    'vitamin_base.datacomp1b_clip_ltt': _cfg(
+    'vitamin_base_224.datacomp1b_clip_ltt': _cfg(
         hf_hub_id='jienengchen/ViTamin-B-LTT', num_classes=768),
-    'vitamin_base.datacomp1b_clip': _cfg(
+    'vitamin_base_224.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-B', num_classes=768),
-    'vitamin_large.datacomp1b_clip': _cfg(
-        hf_hub_id='jienengchen/ViTamin-L-224px', num_classes=1024),
-    'vitamin_large_256.datacomp1b_clip_l2': _cfg(
+    'vitamin_large_224.datacomp1b_clip': _cfg(
+        hf_hub_id='jienengchen/ViTamin-L-224px', num_classes=768),
+    'vitamin_large_256.datacomp1b_clip': _cfg(
+        hf_hub_id='jienengchen/ViTamin-L-256px', num_classes=768,
+        input_size=(3, 256, 256), crop_pct=1.0),
+    'vitamin_large_336.datacomp1b_clip': _cfg(
+        hf_hub_id='jienengchen/ViTamin-L-336px', num_classes=768,
+        input_size=(3, 336, 336), crop_pct=1.0),
+    'vitamin_large_384.datacomp1b_clip': _cfg(
+        hf_hub_id='jienengchen/ViTamin-L-384px', num_classes=768,
+        input_size=(3, 384, 384), crop_pct=1.0),
+    'vitamin_large2_224.datacomp1b_clip': _cfg(
+        hf_hub_id='jienengchen/ViTamin-L2-224px', num_classes=1024),
+    'vitamin_large2_256.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-L2-256px', num_classes=1024,
         input_size=(3, 256, 256), crop_pct=1.0),
-    'vitamin_large_256.datacomp1b_clip': _cfg(
-        hf_hub_id='jienengchen/ViTamin-L-256px', num_classes=1024,
-        input_size=(3, 256, 256), crop_pct=1.0),
-    'vitamin_large_336.datacomp1b_clip_l2': _cfg(
+    'vitamin_large2_336.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-L2-336px', num_classes=1024,
         input_size=(3, 336, 336), crop_pct=1.0),
-    'vitamin_large_336.datacomp1b_clip': _cfg(
-        hf_hub_id='jienengchen/ViTamin-L-336px', num_classes=1024,
-        input_size=(3, 336, 336), crop_pct=1.0),
-    'vitamin_large_384.datacomp1b_clip_l2': _cfg(
+    'vitamin_large2_384.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-L2-384px', num_classes=1024,
-        input_size=(3, 384, 384), crop_pct=1.0),
-    'vitamin_large_384.datacomp1b_clip': _cfg(
-        hf_hub_id='jienengchen/ViTamin-L-384px', num_classes=1024,
         input_size=(3, 384, 384), crop_pct=1.0),
     'vitamin_xlarge_256.datacomp1b_clip': _cfg(
         hf_hub_id='jienengchen/ViTamin-XL-256px', num_classes=1152,
@@ -349,12 +351,12 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def vitamin_small(pretrained=False, **kwargs) -> VisionTransformer:
+def vitamin_small_224(pretrained=False, **kwargs) -> VisionTransformer:
     embed_cfg = VitCfg(
         embed_dim=(64, 128, 384),
         depths=(2, 4, 1),
         stem_width=64,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -364,17 +366,17 @@ def vitamin_small(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=384, depth=14, num_heads=6, mlp_layer=GeGluMlp, mlp_ratio=2.,
         class_token=False, global_pool='avg', embed_cfg=embed_cfg
     )
-    model = _create_vitamin('vitamin_small', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_vitamin('vitamin_small_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vitamin_base(pretrained=False, **kwargs) -> VisionTransformer:
+def vitamin_base_224(pretrained=False, **kwargs) -> VisionTransformer:
     embed_cfg = VitCfg(
         embed_dim=(128, 256, 768),
         depths=(2, 4, 1),
         stem_width=128,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -383,17 +385,17 @@ def vitamin_base(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(
         embed_dim=768, depth=14, num_heads=12, mlp_layer=GeGluMlp, mlp_ratio=2.,
         class_token=False, global_pool='avg', embed_cfg=embed_cfg)
-    model = _create_vitamin('vitamin_base', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_vitamin('vitamin_base_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vitamin_large(pretrained=False, **kwargs) -> VisionTransformer:
+def vitamin_large_224(pretrained=False, **kwargs) -> VisionTransformer:
     embed_cfg = VitCfg(
         embed_dim=(160, 320, 1024),
         depths=(2, 4, 1),
         stem_width=160,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -403,7 +405,7 @@ def vitamin_large(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=1024, depth=31, num_heads=16, mlp_layer=GeGluMlp, mlp_ratio=2.,
         class_token=False, global_pool='avg', embed_cfg=embed_cfg,
     )
-    model = _create_vitamin('vitamin_large', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_vitamin('vitamin_large_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -413,7 +415,7 @@ def vitamin_large_256(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=(160, 320, 1024),
         depths=(2, 4, 1),
         stem_width=160,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -432,7 +434,7 @@ def vitamin_large_336(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=(160, 320, 1024),
         depths=(2, 4, 1),
         stem_width=160,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -452,7 +454,7 @@ def vitamin_large_384(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=(160, 320, 1024),
         depths=(2, 4, 1),
         stem_width=160,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -466,12 +468,90 @@ def vitamin_large_384(pretrained=False, **kwargs) -> VisionTransformer:
 
 
 @register_model
+def vitamin_large2_224(pretrained=False, **kwargs) -> VisionTransformer:
+    embed_cfg = VitCfg(
+        embed_dim=(160, 320, 1024),
+        depths=(2, 4, 1),
+        stem_width=160,
+        conv_cfg=VitConvCfg(
+            norm_layer='layernorm2d',
+            norm_eps=1e-6,
+        ),
+        head_type='1d',
+    )
+    model_args = dict(
+        embed_dim=1024, depth=31, num_heads=16, mlp_layer=GeGluMlp, mlp_ratio=2.,
+        class_token=False, global_pool='avg', embed_cfg=embed_cfg,
+    )
+    model = _create_vitamin('vitamin_large2_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vitamin_large2_256(pretrained=False, **kwargs) -> VisionTransformer:
+    embed_cfg = VitCfg(
+        embed_dim=(160, 320, 1024),
+        depths=(2, 4, 1),
+        stem_width=160,
+        conv_cfg=VitConvCfg(
+            norm_layer='layernorm2d',
+            norm_eps=1e-6,
+        ),
+        head_type='1d',
+    )
+    model_args = dict(
+        img_size=256, embed_dim=1024, depth=31, num_heads=16, mlp_layer=GeGluMlp, mlp_ratio=2.,
+        class_token=False, global_pool='avg', embed_cfg=embed_cfg)
+    model = _create_vitamin('vitamin_large2_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vitamin_large2_336(pretrained=False, **kwargs) -> VisionTransformer:
+    embed_cfg = VitCfg(
+        embed_dim=(160, 320, 1024),
+        depths=(2, 4, 1),
+        stem_width=160,
+        conv_cfg=VitConvCfg(
+            norm_layer='layernorm2d',
+            norm_eps=1e-6,
+        ),
+        head_type='1d',
+    )
+    model_args = dict(
+        img_size=336, embed_dim=1024, depth=31, num_heads=16, mlp_layer=GeGluMlp, mlp_ratio=2.,
+        class_token=False, global_pool='avg', embed_cfg=embed_cfg
+    )
+    model = _create_vitamin('vitamin_large2_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vitamin_large2_384(pretrained=False, **kwargs) -> VisionTransformer:
+    embed_cfg = VitCfg(
+        embed_dim=(160, 320, 1024),
+        depths=(2, 4, 1),
+        stem_width=160,
+        conv_cfg=VitConvCfg(
+            norm_layer='layernorm2d',
+            norm_eps=1e-6,
+        ),
+        head_type='1d',
+    )
+    model_args = dict(
+        img_size=384, embed_dim=1024, depth=31, num_heads=16, mlp_layer=GeGluMlp, mlp_ratio=2.,
+        class_token=False, global_pool='avg', embed_cfg=embed_cfg)
+    model = _create_vitamin('vitamin_large2_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vitamin_xlarge_256(pretrained=False, **kwargs) -> VisionTransformer:
     embed_cfg=VitCfg(
         embed_dim=(192, 384, 1152),
         depths=(2, 4, 1),
         stem_width=192,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -491,7 +571,7 @@ def vitamin_xlarge_336(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=(192, 384, 1152),
         depths=(2, 4, 1),
         stem_width=192,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
@@ -500,7 +580,7 @@ def vitamin_xlarge_336(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(
         img_size=336, embed_dim=1152, depth=32, num_heads=16, mlp_layer=GeGluMlp, mlp_ratio=2.,
         class_token=False, global_pool='avg', pos_embed='none', embed_cfg=embed_cfg)
-    model = _create_vitamin('vitamin_xlarge_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_vitamin('vitamin_xlarge_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -510,7 +590,7 @@ def vitamin_xlarge_384(pretrained=False, **kwargs) -> VisionTransformer:
         embed_dim=(192, 384, 1152),
         depths=(2, 4, 1),
         stem_width=192,
-        conv_cfg = VitConvCfg(
+        conv_cfg=VitConvCfg(
             norm_layer='layernorm2d',
             norm_eps=1e-6,
         ),
