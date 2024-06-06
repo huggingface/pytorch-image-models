@@ -5,6 +5,7 @@ Handles stride, dilation calculations, and selects feature extraction points.
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
+from typing import Callable, Optional
 
 import logging
 import math
@@ -16,7 +17,7 @@ from typing import Any, Dict, List
 import torch.nn as nn
 
 from ._efficientnet_blocks import *
-from timm.layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible
+from timm.layers import CondConv2d, get_condconv_initializer, get_act_layer, get_attn, make_divisible, LayerType
 
 __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights",
            'resolve_bn_args', 'resolve_act_layer', 'round_channels', 'BN_MOMENTUM_TF_DEFAULT', 'BN_EPS_TF_DEFAULT']
@@ -24,7 +25,7 @@ __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"
 _logger = logging.getLogger(__name__)
 
 
-_DEBUG_BUILDER = False
+_DEBUG_BUILDER = True
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
@@ -139,8 +140,8 @@ def _decode_block_str(block_str):
 
     # if act_layer is None, the model default (passed to model init) will be used
     act_layer = options['n'] if 'n' in options else None
-    exp_kernel_size = _parse_ksize(options['a']) if 'a' in options else 1
-    pw_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
+    start_kernel_size = _parse_ksize(options['a']) if 'a' in options else 1
+    end_kernel_size = _parse_ksize(options['p']) if 'p' in options else 1
     force_in_chs = int(options['fc']) if 'fc' in options else 0  # FIXME hack to deal with in_chs issue in TPU def
     num_repeat = int(options['r'])
 
@@ -154,35 +155,69 @@ def _decode_block_str(block_str):
     if block_type == 'ir':
         block_args.update(dict(
             dw_kernel_size=_parse_ksize(options['k']),
-            exp_kernel_size=exp_kernel_size,
-            pw_kernel_size=pw_kernel_size,
+            exp_kernel_size=start_kernel_size,
+            pw_kernel_size=end_kernel_size,
             exp_ratio=float(options['e']),
-            se_ratio=float(options['se']) if 'se' in options else 0.,
+            se_ratio=float(options.get('se', 0.)),
             noskip=skip is False,
+            s2d=int(options.get('d', 0)) > 0,
         ))
         if 'cc' in options:
             block_args['num_experts'] = int(options['cc'])
     elif block_type == 'ds' or block_type == 'dsa':
         block_args.update(dict(
             dw_kernel_size=_parse_ksize(options['k']),
-            pw_kernel_size=pw_kernel_size,
-            se_ratio=float(options['se']) if 'se' in options else 0.,
+            pw_kernel_size=end_kernel_size,
+            se_ratio=float(options.get('se', 0.)),
             pw_act=block_type == 'dsa',
             noskip=block_type == 'dsa' or skip is False,
+            s2d=int(options.get('d', 0)) > 0,
         ))
     elif block_type == 'er':
         block_args.update(dict(
             exp_kernel_size=_parse_ksize(options['k']),
-            pw_kernel_size=pw_kernel_size,
+            pw_kernel_size=end_kernel_size,
             exp_ratio=float(options['e']),
             force_in_chs=force_in_chs,
-            se_ratio=float(options['se']) if 'se' in options else 0.,
+            se_ratio=float(options.get('se', 0.)),
             noskip=skip is False,
         ))
     elif block_type == 'cn':
         block_args.update(dict(
             kernel_size=int(options['k']),
             skip=skip is True,
+        ))
+    elif block_type == 'uir':
+        # override exp / proj kernels for start/end in uir block
+        start_kernel_size = _parse_ksize(options['a']) if 'a' in options else 0
+        end_kernel_size = _parse_ksize(options['p']) if 'p' in options else 0
+        block_args.update(dict(
+            dw_kernel_size_start=start_kernel_size,  # overload exp ks arg for dw start
+            dw_kernel_size_mid=_parse_ksize(options['k']),
+            dw_kernel_size_end=end_kernel_size,  # overload pw ks arg for dw end
+            exp_ratio=float(options['e']),
+            se_ratio=float(options.get('se', 0.)),
+            noskip=skip is False,
+        ))
+    elif block_type == 'mha':
+        kv_dim = int(options['d'])
+        block_args.update(dict(
+            dw_kernel_size=_parse_ksize(options['k']),
+            num_heads=int(options['h']),
+            key_dim=kv_dim,
+            value_dim=kv_dim,
+            kv_stride=int(options.get('v', 1)),
+            noskip=skip is False,
+        ))
+    elif block_type == 'mqa':
+        kv_dim = int(options['d'])
+        block_args.update(dict(
+            dw_kernel_size=_parse_ksize(options['k']),
+            num_heads=int(options['h']),
+            key_dim=kv_dim,
+            value_dim=kv_dim,
+            kv_stride=int(options.get('v', 1)),
+            noskip=skip is False,
         ))
     else:
         assert False, 'Unknown block type (%s)' % block_type
@@ -285,14 +320,27 @@ class EfficientNetBuilder:
     https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/modeling/backbone/fbnet_builder.py
 
     """
-    def __init__(self, output_stride=32, pad_type='', round_chs_fn=round_channels, se_from_exp=False,
-                 act_layer=None, norm_layer=None, se_layer=None, drop_path_rate=0., feature_location=''):
+    def __init__(
+            self,
+            output_stride: int = 32,
+            pad_type: str = '',
+            round_chs_fn: Callable = round_channels,
+            se_from_exp: bool = False,
+            act_layer: Optional[LayerType] = None,
+            norm_layer: Optional[LayerType] = None,
+            aa_layer: Optional[LayerType] = None,
+            se_layer: Optional[LayerType] = None,
+            drop_path_rate: float = 0.,
+            layer_scale_init_value: Optional[float] = None,
+            feature_location: str = '',
+    ):
         self.output_stride = output_stride
         self.pad_type = pad_type
         self.round_chs_fn = round_chs_fn
         self.se_from_exp = se_from_exp  # calculate se channel reduction from expanded (mid) chs
         self.act_layer = act_layer
         self.norm_layer = norm_layer
+        self.aa_layer = aa_layer
         self.se_layer = get_attn(se_layer)
         try:
             self.se_layer(8, rd_ratio=1.0)  # test if attn layer accepts rd_ratio arg
@@ -300,6 +348,7 @@ class EfficientNetBuilder:
         except TypeError:
             self.se_has_ratio = False
         self.drop_path_rate = drop_path_rate
+        self.layer_scale_init_value = layer_scale_init_value
         if feature_location == 'depthwise':
             # old 'depthwise' mode renamed 'expansion' to match TF impl, old expansion mode didn't make sense
             _logger.warning("feature_location=='depthwise' is deprecated, using 'expansion'")
@@ -317,6 +366,10 @@ class EfficientNetBuilder:
         bt = ba.pop('block_type')
         ba['in_chs'] = self.in_chs
         ba['out_chs'] = self.round_chs_fn(ba['out_chs'])
+        s2d = ba.get('s2d', 0)
+        if s2d > 0:
+            # adjust while space2depth active
+            ba['out_chs'] *= 4
         if 'force_in_chs' in ba and ba['force_in_chs']:
             # NOTE this is a hack to work around mismatch in TF EdgeEffNet impl
             ba['force_in_chs'] = self.round_chs_fn(ba['force_in_chs'])
@@ -326,16 +379,22 @@ class EfficientNetBuilder:
         assert ba['act_layer'] is not None
         ba['norm_layer'] = self.norm_layer
         ba['drop_path_rate'] = drop_path_rate
-        if bt != 'cn':
-            se_ratio = ba.pop('se_ratio')
-            if se_ratio and self.se_layer is not None:
-                if not self.se_from_exp:
-                    # adjust se_ratio by expansion ratio if calculating se channels from block input
-                    se_ratio /= ba.get('exp_ratio', 1.0)
-                if self.se_has_ratio:
-                    ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
-                else:
-                    ba['se_layer'] = self.se_layer
+
+        if self.aa_layer is not None:
+            ba['aa_layer'] = self.aa_layer
+
+        se_ratio = ba.pop('se_ratio', None)
+        if se_ratio and self.se_layer is not None:
+            if not self.se_from_exp:
+                # adjust se_ratio by expansion ratio if calculating se channels from block input
+                se_ratio /= ba.get('exp_ratio', 1.0)
+            if s2d == 1:
+                # adjust for start of space2depth
+                se_ratio /= 4
+            if self.se_has_ratio:
+                ba['se_layer'] = partial(self.se_layer, rd_ratio=se_ratio)
+            else:
+                ba['se_layer'] = self.se_layer
 
         if bt == 'ir':
             _log_info_if('  InvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
@@ -349,8 +408,17 @@ class EfficientNetBuilder:
         elif bt == 'cn':
             _log_info_if('  ConvBnAct {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
             block = ConvBnAct(**ba)
+        elif bt == 'uir':
+            _log_info_if('  UniversalInvertedResidual {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = UniversalInvertedResidual(**ba, layer_scale_init_value=self.layer_scale_init_value)
+        elif bt == 'mqa':
+            _log_info_if('  MobileMultiQueryAttention {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = MobileAttention(**ba, use_multi_query=True, layer_scale_init_value=self.layer_scale_init_value)
+        elif bt == 'mha':
+            _log_info_if('  MobileMultiHeadAttention {}, Args: {}'.format(block_idx, str(ba)), self.verbose)
+            block = MobileAttention(**ba, layer_scale_init_value=self.layer_scale_init_value)
         else:
-            assert False, 'Uknkown block type (%s) while building model.' % bt
+            assert False, 'Unknown block type (%s) while building model.' % bt
 
         self.in_chs = ba['out_chs']  # update in_chs for arg of next block
         return block
@@ -377,6 +445,7 @@ class EfficientNetBuilder:
             self.features.append(feature_info)
 
         # outer list of block_args defines the stacks
+        space2depth = 0
         for stack_idx, stack_args in enumerate(model_block_args):
             last_stack = stack_idx + 1 == len(model_block_args)
             _log_info_if('Stack: {}'.format(stack_idx), self.verbose)
@@ -391,6 +460,20 @@ class EfficientNetBuilder:
                 assert block_args['stride'] in (1, 2)
                 if block_idx >= 1:   # only the first block in any stack can have a stride > 1
                     block_args['stride'] = 1
+
+                if not space2depth and block_args.pop('s2d', False):
+                    assert block_args['stride'] == 1
+                    space2depth = 1
+
+                if space2depth > 0:
+                    # FIXME s2d is a WIP
+                    if space2depth == 2 and block_args['stride'] == 2:
+                        block_args['stride'] = 1
+                        # to end s2d region, need to correct expansion and se ratio relative to input
+                        block_args['exp_ratio'] /= 4
+                        space2depth = 0
+                    else:
+                        block_args['s2d'] = space2depth
 
                 extract_features = False
                 if last_block:
@@ -415,6 +498,9 @@ class EfficientNetBuilder:
                 # create the block
                 block = self._make_block(block_args, total_block_idx, total_block_count)
                 blocks.append(block)
+
+                if space2depth == 1:
+                    space2depth = 2
 
                 # stash feature module name and channel info for model feature extraction
                 if extract_features:
