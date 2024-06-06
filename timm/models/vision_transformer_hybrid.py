@@ -389,12 +389,12 @@ default_cfgs = generate_default_cfgs({
     'vit_base_mci_224.apple_mclip': _cfg(
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_b.pt',
         num_classes=512,
-        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.conv1.0',
+        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv.weight',
     ),
     'vit_base_mci_224.apple_mclip_lt': _cfg(
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_blt.pt',
         num_classes=512,
-        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.conv1.0',
+        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv.weight',
     ),
 })
 
