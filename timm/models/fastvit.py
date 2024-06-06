@@ -1414,7 +1414,7 @@ default_cfgs = generate_default_cfgs({
 })
 
 
-def _checkpoint_filter_fn(state_dict, model):
+def checkpoint_filter_fn(state_dict, model):
     """ Remap original checkpoints -> timm """
     if 'stem.0.conv_kxk.0.conv.weight' in state_dict:
         return state_dict  # non-original checkpoint, no remapping needed
@@ -1493,7 +1493,7 @@ def _create_fastvit(variant, pretrained=False, **kwargs):
         FastVit,
         variant,
         pretrained,
-        pretrained_filter_fn=_checkpoint_filter_fn,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs
     )

@@ -403,7 +403,7 @@ class PyramidVisionTransformerV2(nn.Module):
         return x
 
 
-def _checkpoint_filter_fn(state_dict, model):
+def checkpoint_filter_fn(state_dict, model):
     """ Remap original checkpoints -> timm """
     if 'patch_embed.proj.weight' in state_dict:
         return state_dict  # non-original checkpoint, no remapping needed
@@ -430,7 +430,7 @@ def _create_pvt2(variant, pretrained=False, **kwargs):
         PyramidVisionTransformerV2,
         variant,
         pretrained,
-        pretrained_filter_fn=_checkpoint_filter_fn,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs,
     )

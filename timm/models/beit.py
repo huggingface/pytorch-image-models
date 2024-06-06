@@ -591,7 +591,7 @@ default_cfgs = generate_default_cfgs({
 })
 
 
-def _beit_checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antialias=True):
+def checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antialias=True):
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('module', state_dict)
     # beit v2 didn't strip module
@@ -637,7 +637,7 @@ def _create_beit(variant, pretrained=False, **kwargs):
     out_indices = kwargs.pop('out_indices', 3)
     model = build_model_with_cfg(
         Beit, variant, pretrained,
-        pretrained_filter_fn=_beit_checkpoint_filter_fn,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
