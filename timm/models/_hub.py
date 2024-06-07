@@ -285,7 +285,7 @@ def push_to_hf_hub(
         model_config: Optional[dict] = None,
         model_card: Optional[dict] = None,
         model_args: Optional[dict] = None,
-        safe_serialization: Union[bool, Literal["both"]] = False,
+        safe_serialization: Union[bool, Literal["both"]] = 'both',
 ):
     """
     Arguments:
