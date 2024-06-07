@@ -393,6 +393,7 @@ class NormFreeNet(nn.Module):
             self.final_conv = nn.Identity()
         self.final_act = act_layer(inplace=cfg.num_features > 0)
 
+        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             self.num_features,
             num_classes,
@@ -429,10 +430,10 @@ class NormFreeNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):

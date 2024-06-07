@@ -338,7 +338,7 @@ class PyramidVisionTransformerV2(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         # classification head
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
 
@@ -376,7 +376,7 @@ class PyramidVisionTransformerV2(nn.Module):
         for s in self.stages:
             s.grad_checkpointing = enable
 
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

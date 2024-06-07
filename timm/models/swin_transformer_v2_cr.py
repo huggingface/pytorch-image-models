@@ -602,7 +602,7 @@ class SwinTransformerV2Cr(nn.Module):
         self.patch_size: int = patch_size
         self.img_size: Tuple[int, int] = img_size
         self.window_size: int = window_size
-        self.num_features: int = int(embed_dim * 2 ** (len(depths) - 1))
+        self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (len(depths) - 1))
         self.feature_info = []
 
         self.patch_embed = PatchEmbed(

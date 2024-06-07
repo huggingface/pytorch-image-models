@@ -1197,9 +1197,9 @@ class MaxxVit(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         final_norm_layer = partial(get_norm_layer(cfg.transformer_cfg.norm_layer), eps=cfg.transformer_cfg.norm_eps)
-        self.head_hidden_size = cfg.head_hidden_size
-        if self.head_hidden_size:
+        if cfg.head_hidden_size:
             self.norm = nn.Identity()
+            self.head_hidden_size = cfg.head_hidden_size
             self.head = NormMlpClassifierHead(
                 self.num_features,
                 num_classes,
@@ -1210,6 +1210,7 @@ class MaxxVit(nn.Module):
             )
         else:
             # standard classifier head w/ norm, pooling, fc classifier
+            self.head_hidden_size = self.num_features
             self.norm = final_norm_layer(self.num_features)
             self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
@@ -1245,7 +1246,7 @@ class MaxxVit(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

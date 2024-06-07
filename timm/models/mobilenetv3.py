@@ -92,7 +92,6 @@ class MobileNetV3(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
-        self.num_features = num_features
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
@@ -118,19 +117,20 @@ class MobileNetV3(nn.Module):
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
         self.stage_ends = [f['stage'] for f in self.feature_info]
-        head_chs = builder.in_chs
+        self.num_features = builder.in_chs  # features of last stage, output of forward_features()
+        self.head_hidden_size = num_features  # features of conv_head, pre_logits output
 
         # Head + Pooling
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        num_pooled_chs = head_chs * self.global_pool.feat_mult()
+        num_pooled_chs = self.num_features * self.global_pool.feat_mult()
         if head_norm:
             # mobilenet-v4 post-pooling PW conv is followed by a norm+act layer
-            self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type)  # never bias
-            self.norm_head = norm_act_layer(self.num_features)
+            self.conv_head = create_conv2d(num_pooled_chs, self.head_hidden_size, 1, padding=pad_type)  # never bias
+            self.norm_head = norm_act_layer(self.head_hidden_size)
             self.act2 = nn.Identity()
         else:
             # mobilenet-v3 and others only have an activation after final PW conv
-            self.conv_head = create_conv2d(num_pooled_chs, self.num_features, 1, padding=pad_type, bias=head_bias)
+            self.conv_head = create_conv2d(num_pooled_chs, self.head_hidden_size, 1, padding=pad_type, bias=head_bias)
             self.norm_head = nn.Identity()
             self.act2 = act_layer(inplace=True)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
@@ -157,15 +157,15 @@ class MobileNetV3(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
-        # cannot meaningfully change pooling of efficient head after creation
+        # NOTE: cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,
@@ -262,10 +262,10 @@ class MobileNetV3(nn.Module):
         x = self.norm_head(x)
         x = self.act2(x)
         x = self.flatten(x)
-        if pre_logits:
-            return x
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
+        if pre_logits:
+            return x
         return self.classifier(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

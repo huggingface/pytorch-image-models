@@ -229,7 +229,7 @@ class DPN(nn.Module):
 
         blocks['conv5_bn_ac'] = CatBnAct(in_chs, norm_layer=fc_norm_layer)
 
-        self.num_features = in_chs
+        self.num_features = self.head_hidden_size = in_chs
         self.features = nn.Sequential(blocks)
 
         # Using 1x1 conv for the FC layer to allow the extra pooling scheme
@@ -253,10 +253,10 @@ class DPN(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)

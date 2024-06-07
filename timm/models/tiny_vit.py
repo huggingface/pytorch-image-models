@@ -486,7 +486,7 @@ class TinyVit(nn.Module):
             self.feature_info += [dict(num_chs=prev_dim, reduction=stride, module=f'stages.{stage_idx}')]
 
         # Classifier head
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
 
         norm_layer_cf = partial(LayerNorm2d, eps=1e-5)
         self.head = NormMlpClassifierHead(
@@ -529,7 +529,7 @@ class TinyVit(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
@@ -544,8 +544,8 @@ class TinyVit(nn.Module):
             x = self.stages(x)
         return x
 
-    def forward_head(self, x):
-        x = self.head(x)
+    def forward_head(self, x, pre_logits: bool = False):
+        x = self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
         return x
 
     def forward(self, x):

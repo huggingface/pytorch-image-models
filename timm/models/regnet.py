@@ -449,6 +449,7 @@ class RegNet(nn.Module):
             final_act = cfg.linear_out or cfg.preact
             self.final_conv = get_act_layer(cfg.act_layer)() if final_act else nn.Identity()
             self.num_features = prev_width
+        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             in_features=self.num_features,
             num_classes=num_classes,
@@ -510,7 +511,7 @@ class RegNet(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):

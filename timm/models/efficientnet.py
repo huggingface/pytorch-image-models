@@ -97,7 +97,7 @@ class EfficientNet(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
-        self.num_features = num_features
+        self.num_features = self.head_hidden_size = num_features
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
@@ -153,7 +153,7 @@ class EfficientNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
     def reset_classifier(self, num_classes, global_pool='avg'):

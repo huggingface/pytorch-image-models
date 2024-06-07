@@ -405,7 +405,7 @@ class GlobalContextVit(nn.Module):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         num_stages = len(depths)
-        self.num_features = int(embed_dim * 2 ** (num_stages - 1))
+        self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (num_stages - 1))
         if window_size is not None:
             window_size = to_ntuple(num_stages)(window_size)
         else:
@@ -486,7 +486,7 @@ class GlobalContextVit(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

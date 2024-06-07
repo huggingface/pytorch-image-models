@@ -131,7 +131,7 @@ class SelecSls(nn.Module):
         self.features = SequentialList(*[cfg['block'](*block_args) for block_args in cfg['features']])
         self.from_seq = SelectSeq()  # from List[tensor] -> Tensor in module compatible way
         self.head = nn.Sequential(*[conv_bn(*conv_args) for conv_args in cfg['head']])
-        self.num_features = cfg['num_features']
+        self.num_features = self.head_hidden_size = cfg['num_features']
         self.feature_info = cfg['feature_info']
 
         self.global_pool, self.head_drop, self.fc = create_classifier(
@@ -158,7 +158,7 @@ class SelecSls(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):

@@ -675,9 +675,13 @@ class CspNet(nn.Module):
         self.feature_info.extend(stage_feat_info)
 
         # Construct the head
-        self.num_features = prev_chs
+        self.num_features = self.head_hidden_size = prev_chs
         self.head = ClassifierHead(
-            in_features=prev_chs, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            in_features=prev_chs,
+            num_classes=num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+        )
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
@@ -698,11 +702,12 @@ class CspNet(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)

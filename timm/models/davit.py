@@ -485,7 +485,7 @@ class DaVit(nn.Module):
         norm_layer = partial(get_norm_layer(norm_layer), eps=norm_eps)
         norm_layer_cl = partial(get_norm_layer(norm_layer_cl), eps=norm_eps)
         self.num_classes = num_classes
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
         self.feature_info = []
@@ -565,7 +565,7 @@ class DaVit(nn.Module):
             stage.set_grad_checkpointing(enable=enable)
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

@@ -247,7 +247,7 @@ class DenseNet(nn.Module):
         self.features.add_module('norm5', norm_layer(num_features))
 
         self.feature_info += [dict(num_chs=num_features, reduction=current_stride, module='features.norm5')]
-        self.num_features = num_features
+        self.num_features = self.head_hidden_size = num_features
 
         # Linear layer
         global_pool, classifier = create_classifier(
@@ -287,10 +287,10 @@ class DenseNet(nn.Module):
                 b.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
@@ -298,11 +298,14 @@ class DenseNet(nn.Module):
     def forward_features(self, x):
         return self.features(x)
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.head_drop(x)
-        x = self.classifier(x)
+        return x if pre_logits else self.classifier(x)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        x = self.forward_head(x)
         return x
 
 

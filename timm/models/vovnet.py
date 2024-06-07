@@ -227,6 +227,7 @@ class VovNet(nn.Module):
 
         self.stages = nn.Sequential(*stages)
 
+        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
         for n, m in self.named_modules():
@@ -248,7 +249,7 @@ class VovNet(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):

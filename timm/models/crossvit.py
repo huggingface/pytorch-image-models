@@ -330,7 +330,7 @@ class CrossVit(nn.Module):
         num_patches = _compute_num_patches(self.img_size_scaled, patch_size)
         self.num_branches = len(patch_size)
         self.embed_dim = embed_dim
-        self.num_features = sum(embed_dim)
+        self.num_features = self.head_hidden_size = sum(embed_dim)
         self.patch_embed = nn.ModuleList()
 
         # hard-coded for torch jit script
@@ -415,7 +415,7 @@ class CrossVit(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
@@ -423,9 +423,10 @@ class CrossVit(nn.Module):
         if global_pool is not None:
             assert global_pool in ('token', 'avg')
             self.global_pool = global_pool
-        self.head = nn.ModuleList(
-            [nn.Linear(self.embed_dim[i], num_classes) if num_classes > 0 else nn.Identity() for i in
-             range(self.num_branches)])
+        self.head = nn.ModuleList([
+            nn.Linear(self.embed_dim[i], num_classes) if num_classes > 0 else nn.Identity()
+            for i in range(self.num_branches)
+        ])
 
     def forward_features(self, x) -> List[torch.Tensor]:
         B = x.shape[0]

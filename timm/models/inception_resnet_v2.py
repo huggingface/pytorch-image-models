@@ -206,7 +206,7 @@ class InceptionResnetV2(nn.Module):
     ):
         super(InceptionResnetV2, self).__init__()
         self.num_classes = num_classes
-        self.num_features = 1536
+        self.num_features = self.head_hidden_size = 1536
         assert output_stride == 32
         conv_block = partial(
             ConvNormAct,
@@ -270,10 +270,10 @@ class InceptionResnetV2(nn.Module):
         assert not enable, "checkpointing not supported"
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classif
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.classif = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 

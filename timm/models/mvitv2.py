@@ -784,7 +784,7 @@ class MultiScaleVit(nn.Module):
             feat_size = stage.feat_size
             self.stages.append(stage)
 
-        self.num_features = embed_dim
+        self.num_features = self.head_hidden_size = embed_dim
         self.norm = norm_layer(embed_dim)
         self.head = nn.Sequential(OrderedDict([
             ('drop', nn.Dropout(self.drop_rate)),
@@ -822,7 +822,7 @@ class MultiScaleVit(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

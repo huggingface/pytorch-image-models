@@ -515,7 +515,7 @@ class NextViT(nn.Module):
             in_chs = out_chs = self.stage_out_chs[stage_idx][-1]
             stages += [stage]
             idx += depths[stage_idx]
-        self.num_features = out_chs
+        self.num_features = self.head_hidden_size = out_chs
         self.stages = nn.Sequential(*stages)
         self.norm = norm_layer(out_chs)
         self.head = ClassifierHead(pool_type=global_pool, in_features=out_chs, num_classes=num_classes)
@@ -551,7 +551,7 @@ class NextViT(nn.Module):
             stage.set_grad_checkpointing(enable=enable)
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

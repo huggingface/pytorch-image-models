@@ -287,7 +287,7 @@ class VisionTransformerRelPos(nn.Module):
 
         self.num_classes = num_classes
         self.global_pool = global_pool
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
         self.num_prefix_tokens = 1 if class_token else 0
         self.grad_checkpointing = False
 
@@ -378,7 +378,7 @@ class VisionTransformerRelPos(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool=None):

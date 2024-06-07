@@ -239,7 +239,7 @@ class PNASNet5Large(nn.Module):
     ):
         super(PNASNet5Large, self).__init__()
         self.num_classes = num_classes
-        self.num_features = 4320
+        self.num_features = self.head_hidden_size = 4320
         assert output_stride == 32
 
         self.conv_0 = ConvNormAct(
@@ -304,7 +304,7 @@ class PNASNet5Large(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.last_linear
 
     def reset_classifier(self, num_classes, global_pool='avg'):

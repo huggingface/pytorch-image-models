@@ -338,7 +338,7 @@ class Visformer(nn.Module):
             for i in range(self.stage_num1+self.stage_num2, depth)
         ])
 
-        self.num_features = embed_dim if self.vit_stem else embed_dim * 2
+        self.num_features = self.head_hidden_size = embed_dim if self.vit_stem else embed_dim * 2
         self.norm = norm_layer(self.num_features)
 
         # head
@@ -384,10 +384,10 @@ class Visformer(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.head = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 

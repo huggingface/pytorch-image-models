@@ -209,7 +209,7 @@ class PoolingVisionTransformer(nn.Module):
 
         self.transformers = SequentialTuple(*transformers)
         self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6)
-        self.num_features = self.embed_dim = embed_dim
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
 
         # Classifier head
         self.head_drop = nn.Dropout(drop_rate)
@@ -240,7 +240,7 @@ class PoolingVisionTransformer(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         assert not enable, 'gradient checkpointing not supported'
 
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         if self.head_dist is not None:
             return self.head, self.head_dist
         else:
@@ -248,6 +248,8 @@ class PoolingVisionTransformer(nn.Module):
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         if self.head_dist is not None:
             self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()

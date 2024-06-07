@@ -4,6 +4,7 @@ Original implementation & weights from: https://github.com/sail-sg/inceptionnext
 """
 
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -13,6 +14,8 @@ from timm.layers import trunc_normal_, DropPath, to_2tuple, get_padding, SelectA
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
+
+__all__ = ['MetaNeXt']
 
 
 class InceptionDWConv2d(nn.Module):
@@ -95,7 +98,7 @@ class MlpClassifierHead(nn.Module):
 
     def __init__(
             self,
-            dim,
+            in_features,
             num_classes=1000,
             pool_type='avg',
             mlp_ratio=3,
@@ -105,23 +108,33 @@ class MlpClassifierHead(nn.Module):
             bias=True
     ):
         super().__init__()
+        self.use_conv = False
+        self.in_features = in_features
+        self.num_features = hidden_features = int(mlp_ratio * in_features)
+
+        assert pool_type, 'Cannot disable pooling'
         self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
-        in_features = dim * self.global_pool.feat_mult()
-        hidden_features = int(mlp_ratio * in_features)
-        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
+
+        self.fc1 = nn.Linear(in_features * self.global_pool.feat_mult(), hidden_features, bias=bias)
         self.act = act_layer()
         self.norm = norm_layer(hidden_features)
         self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias)
         self.drop = nn.Dropout(drop)
 
-    def forward(self, x):
+    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+        if pool_type is not None:
+            assert pool_type, 'Cannot disable pooling'
+            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
+
+        self.fc2 = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
+    def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.fc1(x)
         x = self.act(x)
         x = self.norm(x)
         x = self.drop(x)
-        x = self.fc2(x)
-        return x
+        return x if pre_logits else self.fc2(x)
 
 
 class MetaNeXtBlock(nn.Module):
@@ -231,7 +244,6 @@ class MetaNeXt(nn.Module):
         norm_layer: Normalization layer. Default: nn.BatchNorm2d
         act_layer: Activation function for MLP. Default: nn.GELU
         mlp_ratios (int or tuple(int)): MLP ratios. Default: (4, 4, 4, 3)
-        head_fn: classifier head
         drop_rate (float): Head dropout rate
         drop_path_rate (float): Stochastic depth rate. Default: 0.
         ls_init_value (float): Init value for Layer Scale. Default: 1e-6.
@@ -249,7 +261,6 @@ class MetaNeXt(nn.Module):
             norm_layer=nn.BatchNorm2d,
             act_layer=nn.GELU,
             mlp_ratios=(4, 4, 4, 3),
-            head_fn=MlpClassifierHead,
             drop_rate=0.,
             drop_path_rate=0.,
             ls_init_value=1e-6,
@@ -301,15 +312,8 @@ class MetaNeXt(nn.Module):
             prev_chs = out_chs
             self.feature_info += [dict(num_chs=prev_chs, reduction=curr_stride, module=f'stages.{i}')]
         self.num_features = prev_chs
-        if self.num_classes > 0:
-            if issubclass(head_fn, MlpClassifierHead):
-                assert self.global_pool, 'Cannot disable global pooling with MLP head present.'
-            self.head = head_fn(self.num_features, num_classes, pool_type=self.global_pool, drop=drop_rate)
-        else:
-            if self.global_pool:
-                self.head = SelectAdaptivePool2d(pool_type=self.global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head = MlpClassifierHead(self.num_features, num_classes, pool_type=self.global_pool, drop=drop_rate)
+        self.head_hidden_size = self.head.num_features
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -329,21 +333,12 @@ class MetaNeXt(nn.Module):
         )
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc2
 
-    def reset_classifier(self, num_classes=0, global_pool=None, head_fn=MlpClassifierHead):
-        if global_pool is not None:
-            self.global_pool = global_pool
-        if num_classes > 0:
-            if issubclass(head_fn, MlpClassifierHead):
-                assert self.global_pool, 'Cannot disable global pooling with MLP head present.'
-            self.head = head_fn(self.num_features, num_classes, pool_type=self.global_pool, drop=self.drop_rate)
-        else:
-            if self.global_pool:
-                self.head = SelectAdaptivePool2d(pool_type=self.global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
@@ -360,11 +355,7 @@ class MetaNeXt(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if pre_logits:
-            if hasattr(self.head, 'global_pool'):
-                x = self.head.global_pool(x)
-            return x
-        return self.head(x)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)

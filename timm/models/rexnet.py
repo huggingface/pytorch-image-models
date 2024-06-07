@@ -206,7 +206,7 @@ class RexNet(nn.Module):
             dw_act_layer,
             drop_path_rate,
         )
-        self.num_features = features[-1].out_channels
+        self.num_features = self.head_hidden_size = features[-1].out_channels
         self.features = nn.Sequential(*features)
 
         self.head = ClassifierHead(self.num_features, num_classes, global_pool, drop_rate)
@@ -226,11 +226,12 @@ class RexNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)

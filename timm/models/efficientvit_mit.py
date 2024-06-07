@@ -6,8 +6,8 @@ Paper: `Efficientvit: Enhanced linear attention for high-resolution low-computat
 Adapted from official impl at https://github.com/mit-han-lab/efficientvit
 """
 
-__all__ = ['EfficientVit']
-from typing import Optional
+__all__ = ['EfficientVit', 'EfficientVitLarge']
+from typing import List, Optional
 from functools import partial
 
 import torch
@@ -631,32 +631,50 @@ class EfficientVitLargeStage(nn.Module):
 class ClassifierHead(nn.Module):
     def __init__(
         self,
-        in_channels,
-        widths,
-        n_classes=1000,
-        dropout=0.,
+        in_channels: int,
+        widths: List[int],
+        num_classes: int = 1000,
+        dropout: float = 0.,
         norm_layer=nn.BatchNorm2d,
         act_layer=nn.Hardswish,
-        global_pool='avg',
-        norm_eps=1e-5,
+        pool_type: str = 'avg',
+        norm_eps: float = 1e-5,
     ):
         super(ClassifierHead, self).__init__()
+        self.widths = widths
+        self.num_features = widths[-1]
+
+        assert pool_type, 'Cannot disable pooling'
         self.in_conv = ConvNormAct(in_channels, widths[0], 1, norm_layer=norm_layer, act_layer=act_layer)
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool, flatten=True, input_fmt='NCHW')
+        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True)
         self.classifier = nn.Sequential(
             nn.Linear(widths[0], widths[1], bias=False),
             nn.LayerNorm(widths[1], eps=norm_eps),
             act_layer(inplace=True) if act_layer is not None else nn.Identity(),
             nn.Dropout(dropout, inplace=False),
-            nn.Linear(widths[1], n_classes, bias=True),
+            nn.Linear(widths[1], num_classes, bias=True) if num_classes > 0 else nn.Identity(),
         )
+
+    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+        if pool_type is not None:
+            assert pool_type, 'Cannot disable pooling'
+            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=True,)
+        if num_classes > 0:
+            self.classifier[-1] = nn.Linear(self.num_features, num_classes, bias=True)
+        else:
+            self.classifier[-1] = nn.Identity()
 
     def forward(self, x, pre_logits: bool = False):
         x = self.in_conv(x)
         x = self.global_pool(x)
         if pre_logits:
-            return x
-        x = self.classifier(x)
+            # cannot slice or iterate with torchscript so, this
+            x = self.classifier[0](x)
+            x = self.classifier[1](x)
+            x = self.classifier[2](x)
+            x = self.classifier[3](x)
+        else:
+            x = self.classifier(x)
         return x
 
 
@@ -704,21 +722,14 @@ class EfficientVit(nn.Module):
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
 
         self.num_features = in_channels
-        self.head_widths = head_widths
-        self.head_dropout = drop_rate
-        if num_classes > 0:
-            self.head = ClassifierHead(
-                self.num_features,
-                self.head_widths,
-                n_classes=num_classes,
-                dropout=self.head_dropout,
-                global_pool=self.global_pool,
-            )
-        else:
-            if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head = ClassifierHead(
+            self.num_features,
+            widths=head_widths,
+            num_classes=num_classes,
+            dropout=drop_rate,
+            pool_type=self.global_pool,
+        )
+        self.head_hidden_size = self.head.num_features
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -736,26 +747,12 @@ class EfficientVit(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.classifier[-1]
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
-        if num_classes > 0:
-            self.head = ClassifierHead(
-                self.num_features,
-                self.head_widths,
-                n_classes=num_classes,
-                dropout=self.head_dropout,
-                global_pool=self.global_pool,
-            )
-        else:
-            if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=self.global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -820,23 +817,16 @@ class EfficientVitLarge(nn.Module):
             self.feature_info += [dict(num_chs=in_channels, reduction=stride, module=f'stages.{i}')]
 
         self.num_features = in_channels
-        self.head_widths = head_widths
-        self.head_dropout = drop_rate
-        if num_classes > 0:
-            self.head = ClassifierHead(
-                self.num_features,
-                self.head_widths,
-                n_classes=num_classes,
-                dropout=self.head_dropout,
-                global_pool=self.global_pool,
-                act_layer=act_layer,
-                norm_eps=self.norm_eps,
-            )
-        else:
-            if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head = ClassifierHead(
+            self.num_features,
+            widths=head_widths,
+            num_classes=num_classes,
+            dropout=drop_rate,
+            pool_type=self.global_pool,
+            act_layer=act_layer,
+            norm_eps=self.norm_eps,
+        )
+        self.head_hidden_size = self.head.num_features
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):
@@ -854,27 +844,12 @@ class EfficientVitLarge(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.classifier[-1]
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        if global_pool is not None:
-            self.global_pool = global_pool
-        if num_classes > 0:
-            self.head = ClassifierHead(
-                self.num_features,
-                self.head_widths,
-                n_classes=num_classes,
-                dropout=self.head_dropout,
-                global_pool=self.global_pool,
-                norm_eps=self.norm_eps
-            )
-        else:
-            if self.global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=self.global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
