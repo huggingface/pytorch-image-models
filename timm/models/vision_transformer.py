@@ -1929,13 +1929,16 @@ default_cfgs = {
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_base_patch16_reg4_gap_256': _cfg(
+    'vit_base_patch16_reg4_gap_256.untrained': _cfg(
         input_size=(3, 256, 256)),
 
-    'vit_so150m_patch16_reg4_gap_256': _cfg(
+    'vit_so150m_patch16_reg4_gap_256.untrained': _cfg(
         input_size=(3, 256, 256)),
-    'vit_so150m_patch16_reg4_map_256': _cfg(
+    'vit_so150m_patch16_reg4_map_256.untrained': _cfg(
         input_size=(3, 256, 256)),
+
+    'test_tiny_vit.untrained': _cfg(
+        input_size=(3, 160, 160), crop_pct=0.875),
 }
 
 _quick_gelu_cfgs = [
@@ -3103,6 +3106,15 @@ def vit_so150m_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
     )
     model = _create_vision_transformer(
         'vit_so150m_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_tiny_vit(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-TestTiny
+    """
+    model_args = dict(patch_size=16, embed_dim=64, depth=4, num_heads=1, mlp_ratio=3)
+    model = _create_vision_transformer('test_tiny_vit', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

@@ -1056,6 +1056,31 @@ def _gen_tinynet(
     return model
 
 
+def _gen_test_efficientnet(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Minimal test EfficientNet generator.
+    """
+    arch_def = [
+        ['cn_r1_k3_s1_e1_c16_skip'],
+        ['er_r1_k3_s2_e4_c24'],
+        ['er_r1_k3_s2_e4_c32'],
+        ['ir_r1_k3_s2_e4_c48_se0.25'],
+        ['ir_r1_k3_s2_e4_c64_se0.25'],
+    ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.)
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=round_chs_fn(256),
+        stem_size=24,
+        round_chs_fn=round_chs_fn,
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
@@ -1584,6 +1609,10 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 106, 106), pool_size=(4, 4),  # int(224 * 0.475)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_e.pth',
         hf_hub_id='timm/'),
+
+    "test_tiny_efficientnet.untrained": _cfg(
+        # hf_hub_id='timm/'
+        input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -2508,6 +2537,13 @@ def tinynet_d(pretrained=False, **kwargs) -> EfficientNet:
 def tinynet_e(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_tinynet('tinynet_e', 0.51, 0.6, pretrained=pretrained, **kwargs)
     return model
+
+
+@register_model
+def test_tiny_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet('test_tiny_efficientnet', pretrained=pretrained, **kwargs)
+    return model
+
 
 
 register_model_deprecations(__name__, {

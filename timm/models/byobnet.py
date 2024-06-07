@@ -1834,6 +1834,18 @@ model_cfgs = dict(
         stem_type='one',
         stem_chs=64,
     ),
+
+    test_tiny_resnet=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='basic', d=1, c=24, s=1, gs=1, br=0.25),
+            ByoBlockCfg(type='basic', d=1, c=32, s=2, gs=1, br=0.25),
+            ByoBlockCfg(type='basic', d=1, c=64, s=2, gs=1, br=0.25),
+            ByoBlockCfg(type='basic', d=1, c=128, s=2, gs=1, br=0.25),
+        ),
+        stem_chs=32,
+        stem_pool='maxpool',
+        act_layer='relu',
+    ),
 )
 
 
@@ -2034,6 +2046,11 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         crop_pct=0.9,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+    ),
+
+    'test_tiny_byobnet.untrained': _cfgr(
+        # hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.875, pool_size=(5, 5),
     ),
 })
 
@@ -2337,3 +2354,10 @@ def mobileone_s4(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('mobileone_s4', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def test_tiny_byobnet(pretrained=False, **kwargs) -> ByobNet:
+    """ Minimal test ResNet (BYOB based) model.
+    """
+    return _create_byobnet('test_tiny_byobnet', pretrained=pretrained, **kwargs)
