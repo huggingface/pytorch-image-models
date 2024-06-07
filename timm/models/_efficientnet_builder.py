@@ -25,7 +25,7 @@ __all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights"
 _logger = logging.getLogger(__name__)
 
 
-_DEBUG_BUILDER = True
+_DEBUG_BUILDER = False
 
 # Defaults used for Google/Tensorflow training of mobile networks /w RMSprop as per
 # papers and TF reference implementations. PT momentum equiv for TF decay is (1 - TF decay)
