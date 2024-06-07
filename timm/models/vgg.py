@@ -5,7 +5,7 @@ timm functionality.
 
 Copyright 2021 Ross Wightman
 """
-from typing import Union, List, Dict, Any, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import torch
 import torch.nn as nn
@@ -81,11 +81,11 @@ class VGG(nn.Module):
         super(VGG, self).__init__()
         assert output_stride == 32
         self.num_classes = num_classes
-        self.num_features = 4096
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
         self.use_norm = norm_layer is not None
         self.feature_info = []
+
         prev_chs = in_chans
         net_stride = 1
         pool_layer = nn.MaxPool2d
@@ -107,9 +107,11 @@ class VGG(nn.Module):
         self.features = nn.Sequential(*layers)
         self.feature_info.append(dict(num_chs=prev_chs, reduction=net_stride, module=f'features.{len(layers) - 1}'))
 
+        self.num_features = prev_chs
+        self.head_hidden_size = 4096
         self.pre_logits = ConvMlp(
             prev_chs,
-            self.num_features,
+            self.head_hidden_size,
             7,
             mlp_ratio=mlp_ratio,
             drop_rate=drop_rate,
@@ -117,7 +119,7 @@ class VGG(nn.Module):
             conv_layer=conv_layer,
         )
         self.head = ClassifierHead(
-            self.num_features,
+            self.head_hidden_size,
             num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
@@ -135,17 +137,12 @@ class VGG(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        self.head = ClassifierHead(
-            self.num_features,
-            self.num_classes,
-            pool_type=global_pool,
-            drop_rate=self.drop_rate,
-        )
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
@@ -153,7 +150,7 @@ class VGG(nn.Module):
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
         x = self.pre_logits(x)
-        return x if pre_logits else self.head(x)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)

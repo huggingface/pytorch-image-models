@@ -570,7 +570,7 @@ class Hiera(nn.Module):
                     dict(num_chs=dim_out, reduction=2**(cur_stage+2), module=f'blocks.{self.stage_ends[cur_stage]}')]
             self.blocks.append(block)
 
-        self.num_features = embed_dim
+        self.num_features = self.head_hidden_size = embed_dim
         self.head = NormClassifierHead(
             embed_dim,
             num_classes,

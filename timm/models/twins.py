@@ -310,7 +310,7 @@ class Twins(nn.Module):
         self.global_pool = global_pool
         self.depths = depths
         self.embed_dims = embed_dims
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.grad_checkpointing = False
 
         img_size = to_2tuple(img_size)
@@ -379,7 +379,7 @@ class Twins(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

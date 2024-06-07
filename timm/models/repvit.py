@@ -306,7 +306,7 @@ class RepVit(nn.Module):
             in_dim = embed_dim[i]
         self.stages = nn.Sequential(*stages)
 
-        self.num_features = embed_dim[-1]
+        self.num_features = self.head_hidden_size = embed_dim[-1]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = RepVitClassifier(embed_dim[-1], num_classes, distillation)
 
@@ -320,16 +320,14 @@ class RepVit(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation=False):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, distillation: bool = False):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
-        self.head = (
-            RepVitClassifier(self.embed_dim[-1], num_classes, distillation) if num_classes > 0 else nn.Identity()
-        )
+        self.head = RepVitClassifier(self.embed_dim[-1], num_classes, distillation)
 
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):
@@ -347,6 +345,8 @@ class RepVit(nn.Module):
         if self.global_pool == 'avg':
             x = x.mean((2, 3), keepdim=False)
         x = self.head_drop(x)
+        if pre_logits:
+            return x
         return self.head(x)
 
     def forward(self, x):

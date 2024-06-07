@@ -511,7 +511,7 @@ class SwinTransformerV2(nn.Module):
         self.output_fmt = 'NHWC'
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
-        self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
+        self.num_features = self.head_hidden_size = int(embed_dim * 2 ** (self.num_layers - 1))
         self.feature_info = []
 
         if not isinstance(embed_dim, (tuple, list)):
@@ -602,7 +602,7 @@ class SwinTransformerV2(nn.Module):
             l.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

@@ -169,6 +169,18 @@ def test_model_backward(model_name, batch_size):
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
 
+# models with extra conv/linear layers after pooling
+EARLY_POOL_MODELS = (
+    timm.models.EfficientVit,
+    timm.models.EfficientVitLarge,
+    timm.models.HighPerfGpuNet,
+    timm.models.GhostNet,
+    timm.models.MetaNeXt, # InceptionNeXt
+    timm.models.MobileNetV3,
+    timm.models.RepGhostNet,
+    timm.models.VGG,
+)
+
 @pytest.mark.cfg
 @pytest.mark.timeout(timeout300)
 @pytest.mark.parametrize('model_name', list_models(
@@ -179,6 +191,9 @@ def test_model_default_cfgs(model_name, batch_size):
     model = create_model(model_name, pretrained=False)
     model.eval()
     model.to(torch_device)
+    assert getattr(model, 'num_classes') >= 0
+    assert getattr(model, 'num_features') > 0
+    assert getattr(model, 'head_hidden_size') > 0
     state_dict = model.state_dict()
     cfg = model.default_cfg
 
@@ -195,37 +210,37 @@ def test_model_default_cfgs(model_name, batch_size):
         input_size = tuple([min(x, MAX_FWD_OUT_SIZE) for x in input_size])
         input_tensor = torch.randn((batch_size, *input_size), device=torch_device)
 
-        # test forward_features (always unpooled)
+        # test forward_features (always unpooled) & forward_head w/ pre_logits
         outputs = model.forward_features(input_tensor)
-        assert outputs.shape[spatial_axis[0]] == pool_size[0], 'unpooled feature shape != config'
-        assert outputs.shape[spatial_axis[1]] == pool_size[1], 'unpooled feature shape != config'
-        if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.RepGhostNet, timm.models.VGG)):
-            assert outputs.shape[feat_axis] == model.num_features
+        outputs_pre = model.forward_head(outputs, pre_logits=True)
+        assert outputs.shape[spatial_axis[0]] == pool_size[0], f'unpooled feature shape {outputs.shape} != config'
+        assert outputs.shape[spatial_axis[1]] == pool_size[1], f'unpooled feature shape {outputs.shape} != config'
+        assert outputs.shape[feat_axis] == model.num_features, f'unpooled feature dim {outputs.shape[feat_axis]} != model.num_features {model.num_features}'
+        assert outputs_pre.shape[1] == model.head_hidden_size, f'pre_logits feature dim {outputs_pre.shape[1]} != model.head_hidden_size {model.head_hidden_size}'
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
         model.to(torch_device)
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 2
-        assert outputs.shape[1] == model.num_features
+        assert outputs.shape[1] == model.head_hidden_size, f'feature dim w/ removed classifier {outputs.shape[1]} != model.head_hidden_size {model.head_hidden_size}'
+        assert outputs.shape == outputs_pre.shape, f'output shape of pre_logits {outputs_pre.shape} does not match reset_head(0) {outputs.shape}'
 
-        # test model forward without pooling and classifier
-        model.reset_classifier(0, '')  # reset classifier and set global pooling to pass-through
-        model.to(torch_device)
-        outputs = model.forward(input_tensor)
-        assert len(outputs.shape) == 4
-        if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.RepGhostNet, timm.models.VGG)):
-            # mobilenetv3/ghostnet/repghostnet/vgg forward_features vs removed pooling differ due to location or lack of GAP
+        # test model forward after removing pooling and classifier
+        if not isinstance(model, EARLY_POOL_MODELS):
+            model.reset_classifier(0, '')  # reset classifier and disable global pooling
+            model.to(torch_device)
+            outputs = model.forward(input_tensor)
+            assert len(outputs.shape) == 4
             assert outputs.shape[spatial_axis[0]] == pool_size[0] and outputs.shape[spatial_axis[1]] == pool_size[1]
 
-        if 'pruned' not in model_name:  # FIXME better pruned model handling
-            # test classifier + global pool deletion via __init__
+        # test classifier + global pool deletion via __init__
+        if 'pruned' not in model_name and not isinstance(model, EARLY_POOL_MODELS):
             model = create_model(model_name, pretrained=False, num_classes=0, global_pool='').eval()
             model.to(torch_device)
             outputs = model.forward(input_tensor)
             assert len(outputs.shape) == 4
-            if not isinstance(model, (timm.models.MobileNetV3, timm.models.GhostNet, timm.models.RepGhostNet, timm.models.VGG)):
-                assert outputs.shape[spatial_axis[0]] == pool_size[0] and outputs.shape[spatial_axis[1]] == pool_size[1]
+            assert outputs.shape[spatial_axis[0]] == pool_size[0] and outputs.shape[spatial_axis[1]] == pool_size[1]
 
     # check classifier name matches default_cfg
     if cfg.get('num_classes', None):
@@ -253,6 +268,9 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     model = create_model(model_name, pretrained=False)
     model.eval()
     model.to(torch_device)
+    assert getattr(model, 'num_classes') >= 0
+    assert getattr(model, 'num_features') > 0
+    assert getattr(model, 'head_hidden_size') > 0
     state_dict = model.state_dict()
     cfg = model.default_cfg
 
@@ -264,6 +282,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
     feat_dim = getattr(model, 'feature_dim', None)
 
     outputs = model.forward_features(input_tensor)
+    outputs_pre = model.forward_head(outputs, pre_logits=True)
     if isinstance(outputs, (tuple, list)):
         # cannot currently verify multi-tensor output.
         pass
@@ -271,6 +290,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
         if feat_dim is None:
             feat_dim = -1 if outputs.ndim == 3 else 1
         assert outputs.shape[feat_dim] == model.num_features
+        assert outputs_pre.shape[1] == model.head_hidden_size
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
@@ -280,7 +300,8 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
         outputs = outputs[0]
     if feat_dim is None:
         feat_dim = -1 if outputs.ndim == 3 else 1
-    assert outputs.shape[feat_dim] == model.num_features, 'pooled num_features != config'
+    assert outputs.shape[feat_dim] == model.head_hidden_size, 'pooled num_features != config'
+    assert outputs.shape == outputs_pre.shape
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     model.to(torch_device)

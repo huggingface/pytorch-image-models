@@ -60,7 +60,7 @@ class VisionTransformerDistilled(VisionTransformer):
         )
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head, self.head_dist
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):

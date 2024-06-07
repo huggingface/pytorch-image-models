@@ -31,6 +31,7 @@ Original copyright of Google code below, modifications by Ross Wightman, Copyrig
 
 from collections import OrderedDict  # pylint: disable=g-importing-member
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -415,7 +416,7 @@ class ResNetV2(nn.Module):
             self.feature_info += [dict(num_chs=prev_chs, reduction=curr_stride, module=f'stages.{stage_idx}')]
             self.stages.add_module(str(stage_idx), stage)
 
-        self.num_features = prev_chs
+        self.num_features = self.head_hidden_size = prev_chs
         self.norm = norm_layer(self.num_features) if preact else nn.Identity()
         self.head = ClassifierHead(
             self.num_features,
@@ -452,10 +453,10 @@ class ResNetV2(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 

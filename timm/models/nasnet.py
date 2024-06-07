@@ -3,6 +3,7 @@
  https://github.com/Cadene/pretrained-models.pytorch
 """
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -407,7 +408,7 @@ class NASNetALarge(nn.Module):
         super(NASNetALarge, self).__init__()
         self.num_classes = num_classes
         self.stem_size = stem_size
-        self.num_features = num_features
+        self.num_features = self.head_hidden_size = num_features
         self.channel_multiplier = channel_multiplier
         assert output_stride == 32
 
@@ -514,7 +515,7 @@ class NASNetALarge(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.last_linear
 
     def reset_classifier(self, num_classes, global_pool='avg'):
@@ -553,11 +554,10 @@ class NASNetALarge(nn.Module):
         x = self.act(x_cell_17)
         return x
 
-    def forward_head(self, x):
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.head_drop(x)
-        x = self.last_linear(x)
-        return x
+        return x if pre_logits else self.last_linear(x)
 
     def forward(self, x):
         x = self.forward_features(x)

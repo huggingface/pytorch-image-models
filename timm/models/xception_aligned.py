@@ -251,6 +251,7 @@ class XceptionAligned(nn.Module):
         self.feature_info += [dict(
             num_chs=self.num_features, reduction=curr_stride, module='blocks.' + str(len(self.blocks) - 1))]
         self.act = act_layer(inplace=True) if preact else nn.Identity()
+        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             in_features=self.num_features,
             num_classes=num_classes,
@@ -270,7 +271,7 @@ class XceptionAligned(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes, global_pool='avg'):

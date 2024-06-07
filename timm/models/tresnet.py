@@ -179,7 +179,7 @@ class TResNet(nn.Module):
         ]
 
         # head
-        self.num_features = (self.planes * 8) * Bottleneck.expansion
+        self.num_features = self.head_hidden_size = (self.planes * 8) * Bottleneck.expansion
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
         # model initialization
@@ -231,7 +231,7 @@ class TResNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
@@ -252,7 +252,7 @@ class TResNet(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return x if pre_logits else self.head(x)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)

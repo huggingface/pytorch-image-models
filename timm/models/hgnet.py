@@ -6,6 +6,7 @@ The Paddle Implement of PP-HGNet (https://github.com/PaddlePaddle/PaddleClas/blo
 PP-HGNet: https://github.com/PaddlePaddle/PaddleClas/blob/release/2.5.1/ppcls/arch/backbone/legendary_models/pp_hgnet.py
 PP-HGNetv2: https://github.com/PaddlePaddle/PaddleClas/blob/release/2.5.1/ppcls/arch/backbone/legendary_models/pp_hgnet_v2.py
 """
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -347,20 +348,25 @@ class HighPerfGpuStage(nn.Module):
 class ClassifierHead(nn.Module):
     def __init__(
             self,
-            num_features,
-            num_classes,
-            pool_type='avg',
-            drop_rate=0.,
-            use_last_conv=True,
-            class_expand=2048,
-            use_lab=False
+            in_features: int,
+            num_classes: int,
+            pool_type: str = 'avg',
+            drop_rate: float = 0.,
+            hidden_size: Optional[int] = 2048,
+            use_lab: bool = False
     ):
         super(ClassifierHead, self).__init__()
-        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type, flatten=False, input_fmt='NCHW')
-        if use_last_conv:
+        self.num_features = in_features
+        if pool_type is not None:
+            if not pool_type:
+                assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
+
+        self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+        if hidden_size is not None:
+            self.num_features = hidden_size
             last_conv = nn.Conv2d(
-                num_features,
-                class_expand,
+                in_features,
+                hidden_size,
                 kernel_size=1,
                 stride=1,
                 padding=0,
@@ -373,15 +379,20 @@ class ClassifierHead(nn.Module):
             else:
                 self.last_conv = nn.Sequential(last_conv, act)
         else:
-            self.last_conv = nn.Indentity()
+            self.last_conv = nn.Identity()
 
-        if drop_rate > 0:
-            self.dropout = nn.Dropout(drop_rate)
-        else:
-            self.dropout = nn.Identity()
+        self.dropout = nn.Dropout(drop_rate)
+        self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
+        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-        self.flatten = nn.Flatten()
-        self.fc = nn.Linear(class_expand if use_last_conv else num_features, num_classes)
+    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+        if pool_type is not None:
+            if not pool_type:
+                assert num_classes == 0, 'Classifier head must be removed if pooling is disabled'
+            self.global_pool = SelectAdaptivePool2d(pool_type=pool_type)
+            self.flatten = nn.Flatten(1) if pool_type else nn.Identity()  # don't flatten if pooling disabled
+
+        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
@@ -398,15 +409,14 @@ class HighPerfGpuNet(nn.Module):
 
     def __init__(
             self,
-            cfg,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='avg',
-            use_last_conv=True,
-            class_expand=2048,
-            drop_rate=0.,
-            drop_path_rate=0.,
-            use_lab=False,
+            cfg: Dict,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'avg',
+            head_hidden_size: Optional[int] = 2048,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            use_lab: bool = False,
             **kwargs,
     ):
         super(HighPerfGpuNet, self).__init__()
@@ -415,8 +425,6 @@ class HighPerfGpuNet(nn.Module):
         stages_cfg = [cfg["stage1"], cfg["stage2"], cfg["stage3"], cfg["stage4"]]
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        self.use_last_conv = use_last_conv
-        self.class_expand = class_expand
         self.use_lab = use_lab
 
         assert stem_type in ['v1', 'v2']
@@ -456,21 +464,15 @@ class HighPerfGpuNet(nn.Module):
             self.feature_info += [dict(num_chs=self.num_features, reduction=current_stride, module=f'stages.{i}')]
         self.stages = nn.Sequential(*stages)
 
-        if num_classes > 0:
-            self.head = ClassifierHead(
-                self.num_features,
-                num_classes=num_classes,
-                pool_type=global_pool,
-                drop_rate=drop_rate,
-                use_last_conv=use_last_conv,
-                class_expand=class_expand,
-                use_lab=use_lab
-            )
-        else:
-            if global_pool == 'avg':
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head = ClassifierHead(
+            self.num_features,
+            num_classes=num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+            hidden_size=head_hidden_size,
+            use_lab=use_lab
+        )
+        self.head_hidden_size = self.head.num_features
 
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
@@ -494,25 +496,12 @@ class HighPerfGpuNet(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        if num_classes > 0:
-            self.head = ClassifierHead(
-                self.num_features,
-                num_classes=num_classes,
-                pool_type=global_pool,
-                drop_rate=self.drop_rate,
-                use_last_conv=self.use_last_conv,
-                class_expand=self.class_expand,
-                use_lab=self.use_lab)
-        else:
-            if global_pool:
-                self.head = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
-            else:
-                self.head = nn.Identity()
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)

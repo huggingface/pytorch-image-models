@@ -4,6 +4,7 @@ Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -293,7 +294,7 @@ class InceptionV3(nn.Module):
             dict(num_chs=2048, reduction=32, module='Mixed_7c'),
         ]
 
-        self.num_features = 2048
+        self.num_features = self.head_hidden_size = 2048
         self.global_pool, self.head_drop, self.fc = create_classifier(
             self.num_features,
             self.num_classes,
@@ -331,10 +332,10 @@ class InceptionV3(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
@@ -371,9 +372,11 @@ class InceptionV3(nn.Module):
         x = self.forward_postaux(x)
         return x
 
-    def forward_head(self, x):
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.head_drop(x)
+        if pre_logits:
+            return x
         x = self.fc(x)
         return x
 
