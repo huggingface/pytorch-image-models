@@ -409,6 +409,7 @@ class VisionTransformer(nn.Module):
             qk_norm: bool = False,
             init_values: Optional[float] = None,
             class_token: bool = True,
+            pos_embed: str = 'learn',
             no_embed_class: bool = False,
             reg_tokens: int = 0,
             pre_norm: bool = False,
@@ -460,6 +461,7 @@ class VisionTransformer(nn.Module):
         super().__init__()
         assert global_pool in ('', 'avg', 'token', 'map')
         assert class_token or global_pool != 'token'
+        assert pos_embed in ('', 'none', 'learn')
         use_fc_norm = global_pool == 'avg' if fc_norm is None else fc_norm
         norm_layer = get_norm_layer(norm_layer) or partial(nn.LayerNorm, eps=1e-6)
         act_layer = get_act_layer(act_layer) or nn.GELU
@@ -494,7 +496,10 @@ class VisionTransformer(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
         embed_len = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
-        self.pos_embed = nn.Parameter(torch.randn(1, embed_len, embed_dim) * .02)
+        if not pos_embed or pos_embed == 'none':
+            self.pos_embed = None
+        else:
+            self.pos_embed = nn.Parameter(torch.randn(1, embed_len, embed_dim) * .02)
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
         if patch_drop_rate > 0:
             self.patch_drop = PatchDropout(
@@ -556,7 +561,8 @@ class VisionTransformer(nn.Module):
     def init_weights(self, mode: str = '') -> None:
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
-        trunc_normal_(self.pos_embed, std=.02)
+        if self.pos_embed is not None:
+            trunc_normal_(self.pos_embed, std=.02)
         if self.cls_token is not None:
             nn.init.normal_(self.cls_token, std=1e-6)
         named_apply(get_init_weights_vit(mode, head_bias), self)
@@ -583,6 +589,8 @@ class VisionTransformer(nn.Module):
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = True) -> None:
         self.grad_checkpointing = enable
+        if hasattr(self.patch_embed, 'set_grad_checkpointing'):
+            self.patch_embed.set_grad_checkpointing(enable)
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -600,6 +608,9 @@ class VisionTransformer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
+        if self.pos_embed is None:
+            return x.view(x.shape[0], -1, x.shape[-1])
+
         if self.dynamic_img_size:
             B, H, W, C = x.shape
             pos_embed = resample_abs_pos_embed(
@@ -1066,10 +1077,13 @@ def checkpoint_filter_fn(
         # IJEPA, vit in an 'encoder' submodule
         state_dict = state_dict['encoder']
         prefix = 'module.'
-    elif 'visual.trunk.pos_embed' in state_dict:
+    elif 'visual.trunk.pos_embed' in state_dict or 'visual.trunk.blocks.0.norm1.weight' in state_dict:
         # OpenCLIP model with timm vision encoder
-        # FIXME remap final nn.Linear if it exists outside of the timm .trunk (ie in visual.head.proj)
         prefix = 'visual.trunk.'
+        if 'visual.head.proj.weight' in state_dict and isinstance(model.head, nn.Linear):
+            # remap final nn.Linear if it exists outside of the timm .trunk (ie in visual.head.proj)
+            out_dict['head.weight'] = state_dict['visual.head.proj.weight']
+            out_dict['head.bias'] = torch.zeros(state_dict['visual.head.proj.weight'].shape[0])
 
     if prefix:
         # filter on & remove prefix string from keys
