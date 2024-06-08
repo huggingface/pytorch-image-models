@@ -389,6 +389,7 @@ class CvT(nn.Module):
         mlp_ratio: float = 4.,
         mlp_act_layer: nn.Module = QuickGELU,
         use_cls_token: Tuple[bool, ...] = (False, False, True),
+        drop_rate: float = 0.,
     ) -> None:
         super().__init__()
         num_stages = len(dims)
