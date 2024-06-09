@@ -371,10 +371,12 @@ All model architecture families include variants with pretrained weights. There 
 * MaxViT (Multi-Axis Vision Transformer) - https://arxiv.org/abs/2204.01697
 * MetaFormer (PoolFormer-v2, ConvFormer, CAFormer) - https://arxiv.org/abs/2210.13452
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
+* MobileCLIP - https://arxiv.org/abs/2311.17049
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
   * FBNet-V3 - https://arxiv.org/abs/2006.02049
   * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
   * LCNet - https://arxiv.org/abs/2109.15099
+* MobileNetV4 - https://arxiv.org/abs/2404.10518
 * MobileOne - https://arxiv.org/abs/2206.04040
 * MobileViT - https://arxiv.org/abs/2110.02178
 * MobileViT-V2 - https://arxiv.org/abs/2206.02680
@@ -417,6 +419,7 @@ All model architecture families include variants with pretrained weights. There 
 * Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
 * Visformer - https://arxiv.org/abs/2104.12533
 * Vision Transformer - https://arxiv.org/abs/2010.11929
+* ViTamin - https://arxiv.org/abs/2404.02132
 * VOLO (Vision Outlooker) - https://arxiv.org/abs/2106.13112
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
