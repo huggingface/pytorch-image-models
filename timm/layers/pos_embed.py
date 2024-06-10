@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 
 def resample_abs_pos_embed(
-        posemb,
+        posemb: torch.Tensor,
         new_size: List[int],
         old_size: Optional[List[int]] = None,
         num_prefix_tokens: int = 1,
@@ -58,7 +58,7 @@ def resample_abs_pos_embed(
 
 
 def resample_abs_pos_embed_nhwc(
-        posemb,
+        posemb: torch.Tensor,
         new_size: List[int],
         interpolation: str = 'bicubic',
         antialias: bool = True,
@@ -69,7 +69,6 @@ def resample_abs_pos_embed_nhwc(
 
     orig_dtype = posemb.dtype
     posemb = posemb.float()
-    # do the interpolation
     posemb = posemb.reshape(1, posemb.shape[-3], posemb.shape[-2], posemb.shape[-1]).permute(0, 3, 1, 2)
     posemb = F.interpolate(posemb, size=new_size, mode=interpolation, antialias=antialias)
     posemb = posemb.permute(0, 2, 3, 1).to(orig_dtype)
