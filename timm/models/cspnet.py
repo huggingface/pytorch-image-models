@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, get_attn, create_act_layer, make_divisible
+from timm.layers import ClassifierHead, ConvNormAct, DropPath, get_attn, create_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, MATCH_PREV_GROUP
 from ._registry import register_model, generate_default_cfgs
@@ -296,10 +296,10 @@ class CrossStage(nn.Module):
             if avg_down:
                 self.conv_down = nn.Sequential(
                     nn.AvgPool2d(2) if stride == 2 else nn.Identity(),  # FIXME dilation handling
-                    ConvNormActAa(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
                 )
             else:
-                self.conv_down = ConvNormActAa(
+                self.conv_down = ConvNormAct(
                     in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                     aa_layer=aa_layer, **conv_kwargs)
             prev_chs = down_chs
@@ -375,10 +375,10 @@ class CrossStage3(nn.Module):
             if avg_down:
                 self.conv_down = nn.Sequential(
                     nn.AvgPool2d(2) if stride == 2 else nn.Identity(),  # FIXME dilation handling
-                    ConvNormActAa(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
                 )
             else:
-                self.conv_down = ConvNormActAa(
+                self.conv_down = ConvNormAct(
                     in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                     aa_layer=aa_layer, **conv_kwargs)
             prev_chs = down_chs
@@ -442,10 +442,10 @@ class DarkStage(nn.Module):
         if avg_down:
             self.conv_down = nn.Sequential(
                 nn.AvgPool2d(2) if stride == 2 else nn.Identity(),   # FIXME dilation handling
-                ConvNormActAa(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
             )
         else:
-            self.conv_down = ConvNormActAa(
+            self.conv_down = ConvNormAct(
                 in_chs, out_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                 aa_layer=aa_layer, **conv_kwargs)
 
