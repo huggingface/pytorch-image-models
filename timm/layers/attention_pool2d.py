@@ -41,9 +41,10 @@ class RotAttentionPool2d(nn.Module):
             num_heads: Optional[int] = None,
             qkv_bias: bool = True,
             qkv_separate: bool = False,
+            drop: float = 0.,
     ):
         super().__init__()
-        embed_dim = embed_dim or in_features
+        self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
         self.out_features = out_features or in_features
         ref_feat_size = to_2tuple(ref_feat_size)
@@ -82,7 +83,7 @@ class RotAttentionPool2d(nn.Module):
             trunc_normal_(self.qkv.weight, std=in_features ** -0.5)
             nn.init.zeros_(self.qkv.bias)
 
-    def forward(self, x):
+    def forward(self, x, pre_logits: bool = False):
         B, _, H, W = x.shape
         N = H * W
         x = x.flatten(2).transpose(1, 2)
@@ -107,8 +108,12 @@ class RotAttentionPool2d(nn.Module):
             attn = attn.softmax(dim=-1)
             x = attn @ v
         x = x.transpose(1, 2).reshape(B, N + 1, -1)
+        x = x[:, 0]
+        x = self.drop(x)
+        if pre_logits:
+            return x
         x = self.proj(x)
-        return x[:, 0]
+        return x
 
 
 class AttentionPool2d(nn.Module):
@@ -132,9 +137,10 @@ class AttentionPool2d(nn.Module):
             num_heads: Optional[int] = None,
             qkv_bias: bool = True,
             qkv_separate: bool = False,
+            drop: float = 0.,
     ):
         super().__init__()
-        embed_dim = embed_dim or in_features
+        self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
         self.out_features = out_features or in_features
         if num_heads is not None:
@@ -158,6 +164,7 @@ class AttentionPool2d(nn.Module):
         else:
             self.q = self.k = self.v = None
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias)
+        self.drop = nn.Dropout(drop)
         self.proj = nn.Linear(embed_dim, self.out_features)
         self.pos_embed = nn.Parameter(torch.zeros(self.seq_len + 1, in_features))
 
@@ -178,15 +185,12 @@ class AttentionPool2d(nn.Module):
             nn.init.zeros_(self.qkv.bias)
         trunc_normal_(self.pos_embed, std=in_features ** -0.5)
 
-    def forward(self, x):
+    def forward(self, x, pre_logits: bool = False):
         B, _, H, W = x.shape
         N = H * W
         x = x.flatten(2).transpose(1, 2)
         x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
-        if self.seq_len != N:
-            pos_embed = resample_abs_pos_embed(self.pos_embed.unsqueeze(0), (H, W), num_prefix_tokens=1)
-        else:
-            pos_embed = self.pos_embed.unsqueeze(0).to(x.dtype)
+        pos_embed = resample_abs_pos_embed(self.pos_embed.unsqueeze(0), (H, W), num_prefix_tokens=1)
         x = x + pos_embed
 
         if self.qkv is None:
@@ -205,5 +209,9 @@ class AttentionPool2d(nn.Module):
             attn = attn.softmax(dim=-1)
             x = attn @ v
         x = x.transpose(1, 2).reshape(B, N + 1, -1)
+        x = x[:, 0]
+        x = self.drop(x)
+        if pre_logits:
+            return x
         x = self.proj(x)
-        return x[:, 0]
+        return x
