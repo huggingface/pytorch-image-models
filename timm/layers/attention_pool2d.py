@@ -41,9 +41,12 @@ class RotAttentionPool2d(nn.Module):
             num_heads: Optional[int] = None,
             qkv_bias: bool = True,
             qkv_separate: bool = False,
-            drop: float = 0.,
+            pool_type: str = 'token',
+            avg_token: bool = True,
+            drop_rate: float = 0.,
     ):
         super().__init__()
+        assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
         self.out_features = out_features or in_features
@@ -56,6 +59,7 @@ class RotAttentionPool2d(nn.Module):
             num_heads = embed_dim // head_dim
         self.num_heads = num_heads
         self.head_dim = head_dim
+        self.pool_type = pool_type.lower()
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
@@ -66,6 +70,7 @@ class RotAttentionPool2d(nn.Module):
             self.qkv = None
         else:
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias)
+        self.drop = nn.Dropout(drop_rate)
         self.proj = nn.Linear(embed_dim, self.out_features)
         self.pos_embed = RotaryEmbedding(self.head_dim, in_pixels=False, ref_feat_shape=ref_feat_size)
 
@@ -82,6 +87,23 @@ class RotAttentionPool2d(nn.Module):
             in_features = self.qkv.in_features
             trunc_normal_(self.qkv.weight, std=in_features ** -0.5)
             nn.init.zeros_(self.qkv.bias)
+
+    def reset(self, num_classes: Optional[int] = None, pool_type: Optional[str] = None):
+        # NOTE: this module is being used as a head, so need compatible reset()
+        if pool_type is not None:
+            assert pool_type in ('', 'token')
+            self.pool_type = pool_type
+        if num_classes is not None:
+            self.proj = nn.Linear(self.in_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.out_features = num_classes if num_classes > 0 else self.embed_dim
+
+    def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
+        if self.pool_type == 'token':
+            x = x[:, 0]
+        else:
+            # if not pooled, return spatial output without token
+            x = x[:, 1:].reshape(x.shape[0], H, W, -1).permute(0, 3, 1, 2)
+        return x
 
     def forward(self, x, pre_logits: bool = False):
         B, _, H, W = x.shape
@@ -111,8 +133,10 @@ class RotAttentionPool2d(nn.Module):
         x = x[:, 0]
         x = self.drop(x)
         if pre_logits:
+            x = self._pool(x, H, W)
             return x
         x = self.proj(x)
+        x = self._pool(x, H, W)
         return x
 
 
@@ -137,9 +161,12 @@ class AttentionPool2d(nn.Module):
             num_heads: Optional[int] = None,
             qkv_bias: bool = True,
             qkv_separate: bool = False,
-            drop: float = 0.,
+            pool_type: str = 'token',
+            learned_token: bool = False,
+            drop_rate: float = 0.,
     ):
         super().__init__()
+        assert pool_type in ('', 'token')
         self.embed_dim = embed_dim = embed_dim or in_features
         self.in_features = in_features
         self.out_features = out_features or in_features
@@ -153,8 +180,14 @@ class AttentionPool2d(nn.Module):
         self.seq_len = self.feat_size[0] * self.feat_size[1]
         self.num_heads = num_heads
         self.head_dim = head_dim
+        self.pool_type = pool_type
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
+
+        if learned_token:
+            self.token = nn.Parameter(torch.zeros(1, embed_dim))
+        else:
+            self.token = None
 
         if qkv_separate:
             self.q = nn.Linear(in_features, embed_dim, bias=qkv_bias)
@@ -164,7 +197,7 @@ class AttentionPool2d(nn.Module):
         else:
             self.q = self.k = self.v = None
             self.qkv = nn.Linear(in_features, embed_dim * 3, bias=qkv_bias)
-        self.drop = nn.Dropout(drop)
+        self.drop = nn.Dropout(drop_rate)
         self.proj = nn.Linear(embed_dim, self.out_features)
         self.pos_embed = nn.Parameter(torch.zeros(self.seq_len + 1, in_features))
 
@@ -185,11 +218,31 @@ class AttentionPool2d(nn.Module):
             nn.init.zeros_(self.qkv.bias)
         trunc_normal_(self.pos_embed, std=in_features ** -0.5)
 
+    def reset(self, num_classes: Optional[int] = None, pool_type: Optional[str] = None):
+        # NOTE: this module is being used as a head, so need compatible reset()
+        if pool_type is not None:
+            assert pool_type in ('', 'token')
+            self.pool_type = pool_type
+        if num_classes is not None:
+            self.proj = nn.Linear(self.in_features, num_classes) if num_classes > 0 else nn.Identity()
+            self.out_features = num_classes if num_classes > 0 else self.embed_dim
+
+    def _pool(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
+        if self.pool_type == 'token':
+            x = x[:, 0]
+        else:
+            # if not pooled, return spatial output without token
+            x = x[:, 1:].reshape(x.shape[0], H, W, -1).permute(0, 3, 1, 2)
+        return x
+
     def forward(self, x, pre_logits: bool = False):
         B, _, H, W = x.shape
         N = H * W
         x = x.flatten(2).transpose(1, 2)
-        x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
+        if self.token is not None:
+            x = torch.cat([self.token.expand(x.shape[0], -1, -1), x], dim=1)
+        else:
+            x = torch.cat([x.mean(1, keepdim=True), x], dim=1)
         pos_embed = resample_abs_pos_embed(self.pos_embed.unsqueeze(0), (H, W), num_prefix_tokens=1)
         x = x + pos_embed
 
@@ -209,9 +262,10 @@ class AttentionPool2d(nn.Module):
             attn = attn.softmax(dim=-1)
             x = attn @ v
         x = x.transpose(1, 2).reshape(B, N + 1, -1)
-        x = x[:, 0]
         x = self.drop(x)
         if pre_logits:
+            x = self._pool(x, H, W)
             return x
         x = self.proj(x)
+        x = self._pool(x, H, W)
         return x
