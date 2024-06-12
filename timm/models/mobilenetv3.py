@@ -999,28 +999,27 @@ default_cfgs = generate_default_cfgs({
     'mobilenetv4_conv_small.e1200_r224_in1k': _cfg(
         hf_hub_id='timm/',
         test_input_size=(3, 256, 256), test_crop_pct=0.95, interpolation='bicubic'),
-    'mobilenetv4_conv_medium.e500_r224_in1k': _cfg(
-        hf_hub_id='timm/',
-        crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
     'mobilenetv4_conv_medium.e500_r256_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8),
         crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0, interpolation='bicubic'),
-    'mobilenetv4_conv_large.e500_r256_in1k': _cfg(
-        # hf_hub_id='timm/',
-        file='mobilenetv4_conv_large-r256.pth',
-        input_size=(3, 256, 256), pool_size=(8, 8),
-        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_medium.e500_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
     'mobilenetv4_conv_large.r384': _cfg(
         # hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=0.95, interpolation='bicubic'),
-
-    'mobilenetv4_hybrid_medium.e500_r224_in1k': _cfg(
+    'mobilenetv4_conv_large.e500_r256_in1k': _cfg(
         hf_hub_id='timm/',
-        crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
+        input_size=(3, 256, 256), pool_size=(8, 8),
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0, interpolation='bicubic'),
+
     'mobilenetv4_hybrid_medium.r256': _cfg(
         # hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_hybrid_medium.e500_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
     'mobilenetv4_hybrid_large.r256': _cfg(
         # hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=0.95, interpolation='bicubic'),
