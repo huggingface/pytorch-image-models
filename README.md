@@ -26,6 +26,28 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### June 12, 2024
+* MobileNetV4 models and initial set of `timm` trained weights added:
+
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [mobilenetv4_conv_large.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_large.e500_r256_in1k) |82.674|17.326  |96.31 |3.69    |32.59      |320     |
+| [mobilenetv4_conv_large.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_large.e500_r256_in1k)                   |81.862|18.138  |95.69 |4.31    |32.59      |256     |
+| [mobilenetv4_hybrid_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e500_r224_in1k)             |81.276|18.724  |95.742|4.258   |11.07      |256     |
+| [mobilenetv4_conv_medium.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r256_in1k)                 |80.858|19.142  |95.768|4.232   |9.72       |320     |
+| [mobilenetv4_hybrid_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e500_r224_in1k)             |80.442|19.558  |95.38 |4.62    |11.07      |224     |
+| [mobilenetv4_conv_blur_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_blur_medium.e500_r224_in1k)       |80.142|19.858  |95.298|4.702   |9.72       |256     |
+| [mobilenetv4_conv_medium.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r256_in1k)                 |79.928|20.072  |95.184|4.816   |9.72       |256     |
+| [mobilenetv4_conv_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r224_in1k)                 |79.808|20.192  |95.186|4.814   |9.72       |256     |
+| [mobilenetv4_conv_blur_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_blur_medium.e500_r224_in1k)       |79.438|20.562  |94.932|5.068   |9.72       |224     |
+| [mobilenetv4_conv_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r224_in1k)                 |79.094|20.906  |94.77 |5.23    |9.72       |224     |
+| [mobilenetv4_conv_small.e1200_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e1200_r224_in1k)                 |74.292|25.708  |92.116|7.884   |3.77       |256     |
+| [mobilenetv4_conv_small.e1200_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e1200_r224_in1k)                 |73.454|26.546  |91.34 |8.66    |3.77       |224     |
+
+* Apple MobileCLIP (https://arxiv.org/pdf/2311.17049, FastViT and ViT-B) image tower model support & weights added (part of OpenCLIP support).
+* ViTamin (https://arxiv.org/abs/2404.02132) CLIP image tower model & weights added (part of OpenCLIP support).
+* OpenAI CLIP Modified ResNet image tower modelling & weight support (via ByobNet). Refactor AttentionPool2d.
+
 ### May 14, 2024
 * Support loading PaliGemma jax weights into SigLIP ViT models with average pooling.
 * Add Hiera models from Meta (https://github.com/facebookresearch/hiera).
