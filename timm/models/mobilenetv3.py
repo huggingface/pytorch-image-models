@@ -1256,7 +1256,7 @@ def mobilenetv4_hybrid_medium_075(pretrained: bool = False, **kwargs) -> MobileN
 @register_model
 def mobilenetv4_hybrid_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 Hybrid"""
-    model = _gen_mobilenet_v4('mobilenetv4_hybrid_large', 0.75, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v4('mobilenetv4_hybrid_large_075', 0.75, pretrained=pretrained, **kwargs)
     return model
 
 
