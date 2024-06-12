@@ -7,7 +7,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import torch
 from torch import nn as nn
 
-from .conv_bn_act import ConvNormActAa
+from .conv_bn_act import ConvNormAct
 from .helpers import make_divisible
 from .trace_utils import _assert
 
@@ -100,7 +100,7 @@ class SelectiveKernel(nn.Module):
             stride=stride, groups=groups, act_layer=act_layer, norm_layer=norm_layer,
             aa_layer=aa_layer, drop_layer=drop_layer)
         self.paths = nn.ModuleList([
-            ConvNormActAa(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
+            ConvNormAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
             for k, d in zip(kernel_size, dilation)])
 
         attn_channels = rd_channels or make_divisible(out_channels * rd_ratio, divisor=rd_divisor)
