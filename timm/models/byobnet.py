@@ -1945,7 +1945,6 @@ model_cfgs = dict(
         downsample='avg',
         aa_layer='avg',
         head_type='attn_abs',
-        #head_hidden_size=512,
     ),
 
     resnet50x4_clip=ByoModelCfg(
@@ -1962,7 +1961,6 @@ model_cfgs = dict(
         downsample='avg',
         aa_layer='avg',
         head_type='attn_abs',
-        #head_hidden_size=640,
     ),
 
     resnet50x16_clip=ByoModelCfg(
@@ -1979,7 +1977,6 @@ model_cfgs = dict(
         downsample='avg',
         aa_layer='avg',
         head_type='attn_abs',
-        #head_hidden_size=768,
     ),
 
     resnet50x64_clip=ByoModelCfg(
@@ -1996,7 +1993,6 @@ model_cfgs = dict(
         downsample='avg',
         aa_layer='avg',
         head_type='attn_abs',
-        #head_hidden_size=1024,
     ),
 
     resnet50_mlp=ByoModelCfg(
