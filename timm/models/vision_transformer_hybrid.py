@@ -386,13 +386,15 @@ default_cfgs = generate_default_cfgs({
     'vit_base_resnet50d_224.untrained': _cfg(
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
 
-    'vit_base_mci_224.apple_mclip': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_b.pt',
+    'vit_base_mci_224.apple_mclip_lt': _cfg(
+        hf_hub_id='apple/mobileclip_b_lt_timm',
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_blt.pt',
         num_classes=512,
         mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
     ),
-    'vit_base_mci_224.apple_mclip_lt': _cfg(
-        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_blt.pt',
+    'vit_base_mci_224.apple_mclip': _cfg(
+        hf_hub_id='apple/mobileclip_b_timm',
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_b.pt',
         num_classes=512,
         mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
     ),
