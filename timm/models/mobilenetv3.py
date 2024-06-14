@@ -893,6 +893,150 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
     return model
 
 
+def _gen_repghostnet_v2(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """Creates a RepGhostNet-V2 model.
+
+    Ref impl: https://github.com/ChengpengChen/RepGhostNetV2
+    Paper:
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer.
+    """
+    num_features = 1280
+    assert 'hybrid' not in variant, 'RepGhostNetV2 not supports hybrid yet'
+    layer_scale_init_value = None
+    if 'small' in variant:
+        stem_size = 32
+        act_layer = resolve_act_layer(kwargs, 'relu')
+        arch_def = [
+            # stage 0, 112x112 in
+            [
+                'cn_r1_k3_s2_e1_c32',  # Conv
+                'cn_r1_k1_s1_e1_c32',  # Conv
+            ],
+            # stage 1, 56x56 in
+            [
+                'cn_r1_k3_s2_e1_c96',  # Conv
+                'cn_r1_k1_s1_e1_c64',  # Conv
+            ],
+            # stage 2, 28x28 in
+            [
+                'uir_r1_a5_k5_s2_e3_c96',  # RG, stride=2, no-shortcut
+                'uir_r3_a0_k3_s1_e2_c96',  # IB
+                'uir_r1_a0_k3_p3_s1_e2_c96',  # RG
+                'uir_r1_a0_k0_p3_s1_e4_c96',  # RG
+            ],
+            # stage 3, 14x14 in
+            [
+                'uir_r1_a0_k3_p5_s2_e6_c128',  # RG, stride=2, no-shortcut
+                'uir_r2_a0_k5_s1_e4_c128',  # IR
+                'uir_r1_a0_k5_s1_e3_c128',  # IR
+                'uir_r2_a0_k3_s1_e4_c128',  # IR
+            ],
+            # stage 4, 7x7 in
+            [
+                'cn_r1_k1_s1_c960',  # Conv
+            ],
+        ]
+    elif 'medium' in variant:
+        stem_size = 32
+        act_layer = resolve_act_layer(kwargs, 'relu')
+        arch_def = [
+            # stage 0, 112x112 in
+            [
+                'er_r1_k3_s2_e4_c48',  # FusedIB (EdgeResidual)
+            ],
+            # stage 1, 56x56 in
+            [
+                'uir_r1_a3_k5_p3_s2_e4_c80',  # RG, stride=2, no-shortcut
+                'uir_r1_a0_k3_p3_s1_e2_c80',  # RG
+            ],
+            # stage 2, 28x28 in
+            [
+                'uir_r1_a0_k5_p3_s2_e6_c160',  # RG, stride=2, no-shortcut
+                'uir_r2_a0_k3_p3_s1_e4_c160',  # RG
+                'uir_r1_a0_k5_p3_s1_e4_c160',  # RG
+                'uir_r1_a0_k3_p3_s1_e4_c160',  # RG
+                'uir_r1_a0_k0_p0_s1_e4_c160',  # FFN
+                'uir_r1_a0_k0_p3_s1_e2_c160',  # RG
+                'uir_r1_a0_k0_p5_s1_e4_c160',  # RG
+            ],
+            # stage 3, 14x14in
+            [
+                'uir_r1_a0_k5_p5_s2_e6_c256',  # RG, stride=2, no-shortcut
+                'uir_r2_a0_k5_p3_s1_e4_c256',  # RG
+                'uir_r1_a0_k5_p0_s1_e4_c256',  # RG
+                'uir_r2_a0_k0_p3_s1_e4_c256',  # RG
+                'uir_r1_a0_k5_p5_s1_e2_c256',  # RG
+                'uir_r1_a0_k5_p0_s1_e4_c256',  # IB
+                'uir_r1_a0_k0_p0_s1_e4_c256',  # FFN
+                'uir_r1_a0_k0_p5_s1_e4_c256',  # RG
+                'uir_r1_a0_k0_p0_s1_e2_c256',  # FFN
+            ],
+            # stage 4, 7x7 in
+            [
+                'cn_r1_k1_s1_c960',  # Conv
+            ],
+        ]
+    elif 'large' in variant:
+        stem_size = 24
+        act_layer = resolve_act_layer(kwargs, 'relu')
+        arch_def = [
+            # stage 0, 112x112 in
+            [
+                'er_r1_k3_s2_e4_c48',  # FusedIB (EdgeResidual)
+            ],
+            # stage 1, 56x56 in
+            [
+                'uir_r1_a3_k5_p3_s2_e4_c96',  # RG
+                'uir_r1_a0_k3_p3_s1_e4_c96',  # RG
+            ],
+            # stage 2, 28x28 in
+            [
+                'uir_r1_a0_k5_p3_s2_e4_c192',  # RG, stride=2, no-shortcut
+                'uir_r3_a0_k3_p3_s1_e4_c192',  # RG
+                'uir_r1_a0_k5_p5_s1_e4_c192',  # RG
+                'uir_r4_a0_k3_p5_s1_e4_c192',  # RG
+                'uir_r1_a0_k3_p3_s1_e4_c192',  # RG
+                'uir_r1_a0_k0_p5_s1_e4_c192',  # RG
+            ],
+            # stage 3, 14x14in
+            [
+                'uir_r4_a0_k5_p5_s2_e4_c512',  # RG, stride=2, no-shortcut
+                'uir_r1_a0_k0_p5_s1_e4_c512',  # RG
+                'uir_r1_a0_k3_p5_s1_e4_c512',  # RG
+                'uir_r2_a0_k0_p5_s1_e4_c512',  # RG
+                'uir_r1_a0_k3_p5_s1_e4_c512',  # RG
+                'uir_r1_a0_k5_p5_s1_e4_c512',  # RG
+                'uir_r2_a0_k0_p5_s1_e4_c512',  # RG
+                'uir_r1_a0_k0_p0_s1_e4_c512',  # FFN
+
+            ],
+            # stage 4, 7x7 in
+            [
+                'cn_r1_k1_s1_c960',  # Conv
+            ],
+        ]
+    else:
+        assert False, f'Unknown variant {variant}.'
+
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def),
+        head_bias=False,
+        head_norm=True,
+        num_features=num_features,
+        stem_size=stem_size,
+        fix_stem=channel_multiplier < 1.0,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=act_layer,
+        layer_scale_init_value=layer_scale_init_value,
+        **kwargs,
+    )
+    model = _create_mnv3(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _cfg(url: str = '', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
@@ -1257,6 +1401,41 @@ def mobilenetv4_hybrid_medium_075(pretrained: bool = False, **kwargs) -> MobileN
 def mobilenetv4_hybrid_large_075(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 Hybrid"""
     model = _gen_mobilenet_v4('mobilenetv4_hybrid_large_075', 0.75, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def repghostnetv2_conv_small(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ RepGhostNet V2 """
+    model = _gen_repghostnet_v2('repghostnetv2_conv_small', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def repghostnetv2_conv_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ RepGhostNet V2 """
+    model = _gen_repghostnet_v2('repghostnetv2_conv_medium', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def repghostnetv2_conv_large(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ RepGhostNet V2 """
+    model = _gen_repghostnet_v2('repghostnetv2_conv_large', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def repghostnetv2_conv_aa_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ RepGhostNet V2 w/ AvgPool AA """
+    model = _gen_repghostnet_v2('repghostnetv2_conv_aa_medium', 1.0, pretrained=pretrained, aa_layer='avg', **kwargs)
+    return model
+
+
+@register_model
+def repghostnetv2_conv_blur_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ RepGhostNet V2 Conv w/ Blur AA """
+    model = _gen_repghostnet_v2('repghostnetv2_conv_blur_medium', 1.0, pretrained=pretrained, aa_layer='blurpc', **kwargs)
     return model
 
 
