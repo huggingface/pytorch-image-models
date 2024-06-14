@@ -221,8 +221,9 @@ def _decode_block_str(block_str):
         ))
     else:
         assert False, 'Unknown block type (%s)' % block_type
+
     if 'gs' in options:
-        block_args['group_size'] = options['gs']
+        block_args['group_size'] = int(options['gs'])
 
     return block_args, num_repeat
 
