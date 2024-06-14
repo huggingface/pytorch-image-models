@@ -79,8 +79,8 @@ class EfficientNet(nn.Module):
             num_features: int = 1280,
             in_chans: int = 3,
             stem_size: int = 32,
-            fix_stem: bool = False,
             stem_kernel_size: int = 3,
+            fix_stem: bool = False,
             output_stride: int = 32,
             pad_type: str = '',
             act_layer: Optional[LayerType] = None,
@@ -278,6 +278,7 @@ class EfficientNetFeatures(nn.Module):
             feature_location: str = 'bottleneck',
             in_chans: int = 3,
             stem_size: int = 32,
+            stem_kernel_size: int = 3,
             fix_stem: bool = False,
             output_stride: int = 32,
             pad_type: str = '',
@@ -300,7 +301,7 @@ class EfficientNetFeatures(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type)
         self.bn1 = norm_act_layer(stem_size, inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
