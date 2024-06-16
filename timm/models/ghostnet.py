@@ -273,7 +273,7 @@ class GhostNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
