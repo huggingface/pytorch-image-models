@@ -996,6 +996,9 @@ default_cfgs = generate_default_cfgs({
     ),
     "lcnet_150.untrained": _cfg(),
 
+    'mobilenetv4_conv_small.e2400_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        test_input_size=(3, 256, 256), test_crop_pct=0.95, interpolation='bicubic'),
     'mobilenetv4_conv_small.e1200_r224_in1k': _cfg(
         hf_hub_id='timm/',
         test_input_size=(3, 256, 256), test_crop_pct=0.95, interpolation='bicubic'),
