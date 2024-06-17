@@ -12,6 +12,7 @@ Copyright 2020 Ross Wightman
 
 from functools import partial
 from math import ceil
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -229,7 +230,7 @@ class RexNet(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
