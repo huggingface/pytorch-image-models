@@ -662,7 +662,7 @@ class EdgeResidual(nn.Module):
             mid_chs = make_divisible(force_in_chs * exp_ratio)
         else:
             mid_chs = make_divisible(in_chs * exp_ratio)
-        groups = num_groups(group_size, in_chs)
+        groups = num_groups(group_size, mid_chs)  # NOTE: Using out_chs of conv_exp for groups calc
         self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
         use_aa = aa_layer is not None and stride > 1  # FIXME handle dilation
 
