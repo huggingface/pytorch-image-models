@@ -137,7 +137,7 @@ class ChannelAttentionV2(nn.Module):
         q, k, v = qkv.unbind(0)
 
         if self.dynamic_scale:
-            q = q * float(N) ** -0.5
+            q = q * N ** -0.5
         else:
             q = q * self.head_dim ** -0.5
         attn = q.transpose(-1, -2) @ k
