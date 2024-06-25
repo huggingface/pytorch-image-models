@@ -26,6 +26,19 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### June 24, 2024
+* 3 more MobileNetV4 hyrid weights with different MQA weight init scheme
+
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [mobilenetv4_hybrid_large.ix_e600_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_large.ix_e600_r384_in1k) |84.356|15.644  |96.892 |3.108  |37.76      |448     |
+| [mobilenetv4_hybrid_large.ix_e600_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_large.ix_e600_r384_in1k) |83.990|16.010  |96.702 |3.298  |37.76      |384     |
+| [mobilenetv4_hybrid_medium.ix_e550_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r384_in1k)       |83.394|16.606  |96.760|3.240   |11.07      |448     |
+| [mobilenetv4_hybrid_medium.ix_e550_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r384_in1k)       |82.968|17.032  |96.474|3.526   |11.07      |384     |
+| [mobilenetv4_hybrid_medium.ix_e550_r256_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r256_in1k)       |82.492|17.508  |96.278|3.722   |11.07      |320     |
+| [mobilenetv4_hybrid_medium.ix_e550_r256_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r256_in1k)       |81.446|18.554  |95.704|4.296   |11.07      |256     |
+* florence2 weight loading in DaViT model
+
 ### June 12, 2024
 * MobileNetV4 models and initial set of `timm` trained weights added:
 
