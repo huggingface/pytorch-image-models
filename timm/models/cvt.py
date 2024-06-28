@@ -495,9 +495,9 @@ def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (14, 14),
-        'crop_pct': 0.95, 'interpolation': 'bicubic',
+        'crop_pct': 0.875, 'interpolation': 'bicubic',
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
-        'first_conv': 'stages.0.conv_embed.conv', 'classifier': 'head',
+        'first_conv': 'stage0.patch_embed.proj', 'classifier': 'head',
         **kwargs
     }
     
@@ -506,18 +506,18 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-13-224x224-IN-1k.pth'),
     'cvt_13.msft_in1k_384': _cfg(
         url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-13-384x384-IN-1k.pth',
-        input_size=(3, 384, 384), pool_size=(24, 24)),
+        input_size=(3, 384, 384), pool_size=(24, 24), crop_mode='squash', crop_pct=1.0), 
     'cvt_13.msft_in22k_ft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-13-384x384-IN-22k.pth',
-        input_size=(3, 384, 384), pool_size=(24, 24)),
+        input_size=(3, 384, 384), pool_size=(24, 24), crop_mode='squash', crop_pct=1.0),
     
     'cvt_21.msft_in1k': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-21-224x224-IN-1k.pth'),
     'cvt_21.msft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-21-384x384-IN-1k.pth',
-        input_size=(3, 384, 384), pool_size=(24, 24)),
+        input_size=(3, 384, 384), pool_size=(24, 24), crop_mode='squash', crop_pct=1.0),
     'cvt_21.msft_in22k_ft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-21-384x384-IN-22k.pth',
-        input_size=(3, 384, 384), pool_size=(24, 24)),
+        input_size=(3, 384, 384), pool_size=(24, 24), crop_mode='squash', crop_pct=1.0),
     
     'cvt_w24.msft_in22k_ft_in1k_384': _cfg(url='https://github.com/fffffgggg54/pytorch-image-models/releases/download/cvt/CvT-w24-384x384-IN-22k.pth',
-        input_size=(3, 384, 384), pool_size=(24, 24)),
+        input_size=(3, 384, 384), pool_size=(24, 24), crop_mode='squash', crop_pct=1.0),
 })
 
 
