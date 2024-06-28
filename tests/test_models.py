@@ -631,3 +631,35 @@ if 'GITHUB_ACTIONS' not in os.environ:
 
         assert outputs.shape[0] == batch_size
         assert not torch.isnan(outputs).any(), 'Output included NaNs'
+
+    @pytest.mark.timeout(120)
+    @pytest.mark.parametrize('model_name', ["regnetx_002"])
+    @pytest.mark.parametrize('batch_size', [1])
+    def test_model_forward_torchscript_with_features_fx(model_name, batch_size):
+        """Create a model with feature extraction based on fx, script it, and run
+        a single forward pass"""
+        if not has_fx_feature_extraction:
+            pytest.skip("Can't test FX. Torch >= 1.10 and Torchvision >= 0.11 are required.")
+
+        allowed_models = list_models(
+            exclude_filters=EXCLUDE_FILTERS + EXCLUDE_JIT_FILTERS + EXCLUDE_FX_JIT_FILTERS,
+            name_matches_cfg=True
+        )
+        assert model_name in allowed_models, f"{model_name=} not supported for this test"
+
+        input_size = _get_input_size(model_name=model_name, target=TARGET_JIT_SIZE)
+        assert max(input_size) <= MAX_JIT_SIZE, "Fixed input size model > limit. Pick a different model to run this test"
+
+        with set_scriptable(True):
+            model = create_model(model_name, pretrained=False, features_only=True, feature_cfg={"feature_cls": "fx"})
+        model.eval()
+
+        model = torch.jit.script(model)
+        with torch.no_grad():
+            outputs = model(torch.randn((batch_size, *input_size)))
+
+        assert isinstance(outputs, list)
+
+        for tensor in outputs:
+            assert tensor.shape[0] == batch_size
+            assert not torch.isnan(tensor).any(), 'Output included NaNs'

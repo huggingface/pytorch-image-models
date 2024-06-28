@@ -116,6 +116,8 @@ def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str
 class FeatureGraphNet(nn.Module):
     """ A FX Graph based feature extractor that works with the model feature_info metadata
     """
+    return_dict: torch.jit.Final[bool]
+
     def __init__(
             self,
             model: nn.Module,
@@ -155,6 +157,8 @@ class GraphExtractNet(nn.Module):
         squeeze_out: if only one output, and output in list format, flatten to single tensor
         return_dict: return as dictionary from extractor with node names as keys, ignores squeeze_out arg
     """
+    return_dict: torch.jit.Final[bool]
+
     def __init__(
             self,
             model: nn.Module,
