@@ -219,8 +219,11 @@ class ResPostBlock(nn.Module):
             nn.init.constant_(self.norm1.weight, self.init_values)
             nn.init.constant_(self.norm2.weight, self.init_values)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.drop_path1(self.norm1(self.attn(x)))
+    def forward(self, x: torch.Tensor, return_attention=False) -> torch.Tensor:
+        y, attn = self.attn(x)
+        if return_attention:
+            return attn
+        x = x + self.drop_path1(self.norm1(y))
         x = x + self.drop_path2(self.norm2(self.mlp(x)))
         return x
 
