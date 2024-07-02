@@ -13,14 +13,14 @@ from timm.layers.classifier import _create_pool
 class MLDecoderHead(nn.Module):
     """MLDecoder wrapper with forward compatible with ClassifierHead"""
 
-    def __init__(self, in_features, num_classes, pool_type='avg', use_conv=False, input_fmt='NCHW'):
+    def __init__(self, head, in_features, num_classes, pool_type='avg', use_conv=False, input_fmt='NCHW'):
         super(MLDecoderHead, self).__init__()
         self.in_features = in_features
         self.use_conv = use_conv
         self.input_fmt = input_fmt
 
         self.global_pool, num_pooled_features = _create_pool(in_features, num_classes, pool_type, use_conv=use_conv, input_fmt=input_fmt)
-        self.head = MLDecoder(in_features=in_features, num_classes=num_classes)
+        self.head = head
         self.flatten = nn.Flatten(1) if pool_type else nn.Identity()
 
 
@@ -30,6 +30,7 @@ class MLDecoderHead(nn.Module):
                 self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv)
             self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
         num_pooled_features = self.in_features * self.global_pool.feat_mult()
+        # TODO fix this it is incorrect, need to impl a reset for mldecoder itself i think
         self.head = MLDecoder(in_features=in_features, num_classes=num_classes)
 
 
@@ -44,12 +45,18 @@ class MLDecoderHead(nn.Module):
             x = self.head(x)
             return self.flatten(x)
 
-def add_ml_decoder_head(model):
-    #FIXME toggle between implementations?
+def add_ml_decoder_head(model, head_version='new', **kwargs):
     # ignore CoaT, crossvit
     # ignore distillation models: deit_distilled, efficientformer V2
     num_classes = model.num_classes
     num_features = model.num_features
+    
+    if head_version == 'old':
+        head_fn = MLDecoderLegacy
+    else:
+        head_fn = MLDecoder
+    
+    head = head_fn(num_features, num_classes, **kwargs)
 
     assert num_classes > 0, "MLDecoder requires a model to have num_classes > 0"
 
@@ -57,14 +64,14 @@ def add_ml_decoder_head(model):
         model.global_pool = nn.Identity()
         del model.fc
 
-        model.fc = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.fc = head
 
     elif hasattr(model, 'fc_norm') or 'Cait' in model._get_name(): # ViT, BEiT, EVA
         model.global_pool = None # disable any pooling, model instantiation leaves 1 norm layer after features, [B, n + K x K, C]
         if hasattr(model, 'attn_pool'):
             model.attn_pool = None
         model.head_drop = nn.Identity()
-        model.head = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.head = head
 
     elif 'MetaFormer' in model._get_name():
         if hasattr(model.head, 'flatten'):  # ConvNext case
@@ -72,12 +79,12 @@ def add_ml_decoder_head(model):
         model.head.global_pool = nn.Identity()
         model.head.drop = nn.Identity()
         del model.head.fc
-        model.head.fc = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.head.fc = head
 
     # maybe  and isinstance(model.head, (NormMlpClassifierHead, ClassifierHead) ?
     elif hasattr(model, 'head'):    # ClassifierHead, nn.Sequential
         input_fmt = getattr(model.head, 'input_fmt', 'NCHW')
-        model.head = MLDecoderHead(num_features, num_classes)
+        model.head = MLDecoderHead(head, num_features, num_classes)
         if hasattr(model, 'global_pool'):
             if(isinstance(model.global_pool, nn.Module)):
                 model.global_pool = nn.Identity()
@@ -90,21 +97,21 @@ def add_ml_decoder_head(model):
 
         model.flatten = nn.Identity()
         del model.classifier
-        model.classifier = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.classifier = head
 
     elif hasattr(model, 'global_pool') and hasattr(model, 'classifier'):  # EfficientNet
         model.global_pool = nn.Identity()
         del model.classifier
-        model.classifier = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.classifier = head
     elif hasattr(model, 'global_pool') and hasattr(model, 'last_linear'):  # InceptionV4
         model.global_pool = nn.Identity()
         del model.last_linear
-        model.last_linear = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.last_linear = head
 
     elif hasattr(model, 'global_pool') and hasattr(model, 'classif'):  # InceptionResnetV2
         model.global_pool = nn.Identity()
         del model.classif
-        model.classif = MLDecoder(num_classes=num_classes, in_features=num_features)
+        model.classif = head
 
     else:
         raise Exception("Model code-writing is not aligned currently with ml-decoder")
@@ -184,27 +191,34 @@ class GroupFC(object):
 
 
 class MLDecoderLegacy(nn.Module):
-    def __init__(self, num_classes, num_of_groups=-1, decoder_embedding=768, in_features=2048, simple_group_fc = True):
+    def __init__(
+        self,
+        in_features: int,
+        num_classes: int,
+        dim: int = 768,
+        num_groups: int = 100,
+        simple_group_fc = True,
+    ):
         super(MLDecoderLegacy, self).__init__()
-        embed_len_decoder = 100 if num_of_groups < 0 else num_of_groups
+        embed_len_decoder = 100 if num_groups < 0 else num_groups
         if embed_len_decoder > num_classes:
             embed_len_decoder = num_classes
         self.embed_len_decoder = embed_len_decoder
 
         # switching to 768 initial embeddings
-        decoder_embedding = 768 if decoder_embedding < 0 else decoder_embedding
-        self.embed_standart = nn.Linear(in_features, decoder_embedding)
+        dim = 768 if dim < 0 else dim
+        self.embed_standart = nn.Linear(in_features, dim)
 
         # decoder
         decoder_dropout = 0.1
         num_layers_decoder = 1
         dim_feedforward = 2048
-        layer_decode = TransformerDecoderLayerOptimal(d_model=decoder_embedding,
+        layer_decode = TransformerDecoderLayerOptimal(d_model=dim,
                                                       dim_feedforward=dim_feedforward, dropout=decoder_dropout)
         self.decoder = nn.TransformerDecoder(layer_decode, num_layers=num_layers_decoder)
 
         # non-learnable queries
-        self.query_embed = nn.Embedding(embed_len_decoder, decoder_embedding)
+        self.query_embed = nn.Embedding(embed_len_decoder, dim)
         self.query_embed.requires_grad_(False)
 
         # group fully-connected
@@ -212,7 +226,7 @@ class MLDecoderLegacy(nn.Module):
         self.num_classes = num_classes
         self.duplicate_factor = int(num_classes / embed_len_decoder + 0.999)
         self.duplicate_pooling = torch.nn.Parameter(
-            torch.Tensor(embed_len_decoder, decoder_embedding, self.duplicate_factor))
+            torch.Tensor(embed_len_decoder, dim, self.duplicate_factor))
         self.duplicate_pooling_bias = torch.nn.Parameter(torch.Tensor(num_classes))
         torch.nn.init.xavier_normal_(self.duplicate_pooling)
         torch.nn.init.constant_(self.duplicate_pooling_bias, 0)
@@ -251,6 +265,7 @@ class CrossAttention(nn.Module):
     def __init__(
             self,
             dim: int,
+            query_dim: Optional[int] = None,
             num_heads: int = 8,
             qkv_bias: bool = True,
             qk_norm: bool = False,
@@ -264,8 +279,9 @@ class CrossAttention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
+        self.query_dim = dim if query_dim is None else query_dim
         
-        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.q = nn.Linear(query_dim, dim, bias=qkv_bias)
         self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -274,7 +290,7 @@ class CrossAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, q, x) -> torch.Tensor:
-        K, _ = q.shape # [K, C]
+        K, _ = q.shape # [K, C_q]
         B, N, C = x.shape # [B, N, C]
         q = self.q(q).reshape(1, K, self.num_heads, self.head_dim).permute(0, 2, 1, 3) # [1, n_h, K, d_h]
         kv = self.kv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4) # [2, B, n_h, N, d_h]
@@ -327,6 +343,10 @@ class MLDecoder(nn.Module):
         dim: int = 768,
         num_groups: int = 100,
         num_heads: int = 8,
+        class_embed: Optional[torch.Tensor] = None,
+        concat_class_embed: bool = True,
+        learnable_embed: bool = False,
+        learnable_class_embed: bool = False,
         embed_drop: float = 0.1,
         embed_norm: bool = True,
         k_norm: bool = False,
@@ -338,20 +358,46 @@ class MLDecoder(nn.Module):
         
     ):
         super().__init__()
-        
-        
-        # non-learnable queries
-        self.query_embed = nn.Embedding(num_groups, dim)
-        self.query_embed.requires_grad_(False)
+        have_class_embed = class_embed is not None
+        self.concat_class_embed = have_class_embed and concat_class_embed
+        self.class_embed = None
+        self.query_embed = None
+        self.query_dim = 0
+        if have_class_embed:
+            assert len(class_embed) == num_classes, 'ML-Decoder got class_embed where dim 0 != num_classes'
+            class_embed = class_embed.clone().detach() # copy instead of reference, detach gradient flow
+            self.query_dim += class_embed.shape[1]
+            duplicate_factor = int(num_classes / num_groups + 0.999)
+            class_embed_pad_length = (duplicate_factor - num_classes % duplicate_factor) % duplicate_factor
+            
+            # pad and reshape into groups
+            class_embed = torch.cat([class_embed, torch.zeros(class_embed_pad_length, class_embed.shape[1])])
+            class_embed = class_embed.reshape(num_groups, duplicate_factor, -1)
+            
+            # reduce each group to a single embed with mean
+            class_embed = class_embed.mean(1)
+            self.class_embed = nn.Embedding.from_pretrained(class_embed)
+            
+            
+            # TODO can use tensor instead of nn.Embedding and simply register as either a parameter or a buffer for learnability
+            self.class_embed.requires_grad_(learnable_class_embed)
+            
+        # case no class embed or using both
+        if not have_class_embed or concat_class_embed:
+            self.query_dim += dim
+            self.query_embed = nn.Embedding(num_groups, dim)
+            # TODO can use tensor instead of nn.Embedding and simply register as either a parameter or a buffer for learnability
+            self.query_embed.requires_grad_(learnable_embed)
+                    
         self.embed_drop = nn.Dropout(embed_drop)
-        self.embed_norm = norm_layer(dim)
+        self.embed_norm = norm_layer(self.query_dim)
         
         self.proj = nn.Linear(in_features, dim)
         self.act = act_layer()
         self.norm1 = norm_layer(dim)
         
         
-        self.attn = CrossAttention(dim, num_heads=num_heads)
+        self.attn = CrossAttention(dim, query_dim=self.query_dim, num_heads=num_heads)
         self.norm2 = norm_layer(dim)
         self.mlp = Mlp(
             in_features=dim,
@@ -367,7 +413,8 @@ class MLDecoder(nn.Module):
             x = x.flatten(2).transpose(1, 2)
                 
         x = self.act(self.proj(x))
-        q = self.embed_norm(self.embed_drop(self.query_embed.weight))
+        q = torch.cat([x.weight for x in [self.query_embed, self.class_embed] if x is not None], dim=1)
+        q = self.embed_norm(self.embed_drop(q))
         x = self.attn(q, self.norm1(x))# + q.unsqueeze(1)
         x = x + self.mlp(self.norm2(x))
         x = self.fc(x)
