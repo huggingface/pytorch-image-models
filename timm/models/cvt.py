@@ -388,18 +388,18 @@ class CvT(nn.Module):
         mlp_layer: nn.Module = Mlp,
         mlp_ratio: float = 4.,
         mlp_act_layer: nn.Module = QuickGELU,
-        use_cls_token: Tuple[bool, ...] = (False, False, True),
+        use_cls_token: bool = True,
         drop_rate: float = 0.,
     ) -> None:
         super().__init__()
         num_stages = len(dims)
         assert num_stages == len(depths) == len(embed_kernel_size) == len(embed_stride)
-        assert num_stages == len(embed_padding) == len(num_heads) == len(use_cls_token)
+        assert num_stages == len(embed_padding) == len(num_heads)
         self.num_classes = num_classes
         self.num_features = dims[-1]
         self.feature_info = []
         
-        self.use_cls_token = use_cls_token[-1]
+        self.use_cls_token = use_cls_token
         
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
         
@@ -437,7 +437,7 @@ class CvT(nn.Module):
                 mlp_layer = mlp_layer,
                 mlp_ratio = mlp_ratio,
                 mlp_act_layer = mlp_act_layer,
-                use_cls_token = use_cls_token[stage_idx],
+                use_cls_token = use_cls_token and stage_idx == num_stages - 1,
             )
             in_chs = dim
             stages.append(stage)
