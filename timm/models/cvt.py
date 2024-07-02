@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ConvNormAct, LayerNorm, LayerNorm2d, Mlp, QuickGELU, trunc_normal_, use_fused_attn
+from timm.layers import ConvNormAct, LayerNorm, LayerNorm2d, Mlp, QuickGELU, trunc_normal_, use_fused_attn, nchw_to
 from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model
 
@@ -447,17 +447,30 @@ class CvT(nn.Module):
         self.norm = norm_layer(dims[-1])
         self.head = nn.Linear(dims[-1], num_classes) if num_classes > 0 else nn.Identity()
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
         
+    def _forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        # nn.Sequential forward can't accept tuple intermediates
+        # TODO grad checkpointing
         for stage in self.stages:
             x = stage(x)
-            
         
+        return x
+        
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        x = self._forward_features(x)
+        
+        return x[0] if self.use_cls_token else x
+    
+    def forward_head(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_cls_token:
             return self.head(self.norm(x[1].flatten(1)))
         else:
             return self.head(self.norm(x.mean(dim=(2,3))))
             
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self._forward_features(x)
+        x = self.forward_head(x)
+        return x
         
         
 def checkpoint_filter_fn(state_dict, model):
