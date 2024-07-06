@@ -400,6 +400,7 @@ class CvT(nn.Module):
         self.feature_info = []
         
         self.use_cls_token = use_cls_token
+        self.global_pool = 'token' if use_cls_token else 'avg'
         
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
         
@@ -448,6 +449,21 @@ class CvT(nn.Module):
         self.head = nn.Linear(dims[-1], num_classes) if num_classes > 0 else nn.Identity()
         
         
+    
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        return self.head
+    
+    def reset_classifier(self, num_classes: int, global_pool = None) -> None:
+        self.num_classes = num_classes
+        if global_pool is not None:
+            assert global_pool in ('', 'avg', 'token')
+            if global_pool == 'token' and not self.use_cls_token:
+                assert False, 'Model not configured to use class token'
+            self.global_pool = global_pool
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
+    
     def _forward_features(self, x: torch.Tensor) -> torch.Tensor:
         # nn.Sequential forward can't accept tuple intermediates
         # TODO grad checkpointing
@@ -457,12 +473,13 @@ class CvT(nn.Module):
         return x
         
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        # get feature map, not always used
         x = self._forward_features(x)
         
         return x[0] if self.use_cls_token else x
     
     def forward_head(self, x: torch.Tensor) -> torch.Tensor:
-        if self.use_cls_token:
+        if self.global_pool == 'token':
             return self.head(self.norm(x[1].flatten(1)))
         else:
             return self.head(self.norm(x.mean(dim=(2,3))))
