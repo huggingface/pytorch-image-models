@@ -834,7 +834,7 @@ class HighResolutionNetFeatures(HighResolutionNet):
     def forward_features(self, x):
         assert False, 'Not supported'
 
-    def forward(self, x) -> List[torch.tensor]:
+    def forward(self, x) -> List[torch.Tensor]:
         out = []
         x = self.conv1(x)
         x = self.bn1(x)
