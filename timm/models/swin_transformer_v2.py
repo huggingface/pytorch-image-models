@@ -86,6 +86,7 @@ class WindowAttention(nn.Module):
             window_size: Tuple[int, int],
             num_heads: int,
             qkv_bias: bool = True,
+            qkv_bias_separate: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             pretrained_window_size: Tuple[int, int] = (0, 0),
@@ -95,6 +96,7 @@ class WindowAttention(nn.Module):
         self.window_size = window_size  # Wh, Ww
         self.pretrained_window_size = pretrained_window_size
         self.num_heads = num_heads
+        self.qkv_bias_separate = qkv_bias_separate
 
         self.logit_scale = nn.Parameter(torch.log(10 * torch.ones((num_heads, 1, 1))))
 
@@ -156,10 +158,16 @@ class WindowAttention(nn.Module):
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
         B_, N, C = x.shape
-        qkv_bias = None
-        if self.q_bias is not None:
+
+        if self.q_bias is None:
+            qkv = self.qkv(x)
+        else:
             qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias))
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+            if self.qkv_bias_separate:
+                qkv = self.qkv(x)
+                qkv += qkv_bias
+            else:
+                qkv = F.linear(x, weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
 

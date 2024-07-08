@@ -86,6 +86,7 @@ class Attention(nn.Module):
             dim: int,
             num_heads: int = 8,
             qkv_bias: bool = False,
+            qkv_bias_separate: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             window_size: Optional[Tuple[int, int]] = None,
@@ -99,6 +100,7 @@ class Attention(nn.Module):
         all_head_dim = head_dim * self.num_heads
         self.scale = head_dim ** -0.5
         self.fused_attn = use_fused_attn()
+        self.qkv_bias_separate = qkv_bias_separate
 
         self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
         if qkv_bias:
@@ -136,8 +138,15 @@ class Attention(nn.Module):
     def forward(self, x, shared_rel_pos_bias: Optional[torch.Tensor] = None):
         B, N, C = x.shape
 
-        qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias)) if self.q_bias is not None else None
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+        if self.q_bias is None:
+            qkv = self.qkv(x)
+        else:
+            qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias))
+            if self.qkv_bias_separate:
+                qkv = self.qkv(x)
+                qkv += qkv_bias
+            else:
+                qkv = F.linear(x, weight=self.qkv.weight, bias=qkv_bias)
         qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)  # B, num_heads, N, head_dim
 
