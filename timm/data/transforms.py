@@ -5,6 +5,7 @@ import warnings
 from typing import List, Sequence, Tuple, Union
 
 import torch
+import torchvision.transforms as transforms
 import torchvision.transforms.functional as F
 try:
     from torchvision.transforms.functional import InterpolationMode
@@ -17,7 +18,7 @@ import numpy as np
 __all__ = [
     "ToNumpy", "ToTensor", "str_to_interp_mode", "str_to_pil_interp", "interp_mode_to_str",
     "RandomResizedCropAndInterpolation", "CenterCropOrPad", "center_crop_or_pad", "crop_or_pad",
-    "RandomCropOrPad", "RandomPad", "ResizeKeepRatio", "TrimBorder"
+    "RandomCropOrPad", "RandomPad", "ResizeKeepRatio", "TrimBorder", "MaybeToTensor", "MaybePILToTensor"
 ]
 
 
@@ -38,6 +39,54 @@ class ToTensor:
 
     def __call__(self, pil_img):
         return F.pil_to_tensor(pil_img).to(dtype=self.dtype)
+
+
+class MaybeToTensor(transforms.ToTensor):
+    """Convert a PIL Image or ndarray to tensor if it's not already one.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __call__(self, pic) -> torch.Tensor:
+        """
+        Args:
+            pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
+
+        Returns:
+            Tensor: Converted image.
+        """
+        if isinstance(pic, torch.Tensor):
+            return pic
+        return F.to_tensor(pic)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+
+class MaybePILToTensor:
+    """Convert a PIL Image to a tensor of the same type - this does not scale values.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __call__(self, pic):
+        """
+        Note: A deep copy of the underlying array is performed.
+
+        Args:
+            pic (PIL Image): Image to be converted to tensor.
+
+        Returns:
+            Tensor: Converted image.
+        """
+        if isinstance(pic, torch.Tensor):
+            return pic
+        return F.pil_to_tensor(pic)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
 
 
 # Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in
