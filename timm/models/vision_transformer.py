@@ -1937,7 +1937,7 @@ default_cfgs = {
     'vit_so150m_patch16_reg4_map_256.untrained': _cfg(
         input_size=(3, 256, 256)),
 
-    'test_tiny_vit.untrained': _cfg(
+    'test_vit.untrained': _cfg(
         input_size=(3, 160, 160), crop_pct=0.875),
 }
 
@@ -3110,11 +3110,11 @@ def vit_so150m_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
 
 
 @register_model
-def test_tiny_vit(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-TestTiny
+def test_vit(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Test
     """
-    model_args = dict(patch_size=16, embed_dim=64, depth=4, num_heads=1, mlp_ratio=3)
-    model = _create_vision_transformer('test_tiny_vit', pretrained=pretrained, **dict(model_args, **kwargs))
+    model_args = dict(patch_size=16, embed_dim=64, depth=6, num_heads=2, mlp_ratio=3)
+    model = _create_vision_transformer('test_vit', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

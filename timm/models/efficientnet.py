@@ -1610,7 +1610,7 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_e.pth',
         hf_hub_id='timm/'),
 
-    "test_tiny_efficientnet.untrained": _cfg(
+    "test_efficientnet.untrained": _cfg(
         # hf_hub_id='timm/'
         input_size=(3, 160, 160), pool_size=(5, 5)),
 })
@@ -2540,8 +2540,8 @@ def tinynet_e(pretrained=False, **kwargs) -> EfficientNet:
 
 
 @register_model
-def test_tiny_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
-    model = _gen_test_efficientnet('test_tiny_efficientnet', pretrained=pretrained, **kwargs)
+def test_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet('test_efficientnet', pretrained=pretrained, **kwargs)
     return model
 
 
