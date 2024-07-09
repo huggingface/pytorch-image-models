@@ -2285,7 +2285,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
-        classifier = 'head.proj',
+        classifier='head.proj',
     ),
     'resnet101_clip.openai': _cfgr(
         hf_hub_id='timm/',
@@ -2299,21 +2299,21 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=640, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 288, 288), pool_size=(9, 9),
-        classifier = 'head.proj',
+        classifier='head.proj',
     ),
     'resnet50x16_clip.openai': _cfgr(
         hf_hub_id='timm/',
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=768, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 384, 384), pool_size=(12, 12),
-        classifier = 'head.proj',
+        classifier='head.proj',
     ),
     'resnet50x64_clip.openai': _cfgr(
         hf_hub_id='timm/',
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         fixed_input_size=True, input_size=(3, 448, 448), pool_size=(14, 14),
-        classifier = 'head.proj',
+        classifier='head.proj',
     ),
 
     # avg-pool w/ optional standard classifier head variants
@@ -2354,6 +2354,7 @@ default_cfgs = generate_default_cfgs({
 
     'test_byobnet.untrained': _cfgr(
         # hf_hub_id='timm/',
+        first_conv='stem.conv',
         input_size=(3, 160, 160), crop_pct=0.875, pool_size=(5, 5),
     ),
 })
