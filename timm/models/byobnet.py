@@ -271,8 +271,9 @@ class BasicBlock(nn.Module):
     def forward(self, x):
         shortcut = x
         x = self.conv1_kxk(x)
-        x = self.conv2_kxk(x)
         x = self.attn(x)
+        x = self.conv2_kxk(x)
+        x = self.attn_last(x)
         x = self.drop_path(x)
         if self.shortcut is not None:
             x = x + self.shortcut(shortcut)
@@ -449,7 +450,6 @@ class EdgeBlock(nn.Module):
             downsample, in_chs, out_chs,
             stride=stride, dilation=dilation, apply_act=False, layers=layers,
         )
-
         self.conv1_kxk = layers.conv_norm_act(
             in_chs, mid_chs, kernel_size,
             stride=stride, dilation=dilation[0], groups=groups, drop_layer=drop_block,
@@ -1931,7 +1931,6 @@ model_cfgs = dict(
         aa_layer='avg',
         head_type='attn_abs',
     ),
-
     resnet101_clip=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
@@ -1946,7 +1945,6 @@ model_cfgs = dict(
         aa_layer='avg',
         head_type='attn_abs',
     ),
-
     resnet50x4_clip=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=4, c=256, s=1, br=0.25),
@@ -1962,7 +1960,6 @@ model_cfgs = dict(
         aa_layer='avg',
         head_type='attn_abs',
     ),
-
     resnet50x16_clip=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=6, c=256, s=1, br=0.25),
@@ -1978,7 +1975,6 @@ model_cfgs = dict(
         aa_layer='avg',
         head_type='attn_abs',
     ),
-
     resnet50x64_clip=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
@@ -2009,6 +2005,21 @@ model_cfgs = dict(
         aa_layer='avg',
         head_hidden_size=1024,
         head_type='mlp',
+    ),
+
+    test_byobnet=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='edge', d=1, c=32, s=2, gs=0, br=0.5),
+            ByoBlockCfg(type='dark', d=1, c=64, s=2, gs=0, br=0.5),
+            ByoBlockCfg(type='basic', d=1, c=128, s=2, gs=32, br=0.25),
+            ByoBlockCfg(type='bottle', d=1, c=256, s=2, gs=64, br=0.25),
+        ),
+        stem_chs=24,
+        downsample='avg',
+        stem_pool='',
+        act_layer='relu',
+        attn_layer='se',
+        attn_kwargs=dict(rd_ratio=0.25),
     ),
 )
 for k in ('resnet50_clip', 'resnet101_clip', 'resnet50x4_clip', 'resnet50x16_clip', 'resnet50x64_clip'):
@@ -2339,6 +2350,11 @@ default_cfgs = generate_default_cfgs({
 
     'resnet50_mlp.untrained': _cfgr(
         input_size=(3, 256, 256), pool_size=(8, 8),
+    ),
+
+    'test_byobnet.untrained': _cfgr(
+        # hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.875, pool_size=(5, 5),
     ),
 })
 
@@ -2719,3 +2735,10 @@ def resnet50_mlp(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('resnet50_mlp', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def test_byobnet(pretrained=False, **kwargs) -> ByobNet:
+    """ Minimal test ResNet (BYOB based) model.
+    """
+    return _create_byobnet('test_byobnet', pretrained=pretrained, **kwargs)

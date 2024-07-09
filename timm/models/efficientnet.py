@@ -1183,6 +1183,31 @@ def _gen_mobilenet_edgetpu(variant, channel_multiplier=1.0, depth_multiplier=1.0
     return model
 
 
+def _gen_test_efficientnet(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Minimal test EfficientNet generator.
+    """
+    arch_def = [
+        ['cn_r1_k3_s1_e1_c16_skip'],
+        ['er_r1_k3_s2_e4_c24'],
+        ['er_r1_k3_s2_e4_c32'],
+        ['ir_r1_k3_s2_e4_c48_se0.25'],
+        ['ir_r1_k3_s2_e4_c64_se0.25'],
+    ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.)
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=round_chs_fn(256),
+        stem_size=24,
+        round_chs_fn=round_chs_fn,
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
@@ -1731,6 +1756,9 @@ default_cfgs = generate_default_cfgs({
         #hf_hub_id='timm/',
         input_size=(3, 224, 224), crop_pct=0.9),
 
+    "test_efficientnet.untrained": _cfg(
+        # hf_hub_id='timm/'
+        input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -2710,6 +2738,12 @@ def mobilenet_edgetpu_v2_m(pretrained=False, **kwargs) -> EfficientNet:
 def mobilenet_edgetpu_v2_l(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet-EdgeTPU-v2 Large. """
     model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_l', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet('test_efficientnet', pretrained=pretrained, **kwargs)
     return model
 
 
