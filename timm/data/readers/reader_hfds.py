@@ -35,7 +35,7 @@ class ReaderHfds(Reader):
             root: Optional[str] = None,
             split: str = 'train',
             class_map: dict = None,
-            image_key: str = 'image',
+            input_key: str = 'image',
             target_key: str = 'label',
             download: bool = False,
     ):
@@ -50,9 +50,9 @@ class ReaderHfds(Reader):
             cache_dir=self.root,  # timm doesn't expect hidden cache dir for datasets, specify a path
         )
         # leave decode for caller, plus we want easy access to original path names...
-        self.dataset = self.dataset.cast_column(image_key, datasets.Image(decode=False))
+        self.dataset = self.dataset.cast_column(input_key, datasets.Image(decode=False))
 
-        self.image_key = image_key
+        self.image_key = input_key
         self.label_key = target_key
         self.remap_class = False
         if class_map:
