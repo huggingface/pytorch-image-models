@@ -632,6 +632,31 @@ class VisionTransformer(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+    ):
+        """Method updates the input image resolution, patch size
+
+        Args:
+            img_size: New input resolution, if None current resolution is used
+            patch_size: New patch size, if None existing patch size is used
+        """
+        prev_grid_size = self.patch_embed.grid_size
+        self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
+        if self.pos_embed is not None:
+            num_prefix_tokens = 0 if self.no_embed_class else self.num_prefix_tokens
+            num_new_tokens = self.patch_embed.num_patches + num_prefix_tokens
+            if num_new_tokens != self.pos_embed.shape[1]:
+                self.pos_embed = nn.Parameter(resample_abs_pos_embed(
+                    self.pos_embed,
+                    new_size=self.patch_embed.grid_size,
+                    old_size=prev_grid_size,
+                    num_prefix_tokens=num_prefix_tokens,
+                    verbose=True,
+                ))
+
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
         if self.pos_embed is None:
             return x.view(x.shape[0], -1, x.shape[-1])

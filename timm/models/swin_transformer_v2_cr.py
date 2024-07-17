@@ -119,7 +119,7 @@ class WindowMultiHeadAttention(nn.Module):
         assert dim % num_heads == 0, \
             "The number of input features (in_features) are not divisible by the number of heads (num_heads)."
         self.in_features: int = dim
-        self.window_size: Tuple[int, int] = window_size
+        self.window_size: Tuple[int, int] = to_2tuple(window_size)
         self.num_heads: int = num_heads
         self.sequential_attn: bool = sequential_attn
 
@@ -152,16 +152,15 @@ class WindowMultiHeadAttention(nn.Module):
             1.0 + relative_coordinates.abs())
         self.register_buffer("relative_coordinates_log", relative_coordinates_log, persistent=False)
 
-    def update_input_size(self, new_window_size: int, **kwargs: Any) -> None:
-        """Method updates the window size and so the pair-wise relative positions
-
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size & interpolate position embeddings
         Args:
-            new_window_size (int): New window size
-            kwargs (Any): Unused
+            window_size (int): New window size
         """
-        # Set new window size and new pair-wise relative positions
-        self.window_size: int = new_window_size
-        self._make_pair_wise_relative_positions()
+        window_size = to_2tuple(window_size)
+        if window_size != self.window_size:
+            self.window_size = window_size
+            self._make_pair_wise_relative_positions()
 
     def _relative_positional_encodings(self) -> torch.Tensor:
         """Method computes the relative positional encodings
@@ -321,18 +320,18 @@ class SwinTransformerV2CrBlock(nn.Module):
             nn.init.constant_(self.norm1.weight, self.init_values)
             nn.init.constant_(self.norm2.weight, self.init_values)
 
-    def update_input_size(self, new_window_size: Tuple[int, int], new_feat_size: Tuple[int, int]) -> None:
+    def set_input_size(self, feat_size: Tuple[int, int], window_size: Tuple[int, int]) -> None:
         """Method updates the image resolution to be processed and window size and so the pair-wise relative positions.
 
         Args:
-            new_window_size (int): New window size
-            new_feat_size (Tuple[int, int]): New input resolution
+            feat_size (Tuple[int, int]): New input resolution
+            window_size (int): New window size
         """
         # Update input resolution
-        self.feat_size: Tuple[int, int] = new_feat_size
-        self.window_size, self.shift_size = self._calc_window_shift(to_2tuple(new_window_size))
+        self.feat_size: Tuple[int, int] = feat_size
+        self.window_size, self.shift_size = self._calc_window_shift(to_2tuple(window_size))
         self.window_area = self.window_size[0] * self.window_size[1]
-        self.attn.update_input_size(new_window_size=self.window_size)
+        self.attn.set_window_size(self.window_size)
         self._make_attention_mask()
 
     def _shifted_window_attn(self, x):
@@ -510,18 +509,18 @@ class SwinTransformerV2CrStage(nn.Module):
             for index in range(depth)]
         )
 
-    def update_input_size(self, new_window_size: int, new_feat_size: Tuple[int, int]) -> None:
+    def set_input_size(self, feat_size: Tuple[int, int], window_size: int) -> None:
         """Method updates the resolution to utilize and the window size and so the pair-wise relative positions.
 
         Args:
-            new_window_size (int): New window size
-            new_feat_size (Tuple[int, int]): New input resolution
+            window_size (int): New window size
+            feat_size (Tuple[int, int]): New input resolution
         """
         self.feat_size: Tuple[int, int] = (
-            (new_feat_size[0] // 2, new_feat_size[1] // 2) if self.downscale else new_feat_size
+            (feat_size[0] // 2, feat_size[1] // 2) if self.downscale else feat_size
         )
         for block in self.blocks:
-            block.update_input_size(new_window_size=new_window_size, new_feat_size=self.feat_size)
+            block.set_input_size(feat_size=self.feat_size, window_size=window_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -657,33 +656,32 @@ class SwinTransformerV2Cr(nn.Module):
         if weight_init != 'skip':
             named_apply(init_weights, self)
 
-    def update_input_size(
+    def set_input_size(
             self,
-            new_img_size: Optional[Tuple[int, int]] = None,
-            new_window_size: Optional[int] = None,
-            img_window_ratio: int = 32,
+            img_size: Optional[Tuple[int, int]] = None,
+            window_size: Optional[Tuple[int, int]] = None,
+            window_ratio: int = 32,
     ) -> None:
         """Method updates the image resolution to be processed and window size and so the pair-wise relative positions.
 
         Args:
-            new_window_size (Optional[int]): New window size, if None based on new_img_size // window_div
-            new_img_size (Optional[Tuple[int, int]]): New input resolution, if None current resolution is used
-            img_window_ratio (int): divisor for calculating window size from image size
+            img_size (Optional[Tuple[int, int]]): New input resolution, if None current resolution is used
+            window_size (Optional[int]): New window size, if None based on new_img_size // window_div
+            window_ratio (int): divisor for calculating window size from image size
         """
-        # Check parameters
-        if new_img_size is None:
-            new_img_size = self.img_size
+        if img_size is None:
+            img_size = self.img_size
         else:
-            new_img_size = to_2tuple(new_img_size)
-        if new_window_size is None:
-            new_window_size = tuple([s // img_window_ratio for s in new_img_size])
+            img_size = to_2tuple(img_size)
+        if window_size is None:
+            window_size = tuple([s // window_ratio for s in img_size])
         # Compute new patch resolution & update resolution of each stage
-        new_patch_grid_size = (new_img_size[0] // self.patch_size, new_img_size[1] // self.patch_size)
+        patch_grid_size = (img_size[0] // self.patch_size, img_size[1] // self.patch_size)
         for index, stage in enumerate(self.stages):
             stage_scale = 2 ** max(index - 1, 0)
-            stage.update_input_size(
-                new_window_size=new_window_size,
-                new_img_size=(new_patch_grid_size[0] // stage_scale, new_patch_grid_size[1] // stage_scale),
+            stage.set_input_size(
+                feat_size=(patch_grid_size[0] // stage_scale, patch_grid_size[1] // stage_scale),
+                window_size=window_size,
             )
 
     @torch.jit.ignore

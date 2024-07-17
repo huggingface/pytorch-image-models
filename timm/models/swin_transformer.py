@@ -140,6 +140,27 @@ class WindowAttention(nn.Module):
         trunc_normal_(self.relative_position_bias_table, std=.02)
         self.softmax = nn.Softmax(dim=-1)
 
+    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+        """Update window size & interpolate position embeddings
+        Args:
+            window_size (int): New window size
+        """
+        window_size = to_2tuple(window_size)
+        if window_size == self.window_size:
+            return
+        self.window_size = window_size
+        win_h, win_w = self.window_size
+        self.window_area = win_h * win_w
+        with torch.no_grad():
+            new_bias_shape = (2 * win_h - 1) * (2 * win_w - 1), self.num_heads
+            self.relative_position_bias_table = nn.Parameter(
+                resize_rel_pos_bias_table(
+                    self.relative_position_bias_table,
+                    new_window_size=self.window_size,
+                    new_bias_shape=new_bias_shape,
+            ))
+            self.register_buffer("relative_position_index", get_relative_position_index(win_h, win_w), persistent=False)
+
     def _get_rel_pos_bias(self) -> torch.Tensor:
         relative_position_bias = self.relative_position_bias_table[
             self.relative_position_index.view(-1)].view(self.window_area, self.window_area, -1)  # Wh*Ww,Wh*Ww,nH
@@ -197,6 +218,7 @@ class SwinTransformerBlock(nn.Module):
             head_dim: Optional[int] = None,
             window_size: _int_or_tuple_2_t = 7,
             shift_size: int = 0,
+            always_partition: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             proj_drop: float = 0.,
@@ -224,9 +246,9 @@ class SwinTransformerBlock(nn.Module):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
-        ws, ss = self._calc_window_shift(window_size, shift_size)
-        self.window_size: Tuple[int, int] = ws
-        self.shift_size: Tuple[int, int] = ss
+        self.target_shift_size = to_2tuple(shift_size)
+        self.always_partition = always_partition
+        self.window_size, self.shift_size = self._calc_window_shift(window_size, target_shift_size=shift_size)
         self.window_area = self.window_size[0] * self.window_size[1]
         self.mlp_ratio = mlp_ratio
 
@@ -251,6 +273,9 @@ class SwinTransformerBlock(nn.Module):
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
+        self._make_attention_mask()
+
+    def _make_attention_mask(self):
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
             H, W = self.input_resolution
@@ -274,15 +299,46 @@ class SwinTransformerBlock(nn.Module):
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
         else:
             attn_mask = None
-
         self.register_buffer("attn_mask", attn_mask, persistent=False)
 
-    def _calc_window_shift(self, target_window_size, target_shift_size) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    def _calc_window_shift(
+            self,
+            target_window_size: Union[int, Tuple[int, int]],
+            target_shift_size: Optional[Union[int, Tuple[int, int]]] = None,
+    ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         target_window_size = to_2tuple(target_window_size)
-        target_shift_size = to_2tuple(target_shift_size)
+        if target_shift_size is None:
+            # if passed value is None, recalculate from default window_size // 2 if it was active
+            target_shift_size = self.target_shift_size
+            if any(target_shift_size):
+                target_shift_size = [target_window_size[0] // 2, target_window_size[1] // 2]
+        else:
+            target_shift_size = to_2tuple(target_shift_size)
+        if self.always_partition:
+            return target_window_size, target_shift_size
         window_size = [r if r <= w else w for r, w in zip(self.input_resolution, target_window_size)]
         shift_size = [0 if r <= w else s for r, w, s in zip(self.input_resolution, window_size, target_shift_size)]
         return tuple(window_size), tuple(shift_size)
+
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: Tuple[int, int],
+            always_partition: Optional[bool] = None,
+    ):
+        """
+        Args:
+            feat_size: New input resolution
+            window_size: New window size
+            always_partition: Change always_partition attribute if not None
+        """
+        self.input_resolution = feat_size
+        if always_partition is not None:
+            self.always_partition = always_partition
+        self.window_size, self.shift_size = self._calc_window_shift(window_size)
+        self.window_area = self.window_size[0] * self.window_size[1]
+        self.attn.set_window_size(self.window_size)
+        self._make_attention_mask()
 
     def _attn(self, x):
         B, H, W, C = x.shape
@@ -374,6 +430,7 @@ class SwinTransformerStage(nn.Module):
             num_heads: int = 4,
             head_dim: Optional[int] = None,
             window_size: _int_or_tuple_2_t = 7,
+            always_partition: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             proj_drop: float = 0.,
@@ -427,6 +484,7 @@ class SwinTransformerStage(nn.Module):
                 head_dim=head_dim,
                 window_size=window_size,
                 shift_size=0 if (i % 2 == 0) else shift_size,
+                always_partition=always_partition,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop,
@@ -435,6 +493,30 @@ class SwinTransformerStage(nn.Module):
                 norm_layer=norm_layer,
             )
             for i in range(depth)])
+
+    def set_input_size(
+            self,
+            feat_size: Tuple[int, int],
+            window_size: int,
+            always_partition: Optional[bool] = None,
+    ):
+        """Method updates the resolution to utilize and the window size and so the pair-wise relative positions.
+
+        Args:
+            feat_size (Tuple[int, int]): New input resolution
+            window_size (int): New window size
+        """
+        self.input_resolution = feat_size
+        if isinstance(self.downsample, nn.Identity):
+            self.output_resolution = feat_size
+        else:
+            self.output_resolution = tuple(i // 2 for i in feat_size)
+        for block in self.blocks:
+            block.set_input_size(
+                feat_size=self.output_resolution,
+                window_size=window_size,
+                always_partition=always_partition,
+            )
 
     def forward(self, x):
         x = self.downsample(x)
@@ -465,6 +547,7 @@ class SwinTransformer(nn.Module):
             num_heads: Tuple[int, ...] = (3, 6, 12, 24),
             head_dim: Optional[int] = None,
             window_size: _int_or_tuple_2_t = 7,
+            always_partition: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
@@ -546,6 +629,7 @@ class SwinTransformer(nn.Module):
                 num_heads=num_heads[i],
                 head_dim=head_dim[i],
                 window_size=window_size[i],
+                always_partition=always_partition,
                 mlp_ratio=mlp_ratio[i],
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop_rate,
@@ -556,7 +640,7 @@ class SwinTransformer(nn.Module):
             in_dim = out_dim
             if i > 0:
                 scale *= 2
-            self.feature_info += [dict(num_chs=out_dim, reduction=4 * scale, module=f'layers.{i}')]
+            self.feature_info += [dict(num_chs=out_dim, reduction=patch_size * scale, module=f'layers.{i}')]
         self.layers = nn.Sequential(*layers)
 
         self.norm = norm_layer(self.num_features)
@@ -583,6 +667,36 @@ class SwinTransformer(nn.Module):
             if 'relative_position_bias_table' in n:
                 nwd.add(n)
         return nwd
+
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+            window_size: Optional[Tuple[int, int]] = None,
+            window_ratio: int = 32,
+            always_partition: Optional[bool] = None,
+    ) -> None:
+        """ Updates the image resolution and window size.
+
+        Args:
+            img_size (Optional[Tuple[int, int]]): New input resolution, if None current resolution is used
+            window_size (Optional[int]): New window size, if None based on new_img_size // window_div
+            window_ratio (int): divisor for calculating window size from image size
+        """
+        if img_size is not None or patch_size is not None:
+            self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
+            self.patch_grid = self.patch_embed.grid_size
+        if window_size is None:
+            img_size = self.patch_embed.img_size
+            window_size = tuple([s // window_ratio for s in img_size])
+        for index, stage in enumerate(self.layers):
+            stage_scale = 2 ** max(index - 1, 0)
+            print(self.patch_grid, stage_scale)
+            stage.set_input_size(
+                feat_size=(self.patch_grid[0] // stage_scale, self.patch_grid[1] // stage_scale),
+                window_size=window_size,
+                always_partition=always_partition,
+            )
 
     @torch.jit.ignore
     def group_matcher(self, coarse=False):

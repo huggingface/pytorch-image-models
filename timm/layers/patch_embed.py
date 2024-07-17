@@ -44,14 +44,7 @@ class PatchEmbed(nn.Module):
     ):
         super().__init__()
         self.patch_size = to_2tuple(patch_size)
-        if img_size is not None:
-            self.img_size = to_2tuple(img_size)
-            self.grid_size = tuple([s // p for s, p in zip(self.img_size, self.patch_size)])
-            self.num_patches = self.grid_size[0] * self.grid_size[1]
-        else:
-            self.img_size = None
-            self.grid_size = None
-            self.num_patches = None
+        self.img_size, self.grid_size, self.num_patches = self._init_img_size(img_size)
 
         if output_fmt is not None:
             self.flatten = False
@@ -65,6 +58,41 @@ class PatchEmbed(nn.Module):
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+
+    def _init_img_size(self, img_size: Union[int, Tuple[int, int]]):
+        assert self.patch_size
+        if img_size is None:
+            return None, None, None
+        img_size = to_2tuple(img_size)
+        grid_size = tuple([s // p for s, p in zip(img_size, self.patch_size)])
+        num_patches = grid_size[0] * grid_size[1]
+        return img_size, grid_size, num_patches
+
+    def set_input_size(
+            self,
+            img_size: Optional[Union[int, Tuple[int, int]]] = None,
+            patch_size: Optional[Union[int, Tuple[int, int]]] = None,
+    ):
+        new_patch_size = None
+        if patch_size is not None:
+            new_patch_size = to_2tuple(patch_size)
+        if new_patch_size is not None and new_patch_size != self.patch_size:
+            with torch.no_grad():
+                new_proj = nn.Conv2d(
+                    self.proj.in_channels,
+                    self.proj.out_channels,
+                    kernel_size=new_patch_size,
+                    stride=new_patch_size,
+                    bias=self.proj.bias is not None,
+                )
+                new_proj.weight.copy_(resample_patch_embed(self.proj.weight, new_patch_size, verbose=True))
+                if self.proj.bias is not None:
+                    new_proj.bias.copy_(self.proj.bias)
+                self.proj = new_proj
+            self.patch_size = new_patch_size
+        img_size = img_size or self.img_size
+        if img_size != self.img_size or new_patch_size is not None:
+            self.img_size, self.grid_size, self.num_patches = self._init_img_size(img_size)
 
     def feat_ratio(self, as_scalar=True) -> Union[Tuple[int, int], int]:
         if as_scalar:
@@ -180,13 +208,9 @@ def resample_patch_embed(
     """
     import numpy as np
     try:
-        import functorch
-        vmap = functorch.vmap
+        from torch import vmap
     except ImportError:
-        if hasattr(torch, 'vmap'):
-            vmap = torch.vmap
-        else:
-            assert False, "functorch or a version of torch with vmap is required for FlexiViT resizing."
+        from functorch import vmap
 
     assert len(patch_embed.shape) == 4, "Four dimensions expected"
     assert len(new_size) == 2, "New shape should only be hw"
