@@ -391,11 +391,12 @@ group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
 
 
-def _parse_args():
+def _parse_args(config_path: str | None = None):
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
-    if args_config.config:
-        with open(args_config.config, 'r') as f:
+    if args_config.config or config_path:
+        config_path = config_path or args_config.config
+        with open(config_path, 'r') as f:
             cfg = yaml.safe_load(f)
             parser.set_defaults(**cfg)
 
@@ -408,9 +409,9 @@ def _parse_args():
     return args, args_text
 
 
-def main():
+def main(config_path: str | None = None):
     utils.setup_default_logging()
-    args, args_text = _parse_args()
+    args, args_text = _parse_args(config_path)
 
     if args.device_modules:
         for module in args.device_modules:
