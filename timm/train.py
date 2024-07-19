@@ -409,7 +409,7 @@ def _parse_args(config_path: str | None = None):
     return args, args_text
 
 
-def main(config_path: str | None = None):
+def train(config_path: str | None = None):
     utils.setup_default_logging()
     args, args_text = _parse_args(config_path)
 
@@ -1177,4 +1177,4 @@ def validate(
 
 
 if __name__ == '__main__':
-    main()
+    train()
