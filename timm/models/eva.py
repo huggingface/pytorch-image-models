@@ -134,10 +134,12 @@ class EvaAttention(nn.Module):
         else:
             q = q * self.scale
             attn = (q @ k.transpose(-2, -1))
-            attn = attn.softmax(dim=-1)
+            
             if attn_mask is not None:
                 attn_mask = attn_mask.to(torch.bool)
                 attn = attn.masked_fill(~attn_mask[:, None, None, :], float("-inf"))
+            attn = attn.softmax(dim=-1)
+            
             attn = self.attn_drop(attn)
             x = attn @ v
 
