@@ -19,12 +19,24 @@ _logger = logging.getLogger(__name__)
 __all__ = ['clean_state_dict', 'load_state_dict', 'load_checkpoint', 'remap_state_dict', 'resume_checkpoint']
 
 
+def _remove_prefix(text, prefix):
+    # FIXME replace with 3.9 stdlib fn when min at 3.9
+    if text.startswith(prefix):
+        return text[len(prefix):]
+    return text
+
+
 def clean_state_dict(state_dict: Dict[str, Any]) -> Dict[str, Any]:
     # 'clean' checkpoint by removing .module prefix from state dict if it exists from parallel training
     cleaned_state_dict = {}
+    to_remove = (
+        'module.',  # DDP wrapper
+        '_orig_mod.',  # torchcompile dynamo wrapper
+    )
     for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
-        cleaned_state_dict[name] = v
+        for r in to_remove:
+            k = _remove_prefix(k, r)
+        cleaned_state_dict[k] = v
     return cleaned_state_dict
 
 
