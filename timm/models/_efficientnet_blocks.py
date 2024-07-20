@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from timm.layers import create_conv2d, DropPath, make_divisible, create_act_layer, create_aa, to_2tuple, LayerType,\
-    ConvNormAct, ConvNormActAa, get_norm_act_layer, MultiQueryAttention2d, Attention2d
+    ConvNormAct, get_norm_act_layer, MultiQueryAttention2d, Attention2d
 
 __all__ = [
     'SqueezeExcite', 'ConvBnAct', 'DepthwiseSeparableConv', 'InvertedResidual', 'CondConvResidual', 'EdgeResidual',
@@ -345,7 +345,7 @@ class UniversalInvertedResidual(nn.Module):
         if dw_kernel_size_start:
             dw_start_stride = stride if not dw_kernel_size_mid else 1
             dw_start_groups = num_groups(group_size, in_chs)
-            self.dw_start = ConvNormActAa(
+            self.dw_start = ConvNormAct(
                 in_chs, in_chs, dw_kernel_size_start,
                 stride=dw_start_stride,
                 dilation=dilation,  # FIXME
@@ -373,7 +373,7 @@ class UniversalInvertedResidual(nn.Module):
         # Middle depth-wise convolution
         if dw_kernel_size_mid:
             groups = num_groups(group_size, mid_chs)
-            self.dw_mid = ConvNormActAa(
+            self.dw_mid = ConvNormAct(
                 mid_chs, mid_chs, dw_kernel_size_mid,
                 stride=stride,
                 dilation=dilation,  # FIXME
@@ -662,7 +662,7 @@ class EdgeResidual(nn.Module):
             mid_chs = make_divisible(force_in_chs * exp_ratio)
         else:
             mid_chs = make_divisible(in_chs * exp_ratio)
-        groups = num_groups(group_size, in_chs)
+        groups = num_groups(group_size, mid_chs)  # NOTE: Using out_chs of conv_exp for groups calc
         self.has_skip = (in_chs == out_chs and stride == 1) and not noskip
         use_aa = aa_layer is not None and stride > 1  # FIXME handle dilation
 

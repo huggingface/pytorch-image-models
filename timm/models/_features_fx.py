@@ -18,6 +18,7 @@ except ImportError:
 
 # Layers we went to treat as leaf modules
 from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame, Format
+from timm.layers import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
 from timm.layers.non_local_attn import BilinearAttnTransform
 from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 from timm.layers.norm_act import (
@@ -75,7 +76,10 @@ def get_notrace_modules():
 
 
 # Functions we want to autowrap (treat them as leaves)
-_autowrap_functions = set()
+_autowrap_functions = {
+    resample_abs_pos_embed,
+    resample_abs_pos_embed_nhwc,
+}
 
 
 def register_notrace_function(func: Callable):
@@ -112,6 +116,8 @@ def create_feature_extractor(model: nn.Module, return_nodes: Union[Dict[str, str
 class FeatureGraphNet(nn.Module):
     """ A FX Graph based feature extractor that works with the model feature_info metadata
     """
+    return_dict: torch.jit.Final[bool]
+
     def __init__(
             self,
             model: nn.Module,
@@ -151,6 +157,8 @@ class GraphExtractNet(nn.Module):
         squeeze_out: if only one output, and output in list format, flatten to single tensor
         return_dict: return as dictionary from extractor with node names as keys, ignores squeeze_out arg
     """
+    return_dict: torch.jit.Final[bool]
+
     def __init__(
             self,
             model: nn.Module,

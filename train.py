@@ -1070,7 +1070,7 @@ def train_one_epoch(
             if utils.is_primary(args):
                 _logger.info(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
-                    f'({100. * update_idx / (updates_per_epoch - 1):>3.0f}%)]  '
+                    f'({100. * (update_idx + 1) / updates_per_epoch:>3.0f}%)]  '
                     f'Loss: {losses_m.val:#.3g} ({losses_m.avg:#.3g})  '
                     f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
                     f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '

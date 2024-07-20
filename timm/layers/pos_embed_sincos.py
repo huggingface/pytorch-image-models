@@ -312,7 +312,6 @@ class RotaryEmbedding(nn.Module):
                     temperature=temperature,
                     step=1,
                 )
-                print(bands)
             self.register_buffer(
                 'bands',
                 bands,

@@ -1391,21 +1391,21 @@ default_cfgs = generate_default_cfgs({
     ),
 
     "fastvit_mci0.apple_mclip": _cfg(
-        #hf_hub_id='timm/',
+        hf_hub_id='apple/mobileclip_s0_timm',
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s0.pt',
         crop_pct=0.95,
         num_classes=512,  # CLIP proj dim
         mean=(0., 0., 0.), std=(1., 1., 1.)
     ),
     "fastvit_mci1.apple_mclip": _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='apple/mobileclip_s1_timm',
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s1.pt',
         crop_pct=0.95,
         num_classes=512,  # CLIP proj dim
         mean=(0., 0., 0.), std=(1., 1., 1.)
     ),
     "fastvit_mci2.apple_mclip": _cfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='apple/mobileclip_s2_timm',
         url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_s2.pt',
         crop_pct=0.95,
         num_classes=512,  # CLIP proj dim

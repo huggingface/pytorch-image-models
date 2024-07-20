@@ -36,9 +36,12 @@ from typing import Tuple, List, Dict, Optional, Union, Any, Callable, Sequence
 import torch
 import torch.nn as nn
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, ConvNormAct, BatchNormAct2d, DropPath, AvgPool2dSame, \
-    create_conv2d, get_act_layer, get_norm_act_layer, get_attn, make_divisible, to_2tuple, EvoNorm2dS0a
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
+from timm.layers import (
+    ClassifierHead, NormMlpClassifierHead, ConvNormAct, BatchNormAct2d, EvoNorm2dS0a,
+    AttentionPool2d, RotAttentionPool2d, DropPath, AvgPool2dSame,
+    create_conv2d, get_act_layer, get_norm_act_layer, get_attn, make_divisible, to_2tuple,
+)
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint_seq
@@ -70,15 +73,22 @@ class ByoModelCfg:
     downsample: str = 'conv1x1'
     stem_type: str = '3x3'
     stem_pool: Optional[str] = 'maxpool'
-    stem_chs: int = 32
+    stem_chs: Union[int, List[int], Tuple[int, ...]] = 32
     width_factor: float = 1.0
     num_features: int = 0  # num out_channels for final conv, no final 1x1 conv if 0
     zero_init_last: bool = True  # zero init last weight (usually bn) in residual path
     fixed_input_size: bool = False  # model constrained to a fixed-input size / img_size must be provided on creation
 
+    # layer config
     act_layer: str = 'relu'
     norm_layer: str = 'batchnorm'
+    aa_layer: str = ''
 
+    # Head config
+    head_hidden_size: Optional[int] = None  # feat dim of MLP head or AttentionPool output
+    head_type: str = 'classifier'
+
+    # Block config
     # NOTE: these config items will be overridden by the block cfg (per-block) if they are set there
     attn_layer: Optional[str] = None
     attn_kwargs: dict = field(default_factory=lambda: dict())
@@ -917,7 +927,7 @@ class Stem(nn.Sequential):
     def __init__(
             self,
             in_chs: int,
-            out_chs: int,
+            out_chs: Union[int, List[int], Tuple[int, ...]],
             kernel_size: int = 3,
             stride: int = 4,
             pool: str = 'maxpool',
@@ -961,10 +971,19 @@ class Stem(nn.Sequential):
             curr_stride *= s
             prev_feat = conv_name
 
-        if pool and 'max' in pool.lower():
+        if pool:
+            pool = pool.lower()
+            assert pool in ('max', 'maxpool', 'avg', 'avgpool', 'max2', 'avg2')
             last_feat_idx = i
             self.feature_info.append(dict(num_chs=prev_chs, reduction=curr_stride, module=prev_feat, stage=0))
-            self.add_module('pool', nn.MaxPool2d(3, 2, 1))
+            if pool == 'max2':
+                self.add_module('pool', nn.MaxPool2d(2))
+            elif pool == 'avg2':
+                self.add_module('pool', nn.AvgPool2d(2))
+            elif 'max' in pool:
+                self.add_module('pool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+            elif 'avg' in pool:
+                self.add_module('pool', nn.AvgPool2d(kernel_size=3, stride=2, padding=1, count_include_pad=False))
             curr_stride *= 2
             prev_feat = 'pool'
 
@@ -1012,11 +1031,14 @@ def create_byob_stem(
         else:
             stem = layers.conv_norm_act(in_chs, out_chs, 7, stride=2)
     else:
-        # 3x3 stem conv as in RegNet is the default
-        if pool_type:
-            stem = Stem(in_chs, out_chs, 3, num_rep=1, pool=pool_type, layers=layers)
+        if isinstance(out_chs, (tuple, list)):
+            stem = Stem(in_chs, out_chs, 3, pool=pool_type, layers=layers)
         else:
-            stem = layers.conv_norm_act(in_chs, out_chs, 3, stride=2)
+            # 3x3 stem conv as in RegNet is the default
+            if pool_type:
+                stem = Stem(in_chs, out_chs, 3, num_rep=1, pool=pool_type, layers=layers)
+            else:
+                stem = layers.conv_norm_act(in_chs, out_chs, 3, stride=2)
 
     if isinstance(stem, Stem):
         feature_info = [dict(f, module='.'.join([feat_prefix, f['module']])) for f in stem.feature_info]
@@ -1138,13 +1160,16 @@ def create_byob_stages(
         prev_feat = dict(num_chs=prev_chs, reduction=net_stride, module=f'stages.{stage_idx}', stage=stage_idx + 1)
 
     feature_info.append(prev_feat)
-    return nn.Sequential(*stages), feature_info
+    return nn.Sequential(*stages), feature_info, feat_size
 
 
-def get_layer_fns(cfg: ByoModelCfg):
+def get_layer_fns(cfg: ByoModelCfg, allow_aa: bool = True):
     act = get_act_layer(cfg.act_layer)
     norm_act = get_norm_act_layer(norm_layer=cfg.norm_layer, act_layer=act)
-    conv_norm_act = partial(ConvNormAct, norm_layer=cfg.norm_layer, act_layer=act)
+    if cfg.aa_layer and allow_aa:
+        conv_norm_act = partial(ConvNormAct, norm_layer=cfg.norm_layer, act_layer=act, aa_layer=cfg.aa_layer)
+    else:
+        conv_norm_act = partial(ConvNormAct, norm_layer=cfg.norm_layer, act_layer=act)
     attn = partial(get_attn(cfg.attn_layer), **cfg.attn_kwargs) if cfg.attn_layer else None
     self_attn = partial(get_attn(cfg.self_attn_layer), **cfg.self_attn_kwargs) if cfg.self_attn_layer else None
     layer_fn = LayerFn(conv_norm_act=conv_norm_act, norm_act=norm_act, act=act, attn=attn, self_attn=self_attn)
@@ -1164,7 +1189,7 @@ class ByobNet(nn.Module):
             cfg: ByoModelCfg,
             num_classes: int = 1000,
             in_chans: int = 3,
-            global_pool: str = 'avg',
+            global_pool: Optional[str] = None,
             output_stride: int = 32,
             img_size: Optional[Union[int, Tuple[int, int]]] = None,
             drop_rate: float = 0.,
@@ -1191,23 +1216,33 @@ class ByobNet(nn.Module):
         self.grad_checkpointing = False
 
         cfg = replace(cfg, **kwargs)  # overlay kwargs onto cfg
-        layers = get_layer_fns(cfg)
+        stem_layers = get_layer_fns(cfg, allow_aa=False)  # keep aa off for stem-layers
+        stage_layers = get_layer_fns(cfg)
         if cfg.fixed_input_size:
             assert img_size is not None, 'img_size argument is required for fixed input size model'
         feat_size = to_2tuple(img_size) if img_size is not None else None
 
         self.feature_info = []
-        stem_chs = int(round((cfg.stem_chs or cfg.blocks[0].c) * cfg.width_factor))
-        self.stem, stem_feat = create_byob_stem(in_chans, stem_chs, cfg.stem_type, cfg.stem_pool, layers=layers)
+        if isinstance(cfg.stem_chs, (list, tuple)):
+            stem_chs = [int(round(c * cfg.width_factor)) for c in cfg.stem_chs]
+        else:
+            stem_chs = int(round((cfg.stem_chs or cfg.blocks[0].c) * cfg.width_factor))
+        self.stem, stem_feat = create_byob_stem(
+            in_chs=in_chans,
+            out_chs=stem_chs,
+            stem_type=cfg.stem_type,
+            pool_type=cfg.stem_pool,
+            layers=stem_layers,
+        )
         self.feature_info.extend(stem_feat[:-1])
         feat_size = reduce_feat_size(feat_size, stride=stem_feat[-1]['reduction'])
 
-        self.stages, stage_feat = create_byob_stages(
+        self.stages, stage_feat, feat_size = create_byob_stages(
             cfg,
             drop_path_rate,
             output_stride,
             stem_feat[-1],
-            layers=layers,
+            layers=stage_layers,
             feat_size=feat_size,
         )
         self.feature_info.extend(stage_feat[:-1])
@@ -1216,7 +1251,7 @@ class ByobNet(nn.Module):
         prev_chs = stage_feat[-1]['num_chs']
         if cfg.num_features:
             self.num_features = int(round(cfg.width_factor * cfg.num_features))
-            self.final_conv = layers.conv_norm_act(prev_chs, self.num_features, 1)
+            self.final_conv = stage_layers.conv_norm_act(prev_chs, self.num_features, 1)
         else:
             self.num_features = prev_chs
             self.final_conv = nn.Identity()
@@ -1225,12 +1260,59 @@ class ByobNet(nn.Module):
         self.stage_ends = [f['stage'] for f in self.feature_info]
 
         self.head_hidden_size = self.num_features
-        self.head = ClassifierHead(
-            self.num_features,
-            num_classes,
-            pool_type=global_pool,
-            drop_rate=self.drop_rate,
-        )
+        assert cfg.head_type in ('', 'classifier', 'mlp', 'attn_abs', 'attn_rot')
+        if cfg.head_type == 'mlp':
+            if global_pool is None:
+                global_pool = 'avg'
+            self.head = NormMlpClassifierHead(
+                self.num_features,
+                num_classes,
+                hidden_size=cfg.head_hidden_size,
+                pool_type=global_pool,
+                norm_layer=cfg.norm_layer,
+                act_layer=cfg.act_layer,
+                drop_rate=self.drop_rate,
+            )
+            self.head_hidden_size = self.head.hidden_size
+        elif cfg.head_type == 'attn_abs':
+            if global_pool is None:
+                global_pool = 'token'
+            assert global_pool in ('', 'token')
+            self.head = AttentionPool2d(
+                self.num_features,
+                embed_dim=cfg.head_hidden_size,
+                out_features=num_classes,
+                feat_size=feat_size,
+                pool_type=global_pool,
+                drop_rate=self.drop_rate,
+                qkv_separate=True,
+            )
+            self.head_hidden_size = self.head.embed_dim
+        elif cfg.head_type =='attn_rot':
+            if global_pool is None:
+                global_pool = 'token'
+            assert global_pool in ('', 'token')
+            self.head = RotAttentionPool2d(
+                self.num_features,
+                embed_dim=cfg.head_hidden_size,
+                out_features=num_classes,
+                ref_feat_size=feat_size,
+                pool_type=global_pool,
+                drop_rate=self.drop_rate,
+                qkv_separate=True,
+            )
+            self.head_hidden_size = self.head.embed_dim
+        else:
+            if global_pool is None:
+                global_pool = 'avg'
+            assert cfg.head_hidden_size is None
+            self.head = ClassifierHead(
+                self.num_features,
+                num_classes,
+                pool_type=global_pool,
+                drop_rate=self.drop_rate,
+            )
+        self.global_pool = global_pool
 
         # init weights
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
@@ -1835,6 +1917,96 @@ model_cfgs = dict(
         stem_chs=64,
     ),
 
+    resnet50_clip=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
+        ),
+        stem_chs=(32, 32, 64),
+        stem_type='',
+        stem_pool='avg2',
+        downsample='avg',
+        aa_layer='avg',
+        head_type='attn_abs',
+    ),
+    resnet101_clip=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=23, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
+        ),
+        stem_chs=(32, 32, 64),
+        stem_type='',
+        stem_pool='avg2',
+        downsample='avg',
+        aa_layer='avg',
+        head_type='attn_abs',
+    ),
+    resnet50x4_clip=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=4, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=10, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=2048, s=2, br=0.25),
+        ),
+        width_factor=1.25,
+        stem_chs=(32, 32, 64),
+        stem_type='',
+        stem_pool='avg2',
+        downsample='avg',
+        aa_layer='avg',
+        head_type='attn_abs',
+    ),
+    resnet50x16_clip=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=6, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=8, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=18, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=8, c=2048, s=2, br=0.25),
+        ),
+        width_factor=1.5,
+        stem_chs=(32, 32, 64),
+        stem_type='',
+        stem_pool='avg2',
+        downsample='avg',
+        aa_layer='avg',
+        head_type='attn_abs',
+    ),
+    resnet50x64_clip=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=15, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=36, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=10, c=2048, s=2, br=0.25),
+        ),
+        width_factor=2.0,
+        stem_chs=(32, 32, 64),
+        stem_type='',
+        stem_pool='avg2',
+        downsample='avg',
+        aa_layer='avg',
+        head_type='attn_abs',
+    ),
+
+    resnet50_mlp=ByoModelCfg(
+        blocks=(
+            ByoBlockCfg(type='bottle', d=3, c=256, s=1, br=0.25),
+            ByoBlockCfg(type='bottle', d=4, c=512, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=6, c=1024, s=2, br=0.25),
+            ByoBlockCfg(type='bottle', d=3, c=2048, s=2, br=0.25),
+        ),
+        stem_chs=(32, 32, 64),
+        stem_type='',
+        stem_pool='avg2',
+        downsample='avg',
+        aa_layer='avg',
+        head_hidden_size=1024,
+        head_type='mlp',
+    ),
+
     test_byobnet=ByoModelCfg(
         blocks=(
             ByoBlockCfg(type='edge', d=1, c=32, s=2, gs=0, br=0.5),
@@ -1850,14 +2022,70 @@ model_cfgs = dict(
         attn_kwargs=dict(rd_ratio=0.25),
     ),
 )
+for k in ('resnet50_clip', 'resnet101_clip', 'resnet50x4_clip', 'resnet50x16_clip', 'resnet50x64_clip'):
+    model_cfgs[k + '_gap'] = replace(model_cfgs[k], head_type='classifier')
+
+
+def _convert_openai_clip(
+        state_dict: Dict[str, torch.Tensor],
+        model: ByobNet,
+        prefix: str = 'visual.',
+) -> Dict[str, torch.Tensor]:
+    model_has_attn_pool = isinstance(model.head, (RotAttentionPool2d, AttentionPool2d))
+    import re
+
+    def _stage_sub(m):
+        stage_idx = int(m.group(1)) - 1
+        layer_idx, layer_type, layer_id = int(m.group(2)), m.group(3), int(m.group(4))
+        prefix_str = f'stages.{stage_idx}.{layer_idx}.'
+        id_map = {1: 'conv1_1x1.', 2: 'conv2_kxk.', 3: 'conv3_1x1.'}
+        suffix_str = id_map[layer_id] + layer_type
+        return prefix_str + suffix_str
+
+    def _down_sub(m):
+        stage_idx = int(m.group(1)) - 1
+        layer_idx, layer_id = int(m.group(2)), int(m.group(3))
+        return f'stages.{stage_idx}.{layer_idx}.shortcut.' + ('conv.conv' if layer_id == 0 else 'conv.bn')
+
+    out_dict = {}
+    for k, v in state_dict.items():
+        if not k.startswith(prefix):
+            continue
+        k = re.sub(rf'{prefix}conv([0-9])', r'stem.conv\1.conv', k)
+        k = re.sub(rf'{prefix}bn([0-9])', r'stem.conv\1.bn', k)
+        k = re.sub(rf'{prefix}layer([0-9])\.([0-9]+)\.([a-z]+)([0-9])', _stage_sub, k)
+        k = re.sub(rf'{prefix}layer([0-9])\.([0-9]+)\.downsample\.([0-9])', _down_sub, k)
+        if k.startswith(f'{prefix}attnpool'):
+            if not model_has_attn_pool:
+                continue
+            k = k.replace(prefix + 'attnpool', 'head')  #'attn_pool')
+            k = k.replace('positional_embedding', 'pos_embed')
+            k = k.replace('q_proj', 'q')
+            k = k.replace('k_proj', 'k')
+            k = k.replace('v_proj', 'v')
+            k = k.replace('c_proj', 'proj')
+        out_dict[k] = v
+
+    return out_dict
+
+
+def checkpoint_filter_fn(
+        state_dict: Dict[str, torch.Tensor],
+        model: ByobNet
+):
+    if 'visual.conv1.weight' in state_dict:
+        state_dict = _convert_openai_clip(state_dict, model)
+    return state_dict
 
 
 def _create_byobnet(variant, pretrained=False, **kwargs):
     return build_model_with_cfg(
         ByobNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True),
-        **kwargs)
+        **kwargs,
+    )
 
 
 def _cfg(url='', **kwargs):
@@ -2049,6 +2277,79 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         crop_pct=0.9,
         first_conv=('stem.conv_kxk.0.conv', 'stem.conv_scale.conv'),
+    ),
+
+    # original attention pool head variants
+    'resnet50_clip.openai': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
+        classifier = 'head.proj',
+    ),
+    'resnet101_clip.openai': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=512, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
+        classifier='head.proj',
+    ),
+    'resnet50x4_clip.openai': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=640, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 288, 288), pool_size=(9, 9),
+        classifier = 'head.proj',
+    ),
+    'resnet50x16_clip.openai': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=768, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 384, 384), pool_size=(12, 12),
+        classifier = 'head.proj',
+    ),
+    'resnet50x64_clip.openai': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 448, 448), pool_size=(14, 14),
+        classifier = 'head.proj',
+    ),
+
+    # avg-pool w/ optional standard classifier head variants
+    'resnet50_clip_gap.openai': _cfgr(
+        hf_hub_id='timm/resnet50_clip.openai',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 224, 224), pool_size=(7, 7),
+    ),
+    'resnet101_clip_gap.openai': _cfgr(
+        hf_hub_id='timm/resnet101_clip.openai',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 224, 224), pool_size=(7, 7),
+    ),
+    'resnet50x4_clip_gap.openai': _cfgr(
+        hf_hub_id='timm/resnet50x4_clip.openai',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 288, 288), pool_size=(9, 9),
+    ),
+    'resnet50x16_clip_gap.openai': _cfgr(
+        hf_hub_id='timm/resnet50x16_clip.openai',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 384, 384), pool_size=(12, 12),
+    ),
+    'resnet50x64_clip_gap.openai': _cfgr(
+        hf_hub_id='timm/resnet50x64_clip.openai',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 448, 448), pool_size=(14, 14),
+    ),
+
+    'resnet50_mlp.untrained': _cfgr(
+        input_size=(3, 256, 256), pool_size=(8, 8),
     ),
 
     'test_byobnet.untrained': _cfgr(
@@ -2357,6 +2658,83 @@ def mobileone_s4(pretrained=False, **kwargs) -> ByobNet:
     """
     """
     return _create_byobnet('mobileone_s4', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50_clip(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50 CLIP image tower
+    """
+    return _create_byobnet('resnet50_clip', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet101_clip(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-101 CLIP image tower
+    """
+    return _create_byobnet('resnet101_clip', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50x4_clip(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50x4 CLIP image tower
+    """
+    return _create_byobnet('resnet50x4_clip', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50x16_clip(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50x16 CLIP image tower
+    """
+    return _create_byobnet('resnet50x16_clip', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50x64_clip(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50x64 CLIP image tower
+    """
+    return _create_byobnet('resnet50x64_clip', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50_clip_gap(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50 CLIP image tower w/ avg pool (no attention pool)
+    """
+    return _create_byobnet('resnet50_clip_gap', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet101_clip_gap(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-101 CLIP image tower w/ avg pool (no attention pool)
+    """
+    return _create_byobnet('resnet101_clip_gap', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50x4_clip_gap(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50x4 CLIP image tower w/ avg pool (no attention pool)
+    """
+    return _create_byobnet('resnet50x4_clip_gap', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50x16_clip_gap(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50x16 CLIP image tower w/ avg pool (no attention pool)
+    """
+    return _create_byobnet('resnet50x16_clip_gap', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50x64_clip_gap(pretrained=False, **kwargs) -> ByobNet:
+    """ OpenAI Modified ResNet-50x64 CLIP image tower w/ avg pool (no attention pool)
+    """
+    return _create_byobnet('resnet50x64_clip_gap', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def resnet50_mlp(pretrained=False, **kwargs) -> ByobNet:
+    """
+    """
+    return _create_byobnet('resnet50_mlp', pretrained=pretrained, **kwargs)
 
 
 @register_model

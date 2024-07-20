@@ -536,7 +536,7 @@ class VisionTransformerSAM(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes=0, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
