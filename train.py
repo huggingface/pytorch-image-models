@@ -210,7 +210,7 @@ group.add_argument('--opt-kwargs', nargs='*', default={}, action=utils.ParseKwar
 # Learning rate schedule parameters
 group = parser.add_argument_group('Learning rate schedule parameters')
 group.add_argument('--sched', type=str, default='cosine', metavar='SCHEDULER',
-                   help='LR scheduler (default: "step"')
+                   help='LR scheduler (default: "cosine"')
 group.add_argument('--sched-on-updates', action='store_true', default=False,
                    help='Apply LR scheduler step on update instead of epoch end.')
 group.add_argument('--lr', type=float, default=None, metavar='LR',
