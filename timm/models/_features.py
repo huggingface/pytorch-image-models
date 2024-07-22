@@ -11,7 +11,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from functools import partial
-from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -26,44 +26,44 @@ __all__ = [
 ]
 
 
-def _take_indices(
-        num_blocks: int,
-        n: Optional[Union[int, List[int], Tuple[int]]],
-) -> Tuple[Set[int], int]:
-    if isinstance(n, int):
-        assert n >= 0
-        take_indices = {x for x in range(num_blocks - n, num_blocks)}
-    else:
-        take_indices = {num_blocks + idx if idx < 0 else idx for idx in n}
-    return take_indices, max(take_indices)
-
-
-def _take_indices_jit(
-        num_blocks: int,
-        n: Union[int, List[int], Tuple[int]],
-) -> Tuple[List[int], int]:
-    if isinstance(n, int):
-        assert n >= 0
-        take_indices = [num_blocks - n + i for i in range(n)]
-    elif isinstance(n, tuple):
-        # splitting this up is silly, but needed for torchscript type resolution of n
-        take_indices = [num_blocks + idx if idx < 0 else idx for idx in n]
-    else:
-        take_indices = [num_blocks + idx if idx < 0 else idx for idx in n]
-    return take_indices, max(take_indices)
-
-
 def feature_take_indices(
-        num_blocks: int,
-        indices: Optional[Union[int, List[int], Tuple[int]]] = None,
+        num_features: int,
+        indices: Optional[Union[int, List[int]]] = None,
+        as_set: bool = False,
 ) -> Tuple[List[int], int]:
+    """ Determine the absolute feature indices to 'take' from.
+
+    Note: This function can be called in forwar() so must be torchscript compatible,
+    which requires some incomplete typing and workaround hacks.
+
+    Args:
+        num_features: total number of features to select from
+        indices: indices to select,
+          None -> select all
+          int -> select last n
+          list/tuple of int -> return specified (-ve indices specify from end)
+        as_set: return as a set
+
+    Returns:
+        List (or set) of absolute (from beginning) indices, Maximum index
+    """
     if indices is None:
-        indices = num_blocks  # all blocks if None
-    if torch.jit.is_scripting():
-        return _take_indices_jit(num_blocks, indices)
+        indices = num_features  # all features if None
+
+    if isinstance(indices, int):
+        assert indices >= 0
+        # convert int -> last n indices
+        take_indices = [num_features - indices + i for i in range(indices)]
+    elif isinstance(indices, tuple):
+        # duplicating this is silly, but needed for torchscript type resolution of n
+        take_indices = [num_features + idx if idx < 0 else idx for idx in indices]
     else:
-        # NOTE non-jit returns Set[int] instead of List[int] but torchscript can't handle that anno
-        return _take_indices(num_blocks, indices)
+        take_indices = [num_features + idx if idx < 0 else idx for idx in indices]
+
+    if not torch.jit.is_scripting() and as_set:
+        return set(take_indices), max(take_indices)
+
+    return take_indices, max(take_indices)
 
 
 def _out_indices_as_tuple(x: Union[int, Tuple[int, ...]]) -> Tuple[int, ...]:
@@ -464,7 +464,6 @@ class FeatureGetterNet(nn.ModuleDict):
                 out_indices,
                 prune_norm=not norm,
             )
-            out_indices = list(out_indices)
         self.feature_info = _get_feature_info(model, out_indices)
         self.model = model
         self.out_indices = out_indices

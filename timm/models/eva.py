@@ -589,7 +589,7 @@ class Eva(nn.Module):
     def forward_intermediates(
             self,
             x: torch.Tensor,
-            indices: Optional[Union[int, List[int], Tuple[int]]] = None,
+            indices: Optional[Union[int, List[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
             stop_early: bool = False,
@@ -646,7 +646,7 @@ class Eva(nn.Module):
 
     def prune_intermediate_layers(
             self,
-            indices: Union[int, List[int], Tuple[int]] = 1,
+            indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
     ):
