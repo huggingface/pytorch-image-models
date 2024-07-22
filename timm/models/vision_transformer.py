@@ -1990,7 +1990,8 @@ default_cfgs = {
     'vit_so150m_patch16_reg4_map_256.untrained': _cfg(
         input_size=(3, 256, 256)),
 
-    'test_vit.untrained': _cfg(
+    'test_vit.r160_in1k': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 160, 160), crop_pct=0.875),
 }
 

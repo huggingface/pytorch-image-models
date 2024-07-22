@@ -1756,8 +1756,8 @@ default_cfgs = generate_default_cfgs({
         #hf_hub_id='timm/',
         input_size=(3, 224, 224), crop_pct=0.9),
 
-    "test_efficientnet.untrained": _cfg(
-        # hf_hub_id='timm/'
+    "test_efficientnet.r160_in1k": _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
