@@ -1,5 +1,5 @@
 torch>=1.7
-torchvision
+torchvision>=0.15
 pyyaml
 huggingface_hub
 safetensors>=0.2
