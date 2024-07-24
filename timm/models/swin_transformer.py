@@ -219,6 +219,7 @@ class SwinTransformerBlock(nn.Module):
             window_size: _int_or_tuple_2_t = 7,
             shift_size: int = 0,
             always_partition: bool = False,
+            dynamic_mask: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             proj_drop: float = 0.,
@@ -235,6 +236,7 @@ class SwinTransformerBlock(nn.Module):
             num_heads: Number of attention heads.
             head_dim: Enforce the number of channels per head
             shift_size: Shift size for SW-MSA.
+            always_partition: Always partition into full windows and shift
             mlp_ratio: Ratio of mlp hidden dim to embedding dim.
             qkv_bias: If True, add a learnable bias to query, key, value.
             proj_drop: Dropout rate.
@@ -246,9 +248,10 @@ class SwinTransformerBlock(nn.Module):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
-        self.target_shift_size = to_2tuple(shift_size)
+        self.target_shift_size = to_2tuple(shift_size)  # store for later resize
         self.always_partition = always_partition
-        self.window_size, self.shift_size = self._calc_window_shift(window_size, target_shift_size=shift_size)
+        self.dynamic_mask = dynamic_mask
+        self.window_size, self.shift_size = self._calc_window_shift(window_size, shift_size)
         self.window_area = self.window_size[0] * self.window_size[1]
         self.mlp_ratio = mlp_ratio
 
@@ -257,7 +260,7 @@ class SwinTransformerBlock(nn.Module):
             dim,
             num_heads=num_heads,
             head_dim=head_dim,
-            window_size=to_2tuple(self.window_size),
+            window_size=self.window_size,
             qkv_bias=qkv_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
@@ -273,25 +276,38 @@ class SwinTransformerBlock(nn.Module):
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-        self._make_attention_mask()
+        self.register_buffer(
+            "attn_mask",
+            None if self.dynamic_mask else self.get_attn_mask(),
+            persistent=False,
+        )
 
-    def _make_attention_mask(self):
+    def get_attn_mask(self, x: Optional[torch.Tensor] = None) -> Optional[torch.Tensor]:
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
-            H, W = self.input_resolution
+            if x is not None:
+                H, W = x.shape[1], x.shape[2]
+                device = x.device
+                dtype = x.dtype
+            else:
+                H, W = self.input_resolution
+                device = None
+                dtype = None
             H = math.ceil(H / self.window_size[0]) * self.window_size[0]
             W = math.ceil(W / self.window_size[1]) * self.window_size[1]
-            img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
+            img_mask = torch.zeros((1, H, W, 1), dtype=dtype, device=device)  # 1 H W 1
             cnt = 0
             for h in (
-                    slice(0, -self.window_size[0]),
-                    slice(-self.window_size[0], -self.shift_size[0]),
-                    slice(-self.shift_size[0], None)):
+                    (0, -self.window_size[0]),
+                    (-self.window_size[0], -self.shift_size[0]),
+                    (-self.shift_size[0], None),
+            ):
                 for w in (
-                        slice(0, -self.window_size[1]),
-                        slice(-self.window_size[1], -self.shift_size[1]),
-                        slice(-self.shift_size[1], None)):
-                    img_mask[:, h, w, :] = cnt
+                        (0, -self.window_size[1]),
+                        (-self.window_size[1], -self.shift_size[1]),
+                        (-self.shift_size[1], None),
+                ):
+                    img_mask[:, h[0]:h[1], w[0]:w[1], :] = cnt
                     cnt += 1
             mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
             mask_windows = mask_windows.view(-1, self.window_area)
@@ -299,7 +315,7 @@ class SwinTransformerBlock(nn.Module):
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
         else:
             attn_mask = None
-        self.register_buffer("attn_mask", attn_mask, persistent=False)
+        return attn_mask
 
     def _calc_window_shift(
             self,
@@ -308,14 +324,16 @@ class SwinTransformerBlock(nn.Module):
     ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         target_window_size = to_2tuple(target_window_size)
         if target_shift_size is None:
-            # if passed value is None, recalculate from default window_size // 2 if it was active
+            # if passed value is None, recalculate from default window_size // 2 if it was previously non-zero
             target_shift_size = self.target_shift_size
             if any(target_shift_size):
-                target_shift_size = [target_window_size[0] // 2, target_window_size[1] // 2]
+                target_shift_size = (target_window_size[0] // 2, target_window_size[1] // 2)
         else:
             target_shift_size = to_2tuple(target_shift_size)
+
         if self.always_partition:
             return target_window_size, target_shift_size
+
         window_size = [r if r <= w else w for r, w in zip(self.input_resolution, target_window_size)]
         shift_size = [0 if r <= w else s for r, w, s in zip(self.input_resolution, window_size, target_shift_size)]
         return tuple(window_size), tuple(shift_size)
@@ -338,7 +356,11 @@ class SwinTransformerBlock(nn.Module):
         self.window_size, self.shift_size = self._calc_window_shift(window_size)
         self.window_area = self.window_size[0] * self.window_size[1]
         self.attn.set_window_size(self.window_size)
-        self._make_attention_mask()
+        self.register_buffer(
+            "attn_mask",
+            None if self.dynamic_mask else self.get_attn_mask(),
+            persistent=False,
+        )
 
     def _attn(self, x):
         B, H, W, C = x.shape
@@ -354,14 +376,18 @@ class SwinTransformerBlock(nn.Module):
         pad_h = (self.window_size[0] - H % self.window_size[0]) % self.window_size[0]
         pad_w = (self.window_size[1] - W % self.window_size[1]) % self.window_size[1]
         shifted_x = torch.nn.functional.pad(shifted_x, (0, 0, 0, pad_w, 0, pad_h))
-        Hp, Wp = H + pad_h, W + pad_w
+        _, Hp, Wp, _ = shifted_x.shape
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.view(-1, self.window_area, C)  # nW*B, window_size*window_size, C
 
         # W-MSA/SW-MSA
-        attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+        if getattr(self, 'dynamic_mask', False):
+            attn_mask = self.get_attn_mask(shifted_x)
+        else:
+            attn_mask = self.attn_mask
+        attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size[0], self.window_size[1], C)
@@ -408,8 +434,11 @@ class PatchMerging(nn.Module):
 
     def forward(self, x):
         B, H, W, C = x.shape
-        _assert(H % 2 == 0, f"x height ({H}) is not even.")
-        _assert(W % 2 == 0, f"x width ({W}) is not even.")
+
+        pad_values = (0, 0, 0, H % 2, 0, W % 2)
+        x = nn.functional.pad(x, pad_values)
+        _, H, W, _ = x.shape
+
         x = x.reshape(B, H // 2, 2, W // 2, 2, C).permute(0, 1, 3, 4, 2, 5).flatten(3)
         x = self.norm(x)
         x = self.reduction(x)
@@ -431,6 +460,7 @@ class SwinTransformerStage(nn.Module):
             head_dim: Optional[int] = None,
             window_size: _int_or_tuple_2_t = 7,
             always_partition: bool = False,
+            dynamic_mask: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             proj_drop: float = 0.,
@@ -485,6 +515,7 @@ class SwinTransformerStage(nn.Module):
                 window_size=window_size,
                 shift_size=0 if (i % 2 == 0) else shift_size,
                 always_partition=always_partition,
+                dynamic_mask=dynamic_mask,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop,
@@ -500,11 +531,12 @@ class SwinTransformerStage(nn.Module):
             window_size: int,
             always_partition: Optional[bool] = None,
     ):
-        """Method updates the resolution to utilize and the window size and so the pair-wise relative positions.
+        """ Updates the resolution, window size and so the pair-wise relative positions.
 
         Args:
-            feat_size (Tuple[int, int]): New input resolution
-            window_size (int): New window size
+            feat_size: New input (feature) resolution
+            window_size: New window size
+            always_partition: Always partition / shift the window
         """
         self.input_resolution = feat_size
         if isinstance(self.downsample, nn.Identity):
@@ -548,6 +580,7 @@ class SwinTransformer(nn.Module):
             head_dim: Optional[int] = None,
             window_size: _int_or_tuple_2_t = 7,
             always_partition: bool = False,
+            strict_img_size: bool = True,
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             drop_rate: float = 0.,
@@ -599,9 +632,10 @@ class SwinTransformer(nn.Module):
             in_chans=in_chans,
             embed_dim=embed_dim[0],
             norm_layer=norm_layer,
+            strict_img_size=strict_img_size,
             output_fmt='NHWC',
         )
-        self.patch_grid = self.patch_embed.grid_size
+        patch_grid = self.patch_embed.grid_size
 
         # build layers
         head_dim = to_ntuple(self.num_layers)(head_dim)
@@ -621,8 +655,8 @@ class SwinTransformer(nn.Module):
                 dim=in_dim,
                 out_dim=out_dim,
                 input_resolution=(
-                    self.patch_grid[0] // scale,
-                    self.patch_grid[1] // scale
+                    patch_grid[0] // scale,
+                    patch_grid[1] // scale
                 ),
                 depth=depths[i],
                 downsample=i > 0,
@@ -630,6 +664,7 @@ class SwinTransformer(nn.Module):
                 head_dim=head_dim[i],
                 window_size=window_size[i],
                 always_partition=always_partition,
+                dynamic_mask=not strict_img_size,
                 mlp_ratio=mlp_ratio[i],
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop_rate,
@@ -673,27 +708,29 @@ class SwinTransformer(nn.Module):
             img_size: Optional[Tuple[int, int]] = None,
             patch_size: Optional[Tuple[int, int]] = None,
             window_size: Optional[Tuple[int, int]] = None,
-            window_ratio: int = 32,
+            window_ratio: int = 8,
             always_partition: Optional[bool] = None,
     ) -> None:
         """ Updates the image resolution and window size.
 
         Args:
-            img_size (Optional[Tuple[int, int]]): New input resolution, if None current resolution is used
-            window_size (Optional[int]): New window size, if None based on new_img_size // window_div
-            window_ratio (int): divisor for calculating window size from image size
+            img_size: New input resolution, if None current resolution is used
+            patch_size (Optional[Tuple[int, int]): New patch size, if None use current patch size
+            window_size: New window size, if None based on new_img_size // window_div
+            window_ratio: divisor for calculating window size from grid size
+            always_partition: always partition into windows and shift (even if window size < feat size)
         """
         if img_size is not None or patch_size is not None:
             self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
-            self.patch_grid = self.patch_embed.grid_size
+            patch_grid = self.patch_embed.grid_size
+
         if window_size is None:
-            img_size = self.patch_embed.img_size
-            window_size = tuple([s // window_ratio for s in img_size])
+            window_size = tuple([pg // window_ratio for pg in patch_grid])
+
         for index, stage in enumerate(self.layers):
             stage_scale = 2 ** max(index - 1, 0)
-            print(self.patch_grid, stage_scale)
             stage.set_input_size(
-                feat_size=(self.patch_grid[0] // stage_scale, self.patch_grid[1] // stage_scale),
+                feat_size=(patch_grid[0] // stage_scale, patch_grid[1] // stage_scale),
                 window_size=window_size,
                 always_partition=always_partition,
             )
