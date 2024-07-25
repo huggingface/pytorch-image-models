@@ -289,8 +289,6 @@ class SwinTransformerV2CrBlock(nn.Module):
             None if self.dynamic_mask else self.get_attn_mask(),
             persistent=False,
         )
-        print(self.dynamic_mask)
-
         self.init_weights()
 
     def _calc_window_shift(

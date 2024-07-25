@@ -333,14 +333,12 @@ class SwinTransformerV2Block(nn.Module):
             target_shift_size = to_2tuple(target_shift_size)
 
         if self.always_partition:
-            print('ap', target_window_size, target_shift_size)
             return target_window_size, target_shift_size
 
         target_window_size = to_2tuple(target_window_size)
         target_shift_size = to_2tuple(target_shift_size)
         window_size = [r if r <= w else w for r, w in zip(self.input_resolution, target_window_size)]
         shift_size = [0 if r <= w else s for r, w, s in zip(self.input_resolution, window_size, target_shift_size)]
-        print('nap', window_size, shift_size)
         return tuple(window_size), tuple(shift_size)
 
     def set_input_size(
