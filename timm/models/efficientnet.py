@@ -1238,9 +1238,17 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_small_lamb-aff75073.pth',
         hf_hub_id='timm/'),
 
-    'mobilenet_100.untrained': _cfg(),
-    'mobilenet_100h.untrained': _cfg(),
-    'mobilenet_125.untrained': _cfg(),
+    'mobilenetv1_100.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenetv1_100h.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenetv1_125.untrained': _cfg(),
 
     'mobilenetv2_035.untrained': _cfg(),
     'mobilenetv2_050.lamb_in1k': _cfg(
@@ -1275,22 +1283,27 @@ default_cfgs = generate_default_cfgs({
     'efficientnet_b0.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth',
         hf_hub_id='timm/'),
+    'efficientnet_b0.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=1.0
+    ),
     'efficientnet_b1.ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth',
         hf_hub_id='timm/',
-        test_input_size=(3, 256, 256), crop_pct=1.0),
+        test_input_size=(3, 256, 256), test_crop_pct=1.0),
     'efficientnet_b2.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth',
         hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), test_input_size=(3, 288, 288), crop_pct=1.0),
+        input_size=(3, 256, 256), pool_size=(8, 8), test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'efficientnet_b3.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra2-cf984f9c.pth',
         hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
+        input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), test_crop_pct=1.0),
     'efficientnet_b4.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b4_ra2_320-7eb33cd5.pth',
         hf_hub_id='timm/',
-        input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), crop_pct=1.0),
+        input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), test_crop_pct=1.0),
     'efficientnet_b5.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, crop_mode='squash'),
@@ -1826,23 +1839,23 @@ def mnasnet_small(pretrained=False, **kwargs) -> EfficientNet:
 
 
 @register_model
-def mobilenet_100(pretrained=False, **kwargs) -> EfficientNet:
+def mobilenetv1_100(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet V1 """
-    model = _gen_mobilenet_v1('mobilenet_100', 1.0, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v1('mobilenetv1_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
-def mobilenet_100h(pretrained=False, **kwargs) -> EfficientNet:
+def mobilenetv1_100h(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet V1 """
-    model = _gen_mobilenet_v1('mobilenet_100h', 1.0, head_conv=True, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v1('mobilenetv1_100h', 1.0, head_conv=True, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
-def mobilenet_125(pretrained=False, **kwargs) -> EfficientNet:
+def mobilenetv1_125(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet V1 """
-    model = _gen_mobilenet_v1('mobilenet_125', 1.25, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v1('mobilenetv1_125', 1.25, pretrained=pretrained, **kwargs)
     return model
 
 
