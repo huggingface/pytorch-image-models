@@ -54,6 +54,7 @@ class EvaAttention(nn.Module):
             qkv_bias: bool = True,
             qkv_fused: bool = True,
             num_prefix_tokens: int = 1,
+            qkv_bias_separate: bool = False,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             attn_head_dim: Optional[int] = None,
@@ -80,6 +81,7 @@ class EvaAttention(nn.Module):
         self.scale = head_dim ** -0.5
         self.num_prefix_tokens = num_prefix_tokens
         self.fused_attn = use_fused_attn()
+        self.qkv_bias_separate = qkv_bias_separate
 
         if qkv_fused:
             self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
@@ -111,8 +113,15 @@ class EvaAttention(nn.Module):
         B, N, C = x.shape
 
         if self.qkv is not None:
-            qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias)) if self.q_bias is not None else None
-            qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+            if self.q_bias is None:
+                qkv = self.qkv(x)
+            else:
+                qkv_bias = torch.cat((self.q_bias, self.k_bias, self.v_bias))
+                if self.qkv_bias_separate:
+                    qkv = self.qkv(x)
+                    qkv += qkv_bias
+                else:
+                    qkv = F.linear(x, weight=self.qkv.weight, bias=qkv_bias)
             qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
             q, k, v = qkv.unbind(0)  # B, num_heads, N, head_dim
         else:

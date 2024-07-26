@@ -11,8 +11,8 @@ from torchvision import transforms
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEFAULT_CROP_PCT
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
-from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation,\
-    ResizeKeepRatio, CenterCropOrPad, RandomCropOrPad, TrimBorder, ToNumpy
+from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, \
+    ResizeKeepRatio, CenterCropOrPad, RandomCropOrPad, TrimBorder, ToNumpy, MaybeToTensor, MaybePILToTensor
 from timm.data.random_erasing import RandomErasing
 
 
@@ -49,10 +49,10 @@ def transforms_noaug_train(
         tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disabled, converted to tensor without scaling, keep original dtype
-        tfl += [transforms.PILToTensor()]
+        tfl += [MaybePILToTensor()]
     else:
         tfl += [
-            transforms.ToTensor(),
+            MaybeToTensor(),
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std)
@@ -218,10 +218,10 @@ def transforms_imagenet_train(
         final_tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disable, converted to tensor without scaling, keeps original dtype
-        final_tfl += [transforms.PILToTensor()]
+        final_tfl += [MaybePILToTensor()]
     else:
         final_tfl += [
-            transforms.ToTensor(),
+            MaybeToTensor(),
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),
@@ -318,10 +318,10 @@ def transforms_imagenet_eval(
         tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disabled, converted to tensor without scaling, keeps original dtype
-        tfl += [transforms.PILToTensor()]
+        tfl += [MaybePILToTensor()]
     else:
         tfl += [
-            transforms.ToTensor(),
+            MaybeToTensor(),
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),

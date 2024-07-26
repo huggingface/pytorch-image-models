@@ -98,7 +98,6 @@ class EfficientNet(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
-        self.num_features = self.head_hidden_size = num_features
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
@@ -125,8 +124,15 @@ class EfficientNet(nn.Module):
         head_chs = builder.in_chs
 
         # Head + Pooling
-        self.conv_head = create_conv2d(head_chs, self.num_features, 1, padding=pad_type)
-        self.bn2 = norm_act_layer(self.num_features, inplace=True)
+        if num_features > 0:
+            self.conv_head = create_conv2d(head_chs, num_features, 1, padding=pad_type)
+            self.bn2 = norm_act_layer(num_features, inplace=True)
+            self.num_features = self.head_hidden_size = num_features
+        else:
+            self.conv_head = nn.Identity()
+            self.bn2 = nn.Identity()
+            self.num_features = self.head_hidden_size = head_chs
+
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
@@ -481,7 +487,8 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
 
 
 def _gen_mobilenet_v1(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, fix_stem_head=False, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0,
+        fix_stem_head=False, head_conv=False, pretrained=False, **kwargs):
     """
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
@@ -494,9 +501,10 @@ def _gen_mobilenet_v1(
         ['dsa_r2_k3_s2_c1024'],
     ]
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
+    head_features = (1024 if fix_stem_head else max(1024, round_chs_fn(1024))) if head_conv else 0
     model_kwargs = dict(
         block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
-        num_features=1024 if fix_stem_head else max(1024, round_chs_fn(1024)),
+        num_features=head_features,
         stem_size=32,
         fix_stem=fix_stem_head,
         round_chs_fn=round_chs_fn,
@@ -1175,6 +1183,31 @@ def _gen_mobilenet_edgetpu(variant, channel_multiplier=1.0, depth_multiplier=1.0
     return model
 
 
+def _gen_test_efficientnet(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Minimal test EfficientNet generator.
+    """
+    arch_def = [
+        ['cn_r1_k3_s1_e1_c16_skip'],
+        ['er_r1_k3_s2_e4_c24'],
+        ['er_r1_k3_s2_e4_c32'],
+        ['ir_r1_k3_s2_e4_c48_se0.25'],
+        ['ir_r1_k3_s2_e4_c64_se0.25'],
+    ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.)
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=round_chs_fn(256),
+        stem_size=24,
+        round_chs_fn=round_chs_fn,
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _cfg(url='', **kwargs):
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
@@ -1205,8 +1238,17 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_small_lamb-aff75073.pth',
         hf_hub_id='timm/'),
 
-    'mobilenet_100.untrained': _cfg(),
-    'mobilenet_125.untrained': _cfg(),
+    'mobilenetv1_100.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenetv1_100h.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenetv1_125.untrained': _cfg(),
 
     'mobilenetv2_035.untrained': _cfg(),
     'mobilenetv2_050.lamb_in1k': _cfg(
@@ -1241,22 +1283,27 @@ default_cfgs = generate_default_cfgs({
     'efficientnet_b0.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth',
         hf_hub_id='timm/'),
+    'efficientnet_b0.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=1.0
+    ),
     'efficientnet_b1.ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth',
         hf_hub_id='timm/',
-        test_input_size=(3, 256, 256), crop_pct=1.0),
+        test_input_size=(3, 256, 256), test_crop_pct=1.0),
     'efficientnet_b2.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth',
         hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), test_input_size=(3, 288, 288), crop_pct=1.0),
+        input_size=(3, 256, 256), pool_size=(8, 8), test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'efficientnet_b3.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra2-cf984f9c.pth',
         hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
+        input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), test_crop_pct=1.0),
     'efficientnet_b4.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b4_ra2_320-7eb33cd5.pth',
         hf_hub_id='timm/',
-        input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), crop_pct=1.0),
+        input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), test_crop_pct=1.0),
     'efficientnet_b5.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, crop_mode='squash'),
@@ -1722,6 +1769,9 @@ default_cfgs = generate_default_cfgs({
         #hf_hub_id='timm/',
         input_size=(3, 224, 224), crop_pct=0.9),
 
+    "test_efficientnet.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -1789,16 +1839,23 @@ def mnasnet_small(pretrained=False, **kwargs) -> EfficientNet:
 
 
 @register_model
-def mobilenet_100(pretrained=False, **kwargs) -> EfficientNet:
+def mobilenetv1_100(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet V1 """
-    model = _gen_mobilenet_v1('mobilenet_100', 1.0, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v1('mobilenetv1_100', 1.0, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
-def mobilenet_125(pretrained=False, **kwargs) -> EfficientNet:
+def mobilenetv1_100h(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet V1 """
-    model = _gen_mobilenet_v1('mobilenet_125', 1.25, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v1('mobilenetv1_100h', 1.0, head_conv=True, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv1_125(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet V1 """
+    model = _gen_mobilenet_v1('mobilenetv1_125', 1.25, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -2694,6 +2751,12 @@ def mobilenet_edgetpu_v2_m(pretrained=False, **kwargs) -> EfficientNet:
 def mobilenet_edgetpu_v2_l(pretrained=False, **kwargs) -> EfficientNet:
     """ MobileNet-EdgeTPU-v2 Large. """
     model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_l', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet('test_efficientnet', pretrained=pretrained, **kwargs)
     return model
 
 

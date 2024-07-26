@@ -1018,6 +1018,10 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 256, 256), pool_size=(8, 8),
         crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0, interpolation='bicubic'),
 
+    'mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), pool_size=(8, 8),
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0, interpolation='bicubic'),
     'mobilenetv4_hybrid_medium.ix_e550_r256_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), pool_size=(8, 8),
@@ -1029,6 +1033,11 @@ default_cfgs = generate_default_cfgs({
     'mobilenetv4_hybrid_medium.e500_r224_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_hybrid_medium.e200_r256_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), pool_size=(8, 8),
+        crop_pct=0.95, test_input_size=(3, 320, 320), test_crop_pct=1.0, interpolation='bicubic'),
     'mobilenetv4_hybrid_large.ix_e600_r384_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12),
@@ -1045,6 +1054,23 @@ default_cfgs = generate_default_cfgs({
     'mobilenetv4_conv_blur_medium.e500_r224_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), pool_size=(14, 14),
+        crop_pct=0.95, test_input_size=(3, 544, 544), test_crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12),
+        crop_pct=0.95, test_input_size=(3, 480, 480), test_crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_aa_large.e600_r384_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), pool_size=(12, 12),
+        crop_pct=0.95, test_input_size=(3, 480, 480), test_crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_aa_large.e230_r384_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 384, 384), pool_size=(12, 12),
+        crop_pct=0.95, test_input_size=(3, 448, 448), test_crop_pct=1.0, interpolation='bicubic'),
     'mobilenetv4_hybrid_medium_075.untrained': _cfg(
         # hf_hub_id='timm/',
         crop_pct=0.95, interpolation='bicubic'),
@@ -1253,6 +1279,13 @@ def mobilenetv4_conv_aa_medium(pretrained: bool = False, **kwargs) -> MobileNetV
 def mobilenetv4_conv_blur_medium(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 Conv w/ Blur AA """
     model = _gen_mobilenet_v4('mobilenetv4_conv_blur_medium', 1.0, pretrained=pretrained, aa_layer='blurpc', **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_conv_aa_large(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 w/ AvgPool AA """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_aa_large', 1.0, pretrained=pretrained, aa_layer='avg', **kwargs)
     return model
 
 

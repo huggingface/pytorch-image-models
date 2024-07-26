@@ -634,6 +634,31 @@ class VisionTransformer(nn.Module):
             self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+    def set_input_size(
+            self,
+            img_size: Optional[Tuple[int, int]] = None,
+            patch_size: Optional[Tuple[int, int]] = None,
+    ):
+        """Method updates the input image resolution, patch size
+
+        Args:
+            img_size: New input resolution, if None current resolution is used
+            patch_size: New patch size, if None existing patch size is used
+        """
+        prev_grid_size = self.patch_embed.grid_size
+        self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
+        if self.pos_embed is not None:
+            num_prefix_tokens = 0 if self.no_embed_class else self.num_prefix_tokens
+            num_new_tokens = self.patch_embed.num_patches + num_prefix_tokens
+            if num_new_tokens != self.pos_embed.shape[1]:
+                self.pos_embed = nn.Parameter(resample_abs_pos_embed(
+                    self.pos_embed,
+                    new_size=self.patch_embed.grid_size,
+                    old_size=prev_grid_size,
+                    num_prefix_tokens=num_prefix_tokens,
+                    verbose=True,
+                ))
+
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
         if self.pos_embed is None:
             return x.view(x.shape[0], -1, x.shape[-1])
@@ -1959,13 +1984,17 @@ default_cfgs = {
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_base_patch16_reg4_gap_256': _cfg(
+    'vit_base_patch16_reg4_gap_256.untrained': _cfg(
         input_size=(3, 256, 256)),
 
-    'vit_so150m_patch16_reg4_gap_256': _cfg(
+    'vit_so150m_patch16_reg4_gap_256.untrained': _cfg(
         input_size=(3, 256, 256)),
-    'vit_so150m_patch16_reg4_map_256': _cfg(
+    'vit_so150m_patch16_reg4_map_256.untrained': _cfg(
         input_size=(3, 256, 256)),
+
+    'test_vit.r160_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.875),
 }
 
 _quick_gelu_cfgs = [
@@ -3133,6 +3162,15 @@ def vit_so150m_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
     )
     model = _create_vision_transformer(
         'vit_so150m_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_vit(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Test
+    """
+    model_args = dict(patch_size=16, embed_dim=64, depth=6, num_heads=2, mlp_ratio=3)
+    model = _create_vision_transformer('test_vit', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

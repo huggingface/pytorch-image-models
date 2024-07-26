@@ -27,6 +27,7 @@ from .gather_excite import GatherExcite
 from .global_context import GlobalContext
 from .grid import ndgrid, meshgrid
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
+from .hybrid_embed import HybridEmbed, HybridEmbedWithSize
 from .inplace_abn import InplaceAbn
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
