@@ -26,6 +26,48 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### July 26, 2024
+* More MobileNet-v4 weights, ImageNet-12k pretrain w/ fine-tunes, and anti-aliased ConvLarge models
+
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k)|84.99 |15.01   |97.294|2.706   |32.59      |544     |
+| [mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k)|84.772|15.228  |97.344|2.656   |32.59      |480     |
+| [mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k)|84.64 |15.36   |97.114|2.886   |32.59      |448     |
+| [mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k)|84.314|15.686  |97.102|2.898   |32.59      |384     |
+| [mobilenetv4_conv_aa_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e600_r384_in1k)     |83.824|16.176  |96.734|3.266   |32.59      |480     |
+| [mobilenetv4_conv_aa_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e600_r384_in1k)             |83.244|16.756  |96.392|3.608   |32.59      |384     |
+| [mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k)|82.99 |17.01   |96.67 |3.33    |11.07      |320     |
+| [mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k)|82.364|17.636  |96.256|3.744   |11.07      |256     |
+
+* Impressive MobileNet-V1 and EfficientNet-B0 baseline challenges (https://huggingface.co/blog/rwightman/mobilenet-baselines)
+  
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [efficientnet_b0.ra4_e3600_r224_in1k](http://hf.co/timm/efficientnet_b0.ra4_e3600_r224_in1k)                       |79.364|20.636  |94.754|5.246   |5.29       |256     |
+| [efficientnet_b0.ra4_e3600_r224_in1k](http://hf.co/timm/efficientnet_b0.ra4_e3600_r224_in1k)                       |78.584|21.416  |94.338|5.662   |5.29       |224     |    
+| [mobilenetv1_100h.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100h.ra4_e3600_r224_in1k)                     |76.596|23.404  |93.272|6.728   |5.28       |256     |
+| [mobilenetv1_100.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100.ra4_e3600_r224_in1k)                       |76.094|23.906  |93.004|6.996   |4.23       |256     |
+| [mobilenetv1_100h.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100h.ra4_e3600_r224_in1k)                     |75.662|24.338  |92.504|7.496   |5.28       |224     |
+| [mobilenetv1_100.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100.ra4_e3600_r224_in1k)                       |75.382|24.618  |92.312|7.688   |4.23       |224     |
+
+* Prototype of `set_input_size()` added to vit and swin v1/v2 models to allow changing image size, patch size, window size after model creation.
+* Improved support in swin for different size handling, in addition to `set_input_size`, `always_partition` and `strict_img_size` args have been added to `__init__` to allow more flexible input size constraints
+* Fix out of order indices info for intermediate 'Getter' feature wrapper, check out or range indices for same.
+* Add several `tiny` < .5M param models for testing that are actually trained on ImageNet-1k
+
+|model                       |top1  |top1_err|top5  |top5_err|param_count|img_size|crop_pct|
+|----------------------------|------|--------|------|--------|-----------|--------|--------|
+|test_efficientnet.r160_in1k |47.156|52.844  |71.726|28.274  |0.36       |192     |1.0     |
+|test_byobnet.r160_in1k      |46.698|53.302  |71.674|28.326  |0.46       |192     |1.0     |
+|test_efficientnet.r160_in1k |46.426|53.574  |70.928|29.072  |0.36       |160     |0.875   |
+|test_byobnet.r160_in1k      |45.378|54.622  |70.572|29.428  |0.46       |160     |0.875   |
+|test_vit.r160_in1k|42.0  |58.0    |68.664|31.336  |0.37       |192     |1.0     |
+|test_vit.r160_in1k|40.822|59.178  |67.212|32.788  |0.37       |160     |0.875   |
+
+* Fix vit reg token init, thanks [Promisery](https://github.com/Promisery)
+* Other misc fixes
+
 ### June 24, 2024
 * 3 more MobileNetV4 hyrid weights with different MQA weight init scheme
 
