@@ -205,6 +205,16 @@ class MultiQueryAttention2d(nn.Module):
 
         self.einsum = False
 
+    def init_weights(self):
+        # using xavier appeared to improve stability for mobilenetv4 hybrid w/ this layer
+        nn.init.xavier_uniform_(self.query.proj.weight)
+        nn.init.xavier_uniform_(self.key.proj.weight)
+        nn.init.xavier_uniform_(self.value.proj.weight)
+        if self.kv_stride > 1:
+            nn.init.xavier_uniform_(self.key.down_conv.weight)
+            nn.init.xavier_uniform_(self.value.down_conv.weight)
+        nn.init.xavier_uniform_(self.output.proj.weight)
+
     def _reshape_input(self, t: torch.Tensor):
         """Reshapes a tensor to three dimensions, keeping the batch and channels."""
         s = t.shape
