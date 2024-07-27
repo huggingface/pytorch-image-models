@@ -31,7 +31,7 @@ class MLDecoderHead(nn.Module):
             self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
         num_pooled_features = self.in_features * self.global_pool.feat_mult()
         # TODO fix this it is incorrect, need to impl a reset for mldecoder itself i think
-        self.head = MLDecoder(in_features=in_features, num_classes=num_classes)
+        self.head = type(self.head)(in_features=in_features, num_classes=num_classes)
 
 
     def forward(self, x, pre_logits: bool = False):
