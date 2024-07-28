@@ -349,7 +349,7 @@ class MLDecoder(nn.Module):
         learnable_class_embed: bool = False,
         embed_drop: float = 0.1,
         embed_norm: bool = True,
-        k_norm: bool = False,
+        qk_norm: bool = False,
         attn_drop: float = 0.1,
         mlp_ratio: float = 8/3,
         proj_drop: float = 0.1,
