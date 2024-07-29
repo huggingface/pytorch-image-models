@@ -26,6 +26,11 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+
+### July 28, 2024
+* Add `mobilenet_edgetpu_v2_m` weights w/ `ra4` mnv4-small based recipe. 80.1% top-1 @ 224 and 80.7 @ 256.
+* Release 1.0.8
+
 ### July 26, 2024
 * More MobileNet-v4 weights, ImageNet-12k pretrain w/ fine-tunes, and anti-aliased ConvLarge models
 
