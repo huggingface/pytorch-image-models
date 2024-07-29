@@ -1762,9 +1762,11 @@ default_cfgs = generate_default_cfgs({
     'mobilenet_edgetpu_v2_s.untrained': _cfg(
         #hf_hub_id='timm/',
         input_size=(3, 224, 224), crop_pct=0.9),
-    'mobilenet_edgetpu_v2_m.untrained': _cfg(
-        #hf_hub_id='timm/',
-        input_size=(3, 224, 224), crop_pct=0.9),
+    'mobilenet_edgetpu_v2_m.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
     'mobilenet_edgetpu_v2_l.untrained': _cfg(
         #hf_hub_id='timm/',
         input_size=(3, 224, 224), crop_pct=0.9),
