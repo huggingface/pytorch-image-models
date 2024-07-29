@@ -13,6 +13,7 @@ from itertools import repeat
 from typing import Callable, Optional, Tuple, Union
 
 import torch
+
 import torch.utils.data
 import numpy as np
 
@@ -226,6 +227,7 @@ def create_loader(
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
         tf_preprocessing: bool = False,
+        balance_classes: bool = False,
 ):
     """
 
@@ -269,6 +271,7 @@ def create_loader(
         persistent_workers: Enable persistent worker processes.
         worker_seeding: Control worker random seeding at init.
         tf_preprocessing: Use TF 1.0 inference preprocessing for testing model ports.
+        balance_classes: Sample classes with uniform probability
 
     Returns:
         DataLoader
@@ -313,6 +316,7 @@ def create_loader(
 
     sampler = None
     if distributed and not isinstance(dataset, torch.utils.data.IterableDataset):
+        assert not balance_classes, "balance_classes not supported with distributed training"
         if is_training:
             if num_aug_repeats:
                 sampler = RepeatAugSampler(dataset, num_repeats=num_aug_repeats)
@@ -324,6 +328,14 @@ def create_loader(
             sampler = OrderedDistributedSampler(dataset)
     else:
         assert num_aug_repeats == 0, "RepeatAugment not currently supported in non-distributed or IterableDataset use"
+        if balance_classes:
+            all_labels = [c for (_, c) in dataset]
+            unique, counts = np.unique(all_labels, return_counts=True)
+            unique_counts = {v: c for v, c in zip(unique, counts)}
+            label_weights = np.array([1 / unique_counts[num] for num in all_labels])
+            label_weights = label_weights / len(unique)
+            sampler = torch.utils.data.WeightedRandomSampler(label_weights, len(all_labels))
+
 
     if collate_fn is None:
         collate_fn = fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate

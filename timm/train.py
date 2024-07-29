@@ -332,6 +332,8 @@ group.add_argument('--drop-path', type=float, default=None, metavar='PCT',
                    help='Drop path rate (default: None)')
 group.add_argument('--drop-block', type=float, default=None, metavar='PCT',
                    help='Drop block rate (default: None)')
+group.add_argument('--balance-classes', action='store_true', default=False, 
+                   help='Sample classes with uniform probability')
 
 # Batch norm parameters (only works with gen_efficientnet based models currently)
 group = parser.add_argument_group('Batch norm parameters', 'Only works with gen_efficientnet based models currently.')
@@ -731,6 +733,7 @@ def train(config_path: str | None = None):
         use_prefetcher=args.prefetcher,
         use_multi_epochs_loader=args.use_multi_epochs_loader,
         worker_seeding=args.worker_seeding,
+        balance_classes=args.balance_classes,
     )
 
     loader_eval = None
