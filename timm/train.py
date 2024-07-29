@@ -332,6 +332,8 @@ group.add_argument('--drop-path', type=float, default=None, metavar='PCT',
                    help='Drop path rate (default: None)')
 group.add_argument('--drop-block', type=float, default=None, metavar='PCT',
                    help='Drop block rate (default: None)')
+group.add_argument('--balance-classes', action='store_true', default=False, 
+                   help='Sample classes with uniform probability')
 
 # Batch norm parameters (only works with gen_efficientnet based models currently)
 group = parser.add_argument_group('Batch norm parameters', 'Only works with gen_efficientnet based models currently.')
@@ -391,11 +393,12 @@ group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
 
 
-def _parse_args():
+def _parse_args(config_path: str | None = None):
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
-    if args_config.config:
-        with open(args_config.config, 'r') as f:
+    if args_config.config or config_path:
+        config_path = config_path or args_config.config
+        with open(config_path, 'r') as f:
             cfg = yaml.safe_load(f)
             parser.set_defaults(**cfg)
 
@@ -408,9 +411,9 @@ def _parse_args():
     return args, args_text
 
 
-def main():
+def train(config_path: str | None = None):
     utils.setup_default_logging()
-    args, args_text = _parse_args()
+    args, args_text = _parse_args(config_path)
 
     if args.device_modules:
         for module in args.device_modules:
@@ -730,6 +733,7 @@ def main():
         use_prefetcher=args.prefetcher,
         use_multi_epochs_loader=args.use_multi_epochs_loader,
         worker_seeding=args.worker_seeding,
+        balance_classes=args.balance_classes,
     )
 
     loader_eval = None
@@ -1176,4 +1180,4 @@ def validate(
 
 
 if __name__ == '__main__':
-    main()
+    train()

@@ -97,8 +97,9 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# PyCharm
+# Editors
 .idea
+.vscode
 
 output/
 
