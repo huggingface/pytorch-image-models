@@ -28,7 +28,7 @@ class Block(nn.Module):
             nn.Conv2d(in_chs, in_chs, groups=in_chs, kernel_size=7, stride=1, padding=3),
             norm_layer(in_chs),
             nn.Conv2d(in_chs, inter_chs, kernel_size=1, stride=1, padding=0),
-            act_layer(act_layer),
+            act_layer(),
             nn.Conv2d(inter_chs, out_chs, kernel_size=1, stride=1, padding=0),
         )
 
