@@ -46,6 +46,7 @@ from .nfnet import *
 from .pit import *
 from .pnasnet import *
 from .pvt_v2 import *
+from .rdnet import *
 from .regnet import *
 from .repghost import *
 from .repvit import *
