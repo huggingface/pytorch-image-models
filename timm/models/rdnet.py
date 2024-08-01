@@ -143,7 +143,6 @@ class RDNet(nn.Module):
             num_init_features: int = 64,
             head_init_scale: float = 1.,
             head_norm_first: bool = False,
-            head_hidden_size: Optional[int] = None,
             conv_bias: bool = True,
             act_layer: Union[str, Callable] = 'gelu',
             norm_layer: str = "layernorm2d",
@@ -167,7 +166,6 @@ class RDNet(nn.Module):
             num_init_features: Number of features of stem.
             head_init_scale: Init scaling value for classifier weights and biases.
             head_norm_first: Apply normalization before global pool + head.
-            head_hidden_size: Size of MLP hidden layer in head if not None and head_norm_first == False.
             conv_bias: Use bias layers w/ all convolutions.
             act_layer: Activation layer type.
             norm_layer: Normalization layer type.
@@ -257,7 +255,6 @@ class RDNet(nn.Module):
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default RDNet ordering (pretrained NV weights)
         if head_norm_first:
-            assert not head_hidden_size
             self.norm_pre = norm_layer(self.num_features)
             self.head = ClassifierHead(
                 self.num_features,
@@ -274,7 +271,6 @@ class RDNet(nn.Module):
                 drop_rate=self.drop_rate,
                 norm_layer=norm_layer,
             )
-            self.head_hidden_size = self.head.num_features
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
