@@ -30,6 +30,7 @@ import torch.nn as nn
 import torchvision.utils
 import yaml
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
+import mlflow
 
 from timm import utils
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
@@ -39,6 +40,7 @@ from timm.models import create_model, safe_model_name, resume_checkpoint, load_c
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
+
 
 try:
     from apex import amp
@@ -409,6 +411,14 @@ def _parse_args(config_path: str | None = None):
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
     return args, args_text
+
+def _log_params(args):
+    mlflow.log_params({
+        "lr_base": args.lr_base,
+        "smoothing": args.smoothing,
+        "batch_size": args.batch_size,
+    })
+
 
 
 def train(config_path: str | None = None):
@@ -817,6 +827,8 @@ def train(config_path: str | None = None):
         )
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
+        mlflow.log_text(args_text, "config.yaml")
+        _log_params(args)
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
@@ -905,6 +917,11 @@ def train(config_path: str | None = None):
                     eval_metrics = ema_eval_metrics
             else:
                 eval_metrics = None
+
+            mlflow.log_metric("train loss", train_metrics["loss"], step=epoch)
+            if eval_metrics:
+                mlflow.log_metric("val loss", eval_metrics["loss"], step=epoch)
+                mlflow.log_metric("val accuracy", eval_metrics["top1"], step=epoch)
 
             if output_dir is not None:
                 lrs = [param_group['lr'] for param_group in optimizer.param_groups]
@@ -1105,6 +1122,8 @@ def train_one_epoch(
         optimizer.sync_lookahead()
 
     return OrderedDict([('loss', losses_m.avg)])
+
+
 
 
 def validate(
