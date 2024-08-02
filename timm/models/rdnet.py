@@ -247,7 +247,7 @@ class RDNet(nn.Module):
                 ]
             dense_stages.append(nn.Sequential(*dense_stage_layers))
         self.dense_stages = nn.Sequential(*dense_stages)
-        self.num_features = num_features
+        self.num_features = self.head_hidden_size = num_features
 
         # if head_norm_first == true, norm -> global pool -> fc ordering, like most other nets
         # otherwise pool -> norm -> fc, the default RDNet ordering (pretrained NV weights)
