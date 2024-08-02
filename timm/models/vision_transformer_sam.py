@@ -182,6 +182,7 @@ class Attention(nn.Module):
 
         x = x.view(B, self.num_heads, N, -1).transpose(1, 2).reshape(B, N, -1)
         x = self.proj(x)
+        x = self.proj_drop(x)
         x = x.view(B, H, W, -1)
         return x
 
