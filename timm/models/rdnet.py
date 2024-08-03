@@ -431,7 +431,7 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='naver-ai/rdnet_large.nv_in1k'),
     'rdnet_large.nv_in1k_ft_in1k_384': _cfg(
         hf_hub_id='naver-ai/rdnet_large.nv_in1k_ft_in1k_384',
-        input_size=(3, 384, 384), crop_pct=1.0),
+        input_size=(3, 384, 384), crop_pct=1.0, pool_size=(12, 12)),
 })
 
 
