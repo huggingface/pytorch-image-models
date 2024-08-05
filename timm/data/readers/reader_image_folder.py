@@ -7,6 +7,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import os
 from typing import Dict, List, Optional, Set, Tuple, Union
+import pandas as pd
 
 from timm.utils.misc import natural_key
 
@@ -19,6 +20,7 @@ def find_images_and_targets(
         folder: str,
         types: Optional[Union[List, Tuple, Set]] = None,
         class_to_idx: Optional[Dict] = None,
+        labels_df: Optional[pd.DataFrame] = None,
         leaf_name_only: bool = True,
         sort: bool = True
 ):
@@ -44,6 +46,8 @@ def find_images_and_targets(
             base, ext = os.path.splitext(f)
             if ext.lower() in types:
                 filenames.append(os.path.join(root, f))
+                if labels_df is not None:
+                    label = labels_df.loc[f, "label"]
                 labels.append(label)
     if class_to_idx is None:
         # building class index
@@ -73,10 +77,19 @@ class ReaderImageFolder(Reader):
         find_types = None
         if input_key:
             find_types = input_key.split(';')
+
+        labels_path = os.path.join(root, "labels.csv")
+
+        labels_df = None
+        if os.path.exists(labels_path):
+            labels_df = pd.read_csv(labels_path).astype(str)
+            labels_df = labels_df.set_index("filename")
+        
         self.samples, self.class_to_idx = find_images_and_targets(
             root,
             class_to_idx=class_to_idx,
             types=find_types,
+            labels_df=labels_df,
         )
         if len(self.samples) == 0:
             raise RuntimeError(

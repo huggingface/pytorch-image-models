@@ -1129,8 +1129,6 @@ def train_one_epoch(
     return OrderedDict([('loss', losses_m.avg)])
 
 
-
-
 def validate(
         model,
         loader,

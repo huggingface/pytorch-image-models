@@ -96,7 +96,6 @@ class CheckpointSaver:
                 os.link(last_save_path, best_save_path)
                 mlflow.pytorch.log_model(self.model, "model")
 
-
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
     def _save(self, save_path, epoch, metric=None):
