@@ -24,6 +24,7 @@ from collections import OrderedDict
 from contextlib import suppress
 from datetime import datetime
 from functools import partial
+import typing as t
 
 import torch
 import torch.nn as nn
@@ -395,18 +396,23 @@ group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
 
 
-def _parse_args(config_path: str | None = None):
+def _parse_args(config: dict[str, t.Any]):
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
-    if args_config.config or config_path:
-        config_path = config_path or args_config.config
-        with open(config_path, 'r') as f:
+    if args_config.config:
+        with open(args_config.config, 'r') as f:
             cfg = yaml.safe_load(f)
             parser.set_defaults(**cfg)
 
     # The main arg parser parses the rest of the args, the usual
     # defaults will have been overridden if config file specified.
     args = parser.parse_args(remaining)
+
+    # override args passed through config
+    args_dict = vars(args)
+    for k, v in config.items():
+        assert k in args_dict, f"Parameter {k} not recognized"
+        args.__setattr__(k, v)
 
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
@@ -420,10 +426,9 @@ def _log_params(args):
     })
 
 
-
-def train(config_path: str | None = None):
+def train(config: dict[str, t.Any]):
     utils.setup_default_logging()
-    args, args_text = _parse_args(config_path)
+    args, args_text = _parse_args(config)
 
     if args.device_modules:
         for module in args.device_modules:
@@ -1199,4 +1204,4 @@ def validate(
 
 
 if __name__ == '__main__':
-    train()
+    train(dict())
