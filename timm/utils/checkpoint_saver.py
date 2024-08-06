@@ -9,6 +9,7 @@ import glob
 import operator
 import os
 import logging
+import mlflow
 
 import torch
 
@@ -93,6 +94,7 @@ class CheckpointSaver:
                 if os.path.exists(best_save_path):
                     os.unlink(best_save_path)
                 os.link(last_save_path, best_save_path)
+                mlflow.pytorch.log_model(self.model, "model")
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 

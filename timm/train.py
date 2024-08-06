@@ -24,12 +24,14 @@ from collections import OrderedDict
 from contextlib import suppress
 from datetime import datetime
 from functools import partial
+import typing as t
 
 import torch
 import torch.nn as nn
 import torchvision.utils
 import yaml
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
+import mlflow
 
 from timm import utils
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
@@ -39,6 +41,7 @@ from timm.models import create_model, safe_model_name, resume_checkpoint, load_c
 from timm.optim import create_optimizer_v2, optimizer_kwargs
 from timm.scheduler import create_scheduler_v2, scheduler_kwargs
 from timm.utils import ApexScaler, NativeScaler
+
 
 try:
     from apex import amp
@@ -393,12 +396,11 @@ group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
 
 
-def _parse_args(config_path: str | None = None):
+def _parse_args(config: dict[str, t.Any]):
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
-    if args_config.config or config_path:
-        config_path = config_path or args_config.config
-        with open(config_path, 'r') as f:
+    if args_config.config:
+        with open(args_config.config, 'r') as f:
             cfg = yaml.safe_load(f)
             parser.set_defaults(**cfg)
 
@@ -406,14 +408,27 @@ def _parse_args(config_path: str | None = None):
     # defaults will have been overridden if config file specified.
     args = parser.parse_args(remaining)
 
+    # override args passed through config
+    args_dict = vars(args)
+    for k, v in config.items():
+        assert k in args_dict, f"Parameter {k} not recognized"
+        args.__setattr__(k, v)
+
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
     return args, args_text
 
+def _log_params(args):
+    mlflow.log_params({
+        "lr_base": args.lr_base,
+        "smoothing": args.smoothing,
+        "batch_size": args.batch_size,
+    })
 
-def train(config_path: str | None = None):
+
+def train(config: dict[str, t.Any]):
     utils.setup_default_logging()
-    args, args_text = _parse_args(config_path)
+    args, args_text = _parse_args(config)
 
     if args.device_modules:
         for module in args.device_modules:
@@ -817,6 +832,8 @@ def train(config_path: str | None = None):
         )
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
+        mlflow.log_text(args_text, "config.yaml")
+        _log_params(args)
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
@@ -905,6 +922,11 @@ def train(config_path: str | None = None):
                     eval_metrics = ema_eval_metrics
             else:
                 eval_metrics = None
+
+            mlflow.log_metric("train loss", train_metrics["loss"], step=epoch)
+            if eval_metrics:
+                mlflow.log_metric("val loss", eval_metrics["loss"], step=epoch)
+                mlflow.log_metric("val accuracy", eval_metrics["top1"], step=epoch)
 
             if output_dir is not None:
                 lrs = [param_group['lr'] for param_group in optimizer.param_groups]
@@ -1180,4 +1202,4 @@ def validate(
 
 
 if __name__ == '__main__':
-    train()
+    train(dict())
