@@ -406,7 +406,7 @@ def _parse_args(config: dict[str, t.Any]):
 
     # The main arg parser parses the rest of the args, the usual
     # defaults will have been overridden if config file specified.
-    args = parser.parse_args(remaining)
+    args, _ = parser.parse_known_args(remaining)
 
     # override args passed through config
     args_dict = vars(args)
