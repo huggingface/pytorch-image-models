@@ -52,6 +52,16 @@ class BlockESE(nn.Module):
         return self.layers(x)
 
 
+def _get_block_type(block: str):
+    block = block.lower().strip()
+    if block == "block":
+        return Block
+    elif block == "blockese":
+        return BlockESE
+    else:
+        assert False, f"Unknown block type ({block})."
+
+
 class DenseBlock(nn.Module):
     def __init__(
             self,
@@ -80,7 +90,7 @@ class DenseBlock(nn.Module):
 
         self.drop_path = DropPath(drop_path_rate)
 
-        self.layers = eval(block_type)(
+        self.layers = _get_block_type(block_type)(
             in_chs=num_input_features,
             inter_chs=inter_chs,
             out_chs=growth_rate,
@@ -130,7 +140,7 @@ class RDNet(nn.Module):
             global_pool: str = 'avg',  # timm option [--gp]
             growth_rates: Union[List[int], Tuple[int]] = (64, 104, 128, 128, 128, 128, 224),
             num_blocks_list: Union[List[int], Tuple[int]] = (3, 3, 3, 3, 3, 3, 3),
-            block_type: Union[List[int], Tuple[int]] = ("Block", "Block", "BlockESE", "BlockESE", "BlockESE", "BlockESE", "BlockESE"),
+            block_type: Union[List[int], Tuple[int]] = ("Block",) * 2 + ("BlockESE",) * 5,
             is_downsample_block: Union[List[bool], Tuple[bool]] = (None, True, True, False, False, False, True),
             bottleneck_width_ratio: float = 4.0,
             transition_compression_ratio: float = 0.5,
