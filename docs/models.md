@@ -84,6 +84,10 @@ A more exciting view (with pretty pictures) of the models within `timm` can be f
 * Paper: `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
 * Reference code: https://github.com/tensorflow/models/tree/master/research/slim/nets/mobilenet
 
+## RDNet [[rdnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/rdnet.py)]
+* Paper: `DenseNets Reloaded: Paradigm Shift Beyond ResNets and ViTs` - arxiv.org/abs/2403.19588
+* Reference code: https://github.com/naver-ai/rdnet/blob/main/rdnet/rdnet.py
+
 ## RegNet [[regnet.py](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/regnet.py)]
 * Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
 * Reference code: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
