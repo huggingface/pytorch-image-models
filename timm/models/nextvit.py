@@ -20,6 +20,8 @@ from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
+__all__ = ['NextViT']
+
 
 def merge_pre_bn(module, pre_bn_1, pre_bn_2=None):
     """ Merge pre BN to reduce inference runtime.

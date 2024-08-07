@@ -20,6 +20,7 @@ from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
+__all__ = ['FastVit']
 
 def num_groups(group_size, channels):
     if not group_size:  # 0 or None

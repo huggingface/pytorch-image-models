@@ -42,6 +42,9 @@ from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
 
 
+__all__ = ['Hiera']
+
+
 def conv_nd(n: int) -> Type[nn.Module]:
     """
     Returns a conv with nd (e.g., Conv2d for n=2). Work up to n=3.
