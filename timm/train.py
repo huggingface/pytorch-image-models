@@ -834,6 +834,10 @@ def train(config: dict[str, t.Any]):
             f.write(args_text)
         mlflow.log_text(args_text, "config.yaml")
         _log_params(args)
+        mlflow.log_param("train_size", len(dataset_train))
+        if dataset_eval:
+            mlflow.log_param("val_size", len(dataset_eval))
+
 
     if utils.is_primary(args) and args.log_wandb:
         if has_wandb:
