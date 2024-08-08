@@ -20,7 +20,7 @@ def find_images_and_targets(
         folder: str,
         types: Optional[Union[List, Tuple, Set]] = None,
         class_to_idx: Optional[Dict] = None,
-        labels_df: Optional[pd.DataFrame] = None,
+        samples_df: Optional[pd.DataFrame] = None,
         leaf_name_only: bool = True,
         sort: bool = True
 ):
@@ -45,9 +45,13 @@ def find_images_and_targets(
         for f in files:
             base, ext = os.path.splitext(f)
             if ext.lower() in types:
+                if samples_df is not None:
+                    # only save samples from the dataframe
+                    if f not in samples_df.index:
+                        continue
+                    label = samples_df.loc[f, "label"]
+
                 filenames.append(os.path.join(root, f))
-                if labels_df is not None:
-                    label = labels_df.loc[f, "label"]
                 labels.append(label)
     if class_to_idx is None:
         # building class index
@@ -61,11 +65,22 @@ def find_images_and_targets(
 
 
 class ReaderImageFolder(Reader):
+    def _get_samples_df(self, root: str, split: str | None) -> pd.DataFrame | None:
+        if not split:
+            return None
+        
+        path = os.path.join(root, f"{split}_samples.csv")
+        if not os.path.exists(path):
+            return None
+        
+        return pd.read_csv(path).astype(str).set_index("filename")
+
 
     def __init__(
             self,
             root,
             class_map='',
+            split=None,
             input_key=None,
     ):
         super().__init__()
@@ -78,18 +93,13 @@ class ReaderImageFolder(Reader):
         if input_key:
             find_types = input_key.split(';')
 
-        labels_path = os.path.join(root, "labels.csv")
-
-        labels_df = None
-        if os.path.exists(labels_path):
-            labels_df = pd.read_csv(labels_path).astype(str)
-            labels_df = labels_df.set_index("filename")
+        samples_df = self._get_samples_df(root, split)
         
         self.samples, self.class_to_idx = find_images_and_targets(
             root,
             class_to_idx=class_to_idx,
             types=find_types,
-            labels_df=labels_df,
+            samples_df=samples_df,
         )
         if len(self.samples) == 0:
             raise RuntimeError(

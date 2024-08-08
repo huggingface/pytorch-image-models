@@ -41,5 +41,5 @@ def create_reader(
         if os.path.isfile(root) and os.path.splitext(root)[1] == '.tar':
             reader = ReaderImageInTar(root, **kwargs)
         else:
-            reader = ReaderImageFolder(root, **kwargs)
+            reader = ReaderImageFolder(root, split=split, **kwargs)
     return reader
