@@ -168,7 +168,11 @@ def load_model_config_from_hf(model_id: str):
     return pretrained_cfg, model_name, model_args
 
 
-def load_state_dict_from_hf(model_id: str, filename: str = HF_WEIGHTS_NAME):
+def load_state_dict_from_hf(
+        model_id: str,
+        filename: str = HF_WEIGHTS_NAME,
+        weights_only: bool = False,
+):
     assert has_hf_hub(True)
     hf_model_id, hf_revision = hf_split(model_id)
 
@@ -187,7 +191,11 @@ def load_state_dict_from_hf(model_id: str, filename: str = HF_WEIGHTS_NAME):
     # Otherwise, load using pytorch.load
     cached_file = hf_hub_download(hf_model_id, filename=filename, revision=hf_revision)
     _logger.debug(f"[{model_id}] Safe alternative not found for '{filename}'. Loading weights using default pytorch.")
-    return torch.load(cached_file, map_location='cpu')
+    try:
+        state_dict = torch.load(cached_file, map_location='cpu', weights_only=weights_only)
+    except ValueError:
+        state_dict = torch.load(cached_file, map_location='cpu')
+    return state_dict
 
 
 def load_custom_from_hf(model_id: str, filename: str, model: torch.nn.Module):
