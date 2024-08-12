@@ -193,7 +193,7 @@ def load_state_dict_from_hf(
     _logger.debug(f"[{model_id}] Safe alternative not found for '{filename}'. Loading weights using default pytorch.")
     try:
         state_dict = torch.load(cached_file, map_location='cpu', weights_only=weights_only)
-    except ValueError:
+    except TypeError:
         state_dict = torch.load(cached_file, map_location='cpu')
     return state_dict
 

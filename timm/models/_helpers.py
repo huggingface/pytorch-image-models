@@ -54,7 +54,7 @@ def load_state_dict(
         else:
             try:
                 checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=weights_only)
-            except ValueError:
+            except TypeError:
                 checkpoint = torch.load(checkpoint_path, map_location=device)
 
         state_dict_key = ''

@@ -185,7 +185,7 @@ def load_pretrained(
                     check_hash=_CHECK_HASH,
                     weights_only=True,
                 )
-            except ValueError:
+            except TypeError:
                 state_dict = load_state_dict_from_url(
                     pretrained_loc,
                     map_location='cpu',
