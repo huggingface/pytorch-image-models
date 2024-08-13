@@ -177,12 +177,21 @@ def load_pretrained(
             model.load_pretrained(pretrained_loc)
             return
         else:
-            state_dict = load_state_dict_from_url(
-                pretrained_loc,
-                map_location='cpu',
-                progress=_DOWNLOAD_PROGRESS,
-                check_hash=_CHECK_HASH,
-            )
+            try:
+                state_dict = load_state_dict_from_url(
+                    pretrained_loc,
+                    map_location='cpu',
+                    progress=_DOWNLOAD_PROGRESS,
+                    check_hash=_CHECK_HASH,
+                    weights_only=True,
+                )
+            except TypeError:
+                state_dict = load_state_dict_from_url(
+                    pretrained_loc,
+                    map_location='cpu',
+                    progress=_DOWNLOAD_PROGRESS,
+                    check_hash=_CHECK_HASH,
+                )
     elif load_from == 'hf-hub':
         _logger.info(f'Loading pretrained weights from Hugging Face hub ({pretrained_loc})')
         if isinstance(pretrained_loc, (list, tuple)):
@@ -193,7 +202,7 @@ def load_pretrained(
             else:
                 state_dict = load_state_dict_from_hf(*pretrained_loc)
         else:
-            state_dict = load_state_dict_from_hf(pretrained_loc)
+            state_dict = load_state_dict_from_hf(pretrained_loc, weights_only=True)
     else:
         model_name = pretrained_cfg.get('architecture', 'this model')
         raise RuntimeError(f"No pretrained weights exist for {model_name}. Use `pretrained=False` for random init.")
