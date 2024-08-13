@@ -18,9 +18,11 @@ results = {
 
 
 def diff(base_df, test_csv):
-    base_models = base_df['model'].values
+    base_df['mi'] = base_df.model + '-' + base_df.img_size.astype('str')
+    base_models = base_df['mi'].values
     test_df = pd.read_csv(test_csv)
-    test_models  = test_df['model'].values
+    test_df['mi'] = test_df.model + '-' + test_df.img_size.astype('str')
+    test_models = test_df['mi'].values
 
     rank_diff = np.zeros_like(test_models, dtype='object')
     top1_diff = np.zeros_like(test_models, dtype='object')
@@ -61,6 +63,8 @@ def diff(base_df, test_csv):
     test_df['top5_diff'] = top5_diff
     test_df['rank_diff'] = rank_diff
 
+    test_df.drop('mi', axis=1, inplace=True)
+    base_df.drop('mi', axis=1, inplace=True)
     test_df['param_count'] = test_df['param_count'].map('{:,.2f}'.format)
     test_df.sort_values(['top1', 'top5', 'model'], ascending=[False, False, True], inplace=True)
     test_df.to_csv(test_csv, index=False, float_format='%.3f')
