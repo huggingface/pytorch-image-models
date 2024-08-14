@@ -1967,6 +1967,10 @@ default_cfgs = {
     'vit_mediumd_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_mediumd_patch16_reg4_gap_256.sbb2_ep200_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_mediumd_patch16_reg4_gap_256.sbb_in12k': _cfg(
         hf_hub_id='timm/',
         num_classes=11821,
@@ -1979,6 +1983,10 @@ default_cfgs = {
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256.sbb2_ep200_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in12k': _cfg(
         hf_hub_id='timm/',
