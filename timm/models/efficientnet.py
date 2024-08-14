@@ -1248,7 +1248,11 @@ default_cfgs = generate_default_cfgs({
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
         test_input_size=(3, 256, 256), test_crop_pct=0.95,
     ),
-    'mobilenetv1_125.untrained': _cfg(),
+    'mobilenetv1_125.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=1.0,
+    ),
 
     'mobilenetv2_035.untrained': _cfg(),
     'mobilenetv2_050.lamb_in1k': _cfg(
