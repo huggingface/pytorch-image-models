@@ -10,6 +10,7 @@ import operator
 import os
 import logging
 import mlflow
+import tempfile
 
 import torch
 
@@ -94,7 +95,20 @@ class CheckpointSaver:
                 if os.path.exists(best_save_path):
                     os.unlink(best_save_path)
                 os.link(last_save_path, best_save_path)
-                mlflow.pytorch.log_model(self.model, "model")
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_location = os.path.join(temp_dir, "model.pt")
+                    model_dict = {
+                        "state_dict": self.model.state_dict(),
+                        "architecture": self.args.model,
+                        "class_mapping": self.args.class_map,
+                        "img_size": self.args.img_size,
+                        "input_normalization_mean": self.args.mean,
+                        "input_normalization_std": self.args.std,
+                        "model_kwargs": self.args.model_kwargs,
+                    }
+                    torch.save(model_dict, temp_location)
+                    mlflow.log_artifact(temp_location)
+
 
         return (None, None) if self.best_metric is None else (self.best_metric, self.best_epoch)
 
