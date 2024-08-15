@@ -29,6 +29,7 @@ from .grid import ndgrid, meshgrid
 from .helpers import to_ntuple, to_2tuple, to_3tuple, to_4tuple, make_divisible, extend_tuple
 from .hybrid_embed import HybridEmbed, HybridEmbedWithSize
 from .inplace_abn import InplaceAbn
+from .layer_scale import LayerScale, LayerScale2d
 from .linear import Linear
 from .mixed_conv2d import MixedConv2d
 from .mlp import Mlp, GluMlp, GatedMlp, SwiGLU, SwiGLUPacked, ConvMlp, GlobalResponseNormMlp
