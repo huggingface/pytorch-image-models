@@ -45,7 +45,7 @@ def window_unpartition(windows: torch.Tensor, window_size: Tuple[int, int], hw: 
     """
     H, W = hw
     B = windows.shape[0] // (H * W // window_size[0] // window_size[1])
-    x = windows.view(B, H // window_size[0], W // window_size[0], window_size[0], window_size[1], -1)
+    x = windows.view(B, H // window_size[0], W // window_size[1], window_size[0], window_size[1], -1)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
     return x
 
@@ -567,11 +567,12 @@ def checkpoint_filter_fn(state_dict, model=None, prefix=''):
 
 def _create_hiera_det(variant: str, pretrained: bool = False, **kwargs) -> HieraDet:
     out_indices = kwargs.pop('out_indices', 4)
-    if True:  # kwargs.get('pretrained_cfg', '') == '?':
+    checkpoint_prefix = ''
+    if 'sam2' in variant:
         # SAM2 pretrained weights have no classifier or final norm-layer (`head.norm`)
         # This is workaround loading with num_classes=0 w/o removing norm-layer.
         kwargs.setdefault('pretrained_strict', False)
-    checkpoint_prefix = 'image_encoder.trunk.' if 'sam2' in variant else ''
+        checkpoint_prefix = 'image_encoder.trunk.'
     return build_model_with_cfg(
         HieraDet,
         variant,
