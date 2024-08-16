@@ -328,18 +328,16 @@ class HieraDet(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *self.global_pos_size))
         self.pos_embed_window = nn.Parameter(torch.zeros(1, embed_dim, self.window_spec[0], self.window_spec[0]))
 
-        dpr = [
-            x.item() for x in torch.linspace(0, drop_path_rate, depth)
-        ]  # stochastic depth decay rule
-
-        cur_stage = 1
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        cur_stage = 0
         self.blocks = nn.Sequential()
+        self.feature_info = []
         for i in range(depth):
             dim_out = embed_dim
             # lags by a block, so first block of
             # next stage uses an initial window size
             # of previous stage and final window size of current stage
-            window_size = self.window_spec[cur_stage - 1]
+            window_size = self.window_spec[cur_stage]
 
             if self.global_att_blocks is not None:
                 window_size = 0 if i in self.global_att_blocks else window_size
@@ -362,6 +360,9 @@ class HieraDet(nn.Module):
 
             embed_dim = dim_out
             self.blocks.append(block)
+            if i in self.stage_ends:
+                self.feature_info += [
+                    dict(num_chs=dim_out, reduction=2**(cur_stage+2), module=f'blocks.{self.stage_ends[cur_stage]}')]
 
         self.channel_list = (
             [self.blocks[i].dim_out for i in self.stage_ends[::-1]]
@@ -397,15 +398,15 @@ class HieraDet(nn.Module):
             self.head.fc.weight.data.mul_(head_init_scale)
             self.head.fc.bias.data.mul_(head_init_scale)
 
-    def _get_pos_embed(self, hw: Tuple[int, int]) -> torch.Tensor:
-        h, w = hw
+    def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
+        h, w = x.shape[1:3]
         window_embed = self.pos_embed_window
         pos_embed = F.interpolate(self.pos_embed, size=(h, w), mode="bicubic")
         tile_h = pos_embed.shape[-2] // window_embed.shape[-2]
         tile_w = pos_embed.shape[-1] // window_embed.shape[-1]
         pos_embed = pos_embed + window_embed.tile((tile_h, tile_w))
         pos_embed = pos_embed.permute(0, 2, 3, 1)
-        return pos_embed
+        return x + pos_embed
 
     def fix_init_weight(self):
         def rescale(param, _layer_id):
@@ -417,13 +418,13 @@ class HieraDet(nn.Module):
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return ['pos_embed', 'pos_embed_win']
+        return ['pos_embed', 'pos_embed_window']
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict:
         return dict(
-            stem=r'^pos_embed|pos_embed_spatial|pos_embed_temporal|pos_embed_abs|pos_embed_win|patch_embed',
-            blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
+            stem=r'^pos_embed|pos_embed_window|patch_embed',
+            blocks=[(r'^blocks\.(\d+)', None)]
         )
 
     @torch.jit.ignore
@@ -434,13 +435,83 @@ class HieraDet(nn.Module):
     def get_classifier(self):
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         self.num_classes = num_classes
-        self.head.reset(num_classes, pool_type=global_pool)
+        self.head.reset(num_classes, pool_type=global_pool, reset_other=reset_other)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = True,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+            coarse: bool = True,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+            coarse: Take coarse features (stage ends) if true, otherwise all block featrures
+        Returns:
+
+        """
+        assert not norm, 'normalization of features not supported'
+        assert output_fmt in ('NCHW', 'NHWC'), 'Output format must be one of NCHW, NHWC.'
+        if coarse:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            take_indices = [self.stage_ends[i] for i in take_indices]
+            max_index = self.stage_ends[max_index]
+        else:
+            take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+
+        x = self.patch_embed(x)
+        x = self._pos_embed(x)
+
+        intermediates = []
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index + 1]
+        for i, blk in enumerate(blocks):
+            x = blk(x)
+            if i in take_indices:
+                x_out = x.permute(0, 3, 1, 2) if output_fmt == 'NCHW' else x
+                intermediates.append(x_out)
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+            coarse: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        if coarse:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            max_index = self.stage_ends[max_index]
+        else:
+            take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks
+        if prune_head:
+            self.head.reset(0, reset_other=True)
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> List[torch.Tensor]:
         x = self.patch_embed(x)  # BHWC
-        x = x + self._get_pos_embed(x.shape[1:3])
+        x = self._pos_embed(x)
         for i, blk in enumerate(self.blocks):
             x = blk(x)
         return x
@@ -449,10 +520,7 @@ class HieraDet(nn.Module):
         x = self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
         return x
 
-    def forward(
-            self,
-            x: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x

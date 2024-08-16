@@ -254,9 +254,12 @@ class ClNormMlpClassifierHead(nn.Module):
         self.drop = nn.Dropout(drop_rate)
         self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+    def reset(self, num_classes: int, pool_type: Optional[str] = None, reset_other: bool = False):
         if pool_type is not None:
             self.pool_type = pool_type
+        if reset_other:
+            self.pre_logits = nn.Identity()
+            self.norm = nn.Identity()
         self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def _global_pool(self, x):

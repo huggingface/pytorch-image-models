@@ -32,8 +32,8 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Mlp, LayerScale, use_fused_attn, _assert, get_norm_layer, to_2tuple, \
-    init_weight_vit, init_weight_jax
+from timm.layers import DropPath, Mlp, LayerScale, ClNormMlpClassifierHead, use_fused_attn, \
+    _assert, get_norm_layer, to_2tuple, init_weight_vit, init_weight_jax
 
 from ._registry import generate_default_cfgs, register_model
 from ._builder import build_model_with_cfg
@@ -376,44 +376,6 @@ class HieraBlock(nn.Module):
         return x
 
 
-class NormClassifierHead(nn.Module):
-    def __init__(
-            self,
-            in_features: int,
-            num_classes: int,
-            pool_type: str = 'avg',
-            drop_rate: float = 0.0,
-            norm_layer: Union[str, Callable] = 'layernorm',
-    ):
-        super().__init__()
-        norm_layer = get_norm_layer(norm_layer)
-        assert pool_type in ('avg', '')
-        self.in_features = self.num_features = in_features
-        self.pool_type = pool_type
-        self.norm = norm_layer(in_features)
-        self.drop = nn.Dropout(drop_rate) if drop_rate else nn.Identity()
-        self.fc = nn.Linear(in_features, num_classes) if num_classes > 0 else nn.Identity()
-
-    def reset(self, num_classes: int, pool_type: Optional[str] = None, other: bool = False):
-        if pool_type is not None:
-            assert pool_type in ('avg', '')
-            self.pool_type = pool_type
-        if other:
-            # reset other non-fc layers
-            self.norm = nn.Identity()
-        self.fc = nn.Linear(self.in_features, num_classes) if num_classes > 0 else nn.Identity()
-
-    def forward(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
-        if self.pool_type == 'avg':
-            x = x.mean(dim=1)
-        x = self.norm(x)
-        x = self.drop(x)
-        if pre_logits:
-            return x
-        x = self.fc(x)
-        return x
-
-
 class PatchEmbed(nn.Module):
     """Patch embed that supports any number of spatial dimensions (1d, 2d, 3d)."""
 
@@ -591,12 +553,13 @@ class Hiera(nn.Module):
             self.blocks.append(block)
 
         self.num_features = self.head_hidden_size = embed_dim
-        self.head = NormClassifierHead(
+        self.head = ClNormMlpClassifierHead(
             embed_dim,
             num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
             norm_layer=norm_layer,
+            input_fmt='NLC',
         )
 
         # Initialize everything
@@ -651,9 +614,9 @@ class Hiera(nn.Module):
     def get_classifier(self):
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, other: bool = False):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, other=other)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other)
 
     def get_random_mask(self, x: torch.Tensor, mask_ratio: float) -> torch.Tensor:
         """
@@ -716,6 +679,7 @@ class Hiera(nn.Module):
             stop_early: bool = True,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
+            coarse: bool = True,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -730,10 +694,13 @@ class Hiera(nn.Module):
 
         """
         assert not norm, 'normalization of features not supported'
-        assert output_fmt in ('NCHW',), 'Output format must be one of NCHW.'
-        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
-        take_indices = [self.stage_ends[i] for i in take_indices]
-        max_index = self.stage_ends[max_index]
+        assert output_fmt in ('NCHW', 'NHWC'), 'Output format must be one of NCHW, NHWC.'
+        if coarse:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            take_indices = [self.stage_ends[i] for i in take_indices]
+            max_index = self.stage_ends[max_index]
+        else:
+            take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
         if mask is not None:
             patch_mask = mask.view(x.shape[0], 1, *self.mask_spatial_shape)  # B, C, *mask_spatial_shape
@@ -755,7 +722,8 @@ class Hiera(nn.Module):
         for i, blk in enumerate(blocks):
             x = blk(x)
             if i in take_indices:
-                intermediates.append(self.reroll(x, i, mask=mask).permute(0, 3, 1, 2))
+                x_int = self.reroll(x, i, mask=mask)
+                intermediates.append(x_int.permute(0, 3, 1, 2) if output_fmt == 'NCHW' else x_int)
 
         if intermediates_only:
             return intermediates
@@ -767,14 +735,18 @@ class Hiera(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
+            coarse: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
-        max_index = self.stage_ends[max_index]
+        if coarse:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            max_index = self.stage_ends[max_index]
+        else:
+            take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_head:
-            self.head.reset(0, other=True)
+            self.head.reset(0, reset_other=True)
         return take_indices
 
     def forward_features(
