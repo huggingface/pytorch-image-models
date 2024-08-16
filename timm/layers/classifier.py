@@ -134,7 +134,8 @@ class ClassifierHead(nn.Module):
 
 
 class NormMlpClassifierHead(nn.Module):
-
+    """ A Pool -> Norm -> Mlp Classifier Head for '2D' NCHW tensors
+    """
     def __init__(
             self,
             in_features: int,
@@ -198,6 +199,79 @@ class NormMlpClassifierHead(nn.Module):
         x = self.global_pool(x)
         x = self.norm(x)
         x = self.flatten(x)
+        x = self.pre_logits(x)
+        x = self.drop(x)
+        if pre_logits:
+            return x
+        x = self.fc(x)
+        return x
+
+
+class ClNormMlpClassifierHead(nn.Module):
+    """ A Pool -> Norm -> Mlp Classifier Head for n-D NxxC tensors
+    """
+    def __init__(
+            self,
+            in_features: int,
+            num_classes: int,
+            hidden_size: Optional[int] = None,
+            pool_type: str = 'avg',
+            drop_rate: float = 0.,
+            norm_layer: Union[str, Callable] = 'layernorm',
+            act_layer: Union[str, Callable] = 'gelu',
+            input_fmt: str = 'NHWC',
+    ):
+        """
+        Args:
+            in_features: The number of input features.
+            num_classes:  The number of classes for the final classifier layer (output).
+            hidden_size: The hidden size of the MLP (pre-logits FC layer) if not None.
+            pool_type: Global pooling type, pooling disabled if empty string ('').
+            drop_rate: Pre-classifier dropout rate.
+            norm_layer: Normalization layer type.
+            act_layer: MLP activation layer type (only used if hidden_size is not None).
+        """
+        super().__init__()
+        self.in_features = in_features
+        self.hidden_size = hidden_size
+        self.num_features = in_features
+        assert pool_type in ('', 'avg', 'max', 'avgmax')
+        self.pool_type = pool_type
+        assert input_fmt in ('NHWC', 'NLC')
+        self.pool_dim = 1 if input_fmt == 'NLC' else (1, 2)
+        norm_layer = get_norm_layer(norm_layer)
+        act_layer = get_act_layer(act_layer)
+
+        self.norm = norm_layer(in_features)
+        if hidden_size:
+            self.pre_logits = nn.Sequential(OrderedDict([
+                ('fc', nn.Linear(in_features, hidden_size)),
+                ('act', act_layer()),
+            ]))
+            self.num_features = hidden_size
+        else:
+            self.pre_logits = nn.Identity()
+        self.drop = nn.Dropout(drop_rate)
+        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
+    def reset(self, num_classes: int, pool_type: Optional[str] = None):
+        if pool_type is not None:
+            self.pool_type = pool_type
+        self.fc = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
+    def _global_pool(self, x):
+        if self.pool_type:
+            if self.pool_type == 'avg':
+                x = x.mean(dim=self.pool_dim)
+            elif self.pool_type == 'max':
+                x = x.amax(dim=self.pool_dim)
+            elif self.pool_type == 'avgmax':
+                x = 0.5 * (x.amax(dim=self.pool_dim) + x.mean(dim=self.pool_dim))
+        return x
+
+    def forward(self, x, pre_logits: bool = False):
+        x = self._global_pool(x)
+        x = self.norm(x)
         x = self.pre_logits(x)
         x = self.drop(x)
         if pre_logits:

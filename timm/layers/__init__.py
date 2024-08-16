@@ -5,7 +5,7 @@ from .attention2d import MultiQueryAttention2d, Attention2d, MultiQueryAttention
 from .attention_pool import AttentionPoolLatent
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
 from .blur_pool import BlurPool2d, create_aa
-from .classifier import ClassifierHead, create_classifier, NormMlpClassifierHead
+from .classifier import create_classifier, ClassifierHead, NormMlpClassifierHead, ClNormMlpClassifierHead
 from .cond_conv2d import CondConv2d, get_condconv_initializer
 from .config import is_exportable, is_scriptable, is_no_jit, use_fused_attn, \
     set_exportable, set_scriptable, set_no_jit, set_layer_config, set_fused_attn
@@ -57,4 +57,5 @@ from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2d
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .trace_utils import _assert, _float_to_int
 from .typing import LayerType, PadType
-from .weight_init import trunc_normal_, trunc_normal_tf_, variance_scaling_, lecun_normal_
+from .weight_init import trunc_normal_, trunc_normal_tf_, variance_scaling_, lecun_normal_, \
+    init_weight_jax, init_weight_vit

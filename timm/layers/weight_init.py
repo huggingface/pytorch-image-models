@@ -1,7 +1,7 @@
 import torch
 import math
 import warnings
-
+from torch import nn
 from torch.nn.init import _calculate_fan_in_and_fan_out
 
 
@@ -123,3 +123,45 @@ def variance_scaling_(tensor, scale=1.0, mode='fan_in', distribution='normal'):
 
 def lecun_normal_(tensor):
     variance_scaling_(tensor, mode='fan_in', distribution='truncated_normal')
+
+
+def init_weight_vit(
+        module: nn.Module,
+        name: str,
+        init_bias: float = 0.02,
+        head_bias: float = 0.,
+        classifier_name: str = 'head'
+):
+    if isinstance(module, (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+        if name.startswith(classifier_name):
+            nn.init.zeros_(module.weight)
+            nn.init.constant_(module.bias, head_bias)
+        else:
+            nn.init.trunc_normal_(module.weight, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                nn.init.constant_(module.bias, init_bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights()
+
+
+def init_weight_jax(
+        module: nn.Module,
+        name: str,
+        head_bias: float = 0.,
+        classifier_name: str = 'head',
+):
+    if isinstance(module, nn.Linear):
+        if name.startswith(classifier_name):
+            nn.init.zeros_(module.weight)
+            nn.init.constant_(module.bias, head_bias)
+        else:
+            nn.init.xavier_uniform_(module.weight)
+            if module.bias is not None:
+                nn.init.normal_(module.bias, std=1e-6) if 'mlp' in name else nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Conv2d):
+        lecun_normal_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif hasattr(module, 'init_weights'):
+        module.init_weights()
+
