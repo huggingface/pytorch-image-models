@@ -97,6 +97,7 @@ def get_act_fn(name: Union[Callable, str] = 'relu'):
         return None
     if isinstance(name, Callable):
         return name
+    name = name.lower()
     if not (is_exportable() or is_scriptable()):
         # If not exporting or scripting the model, first look for a memory-efficient version with
         # custom autograd, then fallback
@@ -117,6 +118,7 @@ def get_act_layer(name: Union[Type[nn.Module], str] = 'relu'):
         return name
     if not name:
         return None
+    name = name.lower()
     if not (is_exportable() or is_scriptable()):
         if name in _ACT_LAYER_ME:
             return _ACT_LAYER_ME[name]

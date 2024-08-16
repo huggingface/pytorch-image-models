@@ -27,6 +27,7 @@ from .ghostnet import *
 from .hardcorenas import *
 from .hgnet import *
 from .hiera import *
+from .hieradet_sam2 import *
 from .hrnet import *
 from .inception_next import *
 from .inception_resnet_v2 import *
