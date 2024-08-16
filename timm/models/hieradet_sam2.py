@@ -517,7 +517,7 @@ def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 0, 'input_size': (3, 896, 896), 'pool_size': (28, 28),
-        'crop_pct': 1.0, 'interpolation': 'bicubic',
+        'crop_pct': 1.0, 'interpolation': 'bicubic', 'min_input_size': (3, 128, 128),
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
         **kwargs
