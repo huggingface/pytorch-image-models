@@ -9,7 +9,7 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, ClNormMlpClassifierHead, PatchDropout, \
-    get_norm_layer, get_act_layer, init_weight_jax, init_weight_vit
+    get_norm_layer, get_act_layer, init_weight_jax, init_weight_vit, to_2tuple
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -17,25 +17,7 @@ from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 
-def do_pool(
-        x: torch.Tensor,
-        pool: nn.Module,
-        norm: nn.Module = None,
-) -> torch.Tensor:
-    if pool is None:
-        return x
-    # (B, H, W, C) -> (B, C, H, W)
-    x = x.permute(0, 3, 1, 2)
-    x = pool(x)
-    # (B, C, H', W') -> (B, H', W', C)
-    x = x.permute(0, 2, 3, 1)
-    if norm:
-        x = norm(x)
-
-    return x
-
-
-def window_partition(x, window_size):
+def window_partition(x, window_size: Tuple[int, int]):
     """
     Partition into non-overlapping windows with padding if needed.
     Args:
@@ -46,39 +28,33 @@ def window_partition(x, window_size):
         (Hp, Wp): padded height and width before partition
     """
     B, H, W, C = x.shape
-
-    pad_h = (window_size - H % window_size) % window_size
-    pad_w = (window_size - W % window_size) % window_size
-    x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
-    Hp, Wp = H + pad_h, W + pad_w
-
-    x = x.view(B, Hp // window_size, window_size, Wp // window_size, window_size, C)
-    windows = (
-        x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
-    )
-    return windows, (Hp, Wp)
+    x = x.view(B, H // window_size[0], window_size[0], W // window_size[1], window_size[1], C)
+    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size[0], window_size[1], C)
+    return windows
 
 
-def window_unpartition(windows: torch.Tensor, window_size: int, pad_hw: List[int], hw: List[int]):
+def window_unpartition(windows: torch.Tensor, window_size: Tuple[int, int], hw: Tuple[int, int]):
     """
     Window unpartition into original sequences and removing padding.
     Args:
         x (tensor): input tokens with [B * num_windows, window_size, window_size, C].
         window_size (int): window size.
-        pad_hw (Tuple): padded height and width (Hp, Wp).
         hw (Tuple): original height and width (H, W) before padding.
     Returns:
         x: unpartitioned sequences with [B, H, W, C].
     """
-    Hp, Wp = pad_hw
     H, W = hw
-    B = windows.shape[0] // (Hp * Wp // window_size // window_size)
-    x = windows.view(
-        B, Hp // window_size, Wp // window_size, window_size, window_size, -1
-    )
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, Hp, Wp, -1)
-    x = x[:, :H, :W, :].contiguous()
+    B = windows.shape[0] // (H * W // window_size[0] // window_size[1])
+    x = windows.view(B, H // window_size[0], W // window_size[0], window_size[0], window_size[1], -1)
+    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
     return x
+
+
+def _calc_pad(H: int, W: int, window_size: Tuple[int, int]) -> Tuple[int, int, int, int]:
+    pad_h = (window_size[0] - H % window_size[0]) % window_size[0]
+    pad_w = (window_size[1] - W % window_size[1]) % window_size[1]
+    Hp, Wp = H + pad_h, W + pad_w
+    return Hp, Wp, pad_h, pad_w
 
 
 class MultiScaleAttention(nn.Module):
@@ -112,8 +88,9 @@ class MultiScaleAttention(nn.Module):
         q, k, v = torch.unbind(qkv, 2)
 
         # Q pooling (for downsample at stage changes)
-        if self.q_pool:
-            q = do_pool(q.reshape(B, H, W, -1), self.q_pool)
+        if self.q_pool is not None:
+            q = q.reshape(B, H, W, -1).permute(0, 3, 1, 2)  # to BCHW for pool
+            q = self.q_pool(q).permute(0, 2, 3, 1)
             H, W = q.shape[1:3]  # downsampled shape
             q = q.reshape(B, H * W, self.num_heads, -1)
 
@@ -138,7 +115,7 @@ class MultiScaleBlock(nn.Module):
         num_heads: int,
         mlp_ratio: float = 4.0,
         drop_path: float = 0.0,
-        q_stride: Tuple[int, int] = None,
+        q_stride: Optional[Tuple[int, int]] = None,
         norm_layer: Union[nn.Module, str] = "LayerNorm",
         act_layer: Union[nn.Module, str] = "GELU",
         window_size: int = 0,
@@ -146,24 +123,26 @@ class MultiScaleBlock(nn.Module):
         super().__init__()
         norm_layer = get_norm_layer(norm_layer)
         act_layer = get_act_layer(act_layer)
-        self.window_size = window_size
+        self.window_size = to_2tuple(window_size)
+        self.is_windowed = any(self.window_size)
         self.dim = dim
         self.dim_out = dim_out
-
-        self.norm1 = norm_layer(dim)
-        self.pool = None
         self.q_stride = q_stride
         if self.q_stride:
-            self.pool = nn.MaxPool2d(
+            q_pool = nn.MaxPool2d(
                 kernel_size=q_stride,
                 stride=q_stride,
                 ceil_mode=False,
             )
+        else:
+            q_pool = None
+
+        self.norm1 = norm_layer(dim)
         self.attn = MultiScaleAttention(
             dim,
             dim_out,
             num_heads=num_heads,
-            q_pool=self.pool,
+            q_pool=q_pool,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
@@ -176,6 +155,16 @@ class MultiScaleBlock(nn.Module):
 
         if dim != dim_out:
             self.proj = nn.Linear(dim, dim_out)
+        else:
+            self.proj = nn.Identity()
+        self.pool = None
+        if self.q_stride:
+            # note make a different instance for this Module so that it's not shared with attn module
+            self.pool = nn.MaxPool2d(
+                kernel_size=q_stride,
+                stride=q_stride,
+                ceil_mode=False,
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shortcut = x  # B, H, W, C
@@ -183,29 +172,32 @@ class MultiScaleBlock(nn.Module):
 
         # Skip connection
         if self.dim != self.dim_out:
-            shortcut = do_pool(self.proj(x), self.pool)
+            shortcut = self.proj(x)
+            if self.pool is not None:
+                shortcut = shortcut.permute(0, 3, 1, 2)
+                shortcut = self.pool(shortcut).permute(0, 2, 3, 1)
 
         # Window partition
         window_size = self.window_size
-        feat_size = x.shape[1:3]
-        pad_hw = 0, 0
-        if window_size > 0:
-            x, pad_hw = window_partition(x, window_size)
+        H, W = x.shape[1:3]
+        Hp, Wp = H, W  # keep torchscript happy
+        if self.is_windowed:
+            x = window_partition(x, window_size)
+            Hp, Wp, pad_h, pad_w = _calc_pad(H, W, window_size)
+            x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
 
         # Window Attention + Q Pooling (if stage change)
         x = self.attn(x)
-        if self.q_stride:
+        if self.q_stride is not None:
             # Shapes have changed due to Q pooling
-            window_size = self.window_size // self.q_stride[0]
-            feat_size = shortcut.shape[1:3]
-
-            pad_h = (window_size - feat_size[0] % window_size) % window_size
-            pad_w = (window_size - feat_size[1] % window_size) % window_size
-            pad_hw = (feat_size[0] + pad_h, feat_size[1] + pad_w)
+            window_size = (self.window_size[0] // self.q_stride[0], self.window_size[1] // self.q_stride[1])
+            H, W = shortcut.shape[1:3]
+            Hp, Wp, pad_h, pad_w = _calc_pad(H, W, window_size)
 
         # Reverse window partition
-        if self.window_size > 0:
-            x = window_unpartition(x, window_size, pad_hw, feat_size)
+        if self.is_windowed:
+            x = window_unpartition(x, window_size, (Hp, Wp))
+            x = x[:, :H, :W, :].contiguous()  # unpad
 
         x = shortcut + self.drop_path(x)
 
@@ -364,12 +356,6 @@ class HieraDet(nn.Module):
                 self.feature_info += [
                     dict(num_chs=dim_out, reduction=2**(cur_stage+2), module=f'blocks.{self.stage_ends[cur_stage]}')]
 
-        self.channel_list = (
-            [self.blocks[i].dim_out for i in self.stage_ends[::-1]]
-            if True else
-            [self.blocks[-1].dim_out]
-        )
-
         self.num_features = self.head_hidden_size = embed_dim
         self.head = ClNormMlpClassifierHead(
             embed_dim,
@@ -509,7 +495,7 @@ class HieraDet(nn.Module):
             self.head.reset(0, reset_other=True)
         return take_indices
 
-    def forward_features(self, x: torch.Tensor) -> List[torch.Tensor]:
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)  # BHWC
         x = self._pos_embed(x)
         for i, blk in enumerate(self.blocks):
