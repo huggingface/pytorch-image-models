@@ -1294,7 +1294,7 @@ default_cfgs = generate_default_cfgs({
     'efficientnet_b1.ra4_e3600_r240_in1k': _cfg(
         hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
-        input_size=(3, 240, 240), crop_pct=0.9,
+        input_size=(3, 240, 240), crop_pct=0.9, pool_size=(8, 8),
         test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'efficientnet_b1.ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth',

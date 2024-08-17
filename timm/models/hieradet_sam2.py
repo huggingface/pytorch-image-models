@@ -294,6 +294,7 @@ class HieraDet(nn.Module):
         assert len(stages) == len(window_spec)
         self.num_classes = num_classes
         self.window_spec = window_spec
+        self.output_fmt = 'NHWC'
 
         depth = sum(stages)
         self.q_stride = q_stride
