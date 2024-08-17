@@ -189,9 +189,9 @@ class MultiScaleBlock(nn.Module):
         H, W = x.shape[1:3]
         Hp, Wp = H, W  # keep torchscript happy
         if self.is_windowed:
-            x = window_partition(x, window_size)
             Hp, Wp, pad_h, pad_w = _calc_pad(H, W, window_size)
             x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
+            x = window_partition(x, window_size)
 
         # Window Attention + Q Pooling (if stage change)
         x = self.attn(x)
