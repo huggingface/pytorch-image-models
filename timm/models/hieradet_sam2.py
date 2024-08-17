@@ -517,7 +517,7 @@ def _cfg(url='', **kwargs):
     return {
         'url': url,
         'num_classes': 0, 'input_size': (3, 896, 896), 'pool_size': (28, 28),
-        'crop_pct': 1.0, 'interpolation': 'bicubic', 'min_input_size': (3, 128, 128),
+        'crop_pct': 1.0, 'interpolation': 'bicubic', 'min_input_size': (3, 224, 224),
         'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
         'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
         **kwargs
@@ -545,6 +545,7 @@ default_cfgs = generate_default_cfgs({
     "sam2_hiera_large": _cfg(
         hf_hub_id='facebook/sam2-hiera-large',
         hf_hub_filename='sam2_hiera_large.pt',
+        min_input_size=(3, 256, 256),
         input_size=(3, 1024, 1024), pool_size=(32, 32),
     ),
 })
