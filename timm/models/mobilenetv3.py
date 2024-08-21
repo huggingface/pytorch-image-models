@@ -450,7 +450,9 @@ def _gen_mobilenet_v3_rw(variant: str, channel_multiplier: float = 1.0, pretrain
     return model
 
 
-def _gen_mobilenet_v3(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+def _gen_mobilenet_v3(
+        variant: str, channel_multiplier: float = 1.0, group_size=None, pretrained: bool = False, **kwargs
+) -> MobileNetV3:
     """Creates a MobileNet-V3 model.
 
     Ref impl: ?
@@ -533,7 +535,7 @@ def _gen_mobilenet_v3(variant: str, channel_multiplier: float = 1.0, pretrained:
             ]
     se_layer = partial(SqueezeExcite, gate_layer='hard_sigmoid', force_act_layer=nn.ReLU, rd_round_fn=round_channels)
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def),
+        block_args=decode_arch_def(arch_def, group_size=group_size),
         num_features=num_features,
         stem_size=16,
         fix_stem=channel_multiplier < 0.75,
@@ -646,7 +648,9 @@ def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool =
     return model
 
 
-def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+def _gen_mobilenet_v4(
+        variant: str, channel_multiplier: float = 1.0, group_size=None, pretrained: bool = False, **kwargs,
+) -> MobileNetV3:
     """Creates a MobileNet-V4 model.
 
     Ref impl: ?
@@ -877,7 +881,7 @@ def _gen_mobilenet_v4(variant: str, channel_multiplier: float = 1.0, pretrained:
             assert False, f'Unknown variant {variant}.'
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def),
+        block_args=decode_arch_def(arch_def, group_size=group_size),
         head_bias=False,
         head_norm=True,
         num_features=num_features,

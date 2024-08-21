@@ -488,7 +488,7 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
 
 def _gen_mobilenet_v1(
         variant, channel_multiplier=1.0, depth_multiplier=1.0,
-        fix_stem_head=False, head_conv=False, pretrained=False, **kwargs):
+        group_size=None, fix_stem_head=False, head_conv=False, pretrained=False, **kwargs):
     """
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
@@ -503,7 +503,12 @@ def _gen_mobilenet_v1(
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
     head_features = (1024 if fix_stem_head else max(1024, round_chs_fn(1024))) if head_conv else 0
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
+        block_args=decode_arch_def(
+            arch_def,
+            depth_multiplier=depth_multiplier,
+            fix_first_last=fix_stem_head,
+            group_size=group_size,
+        ),
         num_features=head_features,
         stem_size=32,
         fix_stem=fix_stem_head,
@@ -517,7 +522,9 @@ def _gen_mobilenet_v1(
 
 
 def _gen_mobilenet_v2(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, fix_stem_head=False, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0,
+        group_size=None, fix_stem_head=False, pretrained=False, **kwargs
+):
     """ Generate MobileNet-V2 network
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
@@ -533,7 +540,12 @@ def _gen_mobilenet_v2(
     ]
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
+        block_args=decode_arch_def(
+            arch_def,
+            depth_multiplier=depth_multiplier,
+            fix_first_last=fix_stem_head,
+            group_size=group_size,
+        ),
         num_features=1280 if fix_stem_head else max(1280, round_chs_fn(1280)),
         stem_size=32,
         fix_stem=fix_stem_head,
@@ -764,7 +776,7 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
 
 
 def _gen_efficientnetv2_base(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs):
     """ Creates an EfficientNet-V2 base model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -780,7 +792,7 @@ def _gen_efficientnetv2_base(
     ]
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.)
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=round_chs_fn(1280),
         stem_size=32,
         round_chs_fn=round_chs_fn,
@@ -831,7 +843,8 @@ def _gen_efficientnetv2_s(
     return model
 
 
-def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_efficientnetv2_m(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs):
     """ Creates an EfficientNet-V2 Medium model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -849,7 +862,7 @@ def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=1280,
         stem_size=24,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
@@ -861,7 +874,8 @@ def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     return model
 
 
-def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_efficientnetv2_l(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs):
     """ Creates an EfficientNet-V2 Large model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -879,7 +893,7 @@ def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=1280,
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
@@ -891,7 +905,8 @@ def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     return model
 
 
-def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_efficientnetv2_xl(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs):
     """ Creates an EfficientNet-V2 Xtra-Large model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -909,7 +924,7 @@ def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0
     ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=1280,
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
@@ -1094,7 +1109,8 @@ def _gen_tinynet(
     return model
 
 
-def _gen_mobilenet_edgetpu(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_mobilenet_edgetpu(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs):
     """
     Based on definitions in: https://github.com/tensorflow/models/tree/d2427a562f401c9af118e47af2f030a0a5599f55/official/projects/edgetpu/vision
     """
@@ -1170,7 +1186,7 @@ def _gen_mobilenet_edgetpu(variant, channel_multiplier=1.0, depth_multiplier=1.0
         ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=num_features,
         stem_size=stem_size,
         stem_kernel_size=stem_kernel_size,
