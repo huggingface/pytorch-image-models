@@ -1964,14 +1964,27 @@ default_cfgs = {
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_mediumd_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_mediumd_patch16_reg4_gap_256.sbb_in12k': _cfg(
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_mediumd_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0),
     'vit_betwixt_patch16_reg1_gap_256.sbb_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in12k_ft_in1k': _cfg(
@@ -1980,10 +1993,17 @@ default_cfgs = {
     'vit_betwixt_patch16_reg4_gap_256.sbb_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_256.sbb2_e200_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=0.95),
     'vit_betwixt_patch16_reg4_gap_256.sbb_in12k': _cfg(
         hf_hub_id='timm/',
         num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_betwixt_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0),
     'vit_base_patch16_reg4_gap_256.untrained': _cfg(
         input_size=(3, 256, 256)),
 
@@ -3111,6 +3131,17 @@ def vit_mediumd_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visi
 
 
 @register_model
+def vit_mediumd_patch16_reg4_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=512, depth=20, num_heads=8, init_values=1e-5,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_mediumd_patch16_reg4_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_betwixt_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=16, embed_dim=640, depth=12, num_heads=10, init_values=1e-5,
@@ -3129,6 +3160,17 @@ def vit_betwixt_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visi
     )
     model = _create_vision_transformer(
         'vit_betwixt_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_betwixt_patch16_reg4_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=640, depth=12, num_heads=10, init_values=1e-5,
+        class_token=False, no_embed_class=True, reg_tokens=4, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_betwixt_patch16_reg4_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

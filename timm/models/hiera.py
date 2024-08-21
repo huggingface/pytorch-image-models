@@ -31,15 +31,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, Mlp, use_fused_attn, _assert, get_norm_layer, to_2tuple
-
+from timm.layers import DropPath, Mlp, LayerScale, ClNormMlpClassifierHead, use_fused_attn, \
+    _assert, get_norm_layer, to_2tuple, init_weight_vit, init_weight_jax
 
 from ._registry import generate_default_cfgs, register_model
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
+from ._manipulate import named_apply
 
 
 __all__ = ['Hiera']
@@ -288,7 +288,6 @@ class MaskUnitAttention(nn.Module):
         """ Input should be of shape [batch, tokens, channels]. """
         B, N, _ = x.shape
         num_windows = (N // (self.q_stride * self.window_size)) if self.use_mask_unit_attn else 1
-
         qkv = self.qkv(x).reshape(B, -1, num_windows, 3, self.heads, self.head_dim).permute(3, 0, 4, 2, 1, 5)
         q, k, v = qkv.unbind(0)
 
@@ -317,6 +316,7 @@ class HieraBlock(nn.Module):
             heads: int,
             mlp_ratio: float = 4.0,
             drop_path: float = 0.0,
+            init_values: Optional[float] = None,
             norm_layer: nn.Module = nn.LayerNorm,
             act_layer: nn.Module = nn.GELU,
             q_stride: int = 1,
@@ -325,7 +325,6 @@ class HieraBlock(nn.Module):
             use_mask_unit_attn: bool = False,
     ):
         super().__init__()
-
         self.dim = dim
         self.dim_out = dim_out
 
@@ -348,12 +347,13 @@ class HieraBlock(nn.Module):
             window_size,
             use_mask_unit_attn
         )
+        self.ls1 = LayerScale(dim_out, init_values=init_values) if init_values is not None else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0 else nn.Identity()
 
         self.norm2 = norm_layer(dim_out)
         self.mlp = Mlp(dim_out, int(dim_out * mlp_ratio), act_layer=act_layer)
+        self.ls2 = LayerScale(dim_out, init_values=init_values) if init_values is not None else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0 else nn.Identity()
-
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Attention + Q Pooling
@@ -369,48 +369,10 @@ class HieraBlock(nn.Module):
                     ],
                     dim=-1,
                 )
-        x = x + self.drop_path1(self.attn(x_norm))
+        x = x + self.drop_path1(self.ls1(self.attn(x_norm)))
 
         # MLP
-        x = x + self.drop_path2(self.mlp(self.norm2(x)))
-        return x
-
-
-class NormClassifierHead(nn.Module):
-    def __init__(
-            self,
-            in_features: int,
-            num_classes: int,
-            pool_type: str = 'avg',
-            drop_rate: float = 0.0,
-            norm_layer: Union[str, Callable] = 'layernorm',
-    ):
-        super().__init__()
-        norm_layer = get_norm_layer(norm_layer)
-        assert pool_type in ('avg', '')
-        self.in_features = self.num_features = in_features
-        self.pool_type = pool_type
-        self.norm = norm_layer(in_features)
-        self.drop = nn.Dropout(drop_rate) if drop_rate else nn.Identity()
-        self.fc = nn.Linear(in_features, num_classes)  if num_classes > 0 else nn.Identity()
-
-    def reset(self, num_classes: int, pool_type: Optional[str] = None, other: bool = False):
-        if pool_type is not None:
-            assert pool_type in ('avg', '')
-            self.pool_type = pool_type
-        if other:
-            # reset other non-fc layers
-            self.norm = nn.Identity()
-        self.fc = nn.Linear(self.in_features, num_classes)  if num_classes > 0 else nn.Identity()
-
-    def forward(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
-        if self.pool_type == 'avg':
-            x = x.mean(dim=1)
-        x = self.norm(x)
-        x = self.drop(x)
-        if pre_logits:
-            return x
-        x = self.fc(x)
+        x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
 
@@ -470,6 +432,7 @@ class Hiera(nn.Module):
             mask_unit_size: Tuple[int, ...] = (8, 8),  # must divide q_stride ** (#stages-1)
             # mask_unit_attn: which stages use mask unit attention?
             mask_unit_attn: Tuple[bool, ...] = (True, True, False, False),
+            use_expand_proj: bool = True,
             dim_mul: float = 2.0,
             head_mul: float = 2.0,
             patch_kernel: Tuple[int, ...] = (7, 7),
@@ -477,13 +440,16 @@ class Hiera(nn.Module):
             patch_padding: Tuple[int, ...] = (3, 3),
             mlp_ratio: float = 4.0,
             drop_path_rate: float = 0.0,
+            init_values: Optional[float] = None,
+            fix_init: bool = True,
+            weight_init: str = '',
             norm_layer: Union[str, nn.Module] = "LayerNorm",
             drop_rate: float = 0.0,
             patch_drop_rate: float = 0.0,
             head_init_scale: float = 0.001,
             sep_pos_embed: bool = False,
             abs_win_pos_embed: bool = False,
-            abs_pos_size: Tuple[int, int] = (14, 14),
+            global_pos_size: Tuple[int, int] = (14, 14),
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -510,11 +476,9 @@ class Hiera(nn.Module):
             patch_kernel,
             patch_stride,
             patch_padding,
-            #reshape=False,  # leave spatial / temporal dims in output
         )
 
         self.pos_embed: Optional[nn.Parameter] = None
-        self.pos_embed_abs: Optional[nn.Parameter] = None
         self.pos_embed_win: Optional[nn.Parameter] = None
         self.pos_embed_spatial: Optional[nn.Parameter] = None
         self.pos_embed_temporal: Optional[nn.Parameter] = None
@@ -528,7 +492,7 @@ class Hiera(nn.Module):
         else:
             if abs_win_pos_embed:
                 # absolute win, params NCHW to make tile & interpolate more natural before add & reshape
-                self.pos_embed_abs = nn.Parameter(torch.zeros(1, embed_dim, *abs_pos_size))
+                self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *global_pos_size))
                 self.pos_embed_win = nn.Parameter(torch.zeros(1, embed_dim, *mask_unit_size))
             else:
                 self.pos_embed = nn.Parameter(torch.zeros(1, num_tokens, embed_dim))
@@ -552,7 +516,7 @@ class Hiera(nn.Module):
         # Transformer blocks
         cur_stage = 0
         depth = sum(stages)
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)] # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList()
         self.feature_info = []
         for i in range(depth):
@@ -575,9 +539,11 @@ class Hiera(nn.Module):
                 heads=num_heads,
                 mlp_ratio=mlp_ratio,
                 drop_path=dpr[i],
+                init_values=init_values,
                 norm_layer=norm_layer,
                 q_stride=(flat_q_stride if i in q_pool_blocks else 1),
                 window_size=flat_mu_size,
+                use_expand_proj=use_expand_proj,
                 use_mask_unit_attn=use_mask_unit_attn,
             )
             embed_dim = dim_out
@@ -587,12 +553,13 @@ class Hiera(nn.Module):
             self.blocks.append(block)
 
         self.num_features = self.head_hidden_size = embed_dim
-        self.head = NormClassifierHead(
+        self.head = ClNormMlpClassifierHead(
             embed_dim,
             num_classes,
             pool_type=global_pool,
             drop_rate=drop_rate,
             norm_layer=norm_layer,
+            input_fmt='NLC',
         )
 
         # Initialize everything
@@ -602,22 +569,26 @@ class Hiera(nn.Module):
         else:
             if self.pos_embed is not None:
                 nn.init.trunc_normal_(self.pos_embed, std=0.02)
-            elif self.pos_embed_abs is not None:
-                nn.init.trunc_normal_(self.pos_embed_abs, std=0.02)
+            if self.pos_embed_win is not None:
                 nn.init.trunc_normal_(self.pos_embed_win, std=0.02)
-        self.apply(partial(self._init_weights))
+
+        if weight_init != 'skip':
+            init_fn = init_weight_jax if weight_init == 'jax' else init_weight_vit
+            init_fn = partial(init_fn, classifier_name='head.fc')
+            named_apply(init_fn, self)
+        if fix_init:
+            self.fix_init_weight()
         if isinstance(self.head.fc, nn.Linear):
             self.head.fc.weight.data.mul_(head_init_scale)
             self.head.fc.bias.data.mul_(head_init_scale)
 
-    def _init_weights(self, m, init_bias=0.02):
-        if isinstance(m, (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)):
-            nn.init.trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, init_bias)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, init_bias)
-            nn.init.constant_(m.weight, 1.0)
+    def fix_init_weight(self):
+        def rescale(param, _layer_id):
+            param.div_(math.sqrt(2.0 * _layer_id))
+
+        for layer_id, layer in enumerate(self.blocks):
+            rescale(layer.attn.proj.weight.data, layer_id + 1)
+            rescale(layer.mlp.fc2.weight.data, layer_id + 1)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -643,9 +614,9 @@ class Hiera(nn.Module):
     def get_classifier(self):
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, other: bool = False):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None, reset_other: bool = False):
         self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool, other=other)
+        self.head.reset(num_classes, global_pool, reset_other=reset_other)
 
     def get_random_mask(self, x: torch.Tensor, mask_ratio: float) -> torch.Tensor:
         """
@@ -672,20 +643,20 @@ class Hiera(nn.Module):
         return mask.bool()
 
     def _pos_embed(self, x) -> torch.Tensor:
-        if self.pos_embed is not None:
-            pos_embed = self.pos_embed
-        elif self.pos_embed_abs is not None:
+        if self.pos_embed_win is not None:
             # absolute win position embedding, from
             # Window Attention is Bugged: How not to Interpolate Position Embeddings (https://arxiv.org/abs/2311.05613)
             pos_embed_win = self.pos_embed_win.tile(self.mask_spatial_shape)
-            pos_embed_abs = F.interpolate(
-                self.pos_embed_abs,
+            pos_embed = F.interpolate(
+                self.pos_embed,
                 size=pos_embed_win.shape[-2:],
                 mode='bicubic',
                 antialias=True,
             )
-            pos_embed = pos_embed_abs + pos_embed_win
+            pos_embed = pos_embed + pos_embed_win
             pos_embed = pos_embed.flatten(2).transpose(1, 2)
+        elif self.pos_embed is not None:
+            pos_embed = self.pos_embed
         else:
             pos_embed = (
                 self.pos_embed_spatial.repeat(1, self.tokens_spatial_shape[0], 1)
@@ -708,6 +679,7 @@ class Hiera(nn.Module):
             stop_early: bool = True,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
+            coarse: bool = True,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
         """ Forward features that returns intermediates.
 
@@ -722,10 +694,13 @@ class Hiera(nn.Module):
 
         """
         assert not norm, 'normalization of features not supported'
-        assert output_fmt in ('NCHW',), 'Output format must be one of NCHW.'
-        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
-        take_indices = [self.stage_ends[i] for i in take_indices]
-        max_index = self.stage_ends[max_index]
+        assert output_fmt in ('NCHW', 'NHWC'), 'Output format must be one of NCHW, NHWC.'
+        if coarse:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            take_indices = [self.stage_ends[i] for i in take_indices]
+            max_index = self.stage_ends[max_index]
+        else:
+            take_indices, max_index = feature_take_indices(len(self.blocks), indices)
 
         if mask is not None:
             patch_mask = mask.view(x.shape[0], 1, *self.mask_spatial_shape)  # B, C, *mask_spatial_shape
@@ -747,7 +722,8 @@ class Hiera(nn.Module):
         for i, blk in enumerate(blocks):
             x = blk(x)
             if i in take_indices:
-                intermediates.append(self.reroll(x, i, mask=mask).permute(0, 3, 1, 2))
+                x_int = self.reroll(x, i, mask=mask)
+                intermediates.append(x_int.permute(0, 3, 1, 2) if output_fmt == 'NCHW' else x_int)
 
         if intermediates_only:
             return intermediates
@@ -759,14 +735,18 @@ class Hiera(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
+            coarse: bool = True,
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
-        max_index = self.stage_ends[max_index]
+        if coarse:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            max_index = self.stage_ends[max_index]
+        else:
+            take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_head:
-            self.head.reset(0, other=True)
+            self.head.reset(0, reset_other=True)
         return take_indices
 
     def forward_features(
@@ -901,8 +881,22 @@ default_cfgs = generate_default_cfgs({
         num_classes=0,
     ),
 
-    "hiera_small_abswin_256.untrained": _cfg(
-        #hf_hub_id='timm/',
+    "hiera_small_abswin_256.sbb2_e200_in12k_ft_in1k": _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95,
+    ),
+    "hiera_small_abswin_256.sbb2_pd_e200_in12k_ft_in1k": _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95,
+    ),
+    "hiera_small_abswin_256.sbb2_e200_in12k": _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=0.95,
+    ),
+    "hiera_small_abswin_256.sbb2_pd_e200_in12k": _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
         input_size=(3, 256, 256), crop_pct=0.95,
     ),
     "hiera_base_abswin_256.untrained": _cfg(
@@ -931,6 +925,8 @@ def checkpoint_filter_fn(state_dict, model=None):
             k = k.replace('encoder_norm.', 'head.norm.')
         elif k.startswith('norm.'):
             k = k.replace('norm.', 'head.norm.')
+        if k == 'pos_embed_abs':
+            k = 'pos_embed'
         output[k] = v
     return output
 
@@ -946,6 +942,7 @@ def _create_hiera(variant: str, pretrained: bool = False, **kwargs) -> Hiera:
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
+
 
 @register_model
 def hiera_tiny_224(pretrained=False, **kwargs):
@@ -985,11 +982,15 @@ def hiera_huge_224(pretrained=False, **kwargs):
 
 @register_model
 def hiera_small_abswin_256(pretrained=False, **kwargs):
-    model_args = dict(embed_dim=96, num_heads=1, stages=(1, 2, 11, 2), abs_win_pos_embed=True, abs_pos_size=(16, 16))
+    model_args = dict(
+        embed_dim=96, num_heads=1, stages=(1, 2, 11, 2), abs_win_pos_embed=True, global_pos_size=(16, 16),
+        init_values=1e-5, weight_init='jax', use_expand_proj=False,
+    )
     return _create_hiera('hiera_small_abswin_256', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def hiera_base_abswin_256(pretrained=False, **kwargs):
-    model_args = dict(embed_dim=96, num_heads=1, stages=(2, 3, 16, 3), abs_win_pos_embed=True, abs_pos_size=(16, 16))
+    model_args = dict(
+        embed_dim=96, num_heads=1, stages=(2, 3, 16, 3), abs_win_pos_embed=True, init_values=1e-5, weight_init='jax')
     return _create_hiera('hiera_base_abswin_256', pretrained=pretrained, **dict(model_args, **kwargs))

@@ -783,6 +783,11 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50d_ra2-464e36ba.pth',
         first_conv='conv1.0'),
+    'resnet50d.ra4_e3600_r224_in1k': _rcfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0,
+        first_conv='conv1.0'),
     'resnet50d.a1_in1k': _rcfg(
         hf_hub_id='timm/',
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet50d_a1_0-e20cff14.pth',
