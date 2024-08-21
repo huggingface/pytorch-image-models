@@ -26,6 +26,34 @@
 * The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
 * Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
 
+### Aug 21, 2024
+* Updated SBB ViT models trained on ImageNet-12k and fine-tuned on ImageNet-1k, challenging quite a number of much larger, slower models
+
+| model | top1 | top5 | param_count | img_size |
+| -------------------------------------------------- | ------ | ------ | ----------- | -------- |
+| [vit_mediumd_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_mediumd_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k) | 87.438 | 98.256 | 64.11 | 384 |
+| [vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k) | 86.608 | 97.934 | 64.11 | 256 |
+| [vit_betwixt_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k) | 86.594 | 98.02 | 60.4 | 384 |
+| [vit_betwixt_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k) | 85.734 | 97.61 | 60.4 | 256 |
+* MobileNet-V1 1.25, EfficientNet-B1, & ResNet50-D weights w/ MNV4 baseline challenge recipe
+
+| model                                                                                                                    | top1   | top5   | param_count | img_size |
+|--------------------------------------------------------------------------------------------------------------------------|--------|--------|-------------|----------|
+| [resnet50d.ra4_e3600_r224_in1k](http://hf.co/timm/resnet50d.ra4_e3600_r224_in1k)                                         | 81.838 | 95.922 | 25.58       | 288      |
+| [efficientnet_b1.ra4_e3600_r240_in1k](http://hf.co/timm/efficientnet_b1.ra4_e3600_r240_in1k)                             | 81.440 | 95.700 | 7.79        | 288      |
+| [resnet50d.ra4_e3600_r224_in1k](http://hf.co/timm/resnet50d.ra4_e3600_r224_in1k)                                         | 80.952 | 95.384 | 25.58       | 224      |
+| [efficientnet_b1.ra4_e3600_r240_in1k](http://hf.co/timm/efficientnet_b1.ra4_e3600_r240_in1k)                             | 80.406 | 95.152 | 7.79        | 240      |
+| [mobilenetv1_125.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_125.ra4_e3600_r224_in1k)                             | 77.600 | 93.804 | 6.27        | 256      |
+| [mobilenetv1_125.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_125.ra4_e3600_r224_in1k)                             | 76.924 | 93.234 | 6.27        | 224      |
+
+* Add SAM2 (HieraDet) backbone arch & weight loading support
+* Add Hiera Small weights trained w/ abswin pos embed on in12k & fine-tuned on 1k
+
+|model                            |top1  |top5  |param_count|
+|---------------------------------|------|------|-----------|
+|hiera_small_abswin_256.sbb2_e200_in12k_ft_in1k    |84.912|97.260|35.01      |
+|hiera_small_abswin_256.sbb2_pd_e200_in12k_ft_in1k |84.560|97.106|35.01      |
+
 ### Aug 8, 2024
 * Add RDNet ('DenseNets Reloaded', https://arxiv.org/abs/2403.19588), thanks [Donghyun Kim](https://github.com/dhkim0225)
   
