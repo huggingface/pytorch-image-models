@@ -500,7 +500,7 @@ class HieraDet(nn.Module):
             take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
         if prune_head:
-            self.head.reset(0, reset_other=True)
+            self.head.reset(0, reset_other=prune_norm)
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
@@ -556,6 +556,10 @@ default_cfgs = generate_default_cfgs({
         min_input_size=(3, 256, 256),
         input_size=(3, 1024, 1024), pool_size=(32, 32),
     ),
+    "hieradet_small.untrained": _cfg(
+        num_classes=1000,
+        input_size=(3, 256, 256), pool_size=(8, 8),
+    ),
 })
 
 
@@ -604,12 +608,6 @@ def sam2_hiera_small(pretrained=False, **kwargs):
     return _create_hiera_det('sam2_hiera_small', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-# @register_model
-# def sam2_hiera_base(pretrained=False, **kwargs):
-#     model_args = dict()
-#     return _create_hiera_det('sam2_hiera_base', pretrained=pretrained, **dict(model_args, **kwargs))
-
-
 @register_model
 def sam2_hiera_base_plus(pretrained=False, **kwargs):
     model_args = dict(embed_dim=112, num_heads=2, global_pos_size=(14, 14))
@@ -626,3 +624,15 @@ def sam2_hiera_large(pretrained=False, **kwargs):
         window_spec=(8, 4, 16, 8),
     )
     return _create_hiera_det('sam2_hiera_large', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def hieradet_small(pretrained=False, **kwargs):
+    model_args = dict(stages=(1, 2, 11, 2), global_att_blocks=(7, 10, 13), window_spec=(8, 4, 16, 8))
+    return _create_hiera_det('hieradet_small', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+# @register_model
+# def hieradet_base(pretrained=False, **kwargs):
+#     model_args = dict(window_spec=(8, 4, 16, 8))
+#     return _create_hiera_det('hieradet_base', pretrained=pretrained, **dict(model_args, **kwargs))
