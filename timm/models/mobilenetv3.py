@@ -412,7 +412,9 @@ def _create_mnv3(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV
     return model
 
 
-def _gen_mobilenet_v3_rw(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+def _gen_mobilenet_v3_rw(
+        variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs
+) -> MobileNetV3:
     """Creates a MobileNet-V3 model.
 
     Ref impl: ?
