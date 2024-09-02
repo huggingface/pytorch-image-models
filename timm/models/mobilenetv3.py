@@ -916,6 +916,10 @@ default_cfgs = generate_default_cfgs({
         interpolation='bicubic',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_large_100_ra-f55367f5.pth',
         hf_hub_id='timm/'),
+    'mobilenetv3_large_100.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic', mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0),
     'mobilenetv3_large_100.miil_in21k_ft_in1k': _cfg(
         interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.),
         origin_url='https://github.com/Alibaba-MIIL/ImageNet21K',
@@ -928,9 +932,10 @@ default_cfgs = generate_default_cfgs({
         origin_url='https://github.com/Alibaba-MIIL/ImageNet21K',
         paper_ids='arXiv:2104.10972v4',
         interpolation='bilinear', mean=(0., 0., 0.), std=(1., 1., 1.), num_classes=11221),
-    'mobilenetv3_large_150d.untrained': _cfg(
-        #hf_hub_id='timm/',
-    ),
+    'mobilenetv3_large_150d.ra4_e3600_r256_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        input_size=(3, 256, 256), crop_pct=0.95, pool_size=(8, 8), test_input_size=(3, 320, 320), test_crop_pct=1.0),
 
     'mobilenetv3_small_050.lamb_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv3_small_050_lambc-4b7bbe87.pth',
