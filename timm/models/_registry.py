@@ -16,7 +16,7 @@ from ._pretrained import PretrainedCfg, DefaultCfg
 __all__ = [
     'split_model_name_tag', 'get_arch_name', 'register_model', 'generate_default_cfgs',
     'list_models', 'list_pretrained', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
-    'get_pretrained_cfg_value', 'is_model_pretrained'
+    'get_pretrained_cfg_value', 'is_model_pretrained', 'get_pretrained_cfgs_for_arch'
 ]
 
 _module_to_models: Dict[str, Set[str]] = defaultdict(set)  # dict of sets to check membership of model in module
@@ -341,3 +341,12 @@ def get_pretrained_cfg_value(model_name: str, cfg_key: str) -> Optional[Any]:
     """
     cfg = get_pretrained_cfg(model_name, allow_unregistered=False)
     return getattr(cfg, cfg_key, None)
+
+
+def get_arch_pretrained_cfgs(model_name: str) -> Dict[str, PretrainedCfg]:
+    """ Get all pretrained cfgs for a given architecture.
+    """
+    arch_name, _ = split_model_name_tag(model_name)
+    model_names = _model_with_tags[arch_name]
+    cfgs = {m: _model_pretrained_cfgs[m] for m in model_names}
+    return cfgs
