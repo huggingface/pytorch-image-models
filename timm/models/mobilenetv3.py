@@ -1254,6 +1254,21 @@ def lcnet_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
 
 
 @register_model
+def mobilenetv4_conv_small_025(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_small', 0.25, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv4_conv_small_050(pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """ MobileNet V4 """
+    model = _gen_mobilenet_v4('mobilenetv4_conv_small', 0.50, pretrained=pretrained, **kwargs)
+    return model
+
+
+
+@register_model
 def mobilenetv4_conv_small(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 """
     model = _gen_mobilenet_v4('mobilenetv4_conv_small', 1.0, pretrained=pretrained, **kwargs)
