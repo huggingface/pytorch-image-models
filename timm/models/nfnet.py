@@ -607,6 +607,10 @@ model_cfgs = dict(
     nf_ecaresnet26=_nfres_cfg(depths=(2, 2, 2, 2), attn_layer='eca', attn_kwargs=dict()),
     nf_ecaresnet50=_nfres_cfg(depths=(3, 4, 6, 3), attn_layer='eca', attn_kwargs=dict()),
     nf_ecaresnet101=_nfres_cfg(depths=(3, 4, 23, 3), attn_layer='eca', attn_kwargs=dict()),
+
+    test_nfnet=_nfnet_cfg(
+        depths=(1, 1, 1, 1), channels=(32, 64, 96, 128), feat_mult=1.5, group_size=8, bottle_ratio=0.25,
+        attn_kwargs=dict(rd_ratio=0.25, rd_divisor=8), act_layer='silu'),
 )
 
 
@@ -730,6 +734,11 @@ default_cfgs = generate_default_cfgs({
     'nf_ecaresnet26': _dcfg(url='', first_conv='stem.conv'),
     'nf_ecaresnet50': _dcfg(url='', first_conv='stem.conv'),
     'nf_ecaresnet101': _dcfg(url='', first_conv='stem.conv'),
+
+    'test_nfnet.r160_in1k': _dcfg(
+        # hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        crop_pct=0.875, input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -1029,3 +1038,8 @@ def nf_ecaresnet101(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free ECA-ResNet101
     """
     return _create_normfreenet('nf_ecaresnet101', pretrained=pretrained, **kwargs)
+
+
+@register_model
+def test_nfnet(pretrained=False, **kwargs) -> NormFreeNet:
+    return _create_normfreenet('test_nfnet', pretrained=pretrained, **kwargs)

@@ -1804,6 +1804,10 @@ default_cfgs = generate_default_cfgs({
     "test_efficientnet.r160_in1k": _cfg(
         hf_hub_id='timm/',
         input_size=(3, 160, 160), pool_size=(5, 5)),
+    "test_efficientnet_gn.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -2791,6 +2795,12 @@ def test_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_test_efficientnet('test_efficientnet', pretrained=pretrained, **kwargs)
     return model
 
+
+@register_model
+def test_efficientnet_gn(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet(
+        'test_efficientnet_gn', pretrained=pretrained, norm_layer=partial(GroupNormAct, group_size=8), **kwargs)
+    return model
 
 register_model_deprecations(__name__, {
     'tf_efficientnet_b0_ap': 'tf_efficientnet_b0.ap_in1k',
