@@ -384,7 +384,7 @@ class MambaOut(nn.Module):
                 drop_rate=drop_rate,
             )
         self.num_features = prev_dim
-        self.hidden_size = self.head.num_features
+        self.head_hidden_size = self.head.num_features
 
         self.apply(self._init_weights)
 
