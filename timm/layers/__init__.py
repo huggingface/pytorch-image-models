@@ -34,7 +34,7 @@ from .linear import Linear
 from .mixed_conv2d import MixedConv2d
 from .mlp import Mlp, GluMlp, GatedMlp, SwiGLU, SwiGLUPacked, ConvMlp, GlobalResponseNormMlp
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
-from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm
+from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm, RmsNorm2d
 from .norm_act import BatchNormAct2d, GroupNormAct, GroupNorm1Act, LayerNormAct, LayerNormAct2d,\
     SyncBatchNormAct, convert_sync_batchnorm, FrozenBatchNormAct2d, freeze_batch_norm_2d, unfreeze_batch_norm_2d
 from .padding import get_padding, get_same_padding, pad_same
