@@ -996,7 +996,7 @@ def convnext_zepto_rms_ols(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant (NOTE: still tweaking depths, will vary between 3-4M param, current is 3.7M
     model_args = dict(
         depths=(2, 2, 4, 2), dims=(32, 64, 128, 256), conv_mlp=True, norm_layer='rmsnorm2d', stem_type='overlap_act')
-    model = _create_convnext('convnext_zepto_rms_oas', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_convnext('convnext_zepto_rms_ols', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
