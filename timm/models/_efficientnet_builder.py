@@ -20,7 +20,7 @@ from timm.layers import CondConv2d, get_condconv_initializer, get_act_layer, get
 from ._efficientnet_blocks import *
 from ._manipulate import named_modules
 
-__all__ = ["EfficientNetBuilder", "decode_arch_def", "efficientnet_init_weights",
+__all__ = ["EfficientNetBuilder", "BlockArgs", "decode_arch_def", "efficientnet_init_weights",
            'resolve_bn_args', 'resolve_act_layer', 'round_channels', 'BN_MOMENTUM_TF_DEFAULT', 'BN_EPS_TF_DEFAULT']
 
 _logger = logging.getLogger(__name__)

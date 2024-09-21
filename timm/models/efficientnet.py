@@ -44,7 +44,8 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, GroupNormAct, LayerType
+from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, LayerType, \
+    GroupNormAct, LayerNormAct2d, EvoNorm2dS0
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
 from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
@@ -1808,6 +1809,14 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 160, 160), pool_size=(5, 5)),
+    "test_efficientnet_ln.r160_in1k": _cfg(
+        #hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5)),
+    "test_efficientnet_evos.r160_in1k": _cfg(
+        #hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 
@@ -2801,6 +2810,21 @@ def test_efficientnet_gn(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_test_efficientnet(
         'test_efficientnet_gn', pretrained=pretrained, norm_layer=partial(GroupNormAct, group_size=8), **kwargs)
     return model
+
+
+@register_model
+def test_efficientnet_ln(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet(
+        'test_efficientnet_ln', pretrained=pretrained, norm_layer=LayerNormAct2d, **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet_evos(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet(
+        'test_efficientnet_evos', pretrained=pretrained, norm_layer=partial(EvoNorm2dS0, group_size=8), **kwargs)
+    return model
+
 
 register_model_deprecations(__name__, {
     'tf_efficientnet_b0_ap': 'tf_efficientnet_b0.ap_in1k',

@@ -2015,6 +2015,12 @@ default_cfgs = {
     'test_vit.r160_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 160, 160), crop_pct=0.875),
+    'test_vit2.r160_in1k': _cfg(
+        #hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.875),
+    'test_vit3.r160_in1k': _cfg(
+        #hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.875),
 }
 
 _quick_gelu_cfgs = [
@@ -3213,6 +3219,26 @@ def test_vit(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """
     model_args = dict(patch_size=16, embed_dim=64, depth=6, num_heads=2, mlp_ratio=3)
     model = _create_vision_transformer('test_vit', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+def test_vit2(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Test
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=64, depth=8, num_heads=2, mlp_ratio=3,
+        class_token=False, reg_tokens=1, global_pool='avg', init_values=1e-5)
+    model = _create_vision_transformer('test_vit2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+def test_vit3(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Test
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=96, depth=10, num_heads=3, mlp_ratio=2,
+        class_token=False, reg_tokens=1, global_pool='map', init_values=1e-5)
+    model = _create_vision_transformer('test_vit3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
