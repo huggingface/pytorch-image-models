@@ -16,8 +16,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, GroupNorm, LayerType, create_attn, \
-    get_attn, get_act_layer, get_norm_layer, create_classifier, create_aa
+from timm.layers import DropBlock2d, DropPath, AvgPool2dSame, BlurPool2d, LayerType, create_attn, \
+    get_attn, get_act_layer, get_norm_layer, create_classifier, create_aa, to_ntuple
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
@@ -286,7 +286,7 @@ def drop_blocks(drop_prob: float = 0.):
 
 
 def make_blocks(
-        block_fn: Union[BasicBlock, Bottleneck],
+        block_fns: Tuple[Union[BasicBlock, Bottleneck]],
         channels: Tuple[int, ...],
         block_repeats: Tuple[int, ...],
         inplanes: int,
@@ -304,7 +304,7 @@ def make_blocks(
     net_block_idx = 0
     net_stride = 4
     dilation = prev_dilation = 1
-    for stage_idx, (planes, num_blocks, db) in enumerate(zip(channels, block_repeats, drop_blocks(drop_block_rate))):
+    for stage_idx, (block_fn, planes, num_blocks, db) in enumerate(zip(block_fns, channels, block_repeats, drop_blocks(drop_block_rate))):
         stage_name = f'layer{stage_idx + 1}'  # never liked this name, but weight compat requires it
         stride = 1 if stage_idx == 0 else 2
         if net_stride >= output_stride:
@@ -490,8 +490,9 @@ class ResNet(nn.Module):
                 self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # Feature Blocks
+        block_fns = to_ntuple(len(channels))(block)
         stage_modules, stage_feature_info = make_blocks(
-            block,
+            block_fns,
             channels,
             layers,
             inplanes,
@@ -513,7 +514,7 @@ class ResNet(nn.Module):
         self.feature_info.extend(stage_feature_info)
 
         # Head (Pooling and Classifier)
-        self.num_features = self.head_hidden_size = channels[-1] * block.expansion
+        self.num_features = self.head_hidden_size = channels[-1] * block_fns[-1].expansion
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
         self.init_weights(zero_init_last=zero_init_last)
@@ -1301,6 +1302,11 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-pretrained-gluonresnet/releases/download/v0.1/gluon_senet154-70a1a3c0.pth',
         first_conv='conv1.0'),
+
+    'test_resnet.r160_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.95,
+        input_size=(3, 160, 160), pool_size=(5, 5), first_conv='conv1.0'),
 })
 
 
@@ -2038,6 +2044,16 @@ def resnetrs420(pretrained: bool = False, **kwargs) -> ResNet:
         block=Bottleneck, layers=(4, 44, 87, 4), stem_width=32, stem_type='deep', replace_stem_pool=True,
         avg_down=True,  block_args=dict(attn_layer=attn_layer))
     return _create_resnet('resnetrs420', pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def test_resnet(pretrained: bool = False, **kwargs) -> ResNet:
+    """Constructs a tiny ResNet test model.
+    """
+    model_args = dict(
+        block=[BasicBlock, BasicBlock, Bottleneck, BasicBlock], layers=(1, 1, 1, 1),
+        stem_width=16, stem_type='deep', avg_down=True, channels=(32, 48, 48, 96))
+    return _create_resnet('test_resnet', pretrained, **dict(model_args, **kwargs))
 
 
 register_model_deprecations(__name__, {

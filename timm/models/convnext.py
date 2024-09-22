@@ -951,6 +951,20 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=1024),
+
+    "test_convnext.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+    "test_convnext2.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+    "test_convnext3.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+
 })
 
 
@@ -1144,6 +1158,29 @@ def convnextv2_huge(pretrained=False, **kwargs) -> ConvNeXt:
     model_args = dict(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], use_grn=True, ls_init_value=None)
     model = _create_convnext('convnextv2_huge', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+@register_model
+def test_convnext(pretrained=False, **kwargs) -> ConvNeXt:
+    model_args = dict(depths=[1, 2, 4, 2], dims=[24, 32, 48, 64], norm_eps=kwargs.pop('norm_eps', 1e-5), act_layer='gelu_tanh')
+    model = _create_convnext('test_convnext', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_convnext2(pretrained=False, **kwargs) -> ConvNeXt:
+    model_args = dict(depths=[1, 1, 1, 1], dims=[32, 64, 96, 128], norm_eps=kwargs.pop('norm_eps', 1e-5), act_layer='gelu_tanh')
+    model = _create_convnext('test_convnext2', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_convnext3(pretrained=False, **kwargs) -> ConvNeXt:
+    model_args = dict(
+        depths=[1, 1, 1, 1], dims=[32, 64, 96, 128], norm_eps=kwargs.pop('norm_eps', 1e-5), kernel_sizes=(7, 5, 5, 3), act_layer='silu')
+    model = _create_convnext('test_convnext3', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
 
 
 register_model_deprecations(__name__, {

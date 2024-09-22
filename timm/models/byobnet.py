@@ -2355,7 +2355,7 @@ default_cfgs = generate_default_cfgs({
     'test_byobnet.r160_in1k': _cfgr(
         hf_hub_id='timm/',
         first_conv='stem.conv',
-        input_size=(3, 160, 160), crop_pct=0.875, pool_size=(5, 5),
+        input_size=(3, 160, 160), crop_pct=0.95, pool_size=(5, 5),
     ),
 })
 
