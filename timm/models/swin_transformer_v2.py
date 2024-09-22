@@ -439,7 +439,7 @@ class PatchMerging(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, H, W, C = x.shape
 
-        pad_values = (0, 0, 0, H % 2, 0, W % 2)
+        pad_values = (0, 0, 0, W % 2, 0, H % 2)
         x = nn.functional.pad(x, pad_values)
         _, H, W, _ = x.shape
 
