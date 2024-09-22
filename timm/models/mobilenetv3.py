@@ -1011,6 +1011,13 @@ default_cfgs = generate_default_cfgs({
     ),
     "lcnet_150.untrained": _cfg(),
 
+    'mobilenetv4_conv_small_035.untrained': _cfg(
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95, interpolation='bicubic'),
+    'mobilenetv4_conv_small_050.e3000_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95, interpolation='bicubic'),
     'mobilenetv4_conv_small.e2400_r224_in1k': _cfg(
         hf_hub_id='timm/',
         test_input_size=(3, 256, 256), test_crop_pct=0.95, interpolation='bicubic'),
@@ -1254,18 +1261,17 @@ def lcnet_150(pretrained: bool = False, **kwargs) -> MobileNetV3:
 
 
 @register_model
-def mobilenetv4_conv_small_025(pretrained: bool = False, **kwargs) -> MobileNetV3:
+def mobilenetv4_conv_small_035(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 """
-    model = _gen_mobilenet_v4('mobilenetv4_conv_small', 0.25, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v4('mobilenetv4_conv_small_035', 0.35, pretrained=pretrained, **kwargs)
     return model
 
 
 @register_model
 def mobilenetv4_conv_small_050(pretrained: bool = False, **kwargs) -> MobileNetV3:
     """ MobileNet V4 """
-    model = _gen_mobilenet_v4('mobilenetv4_conv_small', 0.50, pretrained=pretrained, **kwargs)
+    model = _gen_mobilenet_v4('mobilenetv4_conv_small_050', 0.50, pretrained=pretrained, **kwargs)
     return model
-
 
 
 @register_model
