@@ -2014,13 +2014,13 @@ default_cfgs = {
 
     'test_vit.r160_in1k': _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 160, 160), crop_pct=0.875),
+        input_size=(3, 160, 160), crop_pct=0.95),
     'test_vit2.r160_in1k': _cfg(
-        #hf_hub_id='timm/',
-        input_size=(3, 160, 160), crop_pct=0.875),
+        hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.95),
     'test_vit3.r160_in1k': _cfg(
         #hf_hub_id='timm/',
-        input_size=(3, 160, 160), crop_pct=0.875),
+        input_size=(3, 160, 160), crop_pct=0.95),
 }
 
 _quick_gelu_cfgs = [
@@ -3217,21 +3217,23 @@ def vit_so150m_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> Visio
 def test_vit(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT Test
     """
-    model_args = dict(patch_size=16, embed_dim=64, depth=6, num_heads=2, mlp_ratio=3)
+    model_args = dict(patch_size=16, embed_dim=64, depth=6, num_heads=2, mlp_ratio=3, dynamic_img_size=True)
     model = _create_vision_transformer('test_vit', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
+@register_model
 def test_vit2(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT Test
     """
     model_args = dict(
         patch_size=16, embed_dim=64, depth=8, num_heads=2, mlp_ratio=3,
-        class_token=False, reg_tokens=1, global_pool='avg', init_values=1e-5)
+        class_token=False, reg_tokens=1, global_pool='avg', init_values=1e-5, dynamic_img_size=True)
     model = _create_vision_transformer('test_vit2', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
+@register_model
 def test_vit3(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT Test
     """

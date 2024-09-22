@@ -953,14 +953,17 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 256, 256), pool_size=(8, 8), crop_pct=1.0, num_classes=1024),
 
     "test_convnext.r160_in1k": _cfg(
-        # hf_hub_id='timm/',
-        input_size=(3, 160, 160), pool_size=(5, 5), mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
     "test_convnext2.r160_in1k": _cfg(
-        # hf_hub_id='timm/',
-        input_size=(3, 160, 160), pool_size=(5, 5), mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
     "test_convnext3.r160_in1k": _cfg(
-        # hf_hub_id='timm/',
-        input_size=(3, 160, 160), pool_size=(5, 5), mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
 
 })
 

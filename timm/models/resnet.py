@@ -1304,8 +1304,8 @@ default_cfgs = generate_default_cfgs({
         first_conv='conv1.0'),
 
     'test_resnet.r160_in1k': _cfg(
-        #hf_hub_id='timm/',
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.95,
         input_size=(3, 160, 160), pool_size=(5, 5), first_conv='conv1.0'),
 })
 

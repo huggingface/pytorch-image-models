@@ -736,9 +736,9 @@ default_cfgs = generate_default_cfgs({
     'nf_ecaresnet101': _dcfg(url='', first_conv='stem.conv'),
 
     'test_nfnet.r160_in1k': _dcfg(
-        # hf_hub_id='timm/',
+        hf_hub_id='timm/',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        crop_pct=0.875, input_size=(3, 160, 160), pool_size=(5, 5)),
+        crop_pct=0.95, input_size=(3, 160, 160), pool_size=(5, 5)),
 })
 
 

@@ -1804,19 +1804,18 @@ default_cfgs = generate_default_cfgs({
 
     "test_efficientnet.r160_in1k": _cfg(
         hf_hub_id='timm/',
-        input_size=(3, 160, 160), pool_size=(5, 5)),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+    "test_efficientnet_ln.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
     "test_efficientnet_gn.r160_in1k": _cfg(
         hf_hub_id='timm/',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 160, 160), pool_size=(5, 5)),
-    "test_efficientnet_ln.r160_in1k": _cfg(
-        #hf_hub_id='timm/',
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 160, 160), pool_size=(5, 5)),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
     "test_efficientnet_evos.r160_in1k": _cfg(
-        #hf_hub_id='timm/',
+        hf_hub_id='timm/',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        input_size=(3, 160, 160), pool_size=(5, 5)),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
 })
 
 
