@@ -161,6 +161,8 @@ group.add_argument('--head-init-scale', default=None, type=float,
                    help='Head initialization scale')
 group.add_argument('--head-init-bias', default=None, type=float,
                    help='Head initialization bias value')
+group.add_argument('--torchcompile-mode', type=str, default=None,
+                    help="torch.compile mode (default: None).")
 
 # scripting / codegen
 scripting_group = group.add_mutually_exclusive_group()
@@ -627,7 +629,7 @@ def main():
     if args.torchcompile:
         # torch compile should be done after DDP
         assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
-        model = torch.compile(model, backend=args.torchcompile)
+        model = torch.compile(model, backend=args.torchcompile, mode=args.torchcompile_mode)
 
     # create the train and eval datasets
     if args.data and not args.data_dir:

@@ -139,7 +139,8 @@ parser.add_argument('--fast-norm', default=False, action='store_true',
 parser.add_argument('--reparam', default=False, action='store_true',
                     help='Reparameterize model')
 parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
-
+parser.add_argument('--torchcompile-mode', type=str, default=None,
+                    help="torch.compile mode (default: None).")
 
 scripting_group = parser.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', default=False, action='store_true',
@@ -246,7 +247,7 @@ def validate(args):
     elif args.torchcompile:
         assert has_compile, 'A version of torch w/ torch.compile() is required for --compile, possibly a nightly.'
         torch._dynamo.reset()
-        model = torch.compile(model, backend=args.torchcompile)
+        model = torch.compile(model, backend=args.torchcompile, mode=args.torchcompile_mode)
     elif args.aot_autograd:
         assert has_functorch, "functorch is needed for --aot-autograd"
         model = memory_efficient_fusion(model)

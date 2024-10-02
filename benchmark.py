@@ -120,6 +120,8 @@ parser.add_argument('--fast-norm', default=False, action='store_true',
 parser.add_argument('--reparam', default=False, action='store_true',
                     help='Reparameterize model')
 parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
+parser.add_argument('--torchcompile-mode', type=str, default=None,
+                    help="torch.compile mode (default: None).")
 
 # codegen (model compilation) options
 scripting_group = parser.add_mutually_exclusive_group()
@@ -224,6 +226,7 @@ class BenchmarkRunner:
             device='cuda',
             torchscript=False,
             torchcompile=None,
+            torchcompile_mode=None,
             aot_autograd=False,
             reparam=False,
             precision='float32',
@@ -278,7 +281,7 @@ class BenchmarkRunner:
         elif torchcompile:
             assert has_compile, 'A version of torch w/ torch.compile() is required, possibly a nightly.'
             torch._dynamo.reset()
-            self.model = torch.compile(self.model, backend=torchcompile)
+            self.model = torch.compile(self.model, backend=torchcompile, mode=torchcompile_mode)
             self.compiled = True
         elif aot_autograd:
             assert has_functorch, "functorch is needed for --aot-autograd"
