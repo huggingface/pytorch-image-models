@@ -1817,6 +1817,11 @@ default_cfgs = {
         hf_hub_filename='open_clip_pytorch_model.bin',
         input_size=(3, 256, 256),
         num_classes=0),
+    'vit_base_patch16_siglip_256.webli_i18n': _cfg(
+        hf_hub_id='timm/ViT-B-16-SigLIP-i18n-256',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 256, 256),
+        num_classes=0),
     'vit_base_patch16_siglip_384.webli': _cfg(
         hf_hub_id='timm/ViT-B-16-SigLIP-384',
         hf_hub_filename='open_clip_pytorch_model.bin',
@@ -1841,7 +1846,7 @@ default_cfgs = {
         hf_hub_id='timm/ViT-SO400M-14-SigLIP',
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=0),
-    'vit_so400m_patch16_siglip_256.webli': _cfg(
+    'vit_so400m_patch16_siglip_256.webli_i18n': _cfg(
         hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
         hf_hub_filename='open_clip_pytorch_model.bin',
         input_size=(3, 256, 256),
@@ -1863,6 +1868,11 @@ default_cfgs = {
         num_classes=0),
     'vit_base_patch16_siglip_gap_256.webli': _cfg(
         hf_hub_id='timm/ViT-B-16-SigLIP-256',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_base_patch16_siglip_gap_256.webli_i18n': _cfg(
+        hf_hub_id='timm/ViT-B-16-SigLIP-i18n-256',
         hf_hub_filename='open_clip_pytorch_model.bin',
         input_size=(3, 256, 256),
         num_classes=0),
@@ -1900,7 +1910,7 @@ default_cfgs = {
         hf_hub_filename='paligemma-3b-pt-224.npz',
         custom_load='hf',
         num_classes=0),
-    'vit_so400m_patch16_siglip_gap_256.webli': _cfg(
+    'vit_so400m_patch16_siglip_gap_256.webli_i18n': _cfg(
         hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
         hf_hub_filename='open_clip_pytorch_model.bin',
         input_size=(3, 256, 256),
@@ -1935,13 +1945,11 @@ default_cfgs = {
         num_classes=0),
 
     'vit_so400m_patch14_siglip_378.webli_ft_in1k': _cfg(
-        #hf_hub_id='timm/',
-        #file='vit_so400m_p14_378_map-8.pth',
+        hf_hub_id='timm/',
         input_size=(3, 378, 378), crop_pct=1.0, crop_mode='squash',
     ),
     'vit_so400m_patch14_siglip_gap_378.webli_ft_in1k': _cfg(
-        # hf_hub_id='timm/',
-        #file='vit_so400m_p14_378_gap-8.pth',
+        hf_hub_id='timm/',
         input_size=(3, 378, 378), crop_pct=1.0, crop_mode='squash',
     ),
 
