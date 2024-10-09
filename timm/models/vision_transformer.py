@@ -1841,6 +1841,16 @@ default_cfgs = {
         hf_hub_id='timm/ViT-SO400M-14-SigLIP',
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=0),
+    'vit_so400m_patch16_siglip_256.webli': _cfg(
+        hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_so400m_patch14_siglip_378.webli': _cfg(
+        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 378, 378),
+        num_classes=0),
     'vit_so400m_patch14_siglip_384.webli': _cfg(
         hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
         hf_hub_filename='open_clip_pytorch_model.bin',
@@ -1890,6 +1900,16 @@ default_cfgs = {
         hf_hub_filename='paligemma-3b-pt-224.npz',
         custom_load='hf',
         num_classes=0),
+    'vit_so400m_patch16_siglip_gap_256.webli': _cfg(
+        hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_378.webli': _cfg(
+        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        input_size=(3, 378, 378), crop_pct=1.0,
+        num_classes=0),
     'vit_so400m_patch14_siglip_gap_384.webli': _cfg(
         hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
         hf_hub_filename='open_clip_pytorch_model.bin',
@@ -1913,6 +1933,17 @@ default_cfgs = {
         custom_load='hf',
         input_size=(3, 896, 896), crop_pct=1.0,
         num_classes=0),
+
+    'vit_so400m_patch14_siglip_378.webli_ft_in1k': _cfg(
+        #hf_hub_id='timm/',
+        #file='vit_so400m_p14_378_map-8.pth',
+        input_size=(3, 378, 378), crop_pct=1.0, crop_mode='squash',
+    ),
+    'vit_so400m_patch14_siglip_gap_378.webli_ft_in1k': _cfg(
+        # hf_hub_id='timm/',
+        #file='vit_so400m_p14_378_gap-8.pth',
+        input_size=(3, 378, 378), crop_pct=1.0, crop_mode='squash',
+    ),
 
     'vit_xsmall_patch16_clip_224.tinyclip_yfcc15m': _cfg(
         hf_hub_id='timm/',
@@ -2936,6 +2967,28 @@ def vit_so400m_patch14_siglip_224(pretrained: bool = False, **kwargs) -> VisionT
 
 
 @register_model
+def vit_so400m_patch16_siglip_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    # this is a corrected variant of the 384 with a res properly divisible by patch size (no padding/truncation)
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch14_siglip_378(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    # this is a corrected variant of the 384 with a res properly divisible by patch size (no padding/truncation)
+    model_args = dict(
+        patch_size=14, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch14_siglip_378', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_so400m_patch14_siglip_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=14, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
@@ -3020,6 +3073,30 @@ def vit_so400m_patch14_siglip_gap_224(pretrained: bool = False, **kwargs) -> Vis
     )
     model = _create_vision_transformer(
         'vit_so400m_patch14_siglip_gap_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ A SigLIP variant of ViT with global average pooling (GAP) instead of attention pooling (MAP)."""
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362,
+        class_token=False, global_pool='avg', fc_norm=False,
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch14_siglip_gap_378(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ A SigLIP variant of ViT with global average pooling (GAP) instead of attention pooling (MAP)."""
+    model_args = dict(
+        patch_size=14, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362,
+        class_token=False, global_pool='avg', fc_norm=False,
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch14_siglip_gap_378', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
