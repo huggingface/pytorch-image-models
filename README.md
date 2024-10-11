@@ -41,7 +41,7 @@
 * SigLIP SO400M ViT fine-tunes on ImageNet-1k @ 378x378, added 378x378 option for existing SigLIP 384x384 models
   *  [vit_so400m_patch14_siglip_378.webli_ft_in1k](https://huggingface.co/timm/vit_so400m_patch14_siglip_378.webli_ft_in1k) - 89.42 top-1
   *  [vit_so400m_patch14_siglip_gap_378.webli_ft_in1k](https://huggingface.co/timm/vit_so400m_patch14_siglip_gap_378.webli_ft_in1k) - 89.03
-* SigLIP SO400M ViT encoder from multi-lingual (i18n) patch16 @ 256x256 added
+* SigLIP SO400M ViT encoder from multi-lingual (i18n) patch16 @ 256x256 added (https://huggingface.co/timm/ViT-SO400M-16-SigLIP-i18n-256). OpenCLIP update pending.
 * Add two ConNeXt 'Zepto' models & weights (one w/ overlapped stem and one w/ patch stem). Uses RMSNorm, smaller than previous 'Atto', 2.2M params
   * [convnext_zepto_rms_ols.ra4_e3600_r224_in1k](https://huggingface.co/timm/convnext_zepto_rms_ols.ra4_e3600_r224_in1k) - 73.20 top-1 @ 224
   * [convnext_zepto_rms.ra4_e3600_r224_in1k](https://huggingface.co/timm/convnext_zepto_rms.ra4_e3600_r224_in1k) - 72.81 @ 224
