@@ -13,7 +13,7 @@
 ## What's New
 
 ### Oct 11, 2024
-* MambaOut model & weights added. A cheeky take on SSM vision models w/o the SSM (essentially ConvNeXt w/ gating). A mix of original weights + custom variations & weights.
+* MambaOut (https://github.com/yuweihao/MambaOut) model & weights added. A cheeky take on SSM vision models w/o the SSM (essentially ConvNeXt w/ gating). A mix of original weights + custom variations & weights.
 
 |model                                                                                                                |img_size|top1  |top5  |param_count|
 |---------------------------------------------------------------------------------------------------------------------|--------|------|------|-----------|
