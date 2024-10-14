@@ -500,6 +500,10 @@ default_cfgs = generate_default_cfgs({
     'mambaout_base_plus_rw.sw_e150_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
     ),
+    'mambaout_base_plus_rw.sw_e150_r384_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), test_input_size=(3, 384, 384), crop_mode='squash', pool_size=(12, 12),
+    ),
     'mambaout_base_plus_rw.sw_e150_in12k': _cfg(
         hf_hub_id='timm/',
         num_classes=11821,
