@@ -700,6 +700,10 @@ default_cfgs = generate_default_cfgs({
         interpolation='bicubic', crop_pct=0.95),
     'resnetv2_18d.untrained': _cfg(
         interpolation='bicubic', crop_pct=0.95, first_conv='stem.conv1'),
+    'resnetv2_34.untrained': _cfg(
+        interpolation='bicubic', crop_pct=0.95),
+    'resnetv2_34d.untrained': _cfg(
+        interpolation='bicubic', crop_pct=0.95, first_conv='stem.conv1'),
     'resnetv2_50.a1h_in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
@@ -782,6 +786,24 @@ def resnetv2_18d(pretrained=False, **kwargs) -> ResNetV2:
         conv_layer=create_conv2d, norm_layer=BatchNormAct2d, stem_type='deep', avg_down=True
     )
     return _create_resnetv2('resnetv2_18d', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def resnetv2_34(pretrained=False, **kwargs) -> ResNetV2:
+    model_args = dict(
+        layers=(3, 4, 6, 3), channels=(64, 128, 256, 512), basic=True, bottle_ratio=1.0,
+        conv_layer=create_conv2d, norm_layer=BatchNormAct2d
+    )
+    return _create_resnetv2('resnetv2_34', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def resnetv2_34d(pretrained=False, **kwargs) -> ResNetV2:
+    model_args = dict(
+        layers=(3, 4, 6, 3), channels=(64, 128, 256, 512), basic=True, bottle_ratio=1.0,
+        conv_layer=create_conv2d, norm_layer=BatchNormAct2d, stem_type='deep', avg_down=True
+    )
+    return _create_resnetv2('resnetv2_34d', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
