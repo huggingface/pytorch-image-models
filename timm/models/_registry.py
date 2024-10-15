@@ -16,7 +16,7 @@ from ._pretrained import PretrainedCfg, DefaultCfg
 __all__ = [
     'split_model_name_tag', 'get_arch_name', 'register_model', 'generate_default_cfgs',
     'list_models', 'list_pretrained', 'is_model', 'model_entrypoint', 'list_modules', 'is_model_in_modules',
-    'get_pretrained_cfg_value', 'is_model_pretrained', 'get_pretrained_cfgs_for_arch'
+    'get_pretrained_cfg_value', 'is_model_pretrained', 'get_arch_pretrained_cfgs'
 ]
 
 _module_to_models: Dict[str, Set[str]] = defaultdict(set)  # dict of sets to check membership of model in module
