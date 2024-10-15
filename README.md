@@ -12,6 +12,11 @@
 
 ## What's New
 
+
+### Oct 14, 2024
+* Pre-activation (ResNetV2) version of 18/18d/34/34d ResNet model defs added by request (weights pending)
+* Release 1.0.10
+
 ### Oct 11, 2024
 * MambaOut (https://github.com/yuweihao/MambaOut) model & weights added. A cheeky take on SSM vision models w/o the SSM (essentially ConvNeXt w/ gating). A mix of original weights + custom variations & weights.
 
