@@ -397,6 +397,8 @@ def _try_run(args, initial_batch_size):
         try:
             if torch.cuda.is_available() and 'cuda' in args.device:
                 torch.cuda.empty_cache()
+            elif torch.npu.is_available() and "npu" in args.device:
+                torch.npu.empty_cache()
             results = validate(args)
             return results
         except RuntimeError as e:
