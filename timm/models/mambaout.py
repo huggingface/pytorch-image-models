@@ -151,7 +151,7 @@ class MlpHead(nn.Module):
             self.num_features = in_features
             self.pre_logits = nn.Identity()
 
-        self.fc = nn.Linear(hidden_size, num_classes, bias=bias)
+        self.fc = nn.Linear(hidden_size, num_classes, bias=bias) if num_classes > 0 else nn.Identity()
         self.head_dropout = nn.Dropout(drop_rate)
 
     def reset(self, num_classes: int, pool_type: Optional[str] = None, reset_other: bool = False):
