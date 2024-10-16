@@ -12,6 +12,9 @@
 
 ## What's New
 
+## Oct 16, 2024
+* Fix error on importing from deprecated path `timm.models.registry`, increased priority of existing deprecation warnings to be visible
+* Port weights of InternViT-300M (https://huggingface.co/OpenGVLab/InternViT-300M-448px) to `timm` as `vit_intern300m_patch14_448`
 
 ### Oct 14, 2024
 * Pre-activation (ResNetV2) version of 18/18d/34/34d ResNet model defs added by request (weights pending)
