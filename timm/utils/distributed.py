@@ -159,6 +159,8 @@ def init_distributed_device_so(
 
     if device_type == 'cuda':
         assert torch.cuda.is_available(), f'CUDA is not available but {device} was specified.'
+    elif 'npu' in device:
+        assert torch.npu.is_available(), f'NPU is not available but {device} was specified.'
 
     if distributed and device != 'cpu':
         # Ignore manually specified device index in distributed mode and
@@ -169,6 +171,8 @@ def init_distributed_device_so(
 
     if device.startswith('cuda:'):
         torch.cuda.set_device(device)
+    elif device.startswith('npu:'):
+        torch.npu.set_device(device)
 
     return dict(
         device=device,
