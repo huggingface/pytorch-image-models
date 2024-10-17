@@ -395,9 +395,9 @@ def _try_run(args, initial_batch_size):
     while batch_size:
         args.batch_size = batch_size * args.num_gpu  # multiply by num-gpu for DataParallel case
         try:
-            if torch.cuda.is_available() and 'cuda' in args.device:
+            if 'cuda' in args.device and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            elif torch.npu.is_available() and "npu" in args.device:
+            elif  "npu" in args.device and torch.npu.is_available():
                 torch.npu.empty_cache()
             results = validate(args)
             return results

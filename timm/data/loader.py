@@ -113,8 +113,8 @@ class PrefetchLoader:
             )
         else:
             self.random_erasing = None
-        self.is_cuda = torch.cuda.is_available() and device.type == 'cuda'
-        self.is_npu = torch.npu.is_available() and device.type == 'npu'
+        self.is_cuda = device.type == 'cuda' and torch.cuda.is_available()
+        self.is_npu = device.type == 'npu' and torch.npu.is_available()
 
     def __iter__(self):
         first = True
