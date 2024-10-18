@@ -34,13 +34,6 @@ try:
 except ImportError:
     has_apex = False
 
-has_native_amp = False
-try:
-    if getattr(torch.cuda.amp, 'autocast') is not None:
-        has_native_amp = True
-except AttributeError:
-    pass
-
 try:
     from functorch.compile import memory_efficient_fusion
     has_functorch = True
@@ -183,7 +176,6 @@ def validate(args):
             use_amp = 'apex'
             _logger.info('Validating in mixed precision with NVIDIA APEX AMP.')
         else:
-            assert has_native_amp, 'Please update PyTorch to a version with native AMP (or use APEX).'
             assert args.amp_dtype in ('float16', 'bfloat16')
             use_amp = 'native'
             amp_dtype = torch.bfloat16 if args.amp_dtype == 'bfloat16' else torch.float16
