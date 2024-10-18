@@ -1042,8 +1042,11 @@ def train_one_epoch(
         if model_ema is not None:
             model_ema.update(model, step=num_updates)
 
-        if args.synchronize_step and device.type == 'cuda':
-            torch.cuda.synchronize()
+        if args.synchronize_step:
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
+            elif device.type == 'npu':
+                torch.npu.synchronize()
         time_now = time.time()
         update_time_m.update(time.time() - update_start_time)
         update_start_time = time_now
@@ -1143,6 +1146,8 @@ def validate(
 
             if device.type == 'cuda':
                 torch.cuda.synchronize()
+            elif device.type == "npu":
+                torch.npu.synchronize()
 
             losses_m.update(reduced_loss.item(), input.size(0))
             top1_m.update(acc1.item(), output.size(0))
