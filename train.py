@@ -48,12 +48,6 @@ try:
 except ImportError:
     has_apex = False
 
-has_native_amp = False
-try:
-    if getattr(torch.cuda.amp, 'autocast') is not None:
-        has_native_amp = True
-except AttributeError:
-    pass
 
 try:
     import wandb
@@ -442,7 +436,6 @@ def main():
             use_amp = 'apex'
             assert args.amp_dtype == 'float16'
         else:
-            assert has_native_amp, 'Please update PyTorch to a version with native AMP (or use APEX).'
             use_amp = 'native'
             assert args.amp_dtype in ('float16', 'bfloat16')
         if args.amp_dtype == 'bfloat16':
@@ -572,15 +565,10 @@ def main():
         if utils.is_primary(args):
             _logger.info('Using NVIDIA APEX AMP. Training in mixed precision.')
     elif use_amp == 'native':
-        try:
-            amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
-        except (AttributeError, TypeError):
-            # fallback to CUDA only AMP for PyTorch < 1.10
-            assert device.type == 'cuda'
-            amp_autocast = torch.cuda.amp.autocast
-        if device.type == 'cuda' and amp_dtype == torch.float16:
+        amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
+        if device.type in ('cuda',) and amp_dtype == torch.float16:
             # loss scaler only used for float16 (half) dtype, bfloat16 does not need it
-            loss_scaler = NativeScaler()
+            loss_scaler = NativeScaler(device=device.type)
         if utils.is_primary(args):
             _logger.info('Using native Torch AMP. Training in mixed precision.')
     else:
@@ -1054,8 +1042,11 @@ def train_one_epoch(
         if model_ema is not None:
             model_ema.update(model, step=num_updates)
 
-        if args.synchronize_step and device.type == 'cuda':
-            torch.cuda.synchronize()
+        if args.synchronize_step:
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
+            elif device.type == 'npu':
+                torch.npu.synchronize()
         time_now = time.time()
         update_time_m.update(time.time() - update_start_time)
         update_start_time = time_now
@@ -1155,6 +1146,8 @@ def validate(
 
             if device.type == 'cuda':
                 torch.cuda.synchronize()
+            elif device.type == "npu":
+                torch.npu.synchronize()
 
             losses_m.update(reduced_loss.item(), input.size(0))
             top1_m.update(acc1.item(), output.size(0))

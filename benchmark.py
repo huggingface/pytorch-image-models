@@ -32,13 +32,6 @@ try:
 except ImportError:
     pass
 
-has_native_amp = False
-try:
-    if getattr(torch.cuda.amp, 'autocast') is not None:
-        has_native_amp = True
-except AttributeError:
-    pass
-
 try:
     from deepspeed.profiling.flops_profiler import get_model_profile
     has_deepspeed_profiling = True
@@ -242,7 +235,7 @@ class BenchmarkRunner:
         self.amp_dtype, self.model_dtype, self.data_dtype = resolve_precision(precision)
         self.channels_last = kwargs.pop('channels_last', False)
         if self.amp_dtype is not None:
-            self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=self.amp_dtype)
+            self.amp_autocast = partial(torch.amp.autocast, device_type=device, dtype=self.amp_dtype)
         else:
             self.amp_autocast = suppress
 

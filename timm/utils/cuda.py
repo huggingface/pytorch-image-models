@@ -46,8 +46,11 @@ class ApexScaler:
 class NativeScaler:
     state_dict_key = "amp_scaler"
 
-    def __init__(self):
-        self._scaler = torch.cuda.amp.GradScaler()
+    def __init__(self, device='cuda'):
+        try:
+            self._scaler = torch.amp.GradScaler(device=device)
+        except (AttributeError, TypeError) as e:
+            self._scaler = torch.cuda.amp.GradScaler()
 
     def __call__(
             self,

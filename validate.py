@@ -34,13 +34,6 @@ try:
 except ImportError:
     has_apex = False
 
-has_native_amp = False
-try:
-    if getattr(torch.cuda.amp, 'autocast') is not None:
-        has_native_amp = True
-except AttributeError:
-    pass
-
 try:
     from functorch.compile import memory_efficient_fusion
     has_functorch = True
@@ -183,7 +176,6 @@ def validate(args):
             use_amp = 'apex'
             _logger.info('Validating in mixed precision with NVIDIA APEX AMP.')
         else:
-            assert has_native_amp, 'Please update PyTorch to a version with native AMP (or use APEX).'
             assert args.amp_dtype in ('float16', 'bfloat16')
             use_amp = 'native'
             amp_dtype = torch.bfloat16 if args.amp_dtype == 'bfloat16' else torch.float16
@@ -395,8 +387,10 @@ def _try_run(args, initial_batch_size):
     while batch_size:
         args.batch_size = batch_size * args.num_gpu  # multiply by num-gpu for DataParallel case
         try:
-            if torch.cuda.is_available() and 'cuda' in args.device:
+            if 'cuda' in args.device and torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            elif "npu" in args.device and torch.npu.is_available():
+                torch.npu.empty_cache()
             results = validate(args)
             return results
         except RuntimeError as e:
