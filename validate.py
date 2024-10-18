@@ -389,7 +389,7 @@ def _try_run(args, initial_batch_size):
         try:
             if 'cuda' in args.device and torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            elif  "npu" in args.device and torch.npu.is_available():
+            elif "npu" in args.device and torch.npu.is_available():
                 torch.npu.empty_cache()
             results = validate(args)
             return results
