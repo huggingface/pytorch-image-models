@@ -116,6 +116,7 @@ def init_distributed_device_so(
             "xpu": "ccl",
             "hpu": "hccl",
             "cuda": "nccl",
+            "npu": "hccl",
         }
         dist_backend = dist_backends.get(device_type, 'gloo')
     dist_url = dist_url or 'env://'
@@ -159,6 +160,8 @@ def init_distributed_device_so(
 
     if device_type == 'cuda':
         assert torch.cuda.is_available(), f'CUDA is not available but {device} was specified.'
+    if device_type == 'npu':
+        assert torch.npu.is_available(), f'Ascend NPU is not available but {device} was specified.'
 
     if distributed and device != 'cpu':
         # Ignore manually specified device index in distributed mode and
