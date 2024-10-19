@@ -11,6 +11,8 @@
 - [Citing](#citing)
 
 ## What's New
+## Oct 19, 2024
+* Cleanup torch amp usage to avoid cuda specific calls, merge support for Ascend (NPU) devices from [MengqingCao](https://github.com/MengqingCao) that should work now in PyTorch 2.5 w/ new device extension autoloading feature. Tested Intel Arc (XPU) in Pytorch 2.5 too and it (mostly) worked.
 
 ## Oct 16, 2024
 * Fix error on importing from deprecated path `timm.models.registry`, increased priority of existing deprecation warnings to be visible
