@@ -23,6 +23,7 @@ Acknowledgments:
 
 Hacked together by / Copyright 2020, Ross Wightman
 """
+import copy
 import logging
 import math
 from collections import OrderedDict
@@ -1601,6 +1602,21 @@ default_cfgs = {
         hf_hub_filename='open_clip_pytorch_model.bin',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
 
+    'vit_base_patch32_clip_224.laion400m_e32': _cfg(
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
+    'vit_base_patch16_clip_224.laion400m_e32': _cfg(
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_base_patch16_plus_clip_240.laion400m_e32': _cfg(
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 240, 240), crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.laion400m_e32': _cfg(
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
+
     'vit_base_patch32_clip_224.datacompxl': _cfg(
         hf_hub_id='laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K',
         hf_hub_filename='open_clip_pytorch_model.bin',
@@ -1641,44 +1657,68 @@ default_cfgs = {
         crop_pct=1.0, input_size=(3, 378, 378), num_classes=1024),
 
     'vit_base_patch32_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='facebook/metaclip-b32-fullcc2.5b',
-        hf_hub_filename='metaclip_b32_fullcc2.5b.bin',
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch16_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='facebook/metaclip-b16-fullcc2.5b',
-        hf_hub_filename='metaclip_b16_fullcc2.5b.bin',
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='facebook/metaclip-l14-fullcc2.5b',
-        hf_hub_filename='metaclip_l14_fullcc2.5b.bin',
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='facebook/metaclip-h14-fullcc2.5b',
-        hf_hub_filename='metaclip_h14_fullcc2.5b.bin',
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
+    'vit_gigantic_patch14_clip_224.metaclip_2pt5b': _cfg(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        license='cc-by-nc-4.0',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
+    'vit_base_patch32_clip_224.metaclip_400m': _cfg(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        license='cc-by-nc-4.0',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_base_patch16_clip_224.metaclip_400m': _cfg(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        license='cc-by-nc-4.0',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.metaclip_400m': _cfg(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        license='cc-by-nc-4.0',
+        notes=('natively QuickGELU, use quickgelu model variant for original results',),
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch32_clip_224.openai': _cfg(
-        hf_hub_id='timm/vit_base_patch32_clip_224.openai',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.openai': _cfg(
-        hf_hub_id='timm/vit_base_patch16_clip_224.openai',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_large_patch14_clip_224.openai': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_224.openai',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_large_patch14_clip_336.openai': _cfg(
-        hf_hub_id='timm/vit_large_patch14_clip_336.openai', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
@@ -2071,22 +2111,13 @@ default_cfgs = {
         input_size=(3, 160, 160), crop_pct=0.95),
 }
 
-_quick_gelu_cfgs = [
-    'vit_large_patch14_clip_224.dfn2b',
-    'vit_huge_patch14_clip_224.dfn5b',
-    'vit_huge_patch14_clip_378.dfn5b',
-    'vit_base_patch32_clip_224.metaclip_2pt5b',
-    'vit_base_patch16_clip_224.metaclip_2pt5b',
-    'vit_large_patch14_clip_224.metaclip_2pt5b',
-    'vit_huge_patch14_clip_224.metaclip_2pt5b',
-    'vit_base_patch32_clip_224.openai',
-    'vit_base_patch16_clip_224.openai',
-    'vit_large_patch14_clip_224.openai',
-    'vit_large_patch14_clip_336.openai',
-]
-default_cfgs.update({
-    n.replace('_clip_', '_clip_quickgelu_'): default_cfgs[n] for n in _quick_gelu_cfgs
-})
+_quick_gelu_cfgs = [n for n, c in default_cfgs.items() if c.get('notes', ()) and 'quickgelu' in c['notes'][0]]
+for n in _quick_gelu_cfgs:
+    # generate quickgelu default cfgs based on contents of notes field
+    c = copy.deepcopy(default_cfgs[n])
+    if c['hf_hub_id'] == 'timm/':
+        c['hf_hub_id'] = 'timm/' + n  # need to use non-quickgelu model name for hub id
+    default_cfgs[n.replace('_clip_', '_clip_quickgelu_')] = c
 default_cfgs = generate_default_cfgs(default_cfgs)
 
 
@@ -2511,6 +2542,16 @@ def vit_base_patch16_clip_384(pretrained: bool = False, **kwargs) -> VisionTrans
 
 
 @register_model
+def vit_base_patch16_plus_clip_240(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-Base (ViT-B/16+) CLIP image tower @ 240x240
+    """
+    model_args = dict(patch_size=16, embed_dim=896, depth=12, num_heads=14, pre_norm=True, norm_layer=nn.LayerNorm)
+    model = _create_vision_transformer(
+        'vit_base_patch16_plus_clip_240', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_large_patch14_clip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-Large model (ViT-L/14) CLIP image tower
     """
@@ -2653,6 +2694,18 @@ def vit_huge_patch14_clip_quickgelu_378(pretrained: bool = False, **kwargs) -> V
         norm_layer=nn.LayerNorm, act_layer='quick_gelu')
     model = _create_vision_transformer(
         'vit_huge_patch14_clip_quickgelu_378', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_gigantic_patch14_clip_quickgelu_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT-bigG model (ViT-G/14) w/ QuickGELU act
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16, pre_norm=True,
+        norm_layer=nn.LayerNorm, act_layer='quick_gelu')
+    model = _create_vision_transformer(
+        'vit_gigantic_patch14_clip_quickgelu_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
