@@ -2315,6 +2315,27 @@ default_cfgs = generate_default_cfgs({
         fixed_input_size=True, input_size=(3, 448, 448), pool_size=(14, 14),
         classifier='head.proj',
     ),
+    'resnet50_clip.cc12m': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
+        classifier='head.proj',
+    ),
+    'resnet50_clip.yfcc15m': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=1024, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
+        classifier='head.proj',
+    ),
+    'resnet101_clip.yfcc15m': _cfgr(
+        hf_hub_id='timm/',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=512, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        fixed_input_size=True, input_size=(3, 224, 224), pool_size=(7, 7),
+        classifier='head.proj',
+    ),
 
     # avg-pool w/ optional standard classifier head variants
     'resnet50_clip_gap.openai': _cfgr(
@@ -2346,6 +2367,24 @@ default_cfgs = generate_default_cfgs({
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 448, 448), pool_size=(14, 14),
+    ),
+    'resnet50_clip_gap.cc12m': _cfgr(
+        hf_hub_id='timm/resnet50_clip.cc12m',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 224, 224), pool_size=(7, 7),
+    ),
+    'resnet50_clip_gap.yfcc15m': _cfgr(
+        hf_hub_id='timm/resnet50_clip.cc12m',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 224, 224), pool_size=(7, 7),
+    ),
+    'resnet101_clip_gap.yfcc15m': _cfgr(
+        hf_hub_id='timm/resnet101_clip_gap.yfcc15m',
+        hf_hub_filename='open_clip_pytorch_model.bin',
+        num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        input_size=(3, 224, 224), pool_size=(7, 7),
     ),
 
     'resnet50_mlp.untrained': _cfgr(
