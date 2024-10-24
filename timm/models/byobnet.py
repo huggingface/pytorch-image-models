@@ -2381,7 +2381,7 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 224, 224), pool_size=(7, 7),
     ),
     'resnet101_clip_gap.yfcc15m': _cfgr(
-        hf_hub_id='timm/resnet101_clip_gap.yfcc15m',
+        hf_hub_id='timm/resnet101_clip.yfcc15m',
         hf_hub_filename='open_clip_pytorch_model.bin',
         num_classes=0, mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         input_size=(3, 224, 224), pool_size=(7, 7),
