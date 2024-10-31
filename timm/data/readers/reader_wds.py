@@ -304,8 +304,8 @@ class ReaderWds(Reader):
             self.num_samples = num_samples
         else:
             self.num_samples = self.split_info.num_samples
-        if not self.num_samples:
-            raise RuntimeError(f'Invalid split definition, num_samples not specified.')
+        if is_training and not self.num_samples:
+            raise RuntimeError(f'Invalid split definition, num_samples not specified in train mode.')
         self.remap_class = False
         if class_map:
             self.class_to_idx = load_class_map(class_map)
