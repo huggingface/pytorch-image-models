@@ -711,6 +711,9 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet18d_ra2-48a79e06.pth',
         first_conv='conv1.0'),
+    'resnet18d.ra4_e3600_r224_in1k': _rcfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.9),
     'resnet34.a1_in1k': _rcfg(
         hf_hub_id='timm/',
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet34_a1_0-46f8f793.pth'),
@@ -724,6 +727,9 @@ default_cfgs = generate_default_cfgs({
     'resnet34.bt_in1k': _ttcfg(
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34-43635321.pth'),
+    'resnet34.ra4_e3600_r224_in1k': _rcfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.9),
     'resnet34d.ra2_in1k': _ttcfg(
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet34d_ra2-f8dcfcaf.pth',

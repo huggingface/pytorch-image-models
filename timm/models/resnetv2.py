@@ -696,14 +696,20 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         num_classes=21843, custom_load=True),
 
-    'resnetv2_18.untrained': _cfg(
-        interpolation='bicubic', crop_pct=0.95),
-    'resnetv2_18d.untrained': _cfg(
-        interpolation='bicubic', crop_pct=0.95, first_conv='stem.conv1'),
-    'resnetv2_34.untrained': _cfg(
-        interpolation='bicubic', crop_pct=0.95),
-    'resnetv2_34d.untrained': _cfg(
-        interpolation='bicubic', crop_pct=0.95, first_conv='stem.conv1'),
+    'resnetv2_18.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic', crop_pct=0.9, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'resnetv2_18d.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic', crop_pct=0.9, test_input_size=(3, 288, 288), test_crop_pct=1.0,
+        first_conv='stem.conv1'),
+    'resnetv2_34.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic', crop_pct=0.9, test_input_size=(3, 288, 288), test_crop_pct=1.0),
+    'resnetv2_34d.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        interpolation='bicubic', crop_pct=0.9, test_input_size=(3, 288, 288), test_crop_pct=1.0,
+        first_conv='stem.conv1'),
     'resnetv2_50.a1h_in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
