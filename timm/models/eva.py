@@ -560,9 +560,11 @@ class Eva(nn.Module):
         if self.dynamic_img_size:
             B, H, W, C = x.shape
             if self.pos_embed is not None:
+                prev_grid_size = self.patch_embed.grid_size
                 pos_embed = resample_abs_pos_embed(
                     self.pos_embed,
-                    (H, W),
+                    new_size=(H, W),
+                    old_size=prev_grid_size,
                     num_prefix_tokens=self.num_prefix_tokens,
                 )
             else:
