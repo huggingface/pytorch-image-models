@@ -713,7 +713,7 @@ default_cfgs = generate_default_cfgs({
         first_conv='conv1.0'),
     'resnet18d.ra4_e3600_r224_in1k': _rcfg(
         hf_hub_id='timm/',
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.9),
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), crop_pct=0.9, first_conv='conv1.0'),
     'resnet34.a1_in1k': _rcfg(
         hf_hub_id='timm/',
         url='https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet34_a1_0-46f8f793.pth'),
