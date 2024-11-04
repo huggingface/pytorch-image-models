@@ -4,6 +4,7 @@ from .adahessian import Adahessian
 from .adamp import AdamP
 from .adamw import AdamW
 from .adan import Adan
+from .adafactor_bv import AdafactorBigVision
 from .lamb import Lamb
 from .lars import Lars
 from .lookahead import Lookahead
