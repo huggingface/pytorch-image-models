@@ -368,7 +368,7 @@ group.add_argument('--checkpoint-hist', type=int, default=10, metavar='N',
 group.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                    help='how many training processes to use (default: 4)')
 group.add_argument('--save-images', action='store_true', default=False,
-                   help='save images of input bathes every log interval for debugging')
+                   help='save images of input batches every log interval for debugging')
 group.add_argument('--pin-mem', action='store_true', default=False,
                    help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 group.add_argument('--no-prefetcher', action='store_true', default=False,
