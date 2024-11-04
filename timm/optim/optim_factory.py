@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from timm.models import group_parameters
+from . import AdafactorBigVision
 
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
@@ -356,6 +357,8 @@ def create_optimizer_v2(
     elif opt_lower == 'lion':
         opt_args.pop('eps', None)
         optimizer = Lion(parameters, **opt_args)
+    elif opt_lower == 'adafactorbv':
+        optimizer = AdafactorBigVision(parameters, **opt_args)
 
     # second order
     elif opt_lower == 'adahessian':
