@@ -107,6 +107,7 @@ class PolyLRScheduler(Scheduler):
     def get_cycle_length(self, cycles=0):
         cycles = max(1, cycles or self.cycle_limit)
         if self.cycle_mul == 1.0:
-            return self.t_initial * cycles
+            t = self.t_initial * cycles
         else:
-            return int(math.floor(-self.t_initial * (self.cycle_mul ** cycles - 1) / (1 - self.cycle_mul)))
+            t = int(math.floor(-self.t_initial * (self.cycle_mul ** cycles - 1) / (1 - self.cycle_mul)))
+        return t + self.warmup_t if self.warmup_prefix else t
