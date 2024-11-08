@@ -214,8 +214,8 @@ def _single_tensor_adafactor(
         exp_avg = exp_avgs[i]
         step_t = state_steps[i]
         if eps is None:
-            # use square of machine eps for grad dtype if not set
-            eps = torch.finfo(grad.dtype).eps ** 2
+            # default eps for avoiding div by zero, diff from float type eps
+            eps = 1e-7 if grad.dtype == torch.float16 else 1e-30
 
         # Update step
         step_t += 1
