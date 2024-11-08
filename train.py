@@ -832,8 +832,13 @@ def main():
             lr_scheduler.step(start_epoch)
 
     if utils.is_primary(args):
+        if args.warmup_prefix:
+            sched_explain = '(warmup_epochs + epochs + cooldown_epochs). Warmup added to total when warmup_prefix=True'
+        else:
+            sched_explain = '(epochs + cooldown_epochs). Warmup within epochs when warmup_prefix=False'
         _logger.info(
-            f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
+            f'Scheduled epochs: {num_epochs} {sched_explain}. '
+            f'LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
     results = []
     try:
