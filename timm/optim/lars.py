@@ -84,9 +84,6 @@ class Lars(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        device = self.param_groups[0]['params'][0].device
-        one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
-
         for group in self.param_groups:
             weight_decay = group['weight_decay']
             momentum = group['momentum']
@@ -107,13 +104,14 @@ class Lars(Optimizer):
                     g_norm = grad.norm(2.0)
                     trust_ratio = trust_coeff * w_norm / (g_norm + w_norm * weight_decay + eps)
                     # FIXME nested where required since logical and/or not working in PT XLA
+                    # Set the ratio to 1.0 (no change) if either weight norm or grad norm is zero
                     trust_ratio = torch.where(
                         w_norm > 0,
-                        torch.where(g_norm > 0, trust_ratio, one_tensor),
-                        one_tensor,
+                        torch.where(g_norm > 0, trust_ratio, 1.0),
+                        1.0,
                     )
                     if group['trust_clip']:
-                        trust_ratio = torch.minimum(trust_ratio / group['lr'], one_tensor)
+                        trust_ratio = torch.clamp(trust_ratio / group['lr'], max=1.0)
                     grad.add_(p, alpha=weight_decay)
                     grad.mul_(trust_ratio)
 
