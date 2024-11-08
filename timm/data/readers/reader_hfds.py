@@ -38,6 +38,7 @@ class ReaderHfds(Reader):
             input_key: str = 'image',
             target_key: str = 'label',
             download: bool = False,
+            trust_remote_code: bool = False
     ):
         """
         """
@@ -48,6 +49,7 @@ class ReaderHfds(Reader):
             name,  # 'name' maps to path arg in hf datasets
             split=split,
             cache_dir=self.root,  # timm doesn't expect hidden cache dir for datasets, specify a path
+            trust_remote_code=trust_remote_code
         )
         # leave decode for caller, plus we want easy access to original path names...
         self.dataset = self.dataset.cast_column(input_key, datasets.Image(decode=False))
