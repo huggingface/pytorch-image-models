@@ -17,6 +17,7 @@ from .adafactor import Adafactor
 from .adahessian import Adahessian
 from .adamp import AdamP
 from .adan import Adan
+from .adopt import Adopt
 from .lamb import Lamb
 from .lars import Lars
 from .lion import Lion
@@ -359,6 +360,10 @@ def create_optimizer_v2(
         optimizer = Lion(parameters, **opt_args)
     elif opt_lower == 'adafactorbv':
         optimizer = AdafactorBigVision(parameters, **opt_args)
+    elif opt_lower == 'adopt':
+        optimizer = Adopt(parameters, **opt_args)
+    elif opt_lower == 'adoptw':
+        optimizer = Adopt(parameters, decoupled=True, **opt_args)
 
     # second order
     elif opt_lower == 'adahessian':
