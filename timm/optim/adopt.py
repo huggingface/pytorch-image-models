@@ -129,58 +129,55 @@ class Adopt(Optimizer):
     ):
         has_complex = False
         for p in group["params"]:
-            if p.grad is not None:
-                has_complex |= torch.is_complex(p)
-                params_with_grad.append(p)
-                if p.grad.is_sparse:
-                    raise RuntimeError(
-                        "ADOPT does not support sparse gradients"
-                    )
-                grads.append(p.grad)
+            if p.grad is None:
+                continue
+            has_complex |= torch.is_complex(p)
+            params_with_grad.append(p)
+            if p.grad.is_sparse:
+                raise RuntimeError(
+                    "ADOPT does not support sparse gradients"
+                )
+            grads.append(p.grad)
 
-                state = self.state[p]
-                # Lazy state initialization
-                if len(state) == 0:
-                    # note(crcrpar): [special device hosting for step]
-                    # Deliberately host `step` on CPU if both capturable and fused are off.
-                    # This is because kernel launches are costly on CUDA and XLA.
-                    state["step"] = (
-                        torch.zeros(
-                            (),
-                            dtype=_get_scalar_dtype(),
-                            device=p.device,
-                        )
-                        if group["capturable"]
-                        else torch.tensor(0.0, dtype=_get_scalar_dtype())
+            state = self.state[p]
+            # Lazy state initialization
+            if len(state) == 0:
+                # note(crcrpar): [special device hosting for step]
+                # Deliberately host `step` on CPU if both capturable and fused are off.
+                # This is because kernel launches are costly on CUDA and XLA.
+                state["step"] = (
+                    torch.zeros(
+                        (),
+                        dtype=_get_scalar_dtype(),
+                        device=p.grad.device,
                     )
-                    # Exponential moving average of gradient values
-                    state["exp_avg"] = torch.zeros_like(
-                        p, memory_format=torch.preserve_format
-                    )
-                    # Exponential moving average of squared gradient values
-                    state["exp_avg_sq"] = torch.zeros_like(
-                        p, memory_format=torch.preserve_format
-                    )
+                    if group["capturable"]
+                    else torch.tensor(0.0, dtype=_get_scalar_dtype())
+                )
+                # Exponential moving average of gradient values
+                state["exp_avg"] = torch.zeros_like(
+                    p.grad, memory_format=torch.preserve_format
+                )
+                # Exponential moving average of squared gradient values
+                state["exp_avg_sq"] = torch.zeros_like(
+                    p.grad, memory_format=torch.preserve_format
+                )
 
-                exp_avgs.append(state["exp_avg"])
-                exp_avg_sqs.append(state["exp_avg_sq"])
+            exp_avgs.append(state["exp_avg"])
+            exp_avg_sqs.append(state["exp_avg_sq"])
 
-                if group["differentiable"] and state["step"].requires_grad:
-                    raise RuntimeError(
-                        "`requires_grad` is not supported for `step` in differentiable mode"
-                    )
+            if group["differentiable"] and state["step"].requires_grad:
+                raise RuntimeError(
+                    "`requires_grad` is not supported for `step` in differentiable mode"
+                )
 
-                # Foreach without capturable does not support a tensor lr
-                if (
-                        group["foreach"]
-                        and torch.is_tensor(group["lr"])
-                        and not group["capturable"]
-                ):
-                    raise RuntimeError(
-                        "lr as a Tensor is not supported for capturable=False and foreach=True"
-                    )
+            # Foreach without capturable does not support a tensor lr
+            if group["foreach"] and torch.is_tensor(group["lr"]) and not group["capturable"]:
+                raise RuntimeError(
+                    "lr as a Tensor is not supported for capturable=False and foreach=True"
+                )
 
-                state_steps.append(state["step"])
+            state_steps.append(state["step"])
         return has_complex
 
     #@_use_grad_for_differentiable  # FIXME internal context mgr, can't use
@@ -312,6 +309,7 @@ def _single_tensor_adopt(
             exp_avg.mul_(beta1).addcdiv_(grad, denom, value=1 - beta1)
 
         param.add_(exp_avg, alpha=-lr)
+
         exp_avg_sq.mul_(beta2).addcmul_(grad, grad.conj(), value=1 - beta2)
 
 
