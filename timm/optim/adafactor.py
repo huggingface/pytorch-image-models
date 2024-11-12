@@ -2,8 +2,9 @@
 
 Lifted from https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py
 
-Original header/copyright below.
+Modified by Ross Wightman to fix some issues with factorization dims for non nn.Linear layers
 
+Original header/copyright below.
 """
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
@@ -96,7 +97,7 @@ class Adafactor(torch.optim.Optimizer):
             # nD convs in torch are ND + 2 dim weights with leading in/out chs
             factored = 0, 1
         elif ndim >= 2 and param_shape[-2] > min_size_to_factor and param_shape[-1] > min_size_to_factor:
-            # if the criteria above didn't match, check trailing dims
+            # if the criteria above didn't match, test trailing dims for eligibility
             factored = ndim - 2, ndim - 1
 
         return factored, use_first_moment
