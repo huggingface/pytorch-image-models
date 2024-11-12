@@ -1,3 +1,12 @@
+""" Adafactor (Big Vision variant) for PyTorch
+
+Adapted from the implementation in big vision: https://github.com/google-research/big_vision
+
+Described in 'Scaling Vision Transformers': https://arxiv.org/abs/2106.04560
+
+Adaptation and PyTorch modifications by Ross Wightman
+"""
+
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -39,6 +48,8 @@ def _factored_dims(
 class AdafactorBigVision(Optimizer):
     """
     PyTorch implementation of BigVision's Adafactor variant with both single and multi tensor implementations.
+
+    Adapted from https://github.com/google-research/big_vision by Ross Wightman
     """
 
     def __init__(
@@ -292,4 +303,5 @@ def _multi_tensor_adafactor(
         clipping_threshold: Optional[float],
         unscaled_wd: bool,
 ):
+    # FIXME TODO
     assert False, 'multi-tensor fn (foreach=True) not implemented yet'
