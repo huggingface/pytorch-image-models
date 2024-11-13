@@ -432,17 +432,17 @@ def _register_adam_variants(registry: OptimizerRegistry) -> None:
         OptimInfo(
             name='adafactorbv',
             opt_class=AdafactorBigVision,
-            description='Big Vision variant of Adafactor with factored gradients, half precision momentum.',
+            description='Big Vision variant of Adafactor with factored gradients, half precision momentum',
         ),
         OptimInfo(
             name='adopt',
             opt_class=Adopt,
-            description='Memory-efficient implementation of Adam with factored gradients',
+            description='Modified Adam that can converge with any β2 with the optimal rate',
         ),
         OptimInfo(
             name='adoptw',
             opt_class=Adopt,
-            description='Memory-efficient implementation of Adam with factored gradients',
+            description='Modified AdamW (decoupled decay) that can converge with any β2 with the optimal rate',
             defaults={'decoupled': True}
         ),
     ]
