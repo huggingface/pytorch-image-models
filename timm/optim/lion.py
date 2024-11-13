@@ -137,7 +137,7 @@ def lion(
     """
     if foreach is None:
         # Placeholder for more complex foreach logic to be added when value is not set
-        foreach = False
+        foreach = True
 
     if foreach and torch.jit.is_scripting():
         raise RuntimeError('torch.jit.script not supported with foreach optimizers')

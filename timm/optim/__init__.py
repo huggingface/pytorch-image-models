@@ -17,4 +17,5 @@ from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 
-from .optim_factory import create_optimizer, create_optimizer_v2, optimizer_kwargs
+from ._optim_factory import list_optimizers, get_optimizer_class, create_optimizer_v2, \
+    create_optimizer, optimizer_kwargs, OptimInfo, OptimizerRegistry

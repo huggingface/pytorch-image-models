@@ -27,8 +27,15 @@ class Nadam(Optimizer):
         NOTE: Has potential issues but does work well on some problems.
     """
 
-    def __init__(self, params, lr=2e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0, schedule_decay=4e-3):
+    def __init__(
+            self,
+            params,
+            lr=2e-3,
+            betas=(0.9, 0.999),
+            eps=1e-8,
+            weight_decay=0,
+            schedule_decay=4e-3,
+    ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         defaults = dict(

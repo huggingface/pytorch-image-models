@@ -16,6 +16,7 @@ import math
 
 class Adafactor(torch.optim.Optimizer):
     """Implements Adafactor algorithm.
+
     This implementation is based on: `Adafactor: Adaptive Learning Rates with Sublinear Memory Cost`
     (see https://arxiv.org/abs/1804.04235)
 
