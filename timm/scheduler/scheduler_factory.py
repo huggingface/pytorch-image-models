@@ -196,11 +196,15 @@ def create_scheduler_v2(
         )
 
     if hasattr(lr_scheduler, 'get_cycle_length'):
-        # for cycle based schedulers (cosine, tanh, poly) recalculate total epochs w/ cycles & cooldown
+        # For cycle based schedulers (cosine, tanh, poly) recalculate total epochs w/ cycles & cooldown
+        # NOTE: Warmup prefix added in get_cycle_lengths() if enabled
         t_with_cycles_and_cooldown = lr_scheduler.get_cycle_length() + cooldown_t
         if step_on_epochs:
             num_epochs = t_with_cycles_and_cooldown
         else:
             num_epochs = t_with_cycles_and_cooldown // updates_per_epoch
+    else:
+        if warmup_prefix:
+            num_epochs += warmup_epochs
 
     return lr_scheduler, num_epochs

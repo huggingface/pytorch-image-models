@@ -228,7 +228,7 @@ Datasets & transform refactoring
   * Enabling either dynamic mode will break FX tracing unless PatchEmbed module added as leaf.
   * Existing method of resizing position embedding by passing different `img_size` (interpolate pretrained embed weights once) on creation still works.
   * Existing method of changing `patch_size` (resize pretrained patch_embed weights once) on creation still works.
-  * Example validation cmd `python validate.py /imagenet --model vit_base_patch16_224 --amp --amp-dtype bfloat16 --img-size 255 --crop-pct 1.0 --model-kwargs dynamic_img_size=True dyamic_img_pad=True`
+  * Example validation cmd `python validate.py --data-dir /imagenet --model vit_base_patch16_224 --amp --amp-dtype bfloat16 --img-size 255 --crop-pct 1.0 --model-kwargs dynamic_img_size=True dyamic_img_pad=True`
 
 ### Aug 25, 2023
 * Many new models since last release
@@ -245,8 +245,8 @@ Datasets & transform refactoring
 
 ### Aug 11, 2023
 * Swin, MaxViT, CoAtNet, and BEiT models support resizing of image/window size on creation with adaptation of pretrained weights
-* Example validation cmd to test w/ non-square resize `python validate.py /imagenet --model swin_base_patch4_window7_224.ms_in22k_ft_in1k --amp --amp-dtype bfloat16 --input-size 3 256 320 --model-kwargs window_size=8,10 img_size=256,320`
- 
+* Example validation cmd to test w/ non-square resize `python validate.py --data-dir /imagenet --model swin_base_patch4_window7_224.ms_in22k_ft_in1k --amp --amp-dtype bfloat16 --input-size 3 256 320 --model-kwargs window_size=8,10 img_size=256,320`
+
 ### Aug 3, 2023
 * Add GluonCV weights for HRNet w18_small and w18_small_v2. Converted by [SeeFun](https://github.com/seefun)
 * Fix `selecsls*` model naming regression
@@ -385,7 +385,7 @@ Datasets & transform refactoring
   * Refactor LeViT models to stages, add `features_only=True` support to new `conv` variants, weight remap required.
 * Move ImageNet meta-data (synsets, indices) from `/results` to [`timm/data/_info`](timm/data/_info/).
 * Add ImageNetInfo / DatasetInfo classes to provide labelling for various ImageNet classifier layouts in `timm`
-  * Update `inference.py` to use, try: `python inference.py /folder/to/images --model convnext_small.in12k --label-type detail --topk 5`
+  * Update `inference.py` to use, try: `python inference.py --data-dir /folder/to/images --model convnext_small.in12k --label-type detail --topk 5`
 * Ready for 0.8.10 pypi pre-release (final testing).
 
 ### Jan 20, 2023
@@ -449,8 +449,8 @@ Datasets & transform refactoring
 
 ### Jan 6, 2023
 * Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
-  * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
-  * `train.py /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
+  * `train.py --data-dir /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
+  * `train.py --data-dir /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
 * Cleanup some popular models to better support arg passthrough / merge with model configs, more to go.
 
 ### Jan 5, 2023

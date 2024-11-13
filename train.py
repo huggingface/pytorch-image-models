@@ -369,7 +369,7 @@ group.add_argument('--checkpoint-hist', type=int, default=10, metavar='N',
 group.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                    help='how many training processes to use (default: 4)')
 group.add_argument('--save-images', action='store_true', default=False,
-                   help='save images of input bathes every log interval for debugging')
+                   help='save images of input batches every log interval for debugging')
 group.add_argument('--pin-mem', action='store_true', default=False,
                    help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 group.add_argument('--no-prefetcher', action='store_true', default=False,
@@ -840,8 +840,13 @@ def main():
             lr_scheduler.step(start_epoch)
 
     if utils.is_primary(args):
+        if args.warmup_prefix:
+            sched_explain = '(warmup_epochs + epochs + cooldown_epochs). Warmup added to total when warmup_prefix=True'
+        else:
+            sched_explain = '(epochs + cooldown_epochs). Warmup within epochs when warmup_prefix=False'
         _logger.info(
-            f'Scheduled epochs: {num_epochs}. LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
+            f'Scheduled epochs: {num_epochs} {sched_explain}. '
+            f'LR stepped per {"epoch" if lr_scheduler.t_in_epochs else "update"}.')
 
     results = []
     try:

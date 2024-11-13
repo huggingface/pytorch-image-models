@@ -11,6 +11,8 @@ from copy import deepcopy
 import torch
 from torch.testing._internal.common_utils import TestCase
 from torch.nn import Parameter
+
+from timm.optim.optim_factory import param_groups_layer_decay, param_groups_weight_decay
 from timm.scheduler import PlateauLRScheduler
 
 from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class
@@ -494,4 +496,83 @@ def test_lookahead_radam(optimizer):
     _test_rosenbrock(
         lambda params: create_optimizer_v2(params, optimizer, lr=1e-4)
     )
+
+
+def test_param_groups_layer_decay_with_end_decay():
+    model = torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2)
+    )
+    
+    param_groups = param_groups_layer_decay(
+        model,
+        weight_decay=0.05,
+        layer_decay=0.75,
+        end_layer_decay=0.5,
+        verbose=True
+    )
+    
+    assert len(param_groups) > 0
+    # Verify layer scaling is applied with end decay
+    for group in param_groups:
+        assert 'lr_scale' in group
+        assert group['lr_scale'] <= 1.0
+        assert group['lr_scale'] >= 0.5
+
+
+def test_param_groups_layer_decay_with_matcher():
+    class ModelWithMatcher(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layer1 = torch.nn.Linear(10, 5)
+            self.layer2 = torch.nn.Linear(5, 2)
+            
+        def group_matcher(self, coarse=False):
+            return lambda name: int(name.split('.')[0][-1])
+            
+    model = ModelWithMatcher()
+    param_groups = param_groups_layer_decay(
+        model,
+        weight_decay=0.05,
+        layer_decay=0.75,
+        verbose=True
+    )
+    
+    assert len(param_groups) > 0
+    # Verify layer scaling is applied
+    for group in param_groups:
+        assert 'lr_scale' in group
+        assert 'weight_decay' in group
+        assert len(group['params']) > 0
+
+
+def test_param_groups_weight_decay():
+    model = torch.nn.Sequential(
+        torch.nn.Linear(10, 5),
+        torch.nn.ReLU(),
+        torch.nn.Linear(5, 2)
+    )
+    weight_decay = 0.01
+    no_weight_decay_list = ['1.weight']
+    
+    param_groups = param_groups_weight_decay(
+        model, 
+        weight_decay=weight_decay,
+        no_weight_decay_list=no_weight_decay_list
+    )
+    
+    assert len(param_groups) == 2
+    assert param_groups[0]['weight_decay'] == 0.0
+    assert param_groups[1]['weight_decay'] == weight_decay
+    
+    # Verify parameters are correctly grouped
+    no_decay_params = set(param_groups[0]['params'])
+    decay_params = set(param_groups[1]['params'])
+    
+    for name, param in model.named_parameters():
+        if param.ndim <= 1 or name.endswith(".bias") or name in no_weight_decay_list:
+            assert param in no_decay_params
+        else:
+            assert param in decay_params
 

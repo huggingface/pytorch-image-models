@@ -7,7 +7,7 @@ Benchmark all 'vit*' models:
 python bulk_runner.py  --model-list 'vit*' --results-file vit_bench.csv benchmark.py --amp -b 512
 
 Validate all models:
-python bulk_runner.py  --model-list all --results-file val.csv --pretrained validate.py /imagenet/validation/ --amp -b 512 --retry
+python bulk_runner.py  --model-list all --results-file val.csv --pretrained validate.py --data-dir /imagenet/validation/ --amp -b 512 --retry
 
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
