@@ -11,6 +11,21 @@
 - [Citing](#citing)
 
 ## What's New
+
+## Nov 12, 2024
+* Optimizer factory refactor
+  * New factory works by registering optimizers using an OptimInfo dataclass w/ some key traits
+  * Add `list_optimizers`, `get_optimizer_class`, `get_optimizer_info` to reworked `create_optimizer_v2` fn to explore optimizers, get info or class
+  * deprecate `optim.optim_factory`, move fns to `optim/_optim_factory.py` and `optim/_param_groups.py` and encourage import via `timm.optim`
+* Add Adopt (https://github.com/iShohei220/adopt) optimizer
+* Add 'Big Vision' variant of Adafactor (https://github.com/google-research/big_vision/blob/main/big_vision/optax.py) optimizer
+* Fix original Adafactor to pick better factorization dims for convolutions
+* Tweak LAMB optimizer with some improvements in torch.where functionality since original, refactor clipping a bit
+* dynamic img size support in vit, deit, eva improved to support resize from non-square patch grids, thanks https://github.com/wojtke
+* 
+## Oct 31, 2024
+Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weights. See https://huggingface.co/blog/rwightman/resnet-trick-or-treat
+
 ## Oct 19, 2024
 * Cleanup torch amp usage to avoid cuda specific calls, merge support for Ascend (NPU) devices from [MengqingCao](https://github.com/MengqingCao) that should work now in PyTorch 2.5 w/ new device extension autoloading feature. Tested Intel Arc (XPU) in Pytorch 2.5 too and it (mostly) worked.
 
