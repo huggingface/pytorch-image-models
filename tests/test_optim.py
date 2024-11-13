@@ -294,7 +294,7 @@ def _build_params_dict_single(weight, bias, **kwargs):
 
 @pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*')))
 def test_optim_factory(optimizer):
-    assert issubclass(get_optimizer_class(optimizer), torch.optim.Optimizer)
+    assert issubclass(get_optimizer_class(optimizer, bind_defaults=False), torch.optim.Optimizer)
 
     opt_info = get_optimizer_info(optimizer)
     assert isinstance(opt_info, OptimInfo)
