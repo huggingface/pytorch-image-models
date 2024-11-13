@@ -392,6 +392,7 @@ All model architecture families include variants with pretrained weights. There 
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
 * LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
+* MambaOut - https://arxiv.org/abs/2405.07992
 * MaxViT (Multi-Axis Vision Transformer) - https://arxiv.org/abs/2204.01697
 * MetaFormer (PoolFormer-v2, ConvFormer, CAFormer) - https://arxiv.org/abs/2210.13452
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
@@ -453,13 +454,16 @@ All model architecture families include variants with pretrained weights. There 
 * XCiT (Cross-Covariance Image Transformers) - https://arxiv.org/abs/2106.09681
 
 ### Optimizers
+To see full list of optimizers w/ descriptions: `timm.optim.list_optimizers(with_description=True)`
 
-Included optimizers available via `create_optimizer` / `create_optimizer_v2` factory methods:
+Included optimizers available via `timm.optim.create_optimizer_v2` factory method:
 * `adabelief` an implementation of AdaBelief adapted from https://github.com/juntang-zhuang/Adabelief-Optimizer - https://arxiv.org/abs/2010.07468
 * `adafactor` adapted from [FAIRSeq impl](https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py) - https://arxiv.org/abs/1804.04235
+* `adafactorbv` adapted from [Big Vision](https://github.com/google-research/big_vision/blob/main/big_vision/optax.py) - https://arxiv.org/abs/2106.04560
 * `adahessian` by [David Samuel](https://github.com/davda54/ada-hessian) - https://arxiv.org/abs/2006.00719
 * `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) - https://arxiv.org/abs/2006.08217
 * `adan` an implementation of Adan adapted from https://github.com/sail-sg/Adan - https://arxiv.org/abs/2208.06677
+* `adopt` - adapted from https://github.com/iShohei220/adopt - https://arxiv.org/abs/2411.02853
 * `lamb` an implementation of Lamb and LambC (w/ trust-clipping) cleaned up and modified to support use with XLA - https://arxiv.org/abs/1904.00962
 * `lars` an implementation of LARS and LARC (w/ trust-clipping) - https://arxiv.org/abs/1708.03888
 * `lion` and implementation of Lion adapted from https://github.com/google/automl/tree/master/lion - https://arxiv.org/abs/2302.06675
@@ -472,7 +476,8 @@ Included optimizers available via `create_optimizer` / `create_optimizer_v2` fac
 * `rmsprop_tf` adapted from PyTorch RMSProp by myself. Reproduces much improved Tensorflow RMSProp behaviour
 * `sgdw` and implementation of SGD w/ decoupled weight-decay
 * `fused<name>` optimizers by name with [NVIDIA Apex](https://github.com/NVIDIA/apex/tree/master/apex/optimizers) installed
-* `bits<name>` optimizers by name with [BitsAndBytes](https://github.com/TimDettmers/bitsandbytes) installed
+* `bnb<name>` optimizers by name with [BitsAndBytes](https://github.com/TimDettmers/bitsandbytes) installed
+* `adam`, `adamw`, `rmsprop`, `adadelta`, `adagrad`, and `sgd` pass through to `torch.optim` implementations
 
 ### Augmentations
 * Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py) - https://arxiv.org/abs/1708.04896)
