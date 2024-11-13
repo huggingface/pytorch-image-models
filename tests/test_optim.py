@@ -12,10 +12,9 @@ import torch
 from torch.testing._internal.common_utils import TestCase
 from torch.nn import Parameter
 
-from timm.optim.optim_factory import param_groups_layer_decay, param_groups_weight_decay
-from timm.scheduler import PlateauLRScheduler
-
 from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class
+from timm.optim import param_groups_layer_decay, param_groups_weight_decay
+from timm.scheduler import PlateauLRScheduler
 
 import importlib
 import os
