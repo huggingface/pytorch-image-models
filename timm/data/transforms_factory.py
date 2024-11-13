@@ -114,10 +114,10 @@ def transforms_imagenet_train(
 
     Returns:
         If separate==True, the transforms are returned as a tuple of 3 separate transforms
-        for use in a mixing dataset that passes
-         * all data through the first (primary) transform, called the 'clean' data
-         * a portion of the data through the secondary transform
-         * normalizes and converts the branches above with the third, final transform
+          for use in a mixing dataset that passes
+            * all data through the first (primary) transform, called the 'clean' data
+            * a portion of the data through the secondary transform
+            * normalizes and converts the branches above with the third, final transform
     """
     train_crop_mode = train_crop_mode or 'rrc'
     assert train_crop_mode in {'rrc', 'rkrc', 'rkrr'}
