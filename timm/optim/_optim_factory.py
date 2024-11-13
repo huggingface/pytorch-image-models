@@ -13,10 +13,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from ._param_groups import param_groups_layer_decay, param_groups_weight_decay, group_parameters
+from ._param_groups import param_groups_layer_decay, param_groups_weight_decay
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
 from .adafactor_bv import AdafactorBigVision
+from .adahessian import Adahessian
 from .adamp import AdamP
 from .adan import Adan
 from .adopt import Adopt
@@ -78,6 +79,7 @@ class OptimInfo:
     has_momentum: bool = False
     has_betas: bool = False
     num_betas: int = 2
+    second_order: bool = False
     defaults: Optional[Dict[str, Any]] = None
 
 
@@ -541,6 +543,13 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             num_betas=3
         ),
         OptimInfo(
+            name='adahessian',
+            opt_class=Adahessian,
+            description='An Adaptive Second Order Optimizer',
+            has_betas=True,
+            second_order=True,
+        ),
+        OptimInfo(
             name='lion',
             opt_class=Lion,
             description='Evolved Sign Momentum optimizer for improved convergence',
@@ -768,6 +777,21 @@ def list_optimizers(
         ...]
     """
     return default_registry.list_optimizers(filter, exclude_filters, with_description)
+
+
+def get_optimizer_info(name: str) -> OptimInfo:
+    """Get the OptimInfo for an optimizer.
+
+    Args:
+        name: Name of the optimizer
+
+    Returns:
+        OptimInfo configuration
+
+    Raises:
+        ValueError: If optimizer is not found
+    """
+    return default_registry.get_optimizer_info(name)
 
 
 def get_optimizer_class(

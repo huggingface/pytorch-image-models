@@ -1,6 +1,6 @@
 import logging
 from itertools import islice
-from typing import Collection, Optional, Tuple
+from typing import Collection, Optional
 
 from torch import nn as nn
 
@@ -37,7 +37,7 @@ def _group(it, size):
     return iter(lambda: tuple(islice(it, size)), ())
 
 
-def _layer_map(model, layers_per_group=12, num_groups=None):
+def auto_group_layers(model, layers_per_group=12, num_groups=None):
     def _in_head(n, hp):
         if not hp:
             return True
@@ -63,6 +63,8 @@ def _layer_map(model, layers_per_group=12, num_groups=None):
     layer_map.update({n: num_trunk_groups for n in names_head})
     return layer_map
 
+_layer_map = auto_group_layers  # backward compat
+
 
 def param_groups_layer_decay(
         model: nn.Module,
@@ -86,7 +88,7 @@ def param_groups_layer_decay(
         layer_map = group_parameters(model, model.group_matcher(coarse=False), reverse=True)
     else:
         # fallback
-        layer_map = _layer_map(model)
+        layer_map = auto_group_layers(model)
     num_layers = max(layer_map.values()) + 1
     layer_max = num_layers - 1
     layer_scales = list(layer_decay ** (layer_max - i) for i in range(num_layers))

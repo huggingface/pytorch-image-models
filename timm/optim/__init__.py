@@ -17,6 +17,6 @@ from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 
-from ._optim_factory import list_optimizers, get_optimizer_class, create_optimizer_v2, \
-    create_optimizer, optimizer_kwargs, OptimInfo, OptimizerRegistry
-from ._param_groups import param_groups_layer_decay, param_groups_weight_decay
+from ._optim_factory import list_optimizers, get_optimizer_class, get_optimizer_info, OptimInfo, OptimizerRegistry, \
+    create_optimizer_v2, create_optimizer, optimizer_kwargs
+from ._param_groups import param_groups_layer_decay, param_groups_weight_decay, auto_group_layers

@@ -12,7 +12,7 @@ import torch
 from torch.testing._internal.common_utils import TestCase
 from torch.nn import Parameter
 
-from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class
+from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class, get_optimizer_info, OptimInfo
 from timm.optim import param_groups_layer_decay, param_groups_weight_decay
 from timm.scheduler import PlateauLRScheduler
 
@@ -294,28 +294,32 @@ def _build_params_dict_single(weight, bias, **kwargs):
 
 @pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*')))
 def test_optim_factory(optimizer):
-    get_optimizer_class(optimizer)
+    assert issubclass(get_optimizer_class(optimizer), torch.optim.Optimizer)
 
-    # test basic cases that don't need specific tuning via factory test
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3)
-    )
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2(
-            _build_params_dict(weight, bias, lr=1e-2),
-            optimizer,
-            lr=1e-3)
-    )
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2(
-            _build_params_dict_single(weight, bias, lr=1e-2),
-            optimizer,
-            lr=1e-3)
-    )
-    _test_basic_cases(
-        lambda weight, bias: create_optimizer_v2(
-            _build_params_dict_single(weight, bias, lr=1e-2), optimizer)
-    )
+    opt_info = get_optimizer_info(optimizer)
+    assert isinstance(opt_info, OptimInfo)
+
+    if not opt_info.second_order:  # basic tests don't support second order right now
+        # test basic cases that don't need specific tuning via factory test
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2([weight, bias], optimizer, lr=1e-3)
+        )
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2(
+                _build_params_dict(weight, bias, lr=1e-2),
+                optimizer,
+                lr=1e-3)
+        )
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2(
+                _build_params_dict_single(weight, bias, lr=1e-2),
+                optimizer,
+                lr=1e-3)
+        )
+        _test_basic_cases(
+            lambda weight, bias: create_optimizer_v2(
+                _build_params_dict_single(weight, bias, lr=1e-2), optimizer)
+        )
 
 
 #@pytest.mark.parametrize('optimizer', ['sgd', 'momentum'])
