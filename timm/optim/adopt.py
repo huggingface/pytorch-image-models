@@ -39,7 +39,10 @@ def _get_scalar_dtype(is_fused=None):
 
 
 def _is_compiling():
-    return torch.compiler.is_compiling() if hasattr(torch, 'compiler') else False
+    if hasattr(torch, 'compiler') and hasattr(torch.compiler, 'is_compiling'):
+        return torch.compiler.is_compiling()
+    else:
+        return False
 
 
 def _get_value(x):
