@@ -15,6 +15,7 @@ NVIDIA CUDA specific speedups adopted from NVIDIA Apex examples
 Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
+import copy
 import importlib
 import json
 import logging
@@ -554,6 +555,13 @@ def main():
         **optimizer_kwargs(cfg=args),
         **args.opt_kwargs,
     )
+    if utils.is_primary(args):
+        defaults = copy.deepcopy(optimizer.defaults)
+        defaults['weight_decay'] = args.weight_decay  # this isn't stored in optimizer.defaults
+        defaults = ', '.join([f'{k}: {v}' for k, v in defaults.items()])
+        logging.info(
+            f'Created {type(optimizer).__name__} ({args.opt}) optimizer: {defaults}'
+        )
 
     # setup automatic mixed-precision (AMP) loss scaling and op casting
     amp_autocast = suppress  # do nothing

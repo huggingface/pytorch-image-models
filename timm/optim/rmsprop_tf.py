@@ -45,8 +45,18 @@ class RMSpropTF(Optimizer):
 
     """
 
-    def __init__(self, params, lr=1e-2, alpha=0.9, eps=1e-10, weight_decay=0, momentum=0., centered=False,
-                 decoupled_decay=False, lr_in_momentum=True):
+    def __init__(
+            self,
+            params,
+            lr=1e-2,
+            alpha=0.9,
+            eps=1e-10,
+            weight_decay=0,
+            momentum=0.,
+            centered=False,
+            decoupled_decay=False,
+            lr_in_momentum=True,
+    ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -59,8 +69,15 @@ class RMSpropTF(Optimizer):
             raise ValueError("Invalid alpha value: {}".format(alpha))
 
         defaults = dict(
-            lr=lr, momentum=momentum, alpha=alpha, eps=eps, centered=centered, weight_decay=weight_decay,
-            decoupled_decay=decoupled_decay, lr_in_momentum=lr_in_momentum)
+            lr=lr,
+            momentum=momentum,
+            alpha=alpha,
+            eps=eps,
+            centered=centered,
+            weight_decay=weight_decay,
+            decoupled_decay=decoupled_decay,
+            lr_in_momentum=lr_in_momentum,
+        )
         super(RMSpropTF, self).__init__(params, defaults)
 
     def __setstate__(self, state):

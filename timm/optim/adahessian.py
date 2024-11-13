@@ -23,8 +23,18 @@ class Adahessian(torch.optim.Optimizer):
         n_samples (int, optional): how many times to sample `z` for the approximation of the hessian trace (default: 1)
     """
 
-    def __init__(self, params, lr=0.1, betas=(0.9, 0.999), eps=1e-8, weight_decay=0.0,
-                 hessian_power=1.0, update_each=1, n_samples=1, avg_conv_kernel=False):
+    def __init__(
+            self,
+            params,
+            lr=0.1,
+            betas=(0.9, 0.999),
+            eps=1e-8,
+            weight_decay=0.0,
+            hessian_power=1.0,
+            update_each=1,
+            n_samples=1,
+            avg_conv_kernel=False,
+    ):
         if not 0.0 <= lr:
             raise ValueError(f"Invalid learning rate: {lr}")
         if not 0.0 <= eps:
@@ -44,7 +54,13 @@ class Adahessian(torch.optim.Optimizer):
         self.seed = 2147483647
         self.generator = torch.Generator().manual_seed(self.seed)
 
-        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, hessian_power=hessian_power)
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            hessian_power=hessian_power,
+        )
         super(Adahessian, self).__init__(params, defaults)
 
         for p in self.get_params():

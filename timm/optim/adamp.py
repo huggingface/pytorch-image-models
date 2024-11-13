@@ -41,11 +41,26 @@ def projection(p, grad, perturb, delta: float, wd_ratio: float, eps: float):
 
 
 class AdamP(Optimizer):
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=0, delta=0.1, wd_ratio=0.1, nesterov=False):
+    def __init__(
+            self,
+            params,
+            lr=1e-3,
+            betas=(0.9, 0.999),
+            eps=1e-8,
+            weight_decay=0,
+            delta=0.1,
+            wd_ratio=0.1,
+            nesterov=False,
+    ):
         defaults = dict(
-            lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
-            delta=delta, wd_ratio=wd_ratio, nesterov=nesterov)
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            delta=delta,
+            wd_ratio=wd_ratio,
+            nesterov=nesterov,
+        )
         super(AdamP, self).__init__(params, defaults)
 
     @torch.no_grad()
