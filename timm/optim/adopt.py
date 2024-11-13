@@ -51,6 +51,10 @@ def _get_value(x):
 
 
 class Adopt(Optimizer):
+    """
+    ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate: https://arxiv.org/abs/2411.02853
+
+    """
     def __init__(
             self,
             params,
