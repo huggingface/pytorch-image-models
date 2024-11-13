@@ -1,0 +1,11 @@
+message: "If you use this software, please cite it as below."
+title: "PyTorch Image Models"
+version: "1.2.2"
+doi: "10.5281/zenodo.4414861" 
+authors:
+  - family-names: Wightman
+    given-names: Ross
+version: 1.0.11
+year: "2019"
+url: "https://github.com/huggingface/pytorch-image-models"
+license: "Apache 2.0"
