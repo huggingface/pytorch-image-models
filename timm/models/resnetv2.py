@@ -712,8 +712,8 @@ default_cfgs = generate_default_cfgs({
         first_conv='stem.conv1'),
     'resnetv2_34d.ra4_e3600_r384_in1k': _cfg(
         hf_hub_id='timm/',
-        interpolation='bicubic', crop_pct=1.0, test_input_size=(3, 448, 448), pool_size=(12, 12),
-        first_conv='stem.conv1'),
+        crop_pct=1.0, input_size=(3, 384, 348), pool_size=(12, 12), test_input_size=(3, 448, 448),
+        interpolation='bicubic', first_conv='stem.conv1'),
     'resnetv2_50.a1h_in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
