@@ -1031,6 +1031,23 @@ default_cfgs = generate_default_cfgs({
     'mobilenetv4_conv_medium.e500_r224_in1k': _cfg(
         hf_hub_id='timm/',
         crop_pct=0.95, test_input_size=(3, 256, 256), test_crop_pct=1.0, interpolation='bicubic'),
+
+    'mobilenetv4_conv_medium.e180_r384_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 384, 384), pool_size=(12, 12),
+        crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_medium.e180_ad_r384_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 384, 384), pool_size=(12, 12),
+        crop_pct=1.0, interpolation='bicubic'),
+    'mobilenetv4_conv_medium.e250_r384_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 384, 384), pool_size=(12, 12),
+        crop_pct=1.0, interpolation='bicubic'),
+
     'mobilenetv4_conv_large.e600_r384_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 384, 384), pool_size=(12, 12),
