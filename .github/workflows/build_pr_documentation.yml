@@ -17,3 +17,4 @@ jobs:
       package_name: timm
       path_to_docs: pytorch-image-models/hfdocs/source
       version_tag_suffix: ""
+      doc_builder_revision: fix-docstring-arg-without-type
