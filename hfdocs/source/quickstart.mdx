@@ -22,7 +22,9 @@ Here, we load the pretrained `mobilenetv3_large_100` model.
 ```
 
 <Tip>
-    Note: The returned PyTorch model is set to train mode by default, so you must call .eval() on it if you plan to use it for inference.
+
+    **Note:** The returned PyTorch model is set to train mode by default, so you must call `.eval()` on it if you plan to use it for inference.
+
 </Tip>
 
 ## List Models with Pretrained Weights
@@ -151,7 +153,9 @@ Compose(
 ```
 
 <Tip>
-    Note: Here, the pretrained model's config happens to be the same as the generic config we made earlier. This is not always the case. So, it's safer to use the data config to create the transform as we did here instead of using the generic transform.
+
+    **Note:** Here, the pretrained model's config happens to be the same as the generic config we made earlier. This is not always the case. So, it's safer to use the data config to create the transform as we did here instead of using the generic transform.
+
 </Tip>
 
 ## Using Pretrained Models for Inference

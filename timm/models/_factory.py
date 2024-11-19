@@ -51,8 +51,10 @@ def create_model(
     Lookup model's entrypoint function and pass relevant args to create a new model.
 
     <Tip>
-        **kwargs will be passed through entrypoint fn to ``timm.models.build_model_with_cfg()``
+
+        **kwargs will be passed through entrypoint fn to `timm.models.build_model_with_cfg()`
         and then the model class __init__(). kwargs values set to None are pruned before passing.
+
     </Tip>
 
     Args:
