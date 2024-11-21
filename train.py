@@ -930,20 +930,29 @@ def main():
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, latest_metric)
 
-            results.append({
+            latest_results = {
                 'epoch': epoch,
                 'train': train_metrics,
-                'validation': eval_metrics,
-            })
+            }
+            if eval_metrics is not None:
+                latest_results['validation'] = eval_metrics
+            results.append(latest_results)
 
     except KeyboardInterrupt:
         pass
 
-    results = {'all': results}
     if best_metric is not None:
-        results['best'] = results['all'][best_epoch - start_epoch]
+        # log best metric as tracked by checkpoint saver
         _logger.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
-    print(f'--result\n{json.dumps(results, indent=4)}')
+
+    if utils.is_primary(args):
+        # for parsable results display, dump top-10 summaries to avoid excess console spam
+        display_results = sorted(
+            results,
+            key=lambda x: x.get('validation', x.get('train')).get(eval_metric, 0),
+            reverse=decreasing_metric,
+        )
+        print(f'--result\n{json.dumps(display_results[-10:], indent=4)}')
 
 
 def train_one_epoch(
