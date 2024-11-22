@@ -963,7 +963,10 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_x_c2ns-4e4490aa.pth',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
-    'cs3darknet_focus_s.untrained': _cfg(interpolation='bicubic'),
+    'cs3darknet_focus_s.ra4_e3600_r256_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        interpolation='bicubic', test_input_size=(3, 320, 320), test_crop_pct=1.0),
     'cs3darknet_focus_m.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_m_c2ns-e23bed41.pth',
