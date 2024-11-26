@@ -376,10 +376,17 @@ def test_adam(optimizer):
 
 @pytest.mark.parametrize('optimizer',  ['adopt', 'adoptw'])
 def test_adopt(optimizer):
-    # FIXME rosenbrock is not passing for ADOPT
-    # _test_rosenbrock(
-    #     lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
-    # )
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=3e-3)
+    )
+    _test_model(optimizer, dict(lr=5e-2), after_step=1)  # note no convergence in first step for ADOPT
+
+
+@pytest.mark.parametrize('optimizer',  ['adan', 'adanw'])
+def test_adan(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
+    )
     _test_model(optimizer, dict(lr=5e-2), after_step=1)  # note no convergence in first step for ADOPT
 
 
@@ -432,6 +439,14 @@ def test_lamb(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
+@pytest.mark.parametrize('optimizer', ['laprop'])
+def test_laprop(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
+    )
+    _test_model(optimizer, dict(lr=1e-2))
+
+
 @pytest.mark.parametrize('optimizer',  ['lars', 'larc', 'nlars', 'nlarc'])
 def test_lars(optimizer):
     _test_rosenbrock(
@@ -446,6 +461,14 @@ def test_madgrad(optimizer):
         lambda params: create_optimizer_v2(params, optimizer, lr=1e-2)
     )
     _test_model(optimizer, dict(lr=1e-2))
+
+
+@pytest.mark.parametrize('optimizer',  ['mars'])
+def test_mars(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
+    )
+    _test_model(optimizer, dict(lr=5e-2), after_step=1)  # note no convergence in first step for ADOPT
 
 
 @pytest.mark.parametrize('optimizer',  ['novograd'])

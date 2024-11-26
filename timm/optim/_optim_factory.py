@@ -19,17 +19,20 @@ from .adafactor import Adafactor
 from .adafactor_bv import AdafactorBigVision
 from .adahessian import Adahessian
 from .adamp import AdamP
+from .adamw import AdamWLegacy
 from .adan import Adan
 from .adopt import Adopt
 from .lamb import Lamb
+from .laprop import LaProp
 from .lars import Lars
 from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
-from .nadam import Nadam
+from .mars import Mars
+from .nadam import NAdamLegacy
 from .nadamw import NAdamW
 from .nvnovograd import NvNovoGrad
-from .radam import RAdam
+from .radam import RAdamLegacy
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 from .sgdw import SGDW
@@ -384,13 +387,19 @@ def _register_adam_variants(registry: OptimizerRegistry) -> None:
         OptimInfo(
             name='adam',
             opt_class=optim.Adam,
-            description='torch.optim Adam (Adaptive Moment Estimation)',
+            description='torch.optim.Adam, Adaptive Moment Estimation',
             has_betas=True
         ),
         OptimInfo(
             name='adamw',
             opt_class=optim.AdamW,
-            description='torch.optim Adam with decoupled weight decay regularization',
+            description='torch.optim.AdamW, Adam with decoupled weight decay',
+            has_betas=True
+        ),
+        OptimInfo(
+            name='adamwlegacy',
+            opt_class=AdamWLegacy,
+            description='legacy impl of AdamW that pre-dates inclusion to torch.optim',
             has_betas=True
         ),
         OptimInfo(
@@ -402,26 +411,45 @@ def _register_adam_variants(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='nadam',
-            opt_class=Nadam,
-            description='Adam with Nesterov momentum',
+            opt_class=torch.optim.NAdam,
+            description='torch.optim.NAdam, Adam with Nesterov momentum',
+            has_betas=True
+        ),
+        OptimInfo(
+            name='nadamlegacy',
+            opt_class=NAdamLegacy,
+            description='legacy impl of NAdam that pre-dates inclusion in torch.optim',
             has_betas=True
         ),
         OptimInfo(
             name='nadamw',
             opt_class=NAdamW,
-            description='Adam with Nesterov momentum and decoupled weight decay',
+            description='Adam with Nesterov momentum and decoupled weight decay, mlcommons/algorithmic-efficiency impl',
             has_betas=True
         ),
         OptimInfo(
             name='radam',
-            opt_class=RAdam,
-            description='Rectified Adam with variance adaptation',
+            opt_class=torch.optim.RAdam,
+            description='torch.optim.RAdam, Rectified Adam with variance adaptation',
             has_betas=True
+        ),
+        OptimInfo(
+            name='radamlegacy',
+            opt_class=RAdamLegacy,
+            description='legacy impl of RAdam that predates inclusion in torch.optim',
+            has_betas=True
+        ),
+        OptimInfo(
+            name='radamw',
+            opt_class=torch.optim.RAdam,
+            description='torch.optim.RAdamW, Rectified Adam with variance adaptation and decoupled weight decay',
+            has_betas=True,
+            defaults={'decoupled_weight_decay': True}
         ),
         OptimInfo(
             name='adamax',
             opt_class=optim.Adamax,
-            description='torch.optim Adamax, Adam with infinity norm for more stable updates',
+            description='torch.optim.Adamax, Adam with infinity norm for more stable updates',
             has_betas=True
         ),
         OptimInfo(
@@ -518,12 +546,12 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
         OptimInfo(
             name='adadelta',
             opt_class=optim.Adadelta,
-            description='torch.optim Adadelta, Adapts learning rates based on running windows of gradients'
+            description='torch.optim.Adadelta, Adapts learning rates based on running windows of gradients'
         ),
         OptimInfo(
             name='adagrad',
             opt_class=optim.Adagrad,
-            description='torch.optim Adagrad, Adapts learning rates using cumulative squared gradients',
+            description='torch.optim.Adagrad, Adapts learning rates using cumulative squared gradients',
             defaults={'eps': 1e-8}
         ),
         OptimInfo(
@@ -550,6 +578,12 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             second_order=True,
         ),
         OptimInfo(
+            name='laprop',
+            opt_class=LaProp,
+            description='Separating Momentum and Adaptivity in Adam',
+            has_betas=True,
+        ),
+        OptimInfo(
             name='lion',
             opt_class=Lion,
             description='Evolved Sign Momentum optimizer for improved convergence',
@@ -570,6 +604,12 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             defaults={'decoupled_decay': True}
         ),
         OptimInfo(
+            name='mars',
+            opt_class=Mars,
+            description='Unleashing the Power of Variance Reduction for Training Large Models',
+            has_betas=True,
+        ),
+        OptimInfo(
             name='novograd',
             opt_class=NvNovoGrad,
             description='Normalized Adam with L2 norm gradient normalization',
@@ -578,7 +618,7 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
         OptimInfo(
             name='rmsprop',
             opt_class=optim.RMSprop,
-            description='torch.optim RMSprop, Root Mean Square Propagation',
+            description='torch.optim.RMSprop, Root Mean Square Propagation',
             has_momentum=True,
             defaults={'alpha': 0.9}
         ),

@@ -3,21 +3,26 @@ from .adafactor import Adafactor
 from .adafactor_bv import AdafactorBigVision
 from .adahessian import Adahessian
 from .adamp import AdamP
-from .adamw import AdamW
+from .adamw import AdamWLegacy
 from .adan import Adan
 from .adopt import Adopt
 from .lamb import Lamb
+from .laprop import LaProp
 from .lars import Lars
 from .lion import Lion
 from .lookahead import Lookahead
 from .madgrad import MADGRAD
-from .nadam import Nadam
+from .mars import Mars
+from .nadam import NAdamLegacy
 from .nadamw import NAdamW
 from .nvnovograd import NvNovoGrad
-from .radam import RAdam
+from .radam import RAdamLegacy
 from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 from .sgdw import SGDW
+
+# bring torch optim into timm.optim namespace for consistency
+from torch.optim import Adadelta, Adagrad, Adamax, Adam, NAdam, RAdam, RMSprop, SGD
 
 from ._optim_factory import list_optimizers, get_optimizer_class, get_optimizer_info, OptimInfo, OptimizerRegistry, \
     create_optimizer_v2, create_optimizer, optimizer_kwargs
