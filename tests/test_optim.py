@@ -3,22 +3,19 @@
 These tests were adapted from PyTorch' optimizer tests.
 
 """
-import math
-import pytest
 import functools
+import importlib
+import os
 from copy import deepcopy
 
+import pytest
 import torch
-from IPython.testing.decorators import skip_win32
-from torch.testing._internal.common_utils import TestCase
 from torch.nn import Parameter
+from torch.testing._internal.common_utils import TestCase
 
 from timm.optim import create_optimizer_v2, list_optimizers, get_optimizer_class, get_optimizer_info, OptimInfo
 from timm.optim import param_groups_layer_decay, param_groups_weight_decay
 from timm.scheduler import PlateauLRScheduler
-
-import importlib
-import os
 
 torch_backend = os.environ.get('TORCH_BACKEND')
 if torch_backend is not None:
