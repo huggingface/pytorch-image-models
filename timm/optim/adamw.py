@@ -1,16 +1,17 @@
 """ AdamW Optimizer
 Impl copied from PyTorch master
 
-NOTE: Builtin optim.AdamW is used by the factory, this impl only serves as a Python based reference, will be removed
-someday
+NOTE: This impl has been deprecated in favour of torch.optim.AdamW and remains as a reference
 """
 import math
 import torch
 from torch.optim.optimizer import Optimizer
 
 
-class AdamW(Optimizer):
+class AdamWLegacy(Optimizer):
     r"""Implements AdamW algorithm.
+
+    NOTE: This impl has been deprecated in favour of torch.optim.NAdam and remains as a reference
 
     The original Adam algorithm was proposed in `Adam: A Method for Stochastic Optimization`_.
     The AdamW variant was proposed in `Decoupled Weight Decay Regularization`_.
@@ -61,10 +62,10 @@ class AdamW(Optimizer):
             weight_decay=weight_decay,
             amsgrad=amsgrad,
         )
-        super(AdamW, self).__init__(params, defaults)
+        super(AdamWLegacy, self).__init__(params, defaults)
 
     def __setstate__(self, state):
-        super(AdamW, self).__setstate__(state)
+        super(AdamWLegacy, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
 

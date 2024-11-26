@@ -1,14 +1,19 @@
 """RAdam Optimizer.
 Implementation lifted from: https://github.com/LiyuanLucasLiu/RAdam
 Paper: `On the Variance of the Adaptive Learning Rate and Beyond` - https://arxiv.org/abs/1908.03265
+
+NOTE: This impl has been deprecated in favour of torch.optim.RAdam and remains as a reference
 """
 import math
 import torch
 from torch.optim.optimizer import Optimizer
 
 
-class RAdam(Optimizer):
+class RAdamLegacy(Optimizer):
+    """ PyTorch RAdam optimizer
 
+    NOTE: This impl has been deprecated in favour of torch.optim.AdamW and remains as a reference
+    """
     def __init__(
             self,
             params,
@@ -24,10 +29,10 @@ class RAdam(Optimizer):
             weight_decay=weight_decay,
             buffer=[[None, None, None] for _ in range(10)]
         )
-        super(RAdam, self).__init__(params, defaults)
+        super(RAdamLegacy, self).__init__(params, defaults)
 
     def __setstate__(self, state):
-        super(RAdam, self).__setstate__(state)
+        super(RAdamLegacy, self).__setstate__(state)
 
     @torch.no_grad()
     def step(self, closure=None):

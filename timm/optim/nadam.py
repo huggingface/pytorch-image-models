@@ -4,8 +4,10 @@ import torch
 from torch.optim.optimizer import Optimizer
 
 
-class Nadam(Optimizer):
+class NAdamLegacy(Optimizer):
     """Implements Nadam algorithm (a variant of Adam based on Nesterov momentum).
+
+    NOTE: This impl has been deprecated in favour of torch.optim.NAdam and remains as a reference
 
     It has been proposed in `Incorporating Nesterov Momentum into Adam`__.
 
@@ -45,7 +47,7 @@ class Nadam(Optimizer):
             weight_decay=weight_decay,
             schedule_decay=schedule_decay,
         )
-        super(Nadam, self).__init__(params, defaults)
+        super(NAdamLegacy, self).__init__(params, defaults)
 
     @torch.no_grad()
     def step(self, closure=None):
