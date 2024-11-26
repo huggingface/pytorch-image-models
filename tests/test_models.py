@@ -146,21 +146,21 @@ def test_model_inference(model_name, batch_size):
         rand_output = model(rand_tensors['input'])
         rand_features = model.forward_features(rand_tensors['input'])
         rand_pre_logits = model.forward_head(rand_features, pre_logits=True)
-        assert torch.allclose(rand_output, rand_tensors['output'], rtol=1e-3, atol=1e-4)
-        assert torch.allclose(rand_features, rand_tensors['features'], rtol=1e-3, atol=1e-4)
-        assert torch.allclose(rand_pre_logits, rand_tensors['pre_logits'], rtol=1e-3, atol=1e-4)
+        assert torch.allclose(rand_output, rand_tensors['output'], rtol=1e-3, atol=1e-4), 'rand output does not match'
+        assert torch.allclose(rand_features, rand_tensors['features'], rtol=1e-3, atol=1e-4), 'rand features do not match'
+        assert torch.allclose(rand_pre_logits, rand_tensors['pre_logits'], rtol=1e-3, atol=1e-4), 'rand pre_logits do not match'
 
-        def _test_owl(owl_input):
+        def _test_owl(owl_input, tol=(1e-3, 1e-4)):
             owl_output = model(owl_input)
             owl_features = model.forward_features(owl_input)
             owl_pre_logits = model.forward_head(owl_features.clone(), pre_logits=True)
             assert owl_output.softmax(1).argmax(1) == 24  # owl
-            assert torch.allclose(owl_output, owl_tensors['output'], rtol=1e-3, atol=1e-4)
-            assert torch.allclose(owl_features, owl_tensors['features'], rtol=1e-3, atol=1e-4)
-            assert torch.allclose(owl_pre_logits, owl_tensors['pre_logits'], rtol=1e-3, atol=1e-4)
+            assert torch.allclose(owl_output, owl_tensors['output'], rtol=tol[0], atol=tol[1]), 'owl output does not match'
+            assert torch.allclose(owl_features, owl_tensors['features'], rtol=tol[0], atol=tol[1]), 'owl output does not match'
+            assert torch.allclose(owl_pre_logits, owl_tensors['pre_logits'], rtol=tol[0], atol=tol[1]), 'owl output does not match'
 
         _test_owl(owl_tensors['input'])  # test with original pp owl tensor
-        _test_owl(pp(test_owl).unsqueeze(0))  # re-process from original jpg
+        _test_owl(pp(test_owl).unsqueeze(0), tol=(1e-1, 1e-1))  # re-process from original jpg, Pillow output can change a lot btw ver
 
 
 @pytest.mark.base
