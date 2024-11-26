@@ -297,9 +297,9 @@ def test_optim_factory(optimizer):
     opt_info = get_optimizer_info(optimizer)
     assert isinstance(opt_info, OptimInfo)
 
-    lr = (1e-3, 1e-2, 1e-2, 1e-2)
+    lr = (1e-2,) * 4
     if optimizer in ('mars',):
-        lr = (1e-3, 1e-3, 1e-3, 1e-3)
+        lr = (1e-3,) * 4
 
     try:
         if not opt_info.second_order:  # basic tests don't support second order right now
