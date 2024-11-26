@@ -855,15 +855,15 @@ default_cfgs = generate_default_cfgs({
     # torchvision resnet weights
     'resnet18.tv_in1k': _cfg(
         hf_hub_id='timm/',
-        url='https://download.pytorch.org/models/resnet18-5c106cde.pth',
+        url='https://download.pytorch.org/models/resnet18-f37072fd.pth',
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet34.tv_in1k': _cfg(
         hf_hub_id='timm/',
-        url='https://download.pytorch.org/models/resnet34-333f7ec4.pth',
+        url='https://download.pytorch.org/models/resnet34-b627a593.pth',
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet50.tv_in1k': _cfg(
         hf_hub_id='timm/',
-        url='https://download.pytorch.org/models/resnet50-19c8e357.pth',
+        url='https://download.pytorch.org/models/resnet50-0676ba61.pth',
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet50.tv2_in1k': _cfg(
         hf_hub_id='timm/',
@@ -872,7 +872,7 @@ default_cfgs = generate_default_cfgs({
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet101.tv_in1k': _cfg(
         hf_hub_id='timm/',
-        url='https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
+        url='https://download.pytorch.org/models/resnet101-63fe2227.pth',
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet101.tv2_in1k': _cfg(
         hf_hub_id='timm/',
@@ -881,7 +881,7 @@ default_cfgs = generate_default_cfgs({
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet152.tv_in1k': _cfg(
         hf_hub_id='timm/',
-        url='https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+        url='https://download.pytorch.org/models/resnet152-394f9c45.pth',
         license='bsd-3-clause', origin_url='https://github.com/pytorch/vision'),
     'resnet152.tv2_in1k': _cfg(
         hf_hub_id='timm/',
