@@ -141,8 +141,11 @@ def lion(
     r"""Functional API that performs Lion algorithm computation.
     """
     if foreach is None:
-        # Placeholder for more complex foreach logic to be added when value is not set
-        foreach = True
+        try:
+            # cannot do foreach if this overload doesn't exist when caution enabled
+            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum.overloads()
+        except:
+            foreach = False
 
     if foreach and torch.jit.is_scripting():
         raise RuntimeError('torch.jit.script not supported with foreach optimizers')
