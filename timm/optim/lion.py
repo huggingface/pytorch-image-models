@@ -143,7 +143,7 @@ def lion(
     if foreach is None:
         try:
             # cannot do foreach if this overload doesn't exist when caution enabled
-            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum.overloads()
+            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
         except:
             foreach = False
 
