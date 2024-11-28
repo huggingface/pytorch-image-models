@@ -169,7 +169,12 @@ def nadamw(
             ' singleton tensors')
 
     if foreach is None:
-        foreach = True
+        try:
+            # cannot do foreach if this overload doesn't exist when caution enabled
+            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum.overloads()
+        except:
+            foreach = False
+
     if foreach and not torch.jit.is_scripting():
         func = _multi_tensor_nadamw
     else:
