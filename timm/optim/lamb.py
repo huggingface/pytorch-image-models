@@ -52,50 +52,48 @@ Modifications Copyright 2021 Ross Wightman
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import math
+from typing import Optional, Tuple
 
 import torch
 from torch.optim import Optimizer
+
+from ._types import ParamsT
 
 
 class Lamb(Optimizer):
     """Implements a pure pytorch variant of FuseLAMB (NvLamb variant) optimizer from apex.optimizers.FusedLAMB
     reference: https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/LanguageModeling/Transformer-XL/pytorch/lamb.py
 
-    LAMB was proposed in `Large Batch Optimization for Deep Learning: Training BERT in 76 minutes`_.
+    LAMB was proposed in:
+    - Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:  https://arxiv.org/abs/1904.00962
+    - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
 
-    Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining parameter groups.
-        lr (float, optional): learning rate. (default: 1e-3)
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its norm. (default: (0.9, 0.999))
-        eps (float, optional): term added to the denominator to improve
-            numerical stability. (default: 1e-8)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        grad_averaging (bool, optional): whether apply (1-beta2) to grad when
-            calculating running averages of gradient. (default: True)
-        max_grad_norm (float, optional): value used to clip global grad norm (default: 1.0)
-        trust_clip (bool): enable LAMBC trust ratio clipping (default: False)
-        always_adapt (boolean, optional): Apply adaptive learning rate to 0.0
-            weight decay parameter (default: False)
-
-    .. _Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:
-        https://arxiv.org/abs/1904.00962
-    .. _On the Convergence of Adam and Beyond:
-        https://openreview.net/forum?id=ryQu7f-RZ
+    Args:
+        params: Iterable of parameters to optimize or dicts defining parameter groups.
+        lr: Learning rate
+        betas: Coefficients used for computing running averages of gradient and its norm.
+        eps: Term added to the denominator to improve numerical stability.
+        weight_decay: Weight decay
+        grad_averaging: Whether apply (1-beta2) to grad when calculating running averages of gradient.
+        max_grad_norm: Value used to clip global grad norm.
+        trust_clip: Enable LAMBC trust ratio clipping.
+        always_adapt: Apply adaptive learning rate to 0.0 weight decay parameter.
+        caution: Apply caution.
     """
 
     def __init__(
             self,
-            params,
-            lr=1e-3,
-            bias_correction=True,
-            betas=(0.9, 0.999),
-            eps=1e-6,
-            weight_decay=0.01,
-            grad_averaging=True,
-            max_grad_norm=1.0,
-            trust_clip=False,
-            always_adapt=False,
+            params: ParamsT,
+            lr: float = 1e-3,
+            bias_correction: bool = True,
+            betas: Tuple[float, float] = (0.9, 0.999),
+            eps: float = 1e-6,
+            weight_decay: float = 0.01,
+            grad_averaging: bool = True,
+            max_grad_norm: Optional[float] = 1.0,
+            trust_clip: bool = False,
+            always_adapt: bool = False,
+            caution: bool = False,
     ):
         defaults = dict(
             lr=lr,
@@ -107,8 +105,14 @@ class Lamb(Optimizer):
             max_grad_norm=max_grad_norm,
             trust_clip=trust_clip,
             always_adapt=always_adapt,
+            caution=caution,
         )
         super().__init__(params, defaults)
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault('caution', False)
 
     def _get_clip_grad_norm(self):
         max_grad_norm = self.defaults['max_grad_norm']
@@ -186,6 +190,12 @@ class Lamb(Optimizer):
 
                 denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
                 update = (exp_avg / bias_correction1).div_(denom)
+
+                if group['caution']:
+                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    mask = (update * grad > 0).to(grad.dtype)
+                    mask.div_(mask.mean().clamp_(min=1e-3))
+                    update.mul_(mask)
 
                 weight_decay = group['weight_decay']
                 if weight_decay != 0:

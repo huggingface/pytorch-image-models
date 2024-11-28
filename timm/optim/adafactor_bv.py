@@ -6,12 +6,13 @@ Described in 'Scaling Vision Transformers': https://arxiv.org/abs/2106.04560
 
 Adaptation and PyTorch modifications by Ross Wightman
 """
-
 from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
 from torch.optim import Optimizer
+
+from ._types import ParamsT
 
 
 def _get_scalar_dtype():
@@ -54,9 +55,9 @@ class AdafactorBigVision(Optimizer):
 
     def __init__(
             self,
-            params,
+            params: ParamsT,
             lr: float = 1.0,
-            min_dim_size_to_factor: int = 32,
+            min_dim_size_to_factor: int = 16,
             decay_rate: float = 0.8,
             decay_offset: int = 0,
             beta2_cap: float = 0.999,
@@ -66,6 +67,7 @@ class AdafactorBigVision(Optimizer):
             weight_decay: float = 0.0,
             clipping_threshold: Optional[float] = None,
             unscaled_wd: bool = False,
+            caution: bool = False,
             *,
             foreach: Optional[bool] = False,
     ):
@@ -91,6 +93,7 @@ class AdafactorBigVision(Optimizer):
             weight_decay=weight_decay,
             clipping_threshold=clipping_threshold,
             unscaled_wd=unscaled_wd,
+            caution=caution,
             foreach=foreach,
         )
         super().__init__(params, defaults)
@@ -98,6 +101,7 @@ class AdafactorBigVision(Optimizer):
     def __setstate__(self, state):
         super().__setstate__(state)
         for group in self.param_groups:
+            group.setdefault('caution', False)
             group.setdefault('foreach', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
@@ -192,6 +196,7 @@ class AdafactorBigVision(Optimizer):
                 momentum_dtype=group['momentum_dtype'],
                 clipping_threshold=group['clipping_threshold'],
                 unscaled_wd=group['unscaled_wd'],
+                caution=group['caution'],
             )
 
         return loss
@@ -216,6 +221,7 @@ def _single_tensor_adafactor(
         momentum_dtype: Union[str, torch.dtype],
         clipping_threshold: Optional[float],
         unscaled_wd: bool,
+        caution: bool,
 ):
     for i, param in enumerate(params):
         grad = grads[i]
@@ -267,6 +273,12 @@ def _single_tensor_adafactor(
                 exp_avg.lerp_(update, 1 - momentum)  # ema
                 update = exp_avg.clone()
 
+            if caution:
+                # apply caution as per 'Cautious Optimizers': https://arxiv.org/abs/2411.16085
+                mask = (update * grad > 0).to(grad.dtype)
+                mask.div_(mask.mean().clamp_(min=1e-3))
+                update.mul_(mask)
+
         # Scale by learning rate
         update.mul_(lr)
 
@@ -302,6 +314,7 @@ def _multi_tensor_adafactor(
         momentum_dtype: Union[str, torch.dtype],
         clipping_threshold: Optional[float],
         unscaled_wd: bool,
+        caution: bool,
 ):
     # FIXME TODO
     assert False, 'multi-tensor fn (foreach=True) not implemented yet'

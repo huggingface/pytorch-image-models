@@ -298,7 +298,7 @@ def test_optim_factory(optimizer):
     assert isinstance(opt_info, OptimInfo)
 
     lr = (1e-2,) * 4
-    if optimizer in ('mars',):
+    if optimizer in ('mars', 'nadam', 'claprop', 'crmsproptf', 'cadafactorbv', 'csgdw', 'clamb'):
         lr = (1e-3,) * 4
 
     try:

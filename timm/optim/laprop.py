@@ -12,8 +12,12 @@ Paper: LaProp: Separating Momentum and Adaptivity in Adam, https://arxiv.org/abs
 }
 
 """
+from typing import Tuple
+
 from torch.optim import Optimizer
 import torch
+
+from ._types import ParamsT
 
 
 class LaProp(Optimizer):
@@ -23,11 +27,12 @@ class LaProp(Optimizer):
     """
     def __init__(
             self,
-            params,
-            lr=4e-4,
-            betas=(0.9, 0.999),
-            eps=1e-15,
-            weight_decay=0,
+            params: ParamsT,
+            lr: float = 4e-4,
+            betas: Tuple[float, float] = (0.9, 0.999),
+            eps: float = 1e-15,
+            weight_decay: float = 0.,
+            caution: bool = False,
     ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -42,6 +47,7 @@ class LaProp(Optimizer):
             betas=betas,
             eps=eps,
             weight_decay=weight_decay,
+            caution=caution,
         )
         super(LaProp, self).__init__(params, defaults)
 
@@ -101,7 +107,14 @@ class LaProp(Optimizer):
                 step_of_this_grad = grad / denom
                 exp_avg.mul_(beta1).add_(step_of_this_grad, alpha=group['lr'] * one_minus_beta1)
 
+                if group['caution']:
+                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    mask = (exp_avg * grad > 0).to(grad.dtype)
+                    mask.div_(mask.mean().clamp_(min=1e-3))
+                    exp_avg = exp_avg * mask
+
                 p.add_(exp_avg, alpha=-step_size)
+
                 if group['weight_decay'] != 0:
                     p.add_(p, alpha=-group['weight_decay'])
 

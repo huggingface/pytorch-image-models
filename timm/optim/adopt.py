@@ -10,15 +10,14 @@ Modified for reduced dependencies on PyTorch internals from original at: https:/
  title = {ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate},
  year = {2024}
 }
-
 """
-
-from typing import cast, Callable, List, Optional, Tuple, Union
+from typing import cast, List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
-
 from torch.optim.optimizer import Optimizer
+
+from ._types import ParamsT
 
 __all__ = ["Adopt", "adopt"]
 
@@ -60,7 +59,7 @@ class Adopt(Optimizer):
     """
     def __init__(
             self,
-            params,
+            params: ParamsT,
             lr: Union[float, Tensor] = 1e-3,
             betas: Tuple[float, float] = (0.9, 0.9999),
             eps: float = 1e-6,
@@ -68,7 +67,8 @@ class Adopt(Optimizer):
             weight_decay: float = 0.0,
             decoupled: bool = False,
             *,
-            foreach: Optional[bool] = None,
+            caution: bool = False,
+            foreach: Optional[bool] = False,
             maximize: bool = False,
             capturable: bool = False,
             differentiable: bool = False,
@@ -98,13 +98,13 @@ class Adopt(Optimizer):
             weight_decay=weight_decay,
             clip_exp=clip_exp,
             decoupled=decoupled,
+            caution=caution,
             maximize=maximize,
             foreach=foreach,
             capturable=capturable,
             differentiable=differentiable,
         )
         super().__init__(params, defaults)
-
 
     def __setstate__(self, state):
         super().__setstate__(state)
@@ -114,6 +114,7 @@ class Adopt(Optimizer):
             group.setdefault("capturable", False)
             group.setdefault("differentiable", False)
             group.setdefault("clip_exp", None)
+            group.setdefault("caution", False)
             for p in group["params"]:
                 p_state = self.state.get(p, [])
                 if len(p_state) != 0 and not torch.is_tensor(p_state["step"]):
@@ -223,6 +224,7 @@ class Adopt(Optimizer):
                 clip_exp=group["clip_exp"],
                 decoupled=group["decoupled"],
                 eps=group["eps"],
+                caution=group["caution"],
                 maximize=group["maximize"],
                 foreach=group["foreach"],
                 capturable=group["capturable"],
@@ -251,6 +253,7 @@ def _single_tensor_adopt(
         clip_exp: Optional[float],
         decoupled: bool,
         eps: float,
+        caution: bool,
         maximize: bool,
         capturable: bool,
         differentiable: bool,
@@ -306,6 +309,13 @@ def _single_tensor_adopt(
             normed_grad.clamp_(-clip_val, clip_val)
 
         exp_avg.lerp_(normed_grad, 1 - beta1)
+
+        if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            mask = (exp_avg * grad > 0).to(grad.dtype)
+            mask.div_(mask.mean().clamp_(min=1e-3))
+            exp_avg = exp_avg * mask
+
         param.add_(exp_avg, alpha=-lr)
 
         exp_avg_sq.mul_(beta2).addcmul_(grad, grad.conj(), value=1 - beta2)
@@ -328,6 +338,7 @@ def _multi_tensor_adopt(
         clip_exp: Optional[float],
         decoupled: bool,
         eps: float,
+        caution: bool,
         maximize: bool,
         capturable: bool,
         differentiable: bool,
@@ -403,6 +414,7 @@ def _multi_tensor_adopt(
 
         exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
         torch._foreach_maximum_(exp_avg_sq_sqrt, eps)
+
         normed_grad = torch._foreach_div(device_grads, exp_avg_sq_sqrt)
 
         if clip_exp is not None:
@@ -411,6 +423,16 @@ def _multi_tensor_adopt(
             torch._foreach_minimum_(normed_grad, clip_val)
 
         torch._foreach_lerp_(device_exp_avgs, normed_grad, 1 - beta1)
+
+        if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            masks = torch._foreach_mul(device_exp_avgs, device_grads)
+            masks = [(m > 0).to(g.dtype) for m, g in zip(masks, device_grads)]
+            mask_scale = [m.mean() for m in masks]
+            torch._foreach_maximum_(mask_scale, 1e-3)
+            torch._foreach_div_(masks, mask_scale)
+            device_exp_avgs = torch._foreach_mul(device_exp_avgs, masks)
+
         torch._foreach_add_(device_params, device_exp_avgs, alpha=-lr)
 
         torch._foreach_mul_(device_exp_avg_sqs, beta2)
@@ -440,6 +462,7 @@ def adopt(
         clip_exp: Optional[float],
         decoupled: bool,
         eps: float,
+        caution: bool,
         maximize: bool,
 ):
     r"""Functional API that performs ADOPT algorithm computation.
@@ -477,6 +500,7 @@ def adopt(
         clip_exp=clip_exp,
         decoupled=decoupled,
         eps=eps,
+        caution=caution,
         maximize=maximize,
         capturable=capturable,
         differentiable=differentiable,
