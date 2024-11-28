@@ -16,10 +16,12 @@ Original Impl: https://github.com/google/automl/tree/master/lion
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-from typing import List
+from typing import List, Optional, Tuple
 
 import torch
 from torch.optim.optimizer import Optimizer
+
+from ._types import ParamsT
 
 
 class Lion(Optimizer):
@@ -27,22 +29,22 @@ class Lion(Optimizer):
 
     def __init__(
             self,
-            params,
-            lr=1e-4,
-            betas=(0.9, 0.99),
-            weight_decay=0.0,
-            maximize=False,
-            foreach=None,
+            params: ParamsT,
+            lr: float = 1e-4,
+            betas: Tuple[float, float] = (0.9, 0.99),
+            weight_decay: float = 0.0,
+            caution: bool = False,
+            maximize: bool = False,
+            foreach: Optional[bool] = None,
     ):
         """Initialize the hyperparameters.
 
         Args:
-          params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-          lr (float, optional): learning rate (default: 1e-4)
-          betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.99))
-          weight_decay (float, optional): weight decay coefficient (default: 0)
+          params: iterable of parameters to optimize or dicts defining parameter groups
+          lr: learning rate
+          betas: coefficients used for computing running averages of gradient and its square
+          weight_decay: weight decay coefficient
+          caution: apply caution
         """
 
         if not 0.0 <= lr:
@@ -55,6 +57,7 @@ class Lion(Optimizer):
             lr=lr,
             betas=betas,
             weight_decay=weight_decay,
+            caution=caution,
             foreach=foreach,
             maximize=maximize,
         )
@@ -63,6 +66,7 @@ class Lion(Optimizer):
     def __setstate__(self, state):
         super().__setstate__(state)
         for group in self.param_groups:
+            group.setdefault('caution', False)
             group.setdefault('maximize', False)
             group.setdefault('foreach', None)
 
@@ -71,8 +75,7 @@ class Lion(Optimizer):
         """Performs a single optimization step.
 
         Args:
-          closure (callable, optional): A closure that reevaluates the model
-            and returns the loss.
+          closure: A closure that reevaluates the model and returns the loss.
 
         Returns:
           the loss.
@@ -112,6 +115,7 @@ class Lion(Optimizer):
                 beta2=beta2,
                 lr=group['lr'],
                 weight_decay=group['weight_decay'],
+                caution=group['caution'],
                 maximize=group['maximize'],
                 foreach=group['foreach'],
             )
@@ -132,6 +136,7 @@ def lion(
         beta2: float,
         lr: float,
         weight_decay: float,
+        caution: bool,
 ):
     r"""Functional API that performs Lion algorithm computation.
     """
@@ -155,6 +160,7 @@ def lion(
         beta2=beta2,
         lr=lr,
         weight_decay=weight_decay,
+        caution=caution,
         maximize=maximize,
     )
 
@@ -168,6 +174,7 @@ def _single_tensor_lion(
         beta2: float,
         lr: float,
         weight_decay: float,
+        caution: bool,
         maximize: bool,
 ):
     for i, param in enumerate(params):
@@ -183,8 +190,15 @@ def _single_tensor_lion(
         param.mul_(1 - lr * weight_decay)
 
         # Weight update
-        update = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1)
-        param.add_(torch.sign(update), alpha=-lr)
+        update = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1).sign_()
+
+        if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            mask = (update * grad > 0).to(grad.dtype)
+            mask.div_(mask.mean().clamp_(min=1e-3))
+            update.mul_(mask)
+
+        param.add_(update, alpha=-lr)
 
         # Decay the momentum running average coefficient
         exp_avg.lerp_(grad, 1 - beta2)
@@ -199,6 +213,7 @@ def _multi_tensor_lion(
         beta2: float,
         lr: float,
         weight_decay: float,
+        caution: bool,
         maximize: bool,
 ):
     if len(params) == 0:
@@ -217,8 +232,17 @@ def _multi_tensor_lion(
     # Weight update
     updates = torch._foreach_mul(exp_avgs, beta1)
     torch._foreach_add_(updates, grads, alpha=1 - beta1)
+    updates = [u.sign_() for u in updates]
 
-    updates = [u.sign() for u in updates]
+    if caution:
+        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+        masks = torch._foreach_mul(updates, grads)
+        masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
+        mask_scale = [m.mean() for m in masks]
+        torch._foreach_maximum_(mask_scale, 1e-3)
+        torch._foreach_div_(masks, mask_scale)
+        torch._foreach_mul_(updates, masks)
+
     torch._foreach_add_(params, updates, alpha=-lr)
 
     # Decay the momentum running average coefficient

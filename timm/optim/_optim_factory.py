@@ -5,15 +5,16 @@ Hacked together by / Copyright 2021 Ross Wightman
 import logging
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, TypeVar, Union, Protocol, Iterator
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 from fnmatch import fnmatch
 import importlib
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.optim
 
 from ._param_groups import param_groups_layer_decay, param_groups_weight_decay
+from ._types import ParamsT, OptimType, OptimizerCallable
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
 from .adafactor_bv import AdafactorBigVision
@@ -39,11 +40,6 @@ from .sgdw import SGDW
 
 _logger = logging.getLogger(__name__)
 
-# Type variables
-T = TypeVar('T')
-Params = Union[Iterator[nn.Parameter], Iterator[Dict[str, Any]]]
-OptimType = TypeVar('OptimType', bound='optim.Optimizer')
-
 
 def _import_class(class_string: str) -> Type:
     """Dynamically import a class from a string."""
@@ -54,11 +50,6 @@ def _import_class(class_string: str) -> Type:
     except (ImportError, AttributeError) as e:
         raise ImportError(f"Could not import {class_string}: {e}")
 
-
-class OptimizerCallable(Protocol):
-    """Protocol for optimizer constructor signatures."""
-
-    def __call__(self, params: Params, **kwargs) -> optim.Optimizer: ...
 
 
 @dataclass(frozen=True)
@@ -76,7 +67,7 @@ class OptimInfo:
         defaults: Optional default parameters for the optimizer
     """
     name: str
-    opt_class: Union[str, Type[optim.Optimizer]]
+    opt_class: Union[str, OptimType]
     description: str = ''
     has_eps: bool = True
     has_momentum: bool = False
@@ -185,7 +176,7 @@ class OptimizerRegistry:
             self,
             name_or_info: Union[str, OptimInfo],
             bind_defaults: bool = True,
-    ) -> Union[Type[optim.Optimizer], OptimizerCallable]:
+    ) -> Union[OptimType, OptimizerCallable]:
         """Get the optimizer class with any default arguments applied.
 
         This allows direct instantiation of optimizers with their default configs
@@ -234,7 +225,7 @@ class OptimizerRegistry:
 
     def create_optimizer(
             self,
-            model_or_params: Union[nn.Module, Params],
+            model_or_params: Union[nn.Module, ParamsT],
             opt: str,
             lr: Optional[float] = None,
             weight_decay: float = 0.,
@@ -242,9 +233,9 @@ class OptimizerRegistry:
             foreach: Optional[bool] = None,
             weight_decay_exclude_1d: bool = True,
             layer_decay: Optional[float] = None,
-            param_group_fn: Optional[Callable[[nn.Module], Params]] = None,
+            param_group_fn: Optional[Callable[[nn.Module], ParamsT]] = None,
             **kwargs: Any,
-    ) -> optim.Optimizer:
+    ) -> torch.optim.Optimizer:
         """Create an optimizer instance.
 
         Args:
@@ -347,7 +338,7 @@ def _register_sgd_variants(registry: OptimizerRegistry) -> None:
     sgd_optimizers = [
         OptimInfo(
             name='sgd',
-            opt_class=optim.SGD,
+            opt_class=torch.optim.SGD,
             description='torch.Optim Stochastic Gradient Descent (SGD) with Nesterov momentum',
             has_eps=False,
             has_momentum=True,
@@ -355,7 +346,7 @@ def _register_sgd_variants(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='momentum',
-            opt_class=optim.SGD,
+            opt_class=torch.optim.SGD,
             description='torch.Optim Stochastic Gradient Descent (SGD) with classical momentum',
             has_eps=False,
             has_momentum=True,
@@ -386,13 +377,13 @@ def _register_adam_variants(registry: OptimizerRegistry) -> None:
     adam_optimizers = [
         OptimInfo(
             name='adam',
-            opt_class=optim.Adam,
+            opt_class=torch.optim.Adam,
             description='torch.optim.Adam, Adaptive Moment Estimation',
             has_betas=True
         ),
         OptimInfo(
             name='adamw',
-            opt_class=optim.AdamW,
+            opt_class=torch.optim.AdamW,
             description='torch.optim.AdamW, Adam with decoupled weight decay',
             has_betas=True
         ),
@@ -448,7 +439,7 @@ def _register_adam_variants(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='adamax',
-            opt_class=optim.Adamax,
+            opt_class=torch.optim.Adamax,
             description='torch.optim.Adamax, Adam with infinity norm for more stable updates',
             has_betas=True
         ),
@@ -526,6 +517,87 @@ def _register_lamb_lars(registry: OptimizerRegistry) -> None:
         registry.register(opt)
 
 
+def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
+    cautious_optimizers = [
+        OptimInfo(
+            name='cadafactor',
+            opt_class=Adafactor,
+            description='Cautious Adafactor',
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='cadafactorbv',
+            opt_class=AdafactorBigVision,
+            description='Cautious Big Vision Adafactor',
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='cadamw',
+            opt_class=AdamWLegacy,
+            description='Cautious AdamW',
+            has_betas=True,
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='cadopt',
+            opt_class=Adopt,
+            description='Cautious Adopt',
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='cadoptw',
+            opt_class=Adopt,
+            description='Cautious AdoptW (decoupled decay)',
+            defaults={'decoupled': True, 'caution': True}
+        ),
+        OptimInfo(
+            name='clamb',
+            opt_class=Lamb,
+            description='Cautious LAMB',
+            has_betas=True,
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='claprop',
+            opt_class=LaProp,
+            description='Cautious LaProp',
+            has_betas=True,
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='clion',
+            opt_class=Lion,
+            description='Cautious Lion',
+            has_eps=False,
+            has_betas=True,
+            defaults = {'caution': True}
+        ),
+        OptimInfo(
+            name='cnadamw',
+            opt_class=NAdamW,
+            description='Cautious NAdamW',
+            has_betas=True,
+            defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='crmsproptf',
+            opt_class=RMSpropTF,
+            description='Cautious TensorFlow-style RMSprop',
+            has_momentum=True,
+            defaults={'alpha': 0.9, 'caution': True}
+        ),
+        OptimInfo(
+            name='csgdw',
+            opt_class=SGDW,
+            description='Cautious SGD with decoupled weight decay and Nesterov momentum',
+            has_eps=False,
+            has_momentum=True,
+            defaults={'nesterov': True, 'caution': True}
+        ),
+    ]
+    for opt in cautious_optimizers:
+        registry.register(opt)
+
 def _register_other_optimizers(registry: OptimizerRegistry) -> None:
     """Register miscellaneous optimizers"""
     other_optimizers = [
@@ -545,12 +617,12 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='adadelta',
-            opt_class=optim.Adadelta,
+            opt_class=torch.optim.Adadelta,
             description='torch.optim.Adadelta, Adapts learning rates based on running windows of gradients'
         ),
         OptimInfo(
             name='adagrad',
-            opt_class=optim.Adagrad,
+            opt_class=torch.optim.Adagrad,
             description='torch.optim.Adagrad, Adapts learning rates using cumulative squared gradients',
             defaults={'eps': 1e-8}
         ),
@@ -617,7 +689,7 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
         ),
         OptimInfo(
             name='rmsprop',
-            opt_class=optim.RMSprop,
+            opt_class=torch.optim.RMSprop,
             description='torch.optim.RMSprop, Root Mean Square Propagation',
             has_momentum=True,
             defaults={'alpha': 0.9}
@@ -765,6 +837,7 @@ def _register_default_optimizers() -> None:
     _register_other_optimizers(default_registry)
     _register_apex_optimizers(default_registry)
     _register_bnb_optimizers(default_registry)
+    _register_cautious_optimizers(default_registry)
 
     # Register aliases
     default_registry.register_alias('nesterov', 'sgd')
@@ -839,7 +912,7 @@ def get_optimizer_info(name: str) -> OptimInfo:
 def get_optimizer_class(
         name: str,
         bind_defaults: bool = True,
-) -> Union[Type[optim.Optimizer], OptimizerCallable]:
+) -> Union[OptimType, OptimizerCallable]:
     """Get optimizer class by name with option to bind default arguments.
 
     Retrieves the optimizer class or a partial function with default arguments bound.
@@ -874,7 +947,7 @@ def get_optimizer_class(
 
 
 def create_optimizer_v2(
-        model_or_params: Union[nn.Module, Params],
+        model_or_params: Union[nn.Module, ParamsT],
         opt: str = 'sgd',
         lr: Optional[float] = None,
         weight_decay: float = 0.,
@@ -882,9 +955,9 @@ def create_optimizer_v2(
         foreach: Optional[bool] = None,
         filter_bias_and_bn: bool = True,
         layer_decay: Optional[float] = None,
-        param_group_fn: Optional[Callable[[nn.Module], Params]] = None,
+        param_group_fn: Optional[Callable[[nn.Module], ParamsT]] = None,
         **kwargs: Any,
-) -> optim.Optimizer:
+) -> torch.optim.Optimizer:
     """Create an optimizer instance via timm registry.
 
     Creates and configures an optimizer with appropriate parameter groups and settings.
@@ -985,7 +1058,11 @@ def optimizer_kwargs(cfg):
     return kwargs
 
 
-def create_optimizer(args, model, filter_bias_and_bn=True):
+def create_optimizer(
+        args,
+        model: Union[nn.Module, ParamsT],
+        filter_bias_and_bn: bool = True,
+) -> torch.optim.Optimizer:
     """ Legacy optimizer factory for backwards compatibility.
     NOTE: Use create_optimizer_v2 for new code.
     """
