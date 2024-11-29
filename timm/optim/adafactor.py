@@ -83,7 +83,7 @@ class Adafactor(torch.optim.Optimizer):
         super().__setstate__(state)
         for group in self.param_groups:
             group.setdefault('caution', False)
-            group.setdefault('min_dim_size_to_factor', 32)
+            group.setdefault('min_dim_size_to_factor', 16)
 
     @staticmethod
     def _get_lr(param_group, param_state):
