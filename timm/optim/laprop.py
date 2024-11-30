@@ -116,6 +116,6 @@ class LaProp(Optimizer):
                 p.add_(exp_avg, alpha=-step_size)
 
                 if group['weight_decay'] != 0:
-                    p.add_(p, alpha=-group['weight_decay'])
+                    p.add_(p, alpha=-(group['lr'] * group['weight_decay']))
 
         return loss
