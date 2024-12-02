@@ -413,7 +413,8 @@ def build_model_with_cfg(
             feature_cfg['feature_cls'] = kwargs.pop('feature_cls')
 
     # Instantiate the model
-    with torch.device("meta") if pretrained else nullcontext():
+    meta_device = torch.device("meta")
+    with meta_device if hasattr(meta_device, "__enter__") and pretrained else nullcontext():
         if model_cfg is None:
             model = model_cls(**kwargs)
         else:
