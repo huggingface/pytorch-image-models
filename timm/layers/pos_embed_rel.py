@@ -27,7 +27,7 @@ def gen_relative_position_index(
     # get pair-wise relative position index for each token inside the window
     assert k_size is None, 'Different q & k sizes not currently supported'  # FIXME
 
-    coords = torch.stack(ndgrid(torch.arange(q_size[0]), torch.arange(q_size[1]))).flatten(1)  # 2, Wh, Ww
+    coords = torch.stack(ndgrid(torch.arange(q_size[0], device="cpu"), torch.arange(q_size[1], device="cpu"))).flatten(1)  # 2, Wh, Ww
     relative_coords = coords[:, :, None] - coords[:, None, :]  # 2, Wh*Ww, Wh*Ww
     relative_coords = relative_coords.permute(1, 2, 0)  # Qh*Qw, Kh*Kw, 2
     relative_coords[:, :, 0] += q_size[0] - 1  # shift to start from 0
@@ -307,8 +307,8 @@ def gen_relative_log_coords(
 ):
     assert mode in ('swin', 'cr')
     # as per official swin-v2 impl, supporting timm specific 'cr' log coords as well
-    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0]).to(torch.float32)
-    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1]).to(torch.float32)
+    relative_coords_h = torch.arange(-(win_size[0] - 1), win_size[0], device="cpu").to(torch.float32)
+    relative_coords_w = torch.arange(-(win_size[1] - 1), win_size[1], device="cpu").to(torch.float32)
     relative_coords_table = torch.stack(ndgrid(relative_coords_h, relative_coords_w))
     relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous()  # 2*Wh-1, 2*Ww-1, 2
     if mode == 'swin':
@@ -415,7 +415,7 @@ def generate_lookup_tensor(
         max_relative_position = length - 1
     # Return the cached lookup tensor, otherwise compute it and cache it.
     vocab_size = 2 * max_relative_position + 1
-    ret = torch.zeros(length, length, vocab_size)
+    ret = torch.zeros(length, length, vocab_size, device="cpu")
     for i in range(length):
         for x in range(length):
             v = x - i + max_relative_position

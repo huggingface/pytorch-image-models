@@ -79,7 +79,7 @@ def window_reverse(windows, window_size: Tuple[int, int], H: int, W: int):
 
 def get_relative_position_index(win_h: int, win_w: int):
     # get pair-wise relative position index for each token inside the window
-    coords = torch.stack(ndgrid(torch.arange(win_h), torch.arange(win_w)))  # 2, Wh, Ww
+    coords = torch.stack(ndgrid(torch.arange(win_h, device="cpu"), torch.arange(win_w, device="cpu")))  # 2, Wh, Ww
     coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
     relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
     relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
@@ -291,7 +291,7 @@ class SwinTransformerBlock(nn.Module):
                 dtype = x.dtype
             else:
                 H, W = self.input_resolution
-                device = None
+                device = "cpu"
                 dtype = None
             H = math.ceil(H / self.window_size[0]) * self.window_size[0]
             W = math.ceil(W / self.window_size[1]) * self.window_size[1]

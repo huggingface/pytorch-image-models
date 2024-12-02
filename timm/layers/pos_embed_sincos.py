@@ -163,7 +163,7 @@ class FourierEmbed(nn.Module):
         self.keep_spatial = keep_spatial
         self.register_buffer(
             'bands',
-            pixel_freq_bands(max_res, num_bands),
+            pixel_freq_bands(max_res, num_bands, device="cpu"),
             persistent=False,
         )
 
@@ -305,12 +305,14 @@ class RotaryEmbedding(nn.Module):
                     dim // 4,
                     float(max_res),
                     linear_bands=linear_bands,
+                    device="cpu",
                 )
             else:
                 bands = freq_bands(
                     dim // 4,
                     temperature=temperature,
                     step=1,
+                    device="cpu",
                 )
             self.register_buffer(
                 'bands',
@@ -328,6 +330,7 @@ class RotaryEmbedding(nn.Module):
                 linear_bands=linear_bands,
                 in_pixels=in_pixels,
                 ref_feat_shape=self.ref_feat_shape,
+                device="cpu",
             )
             self.bands = None
             self.register_buffer(
@@ -392,12 +395,14 @@ class RotaryEmbeddingCat(nn.Module):
                     dim // 4,
                     float(max_res),
                     linear_bands=linear_bands,
+                    device="cpu",
                 )
             else:
                 bands = freq_bands(
                     dim // 4,
                     temperature=temperature,
                     step=1,
+                    device="cpu",
                 )
             self.register_buffer(
                 'bands',
@@ -414,6 +419,7 @@ class RotaryEmbeddingCat(nn.Module):
                 linear_bands=linear_bands,
                 in_pixels=in_pixels,
                 ref_feat_shape=self.ref_feat_shape,
+                device="cpu",
             )
             self.bands = None
             self.register_buffer(
