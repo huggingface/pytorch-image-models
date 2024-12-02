@@ -573,6 +573,13 @@ def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
             defaults = {'caution': True}
         ),
         OptimInfo(
+            name='cmars',
+            opt_class=Mars,
+            description='Cautious MARS',
+            has_betas=True,
+            defaults={'caution': True}
+        ),
+        OptimInfo(
             name='cnadamw',
             opt_class=NAdamW,
             description='Cautious NAdamW',
