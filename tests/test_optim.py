@@ -300,6 +300,8 @@ def test_optim_factory(optimizer):
     lr = (1e-2,) * 4
     if optimizer in ('mars', 'nadam', 'claprop', 'crmsproptf', 'cadafactorbv', 'csgdw', 'clamb'):
         lr = (1e-3,) * 4
+    elif optimizer in ('cmars',):
+        lr = (1e-4,) * 4
 
     try:
         if not opt_info.second_order:  # basic tests don't support second order right now
