@@ -686,7 +686,7 @@ class SwinTransformerV2Cr(nn.Module):
         else:
             self.window_size = to_2tuple(window_size)
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         stages = []
         in_dim = embed_dim
         in_scale = 1

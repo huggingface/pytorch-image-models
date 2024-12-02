@@ -328,7 +328,7 @@ class ConvNeXt(nn.Module):
             stem_stride = 4
 
         self.stages = nn.Sequential()
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         stages = []
         prev_chs = dims[0]
         curr_stride = stem_stride

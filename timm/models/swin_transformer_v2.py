@@ -656,7 +656,7 @@ class SwinTransformerV2(nn.Module):
         )
         grid_size = self.patch_embed.grid_size
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         layers = []
         in_dim = embed_dim[0]
         scale = 1

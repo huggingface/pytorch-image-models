@@ -282,7 +282,7 @@ class MetaNeXt(nn.Module):
             norm_layer(dims[0])
         )
 
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         prev_chs = dims[0]
         curr_stride = 4
         dilation = 1

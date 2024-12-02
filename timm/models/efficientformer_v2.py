@@ -542,7 +542,7 @@ class EfficientFormerV2(nn.Module):
         stride = 4
 
         num_stages = len(depths)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         downsamples = downsamples or (False,) + (True,) * (len(depths) - 1)
         mlp_ratios = to_ntuple(num_stages)(mlp_ratios)
         stages = []

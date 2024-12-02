@@ -240,7 +240,7 @@ class TNT(nn.Module):
         self.pixel_pos = nn.Parameter(torch.zeros(1, inner_dim, new_patch_size[0], new_patch_size[1]))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         blocks = []
         for i in range(depth):
             blocks.append(Block(

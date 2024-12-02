@@ -202,7 +202,7 @@ class Visformer(nn.Module):
         self.use_pos_embed = use_pos_embed
         self.grad_checkpointing = False
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]
         # stage 1
         if self.vit_stem:
             self.stem = None

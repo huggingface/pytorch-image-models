@@ -645,7 +645,7 @@ class SwinTransformer(nn.Module):
             window_size = (window_size,) * self.num_layers
         assert len(window_size) == self.num_layers
         mlp_ratio = to_ntuple(self.num_layers)(mlp_ratio)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         layers = []
         in_dim = embed_dim[0]
         scale = 1
