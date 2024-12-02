@@ -291,7 +291,7 @@ class SwinTransformerBlock(nn.Module):
                 dtype = x.dtype
             else:
                 H, W = self.input_resolution
-                device = "cpu"
+                device = torch.device("cpu")
                 dtype = None
             H = math.ceil(H / self.window_size[0]) * self.window_size[0]
             W = math.ceil(W / self.window_size[1]) * self.window_size[1]
