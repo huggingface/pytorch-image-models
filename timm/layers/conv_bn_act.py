@@ -82,7 +82,8 @@ class ConvNormAct(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         x = self.bn(x)
-        if self.aa is not None:
+        aa = getattr(self, 'aa', None)
+        if aa is not None:
             x = self.aa(x)
         return x
 
