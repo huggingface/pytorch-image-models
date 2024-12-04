@@ -344,7 +344,7 @@ class Nest(nn.Module):
 
         # Build up each hierarchical level
         levels = []
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         prev_dim = None
         curr_stride = 4
         for i in range(len(self.num_blocks)):

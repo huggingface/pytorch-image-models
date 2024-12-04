@@ -419,7 +419,7 @@ class GlobalContextVit(nn.Module):
             norm_layer=norm_layer
         )
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         stages = []
         for i in range(num_stages):
             last_stage = i == num_stages - 1

@@ -213,7 +213,7 @@ class RDNet(nn.Module):
         self.num_stages = len(growth_rates)
         curr_stride = stem_stride
         num_features = num_init_features
-        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(num_blocks_list)).split(num_blocks_list)]
+        dp_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(num_blocks_list), device="cpu").split(num_blocks_list)]
 
         dense_stages = []
         for i in range(self.num_stages):
