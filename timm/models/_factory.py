@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from urllib.parse import urlsplit
 
@@ -40,7 +41,8 @@ def create_model(
         pretrained: bool = False,
         pretrained_cfg: Optional[Union[str, Dict[str, Any], PretrainedCfg]] = None,
         pretrained_cfg_overlay:  Optional[Dict[str, Any]] = None,
-        checkpoint_path: str = '',
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        cache_dir: Optional[Union[str, Path]] = None,
         scriptable: Optional[bool] = None,
         exportable: Optional[bool] = None,
         no_jit: Optional[bool] = None,
@@ -50,10 +52,9 @@ def create_model(
 
     Lookup model's entrypoint function and pass relevant args to create a new model.
 
-    <Tip>
+    Tip:
         **kwargs will be passed through entrypoint fn to ``timm.models.build_model_with_cfg()``
         and then the model class __init__(). kwargs values set to None are pruned before passing.
-    </Tip>
 
     Args:
         model_name: Name of model to instantiate.
@@ -61,6 +62,7 @@ def create_model(
         pretrained_cfg: Pass in an external pretrained_cfg for model.
         pretrained_cfg_overlay: Replace key-values in base pretrained_cfg with these.
         checkpoint_path: Path of checkpoint to load _after_ the model is initialized.
+        cache_dir: Override system cache dir for Hugging Face Hub and Torch checkpoint locations
         scriptable: Set layer config so that model is jit scriptable (not working for all models yet).
         exportable: Set layer config so that model is traceable / ONNX exportable (not fully impl/obeyed yet).
         no_jit: Set layer config so that model doesn't utilize jit scripted layers (so far activations only).
@@ -99,7 +101,10 @@ def create_model(
         assert not pretrained_cfg, 'pretrained_cfg should not be set when sourcing model from Hugging Face Hub.'
         # For model names specified in the form `hf-hub:path/architecture_name@revision`,
         # load model weights + pretrained_cfg from Hugging Face hub.
-        pretrained_cfg, model_name, model_args = load_model_config_from_hf(model_name)
+        pretrained_cfg, model_name, model_args = load_model_config_from_hf(
+            model_name,
+            cache_dir=cache_dir,
+        )
         if model_args:
             for k, v in model_args.items():
                 kwargs.setdefault(k, v)
@@ -118,6 +123,7 @@ def create_model(
             pretrained=pretrained,
             pretrained_cfg=pretrained_cfg,
             pretrained_cfg_overlay=pretrained_cfg_overlay,
+            cache_dir=cache_dir,
             **kwargs,
         )
 
