@@ -74,34 +74,37 @@ def create_dataset(
         seed: int = 42,
         repeats: int = 0,
         input_img_mode: str = 'RGB',
+        trust_remote_code: bool = False,
         **kwargs,
 ):
     """ Dataset factory method
 
     In parentheses after each arg are the type of dataset supported for each arg, one of:
-      * folder - default, timm folder (or tar) based ImageDataset
-      * torch - torchvision based datasets
+      * Folder - default, timm folder (or tar) based ImageDataset
+      * Torch - torchvision based datasets
       * HFDS - Hugging Face Datasets
+      * HFIDS - Hugging Face Datasets Iterable (streaming mode, with IterableDataset)
       * TFDS - Tensorflow-datasets wrapper in IterabeDataset interface via IterableImageDataset
       * WDS - Webdataset
-      * all - any of the above
+      * All - any of the above
 
     Args:
-        name: dataset name, empty is okay for folder based datasets
-        root: root folder of dataset (all)
-        split: dataset split (all)
-        search_split: search for split specific child fold from root so one can specify
-            `imagenet/` instead of `/imagenet/val`, etc on cmd line / config. (folder, torch/folder)
-        class_map: specify class -> index mapping via text file or dict (folder)
-        load_bytes: load data, return images as undecoded bytes (folder)
-        download: download dataset if not present and supported (HFDS, TFDS, torch)
-        is_training: create dataset in train mode, this is different from the split.
-            For Iterable / TDFS it enables shuffle, ignored for other datasets. (TFDS, WDS)
-        batch_size: batch size hint for (TFDS, WDS)
-        seed: seed for iterable datasets (TFDS, WDS)
-        repeats: dataset repeats per iteration i.e. epoch (TFDS, WDS)
-        input_img_mode: Input image color conversion mode e.g. 'RGB', 'L' (folder, TFDS, WDS, HFDS)
-        **kwargs: other args to pass to dataset
+        name: Dataset name, empty is okay for folder based datasets
+        root: Root folder of dataset (All)
+        split: Dataset split (All)
+        search_split: Search for split specific child fold from root so one can specify
+            `imagenet/` instead of `/imagenet/val`, etc on cmd line / config. (Folder, Torch)
+        class_map: Specify class -> index mapping via text file or dict (Folder)
+        load_bytes: Load data, return images as undecoded bytes (Folder)
+        download: Download dataset if not present and supported (HFIDS, TFDS, Torch)
+        is_training: Create dataset in train mode, this is different from the split.
+            For Iterable / TDFS it enables shuffle, ignored for other datasets. (TFDS, WDS, HFIDS)
+        batch_size: Batch size hint for iterable datasets (TFDS, WDS, HFIDS)
+        seed: Seed for iterable datasets (TFDS, WDS, HFIDS)
+        repeats: Dataset repeats per iteration i.e. epoch (TFDS, WDS, HFIDS)
+        input_img_mode: Input image color conversion mode e.g. 'RGB', 'L' (folder, TFDS, WDS, HFDS, HFIDS)
+        trust_remote_code: Trust remote code in Hugging Face Datasets if True (HFDS, HFIDS)
+        **kwargs: Other args to pass through to underlying Dataset and/or Reader classes
 
     Returns:
         Dataset object
@@ -162,6 +165,7 @@ def create_dataset(
             split=split,
             class_map=class_map,
             input_img_mode=input_img_mode,
+            trust_remote_code=trust_remote_code,
             **kwargs,
         )
     elif name.startswith('hfids/'):
@@ -177,7 +181,8 @@ def create_dataset(
             repeats=repeats,
             seed=seed,
             input_img_mode=input_img_mode,
-            **kwargs
+            trust_remote_code=trust_remote_code,
+            **kwargs,
         )
     elif name.startswith('tfds/'):
         ds = IterableImageDataset(
