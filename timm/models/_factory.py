@@ -89,6 +89,10 @@ def create_model(
     >>> model = create_model('mobilenetv3_large_100', pretrained=True, num_classes=10)
     >>> model.num_classes
     10
+
+    >>> # Create a Dinov2 small model with pretrained weights and save weights in a custom directory.
+    >>> model = create_model('vit_small_patch14_dinov2.lvd142m', pretrained=True, cache_dir="/data/my-models")
+    >>> # Data will be stored at `/data/my-models/models--timm--vit_small_patch14_dinov2.lvd142m/`
     ```
     """
     # Parameters that aren't supported by all models or are intended to only override model defaults if set
