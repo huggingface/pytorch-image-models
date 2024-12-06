@@ -375,6 +375,10 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
+    'inception_next_atto.sail_in1k': _cfg(
+        hf_hub_id='timm/',
+        # url='https://github.com/sail-sg/inceptionnext/releases/download/model/inceptionnext_atto.pth',
+    ),
     'inception_next_tiny.sail_in1k': _cfg(
         hf_hub_id='timm/',
         # url='https://github.com/sail-sg/inceptionnext/releases/download/model/inceptionnext_tiny.pth',
@@ -403,6 +407,15 @@ def _create_inception_next(variant, pretrained=False, **kwargs):
         **kwargs,
     )
     return model
+
+
+@register_model
+def inception_next_atto(pretrained=False, **kwargs):
+    model_args = dict(
+        depths=(2, 2, 6, 2), dims=(40, 80, 160, 320),
+        token_mixers=partial(InceptionDWConv2d, band_kernel_size=9, branch_ratio=0.25)
+    )
+    return _create_inception_next('inception_next_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
