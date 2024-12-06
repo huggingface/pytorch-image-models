@@ -62,7 +62,7 @@ def create_model(
         pretrained_cfg: Pass in an external pretrained_cfg for model.
         pretrained_cfg_overlay: Replace key-values in base pretrained_cfg with these.
         checkpoint_path: Path of checkpoint to load _after_ the model is initialized.
-        cache_dir: Override system cache dir for Hugging Face Hub and Torch checkpoint locations
+        cache_dir: Override model cache dir for Hugging Face Hub and Torch checkpoints.
         scriptable: Set layer config so that model is jit scriptable (not working for all models yet).
         exportable: Set layer config so that model is traceable / ONNX exportable (not fully impl/obeyed yet).
         no_jit: Set layer config so that model doesn't utilize jit scripted layers (so far activations only).
