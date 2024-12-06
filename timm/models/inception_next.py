@@ -415,7 +415,7 @@ def inception_next_atto(pretrained=False, **kwargs):
         depths=(2, 2, 6, 2), dims=(40, 80, 160, 320),
         token_mixers=partial(InceptionDWConv2d, band_kernel_size=9, branch_ratio=0.25)
     )
-    return _create_inception_next('inception_next_tiny', pretrained=pretrained, **dict(model_args, **kwargs))
+    return _create_inception_next('inception_next_atto', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
