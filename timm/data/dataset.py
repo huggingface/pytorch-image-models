@@ -103,6 +103,7 @@ class IterableImageDataset(data.IterableDataset):
             transform=None,
             target_transform=None,
             max_steps=None,
+            **kwargs,
     ):
         assert reader is not None
         if isinstance(reader, str):
@@ -121,6 +122,7 @@ class IterableImageDataset(data.IterableDataset):
                 input_key=input_key,
                 target_key=target_key,
                 max_steps=max_steps,
+                **kwargs,
             )
         else:
             self.reader = reader

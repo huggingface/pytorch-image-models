@@ -103,6 +103,8 @@ group.add_argument('--input-key', default=None, type=str,
                    help='Dataset key for input images.')
 group.add_argument('--target-key', default=None, type=str,
                    help='Dataset key for target labels.')
+group.add_argument('--dataset-trust-remote-code', action='store_true', default=False,
+                   help='Allow huggingface dataset import to execute code downloaded from the dataset\'s repo.')
 
 # Model parameters
 group = parser.add_argument_group('Model parameters')
@@ -653,6 +655,7 @@ def main():
         input_key=args.input_key,
         target_key=args.target_key,
         num_samples=args.train_num_samples,
+        trust_remote_code=args.dataset_trust_remote_code,
     )
 
     if args.val_split:
@@ -668,6 +671,7 @@ def main():
             input_key=args.input_key,
             target_key=args.target_key,
             num_samples=args.val_num_samples,
+            trust_remote_code=args.dataset_trust_remote_code,
         )
 
     # setup mixup / cutmix

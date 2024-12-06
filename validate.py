@@ -66,6 +66,8 @@ parser.add_argument('--input-img-mode', default=None, type=str,
                    help='Dataset image conversion mode for input images.')
 parser.add_argument('--target-key', default=None, type=str,
                    help='Dataset key for target labels.')
+parser.add_argument('--dataset-trust-remote-code', action='store_true', default=False,
+                   help='Allow huggingface dataset import to execute code downloaded from the dataset\'s repo.')
 
 parser.add_argument('--model', '-m', metavar='NAME', default='dpn92',
                     help='model architecture (default: dpn92)')
@@ -268,6 +270,7 @@ def validate(args):
         input_key=args.input_key,
         input_img_mode=input_img_mode,
         target_key=args.target_key,
+        trust_remote_code=args.dataset_trust_remote_code,
     )
 
     if args.valid_labels:
