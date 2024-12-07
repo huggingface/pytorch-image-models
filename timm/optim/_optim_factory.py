@@ -486,6 +486,20 @@ def _register_lamb_lars(registry: OptimizerRegistry) -> None:
             defaults={'trust_clip': True}
         ),
         OptimInfo(
+            name='lambw',
+            opt_class=Lamb,
+            description='LAMB with decoupled weight decay',
+            has_betas=True,
+            defaults={'decoupled_decay': True}
+        ),
+        OptimInfo(
+            name='lambcw',
+            opt_class=Lamb,
+            description='LAMB with trust ratio clipping for stability and decoupled decay',
+            has_betas=True,
+            defaults={'trust_clip': True, 'decoupled_decay': True}
+        ),
+        OptimInfo(
             name='lars',
             opt_class=Lars,
             description='Layer-wise Adaptive Rate Scaling',
@@ -545,6 +559,22 @@ def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
             defaults={'caution': True}
         ),
         OptimInfo(
+            name='cadan',
+            opt_class=Adan,
+            description='Cautious Adaptive Nesterov Momentum Algorithm',
+            defaults={'caution': True, 'no_prox': False},
+            has_betas=True,
+            num_betas=3
+        ),
+        OptimInfo(
+            name='cadanw',
+            opt_class=Adan,
+            description='Cautious Adaptive Nesterov Momentum with decoupled weight decay',
+            defaults={'caution': True, 'no_prox': True},
+            has_betas=True,
+            num_betas=3
+        ),
+        OptimInfo(
             name='cadoptw',
             opt_class=Adopt,
             description='Cautious AdoptW (decoupled decay)',
@@ -556,6 +586,13 @@ def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
             description='Cautious LAMB',
             has_betas=True,
             defaults={'caution': True}
+        ),
+        OptimInfo(
+            name='clambw',
+            opt_class=Lamb,
+            description='Cautious LAMB with decoupled weight decay',
+            has_betas=True,
+            defaults={'caution': True, 'decoupled_decay': True}
         ),
         OptimInfo(
             name='claprop',

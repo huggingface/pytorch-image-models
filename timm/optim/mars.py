@@ -54,10 +54,13 @@ def _mars_single_tensor_step(
             if c_t_norm > 1.:
                 c_t = c_t / c_t_norm
         exp_avg.mul_(beta1).add_(c_t, alpha=one_minus_beta1)
+
         if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
             mask = (exp_avg * grad > 0).to(grad.dtype)
             mask.div_(mask.mean().clamp_(min=1e-3))
             exp_avg = exp_avg * mask
+
         if mars_type == "adamw":
             exp_avg_sq.mul_(beta2).addcmul_(c_t, c_t, value=1. - beta2)
             bias_correction1 = 1.0 - beta1 ** step
