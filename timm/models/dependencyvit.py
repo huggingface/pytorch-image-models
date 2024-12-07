@@ -7,6 +7,9 @@ From-scratch implementation of DependencyViT in PyTorch
 
 ReversedAttention implementation derived from timm's Vision Transformer implementation
 
+Some guesswork for the architecture, presume final models were based on CPVT-GAP with 1 PEG module
+    - https://arxiv.org/abs/2102.10882
+
 Implementation for timm by / Copyright 2023, Fredo Guan
 """
 
@@ -67,14 +70,14 @@ class ReversedAttention(nn.Module):
         self.dependency_mask = None
         self.head_selector_temperature = 0.1 # appendix D.1
 
-        self.head_selector = nn.Linear(dim, num_heads, bias=False) # FIXME is there a bias term?
+        self.head_selector = nn.Linear(dim, num_heads, bias=False) # TODO ablate bias
 
         self.message_controller = Mlp(
             in_features = dim,
             hidden_features = int(dim/2),
             out_features = 1,
             act_layer = nn.GELU,
-            bias = False, # FIXME is there a bias term?
+            bias = False, # TODO ablate bias
         )
         
         #self.token_pruner = None
@@ -139,6 +142,18 @@ class LayerScale(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.mul_(self.gamma) if self.inplace else x * self.gamma
+        
+class PositionalEncodingGenerator(nn.Module):
+    def __init__(
+            self,
+            dim: int,
+    ) -> None:
+        super().__init__()
+        self.proj = nn.Conv2d(dim, dim, 3, groups=dim)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.proj(x)
+        
 
 
 class DependencyViTBlock(nn.Module):
@@ -156,8 +171,14 @@ class DependencyViTBlock(nn.Module):
             act_layer: nn.Module = nn.GELU,
             norm_layer: nn.Module = nn.LayerNorm,
             mlp_layer: nn.Module = Mlp,
+            nchw_in: bool = False,
+            use_peg: bool = False,
     ) -> None:
         super().__init__()
+        
+        self.nchw_in = nchw_in
+        self.use_peg = use_peg
+        
         self.norm1 = norm_layer(dim)
         self.attn = ReversedAttention(
             dim=dim,
@@ -182,13 +203,22 @@ class DependencyViTBlock(nn.Module):
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        
+        self.peg = nn.Identity()
+        
 
     def forward(self, in_tuple: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         x, m = in_tuple
+        if self.nchw_in:
+            B, C, H, W = x.shape
+            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
         x_new, m, prune_mask = self.attn(self.norm1(x), m)
         x = x + self.drop_path1(self.ls1(x_new))
         x, m = self.token_pruner(x, m, prune_mask) if self.token_pruner else (x, m)
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+        if self.use_peg:
+            # NCHW out
+            x = self.peg(x.reshape(B, C, H, W))
         return (x, m)
 
 
@@ -200,6 +230,7 @@ class DependencyViT(VisionTransformer):
         self,
         prune_layers: Optional[Union[List[int], Tuple[int]]] = None,
         prune_ratio: Optional[float] = None,
+        cpe_depth: int = 1,
         *args,
         **kwargs
     ) -> None:
@@ -212,6 +243,7 @@ class DependencyViT(VisionTransformer):
             qkv_bias=False,
             init_values=1e-6,
             fc_norm=False,
+            pos_embed='none',
         )
         
         if prune_layers is not None:
@@ -221,17 +253,26 @@ class DependencyViT(VisionTransformer):
             assert max(self.prune_layers) <= len(self.blocks), "1 or more pruned layer indices exceed model depth"
             assert self.prune_ratio * len(self.prune_layers) < 1, "prune_ratio too big, ensure len(prune_layers) * prune_ratio is less than 1"
             
-            self.prune_layers = [x-1 for x in self.prune_layers] # convert counting numbers to nn.Sequential indicess
+            self.prune_layers = [x-1 for x in self.prune_layers] # convert counting numbers to nn.Sequential indices
             for prune_index, layer in enumerate(self.prune_layers, 1):
                 self.blocks[layer].token_pruner = TokenPruner(self.prune_ratio, prune_index)
         
+        self.blocks[0].nchw_in = True
+        for layer_index in range(cpe_depth):
+            self.blocks[layer_index].use_peg = True
+            self.blocks[layer_index + 1].nchw_in = True
+            self.blocks[layer_index].peg = PositionalEncodingGenerator(self.embed_dim)
+        
+        
+        
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        B, _, H, W = x.shape
         x = self.patch_embed(x)
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        B, N, _ = x.shape
+        x = x.reshape(B, -1, *self.patch_embed.dynamic_feat_size((H, W))) # [B, N, C] -> [B, C, H, W]
         m = torch.Tensor([1]).to(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x, m = checkpoint_seq(self.blocks, (x, m))
@@ -244,6 +285,7 @@ class DependencyViT(VisionTransformer):
         x = x * m.transpose(1, 3).squeeze(-1)
         return x
     
+    # TODO transition to new method that ViT uses?
     def track_dependency_mask(self, track: bool = True) -> None:
         for block in self.blocks:
             if block.attn.track_dependency_mask is not track:
@@ -314,6 +356,7 @@ def dependencyvit_small_patch16_224(pretrained: bool = False, **kwargs) -> Depen
     model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
     
+# TODO test how this works, presume pretrain unpruned model, enable pruning during inference
 @register_model
 def dependencyvit_lite_tiny_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
     model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=12, prune_layers=[2, 5, 8, 11], prune_ratio=0.16)
