@@ -149,7 +149,7 @@ class PositionalEncodingGenerator(nn.Module):
             dim: int,
     ) -> None:
         super().__init__()
-        self.proj = nn.Conv2d(dim, dim, 3, groups=dim)
+        self.proj = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.proj(x)
