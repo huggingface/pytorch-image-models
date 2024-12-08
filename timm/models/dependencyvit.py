@@ -272,7 +272,7 @@ class DependencyViT(VisionTransformer):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        x = x.reshape(B, -1, *self.patch_embed.dynamic_feat_size((H, W))) # [B, N, C] -> [B, C, H, W]
+        x = x.transpose(1, 2).reshape(B, -1, *self.patch_embed.dynamic_feat_size((H, W))) # [B, N, C] -> [B, C, H, W]
         m = torch.Tensor([1]).to(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x, m = checkpoint_seq(self.blocks, (x, m))
