@@ -218,7 +218,7 @@ class DependencyViTBlock(nn.Module):
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         if self.use_peg:
             # NCHW out
-            x = self.peg(x.reshape(B, C, H, W))
+            x = self.peg(x.transpose(1,2).reshape(B, C, H, W))
         return (x, m)
 
 
