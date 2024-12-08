@@ -62,6 +62,7 @@ NON_STD_FILTERS = [
     'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*', 'sam_hiera*',
     'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*', 'hiera_*', 'vitamin*', 'test_vit*',
+    'dependencyvit_*',
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -78,7 +79,7 @@ else:
     EXCLUDE_FILTERS = ['*enormous*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
 
-EXCLUDE_JIT_FILTERS = ['hiera_*']
+EXCLUDE_JIT_FILTERS = ['hiera_*', 'dependencyvit_*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
