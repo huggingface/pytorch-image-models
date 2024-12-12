@@ -110,7 +110,7 @@ class WindowAttention(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias=False)
         if qkv_bias:
             self.q_bias = nn.Parameter(torch.zeros(dim))
-            self.register_buffer('k_bias', torch.zeros(dim), persistent=False)
+            self.register_buffer('k_bias', torch.zeros(dim, device="cpu"), persistent=False)
             self.v_bias = nn.Parameter(torch.zeros(dim))
         else:
             self.q_bias = None
@@ -125,8 +125,8 @@ class WindowAttention(nn.Module):
 
     def _make_pair_wise_relative_positions(self):
         # get relative_coords_table
-        relative_coords_h = torch.arange(-(self.window_size[0] - 1), self.window_size[0]).to(torch.float32)
-        relative_coords_w = torch.arange(-(self.window_size[1] - 1), self.window_size[1]).to(torch.float32)
+        relative_coords_h = torch.arange(-(self.window_size[0] - 1), self.window_size[0], device="cpu").to(torch.float32)
+        relative_coords_w = torch.arange(-(self.window_size[1] - 1), self.window_size[1], device="cpu").to(torch.float32)
         relative_coords_table = torch.stack(ndgrid(relative_coords_h, relative_coords_w))
         relative_coords_table = relative_coords_table.permute(1, 2, 0).contiguous().unsqueeze(0)  # 1, 2*Wh-1, 2*Ww-1, 2
         if self.pretrained_window_size[0] > 0:
@@ -141,8 +141,8 @@ class WindowAttention(nn.Module):
         self.register_buffer("relative_coords_table", relative_coords_table, persistent=False)
 
         # get pair-wise relative position index for each token inside the window
-        coords_h = torch.arange(self.window_size[0])
-        coords_w = torch.arange(self.window_size[1])
+        coords_h = torch.arange(self.window_size[0], device="cpu")
+        coords_w = torch.arange(self.window_size[1], device="cpu")
         coords = torch.stack(ndgrid(coords_h, coords_w))  # 2, Wh, Ww
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
@@ -293,7 +293,7 @@ class SwinTransformerV2Block(nn.Module):
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
             if x is None:
-                img_mask = torch.zeros((1, *self.input_resolution, 1))  # 1 H W 1
+                img_mask = torch.zeros((1, *self.input_resolution, 1), device="cpu")  # 1 H W 1
             else:
                 img_mask = torch.zeros((1, x.shape[1], x.shape[2], 1), dtype=x.dtype, device=x.device)  # 1 H W 1
             cnt = 0
@@ -656,7 +656,7 @@ class SwinTransformerV2(nn.Module):
         )
         grid_size = self.patch_embed.grid_size
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         layers = []
         in_dim = embed_dim[0]
         scale = 1

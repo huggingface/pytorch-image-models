@@ -63,7 +63,7 @@ def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
     # cls to token & token 2 cls & cls to cls
     # get pair-wise relative position index for each token inside the window
     window_area = window_size[0] * window_size[1]
-    coords = torch.stack(ndgrid(torch.arange(window_size[0]), torch.arange(window_size[1])))  # 2, Wh, Ww
+    coords = torch.stack(ndgrid(torch.arange(window_size[0], device="cpu"), torch.arange(window_size[1], device="cpu")))  # 2, Wh, Ww
     coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
     relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
     relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
@@ -105,7 +105,7 @@ class Attention(nn.Module):
         self.qkv = nn.Linear(dim, all_head_dim * 3, bias=False)
         if qkv_bias:
             self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-            self.register_buffer('k_bias', torch.zeros(all_head_dim), persistent=False)
+            self.register_buffer('k_bias', torch.zeros(all_head_dim, device="cpu"), persistent=False)
             self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
         else:
             self.q_bias = None
@@ -326,7 +326,7 @@ class Beit(nn.Module):
         else:
             self.rel_pos_bias = None
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             Block(
                 dim=embed_dim,

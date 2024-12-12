@@ -260,7 +260,7 @@ class ParallelScalingBlock(nn.Module):
             self.register_buffer('qkv_bias', None)
             self.register_parameter('mlp_bias', None)
         else:
-            self.register_buffer('qkv_bias', torch.zeros(3 * dim), persistent=False)
+            self.register_buffer('qkv_bias', torch.zeros(3 * dim, device="cpu"), persistent=False)
             self.mlp_bias = nn.Parameter(torch.zeros(mlp_hidden_dim))
 
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -539,7 +539,7 @@ class VisionTransformer(nn.Module):
             self.patch_drop = nn.Identity()
         self.norm_pre = norm_layer(embed_dim) if pre_norm else nn.Identity()
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,
