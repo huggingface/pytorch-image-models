@@ -5,7 +5,7 @@ import os
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Iterable, Optional, Union
+from typing import Iterable, List, Optional, Tuple, Union
 
 import torch
 from torch.hub import HASH_REGEX, download_url_to_file, urlparse
@@ -53,7 +53,7 @@ HF_OPEN_CLIP_WEIGHTS_NAME = "open_clip_pytorch_model.bin"  # default pytorch pkl
 HF_OPEN_CLIP_SAFE_WEIGHTS_NAME = "open_clip_model.safetensors"  # safetensors version
 
 
-def get_cache_dir(child_dir=''):
+def get_cache_dir(child_dir: str = ''):
     """
     Returns the location of the directory where models are cached (and creates it if necessary).
     """
@@ -68,13 +68,22 @@ def get_cache_dir(child_dir=''):
     return model_dir
 
 
-def download_cached_file(url, check_hash=True, progress=False):
+def download_cached_file(
+        url: Union[str, List[str], Tuple[str, str]],
+        check_hash: bool = True,
+        progress: bool = False,
+        cache_dir: Optional[Union[str, Path]] = None,
+):
     if isinstance(url, (list, tuple)):
         url, filename = url
     else:
         parts = urlparse(url)
         filename = os.path.basename(parts.path)
-    cached_file = os.path.join(get_cache_dir(), filename)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+    else:
+        cache_dir = get_cache_dir()
+    cached_file = os.path.join(cache_dir, filename)
     if not os.path.exists(cached_file):
         _logger.info('Downloading: "{}" to {}\n'.format(url, cached_file))
         hash_prefix = None
@@ -85,13 +94,19 @@ def download_cached_file(url, check_hash=True, progress=False):
     return cached_file
 
 
-def check_cached_file(url, check_hash=True):
+def check_cached_file(
+        url: Union[str, List[str], Tuple[str, str]],
+        check_hash: bool = True,
+        cache_dir: Optional[Union[str, Path]] = None,
+):
     if isinstance(url, (list, tuple)):
         url, filename = url
     else:
         parts = urlparse(url)
         filename = os.path.basename(parts.path)
-    cached_file = os.path.join(get_cache_dir(), filename)
+    if not cache_dir:
+        cache_dir = get_cache_dir()
+    cached_file = os.path.join(cache_dir, filename)
     if os.path.exists(cached_file):
         if check_hash:
             r = HASH_REGEX.search(filename)  # r is Optional[Match[str]]
@@ -105,7 +120,7 @@ def check_cached_file(url, check_hash=True):
     return False
 
 
-def has_hf_hub(necessary=False):
+def has_hf_hub(necessary: bool = False):
     if not _has_hf_hub and necessary:
         # if no HF Hub module installed, and it is necessary to continue, raise error
         raise RuntimeError(
@@ -122,20 +137,32 @@ def hf_split(hf_id: str):
     return hf_model_id, hf_revision
 
 
-def load_cfg_from_json(json_file: Union[str, os.PathLike]):
+def load_cfg_from_json(json_file: Union[str, Path]):
     with open(json_file, "r", encoding="utf-8") as reader:
         text = reader.read()
     return json.loads(text)
 
 
-def download_from_hf(model_id: str, filename: str):
+def download_from_hf(
+        model_id: str,
+        filename: str,
+        cache_dir: Optional[Union[str, Path]] = None,
+):
     hf_model_id, hf_revision = hf_split(model_id)
-    return hf_hub_download(hf_model_id, filename, revision=hf_revision)
+    return hf_hub_download(
+        hf_model_id,
+        filename,
+        revision=hf_revision,
+        cache_dir=cache_dir,
+    )
 
 
-def load_model_config_from_hf(model_id: str):
+def load_model_config_from_hf(
+        model_id: str,
+        cache_dir: Optional[Union[str, Path]] = None,
+):
     assert has_hf_hub(True)
-    cached_file = download_from_hf(model_id, 'config.json')
+    cached_file = download_from_hf(model_id, 'config.json', cache_dir=cache_dir)
 
     hf_config = load_cfg_from_json(cached_file)
     if 'pretrained_cfg' not in hf_config:
@@ -172,6 +199,7 @@ def load_state_dict_from_hf(
         model_id: str,
         filename: str = HF_WEIGHTS_NAME,
         weights_only: bool = False,
+        cache_dir: Optional[Union[str, Path]] = None,
 ):
     assert has_hf_hub(True)
     hf_model_id, hf_revision = hf_split(model_id)
@@ -180,7 +208,12 @@ def load_state_dict_from_hf(
     if _has_safetensors:
         for safe_filename in _get_safe_alternatives(filename):
             try:
-                cached_safe_file = hf_hub_download(repo_id=hf_model_id, filename=safe_filename, revision=hf_revision)
+                cached_safe_file = hf_hub_download(
+                    repo_id=hf_model_id,
+                    filename=safe_filename,
+                    revision=hf_revision,
+                    cache_dir=cache_dir,
+                )
                 _logger.info(
                     f"[{model_id}] Safe alternative available for '{filename}' "
                     f"(as '{safe_filename}'). Loading weights using safetensors.")
@@ -189,7 +222,12 @@ def load_state_dict_from_hf(
                 pass
 
     # Otherwise, load using pytorch.load
-    cached_file = hf_hub_download(hf_model_id, filename=filename, revision=hf_revision)
+    cached_file = hf_hub_download(
+        hf_model_id,
+        filename=filename,
+        revision=hf_revision,
+        cache_dir=cache_dir,
+    )
     _logger.debug(f"[{model_id}] Safe alternative not found for '{filename}'. Loading weights using default pytorch.")
     try:
         state_dict = torch.load(cached_file, map_location='cpu', weights_only=weights_only)
@@ -198,15 +236,25 @@ def load_state_dict_from_hf(
     return state_dict
 
 
-def load_custom_from_hf(model_id: str, filename: str, model: torch.nn.Module):
+def load_custom_from_hf(
+        model_id: str,
+        filename: str,
+        model: torch.nn.Module,
+        cache_dir: Optional[Union[str, Path]] = None,
+):
     assert has_hf_hub(True)
     hf_model_id, hf_revision = hf_split(model_id)
-    cached_file = hf_hub_download(hf_model_id, filename=filename, revision=hf_revision)
+    cached_file = hf_hub_download(
+        hf_model_id,
+        filename=filename,
+        revision=hf_revision,
+        cache_dir=cache_dir,
+    )
     return model.load_pretrained(cached_file)
 
 
 def save_config_for_hf(
-        model,
+        model: torch.nn.Module,
         config_path: str,
         model_config: Optional[dict] = None,
         model_args: Optional[dict] = None
@@ -255,7 +303,7 @@ def save_config_for_hf(
 
 
 def save_for_hf(
-        model,
+        model: torch.nn.Module,
         save_directory: str,
         model_config: Optional[dict] = None,
         model_args: Optional[dict] = None,

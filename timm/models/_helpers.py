@@ -4,7 +4,6 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import logging
 import os
-from collections import OrderedDict
 from typing import Any, Callable, Dict, Optional, Union
 
 import torch

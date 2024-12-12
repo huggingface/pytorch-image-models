@@ -44,6 +44,7 @@ class ReaderHfids(Reader):
             target_img_mode: str = '',
             shuffle_size: Optional[int] = None,
             num_samples: Optional[int] = None,
+            trust_remote_code: bool = False
     ):
         super().__init__()
         self.root = root
@@ -60,7 +61,11 @@ class ReaderHfids(Reader):
         self.target_key = target_key
         self.target_img_mode = target_img_mode
 
-        self.builder = datasets.load_dataset_builder(name, cache_dir=root)
+        self.builder = datasets.load_dataset_builder(
+            name,
+            cache_dir=root,
+            trust_remote_code=trust_remote_code,
+        )
         if download:
             self.builder.download_and_prepare()
 
