@@ -3,7 +3,7 @@ import logging
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 from contextlib import nullcontext
 
 import torch
