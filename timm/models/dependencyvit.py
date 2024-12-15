@@ -351,6 +351,13 @@ def dependencyvit_tiny_patch16_224(pretrained: bool = False, **kwargs) -> Depend
     return model
 
 @register_model
+def dependencyvit_tiny_cpe5_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
+    model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=12, cpe_depth=5)
+    model = _create_dependencyvit('dependencyvit_tiny_cpe5_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def dependencyvit_small_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
     model_args = dict(patch_size=16, embed_dim=384, depth=12, num_heads=12)
     model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
