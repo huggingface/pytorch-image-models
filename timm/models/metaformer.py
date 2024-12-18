@@ -541,7 +541,7 @@ class MetaFormer(nn.Module):
                 **kwargs,
             )]
             prev_dim = dims[i]
-            self.feature_info += [dict(num_chs=dims[i], reduction=2, module=f'stages.{i}')]
+            self.feature_info += [dict(num_chs=dims[i], reduction=2**(i+2), module=f'stages.{i}')]
 
         self.stages = nn.Sequential(*stages)
 

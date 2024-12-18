@@ -407,7 +407,7 @@ class EfficientFormer(nn.Module):
             )
             prev_dim = embed_dims[i]
             stages.append(stage)
-            self.feature_info += [dict(num_chs=embed_dims[i], reduction=2**(1+i), module=f'stages.{i}')]
+            self.feature_info += [dict(num_chs=embed_dims[i], reduction=2**(i+2), module=f'stages.{i}')]
         self.stages = nn.Sequential(*stages)
 
         # Classifier head
