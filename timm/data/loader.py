@@ -87,7 +87,8 @@ class PrefetchLoader:
             re_prob=0.,
             re_mode='const',
             re_count=1,
-            re_num_splits=0):
+            re_num_splits=0,
+    ):
 
         mean = adapt_to_chs(mean, channels)
         std = adapt_to_chs(std, channels)

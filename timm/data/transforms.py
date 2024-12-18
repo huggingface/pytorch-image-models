@@ -12,7 +12,8 @@ try:
     has_interpolation_mode = True
 except ImportError:
     has_interpolation_mode = False
-from PIL import Image
+from PIL import Image, ImageCms
+
 import numpy as np
 
 __all__ = [
@@ -84,6 +85,31 @@ class MaybePILToTensor:
         if isinstance(pic, torch.Tensor):
             return pic
         return F.pil_to_tensor(pic)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+
+class ToLab(transforms.ToTensor):
+
+    def __init__(self) -> None:
+        super().__init__()
+        rgb_profile = ImageCms.createProfile(colorSpace='sRGB')
+        lab_profile = ImageCms.createProfile(colorSpace='LAB')
+        # Create a transform object from the input and output profiles
+        self.rgb_to_lab_transform = ImageCms.buildTransform(
+            inputProfile=rgb_profile,
+            outputProfile=lab_profile,
+            inMode='RGB',
+            outMode='LAB'
+        )
+
+    def __call__(self, pic) -> torch.Tensor:
+        lab_image = ImageCms.applyTransform(
+            im=pic,
+            transform=self.rgb_to_lab_transform
+        )
+        return lab_image
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
