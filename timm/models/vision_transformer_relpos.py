@@ -317,7 +317,7 @@ class VisionTransformerRelPos(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, self.num_prefix_tokens, embed_dim)) if class_token else None
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             block_fn(
                 dim=embed_dim,

@@ -325,7 +325,7 @@ class HieraDet(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *self.global_pos_size))
         self.pos_embed_window = nn.Parameter(torch.zeros(1, embed_dim, self.window_spec[0], self.window_spec[0]))
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         cur_stage = 0
         self.blocks = nn.Sequential()
         self.feature_info = []

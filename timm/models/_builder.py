@@ -3,8 +3,10 @@ import logging
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
+from contextlib import nullcontext
 
+import torch
 from torch import nn as nn
 from torch.hub import load_state_dict_from_url
 
@@ -420,10 +422,14 @@ def build_model_with_cfg(
             feature_cfg['feature_cls'] = kwargs.pop('feature_cls')
 
     # Instantiate the model
-    if model_cfg is None:
-        model = model_cls(**kwargs)
-    else:
-        model = model_cls(cfg=model_cfg, **kwargs)
+    meta_device = torch.device("meta")
+    with meta_device if hasattr(meta_device, "__enter__") and pretrained else nullcontext():
+        if model_cfg is None:
+            model = model_cls(**kwargs)
+        else:
+            model = model_cls(cfg=model_cfg, **kwargs)
+    if pretrained:
+        model.to_empty(device="cpu")
     model.pretrained_cfg = pretrained_cfg
     model.default_cfg = model.pretrained_cfg  # alias for backwards compat
 

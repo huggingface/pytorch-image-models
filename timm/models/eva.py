@@ -88,7 +88,7 @@ class EvaAttention(nn.Module):
             self.q_proj = self.k_proj = self.v_proj = None
             if qkv_bias:
                 self.q_bias = nn.Parameter(torch.zeros(all_head_dim))
-                self.register_buffer('k_bias', torch.zeros(all_head_dim), persistent=False)
+                self.register_buffer('k_bias', torch.zeros(all_head_dim, device="cpu"), persistent=False)
                 self.v_bias = nn.Parameter(torch.zeros(all_head_dim))
             else:
                 self.q_bias = self.k_bias = self.v_bias = None
@@ -472,7 +472,7 @@ class Eva(nn.Module):
         else:
             self.rope = None
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         block_fn = EvaBlockPostNorm if use_post_norm else EvaBlock
         self.blocks = nn.ModuleList([
             block_fn(

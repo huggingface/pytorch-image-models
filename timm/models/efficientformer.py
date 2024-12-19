@@ -385,7 +385,7 @@ class EfficientFormer(nn.Module):
         # stochastic depth decay rule
         self.num_stages = len(depths)
         last_stage = self.num_stages - 1
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         downsamples = downsamples or (False,) + (True,) * (self.num_stages - 1)
         stages = []
         self.feature_info = []

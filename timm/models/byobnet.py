@@ -1113,7 +1113,7 @@ def create_byob_stages(
     feature_info = []
     block_cfgs = [expand_blocks_cfg(s) for s in cfg.blocks]
     depths = [sum([bc.d for bc in stage_bcs]) for stage_bcs in block_cfgs]
-    dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+    dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
     dilation = 1
     net_stride = stem_feat['reduction']
     prev_chs = stem_feat['num_chs']

@@ -213,7 +213,7 @@ class VovNet(nn.Module):
         current_stride = stem_stride
 
         # OSA stages
-        stage_dpr = torch.split(torch.linspace(0, drop_path_rate, sum(block_per_stage)), block_per_stage)
+        stage_dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(block_per_stage), device="cpu").split(block_per_stage)]
         in_ch_list = stem_chs[-1:] + stage_out_chs[:-1]
         stage_args = dict(residual=cfg["residual"], depthwise=cfg["depthwise"], attn=cfg["attn"], **conv_kwargs)
         stages = []
