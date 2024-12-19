@@ -90,7 +90,7 @@ class MaybePILToTensor:
         return f"{self.__class__.__name__}()"
 
 
-class ToLab(transforms.ToTensor):
+class ToLabPIL:
 
     def __init__(self) -> None:
         super().__init__()
@@ -113,6 +113,121 @@ class ToLab(transforms.ToTensor):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
+
+
+def srgb_to_linear(srgb_image: torch.Tensor) -> torch.Tensor:
+    return torch.where(
+        srgb_image <= 0.04045,
+        srgb_image / 12.92,
+        ((srgb_image + 0.055) / 1.055) ** 2.4
+    )
+
+
+def rgb_to_lab_tensor(
+        rgb_img: torch.Tensor,
+        normalized: bool = True,
+        srgb_input: bool = True,
+) -> torch.Tensor:
+    """
+    Convert RGB image to LAB color space using tensor operations.
+
+    Args:
+        rgb_img: Tensor of shape (..., 3) with values in range [0, 255]
+        normalized: If True, outputs L,a,b in [0, 1] range instead of native LAB ranges
+
+    Returns:
+        lab_img: Tensor of same shape with either:
+            - normalized=False: L in [0, 100] and a,b in [-128, 127]
+            - normalized=True: L,a,b in [0, 1]
+    """
+    # Constants
+    epsilon = 216 / 24389
+    kappa = 24389 / 27
+    xn = 0.95047
+    yn = 1.0
+    zn = 1.08883
+
+    # Convert sRGB to linear RGB
+    if srgb_input:
+        rgb_img = srgb_to_linear(rgb_img)
+
+    # FIXME transforms before this are causing -ve values, can have a large impact on this conversion
+    rgb_img.clamp_(0, 1.0)
+
+    # Convert to XYZ using matrix multiplication
+    rgb_to_xyz = torch.tensor([
+        [0.412453, 0.357580, 0.180423],
+        [0.212671, 0.715160, 0.072169],
+        [0.019334, 0.119193, 0.950227]
+    ], device=rgb_img.device)
+
+    # Reshape input for matrix multiplication if needed
+    original_shape = rgb_img.shape
+    if len(original_shape) > 2:
+        rgb_img = rgb_img.reshape(-1, 3)
+
+    # Perform matrix multiplication
+    xyz = torch.matmul(rgb_img, rgb_to_xyz.T)
+
+    # Adjust XYZ values
+    xyz[..., 0].div_(xn)
+    xyz[..., 1].div_(yn)
+    xyz[..., 2].div_(zn)
+
+    # Step 4: XYZ to LAB
+    lab = torch.where(
+        xyz > epsilon,
+        torch.pow(xyz, 1 / 3),
+        (kappa * xyz + 16) / 116
+    )
+
+    if normalized:
+        # Calculate normalized [0,1] L,a,b values directly
+        # L: map [0,100] to [0,1] : (116y - 16)/100 = 1.16y - 0.16
+        # a: map [-128,127] to [0,1] : (500(x-y) + 128)/255 ≈ 1.96(x-y) + 0.502
+        # b: map [-128,127] to [0,1] : (200(y-z) + 128)/255 ≈ 0.784(y-z) + 0.502
+        shift_128 = 128 / 255
+        a_scale = 500 / 255
+        b_scale = 200 / 255
+        L = 1.16 * lab[..., 1] - 0.16
+        a = a_scale * (lab[..., 0] - lab[..., 1]) + shift_128
+        b = b_scale * (lab[..., 1] - lab[..., 2]) + shift_128
+    else:
+        # Calculate native range L,a,b values
+        L = 116 * lab[..., 1] - 16
+        a = 500 * (lab[..., 0] - lab[..., 1])
+        b = 200 * (lab[..., 1] - lab[..., 2])
+
+    # Stack the results
+    lab = torch.stack([L, a, b], dim=-1)
+
+    # Restore original shape if needed
+    if len(original_shape) > 2:
+        lab = lab.reshape(original_shape)
+
+    return lab
+
+
+class ToLabTensor:
+    def __init__(self, srgb_input=False, normalized=True) -> None:
+        self.srgb_input = srgb_input
+        self.normalized = normalized
+
+    def __call__(self, pic) -> torch.Tensor:
+        return rgb_to_lab_tensor(
+            pic,
+            normalized=self.normalized,
+            srgb_input=self.srgb_input,
+        )
+
+
+class ToLinearRgb:
+    def __init__(self):
+        pass
+
+    def __call__(self, pic) -> torch.Tensor:
+        assert isinstance(pic, torch.Tensor)
+        return srgb_to_linear(pic)
 
 
 # Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in

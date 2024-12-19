@@ -14,6 +14,7 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEF
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
 from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, \
     ResizeKeepRatio, CenterCropOrPad, RandomCropOrPad, TrimBorder, ToNumpy, MaybeToTensor, MaybePILToTensor
+from timm.data.transforms import ToLabTensor, ToLinearRgb
 from timm.data.random_erasing import RandomErasing
 
 
@@ -123,7 +124,10 @@ def transforms_imagenet_train(
             * normalizes and converts the branches above with the third, final transform
     """
     if use_tensor:
-        primary_tfl = [MaybeToTensor()]
+        primary_tfl = [
+            MaybeToTensor(),
+            ToLinearRgb(),  # FIXME
+        ]
     else:
         primary_tfl = []
 
@@ -236,6 +240,7 @@ def transforms_imagenet_train(
         if not use_tensor:
             final_tfl += [MaybeToTensor()]
         final_tfl += [
+            ToLabTensor(),  # FIXME
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),
@@ -268,6 +273,7 @@ def transforms_imagenet_eval(
         std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
         use_prefetcher: bool = False,
         normalize: bool = True,
+        use_tensor: bool = True,
 ):
     """ ImageNet-oriented image transform for evaluation and inference.
 
@@ -294,7 +300,13 @@ def transforms_imagenet_eval(
         scale_size = math.floor(img_size / crop_pct)
         scale_size = (scale_size, scale_size)
 
-    tfl = []
+    if use_tensor:
+        tfl = [
+            MaybeToTensor(),
+            ToLinearRgb(), # FIXME
+        ]
+    else:
+        tfl = []
 
     if crop_border_pixels:
         tfl += [TrimBorder(crop_border_pixels)]
@@ -332,10 +344,13 @@ def transforms_imagenet_eval(
         tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disabled, converted to tensor without scaling, keeps original dtype
-        tfl += [MaybePILToTensor()]
+        if not use_tensor:
+            tfl += [MaybePILToTensor()]
     else:
+        if not use_tensor:
+            tfl += [MaybeToTensor()]
         tfl += [
-            MaybeToTensor(),
+            ToLabTensor(),  # FIXME
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),
