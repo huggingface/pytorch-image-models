@@ -86,7 +86,7 @@ def transforms_imagenet_train(
         use_prefetcher: bool = False,
         normalize: bool = True,
         separate: bool = False,
-        use_tensor: Optional[bool] = True,  # FIXME forced True for testing
+        use_tensor: Optional[bool] = False,
 ):
     """ ImageNet-oriented image transforms for training.
 
@@ -273,7 +273,7 @@ def transforms_imagenet_eval(
         std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
         use_prefetcher: bool = False,
         normalize: bool = True,
-        use_tensor: bool = True,
+        use_tensor: bool = False,
 ):
     """ ImageNet-oriented image transform for evaluation and inference.
 
