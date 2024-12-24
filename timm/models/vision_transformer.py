@@ -1834,96 +1834,77 @@ default_cfgs = {
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 
     'vit_base_patch16_siglip_224.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_base_patch16_siglip_256.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_384.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
     'vit_base_patch16_siglip_512.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-512',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 512, 512),
         num_classes=0),
     'vit_large_patch16_siglip_256.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_large_patch16_siglip_384.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
     'vit_so400m_patch14_siglip_224.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_so400m_patch16_siglip_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_so400m_patch14_siglip_378.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 378, 378),
         num_classes=0),
     'vit_so400m_patch14_siglip_384.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
 
     'vit_base_patch16_siglip_gap_224.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_base_patch16_siglip_gap_256.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_gap_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_gap_384.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
     'vit_base_patch16_siglip_gap_512.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-512',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 512, 512),
         num_classes=0),
     'vit_large_patch16_siglip_gap_256.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_large_patch16_siglip_gap_384.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.pali_mix': _cfg(
         hf_hub_id='google/paligemma-3b-mix-224-jax',
@@ -1936,18 +1917,15 @@ default_cfgs = {
         custom_load='hf',
         num_classes=0),
     'vit_so400m_patch16_siglip_gap_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_378.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 378, 378), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_384.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_448.pali_mix': _cfg(
