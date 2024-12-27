@@ -355,7 +355,7 @@ class MLDecoder(nn.Module):
         proj_drop: float = 0.1,
         norm_layer: nn.Module = nn.LayerNorm,
         act_layer: nn.Module = nn.GELU,
-        
+        shared_fc: bool = False,
     ):
         super().__init__()
         have_class_embed = class_embed is not None
@@ -363,8 +363,10 @@ class MLDecoder(nn.Module):
         self.class_embed = None
         self.query_embed = None
         self.query_dim = 0
+        self.shared_fc = shared_fc
         if have_class_embed:
             assert len(class_embed) == num_classes, 'ML-Decoder got class_embed where dim 0 != num_classes'
+            self.shared_fc = True
             class_embed = class_embed.clone().detach() # copy instead of reference, detach gradient flow
             self.query_dim += class_embed.shape[1]
             duplicate_factor = int(num_classes / num_groups + 0.999)
@@ -405,7 +407,12 @@ class MLDecoder(nn.Module):
             act_layer=act_layer,
             drop=proj_drop,
         )
-        self.fc = GroupLinear(dim, num_classes, num_groups)
+        
+        # 1 group for all queries (shared_fc or class_embed) or 1 group for each query (default, used in paper)
+        duplicate_factor = int(num_classes / num_groups + 0.999)
+        num_fc_classes = duplicate_factor if self.shared_fc else num_classes
+        num_fc_groups = 1 if self.shared_fc else num_groups
+        self.fc = GroupLinear(dim, num_fc_classes, num_fc_groups)
     
     def forward(self, x, q=None):
         # BCHW to BNC
