@@ -94,6 +94,7 @@ class Lamb(Optimizer):
             trust_clip: bool = False,
             always_adapt: bool = False,
             caution: bool = False,
+            decoupled_decay: bool = False,
     ):
         defaults = dict(
             lr=lr,
@@ -106,6 +107,7 @@ class Lamb(Optimizer):
             trust_clip=trust_clip,
             always_adapt=always_adapt,
             caution=caution,
+            decoupled_decay=decoupled_decay,
         )
         super().__init__(params, defaults)
 
@@ -113,6 +115,7 @@ class Lamb(Optimizer):
         super().__setstate__(state)
         for group in self.param_groups:
             group.setdefault('caution', False)
+            group.setdefault('decoupled_decay', False)
 
     def _get_clip_grad_norm(self):
         max_grad_norm = self.defaults['max_grad_norm']
@@ -199,7 +202,10 @@ class Lamb(Optimizer):
 
                 weight_decay = group['weight_decay']
                 if weight_decay != 0:
-                    update.add_(p, alpha=weight_decay)
+                    if group.get('decoupled_decay', False):
+                        p.add_(p, alpha=-group['lr'] * weight_decay)
+                    else:
+                        update.add_(p, alpha=weight_decay)
 
                 if weight_decay != 0 or group['always_adapt']:
                     # Layer-wise LR adaptation. By default, skip adaptation on parameters that are
