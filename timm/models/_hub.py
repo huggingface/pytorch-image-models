@@ -395,10 +395,18 @@ def push_to_hf_hub(
 
 
 def generate_readme(model_card: dict, model_name: str):
+    tags = model_card.get('tags', None) or ['image-classification', 'timm']
     readme_text = "---\n"
-    readme_text += "tags:\n- image-classification\n- timm\n"
-    readme_text += "library_name: timm\n"
+    if tags:
+        readme_text += "tags:\n"
+        for t in tags:
+            readme_text += f"- {t}\n"
+    readme_text += f"library_name: {model_card.get('library_name', 'timm')}\n"
     readme_text += f"license: {model_card.get('license', 'apache-2.0')}\n"
+    if 'license_name' in model_card:
+        readme_text += f"license_name: {model_card.get('license_name')}\n"
+    if 'license_link' in model_card:
+        readme_text += f"license_link: {model_card.get('license_link')}\n"
     if 'details' in model_card and 'Dataset' in model_card['details']:
         readme_text += 'datasets:\n'
         if isinstance(model_card['details']['Dataset'], (tuple, list)):
