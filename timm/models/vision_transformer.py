@@ -912,26 +912,40 @@ def resize_pos_embed(
 
 
 @torch.no_grad()
-def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = '') -> None:
+def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = '', load_bfloat16: bool = False) -> None:
     """ Load weights from .npz checkpoints for official Google Brain Flax implementation
     """
     import numpy as np
+    if load_bfloat16:
+        import jax.numpy as jnp
+        import ml_dtypes
 
-    def _n2p(w, t=True, idx=None):
+    def _n2p(_w, t=True, idx=None):
         if idx is not None:
-            w = w[idx]
-        if w.ndim == 4 and w.shape[0] == w.shape[1] == w.shape[2] == 1:
-            w = w.flatten()
-        if t:
-            if w.ndim == 4:
-                w = w.transpose([3, 2, 0, 1])
-            elif w.ndim == 3:
-                w = w.transpose([2, 0, 1])
-            elif w.ndim == 2:
-                w = w.transpose([1, 0])
-        return torch.from_numpy(w)
+            _w = _w[idx]
 
-    w = np.load(checkpoint_path)
+        if load_bfloat16:
+            _w = _w.view(ml_dtypes.bfloat16).astype(jnp.float32)
+            _w = np.array(_w)
+
+        if _w.ndim == 4 and _w.shape[0] == _w.shape[1] == _w.shape[2] == 1:
+            _w = _w.flatten()
+        if t:
+            if _w.ndim == 4:
+                _w = _w.transpose([3, 2, 0, 1])
+            elif _w.ndim == 3:
+                _w = _w.transpose([2, 0, 1])
+            elif _w.ndim == 2:
+                _w = _w.transpose([1, 0])
+
+        _w = torch.from_numpy(_w)
+        return _w
+
+    if load_bfloat16:
+        w = jnp.load(checkpoint_path)
+    else:
+        w = np.load(checkpoint_path)
+
     interpolation = 'bilinear'
     antialias = False
     big_vision = False
@@ -1593,18 +1607,18 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
 
     'vit_base_patch32_clip_224.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch16_plus_clip_240.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 240, 240), crop_pct=1.0, num_classes=512),
+        input_size=(3, 240, 240), crop_pct=1.0, num_classes=640),
     'vit_large_patch14_clip_224.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch32_clip_224.datacompxl': _cfg(
@@ -1622,22 +1636,18 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch16_clip_224.dfn2b': _cfg(
-        hf_hub_id='apple/DFN2B-CLIP-ViT-B-16',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.dfn2b': _cfg(
-        hf_hub_id='apple/DFN2B-CLIP-ViT-L-14',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.dfn5b': _cfg(
-        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
     'vit_huge_patch14_clip_378.dfn5b': _cfg(
-        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14-378',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         crop_pct=1.0, input_size=(3, 378, 378), num_classes=1024),
@@ -1700,7 +1710,7 @@ default_cfgs = {
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_large_patch14_clip_336.openai': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
@@ -1907,15 +1917,22 @@ default_cfgs = {
         hf_hub_id='timm/',
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.pali_mix': _cfg(
-        hf_hub_id='google/paligemma-3b-mix-224-jax',
-        hf_hub_filename='paligemma-3b-mix-224.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.pali_pt': _cfg(
-        hf_hub_id='google/paligemma-3b-pt-224-jax',
-        hf_hub_filename='paligemma-3b-pt-224.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         num_classes=0),
+    'vit_so400m_patch14_siglip_gap_224.pali2_3b_pt': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_224.pali2_10b_pt': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    # 'vit_so400m_patch14_siglip_gap_224.pali2_28b_pt': _cfg(
+    #     hf_hub_id='google/paligemma2-28b-pt-224-jax',
+    #     hf_hub_filename='pt_27b_224.npz',
+    #     custom_load='hf',
+    #     num_classes=0),
     'vit_so400m_patch16_siglip_gap_256.webli_i18n': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 256, 256),
@@ -1929,23 +1946,69 @@ default_cfgs = {
         input_size=(3, 384, 384), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_448.pali_mix': _cfg(
-        hf_hub_id='google/paligemma-3b-mix-448-jax',
-        hf_hub_filename='paligemma-3b-mix-448.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         input_size=(3, 448, 448), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_448.pali_pt': _cfg(
-        hf_hub_id='google/paligemma-3b-pt-448-jax',
-        hf_hub_filename='paligemma-3b-pt-448.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali_refcoco_seg': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali_ocrvqa': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_3b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_10b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    # 'vit_so400m_patch14_siglip_gap_448.pali2_28b_pt': _cfg(
+    #     hf_hub_id='google/paligemma2-28b-pt-448-jax',
+    #     hf_hub_filename='pt_27b_448.npz',
+    #     custom_load='hf',
+    #     input_size=(3, 448, 448), crop_pct=1.0,
+    #     num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_3b_docci': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_10b_docci': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 448, 448), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_896.pali_pt': _cfg(
-        hf_hub_id='google/paligemma-3b-pt-896-jax',
-        hf_hub_filename='paligemma-3b-pt-896.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         input_size=(3, 896, 896), crop_pct=1.0,
         num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali_refcoco_seg': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali_ocrvqa': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali2_3b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali2_10b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    # 'vit_so400m_patch14_siglip_gap_896.pali2_28b_pt': _cfg(
+    #     hf_hub_id='google/paligemma2-28b-pt-896-jax',
+    #     hf_hub_filename='pt_27b_896.npz',
+    #     custom_load='hf',
+    #     input_size=(3, 896, 896), crop_pct=1.0,
+    #     num_classes=0),
 
     'vit_so400m_patch14_siglip_378.webli_ft_in1k': _cfg(
         hf_hub_id='timm/',
@@ -1958,22 +2021,18 @@ default_cfgs = {
 
     'vit_xsmall_patch16_clip_224.tinyclip_yfcc15m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_medium_patch32_clip_224.tinyclip_laion400m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_medium_patch16_clip_224.tinyclip_yfcc15m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_betwixt_patch32_clip_224.tinyclip_laion400m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
