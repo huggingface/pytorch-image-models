@@ -334,8 +334,8 @@ class GroupLinear(nn.Module):
         nn.init.xavier_normal_(self.weight)
         nn.init.constant_(self.bias, 0)
     
-    def forward(self, x): # [B, K, C]
-        x = (x @ self.weight).permute(1, 0, 2).flatten(1)[:, :self.num_classes]
+    def forward(self, x): # [K, B, C]
+        x = (x @ self.weight).permute(1, 0, 2).flatten(1)[:, :self.num_classes].contiguous()
         x += self.bias
         return x
 
