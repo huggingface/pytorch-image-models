@@ -83,9 +83,9 @@ class GluMlp(nn.Module):
 
     def init_weights(self):
         # override init of fc1 w/ gate portion set to weight near zero, bias=1
-        fc1_mid = self.fc1.bias.shape[0] // 2
-        nn.init.ones_(self.fc1.bias[fc1_mid:])
-        nn.init.normal_(self.fc1.weight[fc1_mid:], std=1e-6)
+        if self.fc1.bias is not None:
+            nn.init.ones_(self.fc1.bias[self.fc1.bias.shape[0] // 2:])
+        nn.init.normal_(self.fc1.weight[self.fc1.weight.shape[0] // 2:], std=1e-6)
 
     def forward(self, x):
         x = self.fc1(x)
