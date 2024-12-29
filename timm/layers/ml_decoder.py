@@ -392,7 +392,6 @@ class MLDecoder(nn.Module):
             # resolve query embed
             # case add: use same shape as class embed
             if class_embed_merge == 'add':
-                self.query_dim += class_embed.shape[-1]
                 self.query_embed = nn.Embedding(num_groups, class_embed.shape[-1])
                 self.query_embed.requires_grad_(learnable_embed)
             # case concat: use default shape
