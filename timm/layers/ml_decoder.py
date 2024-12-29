@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 import torch
 from torch import nn, Tensor
@@ -344,7 +344,7 @@ class MLDecoder(nn.Module):
         num_groups: int = 100,
         num_heads: int = 8,
         class_embed: Optional[torch.Tensor] = None,
-        concat_class_embed: bool = True,
+        class_embed_merge: Literal['', 'add', 'concat'] = 'add',
         learnable_embed: bool = False,
         learnable_class_embed: bool = False,
         embed_drop: float = 0.1,
@@ -359,17 +359,19 @@ class MLDecoder(nn.Module):
         shared_fc: bool = False,
     ):
         super().__init__()
-        have_class_embed = class_embed is not None
-        self.concat_class_embed = have_class_embed and concat_class_embed
+        self.have_class_embed = class_embed is not None
+        self.class_embed_merge = class_embed_merge
         self.class_embed = None
         self.query_embed = None
         self.query_dim = 0
         self.shared_fc = shared_fc
+        
+        # case using class embed
         if have_class_embed:
             assert len(class_embed) == num_classes, 'ML-Decoder got class_embed where dim 0 != num_classes'
             self.shared_fc = True
             class_embed = class_embed.clone().detach() # copy instead of reference, detach gradient flow
-            self.query_dim += class_embed.shape[1]
+            self.query_dim += class_embed.shape[-1] # [K , D]
             duplicate_factor = int(num_classes / num_groups + 0.999)
             class_embed_pad_length = (duplicate_factor - num_classes % duplicate_factor) % duplicate_factor
             
@@ -377,6 +379,7 @@ class MLDecoder(nn.Module):
             class_embed = torch.cat([class_embed, torch.zeros(class_embed_pad_length, class_embed.shape[1])])
             class_embed = class_embed.reshape(num_groups, duplicate_factor, -1)
             
+            # TODO different merging strategies
             # reduce each group to a single embed with mean
             class_embed = class_embed.mean(1)
             self.class_embed = nn.Embedding.from_pretrained(class_embed)
@@ -385,8 +388,21 @@ class MLDecoder(nn.Module):
             # TODO can use tensor instead of nn.Embedding and simply register as either a parameter or a buffer for learnability
             self.class_embed.requires_grad_(learnable_class_embed)
             
-        # case no class embed or using both
-        if not have_class_embed or concat_class_embed:
+            # resolve query embed
+            # case add: use same shape as class embed
+            if class_embed_merge == 'add':
+                self.query_dim += class_embed.shape[-1]
+                self.query_embed = nn.Embedding(num_groups, class_embed.shape[-1])
+                self.query_embed.requires_grad_(learnable_embed)
+            # case concat: use default shape
+            elif class_embed_merge == 'concat':
+                self.query_dim += dim
+                self.query_embed = nn.Embedding(num_groups, dim)
+                self.query_embed.requires_grad_(learnable_embed)
+            # no query embed otherwise, only class embed
+
+        # case no class embed, only using query embed
+        else:
             self.query_dim += dim
             self.query_embed = nn.Embedding(num_groups, dim)
             # TODO can use tensor instead of nn.Embedding and simply register as either a parameter or a buffer for learnability
@@ -409,11 +425,24 @@ class MLDecoder(nn.Module):
             drop=proj_drop,
         )
         
-        # 1 group for all queries (shared_fc or class_embed) or 1 group for each query (default, used in paper)
+        # 1 group for all queries (shared_fc, use with class_embed) or 1 group for each query (default, used in paper)
         duplicate_factor = int(num_classes / num_groups + 0.999)
         num_fc_classes = duplicate_factor if self.shared_fc else num_classes
         num_fc_groups = 1 if self.shared_fc else num_groups
         self.fc = GroupLinear(dim, num_fc_classes, num_fc_groups)
+    
+    def _resolve_query(self, q):
+        if q is not None:
+            return q
+        if not self.have_class_embed:
+            return self.query_embed
+        else:
+            if self.class_embed_merge == 'add':
+                return self.query_embed + self.class_embed
+            elif self.class_embed_merge == 'concat:
+                return torch.cat([x.weight for x in [self.query_embed, self.class_embed] if x is not None], dim=1)
+            else:
+                return self.class_embed
     
     def forward(self, x, q=None):
         # BCHW to BNC
@@ -421,7 +450,7 @@ class MLDecoder(nn.Module):
             x = x.flatten(2).transpose(1, 2)
                 
         x = self.act(self.proj(x))
-        q = q if q is not None else torch.cat([x.weight for x in [self.query_embed, self.class_embed] if x is not None], dim=1)
+        q = self._resolve_query(q)
         q = self.embed_norm(self.embed_drop(q))
         x = self.attn(q, self.norm1(x))# + q.unsqueeze(1)
         x = x + self.mlp(self.norm2(x))
