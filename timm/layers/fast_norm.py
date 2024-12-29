@@ -24,6 +24,8 @@ except ImportError:
     has_apex_rmsnorm = False
 
 
+has_torch_rms_norm = hasattr(F, 'rms_norm')
+
 # fast (ie lower precision LN) can be disabled with this flag if issues crop up
 _USE_FAST_NORM = False  # defaulting to False for now
 
@@ -75,7 +77,6 @@ def fast_group_norm(
     if is_autocast_enabled(x.device.type):
         # normally native AMP casts GN inputs to float32
         # here we use the low precision autocast dtype
-        # FIXME what to do re CPU autocast?
         dt = get_autocast_dtype(x.device.type)
         x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt) if bias is not None else None
 
@@ -101,12 +102,10 @@ def fast_layer_norm(
         # normally native AMP casts LN inputs to float32
         # apex LN does not, this is behaving like Apex
         dt = get_autocast_dtype(x.device.type)
-        # FIXME what to do re CPU autocast?
         x, weight, bias = x.to(dt), weight.to(dt), bias.to(dt) if bias is not None else None
 
     with torch.amp.autocast(device_type=x.device.type, enabled=False):
         return F.layer_norm(x, normalized_shape, weight, bias, eps)
-
 
 
 def rms_norm(
@@ -148,8 +147,19 @@ def fast_rms_norm(
         else:
             return fused_rms_norm_affine(x, weight, normalized_shape, eps)
 
-    # fallback
-    return rms_norm(x, normalized_shape, weight, eps)
+    if is_autocast_enabled(x.device.type):
+        # normally native AMP casts LN inputs to float32
+        # apex LN does not, this is behaving like Apex
+        dt = get_autocast_dtype(x.device.type)
+        x, weight = x.to(dt), weight.to(dt)
+
+    with torch.amp.autocast(device_type=x.device.type, enabled=False):
+        if has_torch_rms_norm:
+            x = F.rms_norm(x, normalized_shape, weight, eps)
+        else:
+            x = rms_norm(x, normalized_shape, weight, eps)
+
+    return x
 
 
 def simple_norm(
