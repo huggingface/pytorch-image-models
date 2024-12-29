@@ -1150,25 +1150,25 @@ def _convert_aimv2(
         state_dict: Dict[str, torch.Tensor],
         model: VisionTransformer,
 ) -> Dict[str, torch.Tensor]:
-    #import re
     out_dict = {}
-
     for k, v in state_dict.items():
         k = k.replace('norm_1', 'norm1')
         k = k.replace('norm_2', 'norm2')
         k = k.replace('preprocessor.patchifier.', 'patch_embed.')
         k = k.replace('preprocessor.pos_embed', 'pos_embed')
         k = k.replace('trunk.', '')
-        k = k.replace('mlp.fc1', 'mlp.fc1_g')
-        k = k.replace('mlp.fc3', 'mlp.fc1_x')
         k = k.replace('post_trunk_norm.', 'norm.')
-        # if re.match(r"blocks\.(\d+)\.mlp\.w12\.(?:weight|bias)", k):
-        #     out_dict[k.replace("w12", "fc1")] = v
-        #     continue
-        # elif re.match(r"blocks\.(\d+)\.mlp\.w3\.(?:weight|bias)", k):
-        #     out_dict[k.replace("w3", "fc2")] = v
-        #     continue
+
+        if 'mlp.fc1' in k:
+            if k in out_dict:
+                v = torch.cat([v, out_dict[k]], dim=0)
+        elif 'mlp.fc3' in k:
+            k = k.replace('mlp.fc3', 'mlp.fc1')
+            if k in out_dict:
+                v = torch.cat([out_dict[k], v], dim=0)
+
         out_dict[k] = v
+
     return out_dict
 
 def checkpoint_filter_fn(
@@ -3448,8 +3448,8 @@ def vit_large_patch14_aimv2_224(pretrained: bool = False, **kwargs) -> VisionTra
     rms_norm = partial(RmsNorm, eps=1e-5)
     model_args = dict(
         patch_size=14, embed_dim=1024, depth=24, num_heads=16,  class_token=False, fc_norm=False,
-        mlp_ratio=2.75, global_pool='avg', norm_layer=rms_norm, embed_norm_layer=rms_norm, mlp_layer=SwiGLU,
-        qkv_bias=False, proj_bias=False,
+        mlp_ratio=5.5, global_pool='avg', norm_layer=rms_norm, embed_norm_layer=rms_norm, mlp_layer=SwiGLUPacked,
+        qkv_bias=False, proj_bias=False, act_layer='silu'
     )
     model = _create_vision_transformer(
         'vit_large_patch14_aimv2_224', pretrained=pretrained, **dict(model_args, **kwargs))
