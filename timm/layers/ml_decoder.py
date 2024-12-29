@@ -368,7 +368,7 @@ class MLDecoder(nn.Module):
         num_groups = num_classes if num_groups < 1 else num_groups
         
         # case using class embed
-        if have_class_embed:
+        if self.have_class_embed:
             assert len(class_embed) == num_classes, 'ML-Decoder got class_embed where dim 0 != num_classes'
             self.shared_fc = True
             class_embed = class_embed.clone().detach() # copy instead of reference, detach gradient flow
