@@ -365,6 +365,7 @@ class MLDecoder(nn.Module):
         self.query_embed = None
         self.query_dim = 0
         self.shared_fc = shared_fc
+        num_groups = num_classes if num_groups < 1
         
         # case using class embed
         if have_class_embed:
