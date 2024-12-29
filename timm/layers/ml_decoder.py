@@ -436,14 +436,14 @@ class MLDecoder(nn.Module):
         if q is not None:
             return q
         if not self.have_class_embed:
-            return self.query_embed
+            return self.query_embed.weight
         else:
             if self.class_embed_merge == 'add':
-                return self.query_embed + self.class_embed
+                return self.query_embed.weight + self.class_embed.weight
             elif self.class_embed_merge == 'concat':
                 return torch.cat([x.weight for x in [self.query_embed, self.class_embed] if x is not None], dim=1)
             else:
-                return self.class_embed
+                return self.class_embed.weight
     
     def forward(self, x, q=None):
         # BCHW to BNC
