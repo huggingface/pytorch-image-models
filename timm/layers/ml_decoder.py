@@ -327,9 +327,10 @@ class GroupLinear(nn.Module):
         # 1 group for all queries (shared_fc, use with class_embed) or 1 group for each query (default, used in paper)
         self.num_classes = num_classes
         duplicate_factor = int(num_classes / num_groups + 0.999)
+        num_biases = duplicate_factor if shared else num_classes
         num_groups = 1 if shared else num_groups
         self.weight = nn.Parameter(torch.Tensor(num_groups, dim, duplicate_factor))
-        self.bias = nn.Parameter(torch.Tensor(self.num_classes))
+        self.bias = nn.Parameter(torch.Tensor(num_biases))
         nn.init.xavier_normal_(self.weight)
         nn.init.constant_(self.bias, 0)
     
