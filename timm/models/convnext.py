@@ -46,6 +46,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import trunc_normal_, AvgPool2dSame, DropPath, Mlp, GlobalResponseNormMlp, \
     LayerNorm2d, LayerNorm, RmsNorm2d, RmsNorm, create_conv2d, get_act_layer, get_norm_layer, make_divisible, to_ntuple
+from timm.layers import SimpleNorm2d, SimpleNorm
 from timm.layers import NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -233,6 +234,34 @@ class ConvNeXtStage(nn.Module):
             x = self.blocks(x)
         return x
 
+# map of norm layers with NCHW (2D) and channels last variants
+_NORM_MAP = {
+    'layernorm': (LayerNorm2d, LayerNorm),
+    'layernorm2d': (LayerNorm2d, LayerNorm),
+    'simplenorm': (SimpleNorm2d, SimpleNorm),
+    'simplenorm2d': (SimpleNorm2d, SimpleNorm),
+    'rmsnorm': (RmsNorm2d, RmsNorm),
+    'rmsnorm2d': (RmsNorm2d, RmsNorm),
+}
+
+
+def _get_norm_layers(norm_layer: Union[Callable, str], conv_mlp: bool, norm_eps: float):
+    norm_layer = norm_layer or 'layernorm'
+    if norm_layer in _NORM_MAP:
+        norm_layer_cl = _NORM_MAP[norm_layer][0] if conv_mlp else _NORM_MAP[norm_layer][1]
+        norm_layer = _NORM_MAP[norm_layer][0]
+        if norm_eps is not None:
+            norm_layer = partial(norm_layer, eps=norm_eps)
+            norm_layer_cl = partial(norm_layer_cl, eps=norm_eps)
+    else:
+        assert conv_mlp, \
+            'If a norm_layer is specified, conv MLP must be used so all norm expect rank-4, channels-first input'
+        norm_layer = get_norm_layer(norm_layer)
+        norm_layer_cl = norm_layer
+        if norm_eps is not None:
+            norm_layer_cl = partial(norm_layer_cl, eps=norm_eps)
+    return norm_layer, norm_layer_cl
+
 
 class ConvNeXt(nn.Module):
     r""" ConvNeXt
@@ -289,20 +318,7 @@ class ConvNeXt(nn.Module):
         super().__init__()
         assert output_stride in (8, 16, 32)
         kernel_sizes = to_ntuple(4)(kernel_sizes)
-        use_rms = isinstance(norm_layer, str) and norm_layer.startswith('rmsnorm')
-        if norm_layer is None or use_rms:
-            norm_layer = RmsNorm2d if use_rms else LayerNorm2d
-            norm_layer_cl = norm_layer if conv_mlp else (RmsNorm if use_rms else LayerNorm)
-            if norm_eps is not None:
-                norm_layer = partial(norm_layer, eps=norm_eps)
-                norm_layer_cl = partial(norm_layer_cl, eps=norm_eps)
-        else:
-            assert conv_mlp,\
-                'If a norm_layer is specified, conv MLP must be used so all norm expect rank-4, channels-first input'
-            norm_layer = get_norm_layer(norm_layer)
-            norm_layer_cl = norm_layer
-            if norm_eps is not None:
-                norm_layer_cl = partial(norm_layer_cl, eps=norm_eps)
+        norm_layer, norm_layer_cl = _get_norm_layers(norm_layer, conv_mlp, norm_eps)
         act_layer = get_act_layer(act_layer)
 
         self.num_classes = num_classes
@@ -975,7 +991,7 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def convnext_zepto_rms(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant (NOTE: still tweaking depths, will vary between 3-4M param, current is 3.7M
-    model_args = dict(depths=(2, 2, 4, 2), dims=(32, 64, 128, 256), conv_mlp=True, norm_layer='rmsnorm2d')
+    model_args = dict(depths=(2, 2, 4, 2), dims=(32, 64, 128, 256), conv_mlp=True, norm_layer='simplenorm')
     model = _create_convnext('convnext_zepto_rms', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
@@ -984,7 +1000,7 @@ def convnext_zepto_rms(pretrained=False, **kwargs) -> ConvNeXt:
 def convnext_zepto_rms_ols(pretrained=False, **kwargs) -> ConvNeXt:
     # timm femto variant (NOTE: still tweaking depths, will vary between 3-4M param, current is 3.7M
     model_args = dict(
-        depths=(2, 2, 4, 2), dims=(32, 64, 128, 256), conv_mlp=True, norm_layer='rmsnorm2d', stem_type='overlap_act')
+        depths=(2, 2, 4, 2), dims=(32, 64, 128, 256), conv_mlp=True, norm_layer='simplenorm', stem_type='overlap_act')
     model = _create_convnext('convnext_zepto_rms_ols', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 

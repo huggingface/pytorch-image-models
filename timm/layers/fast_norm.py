@@ -108,6 +108,7 @@ def fast_layer_norm(
         return F.layer_norm(x, normalized_shape, weight, bias, eps)
 
 
+
 def rms_norm(
     x: torch.Tensor,
     normalized_shape: List[int],
@@ -115,15 +116,16 @@ def rms_norm(
     eps: float = 1e-5,
 ):
     norm_ndim = len(normalized_shape)
+    v = x.pow(2)
     if torch.jit.is_scripting():
         # ndim = len(x.shape)
         # dims = list(range(ndim - norm_ndim, ndim))  # this doesn't work on pytorch <= 1.13.x
         # NOTE -ve dims cause torchscript to crash in some cases, out of options to work around
         assert norm_ndim == 1
-        v = torch.var(x, dim=-1).unsqueeze(-1)  # ts crashes with -ve dim + keepdim=True
+        v = torch.mean(v, dim=-1).unsqueeze(-1)  # ts crashes with -ve dim + keepdim=True
     else:
         dims = tuple(range(-1, -norm_ndim - 1, -1))
-        v = torch.var(x, dim=dims, keepdim=True)
+        v = torch.mean(v, dim=dims, keepdim=True)
     x = x * torch.rsqrt(v + eps)
     if weight is not None:
         x = x * weight
@@ -148,3 +150,47 @@ def fast_rms_norm(
 
     # fallback
     return rms_norm(x, normalized_shape, weight, eps)
+
+
+def simple_norm(
+    x: torch.Tensor,
+    normalized_shape: List[int],
+    weight: Optional[torch.Tensor] = None,
+    eps: float = 1e-5,
+):
+    norm_ndim = len(normalized_shape)
+    if torch.jit.is_scripting():
+        # ndim = len(x.shape)
+        # dims = list(range(ndim - norm_ndim, ndim))  # this doesn't work on pytorch <= 1.13.x
+        # NOTE -ve dims cause torchscript to crash in some cases, out of options to work around
+        assert norm_ndim == 1
+        v = torch.var(x, dim=-1).unsqueeze(-1)  # ts crashes with -ve dim + keepdim=True
+    else:
+        dims = tuple(range(-1, -norm_ndim - 1, -1))
+        v = torch.var(x, dim=dims, keepdim=True)
+    x = x * torch.rsqrt(v + eps)
+    if weight is not None:
+        x = x * weight
+    return x
+
+
+def fast_simple_norm(
+    x: torch.Tensor,
+    normalized_shape: List[int],
+    weight: Optional[torch.Tensor] = None,
+    eps: float = 1e-5,
+) -> torch.Tensor:
+    if torch.jit.is_scripting():
+        # this must be by itself, cannot merge with has_apex_rmsnorm
+        return simple_norm(x, normalized_shape, weight, eps)
+
+    if is_autocast_enabled(x.device.type):
+        # normally native AMP casts LN inputs to float32
+        # apex LN does not, this is behaving like Apex
+        dt = get_autocast_dtype(x.device.type)
+        x, weight = x.to(dt), weight.to(dt)
+
+    with torch.amp.autocast(device_type=x.device.type, enabled=False):
+        x = simple_norm(x, normalized_shape, weight, eps)
+    return x
+
