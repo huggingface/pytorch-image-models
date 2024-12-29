@@ -440,7 +440,7 @@ class MLDecoder(nn.Module):
         else:
             if self.class_embed_merge == 'add':
                 return self.query_embed + self.class_embed
-            elif self.class_embed_merge == 'concat:
+            elif self.class_embed_merge == 'concat':
                 return torch.cat([x.weight for x in [self.query_embed, self.class_embed] if x is not None], dim=1)
             else:
                 return self.class_embed
