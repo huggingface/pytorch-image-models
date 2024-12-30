@@ -53,13 +53,13 @@ FEAT_INTER_FILTERS = [
     'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
     'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
     'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet',
-    'regnet', 'byobnet', 'byoanet', 'mlp_mixer', 'hiera', 'fastvit', 'hieradet_sam2'
+    'regnet', 'byobnet', 'byoanet', 'mlp_mixer', 'hiera', 'fastvit', 'hieradet_sam2', 'aimv2*'
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*',
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*', 'aimv2*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*', 'sam_hiera*',
     'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*', 'hiera_*', 'vitamin*', 'test_vit*',
 ]
@@ -73,10 +73,10 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
         '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
-    NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*']
+    NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*', '*_1b_*', '*_3b_*']
 else:
     EXCLUDE_FILTERS = ['*enormous*']
-    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
+    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*']
 
 EXCLUDE_JIT_FILTERS = ['hiera_*']
 
