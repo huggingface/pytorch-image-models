@@ -164,14 +164,14 @@ First we'll need an image to do inference on. Here we load a picture of a leaf f
 >>> import requests
 >>> from PIL import Image
 >>> from io import BytesIO
->>> url = 'https://datasets-server.huggingface.co/assets/imagenet-1k/--/default/test/12/image/image.jpg'
+>>> url = 'https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/timm/cat.jpg'
 >>> image = Image.open(requests.get(url, stream=True).raw)
 >>> image
 ```
 
 Here's the image we loaded:
 
-<img src="https://datasets-server.huggingface.co/assets/imagenet-1k/--/default/test/12/image/image.jpg" alt="An Image from a link" width="300"/>
+<img src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/timm/cat.jpg" alt="An Image from a link" width="300"/>
 
 Now, we'll create our model and transforms again. This time, we make sure to set our model in evaluation mode.
 
@@ -211,7 +211,7 @@ Now we'll find the top 5 predicted class indexes and values using `torch.topk`.
 ```py
 >>> values, indices = torch.topk(probabilities, 5)
 >>> indices
-tensor([162, 166, 161, 164, 167])
+tensor([281, 282, 285, 673, 670])
 ```
 
 If we check the imagenet labels for the top index, we can see what the model predicted...
@@ -220,9 +220,9 @@ If we check the imagenet labels for the top index, we can see what the model pre
 >>> IMAGENET_1k_URL = 'https://storage.googleapis.com/bit_models/ilsvrc2012_wordnet_lemmas.txt'
 >>> IMAGENET_1k_LABELS = requests.get(IMAGENET_1k_URL).text.strip().split('\n')
 >>> [{'label': IMAGENET_1k_LABELS[idx], 'value': val.item()} for val, idx in zip(values, indices)]
-[{'label': 'beagle', 'value': 0.8486220836639404},
- {'label': 'Walker_hound, Walker_foxhound', 'value': 0.03753996267914772},
- {'label': 'basset, basset_hound', 'value': 0.024628572165966034},
- {'label': 'bluetick', 'value': 0.010317106731235981},
- {'label': 'English_foxhound', 'value': 0.006958036217838526}]
+[{'label': 'tabby, tabby_cat', 'value': 0.5101025700569153},
+ {'label': 'tiger_cat', 'value': 0.22490699589252472},
+ {'label': 'Egyptian_cat', 'value': 0.1835290789604187},
+ {'label': 'mouse, computer_mouse', 'value': 0.006752475164830685},
+ {'label': 'motor_scooter, scooter', 'value': 0.004942195490002632}]
 ```
