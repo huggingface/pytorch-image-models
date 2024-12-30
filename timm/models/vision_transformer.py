@@ -2242,6 +2242,8 @@ default_cfgs = {
     'test_vit3.r160_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 160, 160), crop_pct=0.95),
+    'test_vit4.r160_in1k': _cfg(
+        input_size=(3, 160, 160), crop_pct=0.95),
 }
 
 _quick_gelu_cfgs = [n for n, c in default_cfgs.items() if c.get('notes', ()) and 'quickgelu' in c['notes'][0]]
