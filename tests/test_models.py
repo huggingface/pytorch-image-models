@@ -72,7 +72,7 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
-        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
+        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560', '*_1b_*', '*_3b_*']
     NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*', '*_1b_*', '*_3b_*']
 else:
     EXCLUDE_FILTERS = ['*enormous*']
