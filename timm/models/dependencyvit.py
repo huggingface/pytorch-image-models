@@ -231,6 +231,7 @@ class DependencyViT(VisionTransformer):
         prune_layers: Optional[Union[List[int], Tuple[int]]] = None,
         prune_ratio: Optional[float] = None,
         cpe_depth: int = 1,
+        pos_embed: str = 'none',
         *args,
         **kwargs
     ) -> None:
@@ -347,6 +348,12 @@ def _create_dependencyvit(variant: str, pretrained: bool = False, **kwargs) -> D
 @register_model
 def dependencyvit_tiny_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
     model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=12)
+    model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+    
+@register_model
+def dependencyvit_tiny_cpe1_lpe_patch16_224(pretrained: bool = False, **kwargs) -> DependencyViT:
+    model_args = dict(patch_size=16, embed_dim=192, depth=12, num_heads=12, pos_embed='learn')
     model = _create_dependencyvit('dependencyvit_tiny_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
