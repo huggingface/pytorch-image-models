@@ -13,6 +13,7 @@
 ## What's New
 
 ## Dec 31, 2024
+* `convnext_nano` 384x384 ImageNet-12k pretrain & fine-tune. https://huggingface.co/models?search=convnext_nano%20r384
 * Add AIM-v2 encoders from https://github.com/apple/ml-aim, see on Hub: https://huggingface.co/models?search=timm%20aimv2
 * Add PaliGemma2 encoders from https://github.com/google-research/big_vision to existing PaliGemma, see on Hub: https://huggingface.co/models?search=timm%20pali2
 * Add missing L/14 DFN2B 39B CLIP ViT, `vit_large_patch14_clip_224.dfn2b_s39b`
