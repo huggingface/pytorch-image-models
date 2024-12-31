@@ -17,7 +17,7 @@
 * Add PaliGemma2 encoders from https://github.com/google-research/big_vision to existing PaliGemma, see on Hub: https://huggingface.co/models?search=timm%20pali2
 * Add missing L/14 DFN2B 39B CLIP ViT, `vit_large_patch14_clip_224.dfn2b_s39b`
 * Fix existing RmsProp layer to match standard formulation, use PT 2.5 impl when possible. Move old impl to `SimpleNorm` layer, it's LN w/o centering or bias. There were only two `timm` models using it, and they have been updated.
-* Allow overidde of `cache_dir` arg for model creation
+* Allow override of `cache_dir` arg for model creation
 * Pass through `trust_remote_code` for HF datasets wrapper
 * `inception_next_atto` model added by creator
 * Adan optimizer caution, and Lamb decoupled weighgt decay options
