@@ -248,7 +248,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 ### April 11, 2024
 * Prepping for a long overdue 1.0 release, things have been stable for a while now.
 * Significant feature that's been missing for a while, `features_only=True` support for ViT models with flat hidden states or non-std module layouts (so far covering  `'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'`)
-* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or direclty.
+* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or directly.
 ```python
 model = timm.create_model('vit_base_patch16_224')
 final_feat, intermediates = model.forward_intermediates(input) 
@@ -486,7 +486,7 @@ Included optimizers available via `timm.optim.create_optimizer_v2` factory metho
 * `madgrad` an implementation of MADGRAD adapted from https://github.com/facebookresearch/madgrad - https://arxiv.org/abs/2101.11075
 * `mars` MARS optimizer from https://github.com/AGI-Arena/MARS - https://arxiv.org/abs/2411.10438
 * `nadam` an implementation of Adam w/ Nesterov momentum
-* `nadamw` an impementation of AdamW (Adam w/ decoupled weight-decay) w/ Nesterov momentum. A simplified impl based on https://github.com/mlcommons/algorithmic-efficiency
+* `nadamw` an implementation of AdamW (Adam w/ decoupled weight-decay) w/ Nesterov momentum. A simplified impl based on https://github.com/mlcommons/algorithmic-efficiency
 * `novograd` by [Masashi Kimura](https://github.com/convergence-lab/novograd) - https://arxiv.org/abs/1905.11286
 * `radam` by [Liyuan Liu](https://github.com/LiyuanLucasLiu/RAdam) - https://arxiv.org/abs/1908.03265
 * `rmsprop_tf` adapted from PyTorch RMSProp by myself. Reproduces much improved Tensorflow RMSProp behaviour
