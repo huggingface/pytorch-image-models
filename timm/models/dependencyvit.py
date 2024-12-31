@@ -244,7 +244,7 @@ class DependencyViT(VisionTransformer):
             qkv_bias=False,
             init_values=1e-6,
             fc_norm=False,
-            pos_embed='none',
+            pos_embed=pos_embed,
         )
         
         if prune_layers is not None:
