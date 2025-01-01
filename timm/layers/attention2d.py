@@ -312,7 +312,6 @@ class Attention2d(nn.Module):
         self.num_heads = num_heads
         self.dim_head = dim_attn // num_heads
         self.head_first = head_first
-        self.scale = num_heads ** -0.5
         self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
@@ -337,14 +336,15 @@ class Attention2d(nn.Module):
                 dropout_p=self.attn_drop.p if self.training else 0.,
             ).transpose(-1, -2).reshape(B, -1, H, W)
         else:
-            q = q * self.scale
-            attn = q.transpose(-2, -1) @ k
+            q = q.transpose(-1, -2)
+            v = v.transpose(-1, -2)
+            attn = q @ k * q.size(-1) ** -0.5
             if attn_mask is not None:
                 # NOTE: assumes mask is float and in correct shape
                 attn = attn + attn_mask
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
-            x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
+            x = (attn @ v).transpose(-1, -2).reshape(B, -1, H, W)
 
         x = self.proj(x)
         x = self.proj_drop(x)
