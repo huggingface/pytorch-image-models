@@ -1,7 +1,8 @@
+import pytest
 import torch
 import torch.nn as nn
 
-from timm.layers import create_act_layer, set_layer_config, get_act_layer, get_act_fn
+from timm.layers import create_act_layer, set_layer_config, get_act_layer, get_act_fn, MultiQueryAttentionV2
 
 import importlib
 import os
@@ -119,3 +120,18 @@ def test_get_act_fn_none():
     assert get_act_fn(None) is None
     assert get_act_fn('') is None
 
+@pytest.mark.parametrize("dim", [128])
+@pytest.mark.parametrize("dim_out", [128, 256])
+@pytest.mark.parametrize("use_m", [True, False])
+def test_mqa_v2(dim, dim_out, use_m):
+    mqa = MultiQueryAttentionV2(dim, dim_out)
+    
+    x = torch.randn(1, dim, 32, 48)
+    if use_m:
+        m = torch.randn(1, dim, 16, 24)
+    else:
+        m = None
+        
+    y = mqa(x, m=m)
+    
+    assert (y.shape) == (1, dim_out, 32, 48)
