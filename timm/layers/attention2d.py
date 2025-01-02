@@ -59,8 +59,8 @@ class MultiQueryAttentionV2(nn.Module):
 
     def forward(self, x, m: Optional[torch.Tensor] = None):
         """Run layer computation."""
-        s = x.shape
-        m = m or x
+        b, _, h, w = x.shape
+        m = m if m is not None else x
 
         reshaped_x = self._reshape_input(x)
         reshaped_m = self._reshape_input(m)
@@ -68,15 +68,15 @@ class MultiQueryAttentionV2(nn.Module):
         q = torch.einsum('bnd,hkd->bnhk', reshaped_x, self.query_proj)
         k = torch.einsum('bmd,dk->bmk', reshaped_m, self.key_proj)
 
-        attn = torch.einsum('bnhk,bmk->bnhm', q, k)
+        attn = torch.einsum('bnhk,bmk->bnhm', q, k) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         v = torch.einsum('bmd,dv->bmv', reshaped_m, self.value_proj)
         o = torch.einsum('bnhm,bmv->bnhv', attn, v)
-        result = torch.einsum('bnhv,dhv->bnd', o, self.out_proj)
+        result = torch.einsum('bnhv,dhv->bdn', o, self.out_proj)
         result = self.proj_drop(result)
-        return result.reshape(s)
+        return result.reshape(b, -1, h, w)
 
 
 class MultiQueryAttention2d(nn.Module):

@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from timm.layers import create_act_layer, set_layer_config, get_act_layer, get_act_fn, Attention2d
+from timm.layers import create_act_layer, set_layer_config, get_act_layer, get_act_fn, Attention2d, MultiQueryAttentionV2
 
 import importlib
 import os
@@ -121,6 +121,23 @@ def test_get_act_fn_none():
     assert get_act_fn('') is None
 
 
+@pytest.mark.parametrize("dim", [128])
+@pytest.mark.parametrize("dim_out", [128, 256])
+@pytest.mark.parametrize("use_m", [True, False])
+def test_mqa_v2(dim, dim_out, use_m):
+    mqa = MultiQueryAttentionV2(dim, dim_out)
+    
+    x = torch.randn(1, dim, 32, 48)
+    if use_m:
+        m = torch.randn(1, dim, 16, 24)
+    else:
+        m = None
+        
+    y = mqa(x, m=m)
+    
+    assert (y.shape) == (1, dim_out, 32, 48)
+
+
 @pytest.mark.parametrize("bias", [True, False])
 @pytest.mark.parametrize("expand_first", [True, False])
 @pytest.mark.parametrize("head_first", [True, False])
@@ -141,6 +158,3 @@ def test_attn2d(bias, expand_first, head_first, attn_mask):
     o2 = attn(x, mask)
     
     assert torch.allclose(o1, o2, atol=1e-5), f"{torch.abs(o1 - o2).max()}"
-
-    
-    
