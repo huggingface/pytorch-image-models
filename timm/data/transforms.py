@@ -12,7 +12,8 @@ try:
     has_interpolation_mode = True
 except ImportError:
     has_interpolation_mode = False
-from PIL import Image
+from PIL import Image, ImageCms
+
 import numpy as np
 
 __all__ = [
@@ -87,6 +88,141 @@ class MaybePILToTensor:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
+
+
+class ToLabPIL:
+
+    def __init__(self) -> None:
+        super().__init__()
+        rgb_profile = ImageCms.createProfile(colorSpace='sRGB')
+        lab_profile = ImageCms.createProfile(colorSpace='LAB')
+        # Create a transform object from the input and output profiles
+        self.rgb_to_lab_transform = ImageCms.buildTransform(
+            inputProfile=rgb_profile,
+            outputProfile=lab_profile,
+            inMode='RGB',
+            outMode='LAB'
+        )
+
+    def __call__(self, pic) -> torch.Tensor:
+        lab_image = ImageCms.applyTransform(
+            im=pic,
+            transform=self.rgb_to_lab_transform
+        )
+        return lab_image
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+
+def srgb_to_linear(srgb_image: torch.Tensor) -> torch.Tensor:
+    return torch.where(
+        srgb_image <= 0.04045,
+        srgb_image / 12.92,
+        ((srgb_image + 0.055) / 1.055) ** 2.4
+    )
+
+
+def rgb_to_lab_tensor(
+        rgb_img: torch.Tensor,
+        normalized: bool = True,
+        srgb_input: bool = True,
+        split_channels: bool = False,
+) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    """
+    Convert RGB image to LAB color space using tensor operations.
+
+    Args:
+        rgb_img: Tensor of shape (..., 3) with values in range [0, 255]
+        normalized: If True, outputs L,a,b in [0, 1] range instead of native LAB ranges
+        srgb_input: Input is gamma corrected sRGB, otherwise linear RGB is assumed (rare unless part of a pipeline)
+        split_channels: If True, outputs a tuple of flattened colour channels instead of stacked image
+    Returns:
+        lab_img: Tensor of same shape with either:
+            - normalized=False: L in [0, 100] and a,b in [-128, 127]
+            - normalized=True: L,a,b in [0, 1]
+    """
+    # Constants
+    epsilon = 216 / 24389
+    kappa = 24389 / 27
+    xn = 0.95047
+    yn = 1.0
+    zn = 1.08883
+
+    # Convert sRGB to linear RGB
+    if srgb_input:
+        rgb_img = srgb_to_linear(rgb_img)
+
+    # FIXME transforms before this are causing -ve values, can have a large impact on this conversion
+    rgb_img = rgb_img.clamp(0, 1.0)
+
+    # Convert to XYZ using matrix multiplication
+    rgb_to_xyz = torch.tensor([
+        #    X        Y          Z
+        [0.412453, 0.212671, 0.019334],  # R
+        [0.357580, 0.715160, 0.119193],  # G
+        [0.180423, 0.072169, 0.950227],  # B
+    ], device=rgb_img.device)
+
+    # Reshape input for matrix multiplication if needed
+    original_shape = rgb_img.shape
+    if len(original_shape) > 2:
+        rgb_img = rgb_img.reshape(-1, 3)
+
+    # Perform matrix multiplication
+    xyz = rgb_img @ rgb_to_xyz
+
+    # Adjust XYZ values
+    xyz.div_(torch.tensor([xn, yn, zn], device=xyz.device))
+
+    # Step 4: XYZ to LAB
+    fxfyfz = torch.where(
+        xyz > epsilon,
+        torch.pow(xyz, 1 / 3),
+        (kappa * xyz + 16) / 116
+    )
+
+    L = 116 * fxfyfz[..., 1] - 16
+    a = 500 * (fxfyfz[..., 0] - fxfyfz[..., 1])
+    b = 200 * (fxfyfz[..., 1] - fxfyfz[..., 2])
+    if normalized:
+        # output in rage [0, 1] for each channel
+        L.div_(100)
+        a.add_(128).div_(255)
+        b.add_(128).div_(255)
+
+    if split_channels:
+        return L, a, b
+
+    lab = torch.stack([L, a, b], dim=-1)
+
+    # Restore original shape if needed
+    if len(original_shape) > 2:
+        lab = lab.reshape(original_shape)
+
+    return lab
+
+
+class ToLabTensor:
+    def __init__(self, srgb_input=False, normalized=True) -> None:
+        self.srgb_input = srgb_input
+        self.normalized = normalized
+
+    def __call__(self, pic) -> torch.Tensor:
+        return rgb_to_lab_tensor(
+            pic,
+            normalized=self.normalized,
+            srgb_input=self.srgb_input,
+        )
+
+
+class ToLinearRgb:
+    def __init__(self):
+        pass
+
+    def __call__(self, pic) -> torch.Tensor:
+        assert isinstance(pic, torch.Tensor)
+        return srgb_to_linear(pic)
 
 
 # Pillow is deprecating the top-level resampling attributes (e.g., Image.BILINEAR) in
