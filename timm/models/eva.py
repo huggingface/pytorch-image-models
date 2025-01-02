@@ -677,7 +677,7 @@ class Eva(nn.Module):
         x, rot_pos_embed = self._pos_embed(x)
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk, x, rope=rot_pos_embed)
+                x = checkpoint(blk, x, rope=rot_pos_embed, use_reentrant=False)
             else:
                 x = blk(x, rope=rot_pos_embed)
         x = self.norm(x)
