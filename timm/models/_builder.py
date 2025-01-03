@@ -429,7 +429,19 @@ def build_model_with_cfg(
         else:
             model = model_cls(cfg=model_cfg, **kwargs)
     if pretrained:
+        # .to_empty() will also move cpu params/buffers to uninitialized storage.
+        # this is problematic for non-persistent buffers, since they don't get loaded
+        # from pretrained weights later (not part of state_dict). hence, we have
+        # to save them before calling .to_empty() and fill them back after.
+        buffers = {k: v for k, v in model.named_buffers() if not v.is_meta}
         model.to_empty(device="cpu")
+        for k, v in model.named_buffers():
+            if k in buffers:
+                v.data = buffers[k]
+
+        # alternative, rely on internal method ._apply()
+        # model._apply(lambda t: torch.empty_like(t, device="cpu") if t.is_meta else t)
+
     model.pretrained_cfg = pretrained_cfg
     model.default_cfg = model.pretrained_cfg  # alias for backwards compat
 
