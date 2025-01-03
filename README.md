@@ -12,6 +12,19 @@
 
 ## What's New
 
+## Dec 31, 2024
+* `convnext_nano` 384x384 ImageNet-12k pretrain & fine-tune. https://huggingface.co/models?search=convnext_nano%20r384
+* Add AIM-v2 encoders from https://github.com/apple/ml-aim, see on Hub: https://huggingface.co/models?search=timm%20aimv2
+* Add PaliGemma2 encoders from https://github.com/google-research/big_vision to existing PaliGemma, see on Hub: https://huggingface.co/models?search=timm%20pali2
+* Add missing L/14 DFN2B 39B CLIP ViT, `vit_large_patch14_clip_224.dfn2b_s39b`
+* Fix existing RmsProp layer to match standard formulation, use PT 2.5 impl when possible. Move old impl to `SimpleNorm` layer, it's LN w/o centering or bias. There were only two `timm` models using it, and they have been updated.
+* Allow override of `cache_dir` arg for model creation
+* Pass through `trust_remote_code` for HF datasets wrapper
+* `inception_next_atto` model added by creator
+* Adan optimizer caution, and Lamb decoupled weighgt decay options
+* Some feature_info metadata fixed by https://github.com/brianhou0208
+* All OpenCLIP and JAX (CLIP, SigLIP, Pali, etc) model weights that used load time remapping were given their own HF Hub instances so that they work with `hf-hub:` based loading, and thus will work with new Transformers `TimmWrapperModel`
+
 ## Nov 28, 2024
 * More optimizers
   * Add MARS optimizer (https://arxiv.org/abs/2411.10438, https://github.com/AGI-Arena/MARS)
@@ -248,7 +261,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 ### April 11, 2024
 * Prepping for a long overdue 1.0 release, things have been stable for a while now.
 * Significant feature that's been missing for a while, `features_only=True` support for ViT models with flat hidden states or non-std module layouts (so far covering  `'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'`)
-* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or direclty.
+* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or directly.
 ```python
 model = timm.create_model('vit_base_patch16_224')
 final_feat, intermediates = model.forward_intermediates(input) 
@@ -486,7 +499,7 @@ Included optimizers available via `timm.optim.create_optimizer_v2` factory metho
 * `madgrad` an implementation of MADGRAD adapted from https://github.com/facebookresearch/madgrad - https://arxiv.org/abs/2101.11075
 * `mars` MARS optimizer from https://github.com/AGI-Arena/MARS - https://arxiv.org/abs/2411.10438
 * `nadam` an implementation of Adam w/ Nesterov momentum
-* `nadamw` an impementation of AdamW (Adam w/ decoupled weight-decay) w/ Nesterov momentum. A simplified impl based on https://github.com/mlcommons/algorithmic-efficiency
+* `nadamw` an implementation of AdamW (Adam w/ decoupled weight-decay) w/ Nesterov momentum. A simplified impl based on https://github.com/mlcommons/algorithmic-efficiency
 * `novograd` by [Masashi Kimura](https://github.com/convergence-lab/novograd) - https://arxiv.org/abs/1905.11286
 * `radam` by [Liyuan Liu](https://github.com/LiyuanLucasLiu/RAdam) - https://arxiv.org/abs/1908.03265
 * `rmsprop_tf` adapted from PyTorch RMSProp by myself. Reproduces much improved Tensorflow RMSProp behaviour

@@ -530,26 +530,47 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    "sam2_hiera_tiny.r224": _cfg(
-        hf_hub_id='facebook/sam2-hiera-tiny',
-        hf_hub_filename='sam2_hiera_tiny.pt',
-        input_size=(3, 224, 224), pool_size=(7, 7),
-    ),  # FIXME reduced res for testing
-    "sam2_hiera_tiny.r896": _cfg(
-        hf_hub_id='facebook/sam2-hiera-tiny',
-        hf_hub_filename='sam2_hiera_tiny.pt',
+    "sam2_hiera_tiny.fb_r896": _cfg(
+        # hf_hub_id='facebook/sam2-hiera-tiny',
+        # hf_hub_filename='sam2_hiera_tiny.pt',
+        hf_hub_id='timm/',
     ),
-    "sam2_hiera_small": _cfg(
-        hf_hub_id='facebook/sam2-hiera-small',
-        hf_hub_filename='sam2_hiera_small.pt',
+    "sam2_hiera_tiny.fb_r896_2pt1": _cfg(
+        # hf_hub_id='facebook/sam2.1-hiera-tiny',
+        # hf_hub_filename='sam2.1_hiera_tiny.pt',
+        hf_hub_id='timm/',
     ),
-    "sam2_hiera_base_plus": _cfg(
-        hf_hub_id='facebook/sam2-hiera-base-plus',
-        hf_hub_filename='sam2_hiera_base_plus.pt',
+    "sam2_hiera_small.fb_r896": _cfg(
+        # hf_hub_id='facebook/sam2-hiera-small',
+        # hf_hub_filename='sam2_hiera_small.pt',
+        hf_hub_id='timm/',
     ),
-    "sam2_hiera_large": _cfg(
-        hf_hub_id='facebook/sam2-hiera-large',
-        hf_hub_filename='sam2_hiera_large.pt',
+    "sam2_hiera_small.fb_r896_2pt1": _cfg(
+        # hf_hub_id='facebook/sam2.1-hiera-small',
+        # hf_hub_filename='sam2.1_hiera_small.pt',
+        hf_hub_id='timm/',
+    ),
+    "sam2_hiera_base_plus.fb_r896": _cfg(
+        # hf_hub_id='facebook/sam2-hiera-base-plus',
+        # hf_hub_filename='sam2_hiera_base_plus.pt',
+        hf_hub_id='timm/',
+    ),
+    "sam2_hiera_base_plus.fb_r896_2pt1": _cfg(
+        # hf_hub_id='facebook/sam2.1-hiera-base-plus',
+        # hf_hub_filename='sam2.1_hiera_base_plus.pt',
+        hf_hub_id='timm/',
+    ),
+    "sam2_hiera_large.fb_r1024": _cfg(
+        # hf_hub_id='facebook/sam2-hiera-large',
+        # hf_hub_filename='sam2_hiera_large.pt',
+        hf_hub_id='timm/',
+        min_input_size=(3, 256, 256),
+        input_size=(3, 1024, 1024), pool_size=(32, 32),
+    ),
+    "sam2_hiera_large.fb_r1024_2pt1": _cfg(
+        # hf_hub_id='facebook/sam2.1-hiera-large',
+        # hf_hub_filename='sam2.1_hiera_large.pt',
+        hf_hub_id='timm/',
         min_input_size=(3, 256, 256),
         input_size=(3, 1024, 1024), pool_size=(32, 32),
     ),
@@ -578,11 +599,11 @@ def checkpoint_filter_fn(state_dict, model=None, prefix=''):
 def _create_hiera_det(variant: str, pretrained: bool = False, **kwargs) -> HieraDet:
     out_indices = kwargs.pop('out_indices', 4)
     checkpoint_prefix = ''
-    if 'sam2' in variant:
-        # SAM2 pretrained weights have no classifier or final norm-layer (`head.norm`)
-        # This is workaround loading with num_classes=0 w/o removing norm-layer.
-        kwargs.setdefault('pretrained_strict', False)
-        checkpoint_prefix = 'image_encoder.trunk.'
+    # if 'sam2' in variant:
+    #     # SAM2 pretrained weights have no classifier or final norm-layer (`head.norm`)
+    #     # This is workaround loading with num_classes=0 w/o removing norm-layer.
+    #     kwargs.setdefault('pretrained_strict', False)
+    #     checkpoint_prefix = 'image_encoder.trunk.'
     return build_model_with_cfg(
         HieraDet,
         variant,

@@ -59,8 +59,8 @@ class MultiQueryAttentionV2(nn.Module):
 
     def forward(self, x, m: Optional[torch.Tensor] = None):
         """Run layer computation."""
-        s = x.shape
-        m = m or x
+        b, _, h, w = x.shape
+        m = m if m is not None else x
 
         reshaped_x = self._reshape_input(x)
         reshaped_m = self._reshape_input(m)
@@ -68,15 +68,15 @@ class MultiQueryAttentionV2(nn.Module):
         q = torch.einsum('bnd,hkd->bnhk', reshaped_x, self.query_proj)
         k = torch.einsum('bmd,dk->bmk', reshaped_m, self.key_proj)
 
-        attn = torch.einsum('bnhk,bmk->bnhm', q, k)
+        attn = torch.einsum('bnhk,bmk->bnhm', q, k) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         v = torch.einsum('bmd,dv->bmv', reshaped_m, self.value_proj)
         o = torch.einsum('bnhm,bmv->bnhv', attn, v)
-        result = torch.einsum('bnhv,dhv->bnd', o, self.out_proj)
+        result = torch.einsum('bnhv,dhv->bdn', o, self.out_proj)
         result = self.proj_drop(result)
-        return result.reshape(s)
+        return result.reshape(b, -1, h, w)
 
 
 class MultiQueryAttention2d(nn.Module):
@@ -312,7 +312,6 @@ class Attention2d(nn.Module):
         self.num_heads = num_heads
         self.dim_head = dim_attn // num_heads
         self.head_first = head_first
-        self.scale = num_heads ** -0.5
         self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
@@ -337,14 +336,15 @@ class Attention2d(nn.Module):
                 dropout_p=self.attn_drop.p if self.training else 0.,
             ).transpose(-1, -2).reshape(B, -1, H, W)
         else:
-            q = q * self.scale
-            attn = q.transpose(-2, -1) @ k
+            q = q.transpose(-1, -2)
+            v = v.transpose(-1, -2)
+            attn = q @ k * q.size(-1) ** -0.5
             if attn_mask is not None:
                 # NOTE: assumes mask is float and in correct shape
                 attn = attn + attn_mask
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
-            x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
+            x = (attn @ v).transpose(-1, -2).reshape(B, -1, H, W)
 
         x = self.proj(x)
         x = self.proj_drop(x)
