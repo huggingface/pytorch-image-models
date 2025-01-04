@@ -421,14 +421,25 @@ def build_model_with_cfg(
         if 'feature_cls' in kwargs:
             feature_cfg['feature_cls'] = kwargs.pop('feature_cls')
 
+    # use meta-device init to speed up loading pretrained weights.
+    # device context manager is only available for PyTorch>=2.0
+    # when num_classes is changed, we rely on __init__() logic to initialize head weights.
+    # thus, we can't use meta-device init in that case.
+    num_classes = 0 if features else kwargs.get("num_classes", pretrained_cfg["num_classes"])
+    use_meta_init = (
+        pretrained
+        and hasattr(torch.device("meta"), "__enter__")
+        and (num_classes == 0 or num_classes == pretrained_cfg["num_classes"])
+    )
+
     # Instantiate the model
-    meta_device = torch.device("meta")
-    with meta_device if hasattr(meta_device, "__enter__") and pretrained else nullcontext():
+    with torch.device("meta") if use_meta_init else nullcontext():
         if model_cfg is None:
             model = model_cls(**kwargs)
         else:
             model = model_cls(cfg=model_cfg, **kwargs)
-    if pretrained:
+
+    if use_meta_init:
         # .to_empty() will also move cpu params/buffers to uninitialized storage.
         # this is problematic for non-persistent buffers, since they don't get loaded
         # from pretrained weights later (not part of state_dict). hence, we have
