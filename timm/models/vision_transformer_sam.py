@@ -450,7 +450,7 @@ class VisionTransformerSAM(nn.Module):
             self.rope_window = None
 
         # stochastic depth decay rule
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]
         self.blocks = nn.Sequential(*[
             block_fn(
                 dim=embed_dim,

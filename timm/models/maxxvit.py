@@ -1174,7 +1174,7 @@ class MaxxVit(nn.Module):
 
         num_stages = len(cfg.embed_dim)
         assert len(cfg.depths) == num_stages
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths), device="cpu").split(cfg.depths)]
         in_chs = self.stem.out_chs
         stages = []
         for i in range(num_stages):

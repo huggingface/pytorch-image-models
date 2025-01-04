@@ -312,7 +312,7 @@ class PyramidVisionTransformerV2(nn.Module):
             embed_dim=embed_dims[0],
         )
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         cur = 0
         prev_dim = embed_dims[0]
         stages = []
