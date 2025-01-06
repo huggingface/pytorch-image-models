@@ -20,7 +20,6 @@ from functools import partial, reduce
 from typing import Union, List, Tuple, Optional
 
 import torch
-import torch.utils.checkpoint as checkpoint
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -28,7 +27,8 @@ from timm.layers import Mlp, DropPath, trunc_normal_tf_, get_norm_layer, to_2tup
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
-from ._registry import register_model, register_model_deprecations, generate_default_cfgs
+from ._manipulate import checkpoint
+from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['MultiScaleVit', 'MultiScaleVitCfg']  # model_registry will add each entrypoint fn to this
 

@@ -44,15 +44,14 @@ from typing import Callable, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, SwiGLU, LayerNorm, DropPath, trunc_normal_, use_fused_attn
 from timm.layers import resample_patch_embed, resample_abs_pos_embed, resize_rel_pos_bias_table, ndgrid
 
-
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
+from ._manipulate import checkpoint
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['Beit']

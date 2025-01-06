@@ -41,7 +41,6 @@ from typing import Callable, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, LayerType, \
@@ -51,7 +50,7 @@ from ._efficientnet_blocks import SqueezeExcite
 from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
 from ._features import FeatureInfo, FeatureHooks, feature_take_indices
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint_seq, checkpoint
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['EfficientNet', 'EfficientNetFeatures']
