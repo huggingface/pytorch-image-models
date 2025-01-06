@@ -8,13 +8,12 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint as cp
 from torch.jit.annotations import List
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import BatchNormAct2d, get_norm_act_layer, BlurPool2d, create_classifier
 from ._builder import build_model_with_cfg
-from ._manipulate import MATCH_PREV_GROUP
+from ._manipulate import MATCH_PREV_GROUP, checkpoint
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['DenseNet']
@@ -60,7 +59,7 @@ class DenseLayer(nn.Module):
         def closure(*xs):
             return self.bottleneck_fn(xs)
 
-        return cp.checkpoint(closure, *x)
+        return checkpoint(closure, *x)
 
     @torch.jit._overload_method  # noqa: F811
     def forward(self, x):

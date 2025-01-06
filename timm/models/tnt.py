@@ -11,13 +11,13 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import Mlp, DropPath, trunc_normal_, _assert, to_2tuple
+from timm.layers import Mlp, DropPath, trunc_normal_, _assert, to_2tuple, resample_abs_pos_embed
 from ._builder import build_model_with_cfg
+from ._manipulate import checkpoint
 from ._registry import register_model
-from .vision_transformer import resize_pos_embed
+
 
 __all__ = ['TNT']  # model_registry will add each entrypoint fn to this
 
@@ -340,8 +340,11 @@ class TNT(nn.Module):
 def checkpoint_filter_fn(state_dict, model):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
     if state_dict['patch_pos'].shape != model.patch_pos.shape:
-        state_dict['patch_pos'] = resize_pos_embed(state_dict['patch_pos'],
-            model.patch_pos, getattr(model, 'num_tokens', 1), model.pixel_embed.grid_size)
+        state_dict['patch_pos'] = resample_abs_pos_embed(
+            state_dict['patch_pos'],
+            new_size=model.pixel_embed.grid_size,
+            num_prefix_tokens=1,
+        )
     return state_dict
 
 

@@ -15,10 +15,9 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
 
 from timm.layers import Format, _assert
-
+from ._manipulate import checkpoint
 
 __all__ = [
     'FeatureInfo', 'FeatureHooks', 'FeatureDictNet', 'FeatureListNet', 'FeatureHookNet', 'FeatureGetterNet',

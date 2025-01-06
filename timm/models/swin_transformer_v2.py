@@ -18,14 +18,14 @@ from typing import Callable, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, ClassifierHead,\
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, ClassifierHead,\
     resample_patch_embed, ndgrid, get_act_layer, LayerType
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
+from ._manipulate import checkpoint
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['SwinTransformerV2']  # model_registry will add each entrypoint fn to this

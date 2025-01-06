@@ -37,7 +37,6 @@ except ImportError:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint
 from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
@@ -1019,7 +1018,6 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     else:
         pos_embed_w = _n2p(w[f'{prefix}Transformer/posembed_input/pos_embedding'], t=False)
     if pos_embed_w.shape != model.pos_embed.shape:
-        old_shape = pos_embed_w.shape
         num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
         pos_embed_w = resample_abs_pos_embed(  # resize pos embedding when different size from pretrained weights
             pos_embed_w,

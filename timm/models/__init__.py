@@ -91,7 +91,7 @@ from ._features_fx import FeatureGraphNet, GraphExtractNet, create_feature_extra
 from ._helpers import clean_state_dict, load_state_dict, load_checkpoint, remap_state_dict, resume_checkpoint
 from ._hub import load_model_config_from_hf, load_state_dict_from_hf, push_to_hf_hub
 from ._manipulate import model_parameters, named_apply, named_modules, named_modules_with_params, \
-    group_modules, group_parameters, checkpoint_seq, adapt_input_conv
+    group_modules, group_parameters, checkpoint_seq, checkpoint, adapt_input_conv
 from ._pretrained import PretrainedCfg, DefaultCfg, filter_pretrained_cfg
 from ._prune import adapt_model_from_string
 from ._registry import split_model_name_tag, get_arch_name, generate_default_cfgs, register_model, \

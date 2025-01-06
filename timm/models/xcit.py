@@ -17,16 +17,15 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, to_2tuple, use_fused_attn
+from timm.layers import DropPath, trunc_normal_, to_2tuple, use_fused_attn, Mlp
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
+from ._manipulate import checkpoint
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 from .cait import ClassAttn
-from .vision_transformer import Mlp
 
 __all__ = ['Xcit']  # model_registry will add each entrypoint fn to this
 
