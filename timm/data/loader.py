@@ -77,18 +77,18 @@ class PrefetchLoader:
 
     def __init__(
             self,
-            loader,
-            mean=IMAGENET_DEFAULT_MEAN,
-            std=IMAGENET_DEFAULT_STD,
-            channels=3,
-            device=torch.device('cuda'),
-            img_dtype=torch.float32,
-            fp16=False,
-            re_prob=0.,
-            re_mode='const',
-            re_count=1,
-            re_num_splits=0):
-
+            loader: torch.utils.data.DataLoader,
+            mean: Tuple[float, ...] = IMAGENET_DEFAULT_MEAN,
+            std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
+            channels: int = 3,
+            device: torch.device = torch.device('cuda'),
+            img_dtype: Optional[torch.dtype] = None,
+            fp16: bool = False,
+            re_prob: float = 0.,
+            re_mode: str = 'const',
+            re_count: int = 1,
+            re_num_splits: int = 0,
+    ):
         mean = adapt_to_chs(mean, channels)
         std = adapt_to_chs(std, channels)
         normalization_shape = (1, channels, 1, 1)
@@ -98,7 +98,7 @@ class PrefetchLoader:
         if fp16:
             # fp16 arg is deprecated, but will override dtype arg if set for bwd compat
             img_dtype = torch.float16
-        self.img_dtype = img_dtype
+        self.img_dtype = img_dtype or torch.float32
         self.mean = torch.tensor(
             [x * 255 for x in mean], device=device, dtype=img_dtype).view(normalization_shape)
         self.std = torch.tensor(
