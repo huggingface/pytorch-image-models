@@ -4,6 +4,7 @@ Factory methods for building image transforms for use with TIMM (PyTorch Image M
 Hacked together by / Copyright 2019, Ross Wightman
 """
 import math
+from copy import deepcopy
 from typing import Optional, Tuple, Union
 
 import torch
@@ -13,6 +14,7 @@ from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, DEF
 from timm.data.auto_augment import rand_augment_transform, augment_and_mix_transform, auto_augment_transform
 from timm.data.transforms import str_to_interp_mode, str_to_pil_interp, RandomResizedCropAndInterpolation, \
     ResizeKeepRatio, CenterCropOrPad, RandomCropOrPad, TrimBorder, ToNumpy, MaybeToTensor, MaybePILToTensor
+from timm.data.transforms import ToLabTensor, ToLinearRgb
 from timm.data.random_erasing import RandomErasing
 
 
@@ -84,6 +86,7 @@ def transforms_imagenet_train(
         use_prefetcher: bool = False,
         normalize: bool = True,
         separate: bool = False,
+        use_tensor: Optional[bool] = False,
 ):
     """ ImageNet-oriented image transforms for training.
 
@@ -111,6 +114,7 @@ def transforms_imagenet_train(
         use_prefetcher: Prefetcher enabled. Do not convert image to tensor or normalize.
         normalize: Normalize tensor output w/ provided mean/std (if prefetcher not used).
         separate: Output transforms in 3-stage tuple.
+        use_tensor: Use of float [0, 1.0) tensors for image transforms
 
     Returns:
         If separate==True, the transforms are returned as a tuple of 3 separate transforms
@@ -119,13 +123,21 @@ def transforms_imagenet_train(
             * a portion of the data through the secondary transform
             * normalizes and converts the branches above with the third, final transform
     """
+    if use_tensor:
+        primary_tfl = [
+            MaybeToTensor(),
+            ToLinearRgb(),  # FIXME
+        ]
+    else:
+        primary_tfl = []
+
     train_crop_mode = train_crop_mode or 'rrc'
     assert train_crop_mode in {'rrc', 'rkrc', 'rkrr'}
     if train_crop_mode in ('rkrc', 'rkrr'):
         # FIXME integration of RKR is a WIP
         scale = tuple(scale or (0.8, 1.00))
         ratio = tuple(ratio or (0.9, 1/.9))
-        primary_tfl = [
+        primary_tfl += [
             ResizeKeepRatio(
                 img_size,
                 interpolation=interpolation,
@@ -142,7 +154,7 @@ def transforms_imagenet_train(
     else:
         scale = tuple(scale or (0.08, 1.0))  # default imagenet scale range
         ratio = tuple(ratio or (3. / 4., 4. / 3.))  # default imagenet ratio range
-        primary_tfl = [
+        primary_tfl += [
             RandomResizedCropAndInterpolation(
                 img_size,
                 scale=scale,
@@ -166,9 +178,13 @@ def transforms_imagenet_train(
             img_size_min = min(img_size)
         else:
             img_size_min = img_size
+        if use_tensor:
+            aa_mean = deepcopy(mean)
+        else:
+            aa_mean = tuple([min(255, round(255 * x)) for x in mean])
         aa_params = dict(
             translate_const=int(img_size_min * 0.45),
-            img_mean=tuple([min(255, round(255 * x)) for x in mean]),
+            img_mean=aa_mean,
         )
         if interpolation and interpolation != 'random':
             aa_params['interpolation'] = str_to_pil_interp(interpolation)
@@ -218,10 +234,13 @@ def transforms_imagenet_train(
         final_tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disable, converted to tensor without scaling, keeps original dtype
-        final_tfl += [MaybePILToTensor()]
+        if not use_tensor:
+            final_tfl += [MaybePILToTensor()]
     else:
+        if not use_tensor:
+            final_tfl += [MaybeToTensor()]
         final_tfl += [
-            MaybeToTensor(),
+            ToLabTensor(),  # FIXME
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),
@@ -254,6 +273,7 @@ def transforms_imagenet_eval(
         std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
         use_prefetcher: bool = False,
         normalize: bool = True,
+        use_tensor: bool = False,
 ):
     """ ImageNet-oriented image transform for evaluation and inference.
 
@@ -280,7 +300,13 @@ def transforms_imagenet_eval(
         scale_size = math.floor(img_size / crop_pct)
         scale_size = (scale_size, scale_size)
 
-    tfl = []
+    if use_tensor:
+        tfl = [
+            MaybeToTensor(),
+            ToLinearRgb(), # FIXME
+        ]
+    else:
+        tfl = []
 
     if crop_border_pixels:
         tfl += [TrimBorder(crop_border_pixels)]
@@ -318,10 +344,13 @@ def transforms_imagenet_eval(
         tfl += [ToNumpy()]
     elif not normalize:
         # when normalize disabled, converted to tensor without scaling, keeps original dtype
-        tfl += [MaybePILToTensor()]
+        if not use_tensor:
+            tfl += [MaybePILToTensor()]
     else:
+        if not use_tensor:
+            tfl += [MaybeToTensor()]
         tfl += [
-            MaybeToTensor(),
+            ToLabTensor(),  # FIXME
             transforms.Normalize(
                 mean=torch.tensor(mean),
                 std=torch.tensor(std),

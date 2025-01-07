@@ -15,25 +15,36 @@ import torch
 import torch.distributed as dist
 from PIL import Image
 
-try:
-    import tensorflow as tf
-    tf.config.set_visible_devices([], 'GPU')  # Hands off my GPU! (or pip install tensorflow-cpu)
-    import tensorflow_datasets as tfds
-    try:
-        tfds.even_splits('', 1, drop_remainder=False)  # non-buggy even_splits has drop_remainder arg
-        has_buggy_even_splits = False
-    except TypeError:
-        print("Warning: This version of tfds doesn't have the latest even_splits impl. "
-              "Please update or use tfds-nightly for better fine-grained split behaviour.")
-        has_buggy_even_splits = True
-    # NOTE uncomment below if having file limit issues on dataset build (or alter your OS defaults)
-    # import resource
-    # low, high = resource.getrlimit(resource.RLIMIT_NOFILE)
-    # resource.setrlimit(resource.RLIMIT_NOFILE, (high, high))
-except ImportError as e:
-    print(e)
-    print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
-    raise e
+import importlib
+
+class LazyTfLoader:
+    def __init__(self):
+        self._tf = None
+
+    def __getattr__(self, name):
+        if self._tf is None:
+            self._tf = importlib.import_module('tensorflow')
+            self._tf.config.set_visible_devices([], 'GPU')  # Hands off my GPU! (or pip install tensorflow-cpu)
+        return getattr(self._tf, name)
+
+class LazyTfdsLoader:
+    def __init__(self):
+        self._tfds = None
+        self.has_buggy_even_splits = False
+
+    def __getattr__(self, name):
+        if self._tfds is None:
+            self._tfds = importlib.import_module('tensorflow_datasets')
+            try:
+                self._tfds.even_splits('', 1, drop_remainder=False)  # non-buggy even_splits has drop_remainder arg
+            except TypeError:
+                print("Warning: This version of tfds doesn't have the latest even_splits impl. "
+                      "Please update or use tfds-nightly for better fine-grained split behaviour.")
+                self.has_buggy_even_splits = True
+        return getattr(self._tfds, name)
+
+tf = LazyTfLoader()
+tfds = LazyTfdsLoader()
 
 from .class_map import load_class_map
 from .reader import Reader
@@ -45,7 +56,6 @@ SHUFFLE_SIZE = int(os.environ.get('TFDS_SHUFFLE_SIZE', 8192))  # samples to shuf
 PREFETCH_SIZE = int(os.environ.get('TFDS_PREFETCH_SIZE', 2048))  # samples to prefetch
 
 
-@tfds.decode.make_decoder()
 def decode_example(serialized_image, feature, dct_method='INTEGER_ACCURATE', channels=3):
     return tf.image.decode_jpeg(
         serialized_image,
@@ -231,7 +241,7 @@ class ReaderTfds(Reader):
             if should_subsplit:
                 # split the dataset w/o using sharding for more even samples / worker, can result in less optimal
                 # read patterns for distributed training (overlap across shards) so better to use InputContext there
-                if has_buggy_even_splits:
+                if tfds.has_buggy_even_splits:
                     # my even_split workaround doesn't work on subsplits, upgrade tfds!
                     if not isinstance(self.split_info, tfds.core.splits.SubSplitInfo):
                         subsplits = even_split_indices(self.split, self.global_num_workers, self.num_samples)
@@ -253,10 +263,11 @@ class ReaderTfds(Reader):
             shuffle_reshuffle_each_iteration=True,
             input_context=input_context,
         )
+        decode_fn = tfds.decode.make_decoder()(decode_example)
         ds = self.builder.as_dataset(
             split=self.subsplit or self.split,
             shuffle_files=self.is_training,
-            decoders=dict(image=decode_example(channels=1 if self.input_img_mode == 'L' else 3)),
+            decoders=dict(image=decode_fn(channels=1 if self.input_img_mode == 'L' else 3)),
             read_config=read_config,
         )
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
