@@ -597,7 +597,7 @@ def main():
             _logger.info('Using native Torch AMP. Training in mixed precision.')
     else:
         if utils.is_primary(args):
-            _logger.info(f'AMP not enabled. Training in {model_dtype}.')
+            _logger.info(f'AMP not enabled. Training in {model_dtype or torch.float32}.')
 
     # optionally resume from a checkpoint
     resume_epoch = None

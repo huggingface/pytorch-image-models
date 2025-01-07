@@ -192,7 +192,7 @@ def validate(args):
             amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
             _logger.info('Validating in mixed precision with native PyTorch AMP.')
     else:
-        _logger.info(f'Validating in {model_dtype}. AMP not enabled.')
+        _logger.info(f'Validating in {model_dtype or torch.float32}. AMP not enabled.')
 
     if args.fuser:
         set_jit_fuser(args.fuser)
