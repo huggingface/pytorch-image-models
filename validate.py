@@ -123,6 +123,8 @@ parser.add_argument('--amp-dtype', default='float16', type=str,
                     help='lower precision AMP dtype (default: float16)')
 parser.add_argument('--amp-impl', default='native', type=str,
                     help='AMP impl to use, "native" or "apex" (default: native)')
+parser.add_argument('--model-dtype', default=None, type=str,
+                   help='Model dtype override (non-AMP) (default: float32)')
 parser.add_argument('--tf-preprocessing', action='store_true', default=False,
                     help='Use Tensorflow preprocessing pipeline (require CPU TF installed')
 parser.add_argument('--use-ema', dest='use_ema', action='store_true',
@@ -168,10 +170,16 @@ def validate(args):
 
     device = torch.device(args.device)
 
+    model_dtype = None
+    if args.model_dtype:
+        assert args.model_dtype in ('float32', 'float16', 'bfloat16')
+        model_dtype = getattr(torch, args.model_dtype)
+
     # resolve AMP arguments based on PyTorch / Apex availability
     use_amp = None
     amp_autocast = suppress
     if args.amp:
+        assert model_dtype is None or model_dtype == torch.float32, 'float32 model dtype must be used with AMP'
         if args.amp_impl == 'apex':
             assert has_apex, 'AMP impl specified as APEX but APEX is not installed.'
             assert args.amp_dtype == 'float16'
@@ -184,7 +192,7 @@ def validate(args):
             amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
             _logger.info('Validating in mixed precision with native PyTorch AMP.')
     else:
-        _logger.info('Validating in float32. AMP not enabled.')
+        _logger.info(f'Validating in {model_dtype or torch.float32}. AMP not enabled.')
 
     if args.fuser:
         set_jit_fuser(args.fuser)
@@ -231,7 +239,7 @@ def validate(args):
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config)
 
-    model = model.to(device)
+    model = model.to(device=device, dtype=model_dtype)  # FIXME move model device & dtype into create_model
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
 
@@ -299,6 +307,7 @@ def validate(args):
         crop_border_pixels=args.crop_border_pixels,
         pin_memory=args.pin_mem,
         device=device,
+        img_dtype=model_dtype,
         tf_preprocessing=args.tf_preprocessing,
     )
 
@@ -310,7 +319,7 @@ def validate(args):
     model.eval()
     with torch.no_grad():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
-        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device)
+        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device=device, dtype=model_dtype)
         if args.channels_last:
             input = input.contiguous(memory_format=torch.channels_last)
         with amp_autocast():
@@ -319,8 +328,8 @@ def validate(args):
         end = time.time()
         for batch_idx, (input, target) in enumerate(loader):
             if args.no_prefetcher:
-                target = target.to(device)
-                input = input.to(device)
+                target = target.to(device=device)
+                input = input.to(device=device, dtype=model_dtype)
             if args.channels_last:
                 input = input.contiguous(memory_format=torch.channels_last)
 
