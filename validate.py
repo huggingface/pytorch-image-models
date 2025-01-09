@@ -307,7 +307,7 @@ def validate(args):
         crop_border_pixels=args.crop_border_pixels,
         pin_memory=args.pin_mem,
         device=device,
-        img_dtype=model_dtype,
+        img_dtype=model_dtype or torch.float32,
         tf_preprocessing=args.tf_preprocessing,
     )
 

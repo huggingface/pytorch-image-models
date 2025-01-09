@@ -744,7 +744,7 @@ def main():
         distributed=args.distributed,
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
-        img_dtype=model_dtype,
+        img_dtype=model_dtype or torch.float32,
         device=device,
         use_prefetcher=args.prefetcher,
         use_multi_epochs_loader=args.use_multi_epochs_loader,
@@ -769,7 +769,7 @@ def main():
             distributed=args.distributed,
             crop_pct=data_config['crop_pct'],
             pin_memory=args.pin_mem,
-            img_dtype=model_dtype,
+            img_dtype=model_dtype or torch.float32,
             device=device,
             use_prefetcher=args.prefetcher,
         )
