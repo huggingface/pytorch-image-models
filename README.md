@@ -12,6 +12,12 @@
 
 ## What's New
 
+## Jan 9, 2025
+* Add support to train and validate in pure `bfloat16` or `float16`
+* `wandb` project name arg added by https://github.com/caojiaolong, use arg.experiment for name
+* Fix old issue w/ checkpoint saving not working on filesystem w/o hard-link support (e.g. FUSE fs mounts)
+* 1.0.13 release
+
 ## Jan 6, 2025
 * Add `torch.utils.checkpoint.checkpoint()` wrapper in `timm.models` that defaults `use_reentrant=False`, unless `TIMM_REENTRANT_CKPT=1` is set in env.
 
@@ -20,7 +26,7 @@
 * Add AIM-v2 encoders from https://github.com/apple/ml-aim, see on Hub: https://huggingface.co/models?search=timm%20aimv2
 * Add PaliGemma2 encoders from https://github.com/google-research/big_vision to existing PaliGemma, see on Hub: https://huggingface.co/models?search=timm%20pali2
 * Add missing L/14 DFN2B 39B CLIP ViT, `vit_large_patch14_clip_224.dfn2b_s39b`
-* Fix existing RmsProp layer to match standard formulation, use PT 2.5 impl when possible. Move old impl to `SimpleNorm` layer, it's LN w/o centering or bias. There were only two `timm` models using it, and they have been updated.
+* Fix existing `RmsNorm` layer & fn to match standard formulation, use PT 2.5 impl when possible. Move old impl to `SimpleNorm` layer, it's LN w/o centering or bias. There were only two `timm` models using it, and they have been updated.
 * Allow override of `cache_dir` arg for model creation
 * Pass through `trust_remote_code` for HF datasets wrapper
 * `inception_next_atto` model added by creator
