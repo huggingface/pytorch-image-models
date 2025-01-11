@@ -54,7 +54,7 @@ class MobileOneBlock(nn.Module):
             use_act: bool = True,
             use_scale_branch: bool = True,
             num_conv_branches: int = 1,
-            act_layer: nn.Module = nn.GELU,
+            act_layer: Type[nn.Module] = nn.GELU,
     ) -> None:
         """Construct a MobileOneBlock module.
 
@@ -426,7 +426,7 @@ class ReparamLargeKernelConv(nn.Module):
 def convolutional_stem(
         in_chs: int,
         out_chs: int,
-        act_layer: nn.Module = nn.GELU,
+        act_layer: Type[nn.Module] = nn.GELU,
         inference_mode: bool = False
 ) -> nn.Sequential:
     """Build convolutional stem with MobileOne blocks.
@@ -545,7 +545,7 @@ class PatchEmbed(nn.Module):
             stride: int,
             in_chs: int,
             embed_dim: int,
-            act_layer: nn.Module = nn.GELU,
+            act_layer: Type[nn.Module] = nn.GELU,
             lkc_use_act: bool = False,
             use_se: bool = False,
             inference_mode: bool = False,
@@ -718,7 +718,7 @@ class ConvMlp(nn.Module):
             in_chs: int,
             hidden_channels: Optional[int] = None,
             out_chs: Optional[int] = None,
-            act_layer: nn.Module = nn.GELU,
+            act_layer: Type[nn.Module] = nn.GELU,
             drop: float = 0.0,
     ) -> None:
         """Build convolutional FFN module.
@@ -890,7 +890,7 @@ class RepMixerBlock(nn.Module):
             dim: int,
             kernel_size: int = 3,
             mlp_ratio: float = 4.0,
-            act_layer: nn.Module = nn.GELU,
+            act_layer: Type[nn.Module] = nn.GELU,
             proj_drop: float = 0.0,
             drop_path: float = 0.0,
             layer_scale_init_value: float = 1e-5,
@@ -947,8 +947,8 @@ class AttentionBlock(nn.Module):
             self,
             dim: int,
             mlp_ratio: float = 4.0,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             proj_drop: float = 0.0,
             drop_path: float = 0.0,
             layer_scale_init_value: float = 1e-5,
@@ -1007,8 +1007,8 @@ class FastVitStage(nn.Module):
             pos_emb_layer: Optional[nn.Module] = None,
             kernel_size: int = 3,
             mlp_ratio: float = 4.0,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             proj_drop_rate: float = 0.0,
             drop_path_rate: float = 0.0,
             layer_scale_init_value: Optional[float] = 1e-5,
@@ -1121,8 +1121,8 @@ class FastVit(nn.Module):
             fork_feat: bool = False,
             cls_ratio: float = 2.0,
             global_pool: str = 'avg',
-            norm_layer: nn.Module = nn.BatchNorm2d,
-            act_layer: nn.Module = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.GELU,
             inference_mode: bool = False,
     ) -> None:
         super().__init__()

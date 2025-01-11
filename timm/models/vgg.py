@@ -38,8 +38,8 @@ class ConvMlp(nn.Module):
             kernel_size=7,
             mlp_ratio=1.0,
             drop_rate: float = 0.2,
-            act_layer: nn.Module = None,
-            conv_layer: nn.Module = None,
+            act_layer: Optional[Type[nn.Module]] = None,
+            conv_layer: Optional[Type[nn.Module]] = None,
     ):
         super(ConvMlp, self).__init__()
         self.input_kernel_size = kernel_size
@@ -72,9 +72,9 @@ class VGG(nn.Module):
             in_chans: int = 3,
             output_stride: int = 32,
             mlp_ratio: float = 1.0,
-            act_layer: nn.Module = nn.ReLU,
-            conv_layer: nn.Module = nn.Conv2d,
-            norm_layer: nn.Module = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            conv_layer: Type[nn.Module] = nn.Conv2d,
+            norm_layer: Optional[Type[nn.Module]] = None,
             global_pool: str = 'avg',
             drop_rate: float = 0.,
     ) -> None:
