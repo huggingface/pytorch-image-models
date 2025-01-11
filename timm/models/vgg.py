@@ -5,7 +5,7 @@ timm functionality.
 
 Copyright 2021 Ross Wightman
 """
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Type, Union, cast
 
 import torch
 import torch.nn as nn

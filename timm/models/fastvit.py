@@ -7,7 +7,7 @@
 #
 import os
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn

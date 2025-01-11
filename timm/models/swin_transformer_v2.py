@@ -13,7 +13,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # Written by Ze Liu
 # --------------------------------------------------------
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
