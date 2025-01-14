@@ -12,6 +12,7 @@ import os
 import time
 from contextlib import suppress
 from functools import partial
+from sys import maxsize
 
 import numpy as np
 import pandas as pd
@@ -343,6 +344,7 @@ def main():
 
 
 def save_results(df, results_filename, results_format='csv', filename_col='filename'):
+    np.set_printoptions(threshold=maxsize)
     results_filename += _FMT_EXT[results_format]
     if results_format == 'parquet':
         df.set_index(filename_col).to_parquet(results_filename)
