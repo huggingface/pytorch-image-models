@@ -1,10 +1,10 @@
 # RegNetY
 
-**RegNetY** is a convolutional network design space with simple, regular models with parameters: depth \\( d \\), initial width \\( w\_{0} > 0 \\), and slope \\( w\_{a} > 0 \\), and generates a different block width \\( u\_{j} \\) for each block \\( j < d \\). The key restriction for the RegNet types of model is that there is a linear parameterisation of block widths (the design space only contains models with this linear structure):
+**RegNetY** is a convolutional network design space with simple, regular models with parameters: depth \\( d \\), initial width \\( w_{0} > 0 \\), and slope \\( w_{a} > 0 \\), and generates a different block width \\( u_{j} \\) for each block \\( j < d \\). The key restriction for the RegNet types of model is that there is a linear parameterisation of block widths (the design space only contains models with this linear structure):
 
-\\( \\) u\_{j} = w\_{0} + w\_{a}\cdot{j} \\( \\)
+\\( u_{j} = w_{0} + w_{a}\cdot{j} \\)
 
-For **RegNetX** authors have additional restrictions: we set \\( b = 1 \\) (the bottleneck ratio), \\( 12 \leq d \leq 28 \\), and \\( w\_{m} \geq 2 \\) (the width multiplier).
+For **RegNetX** authors have additional restrictions: we set \\( b = 1 \\) (the bottleneck ratio), \\( 12 \leq d \leq 28 \\), and \\( w_{m} \geq 2 \\) (the width multiplier).
 
 For **RegNetY** authors make one change, which is to include [Squeeze-and-Excitation blocks](https://paperswithcode.com/method/squeeze-and-excitation-block).
 
