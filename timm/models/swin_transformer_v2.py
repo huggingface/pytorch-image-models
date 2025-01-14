@@ -13,7 +13,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # Written by Ze Liu
 # --------------------------------------------------------
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -230,7 +230,7 @@ class SwinTransformerV2Block(nn.Module):
             attn_drop: float = 0.,
             drop_path: float = 0.,
             act_layer: LayerType = "gelu",
-            norm_layer: nn.Module = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             pretrained_window_size: _int_or_tuple_2_t = 0,
     ):
         """
@@ -422,7 +422,7 @@ class PatchMerging(nn.Module):
             self,
             dim: int,
             out_dim: Optional[int] = None,
-            norm_layer: nn.Module = nn.LayerNorm
+            norm_layer: Type[nn.Module] = nn.LayerNorm
     ):
         """
         Args:
@@ -470,7 +470,7 @@ class SwinTransformerV2Stage(nn.Module):
             attn_drop: float = 0.,
             drop_path: float = 0.,
             act_layer: Union[str, Callable] = 'gelu',
-            norm_layer: nn.Module = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             pretrained_window_size: _int_or_tuple_2_t = 0,
             output_nchw: bool = False,
     ) -> None:

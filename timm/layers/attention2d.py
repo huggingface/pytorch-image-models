@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Type, Union
 
 import torch
 from torch import nn as nn
@@ -106,7 +106,7 @@ class MultiQueryAttention2d(nn.Module):
             padding: Union[str, int, List[int]] = '',
             attn_drop: float = 0.,
             proj_drop: float = 0.,
-            norm_layer: nn.Module = nn.BatchNorm2d,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             use_bias: bool = False,
     ):
         """Initializer.
