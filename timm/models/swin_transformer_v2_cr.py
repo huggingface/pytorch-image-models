@@ -140,7 +140,8 @@ class WindowMultiHeadAttention(nn.Module):
 
     def _make_pair_wise_relative_positions(self) -> None:
         """Method initializes the pair-wise relative positions to compute the positional biases."""
-        device = self.logit_scale.device
+        # device = self.logit_scale.device
+        device = "cpu"
         coordinates = torch.stack(ndgrid(
             torch.arange(self.window_size[0], device=device),
             torch.arange(self.window_size[1], device=device)
@@ -313,7 +314,7 @@ class SwinTransformerV2CrBlock(nn.Module):
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
             if x is None:
-                img_mask = torch.zeros((1, *self.feat_size, 1))  # 1 H W 1
+                img_mask = torch.zeros((1, *self.feat_size, 1), device="cpu")  # 1 H W 1
             else:
                 img_mask = torch.zeros((1, x.shape[1], x.shape[2], 1), dtype=x.dtype, device=x.device)  # 1 H W 1
             cnt = 0
@@ -685,7 +686,7 @@ class SwinTransformerV2Cr(nn.Module):
         else:
             self.window_size = to_2tuple(window_size)
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         stages = []
         in_dim = embed_dim
         in_scale = 1

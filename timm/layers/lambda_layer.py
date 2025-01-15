@@ -31,7 +31,7 @@ from .weight_init import trunc_normal_
 
 def rel_pos_indices(size):
     size = to_2tuple(size)
-    pos = torch.stack(ndgrid(torch.arange(size[0]), torch.arange(size[1]))).flatten(1)
+    pos = torch.stack(ndgrid(torch.arange(size[0], device="cpu"), torch.arange(size[1], device="cpu"))).flatten(1)
     rel_pos = pos[:, None, :] - pos[:, :, None]
     rel_pos[0] += size[0] - 1
     rel_pos[1] += size[1] - 1

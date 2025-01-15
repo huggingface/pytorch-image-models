@@ -377,7 +377,7 @@ class FocalNet(nn.Module):
         )
         in_dim = embed_dim[0]
 
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu")]  # stochastic depth decay rule
         layers = []
         for i_layer in range(self.num_layers):
             out_dim = embed_dim[i_layer]

@@ -326,7 +326,7 @@ class Twins(nn.Module):
 
         self.blocks = nn.ModuleList()
         self.feature_info = []
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu")]  # stochastic depth decay rule
         cur = 0
         for k in range(len(depths)):
             _block = nn.ModuleList([block_cls(
