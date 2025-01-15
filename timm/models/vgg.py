@@ -38,8 +38,8 @@ class ConvMlp(nn.Module):
             kernel_size=7,
             mlp_ratio=1.0,
             drop_rate: float = 0.2,
-            act_layer: Optional[Type[nn.Module]] = None,
-            conv_layer: Optional[Type[nn.Module]] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            conv_layer: Type[nn.Module] = nn.Conv2d,
     ):
         super(ConvMlp, self).__init__()
         self.input_kernel_size = kernel_size
