@@ -149,6 +149,8 @@ parser.add_argument('--include-index', action='store_true', default=False,
                     help='include the class index in results')
 parser.add_argument('--exclude-output', action='store_true', default=False,
                     help='exclude logits/probs from results, just indices. topk must be set !=0.')
+parser.add_argument('--no-console-results', action='store_true', default=False,
+                    help='disable printing the inference results to the console')
 
 
 def main():
@@ -348,8 +350,9 @@ def main():
     for fmt in args.results_format:
         save_results(df, results_filename, fmt)
 
-    print(f'--result')
-    print(df.set_index(args.filename_col).to_json(orient='index', indent=4))
+    if not args.no_console_results:
+        print(f'--result')
+        print(df.set_index(args.filename_col).to_json(orient='index', indent=4))
 
 
 def save_results(df, results_filename, results_format='csv', filename_col='filename'):
