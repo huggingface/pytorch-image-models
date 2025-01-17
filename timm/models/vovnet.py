@@ -419,7 +419,12 @@ default_cfgs = generate_default_cfgs({
     'ese_vovnet39b.ra_in1k': _cfg(
         hf_hub_id='timm/',
         test_input_size=(3, 288, 288), test_crop_pct=0.95),
-    'ese_vovnet57b.untrained': _cfg(url=''),
+    'ese_vovnet57b.ra4_e3600_r256_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        crop_pct=0.95, input_size=(3, 256, 256), pool_size=(8, 8),
+        test_input_size=(3, 320, 320), test_crop_pct=1.0
+    ),
     'ese_vovnet99b.untrained': _cfg(url=''),
     'eca_vovnet39b.untrained': _cfg(url=''),
     'ese_vovnet39b_evos.untrained': _cfg(url=''),
