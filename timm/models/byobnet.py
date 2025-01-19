@@ -611,7 +611,7 @@ class RepVggBlock(nn.Module):
         return kernel_final, bias_final
 
     def _fuse_bn_tensor(self, branch) -> Tuple[torch.Tensor, torch.Tensor]:
-        """ Method to fuse batchnorm layer with preceeding conv layer.
+        """ Method to fuse batchnorm layer with preceding conv layer.
         Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L95
         """
         if isinstance(branch, ConvNormAct):
@@ -800,7 +800,7 @@ class MobileOneBlock(nn.Module):
         return kernel_final, bias_final
 
     def _fuse_bn_tensor(self, branch) -> Tuple[torch.Tensor, torch.Tensor]:
-        """ Method to fuse batchnorm layer with preceeding conv layer.
+        """ Method to fuse batchnorm layer with preceding conv layer.
         Reference: https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py#L95
         """
         if isinstance(branch, ConvNormAct):

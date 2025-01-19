@@ -238,7 +238,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 ### May 14, 2024
 * Support loading PaliGemma jax weights into SigLIP ViT models with average pooling.
 * Add Hiera models from Meta (https://github.com/facebookresearch/hiera).
-* Add `normalize=` flag for transorms, return non-normalized torch.Tensor with original dytpe (for `chug`)
+* Add `normalize=` flag for transforms, return non-normalized torch.Tensor with original dytpe (for `chug`)
 * Version 1.0.3 release
 
 ### May 11, 2024

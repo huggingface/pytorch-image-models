@@ -35,7 +35,7 @@ class AdaBelief(Optimizer):
 
     For a complete table of recommended hyperparameters, see https://github.com/juntang-zhuang/Adabelief-Optimizer'
     For example train/args for EfficientNet see these gists
-      - link to train_scipt: https://gist.github.com/juntang-zhuang/0a501dd51c02278d952cf159bc233037
+      - link to train_script: https://gist.github.com/juntang-zhuang/0a501dd51c02278d952cf159bc233037
       - link to args.yaml: https://gist.github.com/juntang-zhuang/517ce3c27022b908bb93f78e4f786dc3
     """
 

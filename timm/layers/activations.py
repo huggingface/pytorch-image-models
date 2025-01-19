@@ -47,7 +47,7 @@ def sigmoid(x, inplace: bool = False):
     return x.sigmoid_() if inplace else x.sigmoid()
 
 
-# PyTorch has this, but not with a consistent inplace argmument interface
+# PyTorch has this, but not with a consistent inplace argument interface
 class Sigmoid(nn.Module):
     def __init__(self, inplace: bool = False):
         super(Sigmoid, self).__init__()
@@ -61,7 +61,7 @@ def tanh(x, inplace: bool = False):
     return x.tanh_() if inplace else x.tanh()
 
 
-# PyTorch has this, but not with a consistent inplace argmument interface
+# PyTorch has this, but not with a consistent inplace argument interface
 class Tanh(nn.Module):
     def __init__(self, inplace: bool = False):
         super(Tanh, self).__init__()

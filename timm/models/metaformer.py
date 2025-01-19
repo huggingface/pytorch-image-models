@@ -618,7 +618,7 @@ class MetaFormer(nn.Module):
         return x
 
 
-# this works but it's long and breaks backwards compatability with weights from the poolformer-only impl
+# this works but it's long and breaks backwards compatibility with weights from the poolformer-only impl
 def checkpoint_filter_fn(state_dict, model):
     if 'stem.conv.weight' in state_dict:
         return state_dict

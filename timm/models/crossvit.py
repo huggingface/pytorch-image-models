@@ -21,7 +21,7 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 
 
 """
-Modifed from Timm. https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
+Modified from Timm. https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 
 """
 from functools import partial

@@ -507,7 +507,7 @@ class VOLO(nn.Module):
         )
         r = patch_size
 
-        # inital positional encoding, we add positional encoding after outlooker blocks
+        # initial positional encoding, we add positional encoding after outlooker blocks
         patch_grid = (img_size[0] // patch_size // pooling_scale, img_size[1] // patch_size // pooling_scale)
         self.pos_embed = nn.Parameter(torch.zeros(1, patch_grid[0], patch_grid[1], embed_dims[-1]))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)

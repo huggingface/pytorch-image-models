@@ -32,7 +32,7 @@ def feature_take_indices(
 ) -> Tuple[List[int], int]:
     """ Determine the absolute feature indices to 'take' from.
 
-    Note: This function can be called in forwar() so must be torchscript compatible,
+    Note: This function can be called in forward() so must be torchscript compatible,
     which requires some incomplete typing and workaround hacks.
 
     Args:

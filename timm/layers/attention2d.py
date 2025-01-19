@@ -16,7 +16,7 @@ class MultiQueryAttentionV2(nn.Module):
     Fast Transformer Decoding: One Write-Head is All You Need
     https://arxiv.org/pdf/1911.02150.pdf
 
-    This is an acceletor optimized version - removing multiple unneccessary
+    This is an acceletor optimized version - removing multiple unnecessary
     tensor transpose by re-arranging indices according to the following rules: 1)
     contracted indices are at the end, 2) other indices have the same order in the
     input and output tensores.
@@ -87,7 +87,7 @@ class MultiQueryAttention2d(nn.Module):
      2. query_strides: horizontal & vertical strides on Query only.
 
     This is an optimized version.
-    1. Projections in Attention is explict written out as 1x1 Conv2D.
+    1. Projections in Attention is explicit written out as 1x1 Conv2D.
     2. Additional reshapes are introduced to bring a up to 3x speed up.
     """
     fused_attn: torch.jit.Final[bool]

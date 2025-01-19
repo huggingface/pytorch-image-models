@@ -124,7 +124,7 @@ def _parse_split_info(split: str, info: Dict):
 
 
 def log_and_continue(exn):
-    """Call in an exception handler to ignore exceptions, isssue a warning, and continue."""
+    """Call in an exception handler to ignore exceptions, issue a warning, and continue."""
     _logger.warning(f'Handling webdataset error ({repr(exn)}). Ignoring.')
     # NOTE: try force an exit on errors that are clearly code / config and not transient
     if isinstance(exn, TypeError):
@@ -277,7 +277,7 @@ class ReaderWds(Reader):
             target_img_mode: str = '',
             filename_key: str = 'filename',
             sample_shuffle_size: Optional[int] = None,
-            smaple_initial_size: Optional[int] = None,
+            sample_initial_size: Optional[int] = None,
     ):
         super().__init__()
         if wds is None:
@@ -290,7 +290,7 @@ class ReaderWds(Reader):
         self.common_seed = seed  # a seed that's fixed across all worker / distributed instances
         self.shard_shuffle_size = 500
         self.sample_shuffle_size = sample_shuffle_size or SAMPLE_SHUFFLE_SIZE
-        self.sample_initial_size = smaple_initial_size or SAMPLE_INITIAL_SIZE
+        self.sample_initial_size = sample_initial_size or SAMPLE_INITIAL_SIZE
 
         self.input_key = input_key
         self.input_img_mode = input_img_mode

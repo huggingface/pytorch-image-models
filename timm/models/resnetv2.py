@@ -4,7 +4,7 @@ A PyTorch implementation of ResNetV2 adapted from the Google Big-Transfer (BiT) 
 at https://github.com/google-research/big_transfer to match timm interfaces. The BiT weights have
 been included here as pretrained models from their original .NPZ checkpoints.
 
-Additionally, supports non pre-activation bottleneck for use as a backbone for Vision Transfomers (ViT) and
+Additionally, supports non pre-activation bottleneck for use as a backbone for Vision Transformers (ViT) and
 extra padding support to allow porting of official Hybrid ResNet pretrained weights from
 https://github.com/google-research/vision_transformer
 
@@ -436,7 +436,7 @@ class ResNetV2(nn.Module):
             stem_chs (int): stem width (default: 64)
             stem_type (str): stem type (default: '' == 7x7)
             avg_down (bool): average pooling in residual downsampling (default: False)
-            preact (bool): pre-activiation (default: True)
+            preact (bool): pre-activation (default: True)
             act_layer (Union[str, nn.Module]): activation layer
             norm_layer (Union[str, nn.Module]): normalization layer
             conv_layer (nn.Module): convolution module
