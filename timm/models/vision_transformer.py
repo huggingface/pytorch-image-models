@@ -3510,7 +3510,7 @@ def vit_so150m_patch16_reg4_gap_384(pretrained: bool = False, **kwargs) -> Visio
 def vit_so150m2_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ SO150M v2 (shape optimized, but diff than paper def, optimized for GPU) """
     model_args = dict(
-        patch_size=16, embed_dim=896, depth=20, num_heads=14, mlp_ratio=2.429, init_values=1e-5,
+        patch_size=16, embed_dim=832, depth=21, num_heads=13, mlp_ratio=34/13, init_values=1e-5,
         qkv_bias=False, class_token=False, reg_tokens=1, global_pool='avg',
     )
     model = _create_vision_transformer(
