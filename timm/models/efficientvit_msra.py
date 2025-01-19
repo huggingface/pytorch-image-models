@@ -246,7 +246,7 @@ class LocalWindowAttention(torch.nn.Module):
     def forward(self, x):
         H = W = self.resolution
         B, C, H_, W_ = x.shape
-        # Only check this for classifcation models
+        # Only check this for classification models
         _assert(H == H_, f'input feature has wrong size, expect {(H, W)}, got {(H_, W_)}')
         _assert(W == W_, f'input feature has wrong size, expect {(H, W)}, got {(H_, W_)}')
         if H <= self.window_resolution and W <= self.window_resolution:

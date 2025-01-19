@@ -1,7 +1,7 @@
-""" NormAct (Normalizaiton + Activation Layer) Factory
+""" NormAct (Normalization + Activation Layer) Factory
 
 Create norm + act combo modules that attempt to be backwards compatible with separate norm + act
-isntances in models. Where these are used it will be possible to swap separate BN + act layers with
+instances in models. Where these are used it will be possible to swap separate BN + act layers with
 combined modules like IABN or EvoNorms.
 
 Hacked together by / Copyright 2020 Ross Wightman

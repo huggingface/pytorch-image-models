@@ -52,7 +52,7 @@ class ImageNetInfo(DatasetInfo):
         subset = re.sub(r'[-_\s]', '', subset.lower())
         assert subset in _SUBSETS, f'Unknown imagenet subset {subset}.'
 
-        # WordNet synsets (part-of-speach + offset) are the unique class label names for ImageNet classifiers
+        # WordNet synsets (part-of-speech + offset) are the unique class label names for ImageNet classifiers
         synset_file = _SUBSETS[subset]
         synset_data = pkgutil.get_data(__name__, os.path.join('_info', synset_file))
         self._synsets = synset_data.decode('utf-8').splitlines()

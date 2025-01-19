@@ -80,7 +80,7 @@ class Adahessian(torch.optim.Optimizer):
 
     def zero_hessian(self):
         """
-        Zeros out the accumalated hessian traces.
+        Zeros out the accumulated hessian traces.
         """
 
         for p in self.get_params():

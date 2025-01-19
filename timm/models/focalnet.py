@@ -78,7 +78,7 @@ class FocalModulation(nn.Module):
         x = self.f(x)
         q, ctx, gates = torch.split(x, self.input_split, 1)
 
-        # context aggreation
+        # context aggregation
         ctx_all = 0
         for l, focal_layer in enumerate(self.focal_layers):
             ctx = focal_layer(ctx)
@@ -353,7 +353,7 @@ class FocalNet(nn.Module):
             focal_levels: How many focal levels at all stages. Note that this excludes the finest-grain level.
             focal_windows: The focal window size at all stages.
             use_overlap_down: Whether to use convolutional embedding.
-            use_post_norm: Whether to use layernorm after modulation (it helps stablize training of large models)
+            use_post_norm: Whether to use layernorm after modulation (it helps stabilize training of large models)
             layerscale_value: Value for layer scale.
             drop_rate: Dropout rate.
             drop_path_rate: Stochastic depth rate.

@@ -490,7 +490,7 @@ class MobileAttention(nn.Module):
         # https://arxiv.org/abs/2102.10882
         # 1. Rather than adding one CPE before the attention blocks, we add a CPE
         #    into every attention block.
-        # 2. We replace the expensive Conv2D by a Seperable DW Conv.
+        # 2. We replace the expensive Conv2D by a Separable DW Conv.
         if use_cpe:
             self.conv_cpe_dw = create_conv2d(
                 in_chs, in_chs,

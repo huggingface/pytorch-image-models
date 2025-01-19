@@ -25,7 +25,7 @@ def find_images_and_targets(
     """ Walk folder recursively to discover images and map them to classes by folder names.
 
     Args:
-        folder: root of folder to recrusively search
+        folder: root of folder to recursively search
         types: types (file extensions) to search for in path
         class_to_idx: specify mapping for class (folder name) to class index if set
         leaf_name_only: use only leaf-name of folder walk for class names

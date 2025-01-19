@@ -93,7 +93,7 @@
 ### May 14, 2024
 * Support loading PaliGemma jax weights into SigLIP ViT models with average pooling.
 * Add Hiera models from Meta (https://github.com/facebookresearch/hiera).
-* Add `normalize=` flag for transorms, return non-normalized torch.Tensor with original dytpe (for `chug`)
+* Add `normalize=` flag for transforms, return non-normalized torch.Tensor with original dytpe (for `chug`)
 * Version 1.0.3 release
 
 ### May 11, 2024
@@ -125,7 +125,7 @@
 ### April 11, 2024
 * Prepping for a long overdue 1.0 release, things have been stable for a while now.
 * Significant feature that's been missing for a while, `features_only=True` support for ViT models with flat hidden states or non-std module layouts (so far covering  `'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'`)
-* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or direclty.
+* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or directly.
 ```python
 model = timm.create_model('vit_base_patch16_224')
 final_feat, intermediates = model.forward_intermediates(input)
@@ -360,7 +360,7 @@ Datasets & transform refactoring
 * 0.8.15dev0
 
 ### Feb 20, 2023
-* Add 320x320 `convnext_large_mlp.clip_laion2b_ft_320` and `convnext_lage_mlp.clip_laion2b_ft_soup_320` CLIP image tower weights for features & fine-tune
+* Add 320x320 `convnext_large_mlp.clip_laion2b_ft_320` and `convnext_large_mlp.clip_laion2b_ft_soup_320` CLIP image tower weights for features & fine-tune
 * 0.8.13dev0 pypi release for latest changes w/ move to huggingface org
 
 ### Feb 16, 2023
@@ -745,7 +745,7 @@ More models, more fixes
 * Add 'group matching' API to all models to allow grouping model parameters for application of 'layer-wise' LR decay, lr scale added to LR scheduler
 * Gradient checkpointing support added to many models
 * `forward_head(x, pre_logits=False)` fn added to all models to allow separate calls of `forward_features` + `forward_head`
-* All vision transformer and vision MLP models update to return non-pooled / non-token selected features from `foward_features`, for consistency with CNN models, token selection or pooling now applied in `forward_head`
+* All vision transformer and vision MLP models update to return non-pooled / non-token selected features from `forward_features`, for consistency with CNN models, token selection or pooling now applied in `forward_head`
 
 ### Feb 2, 2022
 * [Chris Hughes](https://github.com/Chris-hughes10) posted an exhaustive run through of `timm` on his blog yesterday. Well worth a read. [Getting Started with PyTorch Image Models (timm): A Practitioner’s Guide](https://towardsdatascience.com/getting-started-with-pytorch-image-models-timm-a-practitioners-guide-4e77b4bf9055)
@@ -1058,7 +1058,7 @@ More models, more fixes
 * Add 'group matching' API to all models to allow grouping model parameters for application of 'layer-wise' LR decay, lr scale added to LR scheduler
 * Gradient checkpointing support added to many models
 * `forward_head(x, pre_logits=False)` fn added to all models to allow separate calls of `forward_features` + `forward_head`
-* All vision transformer and vision MLP models update to return non-pooled / non-token selected features from `foward_features`, for consistency with CNN models, token selection or pooling now applied in `forward_head`
+* All vision transformer and vision MLP models update to return non-pooled / non-token selected features from `forward_features`, for consistency with CNN models, token selection or pooling now applied in `forward_head`
 
 ### Feb 2, 2022
 * [Chris Hughes](https://github.com/Chris-hughes10) posted an exhaustive run through of `timm` on his blog yesterday. Well worth a read. [Getting Started with PyTorch Image Models (timm): A Practitioner’s Guide](https://towardsdatascience.com/getting-started-with-pytorch-image-models-timm-a-practitioners-guide-4e77b4bf9055)
