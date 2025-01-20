@@ -85,6 +85,8 @@ parser.add_argument('--data-dir', metavar='DIR',
                     help='path to dataset (root dir)')
 parser.add_argument('--dataset', metavar='NAME', default='',
                     help='dataset type + name ("<type>/<name>") (default: ImageFolder or ImageTar if empty)')
+group.add_argument('--labels', metavar='FILENAME',
+                   help='File containing the filename to label associations.')
 group.add_argument('--train-split', metavar='NAME', default='train',
                    help='dataset train split (default: train)')
 group.add_argument('--val-split', metavar='NAME', default='validation',
@@ -656,6 +658,7 @@ def main():
     dataset_train = create_dataset(
         args.dataset,
         root=args.data_dir,
+        labels=args.labels,
         split=args.train_split,
         is_training=True,
         class_map=args.class_map,
@@ -674,6 +677,7 @@ def main():
         dataset_eval = create_dataset(
             args.dataset,
             root=args.data_dir,
+            labels=args.labels,
             split=args.val_split,
             is_training=False,
             class_map=args.class_map,
