@@ -74,12 +74,16 @@ def add_ml_decoder_head(model, head_version='new', **kwargs):
         model.head = head
 
     elif 'MetaFormer' in model._get_name():
+        '''
         if hasattr(model.head, 'flatten'):  # ConvNext case
             model.head.flatten = nn.Identity()
         model.head.global_pool = nn.Identity()
         model.head.drop = nn.Identity()
         del model.head.fc
         model.head.fc = head
+        '''
+        model.head = MLDecoderHead(head, num_features, num_classes)
+        model.forward_head = model.head.forward
 
     # maybe  and isinstance(model.head, (NormMlpClassifierHead, ClassifierHead) ?
     elif hasattr(model, 'head'):    # ClassifierHead, nn.Sequential
