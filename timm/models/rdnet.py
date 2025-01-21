@@ -362,7 +362,7 @@ class RDNet(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.forward_head(x)
         return x
 
     @torch.jit.ignore
