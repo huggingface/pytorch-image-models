@@ -384,7 +384,7 @@ class PyramidVisionTransformerV2(nn.Module):
         if global_pool is not None:
             assert global_pool in ('avg', '')
             self.global_pool = global_pool
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.patch_embed(x)

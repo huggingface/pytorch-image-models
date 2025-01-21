@@ -455,6 +455,7 @@ class FocalNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
