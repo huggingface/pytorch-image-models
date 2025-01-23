@@ -38,10 +38,10 @@ import torch.nn as nn
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, LayerNorm, DropPath, trunc_normal_, to_2tuple
 
-from timm.models._builder import build_model_with_cfg
-from timm.models._features import feature_take_indices
-from timm.models._manipulate import checkpoint
-from timm.models._registry import generate_default_cfgs, register_model
+from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
+from ._manipulate import checkpoint
+from ._registry import generate_default_cfgs, register_model
 
 def get_sinusoid_encoding(n_position: int, d_hid: int) -> torch.Tensor:
     ''' Sinusoid position encoding table using PyTorch '''
@@ -267,7 +267,6 @@ class T2T_module(nn.Module):
 
         # final tokens
         x = self.project(x)
-
         return x
 
 class Attention(nn.Module):
@@ -597,40 +596,40 @@ def checkpoint_filter_fn(
 
 default_cfgs = generate_default_cfgs({
     't2t_vit_7.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/71.7_T2T_ViT_7.pth.tar',
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/71.7_T2T_ViT_7.pth.tar',
     ),
     't2t_vit_10.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/75.2_T2T_ViT_10.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/75.2_T2T_ViT_10.pth.tar'
     ),
     't2t_vit_12.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/76.5_T2T_ViT_12.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/76.5_T2T_ViT_12.pth.tar'
     ),
     't2t_vit_14.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/81.5_T2T_ViT_14.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/81.5_T2T_ViT_14.pth.tar'
     ),
     't2t_vit_19.in1k': _cfg(
-        f_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/81.9_T2T_ViT_19.pth.tar'
+        # f_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/81.9_T2T_ViT_19.pth.tar'
     ),
     't2t_vit_24.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/82.3_T2T_ViT_24.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/82.3_T2T_ViT_24.pth.tar'
     ),
     't2t_vit_t_14.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/81.7_T2T_ViTt_14.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/81.7_T2T_ViTt_14.pth.tar'
     ),
     't2t_vit_t_19.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/82.4_T2T_ViTt_19.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/82.4_T2T_ViTt_19.pth.tar'
     ),
     't2t_vit_t_24.in1k': _cfg(
-        hf_hub_id='timm/',
-        # url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/82.6_T2T_ViTt_24.pth.tar'
+        # hf_hub_id='timm/',
+        url='https://github.com/yitu-opensource/T2T-ViT/releases/download/main/82.6_T2T_ViTt_24.pth.tar'
     ),
 })
 
