@@ -23,6 +23,7 @@ from .adamp import AdamP
 from .adamw import AdamWLegacy
 from .adan import Adan
 from .adopt import Adopt
+from .kron import Kron
 from .lamb import Lamb
 from .laprop import LaProp
 from .lars import Lars
@@ -692,6 +693,12 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
             description='An Adaptive Second Order Optimizer',
             has_betas=True,
             second_order=True,
+        ),
+        OptimInfo(
+            name='kron',
+            opt_class=Kron,
+            description='',
+            has_momentum=True,
         ),
         OptimInfo(
             name='laprop',
