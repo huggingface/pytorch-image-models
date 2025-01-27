@@ -697,8 +697,15 @@ def _register_other_optimizers(registry: OptimizerRegistry) -> None:
         OptimInfo(
             name='kron',
             opt_class=Kron,
-            description='',
+            description='PSGD optimizer with Kronecker-factored preconditioner',
             has_momentum=True,
+        ),
+        OptimInfo(
+            name='kronw',
+            opt_class=Kron,
+            description='PSGD optimizer with Kronecker-factored preconditioner and decoupled weight decay',
+            has_momentum=True,
+            defaults={'decoupled_decay': True}
         ),
         OptimInfo(
             name='laprop',

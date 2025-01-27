@@ -290,7 +290,7 @@ def _build_params_dict_single(weight, bias, **kwargs):
     return [dict(params=bias, **kwargs)]
 
 
-@pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*')))
+@pytest.mark.parametrize('optimizer', list_optimizers(exclude_filters=('fused*', 'bnb*', 'kron*')))
 def test_optim_factory(optimizer):
     assert issubclass(get_optimizer_class(optimizer, bind_defaults=False), torch.optim.Optimizer)
 
@@ -384,6 +384,14 @@ def test_adam(optimizer):
         lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
     )
     _test_model(optimizer, dict(lr=5e-2))
+
+
+@pytest.mark.parametrize('optimizer',  ['kron'])
+def test_kron(optimizer):
+    _test_rosenbrock(
+        lambda params: create_optimizer_v2(params, optimizer, lr=1e-3)
+    )
+    _test_model(optimizer, dict(lr=1e-3))
 
 
 @pytest.mark.parametrize('optimizer',  ['adopt', 'adoptw'])
