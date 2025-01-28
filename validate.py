@@ -412,6 +412,7 @@ def _try_run(args, initial_batch_size):
                 break
         batch_size = decay_batch_step(batch_size)
         _logger.warning(f'Reducing batch size to {batch_size} for retry.')
+    results['model'] = args.model
     results['error'] = error_str
     _logger.error(f'{args.model} failed to validate ({error_str}).')
     return results
