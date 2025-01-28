@@ -12,6 +12,11 @@
 
 ## What's New
 
+## Jan 27, 2025
+* Add Kron Optimizer (PSGD w/ Kronecker-factored preconditioner) 
+  * Code from https://github.com/evanatyourservice/kron_torch
+  * See also https://sites.google.com/site/lixilinx/home/psgd
+
 ## Jan 19, 2025
 * Fix loading of LeViT safetensor weights, remove conversion code which should have been deactivated
 * Add 'SO150M' ViT weights trained with SBB recipes, decent results, but not optimal shape for ImageNet-12k/1k pretrain/ft
@@ -461,6 +466,7 @@ Included optimizers available via `timm.optim.create_optimizer_v2` factory metho
 * `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) - https://arxiv.org/abs/2006.08217
 * `adan` an implementation of Adan adapted from https://github.com/sail-sg/Adan - https://arxiv.org/abs/2208.06677
 * `adopt` ADOPT adapted from https://github.com/iShohei220/adopt - https://arxiv.org/abs/2411.02853
+* `kron` PSGD w/ Kronecker-factored preconditioner from https://github.com/evanatyourservice/kron_torch - https://sites.google.com/site/lixilinx/home/psgd
 * `lamb` an implementation of Lamb and LambC (w/ trust-clipping) cleaned up and modified to support use with XLA - https://arxiv.org/abs/1904.00962
 * `laprop` optimizer from https://github.com/Z-T-WANG/LaProp-Optimizer - https://arxiv.org/abs/2002.04839
 * `lars` an implementation of LARS and LARC (w/ trust-clipping) - https://arxiv.org/abs/1708.03888
