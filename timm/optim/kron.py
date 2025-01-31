@@ -306,10 +306,16 @@ class Kron(torch.optim.Optimizer):
                     exprA, exprGs, _ = exprs
                     Q = state["Q"]
                     if self.deterministic:
-                        torch_rng = torch.Generator(device=V.device).manual_seed(self.rng.randint(0, 2 ** 31))
+                        torch_rng = torch.Generator(device=debiased_momentum.device)
+                        torch_rng.manual_seed(self.rng.randint(0, 2 ** 31))
                     else:
                         torch_rng = None
-                    V = torch.randn(debiased_momentum.shape, generator=torch_rng, dtype=precond_dtype, device=debiased_momentum.device)
+                    V = torch.randn(
+                        debiased_momentum.shape,
+                        generator=torch_rng,
+                        dtype=precond_dtype,
+                        device=debiased_momentum.device,
+                    )
                     G = debiased_momentum if momentum_into_precond_update else grad
 
                     A, conjB = self._calc_A_and_conjB(exprA, G, Q, V)
