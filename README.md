@@ -12,6 +12,9 @@
 
 ## What's New
 
+## Feb 1, 2025
+* FYI PyTorch 2.6 & Python 3.13 are tested and working w/ current main and released version of `timm`
+
 ## Jan 27, 2025
 * Add Kron Optimizer (PSGD w/ Kronecker-factored preconditioner) 
   * Code from https://github.com/evanatyourservice/kron_torch
