@@ -1142,7 +1142,7 @@ class FastVit(nn.Module):
         # Build the main stages of the network architecture
         prev_dim = embed_dims[0]
         scale = 1
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers), device="cpu").split(layers)]
         stages = []
         for i in range(len(layers)):
             downsample = downsamples[i] or prev_dim != embed_dims[i]

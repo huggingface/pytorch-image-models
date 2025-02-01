@@ -183,7 +183,7 @@ class PoolingVisionTransformer(nn.Module):
 
         transformers = []
         # stochastic depth decay rule
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depth)).split(depth)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depth), device="cpu").split(depth)]
         prev_dim = embed_dim
         for i in range(len(depth)):
             pool = None
