@@ -3,7 +3,7 @@
 Hacked together by / Copyright 2021, Ross Wightman
 """
 import os
-from typing import Optional
+from typing import Optional, Union, Dict
 
 from torchvision.datasets import CIFAR100, CIFAR10, MNIST, KMNIST, FashionMNIST, ImageFolder
 try:
@@ -63,6 +63,7 @@ def _search_split(root, split):
 def create_dataset(
         name: str,
         root: Optional[str] = None,
+        labels: Optional[Union[Dict, str]] = None,
         split: str = 'validation',
         search_split: bool = True,
         class_map: dict = None,
@@ -91,6 +92,7 @@ def create_dataset(
     Args:
         name: Dataset name, empty is okay for folder based datasets
         root: Root folder of dataset (All)
+        labels: Specify filename -> label mapping via file or dict (Folder)
         split: Dataset split (All)
         search_split: Search for split specific child fold from root so one can specify
             `imagenet/` instead of `/imagenet/val`, etc on cmd line / config. (Folder, Torch)
@@ -112,6 +114,7 @@ def create_dataset(
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
     name = name.lower()
     if name.startswith('torch/'):
+        assert labels is None, "Argument 'labels' incompatible with name 'torch/...'"
         name = name.split('/', 2)[-1]
         torch_kwargs = dict(root=root, download=download, **kwargs)
         if name in _TORCH_BASIC_DS:
@@ -162,6 +165,7 @@ def create_dataset(
         ds = ImageDataset(
             root,
             reader=name,
+            labels=labels,
             split=split,
             class_map=class_map,
             input_img_mode=input_img_mode,
@@ -172,6 +176,7 @@ def create_dataset(
         ds = IterableImageDataset(
             root,
             reader=name,
+            labels=labels,
             split=split,
             class_map=class_map,
             is_training=is_training,
@@ -188,6 +193,7 @@ def create_dataset(
         ds = IterableImageDataset(
             root,
             reader=name,
+            labels=labels,
             split=split,
             class_map=class_map,
             is_training=is_training,
@@ -203,6 +209,7 @@ def create_dataset(
         ds = IterableImageDataset(
             root,
             reader=name,
+            labels=labels,
             split=split,
             class_map=class_map,
             is_training=is_training,
@@ -221,6 +228,7 @@ def create_dataset(
         ds = ImageDataset(
             root,
             reader=name,
+            labels=labels,
             class_map=class_map,
             load_bytes=load_bytes,
             input_img_mode=input_img_mode,
