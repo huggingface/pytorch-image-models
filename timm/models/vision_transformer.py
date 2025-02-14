@@ -2164,8 +2164,16 @@ default_cfgs = {
         input_size=(3, 384, 384), crop_pct=1.0),
     'vit_so150m_patch16_reg4_map_256.untrained': _cfg(
         input_size=(3, 256, 256)),
-    'vit_so150m2_patch16_reg1_gap_256.untrained': _cfg(
-        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=1.0),
+    'vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=1.0),
+    'vit_so150m2_patch16_reg1_gap_384.sbb_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0),
 
     'vit_intern300m_patch14_448.ogvl_dist': _cfg(
         hf_hub_id='timm/',
@@ -3515,6 +3523,18 @@ def vit_so150m2_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> Visi
     )
     model = _create_vision_transformer(
         'vit_so150m2_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m2_patch16_reg1_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M v2 (shape optimized, but diff than paper def, optimized for GPU) """
+    model_args = dict(
+        patch_size=16, embed_dim=832, depth=21, num_heads=13, mlp_ratio=34/13, init_values=1e-5,
+        qkv_bias=False, class_token=False, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_so150m2_patch16_reg1_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
