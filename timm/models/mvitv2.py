@@ -749,7 +749,7 @@ class MultiScaleVit(nn.Module):
         num_stages = len(cfg.embed_dim)
         feat_size = patch_dims
         curr_stride = max(cfg.patch_stride)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths), device="cpu").split(cfg.depths)]
         self.stages = nn.ModuleList()
         self.feature_info = []
         for i in range(num_stages):

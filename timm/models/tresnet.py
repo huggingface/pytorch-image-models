@@ -135,7 +135,7 @@ class TResNet(nn.Module):
             self.inplanes = self.inplanes // 8 * 8
             self.planes = self.planes // 8 * 8
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers), device="cpu").split(layers)]
         conv1 = ConvNormAct(in_chans * 16, self.planes, stride=1, kernel_size=3, act_layer=act_layer)
         layer1 = self._make_layer(
             Bottleneck if v2 else BasicBlock,

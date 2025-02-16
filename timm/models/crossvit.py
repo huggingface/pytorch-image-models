@@ -351,7 +351,7 @@ class CrossVit(nn.Module):
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
         total_depth = sum([sum(x[-2:]) for x in depth])
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, total_depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, total_depth, device="cpu")]  # stochastic depth decay rule
         dpr_ptr = 0
         self.blocks = nn.ModuleList()
         for idx, block_cfg in enumerate(depth):

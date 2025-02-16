@@ -467,7 +467,7 @@ class ResNetV2(nn.Module):
         prev_chs = stem_chs
         curr_stride = 4
         dilation = 1
-        block_dprs = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers)).split(layers)]
+        block_dprs = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(layers), device="cpu").split(layers)]
         if preact:
             block_fn = PreActBasic if basic else PreActBottleneck
         else:

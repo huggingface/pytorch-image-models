@@ -448,7 +448,7 @@ class TinyVit(nn.Module):
         )
 
         # stochastic depth rate rule
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu")]
 
         # build stages
         self.stages = nn.Sequential()
