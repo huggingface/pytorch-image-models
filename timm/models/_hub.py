@@ -395,7 +395,7 @@ def push_to_hf_hub(
 
 
 def generate_readme(model_card: dict, model_name: str):
-    tags = model_card.get('tags', None) or ['image-classification', 'timm']
+    tags = model_card.get('tags', None) or ['image-classification', 'timm', 'transformers']
     readme_text = "---\n"
     if tags:
         readme_text += "tags:\n"
