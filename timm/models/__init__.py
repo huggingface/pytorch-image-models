@@ -64,6 +64,7 @@ from .sknet import *
 from .swin_transformer import *
 from .swin_transformer_v2 import *
 from .swin_transformer_v2_cr import *
+from .t2t_vit import *
 from .tiny_vit import *
 from .tnt import *
 from .tresnet import *
