@@ -337,7 +337,7 @@ class NormFreeNet(nn.Module):
         )
 
         self.feature_info = [stem_feat]
-        drop_path_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths)).split(cfg.depths)]
+        drop_path_rates = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.depths), device="cpu").split(cfg.depths)]
         prev_chs = stem_chs
         net_stride = stem_stride
         dilation = 1

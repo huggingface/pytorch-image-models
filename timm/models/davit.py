@@ -554,7 +554,7 @@ class DaVit(nn.Module):
         self.stem = Stem(in_chans, embed_dims[0], norm_layer=norm_layer)
         in_chs = embed_dims[0]
 
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         stages = []
         for i in range(num_stages):
             out_chs = embed_dims[i]

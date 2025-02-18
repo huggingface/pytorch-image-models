@@ -498,7 +498,7 @@ class NextViT(nn.Module):
         in_chs = out_chs = stem_chs[-1]
         stages = []
         idx = 0
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         for stage_idx in range(len(depths)):
             stage = NextStage(
                 in_chs=in_chs,

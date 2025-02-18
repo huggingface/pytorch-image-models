@@ -515,7 +515,7 @@ class Hiera(nn.Module):
         # Transformer blocks
         cur_stage = 0
         depth = sum(stages)
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth, device="cpu")]  # stochastic depth decay rule
         self.blocks = nn.ModuleList()
         self.feature_info = []
         for i in range(depth):

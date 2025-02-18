@@ -569,7 +569,7 @@ def create_csp_stages(
     cfg_dict = asdict(cfg.stages)
     num_stages = len(cfg.stages.depth)
     cfg_dict['block_dpr'] = [None] * num_stages if not drop_path_rate else \
-        [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.stages.depth)).split(cfg.stages.depth)]
+        [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(cfg.stages.depth), device="cpu").split(cfg.stages.depth)]
     stage_args = [dict(zip(cfg_dict.keys(), values)) for values in zip(*cfg_dict.values())]
     block_kwargs = dict(
         act_layer=cfg.act_layer,
