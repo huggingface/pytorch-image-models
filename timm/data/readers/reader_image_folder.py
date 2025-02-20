@@ -18,6 +18,7 @@ from .reader import Reader
 def find_images_and_targets(
         folder: str,
         types: Optional[Union[List, Tuple, Set]] = None,
+        labels: Optional[Dict] = None,
         class_to_idx: Optional[Dict] = None,
         leaf_name_only: bool = True,
         sort: bool = True
@@ -27,6 +28,7 @@ def find_images_and_targets(
     Args:
         folder: root of folder to recursively search
         types: types (file extensions) to search for in path
+        labels: specify filename -> label mapping (and ignore the subfolder structure)
         class_to_idx: specify mapping for class (folder name) to class index if set
         leaf_name_only: use only leaf-name of folder walk for class names
         sort: re-sort found images by name (for consistent ordering)
@@ -35,22 +37,25 @@ def find_images_and_targets(
         A list of image and target tuples, class_to_idx mapping
     """
     types = get_img_extensions(as_set=True) if not types else set(types)
-    labels = []
     filenames = []
+    file_labels = []
     for root, subdirs, files in os.walk(folder, topdown=False, followlinks=True):
-        rel_path = os.path.relpath(root, folder) if (root != folder) else ''
-        label = os.path.basename(rel_path) if leaf_name_only else rel_path.replace(os.path.sep, '_')
+        if labels is None:
+            rel_path = os.path.relpath(root, folder) if (root != folder) else ''
+            label = os.path.basename(rel_path) if leaf_name_only else rel_path.replace(os.path.sep, '_')
         for f in files:
             base, ext = os.path.splitext(f)
             if ext.lower() in types:
+                if labels is not None:
+                    label = labels[f]
                 filenames.append(os.path.join(root, f))
-                labels.append(label)
+                file_labels.append(label)
     if class_to_idx is None:
         # building class index
-        unique_labels = set(labels)
+        unique_labels = set(file_labels)
         sorted_labels = list(sorted(unique_labels, key=natural_key))
         class_to_idx = {c: idx for idx, c in enumerate(sorted_labels)}
-    images_and_targets = [(f, class_to_idx[l]) for f, l in zip(filenames, labels) if l in class_to_idx]
+    images_and_targets = [(f, class_to_idx[l]) for f, l in zip(filenames, file_labels) if l in class_to_idx]
     if sort:
         images_and_targets = sorted(images_and_targets, key=lambda k: natural_key(k[0]))
     return images_and_targets, class_to_idx
@@ -61,6 +66,7 @@ class ReaderImageFolder(Reader):
     def __init__(
             self,
             root,
+            labels=None,
             class_map='',
             input_key=None,
     ):
@@ -75,8 +81,9 @@ class ReaderImageFolder(Reader):
             find_types = input_key.split(';')
         self.samples, self.class_to_idx = find_images_and_targets(
             root,
-            class_to_idx=class_to_idx,
             types=find_types,
+            labels=labels,
+            class_to_idx=class_to_idx,
         )
         if len(self.samples) == 0:
             raise RuntimeError(
