@@ -12,6 +12,16 @@
 
 ## What's New
 
+## Feb 21, 2025
+* SigLIP 2 ViT image encoders added (https://huggingface.co/collections/timm/siglip-2-67b8e72ba08b09dd97aecaf9)
+  * Variable resolution / aspect NaFlex versions are a WIP
+* Add 'SO150M2' ViT weights trained with SBB recipes, great results, better for ImageNet than previous attempt w/ less training.
+  * `vit_so150m2_patch16_reg1_gap_448.sbb_e200_in12k_ft_in1k` - 88.1% top-1
+  * `vit_so150m2_patch16_reg1_gap_384.sbb_e200_in12k_ft_in1k` - 87.9% top-1
+  * `vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k_ft_in1k` - 87.3% top-1
+  * `vit_so150m2_patch16_reg4_gap_256.sbb_e200_in12k`
+* Updated InternViT-300M '2.5' weights
+
 ## Feb 1, 2025
 * FYI PyTorch 2.6 & Python 3.13 are tested and working w/ current main and released version of `timm`
 
