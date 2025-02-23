@@ -21,6 +21,7 @@
   * `vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k_ft_in1k` - 87.3% top-1
   * `vit_so150m2_patch16_reg4_gap_256.sbb_e200_in12k`
 * Updated InternViT-300M '2.5' weights
+* Release 1.0.15
 
 ## Feb 1, 2025
 * FYI PyTorch 2.6 & Python 3.13 are tested and working w/ current main and released version of `timm`
@@ -452,6 +453,8 @@ All model architecture families include variants with pretrained weights. There 
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * Sequencer2D - https://arxiv.org/abs/2205.01972
+* SigLIP (image encoder) - https://arxiv.org/abs/2303.15343
+* SigLIP 2 (image encoder) - https://arxiv.org/abs/2502.14786
 * Swin S3 (AutoFormerV2) - https://arxiv.org/abs/2111.14725
 * Swin Transformer - https://arxiv.org/abs/2103.14030
 * Swin Transformer V2 - https://arxiv.org/abs/2111.09883
