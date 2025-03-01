@@ -131,7 +131,7 @@ class Attention2d(torch.nn.Module):
         self.act = act_layer()
         self.proj = ConvNorm(self.dh, dim, 1)
 
-        pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(torch.arange(self.resolution[0], device="cpu"), torch.arange(self.resolution[1], device="cpu"))).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
         self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, self.N))
@@ -233,10 +233,10 @@ class Attention2dDownsample(torch.nn.Module):
         self.proj = ConvNorm(self.dh, self.out_dim, 1)
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.N))
-        k_pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        k_pos = torch.stack(ndgrid(torch.arange(self.resolution[0], device="cpu"), torch.arange(self.resolution[1], device="cpu"))).flatten(1)
         q_pos = torch.stack(ndgrid(
-            torch.arange(0, self.resolution[0], step=2),
-            torch.arange(0, self.resolution[1], step=2)
+            torch.arange(0, self.resolution[0], step=2, device="cpu"),
+            torch.arange(0, self.resolution[1], step=2, device="cpu")
         )).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
@@ -542,7 +542,7 @@ class EfficientFormerV2(nn.Module):
         stride = 4
 
         num_stages = len(depths)
-        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
+        dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths), device="cpu").split(depths)]
         downsamples = downsamples or (False,) + (True,) * (len(depths) - 1)
         mlp_ratios = to_ntuple(num_stages)(mlp_ratios)
         stages = []

@@ -195,7 +195,7 @@ class Attention(nn.Module):
         ]))
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
-        pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(torch.arange(resolution[0], device="cpu"), torch.arange(resolution[1], device="cpu"))).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
         self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
@@ -291,10 +291,10 @@ class AttentionDownsample(nn.Module):
         ]))
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
-        k_pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        k_pos = torch.stack(ndgrid(torch.arange(resolution[0], device="cpu"), torch.arange(resolution[1], device="cpu"))).flatten(1)
         q_pos = torch.stack(ndgrid(
-            torch.arange(0, resolution[0], step=stride),
-            torch.arange(0, resolution[1], step=stride)
+            torch.arange(0, resolution[0], step=stride, device="cpu"),
+            torch.arange(0, resolution[1], step=stride, device="cpu"),
         )).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
