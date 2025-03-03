@@ -39,7 +39,7 @@ def create_reader(
         # default fallback path (backwards compat), use image tar if root is a .tar file, otherwise image folder
         # FIXME support split here or in reader?
         if os.path.isfile(root) and os.path.splitext(root)[1] == '.tar':
-            reader = ReaderImageInTar(root, **kwargs)
+            reader = ReaderImageInTar(root + '/' + split, **kwargs)
         else:
-            reader = ReaderImageFolder(root, **kwargs)
+            reader = ReaderImageFolder(root + '/' + split, **kwargs)
     return reader
