@@ -460,7 +460,8 @@ def build_model_with_cfg(
             model = model_cls(cfg=model_cfg, **kwargs)
 
     # convert meta-device tensors to concrete tensors
-    device = kwargs.get("device", torch.get_default_device())
+    default_device = torch.get_default_device() if hasattr(torch, "get_default_device") else "cpu"
+    device = kwargs.get("device", default_device)
     model._apply(lambda t: (torch.empty_like(t, device=device) if t.is_meta else t))
 
     model.pretrained_cfg = pretrained_cfg
