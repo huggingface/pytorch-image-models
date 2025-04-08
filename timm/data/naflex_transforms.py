@@ -575,7 +575,7 @@ class RandomResizedCropToSequence(torch.nn.Module):
 
     @staticmethod
     def get_params(
-            img: Union[torch.Tensor, Image],
+            img: torch.Tensor,
             scale: Tuple[float, float],
             ratio: Tuple[float, float],
             crop_attempts: int = 10,
@@ -690,7 +690,7 @@ class RandomResizedCropToSequence(torch.nn.Module):
 
         return (top, left, crop_h, crop_w), final_size, interpolation
 
-    def forward(self, img: Union[torch.Tensor, Image]) -> torch.Tensor:
+    def forward(self, img: torch.Tensor) -> torch.Tensor:
         # Sample crop, resize, and interpolation parameters
         crop_params, final_size, interpolation = self.get_params(
             img,

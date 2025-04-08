@@ -36,10 +36,7 @@ class NaFlexCollator:
         assert isinstance(batch[0], tuple)
         batch_size = len(batch)
 
-        # FIXME
-        # get seq len from sampler schedule
-
-        # resize to final size based on seq_len and patchify
+        # Resize to final size based on seq_len and patchify
 
         # Extract targets
         targets = torch.tensor([item[1] for item in batch], dtype=torch.int64)
