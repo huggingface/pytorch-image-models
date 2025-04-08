@@ -78,7 +78,7 @@ else:
     EXCLUDE_FILTERS = ['*enormous*']
     NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*']
 
-EXCLUDE_JIT_FILTERS = ['hiera_*']
+EXCLUDE_JIT_FILTERS = ['hiera_*', '*naflex*']
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
