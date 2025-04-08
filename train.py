@@ -396,6 +396,15 @@ group.add_argument('--wandb-tags', default=[], type=str, nargs='+',
 group.add_argument('--wandb-resume-id', default='', type=str, metavar='ID',
                    help='If resuming a run, the id of the run in wandb')
 
+# NaFlex scheduled loader arguments
+group.add_argument('--naflex-loader', action='store_true', default=False,
+                   help='Use NaFlex loader (Requires NaFlex compatible model)')
+group.add_argument('--naflex-train-seq-lens', type=int, nargs='+', default=[128, 256, 576, 784, 1024],
+                   help='Sequence lengths to use for NaFlex loader')
+group.add_argument('--naflex-max-seq-len', type=int, default=576,
+                   help='Fixed maximum sequence length for NaFlex loader (validation)')
+
+
 
 def _parse_args():
     # Do we have a config file to parse?
@@ -669,6 +678,7 @@ def main():
         trust_remote_code=args.dataset_trust_remote_code,
     )
 
+    dataset_eval = None
     if args.val_split:
         dataset_eval = create_dataset(
             args.dataset,
@@ -690,6 +700,7 @@ def main():
     mixup_fn = None
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
+        assert not args.naflex_loader, "Mixup/Cutmix not currently supported for NaFlex loading."
         mixup_args = dict(
             mixup_alpha=args.mixup,
             cutmix_alpha=args.cutmix,
@@ -714,9 +725,19 @@ def main():
     train_interpolation = args.train_interpolation
     if args.no_aug or not train_interpolation:
         train_interpolation = data_config['interpolation']
-    loader_train = create_loader(
-        dataset_train,
-        input_size=data_config['input_size'],
+        
+    # Check if we should use the NaFlex scheduled loader
+    common_loader_kwargs = dict(
+        mean=data_config['mean'],
+        std=data_config['std'],
+        pin_memory=args.pin_mem,
+        img_dtype=model_dtype or torch.float32,
+        device=device,
+        distributed=args.distributed,
+        use_prefetcher=args.prefetcher,
+    )
+
+    train_loader_kwargs = dict(
         batch_size=args.batch_size,
         is_training=True,
         no_aug=args.no_aug,
@@ -737,41 +758,69 @@ def main():
         num_aug_repeats=args.aug_repeats,
         num_aug_splits=num_aug_splits,
         interpolation=train_interpolation,
-        mean=data_config['mean'],
-        std=data_config['std'],
         num_workers=args.workers,
-        distributed=args.distributed,
-        collate_fn=collate_fn,
-        pin_memory=args.pin_mem,
-        img_dtype=model_dtype or torch.float32,
-        device=device,
-        use_prefetcher=args.prefetcher,
-        use_multi_epochs_loader=args.use_multi_epochs_loader,
         worker_seeding=args.worker_seeding,
     )
 
+    if args.naflex_loader:
+        from timm.data.naflex_loader import create_naflex_loader
+        if utils.is_primary(args):
+            _logger.info('Using NaFlex loader')
+
+        loader_train = create_naflex_loader(
+            dataset=dataset_train,
+            patch_size=16,  # Could be derived from model config 
+            train_seq_lens=args.naflex_train_seq_lens,
+            rank=args.rank,
+            world_size=args.world_size,
+            **common_loader_kwargs,
+            **train_loader_kwargs,
+        )
+    else:
+        # Use standard loader
+        loader_train = create_loader(
+            dataset_train,
+            input_size=data_config['input_size'],
+            collate_fn=collate_fn,
+            use_multi_epochs_loader=args.use_multi_epochs_loader,
+            **common_loader_kwargs,
+            **train_loader_kwargs,
+        )
+
     loader_eval = None
     if args.val_split:
+        assert dataset_eval is not None
         eval_workers = args.workers
         if args.distributed and ('tfds' in args.dataset or 'wds' in args.dataset):
             # FIXME reduces validation padding issues when using TFDS, WDS w/ workers and distributed training
             eval_workers = min(2, args.workers)
-        loader_eval = create_loader(
-            dataset_eval,
-            input_size=data_config['input_size'],
+
+        eval_loader_kwargs = dict(
             batch_size=args.validation_batch_size or args.batch_size,
             is_training=False,
             interpolation=data_config['interpolation'],
-            mean=data_config['mean'],
-            std=data_config['std'],
             num_workers=eval_workers,
-            distributed=args.distributed,
             crop_pct=data_config['crop_pct'],
-            pin_memory=args.pin_mem,
-            img_dtype=model_dtype or torch.float32,
-            device=device,
-            use_prefetcher=args.prefetcher,
         )
+
+        if args.naflex_loader:
+            from timm.data.naflex_loader import create_naflex_loader
+            # Use largest sequence length for validation
+            loader_eval = create_naflex_loader(
+                dataset=dataset_eval,
+                patch_size=16,  # Could be derived from model config
+                max_seq_len=args.naflex_max_seq_len,
+                **common_loader_kwargs,
+                **eval_loader_kwargs
+            )
+        else:
+            # Use standard loader
+            loader_eval = create_loader(
+                dataset_eval,
+                input_size=data_config['input_size'],
+                **common_loader_kwargs,
+                **eval_loader_kwargs,
+            )
 
     # setup loss function
     if args.jsd_loss:
@@ -1083,8 +1132,12 @@ def train_one_epoch(
             loss = _forward()
             _backward(loss)
 
-        losses_m.update(loss.item() * accum_steps, input.size(0))
-        update_sample_count += input.size(0)
+        if isinstance(input, dict):
+            batch_size = input['patches'].shape[0]
+        else:
+            batch_size = input.shape[0]
+        losses_m.update(loss.item() * accum_steps, batch_size)
+        update_sample_count += batch_size
 
         if not need_update:
             data_start_time = time.time()
@@ -1210,9 +1263,10 @@ def validate(
             elif device.type == "npu":
                 torch.npu.synchronize()
 
-            losses_m.update(reduced_loss.item(), input.size(0))
-            top1_m.update(acc1.item(), output.size(0))
-            top5_m.update(acc5.item(), output.size(0))
+            batch_size = output.shape[0]
+            losses_m.update(reduced_loss.item(), batch_size)
+            top1_m.update(acc1.item(), batch_size)
+            top5_m.update(acc5.item(), batch_size)
 
             batch_time_m.update(time.time() - end)
             end = time.time()

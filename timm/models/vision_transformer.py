@@ -41,8 +41,8 @@ from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, SwiGLUPacked, SwiGLU, \
-    trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
+from timm.layers import Attention, PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, \
+    SwiGLUPacked, SwiGLU, trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
     get_act_layer, get_norm_layer, LayerType
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
@@ -53,58 +53,6 @@ __all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to
 
 
 _logger = logging.getLogger(__name__)
-
-
-class Attention(nn.Module):
-    fused_attn: Final[bool]
-
-    def __init__(
-            self,
-            dim: int,
-            num_heads: int = 8,
-            qkv_bias: bool = False,
-            qk_norm: bool = False,
-            proj_bias: bool = True,
-            attn_drop: float = 0.,
-            proj_drop: float = 0.,
-            norm_layer: Type[nn.Module] = nn.LayerNorm,
-    ) -> None:
-        super().__init__()
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
-        self.num_heads = num_heads
-        self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
-        self.fused_attn = use_fused_attn()
-
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim, bias=proj_bias)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv.unbind(0)
-        q, k = self.q_norm(q), self.k_norm(k)
-
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-            )
-        else:
-            q = q * self.scale
-            attn = q @ k.transpose(-2, -1)
-            attn = attn.softmax(dim=-1)
-            attn = self.attn_drop(attn)
-            x = attn @ v
-
-        x = x.transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
 
 
 class LayerScale(nn.Module):
@@ -165,8 +113,8 @@ class Block(nn.Module):
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x), attn_mask=attn_mask)))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
 
@@ -222,8 +170,8 @@ class ResPostBlock(nn.Module):
             nn.init.constant_(self.norm1.weight, self.init_values)
             nn.init.constant_(self.norm2.weight, self.init_values)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.drop_path1(self.norm1(self.attn(x)))
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x = x + self.drop_path1(self.norm1(self.attn(x, attn_mask=attn_mask)))
         x = x + self.drop_path2(self.norm2(self.mlp(x)))
         return x
 
@@ -282,7 +230,7 @@ class ParallelScalingBlock(nn.Module):
         self.ls = LayerScale(dim, init_values=init_values) if init_values is not None else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         B, N, C = x.shape
 
         # Combined MLP fc1 & qkv projections
@@ -302,14 +250,18 @@ class ParallelScalingBlock(nn.Module):
         if self.fused_attn:
             x_attn = F.scaled_dot_product_attention(
                 q, k, v,
+                attn_mask=attn_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
             )
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
+            if attn_mask is not None:
+                attn = attn + attn_mask
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x_attn = attn @ v
+            
         x_attn = x_attn.transpose(1, 2).reshape(B, N, C)
         x_attn = self.attn_out_proj(x_attn)
 
@@ -379,22 +331,10 @@ class ParallelThingsBlock(nn.Module):
                 ('drop_path', DropPath(drop_path) if drop_path > 0. else nn.Identity())
             ])))
 
-    def _forward_jit(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + torch.stack([attn(x) for attn in self.attns]).sum(dim=0)
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x = x + torch.stack([attn(x, attn_mask=attn_mask) for attn in self.attns]).sum(dim=0)
         x = x + torch.stack([ffn(x) for ffn in self.ffns]).sum(dim=0)
         return x
-
-    @torch.jit.ignore
-    def _forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + sum(attn(x) for attn in self.attns)
-        x = x + sum(ffn(x) for ffn in self.ffns)
-        return x
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if torch.jit.is_scripting() or torch.jit.is_tracing():
-            return self._forward_jit(x)
-        else:
-            return self._forward(x)
 
 
 def global_pool_nlc(
@@ -728,7 +668,9 @@ class VisionTransformer(nn.Module):
             stop_early: bool = False,
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+            output_dict: bool = False,
+            attn_mask: Optional[torch.Tensor] = None,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]], Dict[str, Any]]:
         """ Forward features that returns intermediates.
 
         Args:
@@ -739,8 +681,11 @@ class VisionTransformer(nn.Module):
             stop_early: Stop iterating over blocks when last desired intermediate hit
             output_fmt: Shape of intermediate feature outputs
             intermediates_only: Only return intermediate features
+            output_dict: Return outputs as a dictionary with 'image_features' and 'image_intermediates' keys
+            attn_mask: Optional attention mask for masked attention (e.g., for NaFlex)
         Returns:
-
+            A tuple with (final_features, intermediates), a list of intermediate features, or a dictionary containing
+            'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix')
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
@@ -759,7 +704,7 @@ class VisionTransformer(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x)
+            x = blk(x, attn_mask=attn_mask)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)
@@ -776,6 +721,23 @@ class VisionTransformer(nn.Module):
             # reshape to BCHW output format
             H, W = self.patch_embed.dynamic_feat_size((height, width))
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+            
+        # For dictionary output, handle prefix tokens separately
+        if output_dict:
+            result_dict = {}
+            # Intermediates are always included
+            result_dict['image_intermediates'] = intermediates
+            if prefix_tokens is not None and return_prefix_tokens:
+                result_dict['image_intermediates_prefix'] = prefix_tokens
+                
+            # Only include features if not intermediates_only
+            if not intermediates_only:
+                x_final = self.norm(x)
+                result_dict['image_features'] = x_final
+                
+            return result_dict
+            
+        # For non-dictionary output, maintain the original behavior
         if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
             # return_prefix not support in torchscript due to poor type handling
             intermediates = list(zip(intermediates, prefix_tokens))
@@ -811,6 +773,7 @@ class VisionTransformer(nn.Module):
             reshape: bool = False,
             return_prefix_tokens: bool = False,
             norm: bool = False,
+            attn_mask: Optional[torch.Tensor] = None,
     ) -> List[torch.Tensor]:
         """ Intermediate layer accessor inspired by DINO / DINOv2 interface.
         NOTE: This API is for backwards compat, favour using forward_intermediates() directly.
@@ -821,17 +784,24 @@ class VisionTransformer(nn.Module):
             norm=norm,
             output_fmt='NCHW' if reshape else 'NLC',
             intermediates_only=True,
+            attn_mask=attn_mask,
         )
 
-    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_features(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         x = self.patch_embed(x)
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        if self.grad_checkpointing and not torch.jit.is_scripting():
+        
+        if attn_mask is not None:
+            # If mask provided, we need to apply blocks one by one
+            for blk in self.blocks:
+                x = blk(x, attn_mask=attn_mask)
+        elif self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
+            
         x = self.norm(x)
         return x
 
@@ -849,8 +819,8 @@ class VisionTransformer(nn.Module):
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.forward_features(x)
+    def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        x = self.forward_features(x, attn_mask=attn_mask)
         x = self.forward_head(x)
         return x
 
