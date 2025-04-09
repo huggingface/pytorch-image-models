@@ -8,6 +8,8 @@ from .dataset_info import DatasetInfo, CustomDatasetInfo
 from .imagenet_info import ImageNetInfo, infer_imagenet_subset
 from .loader import create_loader
 from .mixup import Mixup, FastCollateMixup
+from .naflex_dataset import VariableSeqMapWrapper
+from .naflex_loader import create_naflex_loader
 from .naflex_transforms import (
     ResizeToSequence,
     CenterCropToSequence,

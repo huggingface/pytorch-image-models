@@ -356,10 +356,9 @@ def create_attention_mask(
     """
     patch_valid = patch_valid.bool()
     B = patch_valid.shape[0]
-    device = patch_valid.device
 
     if num_prefix_tokens > 0:
-        prefix_valid = torch.ones((B, num_prefix_tokens), device=device, dtype=torch.bool)
+        prefix_valid = patch_valid.new_ones((B, num_prefix_tokens))
         patch_valid = torch.cat([prefix_valid, patch_valid], dim=1)
 
     mask_bool = (patch_valid.unsqueeze(-1) & patch_valid.unsqueeze(1)).unsqueeze(1)
@@ -390,10 +389,9 @@ def create_attention_mask2(
     """
     patch_valid = patch_valid.bool()
     B, kv_len = patch_valid.shape
-    device = patch_valid.device
 
     if num_prefix_tokens > 0:
-        prefix_valid = torch.ones((B, num_prefix_tokens), device=device, dtype=torch.bool)
+        prefix_valid = patch_valid.new_ones((B, num_prefix_tokens))
         patch_valid = torch.cat([prefix_valid, patch_valid], dim=1)
         kv_len = patch_valid.shape[1]
 
