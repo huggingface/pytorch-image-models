@@ -598,6 +598,7 @@ One of the greatest assets of PyTorch is the community and their contributions. 
 
 ### Training / Frameworks
 * fastai - https://github.com/fastai/fastai
+* lightly_train - https://github.com/lightly-ai/lightly-train
 
 ## Licenses
 
