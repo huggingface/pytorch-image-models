@@ -181,8 +181,8 @@ def skresnet18(pretrained=False, **kwargs) -> ResNet:
     sk_kwargs = dict(rd_ratio=1 / 8, rd_divisor=16, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[2, 2, 2, 2], block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last=False, **kwargs)
-    return _create_skresnet('skresnet18', pretrained, **model_args)
+        zero_init_last=False)
+    return _create_skresnet('skresnet18', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -195,8 +195,8 @@ def skresnet34(pretrained=False, **kwargs) -> ResNet:
     sk_kwargs = dict(rd_ratio=1 / 8, rd_divisor=16, split_input=True)
     model_args = dict(
         block=SelectiveKernelBasic, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last=False, **kwargs)
-    return _create_skresnet('skresnet34', pretrained, **model_args)
+        zero_init_last=False)
+    return _create_skresnet('skresnet34', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -209,8 +209,8 @@ def skresnet50(pretrained=False, **kwargs) -> ResNet:
     sk_kwargs = dict(split_input=True)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], block_args=dict(sk_kwargs=sk_kwargs),
-        zero_init_last=False, **kwargs)
-    return _create_skresnet('skresnet50', pretrained, **model_args)
+        zero_init_last=False)
+    return _create_skresnet('skresnet50', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -223,8 +223,8 @@ def skresnet50d(pretrained=False, **kwargs) -> ResNet:
     sk_kwargs = dict(split_input=True)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], stem_width=32, stem_type='deep', avg_down=True,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last=False, **kwargs)
-    return _create_skresnet('skresnet50d', pretrained, **model_args)
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last=False)
+    return _create_skresnet('skresnet50d', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
@@ -235,6 +235,6 @@ def skresnext50_32x4d(pretrained=False, **kwargs) -> ResNet:
     sk_kwargs = dict(rd_ratio=1/16, rd_divisor=32, split_input=False)
     model_args = dict(
         block=SelectiveKernelBottleneck, layers=[3, 4, 6, 3], cardinality=32, base_width=4,
-        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last=False, **kwargs)
-    return _create_skresnet('skresnext50_32x4d', pretrained, **model_args)
+        block_args=dict(sk_kwargs=sk_kwargs), zero_init_last=False)
+    return _create_skresnet('skresnext50_32x4d', pretrained, **dict(model_args, **kwargs))
 
