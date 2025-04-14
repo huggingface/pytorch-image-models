@@ -321,7 +321,7 @@ def resample_patch_embed(
         verbose: bool = False,
 ):
     """ Standalone function (computes matrix on each call). """
-    assert len(patch_embed.shape) == 4, "Input tensor should be 4D (out_c, in_c, h, w)"
+    assert len(patch_embed.shape) == 4, "Input tensor should be 4D (out_ch, in_ch, h, w)"
     assert len(new_size) == 2, "New shape should only be hw (height, width)"
 
     old_size_tuple: Tuple[int, int] = tuple(patch_embed.shape[-2:])
