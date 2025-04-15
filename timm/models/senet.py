@@ -404,62 +404,62 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def legacy_seresnet18(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNetBlock, layers=[2, 2, 2, 2], groups=1, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnet18', pretrained, **model_args)
+        block=SEResNetBlock, layers=[2, 2, 2, 2], groups=1, reduction=16)
+    return _create_senet('legacy_seresnet18', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnet34(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNetBlock, layers=[3, 4, 6, 3], groups=1, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnet34', pretrained, **model_args)
+        block=SEResNetBlock, layers=[3, 4, 6, 3], groups=1, reduction=16)
+    return _create_senet('legacy_seresnet34', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnet50(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNetBottleneck, layers=[3, 4, 6, 3], groups=1, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnet50', pretrained, **model_args)
+        block=SEResNetBottleneck, layers=[3, 4, 6, 3], groups=1, reduction=16)
+    return _create_senet('legacy_seresnet50', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnet101(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNetBottleneck, layers=[3, 4, 23, 3], groups=1, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnet101', pretrained, **model_args)
+        block=SEResNetBottleneck, layers=[3, 4, 23, 3], groups=1, reduction=16)
+    return _create_senet('legacy_seresnet101', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnet152(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNetBottleneck, layers=[3, 8, 36, 3], groups=1, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnet152', pretrained, **model_args)
+        block=SEResNetBottleneck, layers=[3, 8, 36, 3], groups=1, reduction=16)
+    return _create_senet('legacy_seresnet152', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_senet154(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
         block=SEBottleneck, layers=[3, 8, 36, 3], groups=64, reduction=16,
-        downsample_kernel_size=3, downsample_padding=1,  inplanes=128, input_3x3=True, **kwargs)
-    return _create_senet('legacy_senet154', pretrained, **model_args)
+        downsample_kernel_size=3, downsample_padding=1,  inplanes=128, input_3x3=True)
+    return _create_senet('legacy_senet154', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnext26_32x4d(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNeXtBottleneck, layers=[2, 2, 2, 2], groups=32, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnext26_32x4d', pretrained, **model_args)
+        block=SEResNeXtBottleneck, layers=[2, 2, 2, 2], groups=32, reduction=16)
+    return _create_senet('legacy_seresnext26_32x4d', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnext50_32x4d(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNeXtBottleneck, layers=[3, 4, 6, 3], groups=32, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnext50_32x4d', pretrained, **model_args)
+        block=SEResNeXtBottleneck, layers=[3, 4, 6, 3], groups=32, reduction=16)
+    return _create_senet('legacy_seresnext50_32x4d', pretrained, **dict(model_args, **kwargs))
 
 
 @register_model
 def legacy_seresnext101_32x4d(pretrained=False, **kwargs) -> SENet:
     model_args = dict(
-        block=SEResNeXtBottleneck, layers=[3, 4, 23, 3], groups=32, reduction=16, **kwargs)
-    return _create_senet('legacy_seresnext101_32x4d', pretrained, **model_args)
+        block=SEResNeXtBottleneck, layers=[3, 4, 23, 3], groups=32, reduction=16)
+    return _create_senet('legacy_seresnext101_32x4d', pretrained, **dict(model_args, **kwargs))
