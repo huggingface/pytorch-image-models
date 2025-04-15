@@ -43,7 +43,7 @@ def onnx_export(
 
     if example_input is None:
         if not input_size:
-            assert hasattr(model, 'default_cfg')
+            assert hasattr(model, 'default_cfg'), 'Cannot file model default config, input size must be provided'
             input_size = model.default_cfg.get('input_size')
         example_input = torch.randn((batch_size,) + input_size, requires_grad=training)
 
@@ -80,7 +80,7 @@ def onnx_export(
         export_output.save(output_file)
         torch_out = None
     else:
-        torch_out = torch.onnx._export(
+        torch_out = torch.onnx.export(
             model,
             example_input,
             output_file,
