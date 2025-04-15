@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Union, Dict
 
 from .reader_image_folder import ReaderImageFolder
 from .reader_image_in_tar import ReaderImageInTar
@@ -8,6 +8,7 @@ from .reader_image_in_tar import ReaderImageInTar
 def create_reader(
         name: str,
         root: Optional[str] = None,
+        labels: Optional[Union[Dict, str]] = None,
         split: str = 'train',
         **kwargs,
 ):
@@ -18,6 +19,13 @@ def create_reader(
     if len(name) > 1:
         prefix = name[0]
     name = name[-1]
+
+    if isinstance(labels, str):
+        import json
+        with open(labels, 'r') as labels_file:
+            labels = json.load(labels_file)
+    if labels is not None:
+        kwargs["labels"] = labels
 
     # FIXME improve the selection right now just tfds prefix or fallback path, will need options to
     # explicitly select other options shortly
