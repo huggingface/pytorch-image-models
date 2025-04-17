@@ -5,7 +5,7 @@ import os
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import torch
 from torch.hub import HASH_REGEX, download_url_to_file, urlparse
@@ -157,42 +157,60 @@ def download_from_hf(
     )
 
 
+def _parse_model_cfg(
+        cfg: Dict[str, Any],
+        extra_fields: Dict[str, Any],
+) -> Tuple[Dict[str, Any], str, Dict[str, Any]]:
+    """"""
+    # legacy "single‑dict" → split
+    if "pretrained_cfg" not in cfg:
+        pretrained_cfg = cfg
+        cfg = {
+            "architecture": pretrained_cfg.pop("architecture"),
+            "num_features": pretrained_cfg.pop("num_features", None),
+            "pretrained_cfg": pretrained_cfg,
+        }
+        if "labels" in pretrained_cfg:                  # rename ‑‑> label_names
+            pretrained_cfg["label_names"] = pretrained_cfg.pop("labels")
+
+    pretrained_cfg = cfg["pretrained_cfg"]
+    pretrained_cfg.update(extra_fields)
+
+    # top‑level overrides
+    if "num_classes" in cfg:
+        pretrained_cfg["num_classes"] = cfg["num_classes"]
+    if "label_names" in cfg:
+        pretrained_cfg["label_names"] = cfg.pop("label_names")
+    if "label_descriptions" in cfg:
+        pretrained_cfg["label_descriptions"] = cfg.pop("label_descriptions")
+
+    model_args = cfg.get("model_args", {})
+    model_name = cfg["architecture"]
+    return pretrained_cfg, model_name, model_args
+
+
 def load_model_config_from_hf(
         model_id: str,
         cache_dir: Optional[Union[str, Path]] = None,
 ):
+    """Original HF‑Hub loader (unchanged download, shared parsing)."""
     assert has_hf_hub(True)
-    cached_file = download_from_hf(model_id, 'config.json', cache_dir=cache_dir)
+    cfg_path = download_from_hf(model_id, "config.json", cache_dir=cache_dir)
+    cfg = load_cfg_from_json(cfg_path)
+    return _parse_model_cfg(cfg, {"hf_hub_id": model_id, "source": "hf-hub"})
 
-    hf_config = load_cfg_from_json(cached_file)
-    if 'pretrained_cfg' not in hf_config:
-        # old form, pull pretrain_cfg out of the base dict
-        pretrained_cfg = hf_config
-        hf_config = {}
-        hf_config['architecture'] = pretrained_cfg.pop('architecture')
-        hf_config['num_features'] = pretrained_cfg.pop('num_features', None)
-        if 'labels' in pretrained_cfg:  # deprecated name for 'label_names'
-            pretrained_cfg['label_names'] = pretrained_cfg.pop('labels')
-        hf_config['pretrained_cfg'] = pretrained_cfg
 
-    # NOTE currently discarding parent config as only arch name and pretrained_cfg used in timm right now
-    pretrained_cfg = hf_config['pretrained_cfg']
-    pretrained_cfg['hf_hub_id'] = model_id  # insert hf_hub id for pretrained weight load during model creation
-    pretrained_cfg['source'] = 'hf-hub'
-
-    # model should be created with base config num_classes if its exist
-    if 'num_classes' in hf_config:
-        pretrained_cfg['num_classes'] = hf_config['num_classes']
-
-    # label meta-data in base config overrides saved pretrained_cfg on load
-    if 'label_names' in hf_config:
-        pretrained_cfg['label_names'] = hf_config.pop('label_names')
-    if 'label_descriptions' in hf_config:
-        pretrained_cfg['label_descriptions'] = hf_config.pop('label_descriptions')
-
-    model_args = hf_config.get('model_args', {})
-    model_name = hf_config['architecture']
-    return pretrained_cfg, model_name, model_args
+def load_model_config_from_path(
+        model_path: Union[str, Path],
+):
+    """Load from ``<model_path>/config.json`` on the local filesystem."""
+    model_path = Path(model_path)
+    cfg_file = model_path / "config.json"
+    if not cfg_file.is_file():
+        raise FileNotFoundError(f"Config file not found: {cfg_file}")
+    cfg = load_cfg_from_json(cfg_file)
+    extra_fields = {"file": str(model_path), "source": "local-dir"}
+    return _parse_model_cfg(cfg, extra_fields=extra_fields)
 
 
 def load_state_dict_from_hf(
@@ -233,6 +251,51 @@ def load_state_dict_from_hf(
         state_dict = torch.load(cached_file, map_location='cpu', weights_only=weights_only)
     except TypeError:
         state_dict = torch.load(cached_file, map_location='cpu')
+    return state_dict
+
+
+_PREFERRED_FILES = (
+    "model.safetensors",
+    "pytorch_model.bin",
+    "pytorch_model.pth",
+    "model.pth",
+    "open_clip_model.safetensors",
+    "open_clip_pytorch_model.safetensors",
+    "open_clip_pytorch_model.bin",
+    "open_clip_pytorch_model.pth",
+)
+_EXT_PRIORITY = ('.safetensors', '.pth', '.pth.tar', '.bin')
+
+def load_state_dict_from_path(
+        path: str,
+        weights_only: bool = False,
+):
+    found_file = None
+    for fname in _PREFERRED_FILES:
+        p = path / fname
+        if p.exists():
+            logging.info(f"Found preferred checkpoint: {p.name}")
+            found_file = p
+            break
+
+    # fallback: first match per‑extension class
+    for ext in _EXT_PRIORITY:
+        files = sorted(path.glob(f"*{ext}"))
+        if files:
+            if len(files) > 1:
+                logging.warning(
+                    f"Multiple {ext} checkpoints in {path}: {names}. "
+                    f"Using '{files[0].name}'."
+                )
+            found_file = files[0]
+
+    if not found_file:
+        raise RuntimeError(f"No suitable checkpoints found in {path}.")
+
+    try:
+        state_dict = torch.load(found_file, map_location='cpu', weights_only=weights_only)
+    except TypeError:
+        state_dict = torch.load(found_file, map_location='cpu')
     return state_dict
 
 
