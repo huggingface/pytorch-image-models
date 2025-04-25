@@ -18,27 +18,29 @@ from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm,
     trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
     get_act_layer, get_norm_layer, LayerType, LayerScale 
 #from timm.layers import RotaryEmbeddingCat, RotaryEmbedding # not compatible
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
+
+__all__ = ['PE']
+
+
+####### PE's Rope ########
 
 def exists(val):
     return val is not None
 
-
 def default(val, d):
     return val if exists(val) else d
-
 
 def rotate_half(x):
     x = rearrange(x, "... (d r) -> ... d r", r=2)
     x1, x2 = x.unbind(dim=-1)
     x = torch.stack((-x2, x1), dim=-1)
     return rearrange(x, "... d r -> ... (d r)")
-
 
 @autocast("cuda", enabled=False)
 def apply_rotary_emb(freqs, t, start_index=0, scale=1.0, seq_dim=-2):
@@ -330,6 +332,7 @@ class Rope2D:
 
         return q, k
 
+####### PE's Modules ########
 
 class AttentionPooling(nn.Module):
     def __init__(
@@ -801,6 +804,41 @@ def checkpoint_filter_fn(
         state_dict = {k.replace("visual.", ""): v for k, v in state_dict.items() if "visual" in k}
     return state_dict
 
+
+default_cfgs = generate_default_cfgs({
+    'pe_core_b16_224': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
+        input_size=(3, 224, 224)),
+    'pe_core_l14_336': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
+        input_size=(3, 336, 336)),
+    'pe_core_G14_448': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
+        input_size=(3, 448, 448)),
+    'pe_lang_l14_448': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
+        input_size=(3, 448, 448)),
+    'pe_lang_G14_448': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
+        input_size=(3, 448, 448)),
+    'pe_spatial_G14_448': _cfg(
+        hf_hub_id='timm/',
+        license='apache-2.0',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
+        input_size=(3, 448, 448)),
+})
+
+
 def _create_pe(variant: str, pretrained: bool = False, **kwargs) -> PE:
     out_indices = kwargs.pop('out_indices', 3)
 
@@ -813,7 +851,6 @@ def _create_pe(variant: str, pretrained: bool = False, **kwargs) -> PE:
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
-
 
 @register_model
 def pe_core_b16_224(pretrained=False, **kwargs):
