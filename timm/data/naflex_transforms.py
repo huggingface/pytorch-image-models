@@ -760,7 +760,6 @@ def patchify(
     nh, nw = h // ph, w // pw
     # Reshape image to patches [nh, nw, ph, pw, c]
     patches = img.view(c, nh, ph, nw, pw).permute(1, 3, 2, 4, 0).reshape(nh * nw, ph * pw * c)
-
     if include_info:
         # Create coordinate indices
         y_idx, x_idx = torch.meshgrid(torch.arange(nh), torch.arange(nw), indexing='ij')

@@ -318,7 +318,7 @@ def transforms_imagenet_eval(
         tfl += [ResizeToSequence(
             patch_size=patch_size,
             max_seq_len=max_seq_len,
-            interpolation=interpolation
+            interpolation=interpolation,
         )]
     else:
         if crop_mode == 'squash':
