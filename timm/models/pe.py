@@ -805,36 +805,35 @@ def checkpoint_filter_fn(
     return state_dict
 
 
+def _cfg(url='', **kwargs):
+    return {
+        'license': 'apache-2.0',
+        'num_classes': 0,
+        'interpolation': 'bilinear',
+        'fixed_input_size': True,
+        'mean': IMAGENET_INCEPTION_MEAN, 
+        'std': IMAGENET_INCEPTION_STD,
+        **kwargs
+    }
+
 default_cfgs = generate_default_cfgs({
     'pe_core_b16_224': _cfg(
         hf_hub_id='timm/',
-        license='apache-2.0',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
         input_size=(3, 224, 224)),
     'pe_core_l14_336': _cfg(
         hf_hub_id='timm/',
-        license='apache-2.0',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
         input_size=(3, 336, 336)),
     'pe_core_G14_448': _cfg(
         hf_hub_id='timm/',
-        license='apache-2.0',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
         input_size=(3, 448, 448)),
     'pe_lang_l14_448': _cfg(
         hf_hub_id='timm/',
-        license='apache-2.0',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
         input_size=(3, 448, 448)),
     'pe_lang_G14_448': _cfg(
         hf_hub_id='timm/',
-        license='apache-2.0',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
         input_size=(3, 448, 448)),
     'pe_spatial_G14_448': _cfg(
         hf_hub_id='timm/',
-        license='apache-2.0',
-        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, num_classes=0,
         input_size=(3, 448, 448)),
 })
 
