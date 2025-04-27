@@ -4,7 +4,6 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, 
 
 import torch
 import torch.nn as nn
-from einops import rearrange, repeat
 from torch import nn, Tensor, broadcast_tensors, einsum
 from torch.nn import functional as F
 from torch.nn import Module, ModuleList
@@ -49,17 +48,14 @@ __all__ = ['PE']
 def exists(val):
     return val is not None
 
-
 def default(val, d):
     return val if exists(val) else d
 
-
 def rotate_half(x):
-    x = rearrange(x, "... (d r) -> ... d r", r=2)
-    x1, x2 = x.unbind(dim=-1)
+    x = x.view(*x.shape[:-1], -1, 2)
+    x1, x2 = x[..., 0], x[..., 1]
     x = torch.stack((-x2, x1), dim=-1)
-    return rearrange(x, "... d r -> ... (d r)")
-
+    return x.view(*x.shape[:-2], -1)
 
 @autocast("cuda", enabled=False)
 def apply_rotary_emb(freqs, t, start_index=0, scale=1.0, seq_dim=-2):
@@ -85,7 +81,6 @@ def apply_rotary_emb(freqs, t, start_index=0, scale=1.0, seq_dim=-2):
     out = torch.cat((t_left, t, t_right), dim=-1)
 
     return out.type(dtype)
-
 
 class RotaryEmbedding(Module):
     def __init__(
@@ -187,7 +182,7 @@ class RotaryEmbedding(Module):
         )
 
         if seq_dim == -3:
-            freqs = rearrange(freqs, "n d -> n 1 d")
+            freqs = freqs.unsqueeze(1)
 
         return apply_rotary_emb(freqs, t, seq_dim=seq_dim)
 
@@ -217,8 +212,8 @@ class RotaryEmbedding(Module):
         scale = self.get_scale(seq, seq_len=seq_len).to(dtype)
 
         if seq_dim == -3:
-            freqs = rearrange(freqs, "n d -> n 1 d")
-            scale = rearrange(scale, "n d -> n 1 d")
+            freqs = freqs.unsqueeze(1)
+            scale = scale.unsqueeze(1)
 
         rotated_q = apply_rotary_emb(freqs, q, scale=scale, seq_dim=seq_dim)
         rotated_k = apply_rotary_emb(freqs, k, scale=scale**-1, seq_dim=seq_dim)
@@ -230,7 +225,6 @@ class RotaryEmbedding(Module):
 
     def get_scale(self, t: Tensor, seq_len: Optional[int] = None, offset=0):
         assert self.use_xpos
-
         should_cache = self.cache_if_possible and exists(seq_len)
 
         if should_cache and exists(self.cached_scales) and (seq_len + offset) <= self.cached_scales.shape[0]:
@@ -239,7 +233,7 @@ class RotaryEmbedding(Module):
         scale = 1.0
         if self.use_xpos:
             power = (t - len(t) // 2) / self.scale_base
-            scale = self.scale ** rearrange(power, "n -> n 1")
+            scale = self.scale ** power.unsqueeze(-1)
             scale = torch.cat((scale, scale), dim=-1)
 
         if should_cache:
@@ -280,7 +274,7 @@ class RotaryEmbedding(Module):
         freqs = self.freqs
 
         freqs = einsum("..., f -> ... f", t.type(freqs.dtype), freqs)
-        freqs = repeat(freqs, "... n -> ... (n r)", r=2)
+        freqs = freqs.repeat_interleave(2, dim=-1)
 
         if should_cache:
             self.tmp_store("cached_freqs", freqs.detach())
@@ -414,15 +408,15 @@ class SelfAttention(nn.Module):
         q, k, v = proj[0], proj[1], proj[2]
 
         # Use "q_" so that we don't accidentally quit in pdb :)
-        q = rearrange(q, "b s (h d) -> b h s d", h=self.num_heads)
-        k = rearrange(k, "b s (h d) -> b h s d", h=self.num_heads)
-        v = rearrange(v, "b s (h d) -> b h s d", h=self.num_heads)
+        q = q.view(batch, seq, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        k = k.view(batch, seq, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        v = v.view(batch, seq, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
         if self.rope:
             q, k = self.rope(q, k)
 
         attn = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale)
-        attn = rearrange(attn, "b h s d -> b s (h d)")
+        attn = attn.permute(0, 2, 1, 3).contiguous().view(batch, seq, -1)
 
         return F.linear(attn, self.out_proj.weight, self.out_proj.bias)
 
