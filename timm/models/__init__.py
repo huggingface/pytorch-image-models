@@ -60,6 +60,7 @@ from .rexnet import *
 from .selecsls import *
 from .senet import *
 from .sequencer import *
+from .shvit import *
 from .sknet import *
 from .starnet import *
 from .swiftformer import *
