@@ -281,7 +281,6 @@ class RotaryEmbedding(Module):
 
         return freqs
 
-
 class Rope2D:
     """Helper class to apply RoPE2D as well as interpolate on the fly."""
 
@@ -565,14 +564,14 @@ class PE(nn.Module):
         use_ln_post: bool = True,
         ls_init_value: float = None,
         drop_path: float = 0.0,
-        image_size: int = 448,  # Pretrain image size only; you can pass in any image size
+        img_size: int = 448,  # Pretrain image size only; you can pass in any image size
         use_abs_posemb: bool = True,
         use_rope2d: bool = True,
         use_cls_token: bool = False,
         output_dim: Optional[int] = 1280,
         attn_pooler_heads: int = 8,
         pool_type: Literal["attn", "tok", "avg", "none"] = "attn",
-        num_classes: int = 1000,  # no use for now
+        num_classes: int = 0,  # no use for PE
         in_chans: int = 3,
     ):
         super().__init__()
@@ -589,7 +588,9 @@ class PE(nn.Module):
         self.use_abs_posemb = use_abs_posemb
         self.use_cls_token = use_cls_token
         self.use_rope2d = use_rope2d
-        self.image_size = image_size
+        if isinstance(img_size, (tuple, list)):
+            img_size = img_size[0]
+        self.img_size = img_size
 
         self.conv1 = nn.Conv2d(
             in_channels=3,
@@ -652,7 +653,7 @@ class PE(nn.Module):
             self.class_embedding = nn.Parameter(init_scale * torch.randn(self.width))
 
         if self.use_abs_posemb:
-            self.posemb_grid_size = self.image_size // self.patch_size
+            self.posemb_grid_size = self.img_size // self.patch_size
             self.positional_embedding = nn.Parameter(
                 init_scale * torch.randn(int(self.use_cls_token) + self.posemb_grid_size**2, self.width)
             )
@@ -731,8 +732,8 @@ class PE(nn.Module):
 
         return x
 
-    def forward(self, x: torch.Tensor, **kwargs):
-        x = self.forward_features(x, norm=True, **kwargs)
+    def forward(self, x: torch.Tensor, layer_idx: int = -1, strip_cls_token: bool = False):
+        x = self.forward_features(x, norm=True, layer_idx=layer_idx, strip_cls_token=strip_cls_token)
         x = self._pool(x)
 
         if self.proj_dim is not None:
@@ -758,8 +759,8 @@ def _cfg(url='', **kwargs):
         'num_classes': 0,
         'interpolation': 'bilinear',
         'fixed_input_size': True,
-        'mean': IMAGENET_INCEPTION_MEAN,
-        'std': IMAGENET_INCEPTION_STD,
+        'mean': IMAGENET_INCEPTION_MEAN, # (0.5, 0.5, 0.5)
+        'std': IMAGENET_INCEPTION_STD, # (0.5, 0.5, 0.5)
         **kwargs,
     }
 
@@ -792,7 +793,7 @@ def _create_pe(variant: str, pretrained: bool = False, **kwargs) -> PE:
 @register_model
 def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
     model_args = dict(
-        image_size=224,
+        img_size=224,
         patch_size=16,
         width=768,
         layers=12,
@@ -808,7 +809,7 @@ def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
 @register_model
 def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
     model_args = dict(
-        image_size=336,
+        img_size=336,
         patch_size=14,
         width=1024,
         layers=24,
@@ -824,7 +825,7 @@ def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
 @register_model
 def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
     model_args = dict(
-        image_size=448,
+        img_size=448,
         patch_size=14,
         width=1536,
         layers=50,
@@ -840,7 +841,7 @@ def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
 @register_model
 def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
     model_args = dict(
-        image_size=448,
+        img_size=448,
         patch_size=14,
         width=1024,
         layers=23,
@@ -858,7 +859,7 @@ def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
 @register_model
 def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
     model_args = dict(
-        image_size=448,
+        img_size=448,
         patch_size=14,
         width=1536,
         layers=47,
@@ -876,7 +877,7 @@ def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
 @register_model
 def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
     model_args = dict(
-        image_size=448,
+        img_size=448,
         patch_size=14,
         width=1536,
         layers=50,
