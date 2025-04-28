@@ -61,6 +61,7 @@ from .selecsls import *
 from .senet import *
 from .sequencer import *
 from .sknet import *
+from .starnet import *
 from .swiftformer import *
 from .swin_transformer import *
 from .swin_transformer_v2 import *
