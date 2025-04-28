@@ -480,7 +480,7 @@ class SwiftFormer(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ) -> List[int]:
+    ):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
@@ -561,10 +561,10 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
-    # 'swiftformer_xs.dist_in1k': _cfg(url=''),
-    # 'swiftformer_s.dist_in1k': _cfg(url=''),
-    # 'swiftformer_l1.dist_in1k': _cfg(url=''),
-    # 'swiftformer_l3.dist_in1k': _cfg(url=''),
+    # 'swiftformer_xs.dist_in1k': _cfg(hf_hub_id='timm/'),
+    # 'swiftformer_s.dist_in1k': _cfg(hf_hub_id='timm/'),
+    # 'swiftformer_l1.dist_in1k': _cfg(hf_hub_id='timm/'),
+    # 'swiftformer_l3.dist_in1k': _cfg(hf_hub_id='timm/'),
     'swiftformer_xs.untrained': _cfg(),
     'swiftformer_s.untrained': _cfg(),
     'swiftformer_l1.untrained': _cfg(),
@@ -588,18 +588,18 @@ def swiftformer_xs(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
     return _create_swiftformer('swiftformer_xs', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-# @register_model
-# def swiftformer_s(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
-#     model_args = dict(layers=[3, 3, 9, 6], embed_dims=[48, 64, 168, 224])
-#     return _create_swiftformer('swiftformer_s', pretrained=pretrained, **dict(model_args, **kwargs))
+@register_model
+def swiftformer_s(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
+    model_args = dict(layers=[3, 3, 9, 6], embed_dims=[48, 64, 168, 224])
+    return _create_swiftformer('swiftformer_s', pretrained=pretrained, **dict(model_args, **kwargs))
 
-# @register_model
-# def swiftformer_l1(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
-#     model_args = dict(layers=[4, 3, 10, 5], embed_dims=[48, 96, 192, 384])
-#     return _create_swiftformer('swiftformer_l1', pretrained=pretrained, **dict(model_args, **kwargs))
+@register_model
+def swiftformer_l1(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
+    model_args = dict(layers=[4, 3, 10, 5], embed_dims=[48, 96, 192, 384])
+    return _create_swiftformer('swiftformer_l1', pretrained=pretrained, **dict(model_args, **kwargs))
 
 
-# @register_model
-# def swiftformer_l3(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
-#     model_args = dict(layers=[4, 4, 12, 6], embed_dims=[64, 128, 320, 512])
-#     return _create_swiftformer('swiftformer_l3', pretrained=pretrained, **dict(model_args, **kwargs))
+@register_model
+def swiftformer_l3(pretrained: bool = False, **kwargs: Any) -> SwiftFormer:
+    model_args = dict(layers=[4, 4, 12, 6], embed_dims=[64, 128, 320, 512])
+    return _create_swiftformer('swiftformer_l3', pretrained=pretrained, **dict(model_args, **kwargs))
