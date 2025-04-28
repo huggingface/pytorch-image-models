@@ -1142,7 +1142,10 @@ def train_one_epoch(
 
             if args.distributed:
                 # scale gradient btw distributed ranks, each one can have different batch size
-                global_batch_size = utils.reduce_tensor(torch.tensor(batch_size, device=device), 1) # SUM
+                global_batch_size = utils.reduce_tensor(
+                    torch.tensor(batch_size, device=device, dtype=torch.float32),
+                    1 # SUM
+                )
                 dist_scale = args.world_size * batch_size / global_batch_size
             else:
                 dist_scale = None
