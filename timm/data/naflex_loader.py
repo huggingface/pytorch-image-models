@@ -7,72 +7,8 @@ import torch
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .loader import _worker_init
-from .naflex_dataset import VariableSeqMapWrapper
+from .naflex_dataset import VariableSeqMapWrapper, NaFlexCollator
 from .transforms_factory import create_transform
-
-
-class NaFlexCollator:
-    """Custom collator for batching NaFlex-style variable-resolution images."""
-
-    def __init__(
-            self,
-            patch_size=16,
-            max_seq_len=None,
-    ):
-        self.patch_size = patch_size
-        self.max_seq_len = max_seq_len or 576  # Default ViT-B/16 sequence length (577 = 24*24)
-
-    def __call__(self, batch):
-        """
-        Args:
-            batch: List of tuples (patch_dict, target)
-
-        Returns:
-            A tuple of (input_dict, targets) where input_dict contains:
-                - patches: Padded tensor of patches
-                - patch_coord: Coordinates for each patch (y, x)
-                - patch_valid: Valid indicators
-        """
-        assert isinstance(batch[0], tuple)
-        batch_size = len(batch)
-
-        # Resize to final size based on seq_len and patchify
-
-        # Extract targets
-        targets = torch.tensor([item[1] for item in batch], dtype=torch.int64)
-
-        # Get patch dictionaries
-        patch_dicts = [item[0] for item in batch]
-
-        # If we have a maximum sequence length constraint, ensure we don't exceed it
-        if self.max_seq_len is not None:
-            max_patches = self.max_seq_len
-        else:
-            # Find the maximum number of patches in this batch
-            max_patches = max(item['patches'].shape[0] for item in patch_dicts)
-
-        # Get patch dimensionality
-        patch_dim = patch_dicts[0]['patches'].shape[1]
-
-        # Prepare tensors for the batch
-        patches = torch.zeros((batch_size, max_patches, patch_dim), dtype=torch.float32)
-        patch_coord = torch.zeros((batch_size, max_patches, 2), dtype=torch.int64)  # [B, N, 2] for (y, x)
-        patch_valid = torch.zeros((batch_size, max_patches), dtype=torch.bool)
-
-        # Fill in the tensors
-        for i, patch_dict in enumerate(patch_dicts):
-            num_patches = min(patch_dict['patches'].shape[0], max_patches)
-
-            patches[i, :num_patches] = patch_dict['patches'][:num_patches]
-            patch_coord[i, :num_patches] = patch_dict['patch_coord'][:num_patches]
-            patch_valid[i, :num_patches] = patch_dict['patch_valid'][:num_patches]
-
-        return {
-            'patches': patches,
-            'patch_coord': patch_coord,
-            'patch_valid': patch_valid,
-            'seq_len': max_patches,
-        }, targets
 
 
 class NaFlexPrefetchLoader:
@@ -261,9 +197,7 @@ def create_naflex_loader(
         # NOTE: Collation is handled by the dataset wrapper for training
         # Create the collator (handles fixed-size collation)
         # collate_fn = NaFlexCollator(
-        #     patch_size=patch_size,
         #     max_seq_len=max(seq_lens) + 1,  # +1 for class token
-        #     use_prefetcher=use_prefetcher
         # )
 
         loader = torch.utils.data.DataLoader(
@@ -303,10 +237,7 @@ def create_naflex_loader(
         )
 
         # Create the collator
-        collate_fn = NaFlexCollator(
-            patch_size=patch_size,
-            max_seq_len=max_seq_len,
-        )
+        collate_fn = NaFlexCollator(max_seq_len=max_seq_len)
 
         # Handle distributed training
         sampler = None
