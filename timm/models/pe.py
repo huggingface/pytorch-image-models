@@ -11,6 +11,7 @@ from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
 from torch.nn.parameter import Parameter
 from torch.amp import autocast
 from torch.utils.checkpoint import checkpoint
+from torch import pi
 
 ### Import timm layers
 from timm.layers import (
@@ -44,283 +45,105 @@ from ._registry import generate_default_cfgs, register_model, register_model_dep
 __all__ = ['PE']
 
 
-######## PE's Rope ########
-def exists(val):
-    return val is not None
-
-def default(val, d):
-    return val if exists(val) else d
-
-def rotate_half(x):
-    x = x.view(*x.shape[:-1], -1, 2)
-    x1, x2 = x[..., 0], x[..., 1]
-    x = torch.stack((-x2, x1), dim=-1)
-    return x.view(*x.shape[:-2], -1)
-
-@autocast("cuda", enabled=False)
-def apply_rotary_emb(freqs, t, start_index=0, scale=1.0, seq_dim=-2):
-    dtype = t.dtype
-
-    if t.ndim == 3:
-        seq_len = t.shape[seq_dim]
-        freqs = freqs[-seq_len:]
-
-    rot_dim = freqs.shape[-1]
-    end_index = start_index + rot_dim
-
-    assert (
-        rot_dim <= t.shape[-1]
-    ), f"feature dimension {t.shape[-1]} is not of sufficient size to rotate in all the positions {rot_dim}"
-
-    t_left, t, t_right = (
-        t[..., :start_index],
-        t[..., start_index:end_index],
-        t[..., end_index:],
-    )
-    t = (t * freqs.cos() * scale) + (rotate_half(t) * freqs.sin() * scale)
-    out = torch.cat((t_left, t, t_right), dim=-1)
-
-    return out.type(dtype)
-
+######## PE Rope (Simplified) ########
 class RotaryEmbedding(Module):
     def __init__(
         self,
         dim,
-        custom_freqs: Optional[Tensor] = None,
-        freqs_for: Union[Literal["lang"], Literal["pixel"], Literal["constant"]] = "lang",
+        freqs_for: Union[Literal["lang"], Literal["pixel"], Literal["constant"]] = "lang",        
         theta=10000,
         max_freq=10,
         num_freqs=1,
-        learned_freq=False,
-        use_xpos=False,
-        xpos_scale_base=512,
-        interpolate_factor=1.0,
+        learned_freq=False,              
         theta_rescale_factor=1.0,
-        seq_before_head_dim=False,
-        cache_if_possible=True,
     ):
         super().__init__()
         # proposed by reddit user bloc97, to rescale rotary embeddings to longer sequence length without fine-tuning
         # has some connection to NTK literature
         # https://www.reddit.com/r/LocalLLaMA/comments/14lz7j5/ntkaware_scaled_rope_allows_llama_models_to_have/
-
         theta *= theta_rescale_factor ** (dim / (dim - 2))
-
-        self.freqs_for = freqs_for
-
-        if exists(custom_freqs):
-            freqs = custom_freqs
-        elif freqs_for == "lang":
+        if freqs_for == "lang":
             freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
         elif freqs_for == "pixel":
             freqs = torch.linspace(1.0, max_freq / 2, dim // 2) * pi
         elif freqs_for == "constant":
             freqs = torch.ones(num_freqs).float()
-
-        self.cache_if_possible = cache_if_possible
-
-        self.tmp_store("cached_freqs", None)
-        self.tmp_store("cached_scales", None)
-
         self.freqs = nn.Parameter(freqs, requires_grad=learned_freq)
 
-        self.learned_freq = learned_freq
-
-        # dummy for device
-
-        self.tmp_store("dummy", torch.tensor(0))
-
-        # default sequence dimension
-
-        self.seq_before_head_dim = seq_before_head_dim
-        self.default_seq_dim = -3 if seq_before_head_dim else -2
-
-        # interpolation factors
-
-        assert interpolate_factor >= 1.0
-        self.interpolate_factor = interpolate_factor
-
-        # xpos
-
-        self.use_xpos = use_xpos
-        if not use_xpos:
-            self.tmp_store("scale", None)
-            return
-
-        scale = (torch.arange(0, dim, 2) + 0.4 * dim) / (1.4 * dim)
-
-        self.scale_base = xpos_scale_base
-        self.tmp_store("scale", scale)
-
-        # add apply_rotary_emb as static method
-
-        self.apply_rotary_emb = staticmethod(apply_rotary_emb)
-
-    @property
-    def device(self):
-        return self.dummy.device
-
-    def tmp_store(self, key, value):
-        self.register_buffer(key, value, persistent=False)
-
-    def get_seq_pos(self, seq_len, device, dtype, offset=0):
-        return (torch.arange(seq_len, device=device, dtype=dtype) + offset) / self.interpolate_factor
-
-    def rotate_queries_or_keys(self, t, seq_dim=None, offset=0):
-        seq_dim = default(seq_dim, self.default_seq_dim)
-
-        assert (
-            not self.use_xpos
-        ), "you must use `.rotate_queries_and_keys` method instead and pass in both queries and keys, for length extrapolatable rotary embeddings"
-
-        device, dtype, seq_len = t.device, t.dtype, t.shape[seq_dim]
-
-        freqs = self.forward(
-            self.get_seq_pos(seq_len, device=device, dtype=dtype, offset=offset),
-            seq_len=seq_len,
-            offset=offset,
-        )
-
-        if seq_dim == -3:
-            freqs = freqs.unsqueeze(1)
-
-        return apply_rotary_emb(freqs, t, seq_dim=seq_dim)
-
-    def rotate_queries_with_cached_keys(self, q, k, seq_dim=None, offset=0):
-        seq_dim = default(seq_dim, self.default_seq_dim)
-
-        q_len, k_len = q.shape[seq_dim], k.shape[seq_dim]
-        assert q_len <= k_len
-
-        rotated_q = self.rotate_queries_or_keys(q, seq_dim=seq_dim, offset=k_len - q_len + offset)
-        rotated_k = self.rotate_queries_or_keys(k, seq_dim=seq_dim, offset=offset)
-
-        rotated_q = rotated_q.type(q.dtype)
-        rotated_k = rotated_k.type(k.dtype)
-
-        return rotated_q, rotated_k
-
-    def rotate_queries_and_keys(self, q, k, seq_dim=None):
-        seq_dim = default(seq_dim, self.default_seq_dim)
-
-        assert self.use_xpos
-        device, dtype, seq_len = q.device, q.dtype, q.shape[seq_dim]
-
-        seq = self.get_seq_pos(seq_len, dtype=dtype, device=device)
-
-        freqs = self.forward(seq, seq_len=seq_len)
-        scale = self.get_scale(seq, seq_len=seq_len).to(dtype)
-
-        if seq_dim == -3:
-            freqs = freqs.unsqueeze(1)
-            scale = scale.unsqueeze(1)
-
-        rotated_q = apply_rotary_emb(freqs, q, scale=scale, seq_dim=seq_dim)
-        rotated_k = apply_rotary_emb(freqs, k, scale=scale**-1, seq_dim=seq_dim)
-
-        rotated_q = rotated_q.type(q.dtype)
-        rotated_k = rotated_k.type(k.dtype)
-
-        return rotated_q, rotated_k
-
-    def get_scale(self, t: Tensor, seq_len: Optional[int] = None, offset=0):
-        assert self.use_xpos
-        should_cache = self.cache_if_possible and exists(seq_len)
-
-        if should_cache and exists(self.cached_scales) and (seq_len + offset) <= self.cached_scales.shape[0]:
-            return self.cached_scales[offset : (offset + seq_len)]
-
-        scale = 1.0
-        if self.use_xpos:
-            power = (t - len(t) // 2) / self.scale_base
-            scale = self.scale ** power.unsqueeze(-1)
-            scale = torch.cat((scale, scale), dim=-1)
-
-        if should_cache:
-            self.tmp_store("cached_scales", scale)
-
-        return scale
-
-    def get_axial_freqs(self, *dims):
-        Colon = slice(None)
-        all_freqs = []
-
-        for ind, dim in enumerate(dims):
-            if self.freqs_for == "pixel":
-                pos = torch.linspace(-1, 1, steps=dim, device=self.device)
-            else:
-                pos = torch.arange(dim, device=self.device)
-
-            freqs = self.forward(pos, seq_len=dim)
-
-            all_axis = [None] * len(dims)
-            all_axis[ind] = Colon
-
-            new_axis_slice = (Ellipsis, *all_axis, Colon)
-            all_freqs.append(freqs[new_axis_slice])
-
-        all_freqs = broadcast_tensors(*all_freqs)
-        return torch.cat(all_freqs, dim=-1)
-
-    @autocast("cuda", enabled=False)
-    def forward(self, t: Tensor, seq_len=None, offset=0):
-        should_cache = (
-            self.cache_if_possible and not self.learned_freq and exists(seq_len) and self.freqs_for != "pixel"
-        )
-
-        if should_cache and exists(self.cached_freqs) and (offset + seq_len) <= self.cached_freqs.shape[0]:
-            return self.cached_freqs[offset : (offset + seq_len)].detach()
-
+    def forward(self, t: Tensor): #, seq_len=None, offset=0):
         freqs = self.freqs
-
-        freqs = einsum("..., f -> ... f", t.type(freqs.dtype), freqs)
+        freqs = t.type(freqs.dtype).unsqueeze(-1) * freqs
         freqs = freqs.repeat_interleave(2, dim=-1)
-
-        if should_cache:
-            self.tmp_store("cached_freqs", freqs.detach())
-
         return freqs
 
-class Rope2D:
-    """Helper class to apply RoPE2D as well as interpolate on the fly."""
 
-    def __init__(self, dim, use_cls_token=False):
+class Rope2D(Module):
+    def __init__(self, dim, grid_size, use_cls_token=False):
+        super().__init__()
         self.dim = dim
         self.use_cls_token = use_cls_token
-        self.grid_size = None
-        self.freq = None
-
-    def init_tensors(self):
+        self.grid_size = grid_size
         self.rope = RotaryEmbedding(self.dim // 2)
+        self.init_tensors()
+        
+    def init_tensors(self):
+        self.update_grid(self.grid_size[0], self.grid_size[1])
+        
+    def update_grid(self, grid_h, grid_w):
+        if self.use_cls_token:
+            # +1 to leave space for the cls token to be (0, 0)
+            grid_y_range = torch.arange(grid_h) + 1
+            grid_x_range = torch.arange(grid_w) + 1
+        else:
+            grid_y_range = torch.arange(grid_h)
+            grid_x_range = torch.arange(grid_w)
+        freqs_y = self.rope(grid_y_range)[:, None].expand(grid_h, grid_w, -1)
+        freqs_x = self.rope(grid_x_range)[None, :].expand(grid_h, grid_w, -1)
+        freq = torch.cat([freqs_x, freqs_y], dim=-1).reshape(grid_h * grid_w, -1)
 
-    def update_grid(self, device, grid_h, grid_w):
-        if self.grid_size != (grid_h, grid_w):
-            self.grid_size = (grid_h, grid_w)
+        if self.use_cls_token:
+            freq = torch.cat([freq, torch.zeros(1, freq.shape[-1])], dim=0)
 
-            self.rope = self.rope.to(device)
-            if self.use_cls_token:
-                # +1 to leave space for the cls token to be (0, 0)
-                grid_y_range = torch.arange(grid_h, device=device) + 1
-                grid_x_range = torch.arange(grid_w, device=device) + 1
-            else:
-                grid_y_range = torch.arange(grid_h, device=device)
-                grid_x_range = torch.arange(grid_w, device=device)
-            freqs_y = self.rope(grid_y_range)[:, None].expand(grid_h, grid_w, -1)
-            freqs_x = self.rope(grid_x_range)[None, :].expand(grid_h, grid_w, -1)
-            freq = torch.cat([freqs_x, freqs_y], dim=-1).reshape(grid_h * grid_w, -1)
+        self.freq = Parameter(freq[None, ...]) # remark: using Parameter instead of tensor for device consistency
 
-            if self.use_cls_token:
-                freq = torch.cat([freq, torch.zeros(1, freq.shape[-1], device=device)], dim=0)
+    def rotate_half(self, x):
+        shape = x.shape 
+        x = x.view(shape[:-1] + (-1, 2))
+        x1, x2 = x[..., 0], x[..., 1]
+        x = torch.stack((-x2, x1), dim=-1)
+        return x.view(shape[:-1] + (-1,))
+    
+    def apply_rotary_emb(self, freqs, t):
+        start_index=0
+        scale=1.0
+        seq_dim=-2
+        dtype = t.dtype
 
-            self.freq = freq[None, ...]
+        if t.ndim == 3:
+            seq_len = t.shape[seq_dim]
+            freqs = freqs[-seq_len:]
 
-        self.freq = self.freq.to(device)
+        rot_dim = freqs.shape[-1]
+        end_index = start_index + rot_dim
 
-    def __call__(self, q, k):
+        assert (
+            rot_dim <= t.shape[-1]
+        ), f"feature dimension {t.shape[-1]} is not of sufficient size to rotate in all the positions {rot_dim}"
+
+        t_left, t, t_right = (
+            t[..., :start_index],
+            t[..., start_index:end_index],
+            t[..., end_index:],
+        )
+        t = (t * freqs.cos() * scale) + (self.rotate_half(t) * freqs.sin() * scale)
+        out = torch.cat((t_left, t, t_right), dim=-1)
+
+        return out.type(dtype)
+
+    def forward(self, q, k):
         # batch, heads, seq, dim = q.shape
-        q = apply_rotary_emb(self.freq[:, None, :, :], q)
-        k = apply_rotary_emb(self.freq[:, None, :, :], k)
-
+        q = self.apply_rotary_emb(self.freq[:, None, :, :], q)
+        k = self.apply_rotary_emb(self.freq[:, None, :, :], k)
         return q, k
 
 
@@ -359,11 +182,9 @@ class AttentionPooling(nn.Module):
 
     def forward(self, x: torch.Tensor):
         batch, _, _ = x.shape
-
         q = self.probe.repeat((batch, 1, 1)).to(x.dtype)
         x = self.attn(q, x, x, need_weights=False)[0]
         x = x + self.mlp(self.layernorm(x))
-
         return x
 
 
@@ -371,7 +192,6 @@ class SelfAttention(nn.Module):
     r"""
     Implements sequence packed attention and RoPe
     """
-
     def __init__(
         self,
         embed_dim: int,
@@ -398,7 +218,10 @@ class SelfAttention(nn.Module):
         constant_(self.in_proj_bias, 0.0)
         constant_(self.out_proj.bias, 0.0)
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, 
+            x: torch.Tensor,
+            attn_mask: Optional[torch.Tensor] = None,      
+        ):
         batch, seq, embed_dim = x.shape
         proj = F.linear(x, self.in_proj_weight, self.in_proj_bias)
 
@@ -411,7 +234,7 @@ class SelfAttention(nn.Module):
         k = k.view(batch, seq, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         v = v.view(batch, seq, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
-        if self.rope:
+        if self.rope is not None:
             q, k = self.rope(q, k)
 
         attn = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale)
@@ -462,9 +285,8 @@ class ResidualAttentionBlock(nn.Module):
     def _call_attn(
         self,
         q_x: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
+        attn_mask: Optional[torch.Tensor] = None
     ):
-
         if attn_mask is not None:
             # Leave boolean masks as is
             if not attn_mask.dtype == torch.bool:
@@ -478,7 +300,7 @@ class ResidualAttentionBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
+        attn_mask: Optional[torch.Tensor] = None,        
     ):
         x = x + self.drop_path1(self.ls_1(self._call_attn(self.ln_1(x), attn_mask=attn_mask)))
         x = x + self.drop_path2(self.ls_2(self.mlp(self.ln_2(x))))
@@ -532,21 +354,18 @@ class Transformer(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,
-        layer_idx: int = -1,
+        attn_mask: Optional[torch.Tensor] = None,        
+        # layer_idx=-1, #: int = -1, # torchscript emits iterations over modules as unrolled loops. so dynamic layer_idx is not supported as in orig pe
     ):
-        stop_idx = (self.layers + layer_idx) % self.layers
-
+        #stop_idx = (self.layers + layer_idx) % self.layers
         for i, r in enumerate(self.resblocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
                 x = checkpoint(r, x, None, None, attn_mask)
             else:
                 x = r(x, attn_mask=attn_mask)
-
-            if i == stop_idx:
-                break
-
+            # if i == stop_idx:
+            #     break
         return x
 
 
@@ -603,6 +422,7 @@ class PE(nn.Module):
             Rope2D(
                 dim=width // heads,
                 use_cls_token=self.use_cls_token,
+                grid_size = (img_size // patch_size, img_size // patch_size),
             )
             if self.use_rope2d
             else None
@@ -670,26 +490,6 @@ class PE(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         self.transformer.set_grad_checkpointing(enable=enable)
 
-    def _sample_abs_posemb(self, grid_h: int, grid_w: int):
-        """Interpolates the absolute position embedding if necessary."""
-        if self.posemb_grid_size == grid_h and self.posemb_grid_size == grid_w:
-            return self.positional_embedding[None, ...]
-
-        pos_embed = self.positional_embedding
-        if self.use_cls_token:
-            cls_token_embed, pos_embed = pos_embed[:1], pos_embed[1:]
-
-        pos_embed = (
-            pos_embed.reshape(1, self.posemb_grid_size, self.posemb_grid_size, -1).permute(0, 3, 1, 2).contiguous()
-        )
-        pos_embed = F.interpolate(pos_embed, size=(grid_h, grid_w), mode="bilinear", align_corners=False)
-        pos_embed = pos_embed.permute(0, 2, 3, 1).reshape(-1, self.width).contiguous()
-
-        if self.use_cls_token:
-            pos_embed = torch.cat([cls_token_embed, pos_embed], dim=0)
-
-        return pos_embed[None, ...]
-
     def _pool(self, x: torch.Tensor):
         if self.pool_type == "tok":
             return x[:, 0]
@@ -702,9 +502,10 @@ class PE(nn.Module):
         else:
             raise NotImplementedError
 
-    def forward_features(self, x: torch.Tensor, norm: bool = False, layer_idx: int = -1, strip_cls_token: bool = False):
+    #def forward_features(self, x: torch.Tensor, norm: bool = False, layer_idx: int = -1, strip_cls_token: bool = False):
+    def forward_features(self, x: torch.Tensor, norm: bool = False, strip_cls_token: bool = False):
+        #: layer_idx = -1, # torchscript emits iterations over modules as unrolled loops. so dynamic layer_idx is not supported in timm as in orig pe
         batch, _, h, w = x.shape
-        grid_h, grid_w = h // self.patch_size, w // self.patch_size
 
         x = self.conv1(x)
         x = x.permute(0, 2, 3, 1).reshape(batch, -1, self.width)
@@ -716,13 +517,10 @@ class PE(nn.Module):
             )
 
         if self.use_abs_posemb:
-            x = x + self._sample_abs_posemb(grid_h, grid_w)
-
-        if self.use_rope2d:
-            self.rope.update_grid(x.device, grid_h, grid_w)
+            x = x + self.positional_embedding[None, ...]
 
         x = self.ln_pre(x)
-        x = self.transformer(x, layer_idx=layer_idx)
+        x = self.transformer(x)
 
         if norm:
             x = self.ln_post(x)
@@ -732,8 +530,8 @@ class PE(nn.Module):
 
         return x
 
-    def forward(self, x: torch.Tensor, layer_idx: int = -1, strip_cls_token: bool = False):
-        x = self.forward_features(x, norm=True, layer_idx=layer_idx, strip_cls_token=strip_cls_token)
+    def forward(self, x: torch.Tensor, strip_cls_token: bool = False):
+        x = self.forward_features(x, norm=True, strip_cls_token=strip_cls_token)
         x = self._pool(x)
 
         if self.proj_dim is not None:
@@ -784,7 +582,9 @@ def _create_pe(variant: str, pretrained: bool = False, **kwargs) -> PE:
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        pretrained_strict=True,
+        pretrained_strict=False, 
+        # Remakr: strict=False since original pretrained models don't have rope freqs in nn.modules and samples rope on-the-fly w/ dynamic grid
+        # torchscript/timm doesn't support dynamic grid so sample once during model init without overwritten by ckpt loading.
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
@@ -890,3 +690,4 @@ def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
         ls_init_value=0.1,
     )
     return _create_pe('vit_pe_spatial_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
+
