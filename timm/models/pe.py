@@ -11,25 +11,11 @@ from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
 from torch.nn.parameter import Parameter
 from torch.amp import autocast
 from torch.utils.checkpoint import checkpoint
-from torch import pi
 
 ### Import timm layers
 from timm.layers import (
-    PatchEmbed,
-    Mlp,
     DropPath,
     AttentionPoolLatent,
-    RmsNorm,
-    PatchDropout,
-    SwiGLUPacked,
-    SwiGLU,
-    trunc_normal_,
-    lecun_normal_,
-    resample_patch_embed,
-    resample_abs_pos_embed,
-    use_fused_attn,
-    get_act_layer,
-    get_norm_layer,
     LayerType,
     LayerScale,
 )
@@ -40,12 +26,14 @@ from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
+from ._features_fx import register_notrace_module
 
 
 __all__ = ['PE']
 
 
 ######## PE Rope (Simplified) ########
+@register_notrace_module
 class RotaryEmbedding(Module):
     def __init__(
         self,
@@ -65,18 +53,24 @@ class RotaryEmbedding(Module):
         if freqs_for == "lang":
             freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
         elif freqs_for == "pixel":
-            freqs = torch.linspace(1.0, max_freq / 2, dim // 2) * pi
+            freqs = torch.linspace(1.0, max_freq / 2, dim // 2) * torch.pi
         elif freqs_for == "constant":
             freqs = torch.ones(num_freqs).float()
-        self.freqs = nn.Parameter(freqs, requires_grad=learned_freq)
+        else:
+            assert False
+        if learned_freq:
+            self.freqs = nn.Parameter(freqs)
+        else:
+            self.freqs = nn.Buffer(freqs, persistent=False)
 
-    def forward(self, t: Tensor): #, seq_len=None, offset=0):
+    def forward(self, t: Tensor):
         freqs = self.freqs
         freqs = t.type(freqs.dtype).unsqueeze(-1) * freqs
         freqs = freqs.repeat_interleave(2, dim=-1)
         return freqs
 
 
+@register_notrace_module
 class Rope2D(Module):
     def __init__(self, dim, grid_size, use_cls_token=False):
         super().__init__()
@@ -103,8 +97,7 @@ class Rope2D(Module):
 
         if self.use_cls_token:
             freq = torch.cat([freq, torch.zeros(1, freq.shape[-1])], dim=0)
-
-        self.freq = Parameter(freq[None, ...]) # remark: using Parameter instead of tensor for device consistency
+        self.freq = nn.Buffer(freq[None, ...], persistent=False)  
 
     def rotate_half(self, x):
         shape = x.shape 
@@ -114,21 +107,17 @@ class Rope2D(Module):
         return x.view(shape[:-1] + (-1,))
     
     def apply_rotary_emb(self, freqs, t):
-        start_index=0
-        scale=1.0
-        seq_dim=-2
+        start_index = 0
+        scale = 1.0
+        seq_dim = -2
         dtype = t.dtype
-
-        if t.ndim == 3:
-            seq_len = t.shape[seq_dim]
-            freqs = freqs[-seq_len:]
+        
+        # if len(t.shape) == 3:
+        #     seq_len = t.shape[seq_dim]
+        #     freqs = freqs[-seq_len:]
 
         rot_dim = freqs.shape[-1]
         end_index = start_index + rot_dim
-
-        assert (
-            rot_dim <= t.shape[-1]
-        ), f"feature dimension {t.shape[-1]} is not of sufficient size to rotate in all the positions {rot_dim}"
 
         t_left, t, t_right = (
             t[..., :start_index],
@@ -387,37 +376,51 @@ class PE(nn.Module):
         use_abs_posemb: bool = True,
         use_rope2d: bool = True,
         use_cls_token: bool = False,
+        use_proj: bool = True,
         output_dim: Optional[int] = 1280,
+        num_classes: int = 0, 
         attn_pooler_heads: int = 8,
         pool_type: Literal["attn", "tok", "avg", "none"] = "attn",
-        num_classes: int = 0,  # no use for PE
         in_chans: int = 3,
     ):
         super().__init__()
         assert pool_type in ("attn", "tok", "avg", "none")
         self.pool_type = pool_type
-        self.patch_size = patch_size
 
-        self.output_dim = output_dim or width
-        self.proj_dim = output_dim
+        self.patch_size = patch_size
         self.heads = heads
         self.width = width
         self.layers = layers
+        self.in_chans = in_chans
+
+        self.num_intermediate_features = width # the dim before PE projection layer (vit output)
+        self.proj_dim = output_dim # the output_dim after PE projection layer
+        self.use_proj = use_proj
+        if self.use_proj:
+            self.head_hidden_size = self.proj_dim
+            self.num_features = self.proj_dim
+        else:
+            self.head_hidden_size = self.num_intermediate_features
+            self.num_features = self.num_intermediate_features
+
+        self.num_classes = num_classes
 
         self.use_abs_posemb = use_abs_posemb
         self.use_cls_token = use_cls_token
         self.use_rope2d = use_rope2d
+
         if isinstance(img_size, (tuple, list)):
             img_size = img_size[0]
         self.img_size = img_size
 
         self.conv1 = nn.Conv2d(
-            in_channels=3,
+            in_channels=in_chans,
             out_channels=width,
             kernel_size=patch_size,
             stride=patch_size,
             bias=False,
         )
+
         self.rope = (
             Rope2D(
                 dim=width // heads,
@@ -478,8 +481,19 @@ class PE(nn.Module):
                 init_scale * torch.randn(int(self.use_cls_token) + self.posemb_grid_size**2, self.width)
             )
 
-        if self.proj_dim is not None:
+        # PE's: Transfomer(x) -> pool -> proj -> head (for timm). (PE contains an additional projection layer)
+        if self.use_proj:
             self.proj = nn.Parameter(init_scale * torch.randn(self.width, self.proj_dim))
+            if self.num_classes > 0:
+                self.head = nn.Linear(self.proj_dim, self.num_classes)
+            else:
+                self.head = nn.Identity()
+        else: # no projection (eg PE-lang and PE-spatial)
+            self.proj = nn.Identity()
+            if self.num_classes > 0:
+                self.head = nn.Linear(self.width, self.num_classes) 
+            else:
+                self.head = nn.Identity()
 
     def truncate(self, layer_idx: int):
         """Delete layers so the last layer is the given layer index."""
@@ -490,20 +504,24 @@ class PE(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         self.transformer.set_grad_checkpointing(enable=enable)
 
-    def _pool(self, x: torch.Tensor):
+    def forward_pool_and_proj(self, x: torch.Tensor):
         if self.pool_type == "tok":
-            return x[:, 0]
+            x =  x[:, 0]
         elif self.pool_type == "avg":
-            return x.mean(dim=1)
+            x = x.mean(dim=1)
         elif self.pool_type == "attn":
-            return self.attn_pool(x).squeeze(1)
+            x = self.attn_pool(x).squeeze(1)
         elif self.pool_type == "none":
-            return x
-        else:
-            raise NotImplementedError
+            x = x    
+        if self.use_proj:
+            x = x @ self.proj
+        return x
+
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
+        return x if pre_logits else self.head(x)
 
     #def forward_features(self, x: torch.Tensor, norm: bool = False, layer_idx: int = -1, strip_cls_token: bool = False):
-    def forward_features(self, x: torch.Tensor, norm: bool = False, strip_cls_token: bool = False):
+    def forward_features(self, x: torch.Tensor, norm: bool = False):
         #: layer_idx = -1, # torchscript emits iterations over modules as unrolled loops. so dynamic layer_idx is not supported in timm as in orig pe
         batch, _, h, w = x.shape
 
@@ -521,23 +539,29 @@ class PE(nn.Module):
 
         x = self.ln_pre(x)
         x = self.transformer(x)
-
         if norm:
             x = self.ln_post(x)
 
-        if strip_cls_token and self.use_cls_token:
-            x = x[:, 1:, :]
+        # if strip_cls_token and self.use_cls_token:
+        #     x = x[:, 1:, :]
 
+        x = self.forward_pool_and_proj(x)
         return x
 
-    def forward(self, x: torch.Tensor, strip_cls_token: bool = False):
-        x = self.forward_features(x, norm=True, strip_cls_token=strip_cls_token)
-        x = self._pool(x)
-
-        if self.proj_dim is not None:
-            x = x @ self.proj
-
+    def forward(self, x: torch.Tensor):
+        x = self.forward_features(x, norm=True)
+        x = self.forward_head(x)
         return x
+
+    def reset_classifier(self, num_classes: int):
+        self.num_classes = num_classes
+        if num_classes > 0:
+            if self.proj_dim > 0:
+                self.head = nn.Parameter(self.proj_dim, num_classes)
+            else: # no projection (eg PE-lang and PE-spatial)
+                self.head = nn.Parameter(self.width, num_classes)
+        else:
+            self.head = nn.Identity()
 
 
 def checkpoint_filter_fn(
@@ -559,6 +583,8 @@ def _cfg(url='', **kwargs):
         'fixed_input_size': True,
         'mean': IMAGENET_INCEPTION_MEAN, # (0.5, 0.5, 0.5)
         'std': IMAGENET_INCEPTION_STD, # (0.5, 0.5, 0.5)
+        'first_conv': 'conv1',
+        'classifier': 'head',        
         **kwargs,
     }
 
@@ -582,9 +608,7 @@ def _create_pe(variant: str, pretrained: bool = False, **kwargs) -> PE:
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        pretrained_strict=False, 
-        # Remakr: strict=False since original pretrained models don't have rope freqs in nn.modules and samples rope on-the-fly w/ dynamic grid
-        # torchscript/timm doesn't support dynamic grid so sample once during model init without overwritten by ckpt loading.
+        pretrained_strict=True,
         feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
@@ -600,8 +624,10 @@ def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
         heads=12,
         mlp_ratio=4.0,
         output_dim=1024,
+        num_classes=0,
         use_cls_token=True,
         pool_type='attn',
+        use_proj=True,
     )
     return _create_pe('vit_pe_core_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -616,8 +642,10 @@ def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
         heads=16,
         mlp_ratio=4.0,
         output_dim=1024,
+        num_classes=0,
         use_cls_token=True,
         pool_type='attn',
+        use_proj=True,
     )
     return _create_pe('vit_pe_core_large_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -632,8 +660,10 @@ def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
         heads=16,
         mlp_ratio=8960 / 1536,
         output_dim=1280,
+        num_classes=0,
         use_cls_token=False,
         pool_type='attn',
+        use_proj=True,
     )
     return _create_pe('vit_pe_core_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -647,11 +677,13 @@ def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
         layers=23,
         heads=16,
         mlp_ratio=4.0,
-        output_dim=None,
-        use_cls_token=True,
+        output_dim=1024,
+        num_classes=0,
+        use_cls_token=False,
         use_ln_post=False,
         pool_type='none',
         ls_init_value=0.1,
+        use_proj=False,
     )
     return _create_pe('vit_pe_lang_large_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -665,11 +697,13 @@ def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
         layers=47,
         heads=16,
         mlp_ratio=8960 / 1536,
-        output_dim=None,
+        output_dim=1536,
+        num_classes=0,
         use_cls_token=False,
         use_ln_post=False,
         pool_type='none',
         ls_init_value=0.1,
+        use_proj=False,
     )
     return _create_pe('vit_pe_lang_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -683,11 +717,13 @@ def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
         layers=50,
         heads=16,
         mlp_ratio=8960 / 1536,
-        output_dim=None,
+        output_dim=1536,
+        num_classes=0,
         use_cls_token=False,
         use_ln_post=False,
         pool_type='none',
         ls_init_value=0.1,
+        use_proj=False,
     )
     return _create_pe('vit_pe_spatial_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
