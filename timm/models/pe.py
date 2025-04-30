@@ -61,7 +61,7 @@ class RotaryEmbedding(Module):
         if learned_freq:
             self.freqs = nn.Parameter(freqs)
         else:
-            self.freqs = nn.Buffer(freqs, persistent=False)
+            self.register_buffer('freqs', freqs, persistent=False)
 
     def forward(self, t: Tensor):
         freqs = self.freqs
@@ -97,7 +97,7 @@ class Rope2D(Module):
 
         if self.use_cls_token:
             freq = torch.cat([freq, torch.zeros(1, freq.shape[-1])], dim=0)
-        self.freq = nn.Buffer(freq[None, ...], persistent=False)  
+        self.register_buffer('freq', freq[None, ...], persistent=False)
 
     def rotate_half(self, x):
         shape = x.shape 
@@ -382,6 +382,7 @@ class PE(nn.Module):
         attn_pooler_heads: int = 8,
         use_attn_pool: bool = True,
         in_chans: int = 3,
+        drop_rate: float = 0.,  # Expected to be here, TODO add a final drop layer once head finalized
     ):
         super().__init__()
         self.patch_size = patch_size
@@ -389,6 +390,8 @@ class PE(nn.Module):
         self.width = width
         self.layers = layers
         self.in_chans = in_chans
+        self.num_classes = num_classes
+        self.drop_rate = drop_rate
         
         # PE contains an (optional) projection layer
         # Flow: x -> Transfomer(x) -> pool -> proj -> head (for timm).
@@ -494,16 +497,13 @@ class PE(nn.Module):
         # PE's: Transfomer(x) -> pool -> proj -> head (for timm). (PE contains an additional projection layer)
         if self.use_proj:
             self.proj = nn.Parameter(init_scale * torch.randn(self.width, self.proj_dim))
-            if self.num_classes > 0:
-                self.head = nn.Linear(self.proj_dim, self.num_classes)
-            else:
-                self.head = nn.Identity()
         else: # no projection (eg PE-lang and PE-spatial)
             self.proj = None
-            if self.num_classes > 0:
-                self.head = nn.Linear(self.width, self.num_classes) # no proj. input dim = self.width (pooled)
-            else:
-                self.head = nn.Identity()
+
+        if self.num_classes > 0:
+            self.head = nn.Linear(self.head_hidden_size, self.num_classes) # no proj. input dim = self.width (pooled)
+        else:
+            self.head = nn.Identity()
 
     def truncate(self, layer_idx: int):
         """Delete layers so the last layer is the given layer index."""
@@ -671,7 +671,8 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs(
     {
-        'vit_pe_core_base_patch16_224': _cfg(hf_hub_id='timm/', input_size=(3, 224, 224)),
+        # TODO finalize locations
+        'vit_pe_core_base_patch16_224': _cfg(hf_hub_id='facebook/pe_core_base_patch16_224_timm', input_size=(3, 224, 224)),
         'vit_pe_core_large_patch14_336': _cfg(hf_hub_id='timm/', input_size=(3, 336, 336)),
         'vit_pe_core_gigantic_patch14_448': _cfg(hf_hub_id='timm/', input_size=(3, 448, 448)),
         'vit_pe_lang_large_patch14_448': _cfg(hf_hub_id='timm/', input_size=(3, 448, 448)),
