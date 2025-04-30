@@ -393,15 +393,21 @@ class PE(nn.Module):
         self.layers = layers
         self.in_chans = in_chans
 
-        self.num_intermediate_features = width # the dim before PE projection layer (vit output)
-        self.proj_dim = output_dim # the output_dim after PE projection layer
+        # PE contains an (optional) projection layer
+        # Flow: x -> Transfomer(x) -> pool -> proj -> head (for timm).
+        # forward_features: x -> Transfomer(x)
+        # forward_head: pool -> proj -> head
+        # output_dim is the final output dim of the model (keep it for clarity)
         self.use_proj = use_proj
         if self.use_proj:
+            self.proj_dim = output_dim
             self.head_hidden_size = self.proj_dim
-            self.num_features = self.proj_dim
+            self.num_features = width # self.proj_dim
         else:
-            self.head_hidden_size = self.num_intermediate_features
-            self.num_features = self.num_intermediate_features
+            self.proj_dim = 0 
+            assert output_dim == width 
+            self.head_hidden_size = width
+            self.num_features = width
 
         self.num_classes = num_classes
 
@@ -445,6 +451,9 @@ class PE(nn.Module):
             drop_path=drop_path,
             rope=self.rope,
         )
+
+        self.feature_info = [
+            dict(module=f'blocks.{i}', num_chs=width, reduction=patch_size) for i in range(layers)]
 
         if pool_type == "attn":
             self.attn_pool = AttentionPooling(
@@ -491,7 +500,7 @@ class PE(nn.Module):
         else: # no projection (eg PE-lang and PE-spatial)
             self.proj = nn.Identity()
             if self.num_classes > 0:
-                self.head = nn.Linear(self.width, self.num_classes) 
+                self.head = nn.Linear(self.width, self.num_classes) # no proj. input dim = self.width (pooled)
             else:
                 self.head = nn.Identity()
 
@@ -518,6 +527,9 @@ class PE(nn.Module):
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
+         # PE has an additional proj layer: Transfomer(x) -> pool -> proj -> head (for timm). 
+         # Ideally pool To discuss with Ross where to split
+        x = self.forward_pool_and_proj(x)
         return x if pre_logits else self.head(x)
 
     #def forward_features(self, x: torch.Tensor, norm: bool = False, layer_idx: int = -1, strip_cls_token: bool = False):
@@ -544,8 +556,6 @@ class PE(nn.Module):
 
         # if strip_cls_token and self.use_cls_token:
         #     x = x[:, 1:, :]
-
-        x = self.forward_pool_and_proj(x)
         return x
 
     def forward(self, x: torch.Tensor):
@@ -562,6 +572,86 @@ class PE(nn.Module):
                 self.head = nn.Parameter(self.width, num_classes)
         else:
             self.head = nn.Identity()
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            return_prefix_tokens: bool = False,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            return_prefix_tokens: Return both prefix and spatial intermediate tokens
+            norm: Apply norm layer to all intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
+        reshape = output_fmt == 'NCHW'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(self.layers, indices)
+
+        # forward pass
+        B, _, height, width = x.shape
+
+
+        x = self.conv1(x)
+        x = x.permute(0, 2, 3, 1).reshape(B, -1, self.width) # NLC
+
+        if self.use_cls_token:
+            x = torch.cat(
+                [self.class_embedding.view(1, 1, -1).expand(B, -1, -1), x],
+                dim=1,
+            )
+
+        if self.use_abs_posemb:
+            x = x + self.positional_embedding[None, ...]
+
+        x = self.ln_pre(x)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.transformer.resblocks
+        else:
+            blocks = self.transformer.resblocks[:max_index + 1]
+
+        for i, blk in enumerate(blocks):
+            x = blk(x)
+            if i in take_indices:
+                # normalize intermediates with final norm layer if enabled
+                intermediates.append(self.norm(x) if norm else x)
+
+        # process intermediates
+        if self.use_cls_token:
+            prefix_tokens = [y[:, 0] for y in intermediates]
+            intermediates = [y[:, 1:] for y in intermediates]
+        else:
+            prefix_tokens = None
+
+        if reshape:
+            # reshape to BCHW output format
+            H = W = self.posemb_grid_size
+            intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
+        if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
+            # return_prefix not support in torchscript due to poor type handling
+            intermediates = list(zip(intermediates, prefix_tokens))
+
+        if intermediates_only:
+            return intermediates
+
+        x = self.ln_post(x)
+
+        return x, intermediates
+                
 
 
 def checkpoint_filter_fn(
@@ -679,7 +769,7 @@ def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
         mlp_ratio=4.0,
         output_dim=1024,
         num_classes=0,
-        use_cls_token=False,
+        use_cls_token=True,
         use_ln_post=False,
         pool_type='none',
         ls_init_value=0.1,
