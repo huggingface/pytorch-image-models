@@ -246,10 +246,10 @@ class ResidualAttentionBlock(nn.Module):
     ):
         super().__init__()
 
-        if rope:
-            self.attn = SelfAttention(d_model, n_head, rope=rope)
-        else:
-            self.attn = nn.MultiheadAttention(d_model, n_head, batch_first=True)
+        #if rope:
+        self.attn = SelfAttention(d_model, n_head, rope=rope)
+        #else:
+        #    self.attn = nn.MultiheadAttention(d_model, n_head, batch_first=True)
 
         self.ls_1 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
         self.ls_2 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
@@ -281,10 +281,10 @@ class ResidualAttentionBlock(nn.Module):
             if not attn_mask.dtype == torch.bool:
                 attn_mask = attn_mask.to(q_x.dtype)
 
-        if isinstance(self.attn, SelfAttention):
-            return self.attn(q_x, attn_mask=attn_mask)
-        else:
-            return self.attn(q_x, q_x, q_x, attn_mask=attn_mask, need_weights=False)[0]
+        #if isinstance(self.attn, SelfAttention):
+        return self.attn(q_x, attn_mask=attn_mask)
+        #else:
+        #    return self.attn(q_x, q_x, q_x, attn_mask=attn_mask, need_weights=False)[0]
 
     def forward(
         self,
@@ -380,19 +380,16 @@ class PE(nn.Module):
         output_dim: Optional[int] = 1280,
         num_classes: int = 0, 
         attn_pooler_heads: int = 8,
-        pool_type: Literal["attn", "tok", "avg", "none"] = "attn",
+        use_attn_pool: bool = True,
         in_chans: int = 3,
     ):
         super().__init__()
-        assert pool_type in ("attn", "tok", "avg", "none")
-        self.pool_type = pool_type
-
         self.patch_size = patch_size
         self.heads = heads
         self.width = width
         self.layers = layers
         self.in_chans = in_chans
-
+        
         # PE contains an (optional) projection layer
         # Flow: x -> Transfomer(x) -> pool -> proj -> head (for timm).
         # forward_features: x -> Transfomer(x)
@@ -418,6 +415,7 @@ class PE(nn.Module):
         if isinstance(img_size, (tuple, list)):
             img_size = img_size[0]
         self.img_size = img_size
+        self.grid_size = self.img_size // self.patch_size
 
         self.conv1 = nn.Conv2d(
             in_channels=in_chans,
@@ -455,7 +453,7 @@ class PE(nn.Module):
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=width, reduction=patch_size) for i in range(layers)]
 
-        if pool_type == "attn":
+        if use_attn_pool:
             self.attn_pool = AttentionPooling(
                 embed_dim=width,
                 num_heads=attn_pooler_heads,
@@ -483,12 +481,15 @@ class PE(nn.Module):
 
         if self.use_cls_token:
             self.class_embedding = nn.Parameter(init_scale * torch.randn(self.width))
+        else:
+            self.class_embedding = None
 
         if self.use_abs_posemb:
-            self.posemb_grid_size = self.img_size // self.patch_size
             self.positional_embedding = nn.Parameter(
-                init_scale * torch.randn(int(self.use_cls_token) + self.posemb_grid_size**2, self.width)
+                init_scale * torch.randn(int(self.use_cls_token) + self.grid_size**2, self.width)
             )
+        else:
+            self.positional_embedding = None
 
         # PE's: Transfomer(x) -> pool -> proj -> head (for timm). (PE contains an additional projection layer)
         if self.use_proj:
@@ -498,7 +499,7 @@ class PE(nn.Module):
             else:
                 self.head = nn.Identity()
         else: # no projection (eg PE-lang and PE-spatial)
-            self.proj = nn.Identity()
+            self.proj = None
             if self.num_classes > 0:
                 self.head = nn.Linear(self.width, self.num_classes) # no proj. input dim = self.width (pooled)
             else:
@@ -514,15 +515,9 @@ class PE(nn.Module):
         self.transformer.set_grad_checkpointing(enable=enable)
 
     def forward_pool_and_proj(self, x: torch.Tensor):
-        if self.pool_type == "tok":
-            x =  x[:, 0]
-        elif self.pool_type == "avg":
-            x = x.mean(dim=1)
-        elif self.pool_type == "attn":
+        if self.attn_pool is not None:
             x = self.attn_pool(x).squeeze(1)
-        elif self.pool_type == "none":
-            x = x    
-        if self.use_proj:
+        if self.proj is not None:
             x = x @ self.proj
         return x
 
@@ -532,21 +527,19 @@ class PE(nn.Module):
         x = self.forward_pool_and_proj(x)
         return x if pre_logits else self.head(x)
 
-    #def forward_features(self, x: torch.Tensor, norm: bool = False, layer_idx: int = -1, strip_cls_token: bool = False):
     def forward_features(self, x: torch.Tensor, norm: bool = False):
-        #: layer_idx = -1, # torchscript emits iterations over modules as unrolled loops. so dynamic layer_idx is not supported in timm as in orig pe
         batch, _, h, w = x.shape
 
         x = self.conv1(x)
         x = x.permute(0, 2, 3, 1).reshape(batch, -1, self.width)
 
-        if self.use_cls_token:
+        if self.class_embedding is not None:
             x = torch.cat(
                 [self.class_embedding.view(1, 1, -1).expand(batch, -1, -1), x],
                 dim=1,
             )
-
-        if self.use_abs_posemb:
+            
+        if self.positional_embedding is not None:
             x = x + self.positional_embedding[None, ...]
 
         x = self.ln_pre(x)
@@ -554,8 +547,6 @@ class PE(nn.Module):
         if norm:
             x = self.ln_post(x)
 
-        # if strip_cls_token and self.use_cls_token:
-        #     x = x[:, 1:, :]
         return x
 
     def forward(self, x: torch.Tensor):
@@ -566,7 +557,7 @@ class PE(nn.Module):
     def reset_classifier(self, num_classes: int):
         self.num_classes = num_classes
         if num_classes > 0:
-            if self.proj_dim > 0:
+            if self.proj is not None:
                 self.head = nn.Parameter(self.proj_dim, num_classes)
             else: # no projection (eg PE-lang and PE-spatial)
                 self.head = nn.Parameter(self.width, num_classes)
@@ -603,18 +594,17 @@ class PE(nn.Module):
 
         # forward pass
         B, _, height, width = x.shape
-
-
+        # patch embedgging
         x = self.conv1(x)
         x = x.permute(0, 2, 3, 1).reshape(B, -1, self.width) # NLC
 
-        if self.use_cls_token:
+        if self.class_embedding is not None:
             x = torch.cat(
                 [self.class_embedding.view(1, 1, -1).expand(B, -1, -1), x],
                 dim=1,
             )
 
-        if self.use_abs_posemb:
+        if self.positional_embedding is not None:
             x = x + self.positional_embedding[None, ...]
 
         x = self.ln_pre(x)
@@ -631,15 +621,15 @@ class PE(nn.Module):
                 intermediates.append(self.norm(x) if norm else x)
 
         # process intermediates
-        if self.use_cls_token:
-            prefix_tokens = [y[:, 0] for y in intermediates]
+        if self.class_embedding is not None:
+            prefix_tokens = [y[:, 0] for y in intermediates] # only one cls token in PE
             intermediates = [y[:, 1:] for y in intermediates]
         else:
             prefix_tokens = None
 
         if reshape:
             # reshape to BCHW output format
-            H = W = self.posemb_grid_size
+            H = W = self.grid_size
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
         if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
             # return_prefix not support in torchscript due to poor type handling
@@ -716,7 +706,7 @@ def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
         output_dim=1024,
         num_classes=0,
         use_cls_token=True,
-        pool_type='attn',
+        use_attn_pool=True,
         use_proj=True,
     )
     return _create_pe('vit_pe_core_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -734,7 +724,7 @@ def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
         output_dim=1024,
         num_classes=0,
         use_cls_token=True,
-        pool_type='attn',
+        use_attn_pool=True,
         use_proj=True,
     )
     return _create_pe('vit_pe_core_large_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -752,7 +742,7 @@ def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
         output_dim=1280,
         num_classes=0,
         use_cls_token=False,
-        pool_type='attn',
+        use_attn_pool=True,
         use_proj=True,
     )
     return _create_pe('vit_pe_core_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -771,7 +761,7 @@ def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
         num_classes=0,
         use_cls_token=True,
         use_ln_post=False,
-        pool_type='none',
+        use_attn_pool=False,
         ls_init_value=0.1,
         use_proj=False,
     )
@@ -791,7 +781,7 @@ def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
         num_classes=0,
         use_cls_token=False,
         use_ln_post=False,
-        pool_type='none',
+        use_attn_pool=False,
         ls_init_value=0.1,
         use_proj=False,
     )
@@ -811,7 +801,7 @@ def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
         num_classes=0,
         use_cls_token=False,
         use_ln_post=False,
-        pool_type='none',
+        use_attn_pool=False,
         ls_init_value=0.1,
         use_proj=False,
     )
