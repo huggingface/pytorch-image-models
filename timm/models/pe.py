@@ -11,6 +11,8 @@ from torch.nn.init import constant_, xavier_normal_, xavier_uniform_
 from torch.nn.parameter import Parameter
 from torch.amp import autocast
 from torch.utils.checkpoint import checkpoint
+from torch.jit import Final
+
 
 ### Import timm layers
 from timm.layers import (
@@ -18,6 +20,7 @@ from timm.layers import (
     AttentionPoolLatent,
     LayerType,
     LayerScale,
+    use_fused_attn,
 )
 
 # from timm.layers import RotaryEmbeddingCat, RotaryEmbedding # not compatible
@@ -68,6 +71,7 @@ class RotaryEmbedding(Module):
         freqs = t.type(freqs.dtype).unsqueeze(-1) * freqs
         freqs = freqs.repeat_interleave(2, dim=-1)
         return freqs
+
 
 
 @register_notrace_module
@@ -181,6 +185,8 @@ class SelfAttention(nn.Module):
     r"""
     Implements sequence packed attention and RoPe
     """
+    fused_attn: Final[bool]
+
     def __init__(
         self,
         embed_dim: int,
@@ -201,11 +207,13 @@ class SelfAttention(nn.Module):
 
         self.rope = rope
         self.scale = self.head_dim ** (-0.5)
+        self.fused_attn = use_fused_attn()
 
     def init_tensors(self):
         xavier_uniform_(self.in_proj_weight)
         constant_(self.in_proj_bias, 0.0)
         constant_(self.out_proj.bias, 0.0)
+
 
     def forward(self, 
             x: torch.Tensor,
@@ -226,10 +234,19 @@ class SelfAttention(nn.Module):
         if self.rope is not None:
             q, k = self.rope(q, k)
 
-        attn = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale)
+        if self.fused_attn:
+            attn = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale)
+        else:
+            q = q * self.scale
+            attn = q @ k.transpose(-2, -1)
+            attn = attn.softmax(dim=-1)
+            attn = attn @ v
+
         attn = attn.permute(0, 2, 1, 3).contiguous().view(batch, seq, -1)
 
         return F.linear(attn, self.out_proj.weight, self.out_proj.bias)
+
+
 
 
 class ResidualAttentionBlock(nn.Module):
@@ -246,10 +263,7 @@ class ResidualAttentionBlock(nn.Module):
     ):
         super().__init__()
 
-        #if rope:
         self.attn = SelfAttention(d_model, n_head, rope=rope)
-        #else:
-        #    self.attn = nn.MultiheadAttention(d_model, n_head, batch_first=True)
 
         self.ls_1 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
         self.ls_2 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
@@ -281,10 +295,7 @@ class ResidualAttentionBlock(nn.Module):
             if not attn_mask.dtype == torch.bool:
                 attn_mask = attn_mask.to(q_x.dtype)
 
-        #if isinstance(self.attn, SelfAttention):
         return self.attn(q_x, attn_mask=attn_mask)
-        #else:
-        #    return self.attn(q_x, q_x, q_x, attn_mask=attn_mask, need_weights=False)[0]
 
     def forward(
         self,
@@ -392,6 +403,7 @@ class PE(nn.Module):
         self.in_chans = in_chans
         self.num_classes = num_classes
         self.drop_rate = drop_rate
+        self.emb_dim = width
         
         # PE contains an (optional) projection layer
         # Flow: x -> Transfomer(x) -> pool -> proj -> head (for timm).
@@ -410,6 +422,7 @@ class PE(nn.Module):
             self.num_features = width
 
         self.num_classes = num_classes
+        self.output_dim = output_dim
 
         self.use_abs_posemb = use_abs_posemb
         self.use_cls_token = use_cls_token
@@ -466,6 +479,7 @@ class PE(nn.Module):
         else:
             self.attn_pool = None
 
+        self.act_layer_cfg = act_layer
         self.init_tensors()
 
     def init_tensors(self):
@@ -523,8 +537,10 @@ class PE(nn.Module):
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
          # PE has an additional proj layer: Transfomer(x) -> pool -> proj -> head (for timm). 
-         # Ideally pool To discuss with Ross where to split
+         # To discuss with Ross where to split
         x = self.forward_pool_and_proj(x)
+        if self.head_act_layer is not None:
+            x = self.head_act_layer(x)
         return x if pre_logits else self.head(x)
 
     def forward_features(self, x: torch.Tensor, norm: bool = False):
@@ -807,4 +823,3 @@ def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
         use_proj=False,
     )
     return _create_pe('vit_pe_spatial_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
-
