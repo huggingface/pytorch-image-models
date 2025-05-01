@@ -479,7 +479,7 @@ class PE(nn.Module):
         else:
             self.attn_pool = None
 
-        self.act_layer_cfg = act_layer
+        self.head_act_layer = None # =act_layer if to add an additional activation between fc1(proj) and fc2(head)
         self.init_tensors()
 
     def init_tensors(self):
