@@ -41,11 +41,11 @@ class RotaryEmbedding(Module):
     def __init__(
         self,
         dim,
-        freqs_for: Union[Literal["lang"], Literal["pixel"], Literal["constant"]] = "lang",        
+        freqs_for: Union[Literal["lang"], Literal["pixel"], Literal["constant"]] = "lang",
         theta=10000,
         max_freq=10,
         num_freqs=1,
-        learned_freq=False,              
+        learned_freq=False,
         theta_rescale_factor=1.0,
     ):
         super().__init__()
@@ -73,7 +73,6 @@ class RotaryEmbedding(Module):
         return freqs
 
 
-
 @register_notrace_module
 class Rope2D(Module):
     def __init__(self, dim, grid_size, use_cls_token=False):
@@ -83,10 +82,10 @@ class Rope2D(Module):
         self.grid_size = grid_size
         self.rope = RotaryEmbedding(self.dim // 2)
         self.init_tensors()
-        
+
     def init_tensors(self):
         self.update_grid(self.grid_size[0], self.grid_size[1])
-        
+
     def update_grid(self, grid_h, grid_w):
         if self.use_cls_token:
             # +1 to leave space for the cls token to be (0, 0)
@@ -100,22 +99,22 @@ class Rope2D(Module):
         freq = torch.cat([freqs_x, freqs_y], dim=-1).reshape(grid_h * grid_w, -1)
 
         if self.use_cls_token:
-            freq = torch.cat([freq, torch.zeros(1, freq.shape[-1])], dim=0)
+            freq = torch.cat([torch.zeros(1, freq.shape[-1]), freq], dim=0)
         self.register_buffer('freq', freq[None, ...], persistent=False)
 
     def rotate_half(self, x):
-        shape = x.shape 
+        shape = x.shape
         x = x.view(shape[:-1] + (-1, 2))
         x1, x2 = x[..., 0], x[..., 1]
         x = torch.stack((-x2, x1), dim=-1)
         return x.view(shape[:-1] + (-1,))
-    
+
     def apply_rotary_emb(self, freqs, t):
         start_index = 0
         scale = 1.0
         seq_dim = -2
         dtype = t.dtype
-        
+
         # if len(t.shape) == 3:
         #     seq_len = t.shape[seq_dim]
         #     freqs = freqs[-seq_len:]
@@ -185,6 +184,7 @@ class SelfAttention(nn.Module):
     r"""
     Implements sequence packed attention and RoPe
     """
+
     fused_attn: Final[bool]
 
     def __init__(
@@ -214,11 +214,11 @@ class SelfAttention(nn.Module):
         constant_(self.in_proj_bias, 0.0)
         constant_(self.out_proj.bias, 0.0)
 
-
-    def forward(self, 
-            x: torch.Tensor,
-            attn_mask: Optional[torch.Tensor] = None,      
-        ):
+    def forward(
+        self,
+        x: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+    ):
         batch, seq, embed_dim = x.shape
         proj = F.linear(x, self.in_proj_weight, self.in_proj_bias)
 
@@ -235,7 +235,9 @@ class SelfAttention(nn.Module):
             q, k = self.rope(q, k)
 
         if self.fused_attn:
-            attn = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale)
+            attn = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale
+            )
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
@@ -245,8 +247,6 @@ class SelfAttention(nn.Module):
         attn = attn.permute(0, 2, 1, 3).contiguous().view(batch, seq, -1)
 
         return F.linear(attn, self.out_proj.weight, self.out_proj.bias)
-
-
 
 
 class ResidualAttentionBlock(nn.Module):
@@ -285,11 +285,7 @@ class ResidualAttentionBlock(nn.Module):
             )
         )
 
-    def _call_attn(
-        self,
-        q_x: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None
-    ):
+    def _call_attn(self, q_x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
         if attn_mask is not None:
             # Leave boolean masks as is
             if not attn_mask.dtype == torch.bool:
@@ -300,7 +296,7 @@ class ResidualAttentionBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,        
+        attn_mask: Optional[torch.Tensor] = None,
     ):
         x = x + self.drop_path1(self.ls_1(self._call_attn(self.ln_1(x), attn_mask=attn_mask)))
         x = x + self.drop_path2(self.ls_2(self.mlp(self.ln_2(x))))
@@ -354,18 +350,14 @@ class Transformer(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        attn_mask: Optional[torch.Tensor] = None,        
-        # layer_idx=-1, #: int = -1, # torchscript emits iterations over modules as unrolled loops. so dynamic layer_idx is not supported as in orig pe
+        attn_mask: Optional[torch.Tensor] = None,
     ):
-        #stop_idx = (self.layers + layer_idx) % self.layers
         for i, r in enumerate(self.resblocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
                 x = checkpoint(r, x, None, None, attn_mask)
             else:
                 x = r(x, attn_mask=attn_mask)
-            # if i == stop_idx:
-            #     break
         return x
 
 
@@ -389,11 +381,11 @@ class PE(nn.Module):
         use_cls_token: bool = False,
         use_proj: bool = True,
         output_dim: Optional[int] = 1280,
-        num_classes: int = 0, 
+        num_classes: int = 0,
         attn_pooler_heads: int = 8,
         use_attn_pool: bool = True,
         in_chans: int = 3,
-        drop_rate: float = 0.,  # Expected to be here, TODO add a final drop layer once head finalized
+        drop_rate: float = 0.0,  # Expected to be here, TODO add a final drop layer once head finalized
     ):
         super().__init__()
         self.patch_size = patch_size
@@ -404,7 +396,7 @@ class PE(nn.Module):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.emb_dim = width
-        
+
         # PE contains an (optional) projection layer
         # Flow: x -> Transfomer(x) -> pool -> proj -> head (for timm).
         # forward_features: x -> Transfomer(x)
@@ -414,10 +406,10 @@ class PE(nn.Module):
         if self.use_proj:
             self.proj_dim = output_dim
             self.head_hidden_size = self.proj_dim
-            self.num_features = width # self.proj_dim
+            self.num_features = width  # self.proj_dim
         else:
-            self.proj_dim = 0 
-            assert output_dim == width 
+            self.proj_dim = 0
+            assert output_dim == width
             self.head_hidden_size = width
             self.num_features = width
 
@@ -445,7 +437,7 @@ class PE(nn.Module):
             Rope2D(
                 dim=width // heads,
                 use_cls_token=self.use_cls_token,
-                grid_size = (img_size // patch_size, img_size // patch_size),
+                grid_size=(img_size // patch_size, img_size // patch_size),
             )
             if self.use_rope2d
             else None
@@ -466,8 +458,7 @@ class PE(nn.Module):
             rope=self.rope,
         )
 
-        self.feature_info = [
-            dict(module=f'blocks.{i}', num_chs=width, reduction=patch_size) for i in range(layers)]
+        self.feature_info = [dict(module=f'blocks.{i}', num_chs=width, reduction=patch_size) for i in range(layers)]
 
         if use_attn_pool:
             self.attn_pool = AttentionPooling(
@@ -479,7 +470,7 @@ class PE(nn.Module):
         else:
             self.attn_pool = None
 
-        self.head_act_layer = None # =act_layer if to add an additional activation between fc1(proj) and fc2(head)
+        self.head_act_layer = None  # =act_layer if to add an additional activation between fc1(proj) and fc2(head)
         self.init_tensors()
 
     def init_tensors(self):
@@ -511,11 +502,11 @@ class PE(nn.Module):
         # PE's: Transfomer(x) -> pool -> proj -> head (for timm). (PE contains an additional projection layer)
         if self.use_proj:
             self.proj = nn.Parameter(init_scale * torch.randn(self.width, self.proj_dim))
-        else: # no projection (eg PE-lang and PE-spatial)
+        else:  # no projection (eg PE-lang and PE-spatial)
             self.proj = None
 
         if self.num_classes > 0:
-            self.head = nn.Linear(self.head_hidden_size, self.num_classes) # no proj. input dim = self.width (pooled)
+            self.head = nn.Linear(self.head_hidden_size, self.num_classes)  # no proj. input dim = self.width (pooled)
         else:
             self.head = nn.Identity()
 
@@ -536,8 +527,8 @@ class PE(nn.Module):
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
-         # PE has an additional proj layer: Transfomer(x) -> pool -> proj -> head (for timm). 
-         # To discuss with Ross where to split
+        # PE has an additional proj layer: Transfomer(x) -> pool -> proj -> head (for timm).
+        # To discuss with Ross where to split
         x = self.forward_pool_and_proj(x)
         if self.head_act_layer is not None:
             x = self.head_act_layer(x)
@@ -554,7 +545,7 @@ class PE(nn.Module):
                 [self.class_embedding.view(1, 1, -1).expand(batch, -1, -1), x],
                 dim=1,
             )
-            
+
         if self.positional_embedding is not None:
             x = x + self.positional_embedding[None, ...]
 
@@ -575,22 +566,22 @@ class PE(nn.Module):
         if num_classes > 0:
             if self.proj is not None:
                 self.head = nn.Parameter(self.proj_dim, num_classes)
-            else: # no projection (eg PE-lang and PE-spatial)
+            else:  # no projection (eg PE-lang and PE-spatial)
                 self.head = nn.Parameter(self.width, num_classes)
         else:
             self.head = nn.Identity()
 
     def forward_intermediates(
-            self,
-            x: torch.Tensor,
-            indices: Optional[Union[int, List[int]]] = None,
-            return_prefix_tokens: bool = False,
-            norm: bool = False,
-            stop_early: bool = False,
-            output_fmt: str = 'NCHW',
-            intermediates_only: bool = False,
+        self,
+        x: torch.Tensor,
+        indices: Optional[Union[int, List[int]]] = None,
+        return_prefix_tokens: bool = False,
+        norm: bool = False,
+        stop_early: bool = False,
+        output_fmt: str = 'NCHW',
+        intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
             x: Input image tensor
@@ -612,7 +603,7 @@ class PE(nn.Module):
         B, _, height, width = x.shape
         # patch embedgging
         x = self.conv1(x)
-        x = x.permute(0, 2, 3, 1).reshape(B, -1, self.width) # NLC
+        x = x.permute(0, 2, 3, 1).reshape(B, -1, self.width)  # NLC
 
         if self.class_embedding is not None:
             x = torch.cat(
@@ -628,7 +619,7 @@ class PE(nn.Module):
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             blocks = self.transformer.resblocks
         else:
-            blocks = self.transformer.resblocks[:max_index + 1]
+            blocks = self.transformer.resblocks[: max_index + 1]
 
         for i, blk in enumerate(blocks):
             x = blk(x)
@@ -638,7 +629,7 @@ class PE(nn.Module):
 
         # process intermediates
         if self.class_embedding is not None:
-            prefix_tokens = [y[:, 0] for y in intermediates] # only one cls token in PE
+            prefix_tokens = [y[:, 0] for y in intermediates]  # only one cls token in PE
             intermediates = [y[:, 1:] for y in intermediates]
         else:
             prefix_tokens = None
@@ -657,7 +648,6 @@ class PE(nn.Module):
         x = self.ln_post(x)
 
         return x, intermediates
-                
 
 
 def checkpoint_filter_fn(
@@ -677,10 +667,10 @@ def _cfg(url='', **kwargs):
         'num_classes': 0,
         'interpolation': 'bilinear',
         'fixed_input_size': True,
-        'mean': IMAGENET_INCEPTION_MEAN, # (0.5, 0.5, 0.5)
-        'std': IMAGENET_INCEPTION_STD, # (0.5, 0.5, 0.5)
+        'mean': IMAGENET_INCEPTION_MEAN,  # (0.5, 0.5, 0.5)
+        'std': IMAGENET_INCEPTION_STD,  # (0.5, 0.5, 0.5)
         'first_conv': 'conv1',
-        'classifier': 'head',        
+        'classifier': 'head',
         **kwargs,
     }
 
@@ -688,7 +678,9 @@ def _cfg(url='', **kwargs):
 default_cfgs = generate_default_cfgs(
     {
         # TODO finalize locations
-        'vit_pe_core_base_patch16_224': _cfg(hf_hub_id='facebook/pe_core_base_patch16_224_timm', input_size=(3, 224, 224)),
+        'vit_pe_core_base_patch16_224': _cfg(
+            hf_hub_id='facebook/pe_core_base_patch16_224_timm', input_size=(3, 224, 224)
+        ),
         'vit_pe_core_large_patch14_336': _cfg(hf_hub_id='timm/', input_size=(3, 336, 336)),
         'vit_pe_core_gigantic_patch14_448': _cfg(hf_hub_id='timm/', input_size=(3, 448, 448)),
         'vit_pe_lang_large_patch14_448': _cfg(hf_hub_id='timm/', input_size=(3, 448, 448)),
