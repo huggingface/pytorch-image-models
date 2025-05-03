@@ -497,11 +497,7 @@ class SwiftFormer(nn.Module):
         x = self.norm(x)
         return x
 
-    def forward_head(
-            self,
-            x: torch.Tensor,
-            pre_logits: bool = False,
-    ) -> Union[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False):
         if self.global_pool == 'avg':
             x = x.mean(dim=(2, 3))
         x = self.head_drop(x)
@@ -515,7 +511,7 @@ class SwiftFormer(nn.Module):
             # during standard train/finetune, inference average the classifier predictions
             return (x + x_dist) / 2
 
-    def forward(self, x: torch.Tensor) -> Union[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
+    def forward(self, x: torch.Tensor):
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x

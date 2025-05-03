@@ -235,7 +235,7 @@ class StageBlock(nn.Module):
             PatchMerging(prev_dim, dim, act_layer),
             Residule(Conv2d_BN(dim, dim, 3, 1, 1, groups=dim)),
             Residule(FFN(dim, int(dim * 2), act_layer)),
-        ) if prev_dim is not None else nn.Identity()
+        ) if prev_dim != dim else nn.Identity()
 
         self.block = nn.Sequential(*[
             BasicBlock(dim, qk_dim, pdim, type, norm_layer, act_layer) for _ in range(depth)
@@ -269,19 +269,20 @@ class SHViT(nn.Module):
         self.feature_info = []
 
         # Patch embedding
+        stem_chs = embed_dim[0]
         self.patch_embed = nn.Sequential(
-            Conv2d_BN(in_chans, embed_dim[0] // 8, 3, 2, 1),
+            Conv2d_BN(in_chans, stem_chs // 8, 3, 2, 1),
             act_layer(),
-            Conv2d_BN(embed_dim[0] // 8, embed_dim[0] // 4, 3, 2, 1),
+            Conv2d_BN(stem_chs // 8, stem_chs // 4, 3, 2, 1),
             act_layer(),
-            Conv2d_BN(embed_dim[0] // 4, embed_dim[0] // 2, 3, 2, 1),
+            Conv2d_BN(stem_chs // 4, stem_chs // 2, 3, 2, 1),
             act_layer(),
-            Conv2d_BN(embed_dim[0] // 2, embed_dim[0], 3, 2, 1)
+            Conv2d_BN(stem_chs // 2, stem_chs, 3, 2, 1)
         )
 
         # Build SHViT blocks
         blocks = []
-        prev_chs = None
+        prev_chs = stem_chs
         for i in range(len(embed_dim)):
             blocks.append(StageBlock(
                 prev_dim=prev_chs,
