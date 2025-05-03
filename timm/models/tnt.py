@@ -488,7 +488,7 @@ def checkpoint_filter_fn(state_dict, model):
         k = k.replace('outer_attn', 'attn_out')
         k = k.replace('outer_norm2', 'norm_mlp')
         k = k.replace('outer_mlp', 'mlp')
-        if k == 'pixel_pos':
+        if k == 'pixel_pos' and model.pixel_embed.legacy == False:
             B, N, C = v.shape
             H = W = int(N ** 0.5)
             assert H * W == N
