@@ -355,6 +355,7 @@ class RDNet(nn.Module):
     def forward_features(self, x):
         x = self.stem(x)
         x = self.dense_stages(x)
+        x = self.norm_pre(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False):

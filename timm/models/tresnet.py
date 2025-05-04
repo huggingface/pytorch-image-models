@@ -252,14 +252,15 @@ class TResNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.body) - 1, indices)
-
+        stage_ends = [1, 2, 3, 4, 5]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        take_indices = [stage_ends[i] for i in take_indices]
+        max_index = stage_ends[max_index]
         # forward pass
-        x = self.body[0](x)  # s2d
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
-            stages = [self.body[1], self.body[2], self.body[3], self.body[4], self.body[5]]
+            stages = self.body
         else:
-            stages = self.body[1:max_index + 2]
+            stages = self.body[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
@@ -279,8 +280,10 @@ class TResNet(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.body) - 1, indices)
-        self.body = self.body[1:max_index + 2]  # truncate blocks w/ stem as idx 0
+        stage_ends = [1, 2, 3, 4, 5]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        max_index = stage_ends[max_index]
+        self.body = self.body[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
             self.reset_classifier(0, '')
         return take_indices
