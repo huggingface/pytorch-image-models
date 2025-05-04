@@ -253,7 +253,6 @@ class TResNet(nn.Module):
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.body) - 1, indices)
-        print(take_indices, max_index)
 
         # forward pass
         x = self.body[0](x)  # s2d
@@ -261,7 +260,6 @@ class TResNet(nn.Module):
             stages = [self.body[1], self.body[2], self.body[3], self.body[4], self.body[5]]
         else:
             stages = self.body[1:max_index + 2]
-        print(len(stages))
 
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
