@@ -1,5 +1,22 @@
+"""FasterNet
+Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks
+- paper: https://arxiv.org/abs/2303.03667
+- code: https://github.com/JierunChen/FasterNet
+
+@article{chen2023run,
+  title={Run, Don't Walk: Chasing Higher FLOPS for Faster Neural Networks},
+  author={Chen, Jierun and Kao, Shiu-hong and He, Hao and Zhuo, Weipeng and Wen, Song and Lee, Chul-Ho and Chan, S-H Gary},
+  journal={arXiv preprint arXiv:2303.03667},
+  year={2023}
+}
+
+Modifications by / Copyright 2025 Ryan Hou & Ross Wightman, original copyrights below
+"""
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
