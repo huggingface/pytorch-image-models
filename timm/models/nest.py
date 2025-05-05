@@ -449,7 +449,7 @@ class Nest(nn.Module):
 
         # forward pass
         x = self.patch_embed(x)
-        last_idx = self.num_blocks - 1
+        last_idx = len(self.num_blocks) - 1
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.levels
         else:
