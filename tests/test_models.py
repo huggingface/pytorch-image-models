@@ -54,7 +54,7 @@ FEAT_INTER_FILTERS = [
     'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
     'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet',
     'regnet', 'byobnet', 'byoanet', 'mlp_mixer', 'hiera', 'fastvit', 'hieradet_sam2', 'aimv2*', 'swiftformer',
-    'starnet', 'shvit',
+    'starnet', 'shvit', 'fasternet',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
@@ -219,6 +219,7 @@ def test_model_backward(model_name, batch_size):
 EARLY_POOL_MODELS = (
     timm.models.EfficientVit,
     timm.models.EfficientVitLarge,
+    timm.models.FasterNet,
     timm.models.HighPerfGpuNet,
     timm.models.GhostNet,
     timm.models.MetaNeXt, # InceptionNeXt

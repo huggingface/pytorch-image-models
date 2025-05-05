@@ -471,7 +471,8 @@ class SwiftFormer(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm(x)
+        if feat_idx == last_idx:
+            x = self.norm(x)
 
         return x, intermediates
 
