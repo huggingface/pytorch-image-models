@@ -449,6 +449,7 @@ class Nest(nn.Module):
 
         # forward pass
         x = self.patch_embed(x)
+        last_idx = self.num_blocks - 1
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.levels
         else:
@@ -457,13 +458,18 @@ class Nest(nn.Module):
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                if norm and feat_idx == last_idx:
+                    x_inter = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+                    intermediates.append(x_inter)
+                else:
+                    intermediates.append(x)
 
         if intermediates_only:
             return intermediates
 
-        # Layer norm done over channel dim only (to NHWC and back)
-        x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        if feat_idx == last_idx:
+            # Layer norm done over channel dim only (to NHWC and back)
+            x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
         return x, intermediates
 

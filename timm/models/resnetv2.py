@@ -574,7 +574,7 @@ class ResNetV2(nn.Module):
         x = self.stem(x)
         if feat_idx in take_indices:
             intermediates.append(x)
-
+        last_idx = len(self.stages)
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
         else:
@@ -583,12 +583,17 @@ class ResNetV2(nn.Module):
         for feat_idx, stage in enumerate(stages, start=1):
             x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                if feat_idx == last_idx:
+                    x_inter = self.norm(x) if norm else x
+                    intermediates.append(x_inter)
+                else:
+                    intermediates.append(x) 
 
         if intermediates_only:
             return intermediates
         
-        x = self.norm(x)
+        if feat_idx == last_idx:
+            x = self.norm(x)
 
         return x, intermediates
 

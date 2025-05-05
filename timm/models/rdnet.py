@@ -309,7 +309,7 @@ class RDNet(nn.Module):
         x = self.stem(x)
         if feat_idx in take_indices:
             intermediates.append(x)
-
+        last_idx = len(self.dense_stages)
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             dense_stages = self.dense_stages
         else:
@@ -324,7 +324,8 @@ class RDNet(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm_pre(x)
+        if feat_idx == last_idx:
+            x = self.norm_pre(x)
 
         return x, intermediates
 
