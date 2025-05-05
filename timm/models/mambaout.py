@@ -479,7 +479,6 @@ class MambaOut(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-
     def forward_features(self, x):
         x = self.stem(x)
         x = self.stages(x)
