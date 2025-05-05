@@ -517,12 +517,13 @@ class MobileAttention(nn.Module):
                 value_dim=value_dim,
                 query_strides=query_strides,
                 kv_stride=kv_stride,
+                dw_kernel_size=dw_kernel_size,
                 dilation=dilation,
                 padding=pad_type,
-                dw_kernel_size=dw_kernel_size,
                 attn_drop=attn_drop,
                 proj_drop=proj_drop,
-                #bias=use_bias, # why not here if used w/ mhsa?
+                norm_layer=norm_layer,
+                # use_bias=use_bias, # why not here if used w/ mhsa?
             )
         else:
             self.attn = Attention2d(

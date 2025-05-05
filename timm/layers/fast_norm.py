@@ -148,7 +148,7 @@ def fast_rms_norm(
             return fused_rms_norm_affine(x, weight, normalized_shape, eps)
 
     if is_autocast_enabled(x.device.type):
-        # normally native AMP casts LN inputs to float32
+        # normally native AMP casts LN inputs to float32 and leaves the output as float32
         # apex LN does not, this is behaving like Apex
         dt = get_autocast_dtype(x.device.type)
         x, weight = x.to(dt), weight.to(dt)
@@ -158,6 +158,51 @@ def fast_rms_norm(
             x = F.rms_norm(x, normalized_shape, weight, eps)
         else:
             x = rms_norm(x, normalized_shape, weight, eps)
+
+    return x
+
+
+def rms_norm2d(
+    x: torch.Tensor,
+    normalized_shape: List[int],
+    weight: Optional[torch.Tensor] = None,
+    eps: float = 1e-5,
+):
+    assert len(normalized_shape) == 1
+    v = x.pow(2)
+    v = torch.mean(v, dim=1, keepdim=True)
+    x = x * torch.rsqrt(v + eps)
+    if weight is not None:
+        x = x * weight.reshape(1, -1, 1, 1)
+    return x
+
+
+def fast_rms_norm2d(
+    x: torch.Tensor,
+    normalized_shape: List[int],
+    weight: Optional[torch.Tensor] = None,
+    eps: float = 1e-5,
+) -> torch.Tensor:
+    if torch.jit.is_scripting():
+        # this must be by itself, cannot merge with has_apex_rmsnorm
+        return rms_norm2d(x, normalized_shape, weight, eps)
+
+    if has_apex_rmsnorm:
+        x = x.permute(0, 2, 3, 1)
+        if weight is None:
+            x = fused_rms_norm(x, normalized_shape, eps)
+        else:
+            x = fused_rms_norm_affine(x, weight, normalized_shape, eps)
+        x = x.permute(0, 3, 1, 2)
+
+    if is_autocast_enabled(x.device.type):
+        # normally native AMP casts norm inputs to float32 and leaves the output as float32
+        # apex does not, this is behaving like Apex
+        dt = get_autocast_dtype(x.device.type)
+        x, weight = x.to(dt), weight.to(dt)
+
+    with torch.amp.autocast(device_type=x.device.type, enabled=False):
+        x = rms_norm2d(x, normalized_shape, weight, eps)
 
     return x
 

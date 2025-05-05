@@ -20,8 +20,14 @@ from torch.nn import functional as F
 from torchvision.ops.misc import FrozenBatchNorm2d
 
 from .create_act import create_act_layer
-from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm
+from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm, fast_rms_norm, rms_norm2d, fast_rms_norm2d
+from .norm import RmsNorm, RmsNorm2d
 from .trace_utils import _assert
+
+try:
+    from torch.nn.functional import rms_norm
+except ImportError:
+    from .fast_norm import rms_norm
 
 
 def _create_act(act_layer, act_kwargs=None, inplace=False, apply_act=True):
@@ -457,6 +463,72 @@ class LayerNormAct2d(nn.LayerNorm):
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = x.permute(0, 3, 1, 2)
+        x = self.drop(x)
+        x = self.act(x)
+        return x
+
+
+class RmsNormAct(RmsNorm):
+    """ RMSNorm + Activation for '2D' NCHW tensors
+
+    NOTE: It's currently (2025-05-10) faster to use an eager 2d kernel that does reduction
+    on dim=1 than to permute and use internal PyTorch F.rms_norm, this may change if something
+    like https://github.com/pytorch/pytorch/pull/150576 lands.
+    """
+    def __init__(
+            self,
+            num_channels,
+            eps=1e-5,
+            affine=True,
+            apply_act=True,
+            act_layer=nn.ReLU,
+            act_kwargs=None,
+            inplace=True,
+            drop_layer=None,
+    ):
+        super().__init__(channels=num_channels, eps=eps, affine=affine)
+        self.drop = drop_layer() if drop_layer is not None else nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self._fast_norm = is_fast_norm()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self._fast_norm:
+            x = fast_rms_norm(x, self.normalized_shape, self.weight, self.eps)
+        else:
+            x = rms_norm(x, self.normalized_shape, self.weight, self.eps)
+        x = self.drop(x)
+        x = self.act(x)
+        return x
+
+
+class RmsNormAct2d(RmsNorm2d):
+    """ RMSNorm + Activation for '2D' NCHW tensors
+
+    NOTE: It's currently (2025-05-10) faster to use an eager 2d kernel that does reduction
+    on dim=1 than to permute and use internal PyTorch F.rms_norm, this may change if something
+    like https://github.com/pytorch/pytorch/pull/150576 lands.
+    """
+    def __init__(
+            self,
+            num_channels,
+            eps=1e-5,
+            affine=True,
+            apply_act=True,
+            act_layer=nn.ReLU,
+            act_kwargs=None,
+            inplace=True,
+            drop_layer=None,
+    ):
+        super().__init__(channels=num_channels, eps=eps, affine=affine)
+        self.drop = drop_layer() if drop_layer is not None else nn.Identity()
+        self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
+        self._fast_norm = is_fast_norm()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self._fast_norm:
+            x = fast_rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
+        else:
+            x = rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
         x = self.drop(x)
         x = self.act(x)
         return x

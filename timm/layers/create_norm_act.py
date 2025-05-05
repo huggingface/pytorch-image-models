@@ -11,7 +11,7 @@ import functools
 
 from .evo_norm import *
 from .filter_response_norm import FilterResponseNormAct2d, FilterResponseNormTlu2d
-from .norm_act import BatchNormAct2d, GroupNormAct, LayerNormAct, LayerNormAct2d
+from .norm_act import BatchNormAct2d, GroupNormAct, LayerNormAct, LayerNormAct2d, RmsNormAct, RmsNormAct2d
 from .inplace_abn import InplaceAbn
 
 _NORM_ACT_MAP = dict(
@@ -34,11 +34,21 @@ _NORM_ACT_MAP = dict(
     frntlu=FilterResponseNormTlu2d,
     inplaceabn=InplaceAbn,
     iabn=InplaceAbn,
+    rmsnorm=RmsNormAct,
+    rmsnorm2d=RmsNormAct2d,
 )
 _NORM_ACT_TYPES = {m for n, m in _NORM_ACT_MAP.items()}
 # has act_layer arg to define act type
 _NORM_ACT_REQUIRES_ARG = {
-    BatchNormAct2d, GroupNormAct, LayerNormAct, LayerNormAct2d, FilterResponseNormAct2d, InplaceAbn}
+    BatchNormAct2d,
+    GroupNormAct,
+    LayerNormAct,
+    LayerNormAct2d,
+    FilterResponseNormAct2d,
+    InplaceAbn,
+    RmsNormAct,
+    RmsNormAct2d,
+}
 
 
 def create_norm_act_layer(layer_name, num_features, act_layer=None, apply_act=True, jit=False, **kwargs):
@@ -83,6 +93,8 @@ def get_norm_act_layer(norm_layer, act_layer=None):
             norm_act_layer = LayerNormAct2d
         elif type_name.startswith('layernorm'):
             norm_act_layer = LayerNormAct
+        elif type_name.startswith('rmsnorm2d'):
+            norm_act_layer = RmsNormAct2d
         else:
             assert False, f"No equivalent norm_act layer for {type_name}"
 
