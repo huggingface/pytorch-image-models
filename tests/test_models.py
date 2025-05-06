@@ -508,8 +508,9 @@ def test_model_forward_intermediates(model_name, batch_size):
     spatial_axis = get_spatial_dim(output_fmt)
     import math
 
+    inpt = torch.randn((batch_size, *input_size))
     output, intermediates = model.forward_intermediates(
-        torch.randn((batch_size, *input_size)),
+        inpt,
         output_fmt=output_fmt,
     )
     assert len(expected_channels) == len(intermediates)
@@ -520,6 +521,9 @@ def test_model_forward_intermediates(model_name, batch_size):
         assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
         assert o.shape[0] == batch_size
         assert not torch.isnan(o).any()
+
+    output2 = model.forward_features(inpt)
+    assert torch.allclose(output, output2)
 
 
 def _create_fx_model(model, train=False):
