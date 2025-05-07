@@ -571,9 +571,13 @@ class ResNetV2(nn.Module):
         
         # forward pass
         feat_idx = 0
-        x = self.stem(x)
+        H, W = x.shape[-2:]
+        for stem in self.stem:
+            x = stem(x)
+            if x.shape[-2:] == (H //2, W //2):
+                x_down = x
         if feat_idx in take_indices:
-            intermediates.append(x)
+            intermediates.append(x_down)
         last_idx = len(self.stages)
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages

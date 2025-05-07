@@ -870,10 +870,11 @@ class MultiScaleVit(nn.Module):
         if self.pos_embed is not None:
             x = x + self.pos_embed
 
-        for i, stage in enumerate(self.stages):
+        last_idx = len(self.stages) - 1
+        for feat_idx, stage in enumerate(self.stages):
             x, feat_size = stage(x, feat_size)
-            if i in take_indices:
-                if norm and i == (len(self.stages) - 1):
+            if feat_idx in take_indices:
+                if norm and feat_idx == last_idx:
                     x_inter = self.norm(x)  # applying final norm last intermediate
                 else:
                     x_inter = x
@@ -887,7 +888,8 @@ class MultiScaleVit(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm(x)
+        if feat_idx == last_idx:
+            x = self.norm(x)
 
         return x, intermediates
 

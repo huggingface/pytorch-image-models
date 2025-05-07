@@ -452,29 +452,29 @@ class ConvNeXt(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
 
         # forward pass
-        feat_idx = 0  # stem is index 0
         x = self.stem(x)
-        if feat_idx in take_indices:
-            intermediates.append(x)
 
+        last_idx = len(self.stages) - 1
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.stages
         else:
-            stages = self.stages[:max_index]
-        for stage in stages:
-            feat_idx += 1
+            stages = self.stages[:max_index + 1]
+        for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:
-                # NOTE not bothering to apply norm_pre when norm=True as almost no models have it enabled
-                intermediates.append(x)
+                if norm and feat_idx == last_idx:
+                    intermediates.append(self.norm_pre(x))
+                else:
+                    intermediates.append(x)
 
         if intermediates_only:
             return intermediates
 
-        x = self.norm_pre(x)
+        if feat_idx == last_idx:
+            x = self.norm_pre(x)
 
         return x, intermediates
 
