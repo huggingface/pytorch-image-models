@@ -491,7 +491,7 @@ class FocalNet(nn.Module):
         else:
             stages = self.layers[:max_index + 1]
 
-        last_idx = len(self.layers)
+        last_idx = len(self.layers) - 1
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:

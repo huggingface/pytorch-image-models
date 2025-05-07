@@ -302,20 +302,20 @@ class RDNet(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.dense_stages) + 1, indices)
+        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        take_indices = [stage_ends[i] for i in take_indices]
+        max_index = stage_ends[max_index]
 
         # forward pass
-        feat_idx = 0  # stem is index 0
         x = self.stem(x)
-        if feat_idx in take_indices:
-            intermediates.append(x)
-        last_idx = len(self.dense_stages)
+
+        last_idx = len(self.dense_stages) - 1
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             dense_stages = self.dense_stages
         else:
-            dense_stages = self.dense_stages[:max_index]
-        for stage in dense_stages:
-            feat_idx += 1
+            dense_stages = self.dense_stages[:max_index + 1]
+        for feat_idx, stage in enumerate(dense_stages):
             x = stage(x)
             if feat_idx in take_indices:
                 if norm and feat_idx == last_idx:
@@ -340,8 +340,10 @@ class RDNet(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.dense_stages) + 1, indices)
-        self.dense_stages = self.dense_stages[:max_index]  # truncate blocks w/ stem as idx 0
+        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        max_index = stage_ends[max_index]
+        self.dense_stages = self.dense_stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_norm:
             self.norm_pre = nn.Identity()
         if prune_head:
