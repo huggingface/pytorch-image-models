@@ -313,7 +313,7 @@ class PoolingVisionTransformer(nn.Module):
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.transformers), indices)
-        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        self.transformers = self.transformers[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_norm:
             self.norm = nn.Identity()
         if prune_head:
@@ -380,7 +380,7 @@ def _create_pit(variant, pretrained=False, **kwargs):
         variant,
         pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
-        feature_cfg=dict(feature_cls='hook', no_rewrite=True, out_indices=out_indices),
+        feature_cfg=dict(feature_cls='hook', out_indices=out_indices),
         **kwargs,
     )
     return model
