@@ -486,8 +486,8 @@ class ConvNeXt(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.stages) + 1, indices)
-        self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_norm:
             self.norm_pre = nn.Identity()
         if prune_head:
