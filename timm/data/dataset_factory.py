@@ -144,6 +144,7 @@ def create_dataset(
             use_train = split in _TRAIN_SYNONYM
             ds = QMNIST(train=use_train, **torch_kwargs)
         elif name == 'imagenet':
+            torch_kwargs.pop('download')
             assert has_imagenet, 'Please update to a newer PyTorch and torchvision for ImageNet dataset.'
             if split in _EVAL_SYNONYM:
                 split = 'val'
