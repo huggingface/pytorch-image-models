@@ -1565,7 +1565,7 @@ def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
         attn_pool_num_heads=8,
         attn_pool_mlp_ratio=4.,
         norm_layer=partial(LayerNorm, eps=1e-5),
-        dynamic_img_size=True
+        #dynamic_img_size=True
     )
     return _create_eva('vit_pe_core_base_patch16_224', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1588,7 +1588,7 @@ def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
         attn_pool_num_heads=8,
         attn_pool_mlp_ratio=4.,
         norm_layer=partial(LayerNorm, eps=1e-5),
-        dynamic_img_size=True,
+        #dynamic_img_size=True,
     )
     return _create_eva('vit_pe_core_large_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1611,7 +1611,7 @@ def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
         attn_pool_num_heads=8,
         attn_pool_mlp_ratio=4.,
         norm_layer=partial(LayerNorm, eps=1e-5),
-        dynamic_img_size=True,
+        #dynamic_img_size=True,
     )
     return _create_eva('vit_pe_core_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1635,7 +1635,7 @@ def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
         use_fc_norm=False,  # explicitly disable
         init_values=0.1,
         norm_layer=partial(LayerNorm, eps=1e-5),
-        dynamic_img_size=True,
+        #dynamic_img_size=True,
     )
     return _create_eva('vit_pe_lang_large_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1658,7 +1658,7 @@ def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
         use_fc_norm=False,  # explicitly disable
         init_values=0.1,
         norm_layer=partial(LayerNorm, eps=1e-5),
-        dynamic_img_size=True,
+        #dynamic_img_size=True,
     )
     return _create_eva('vit_pe_lang_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
@@ -1680,7 +1680,7 @@ def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
         use_post_transformer_norm=False,
         init_values=0.1,
         norm_layer=partial(LayerNorm, eps=1e-5),
-        dynamic_img_size=True,
+        #dynamic_img_size=True,
     )
     return _create_eva('vit_pe_spatial_gigantic_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
 
