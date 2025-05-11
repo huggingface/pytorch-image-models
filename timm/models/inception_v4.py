@@ -3,6 +3,7 @@ Sourced from https://github.com/Cadene/tensorflow-model-zoo.torch (MIT License) 
 based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0 License)
 """
 from functools import partial
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -10,6 +11,7 @@ import torch.nn as nn
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import create_classifier, ConvNormAct
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['InceptionV4']
@@ -284,6 +286,66 @@ class InceptionV4(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        take_indices = [stage_ends[i] for i in take_indices]
+        max_index = stage_ends[max_index]
+
+        # forward pass
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.features
+        else:
+            stages = self.features[:max_index + 1]
+
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                intermediates.append(x) 
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        stage_ends = [int(info['module'].split('.')[-1]) for info in self.feature_info]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        max_index = stage_ends[max_index]
+        self.features = self.features[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         return self.features(x)
