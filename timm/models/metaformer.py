@@ -26,9 +26,9 @@ Adapted from https://github.com/sail-sg/metaformer, original copyright below
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from collections import OrderedDict
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -541,16 +541,19 @@ class MetaFormer(nn.Module):
                 **kwargs,
             )]
             prev_dim = dims[i]
-            self.feature_info += [dict(num_chs=dims[i], reduction=2, module=f'stages.{i}')]
+            self.feature_info += [dict(num_chs=dims[i], reduction=2**(i+2), module=f'stages.{i}')]
 
         self.stages = nn.Sequential(*stages)
 
         # if using MlpHead, dropout is handled by MlpHead
         if num_classes > 0:
             if self.use_mlp_head:
+                # FIXME not actually returning mlp hidden state right now as pre-logits.
                 final = MlpHead(self.num_features, num_classes, drop_rate=self.drop_rate)
+                self.head_hidden_size = self.num_features
             else:
                 final = nn.Linear(self.num_features, num_classes)
+                self.head_hidden_size = self.num_features
         else:
             final = nn.Identity()
 
@@ -577,10 +580,10 @@ class MetaFormer(nn.Module):
             stage.set_grad_checkpointing(enable=enable)
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes=0, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         if global_pool is not None:
             self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()

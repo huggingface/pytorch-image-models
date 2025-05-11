@@ -14,13 +14,13 @@ Modifications for timm by / Copyright 2020 Ross Wightman
 import math
 import re
 from functools import partial
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import torch
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_, to_2tuple, LayerNorm
+from timm.layers import trunc_normal_, to_2tuple
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
 from .vision_transformer import Block
@@ -209,7 +209,7 @@ class PoolingVisionTransformer(nn.Module):
 
         self.transformers = SequentialTuple(*transformers)
         self.norm = nn.LayerNorm(base_dims[-1] * heads[-1], eps=1e-6)
-        self.num_features = self.embed_dim = embed_dim
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim
 
         # Classifier head
         self.head_drop = nn.Dropout(drop_rate)
@@ -240,14 +240,16 @@ class PoolingVisionTransformer(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         assert not enable, 'gradient checkpointing not supported'
 
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         if self.head_dist is not None:
             return self.head, self.head_dist
         else:
             return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
+        if global_pool is not None:
+            self.global_pool = global_pool
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         if self.head_dist is not None:
             self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()

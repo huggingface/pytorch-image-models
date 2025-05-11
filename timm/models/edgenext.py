@@ -8,17 +8,16 @@ Original code and weights from https://github.com/mmaaz60/EdgeNeXt
 Modifications and additions for timm by / Copyright 2022, Ross Wightman
 """
 import math
-from collections import OrderedDict
 from functools import partial
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, SelectAdaptivePool2d, create_conv2d, \
-    use_fused_attn, NormMlpClassifierHead, ClassifierHead
+from timm.layers import trunc_normal_tf_, DropPath, LayerNorm2d, Mlp, create_conv2d, \
+    NormMlpClassifierHead, ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._manipulate import named_apply, checkpoint_seq
@@ -41,13 +40,13 @@ class PositionalEncodingFourier(nn.Module):
         device = self.token_projection.weight.device
         dtype = self.token_projection.weight.dtype
         inv_mask = ~torch.zeros(shape).to(device=device, dtype=torch.bool)
-        y_embed = inv_mask.cumsum(1, dtype=dtype)
-        x_embed = inv_mask.cumsum(2, dtype=dtype)
+        y_embed = inv_mask.cumsum(1, dtype=torch.float32)
+        x_embed = inv_mask.cumsum(2, dtype=torch.float32)
         eps = 1e-6
         y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
         x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
-        dim_t = torch.arange(self.hidden_dim, dtype=dtype, device=device)
+        dim_t = torch.arange(self.hidden_dim, dtype=torch.int64, device=device).to(torch.float32)
         dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode='floor') / self.hidden_dim)
 
         pos_x = x_embed[:, :, :, None] / dim_t
@@ -59,7 +58,7 @@ class PositionalEncodingFourier(nn.Module):
             (pos_y[:, :, :, 0::2].sin(),
              pos_y[:, :, :, 1::2].cos()), dim=4).flatten(3)
         pos = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
-        pos = self.token_projection(pos)
+        pos = self.token_projection(pos.to(dtype))
 
         return pos
 
@@ -374,7 +373,8 @@ class EdgeNeXt(nn.Module):
 
         self.stages = nn.Sequential(*stages)
 
-        self.num_features = dims[-1]
+        self.num_features = self.head_hidden_size = dims[-1]
+
         if head_norm_first:
             self.norm_pre = norm_layer(self.num_features)
             self.head = ClassifierHead(
@@ -412,10 +412,10 @@ class EdgeNeXt(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes=0, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):

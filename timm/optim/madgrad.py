@@ -71,7 +71,12 @@ class MADGRAD(torch.optim.Optimizer):
             raise ValueError(f"Eps must be non-negative")
 
         defaults = dict(
-            lr=lr, eps=eps, momentum=momentum, weight_decay=weight_decay, decoupled_decay=decoupled_decay)
+            lr=lr,
+            eps=eps,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            decoupled_decay=decoupled_decay,
+        )
         super().__init__(params, defaults)
 
     @property

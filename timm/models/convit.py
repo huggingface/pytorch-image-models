@@ -21,18 +21,16 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 '''These modules are adapted from those of timm, see
 https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 '''
-
-from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp, LayerNorm
+from timm.layers import DropPath, trunc_normal_, PatchEmbed, Mlp, LayerNorm, HybridEmbed
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_module
 from ._registry import register_model, generate_default_cfgs
-from .vision_transformer_hybrid import HybridEmbed
 
 
 __all__ = ['ConVit']
@@ -270,7 +268,7 @@ class ConVit(nn.Module):
         self.num_classes = num_classes
         self.global_pool = global_pool
         self.local_up_to_layer = local_up_to_layer
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
         self.locality_strength = locality_strength
         self.use_pos_embed = use_pos_embed
 
@@ -346,10 +344,10 @@ class ConVit(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'token', 'avg')

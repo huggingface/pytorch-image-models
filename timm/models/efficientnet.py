@@ -36,7 +36,7 @@ the models and weights open source!
 Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
-from typing import List
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -44,12 +44,13 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, GroupNormAct
+from timm.layers import create_conv2d, create_classifier, get_norm_act_layer, LayerType, \
+    GroupNormAct, LayerNormAct2d, EvoNorm2dS0
 from ._builder import build_model_with_cfg, pretrained_cfg_for_features
 from ._efficientnet_blocks import SqueezeExcite
-from ._efficientnet_builder import EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
+from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
     round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
-from ._features import FeatureInfo, FeatureHooks
+from ._features import FeatureInfo, FeatureHooks, feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -74,21 +75,23 @@ class EfficientNet(nn.Module):
 
     def __init__(
             self,
-            block_args,
-            num_classes=1000,
-            num_features=1280,
-            in_chans=3,
-            stem_size=32,
-            fix_stem=False,
-            output_stride=32,
-            pad_type='',
-            round_chs_fn=round_channels,
-            act_layer=None,
-            norm_layer=None,
-            se_layer=None,
-            drop_rate=0.,
-            drop_path_rate=0.,
-            global_pool='avg'
+            block_args: BlockArgs,
+            num_classes: int = 1000,
+            num_features: int = 1280,
+            in_chans: int = 3,
+            stem_size: int = 32,
+            stem_kernel_size: int = 3,
+            fix_stem: bool = False,
+            output_stride: int = 32,
+            pad_type: str = '',
+            act_layer: Optional[LayerType] = None,
+            norm_layer: Optional[LayerType] = None,
+            aa_layer: Optional[LayerType] = None,
+            se_layer: Optional[LayerType] = None,
+            round_chs_fn: Callable = round_channels,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            global_pool: str = 'avg'
     ):
         super(EfficientNet, self).__init__()
         act_layer = act_layer or nn.ReLU
@@ -96,14 +99,13 @@ class EfficientNet(nn.Module):
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
         self.num_classes = num_classes
-        self.num_features = num_features
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
 
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type)
         self.bn1 = norm_act_layer(stem_size, inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
@@ -113,16 +115,25 @@ class EfficientNet(nn.Module):
             round_chs_fn=round_chs_fn,
             act_layer=act_layer,
             norm_layer=norm_layer,
+            aa_layer=aa_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
         )
         self.blocks = nn.Sequential(*builder(stem_size, block_args))
         self.feature_info = builder.features
+        self.stage_ends = [f['stage'] for f in self.feature_info]
         head_chs = builder.in_chs
 
         # Head + Pooling
-        self.conv_head = create_conv2d(head_chs, self.num_features, 1, padding=pad_type)
-        self.bn2 = norm_act_layer(self.num_features, inplace=True)
+        if num_features > 0:
+            self.conv_head = create_conv2d(head_chs, num_features, 1, padding=pad_type)
+            self.bn2 = norm_act_layer(num_features, inplace=True)
+            self.num_features = self.head_hidden_size = num_features
+        else:
+            self.conv_head = nn.Identity()
+            self.bn2 = nn.Identity()
+            self.num_features = self.head_hidden_size = head_chs
+
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
@@ -150,13 +161,92 @@ class EfficientNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+            extra_blocks: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+            extra_blocks: Include outputs of all blocks and head conv in output, does not align with feature_info
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        if extra_blocks:
+            take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
+        else:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            take_indices = [self.stage_ends[i] for i in take_indices]
+            max_index = self.stage_ends[max_index]
+        # forward pass
+        feat_idx = 0  # stem is index 0
+        x = self.conv_stem(x)
+        x = self.bn1(x)
+        if feat_idx in take_indices:
+            intermediates.append(x)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            blocks = self.blocks
+        else:
+            blocks = self.blocks[:max_index]
+        for blk in blocks:
+            feat_idx += 1
+            x = blk(x)
+            if feat_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        if feat_idx == self.stage_ends[-1]:
+            x = self.conv_head(x)
+            x = self.bn2(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+            extra_blocks: bool = False,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        if extra_blocks:
+            take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
+        else:
+            take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
+            max_index = self.stage_ends[max_index]
+        self.blocks = self.blocks[:max_index]  # truncate blocks w/ stem as idx 0
+        if prune_norm or max_index < len(self.blocks):
+            self.conv_head = nn.Identity()
+            self.bn2 = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -190,20 +280,22 @@ class EfficientNetFeatures(nn.Module):
 
     def __init__(
             self,
-            block_args,
-            out_indices=(0, 1, 2, 3, 4),
-            feature_location='bottleneck',
-            in_chans=3,
-            stem_size=32,
-            fix_stem=False,
-            output_stride=32,
-            pad_type='',
-            round_chs_fn=round_channels,
-            act_layer=None,
-            norm_layer=None,
-            se_layer=None,
-            drop_rate=0.,
-            drop_path_rate=0.
+            block_args: BlockArgs,
+            out_indices: Tuple[int, ...] = (0, 1, 2, 3, 4),
+            feature_location: str = 'bottleneck',
+            in_chans: int = 3,
+            stem_size: int = 32,
+            stem_kernel_size: int = 3,
+            fix_stem: bool = False,
+            output_stride: int = 32,
+            pad_type: str = '',
+            act_layer: Optional[LayerType] = None,
+            norm_layer: Optional[LayerType] = None,
+            aa_layer: Optional[LayerType] = None,
+            se_layer: Optional[LayerType] = None,
+            round_chs_fn: Callable = round_channels,
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
     ):
         super(EfficientNetFeatures, self).__init__()
         act_layer = act_layer or nn.ReLU
@@ -216,7 +308,7 @@ class EfficientNetFeatures(nn.Module):
         # Stem
         if not fix_stem:
             stem_size = round_chs_fn(stem_size)
-        self.conv_stem = create_conv2d(in_chans, stem_size, 3, stride=2, padding=pad_type)
+        self.conv_stem = create_conv2d(in_chans, stem_size, stem_kernel_size, stride=2, padding=pad_type)
         self.bn1 = norm_act_layer(stem_size, inplace=True)
 
         # Middle stages (IR/ER/DS Blocks)
@@ -226,6 +318,7 @@ class EfficientNetFeatures(nn.Module):
             round_chs_fn=round_chs_fn,
             act_layer=act_layer,
             norm_layer=norm_layer,
+            aa_layer=aa_layer,
             se_layer=se_layer,
             drop_path_rate=drop_path_rate,
             feature_location=feature_location,
@@ -272,7 +365,7 @@ def _create_effnet(variant, pretrained=False, **kwargs):
     model_cls = EfficientNet
     kwargs_filter = None
     if kwargs.pop('features_only', False):
-        if 'feature_cfg' in kwargs:
+        if 'feature_cfg' in kwargs or 'feature_cls' in kwargs:
             features_mode = 'cfg'
         else:
             kwargs_filter = ('num_classes', 'num_features', 'head_conv', 'global_pool')
@@ -394,8 +487,46 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
     return model
 
 
+def _gen_mobilenet_v1(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0,
+        group_size=None, fix_stem_head=False, head_conv=False, pretrained=False, **kwargs
+):
+    """
+    Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
+    Paper: https://arxiv.org/abs/1801.04381
+    """
+    arch_def = [
+        ['dsa_r1_k3_s1_c64'],
+        ['dsa_r2_k3_s2_c128'],
+        ['dsa_r2_k3_s2_c256'],
+        ['dsa_r6_k3_s2_c512'],
+        ['dsa_r2_k3_s2_c1024'],
+    ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
+    head_features = (1024 if fix_stem_head else max(1024, round_chs_fn(1024))) if head_conv else 0
+    model_kwargs = dict(
+        block_args=decode_arch_def(
+            arch_def,
+            depth_multiplier=depth_multiplier,
+            fix_first_last=fix_stem_head,
+            group_size=group_size,
+        ),
+        num_features=head_features,
+        stem_size=32,
+        fix_stem=fix_stem_head,
+        round_chs_fn=round_chs_fn,
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'relu6'),
+        **kwargs
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
 def _gen_mobilenet_v2(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, fix_stem_head=False, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0,
+        group_size=None, fix_stem_head=False, pretrained=False, **kwargs
+):
     """ Generate MobileNet-V2 network
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
     Paper: https://arxiv.org/abs/1801.04381
@@ -411,7 +542,12 @@ def _gen_mobilenet_v2(
     ]
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier)
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier=depth_multiplier, fix_first_last=fix_stem_head),
+        block_args=decode_arch_def(
+            arch_def,
+            depth_multiplier=depth_multiplier,
+            fix_first_last=fix_stem_head,
+            group_size=group_size,
+        ),
         num_features=1280 if fix_stem_head else max(1280, round_chs_fn(1280)),
         stem_size=32,
         fix_stem=fix_stem_head,
@@ -491,7 +627,8 @@ def _gen_spnasnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
 
 def _gen_efficientnet(
         variant, channel_multiplier=1.0, depth_multiplier=1.0, channel_divisor=8,
-        group_size=None, pretrained=False, **kwargs):
+        group_size=None, pretrained=False, **kwargs
+):
     """Creates an EfficientNet model.
 
     Ref impl: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
@@ -539,7 +676,8 @@ def _gen_efficientnet(
 
 
 def _gen_efficientnet_edge(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs
+):
     """ Creates an EfficientNet-EdgeTPU model
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/edgetpu
@@ -570,7 +708,8 @@ def _gen_efficientnet_edge(
 
 
 def _gen_efficientnet_condconv(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, experts_multiplier=1, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, experts_multiplier=1, pretrained=False, **kwargs
+):
     """Creates an EfficientNet-CondConv model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/condconv
@@ -642,7 +781,8 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
 
 
 def _gen_efficientnetv2_base(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs
+):
     """ Creates an EfficientNet-V2 base model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -658,7 +798,7 @@ def _gen_efficientnetv2_base(
     ]
     round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.)
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=round_chs_fn(1280),
         stem_size=32,
         round_chs_fn=round_chs_fn,
@@ -671,7 +811,8 @@ def _gen_efficientnetv2_base(
 
 
 def _gen_efficientnetv2_s(
-        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, rw=False, pretrained=False, **kwargs):
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, rw=False, pretrained=False, **kwargs
+):
     """ Creates an EfficientNet-V2 Small model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -709,7 +850,9 @@ def _gen_efficientnetv2_s(
     return model
 
 
-def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_efficientnetv2_m(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs
+):
     """ Creates an EfficientNet-V2 Medium model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -727,7 +870,7 @@ def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=1280,
         stem_size=24,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
@@ -739,7 +882,9 @@ def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     return model
 
 
-def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_efficientnetv2_l(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs
+):
     """ Creates an EfficientNet-V2 Large model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -757,7 +902,7 @@ def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=1280,
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
@@ -769,7 +914,9 @@ def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0,
     return model
 
 
-def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+def _gen_efficientnetv2_xl(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, group_size=None, pretrained=False, **kwargs
+):
     """ Creates an EfficientNet-V2 Xtra-Large model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
@@ -787,12 +934,95 @@ def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0
     ]
 
     model_kwargs = dict(
-        block_args=decode_arch_def(arch_def, depth_multiplier),
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
         num_features=1280,
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'silu'),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_efficientnet_x(
+        variant, channel_multiplier=1.0, depth_multiplier=1.0, channel_divisor=8,
+        group_size=None, version=1, pretrained=False, **kwargs
+):
+    """Creates an EfficientNet model.
+
+    Ref impl: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
+    Paper: https://arxiv.org/abs/1905.11946
+
+    EfficientNet params
+    name: (channel_multiplier, depth_multiplier, resolution, dropout_rate)
+    'efficientnet-x-b0': (1.0, 1.0, 224, 0.2),
+    'efficientnet-x-b1': (1.0, 1.1, 240, 0.2),
+    'efficientnet-x-b2': (1.1, 1.2, 260, 0.3),
+    'efficientnet-x-b3': (1.2, 1.4, 300, 0.3),
+    'efficientnet-x-b4': (1.4, 1.8, 380, 0.4),
+    'efficientnet-x-b5': (1.6, 2.2, 456, 0.4),
+    'efficientnet-x-b6': (1.8, 2.6, 528, 0.5),
+    'efficientnet-x-b7': (2.0, 3.1, 600, 0.5),
+    'efficientnet-x-b8': (2.2, 3.6, 672, 0.5),
+    'efficientnet-l2': (4.3, 5.3, 800, 0.5),
+
+    Args:
+      channel_multiplier: multiplier to number of channels per layer
+      depth_multiplier: multiplier to number of repeats per stage
+
+    """
+    """
+      if version == 1:
+    blocks_args = [
+        'r1_k3_s11_e1_i32_o16_se0.25_d1_a0',
+        'r2_k3_s22_e6_i16_o24_se0.25_f1_d2_a1',
+        'r2_k5_s22_e6_i24_o40_se0.25_f1_a1',
+        'r3_k3_s22_e6_i40_o80_se0.25_a0',
+        'r3_k5_s11_e6_i80_o112_se0.25_a0',
+        'r4_k5_s22_e6_i112_o192_se0.25_a0',
+        'r1_k3_s11_e6_i192_o320_se0.25_a0',
+    ]
+  elif version == 2:
+    blocks_args = [
+        'r1_k3_s11_e1_i32_o16_se0.25_d1_a0',
+        'r2_k3_s22_e4_i16_o24_se0.25_f1_d2_a1',
+        'r2_k5_s22_e4_i24_o40_se0.25_f1_a1',
+        'r3_k3_s22_e4_i40_o80_se0.25_a0',
+        'r3_k5_s11_e6_i80_o112_se0.25_a0',
+        'r4_k5_s22_e6_i112_o192_se0.25_a0',
+        'r1_k3_s11_e6_i192_o320_se0.25_a0',
+    ]
+    """
+    if version == 1:
+        arch_def = [
+            ['ds_r1_k3_s1_e1_c16_se0.25_d1'],
+            ['er_r2_k3_s2_e6_c24_se0.25_nre'],
+            ['er_r2_k5_s2_e6_c40_se0.25_nre'],
+            ['ir_r3_k3_s2_e6_c80_se0.25'],
+            ['ir_r3_k5_s1_e6_c112_se0.25'],
+            ['ir_r4_k5_s2_e6_c192_se0.25'],
+            ['ir_r1_k3_s1_e6_c320_se0.25'],
+        ]
+    else:
+        arch_def = [
+            ['ds_r1_k3_s1_e1_c16_se0.25_d1'],
+            ['er_r2_k3_s2_e4_c24_se0.25_nre'],
+            ['er_r2_k5_s2_e4_c40_se0.25_nre'],
+            ['ir_r3_k3_s2_e4_c80_se0.25'],
+            ['ir_r3_k5_s1_e6_c112_se0.25'],
+            ['ir_r4_k5_s2_e6_c192_se0.25'],
+            ['ir_r1_k3_s1_e6_c320_se0.25'],
+        ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, divisor=channel_divisor)
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier, group_size=group_size),
+        num_features=round_chs_fn(1280),
+        stem_size=32,
+        round_chs_fn=round_chs_fn,
+        act_layer=resolve_act_layer(kwargs, 'silu'),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs,
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -865,9 +1095,7 @@ def _gen_mixnet_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrai
     return model
 
 
-def _gen_tinynet(
-    variant, model_width=1.0, depth_multiplier=1.0, pretrained=False, **kwargs
-):
+def _gen_tinynet(variant, model_width=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
     """Creates a TinyNet model.
     """
     arch_def = [
@@ -884,6 +1112,119 @@ def _gen_tinynet(
         round_chs_fn=partial(round_channels, multiplier=model_width),
         act_layer=resolve_act_layer(kwargs, 'swish'),
         norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_mobilenet_edgetpu(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """
+    Based on definitions in: https://github.com/tensorflow/models/tree/d2427a562f401c9af118e47af2f030a0a5599f55/official/projects/edgetpu/vision
+    """
+    if 'edgetpu_v2' in variant:
+        stem_size = 64
+        stem_kernel_size = 5
+        group_size = 64
+        num_features = 1280
+        act_layer = resolve_act_layer(kwargs, 'relu')
+
+        def _arch_def(chs: List[int], group_size: int):
+            return [
+                # stage 0, 112x112 in
+                [f'cn_r1_k1_s1_c{chs[0]}'],  # NOTE with expansion==1, official impl block ends just 1x1 pwl
+                # stage 1, 112x112 in
+                [f'er_r1_k3_s2_e8_c{chs[1]}', f'er_r1_k3_s1_e4_gs{group_size}_c{chs[1]}'],
+                # stage 2, 56x56 in
+                [
+                    f'er_r1_k3_s2_e8_c{chs[2]}',
+                    f'er_r1_k3_s1_e4_gs{group_size}_c{chs[2]}',
+                    f'er_r1_k3_s1_e4_c{chs[2]}',
+                    f'er_r1_k3_s1_e4_gs{group_size}_c{chs[2]}',
+                ],
+                # stage 3, 28x28 in
+                [f'er_r1_k3_s2_e8_c{chs[3]}', f'ir_r3_k3_s1_e4_c{chs[3]}'],
+                # stage 4, 14x14in
+                [f'ir_r1_k3_s1_e8_c{chs[4]}', f'ir_r3_k3_s1_e4_c{chs[4]}'],
+                # stage 5, 14x14in
+                [f'ir_r1_k3_s2_e8_c{chs[5]}', f'ir_r3_k3_s1_e4_c{chs[5]}'],
+                # stage 6, 7x7 in
+                [f'ir_r1_k3_s1_e8_c{chs[6]}'],
+            ]
+
+        if 'edgetpu_v2_xs' in variant:
+            stem_size = 32
+            stem_kernel_size = 3
+            channels = [16, 32, 48, 96, 144, 160, 192]
+        elif 'edgetpu_v2_s' in variant:
+            channels = [24, 48, 64, 128, 160, 192, 256]
+        elif 'edgetpu_v2_m' in variant:
+            channels = [32, 64, 80, 160, 192, 240, 320]
+            num_features = 1344
+        elif 'edgetpu_v2_l' in variant:
+            stem_kernel_size = 7
+            group_size = 128
+            channels = [32, 64, 96, 192, 240, 256, 384]
+            num_features = 1408
+        else:
+            assert False
+
+        arch_def = _arch_def(channels, group_size)
+    else:
+        # v1
+        stem_size = 32
+        stem_kernel_size = 3
+        num_features = 1280
+        act_layer = resolve_act_layer(kwargs, 'relu')
+        arch_def = [
+            # stage 0, 112x112 in
+            ['cn_r1_k1_s1_c16'],
+            # stage 1, 112x112 in
+            ['er_r1_k3_s2_e8_c32', 'er_r3_k3_s1_e4_c32'],
+            # stage 2, 56x56 in
+            ['er_r1_k3_s2_e8_c48', 'er_r3_k3_s1_e4_c48'],
+            # stage 3, 28x28 in
+            ['ir_r1_k3_s2_e8_c96', 'ir_r3_k3_s1_e4_c96'],
+            # stage 4, 14x14in
+            ['ir_r1_k3_s1_e8_c96_noskip', 'ir_r3_k3_s1_e4_c96'],
+            # stage 5, 14x14in
+            ['ir_r1_k5_s2_e8_c160', 'ir_r3_k5_s1_e4_c160'],
+            # stage 6, 7x7 in
+            ['ir_r1_k3_s1_e8_c192'],
+        ]
+
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=num_features,
+        stem_size=stem_size,
+        stem_kernel_size=stem_kernel_size,
+        round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=act_layer,
+        **kwargs,
+    )
+    model = _create_effnet(variant, pretrained, **model_kwargs)
+    return model
+
+
+def _gen_test_efficientnet(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrained=False, **kwargs):
+    """ Minimal test EfficientNet generator.
+    """
+    arch_def = [
+        ['cn_r1_k3_s1_e1_c16_skip'],
+        ['er_r1_k3_s2_e4_c24'],
+        ['er_r1_k3_s2_e4_c32'],
+        ['ir_r1_k3_s2_e4_c48_se0.25'],
+        ['ir_r1_k3_s2_e4_c64_se0.25'],
+    ]
+    round_chs_fn = partial(round_channels, multiplier=channel_multiplier, round_limit=0.)
+    model_kwargs = dict(
+        block_args=decode_arch_def(arch_def, depth_multiplier),
+        num_features=round_chs_fn(256),
+        stem_size=24,
+        round_chs_fn=round_chs_fn,
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        act_layer=resolve_act_layer(kwargs, 'silu'),
         **kwargs,
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -920,6 +1261,22 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mnasnet_small_lamb-aff75073.pth',
         hf_hub_id='timm/'),
 
+    'mobilenetv1_100.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenetv1_100h.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenetv1_125.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=1.0,
+    ),
+
     'mobilenetv2_035.untrained': _cfg(),
     'mobilenetv2_050.lamb_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/mobilenetv2_050-3d30d450.pth',
@@ -953,22 +1310,31 @@ default_cfgs = generate_default_cfgs({
     'efficientnet_b0.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth',
         hf_hub_id='timm/'),
+    'efficientnet_b0.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=1.0),
+    'efficientnet_b1.ra4_e3600_r240_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        input_size=(3, 240, 240), crop_pct=0.9, pool_size=(8, 8),
+        test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'efficientnet_b1.ft_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b1-533bc792.pth',
         hf_hub_id='timm/',
-        test_input_size=(3, 256, 256), crop_pct=1.0),
+        test_input_size=(3, 256, 256), test_crop_pct=1.0),
     'efficientnet_b2.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b2_ra-bcdf34b7.pth',
         hf_hub_id='timm/',
-        input_size=(3, 256, 256), pool_size=(8, 8), test_input_size=(3, 288, 288), crop_pct=1.0),
+        input_size=(3, 256, 256), pool_size=(8, 8), test_input_size=(3, 288, 288), test_crop_pct=1.0),
     'efficientnet_b3.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b3_ra2-cf984f9c.pth',
         hf_hub_id='timm/',
-        input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
+        input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), test_crop_pct=1.0),
     'efficientnet_b4.ra2_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b4_ra2_320-7eb33cd5.pth',
         hf_hub_id='timm/',
-        input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), crop_pct=1.0),
+        input_size=(3, 320, 320), pool_size=(10, 10), test_input_size=(3, 384, 384), test_crop_pct=1.0),
     'efficientnet_b5.sw_in12k_ft_in1k': _cfg(
         hf_hub_id='timm/',
         input_size=(3, 448, 448), pool_size=(14, 14), crop_pct=1.0, crop_mode='squash'),
@@ -992,6 +1358,7 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
     'efficientnet_b3_g8_gn.untrained': _cfg(
         input_size=(3, 288, 288), pool_size=(9, 9), test_input_size=(3, 320, 320), crop_pct=1.0),
+    'efficientnet_blur_b0.untrained': _cfg(),
 
     'efficientnet_es.ra_in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_es_ra-f111e99c.pth',
@@ -1228,7 +1595,6 @@ default_cfgs = generate_default_cfgs({
         hf_hub_id='timm/',
         input_size=(3, 456, 456), pool_size=(15, 15), crop_pct=0.934),
 
-
     'tf_efficientnet_es.in1k': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/tf_efficientnet_es-ca1afbfe.pth',
         hf_hub_id='timm/',
@@ -1417,6 +1783,39 @@ default_cfgs = generate_default_cfgs({
         input_size=(3, 106, 106), pool_size=(4, 4),  # int(224 * 0.475)
         url='https://github.com/huawei-noah/CV-Backbones/releases/download/v1.2.0/tinynet_e.pth',
         hf_hub_id='timm/'),
+
+    'mobilenet_edgetpu_100.untrained': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 224, 224), crop_pct=0.9),
+    'mobilenet_edgetpu_v2_xs.untrained': _cfg(
+        # hf_hub_id='timm/',
+        input_size=(3, 224, 224), crop_pct=0.9),
+    'mobilenet_edgetpu_v2_s.untrained': _cfg(
+        #hf_hub_id='timm/',
+        input_size=(3, 224, 224), crop_pct=0.9),
+    'mobilenet_edgetpu_v2_m.ra4_e3600_r224_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD,
+        crop_pct=0.9, test_input_size=(3, 256, 256), test_crop_pct=0.95,
+    ),
+    'mobilenet_edgetpu_v2_l.untrained': _cfg(
+        #hf_hub_id='timm/',
+        input_size=(3, 224, 224), crop_pct=0.9),
+
+    "test_efficientnet.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+    "test_efficientnet_ln.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+    "test_efficientnet_gn.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
+    "test_efficientnet_evos.r160_in1k": _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        input_size=(3, 160, 160), pool_size=(5, 5), crop_pct=0.95),
 })
 
 
@@ -1480,6 +1879,27 @@ def semnasnet_140(pretrained=False, **kwargs) -> EfficientNet:
 def mnasnet_small(pretrained=False, **kwargs) -> EfficientNet:
     """ MNASNet Small,  depth multiplier of 1.0. """
     model = _gen_mnasnet_small('mnasnet_small', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv1_100(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet V1 """
+    model = _gen_mobilenet_v1('mobilenetv1_100', 1.0, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv1_100h(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet V1 """
+    model = _gen_mobilenet_v1('mobilenetv1_100h', 1.0, head_conv=True, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenetv1_125(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet V1 """
+    model = _gen_mobilenet_v1('mobilenetv1_125', 1.25, pretrained=pretrained, **kwargs)
     return model
 
 
@@ -1685,6 +2105,17 @@ def efficientnet_b3_g8_gn(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_efficientnet(
         'efficientnet_b3_g8_gn', channel_multiplier=1.2, depth_multiplier=1.4, group_size=8, channel_divisor=16,
         norm_layer=partial(GroupNormAct, group_size=16), pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_blur_b0(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B0 w/ BlurPool """
+    # NOTE for train, drop_rate should be 0.2, drop_path_rate should be 0.2
+    model = _gen_efficientnet(
+        'efficientnet_blur_b0', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained,
+        aa_layer='blurpc', **kwargs
+    )
     return model
 
 
@@ -2198,6 +2629,31 @@ def tf_efficientnetv2_b3(pretrained=False, **kwargs) -> EfficientNet:
 
 
 @register_model
+def efficientnet_x_b3(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B3 """
+    # NOTE for train, drop_rate should be 0.3, drop_path_rate should be 0.2
+    model = _gen_efficientnet_x(
+        'efficientnet_b3', channel_multiplier=1.2, depth_multiplier=1.4, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_x_b5(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B5 """
+    model = _gen_efficientnet_x(
+        'efficientnet_b5', channel_multiplier=1.6, depth_multiplier=2.2, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def efficientnet_h_b5(pretrained=False, **kwargs) -> EfficientNet:
+    """ EfficientNet-B5 """
+    model = _gen_efficientnet_x(
+        'efficientnet_b5', channel_multiplier=1.92, depth_multiplier=2.2, version=2, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
 def mixnet_s(pretrained=False, **kwargs) -> EfficientNet:
     """Creates a MixNet Small model.
     """
@@ -2304,6 +2760,68 @@ def tinynet_d(pretrained=False, **kwargs) -> EfficientNet:
 @register_model
 def tinynet_e(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_tinynet('tinynet_e', 0.51, 0.6, pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenet_edgetpu_100(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet-EdgeTPU-v1 100. """
+    model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_100', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenet_edgetpu_v2_xs(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet-EdgeTPU-v2 Extra Small. """
+    model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_xs', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenet_edgetpu_v2_s(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet-EdgeTPU-v2 Small. """
+    model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_s', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenet_edgetpu_v2_m(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet-EdgeTPU-v2 Medium. """
+    model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_m', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def mobilenet_edgetpu_v2_l(pretrained=False, **kwargs) -> EfficientNet:
+    """ MobileNet-EdgeTPU-v2 Large. """
+    model = _gen_mobilenet_edgetpu('mobilenet_edgetpu_v2_l', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet('test_efficientnet', pretrained=pretrained, **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet_gn(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet(
+        'test_efficientnet_gn', pretrained=pretrained, norm_layer=partial(GroupNormAct, group_size=8), **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet_ln(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet(
+        'test_efficientnet_ln', pretrained=pretrained, norm_layer=LayerNormAct2d, **kwargs)
+    return model
+
+
+@register_model
+def test_efficientnet_evos(pretrained=False, **kwargs) -> EfficientNet:
+    model = _gen_test_efficientnet(
+        'test_efficientnet_evos', pretrained=pretrained, norm_layer=partial(EvoNorm2dS0, group_size=8), **kwargs)
     return model
 
 

@@ -26,7 +26,7 @@ Hacked together by / Copyright 2020 Ross Wightman
 import math
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Optional, Union, Callable
+from typing import Callable, List, Optional, Union, Tuple
 
 import numpy as np
 import torch
@@ -36,6 +36,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import ClassifierHead, AvgPool2dSame, ConvNormAct, SEModule, DropPath, GroupNormAct
 from timm.layers import get_act_layer, get_norm_act_layer, create_conv2d, make_divisible
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq, named_apply
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -448,6 +449,7 @@ class RegNet(nn.Module):
             final_act = cfg.linear_out or cfg.preact
             self.final_conv = get_act_layer(cfg.act_layer)() if final_act else nn.Identity()
             self.num_features = prev_width
+        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(
             in_features=self.num_features,
             num_classes=num_classes,
@@ -509,11 +511,78 @@ class RegNet(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, pool_type=global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(5, indices)
+
+        # forward pass
+        feat_idx = 0
+        x = self.stem(x)
+        if feat_idx in take_indices:
+            intermediates.append(x)
+
+        layer_names = ('s1', 's2', 's3', 's4')
+        if stop_early:
+            layer_names = layer_names[:max_index]
+        for n in layer_names:
+            feat_idx += 1
+            x = getattr(self, n)(x)  # won't work with torchscript, but keeps code reasonable, FML
+            if feat_idx in take_indices:
+                intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        if feat_idx == 4:
+            x = self.final_conv(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(5, indices)
+        layer_names = ('s1', 's2', 's3', 's4')
+        layer_names = layer_names[max_index:]
+        for n in layer_names:
+            setattr(self, n, nn.Identity())
+        if max_index < 4:
+            self.final_conv = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -525,7 +594,7 @@ class RegNet(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return self.head(x, pre_logits=pre_logits)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)

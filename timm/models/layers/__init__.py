@@ -37,7 +37,6 @@ from timm.layers.pool2d_same import AvgPool2dSame, create_pool2d
 from timm.layers.squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from timm.layers.selective_kernel import SelectiveKernel
 from timm.layers.separable_conv import SeparableConv2d, SeparableConvNormAct
-from timm.layers.space_to_depth import SpaceToDepthModule
 from timm.layers.split_attn import SplitAttn
 from timm.layers.split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from timm.layers.std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
@@ -46,4 +45,4 @@ from timm.layers.trace_utils import _assert, _float_to_int
 from timm.layers.weight_init import trunc_normal_, trunc_normal_tf_, variance_scaling_, lecun_normal_
 
 import warnings
-warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", DeprecationWarning)
+warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)

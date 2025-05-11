@@ -231,7 +231,7 @@ class InceptionV4(nn.Module):
         super(InceptionV4, self).__init__()
         assert output_stride == 32
         self.num_classes = num_classes
-        self.num_features = 1536
+        self.num_features = self.head_hidden_size = 1536
         conv_block = partial(
             ConvNormAct,
             padding=0,
@@ -277,10 +277,10 @@ class InceptionV4(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.last_linear
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.last_linear = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)

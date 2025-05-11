@@ -12,14 +12,15 @@ Based on Apache 2.0 licensed code at https://github.com/snap-research/EfficientF
 
 Modifications and timm support by / Copyright 2022, Ross Wightman
 """
-from typing import Dict
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import DropPath, trunc_normal_, to_2tuple, Mlp
+from timm.layers import DropPath, trunc_normal_, to_2tuple, Mlp, ndgrid
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
@@ -63,7 +64,7 @@ class Attention(torch.nn.Module):
         self.proj = nn.Linear(self.val_attn_dim, dim)
 
         resolution = to_2tuple(resolution)
-        pos = torch.stack(torch.meshgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
         self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
@@ -382,16 +383,19 @@ class EfficientFormer(nn.Module):
         prev_dim = embed_dims[0]
 
         # stochastic depth decay rule
+        self.num_stages = len(depths)
+        last_stage = self.num_stages - 1
         dpr = [x.tolist() for x in torch.linspace(0, drop_path_rate, sum(depths)).split(depths)]
-        downsamples = downsamples or (False,) + (True,) * (len(depths) - 1)
+        downsamples = downsamples or (False,) + (True,) * (self.num_stages - 1)
         stages = []
-        for i in range(len(depths)):
+        self.feature_info = []
+        for i in range(self.num_stages):
             stage = EfficientFormerStage(
                 prev_dim,
                 embed_dims[i],
                 depths[i],
                 downsample=downsamples[i],
-                num_vit=num_vit if i == 3 else 0,
+                num_vit=num_vit if i == last_stage else 0,
                 pool_size=pool_size,
                 mlp_ratio=mlp_ratios,
                 act_layer=act_layer,
@@ -403,11 +407,11 @@ class EfficientFormer(nn.Module):
             )
             prev_dim = embed_dims[i]
             stages.append(stage)
-
+            self.feature_info += [dict(num_chs=embed_dims[i], reduction=2**(i+2), module=f'stages.{i}')]
         self.stages = nn.Sequential(*stages)
 
         # Classifier head
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.norm = norm_layer_cl(self.num_features)
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
@@ -442,10 +446,10 @@ class EfficientFormer(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -455,6 +459,76 @@ class EfficientFormer(nn.Module):
     @torch.jit.ignore
     def set_distilled_training(self, enable=True):
         self.distilled_training = enable
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        # forward pass
+        x = self.stem(x)
+        B, C, H, W = x.shape
+
+        last_idx = self.num_stages - 1
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+        feat_idx = 0
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx < last_idx:
+                B, C, H, W = x.shape
+            if feat_idx in take_indices:
+                if feat_idx == last_idx:
+                    x_inter = self.norm(x) if norm else x
+                    intermediates.append(x_inter.reshape(B, H // 2, W // 2, -1).permute(0, 3, 1, 2))
+                else:
+                    intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        if feat_idx == last_idx:
+            x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -482,7 +556,7 @@ class EfficientFormer(nn.Module):
         return x
 
 
-def _checkpoint_filter_fn(state_dict, model):
+def checkpoint_filter_fn(state_dict, model):
     """ Remap original checkpoints -> timm """
     if 'stem.0.weight' in state_dict:
         return state_dict  # non-original checkpoint, no remapping needed
@@ -534,13 +608,13 @@ default_cfgs = generate_default_cfgs({
 
 
 def _create_efficientformer(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for EfficientFormer models.')
-
+    out_indices = kwargs.pop('out_indices', 4)
     model = build_model_with_cfg(
         EfficientFormer, variant, pretrained,
-        pretrained_filter_fn=_checkpoint_filter_fn,
-        **kwargs)
+        pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
     return model
 
 

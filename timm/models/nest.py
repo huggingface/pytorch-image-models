@@ -309,7 +309,7 @@ class Nest(nn.Module):
         num_heads = to_ntuple(num_levels)(num_heads)
         depths = to_ntuple(num_levels)(depths)
         self.num_classes = num_classes
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.feature_info = []
         norm_layer = norm_layer or LayerNorm
         act_layer = act_layer or nn.GELU
@@ -412,10 +412,10 @@ class Nest(nn.Module):
             l.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.head = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)

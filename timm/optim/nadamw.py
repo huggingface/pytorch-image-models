@@ -5,44 +5,43 @@ Based on simplified algorithm in https://github.com/mlcommons/algorithmic-effici
 Added multi-tensor (foreach) path.
 """
 import math
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import torch
 from torch import Tensor
 
+from ._types import ParamsT
+
 
 # Modified from github.com/pytorch/pytorch/blob/v1.12.1/torch/optim/adamw.py.
 class NAdamW(torch.optim.Optimizer):
-    r"""Implements NAdamW algorithm.
+    """ Implements NAdamW algorithm.
 
-      See Table 1 in https://arxiv.org/abs/1910.05446 for the implementation of
-      the NAdam algorithm (there is also a comment in the code which highlights
-      the only difference of NAdamW and AdamW).
-      For further details regarding the algorithm we refer to
-      `Decoupled Weight Decay Regularization`_.
+    See Table 1 in https://arxiv.org/abs/1910.05446 for the implementation of
+    the NAdam algorithm (there is also a comment in the code which highlights
+    the only difference of NAdamW and AdamW).
 
-      Args:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float, optional): learning rate (default: 1e-3)
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        eps (float, optional): term added to the denominator to improve
-            numerical stability (default: 1e-8)
-        weight_decay (float, optional): weight decay coefficient (default: 1e-2)
-      .. _Decoupled Weight Decay Regularization:
-          https://arxiv.org/abs/1711.05101
-      .. _On the Convergence of Adam and Beyond:
-          https://openreview.net/forum?id=ryQu7f-RZ
+    For further details regarding the algorithm we refer to
+        - Decoupled Weight Decay Regularization: https://arxiv.org/abs/1711.05101
+        - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
+
+    Args:
+        params: iterable of parameters to optimize or dicts defining parameter groups
+        lr: learning rate
+        betas: coefficients used for computing running averages of gradient and its square
+        eps: term added to the denominator to improve numerical stability
+        weight_decay: weight decay coefficient
+        caution: enable caution
     """
 
     def __init__(
             self,
-            params,
-            lr=1e-3,
-            betas=(0.9, 0.999),
-            eps=1e-8,
-            weight_decay=1e-2,
+            params: ParamsT,
+            lr: float = 1e-3,
+            betas: Tuple[float, float] = (0.9, 0.999),
+            eps: float = 1e-8,
+            weight_decay: float = 1e-2,
+            caution: bool = False,
             maximize: bool = False,
             foreach: Optional[bool] = None,
             capturable: bool = False,
@@ -62,6 +61,7 @@ class NAdamW(torch.optim.Optimizer):
             betas=betas,
             eps=eps,
             weight_decay=weight_decay,
+            caution=caution,
             foreach=foreach,
             maximize=maximize,
             capturable=capturable,
@@ -71,11 +71,12 @@ class NAdamW(torch.optim.Optimizer):
     def __setstate__(self, state):
         super().__setstate__(state)
         state_values = list(self.state.values())
-        step_is_tensor = (len(state_values) != 0) and torch.is_tensor(
-            state_values[0]['step'])
+        step_is_tensor = (len(state_values) != 0) and torch.is_tensor(state_values[0]['step'])
         if not step_is_tensor:
             for s in state_values:
                 s['step'] = torch.tensor(float(s['step']))
+        for group in self.param_groups:
+            group.setdefault('caution', False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -133,6 +134,7 @@ class NAdamW(torch.optim.Optimizer):
                 lr=group['lr'],
                 weight_decay=group['weight_decay'],
                 eps=group['eps'],
+                caution=group['caution'],
                 maximize=group['maximize'],
                 capturable=group['capturable'],
             )
@@ -154,6 +156,7 @@ def nadamw(
         lr: float,
         weight_decay: float,
         eps: float,
+        caution: bool,
         maximize: bool,
 ) -> None:
     r"""Functional API that performs NAdamW algorithm computation.
@@ -166,7 +169,12 @@ def nadamw(
             ' singleton tensors')
 
     if foreach is None:
-        foreach = True
+        try:
+            # cannot do foreach if this overload doesn't exist when caution enabled
+            foreach = not caution or 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
+        except:
+            foreach = False
+
     if foreach and not torch.jit.is_scripting():
         func = _multi_tensor_nadamw
     else:
@@ -183,6 +191,7 @@ def nadamw(
         lr=lr,
         weight_decay=weight_decay,
         eps=eps,
+        caution=caution,
         maximize=maximize,
         capturable=capturable,
     )
@@ -200,6 +209,7 @@ def _single_tensor_nadamw(
         lr: float,
         weight_decay: float,
         eps: float,
+        caution: bool,
         maximize: bool,
         capturable: bool
 ):
@@ -238,6 +248,14 @@ def _single_tensor_nadamw(
             exp_avg = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1)
 
             denom = (exp_avg_sq.sqrt() / (bias_correction2_sqrt * step_size_neg)).add_(eps / step_size_neg)
+
+            if caution:
+                # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                # FIXME not 100% sure if this remains capturable?
+                mask = (exp_avg * grad > 0).to(grad.dtype)
+                mask.div_(mask.mean().clamp_(min=1e-3))
+                exp_avg.mul_(mask)
+
             param.addcdiv_(exp_avg, denom)
         else:
             step = step_t.item()
@@ -246,11 +264,17 @@ def _single_tensor_nadamw(
             step_size = lr / bias_correction1
             bias_correction2_sqrt = math.sqrt(bias_correction2)
 
-            # Only difference between NAdamW and AdamW in this implementation.
+            # Apply Nesterov. Only difference between NAdamW and AdamW in this implementation.
             # The official PyTorch implementation of NAdam uses a different algorithm.
             exp_avg = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1)
-
             denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps)
+
+            if caution:
+                # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                mask = (exp_avg * grad > 0).to(grad.dtype)
+                mask.div_(mask.mean().clamp_(min=1e-3))
+                exp_avg.mul_(mask)
+
             param.addcdiv_(exp_avg, denom, value=-step_size)
 
 
@@ -266,6 +290,7 @@ def _multi_tensor_nadamw(
         lr: float,
         weight_decay: float,
         eps: float,
+        caution: bool,
         maximize: bool,
         capturable: bool,
 ):
@@ -322,11 +347,21 @@ def _multi_tensor_nadamw(
 
         exp_avg_sq_sqrt = torch._foreach_sqrt(exp_avg_sqs)
         torch._foreach_div_(
-            exp_avg_sq_sqrt, torch._foreach_mul(bias_correction2_sqrt, step_size)
+            exp_avg_sq_sqrt,
+            torch._foreach_mul(bias_correction2_sqrt, step_size)
         )
         eps_over_step_size = torch._foreach_div(step_size, eps)
         torch._foreach_reciprocal_(eps_over_step_size)
         denom = torch._foreach_add(exp_avg_sq_sqrt, eps_over_step_size)
+
+        if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            masks = torch._foreach_mul(exp_avgs, grads)
+            masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]  # capturable?
+            mask_scale = [m.mean() for m in masks]
+            torch._foreach_maximum_(mask_scale, 1e-3)
+            torch._foreach_div_(masks, mask_scale)
+            torch._foreach_mul_(exp_avgs, masks)
 
         torch._foreach_addcdiv_(params, exp_avgs, denom)
     else:
@@ -337,7 +372,7 @@ def _multi_tensor_nadamw(
 
         bias_correction2_sqrt = [math.sqrt(bc) for bc in bias_correction2]
 
-        # Only difference between NAdamW and AdamW in this implementation.
+        # Apply Nesterov. Only difference between NAdamW and AdamW in this implementation.
         # The official PyTorch implementation of NAdam uses a different algorithm.
         exp_avgs = torch._foreach_mul(exp_avgs, beta1)
         torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
@@ -345,5 +380,14 @@ def _multi_tensor_nadamw(
         exp_avg_sq_sqrt = torch._foreach_sqrt(exp_avg_sqs)
         torch._foreach_div_(exp_avg_sq_sqrt, bias_correction2_sqrt)
         denom = torch._foreach_add(exp_avg_sq_sqrt, eps)
+
+        if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            masks = torch._foreach_mul(exp_avgs, grads)
+            masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
+            mask_scale = [m.mean() for m in masks]
+            torch._foreach_maximum_(mask_scale, 1e-3)
+            torch._foreach_div_(masks, mask_scale)
+            torch._foreach_mul_(exp_avgs, masks)
 
         torch._foreach_addcdiv_(params, exp_avgs, denom, step_size)

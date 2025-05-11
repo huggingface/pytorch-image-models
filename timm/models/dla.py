@@ -301,7 +301,7 @@ class DLA(nn.Module):
             dict(num_chs=channels[5], reduction=32, module='level5'),
         ]
 
-        self.num_features = channels[-1]
+        self.num_features = self.head_hidden_size = channels[-1]
         self.global_pool, self.head_drop, self.fc = create_classifier(
             self.num_features,
             self.num_classes,
@@ -350,10 +350,10 @@ class DLA(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool, use_conv=True)

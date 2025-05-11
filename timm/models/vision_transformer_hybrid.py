@@ -13,136 +13,60 @@ They were moved here to keep file sizes sane.
 
 Hacked together by / Copyright 2020, Ross Wightman
 """
+import math
 from functools import partial
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import StdConv2dSame, StdConv2d, to_2tuple, Format, nchw_to
+from timm.layers import StdConv2dSame, StdConv2d, ConvNormAct, to_2tuple, to_ntuple, HybridEmbed
+
+from ._builder import build_model_with_cfg
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 from .resnet import resnet26d, resnet50d
 from .resnetv2 import ResNetV2, create_resnetv2_stem
-from .vision_transformer import _create_vision_transformer, VisionTransformer
+from .vision_transformer import VisionTransformer
 
 
-class HybridEmbed(nn.Module):
-    """ CNN Feature Map Embedding
-    Extract feature map from CNN, flatten, project to embedding dim.
-    """
-    output_fmt: Format
-    dynamic_img_pad: torch.jit.Final[bool]
-
+class ConvStem(nn.Sequential):
     def __init__(
             self,
-            backbone,
-            img_size=224,
-            patch_size=1,
-            feature_size=None,
-            in_chans=3,
-            embed_dim=768,
-            bias=True,
-            flatten: bool = True,
-            output_fmt: Optional[str] = None,
-            strict_img_size: bool = True,
-            dynamic_img_pad: bool = False,
+            in_chans: int = 3,
+            depth: int = 3,
+            channels: Union[int, Tuple[int, ...]] = 64,
+            kernel_size: Union[int, Tuple[int, ...]] = 3,
+            stride: Union[int, Tuple[int, ...]] = (2, 2, 2),
+            padding: Union[str, int, Tuple[int, ...]] = "",
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            act_layer: Type[nn.Module] = nn.ReLU,
     ):
         super().__init__()
-        assert isinstance(backbone, nn.Module)
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.backbone = backbone
-        if feature_size is None:
-            with torch.no_grad():
-                # NOTE Most reliable way of determining output dims is to run forward pass
-                training = backbone.training
-                if training:
-                    backbone.eval()
-                o = self.backbone(torch.zeros(1, in_chans, img_size[0], img_size[1]))
-                if isinstance(o, (list, tuple)):
-                    o = o[-1]  # last feature if backbone outputs list/tuple of features
-                feature_size = o.shape[-2:]
-                feature_dim = o.shape[1]
-                backbone.train(training)
-        else:
-            feature_size = to_2tuple(feature_size)
-            if hasattr(self.backbone, 'feature_info'):
-                feature_dim = self.backbone.feature_info.channels()[-1]
-            else:
-                feature_dim = self.backbone.num_features
-        if not dynamic_img_pad:
-            assert feature_size[0] % patch_size[0] == 0 and feature_size[1] % patch_size[1] == 0
-        self.grid_size = (feature_size[0] // patch_size[0], feature_size[1] // patch_size[1])
-        self.num_patches = self.grid_size[0] * self.grid_size[1]
-        if output_fmt is not None:
-            self.flatten = False
-            self.output_fmt = Format(output_fmt)
-        else:
-            # flatten spatial dim and transpose to channels last, kept for bwd compat
-            self.flatten = flatten
-            self.output_fmt = Format.NCHW
-        self.strict_img_size = strict_img_size
-        self.dynamic_img_pad = dynamic_img_pad
+        if isinstance(channels, int):
+            # a default tiered channel strategy
+            channels = tuple([channels // 2**i for i in range(depth)][::-1])
 
-        self.proj = nn.Conv2d(feature_dim, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
+        kernel_size = to_ntuple(depth)(kernel_size)
+        padding = to_ntuple(depth)(padding)
+        assert depth == len(stride) == len(kernel_size) == len(channels)
 
-    def forward(self, x):
-        x = self.backbone(x)
-        if isinstance(x, (list, tuple)):
-            x = x[-1]  # last feature if backbone outputs list/tuple of features
-        _, _, H, W = x.shape
-        if self.dynamic_img_pad:
-            pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
-            pad_w = (self.patch_size[1] - W % self.patch_size[1]) % self.patch_size[1]
-            x = F.pad(x, (0, pad_w, 0, pad_h))
-        x = self.proj(x)
-        if self.flatten:
-            x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
-        elif self.output_fmt != Format.NCHW:
-            x = nchw_to(x, self.output_fmt)
-        return x
-
-
-class HybridEmbedWithSize(nn.Module):
-    """ CNN Feature Map Embedding
-    Extract feature map from CNN, flatten, project to embedding dim.
-    """
-    def __init__(
-            self,
-            backbone,
-            img_size=224,
-            patch_size=1,
-            feature_size=None,
-            in_chans=3,
-            embed_dim=768,
-            bias=True,
-    ):
-        super().__init__(
-            backbone=backbone,
-            img_size=img_size,
-            patch_size=patch_size,
-            feature_size=feature_size,
-            in_chans=in_chans,
-            embed_dim=embed_dim,
-            bias=bias,
-        )
-
-    def forward(self, x) -> Tuple[torch.Tensor, List[int]]:
-        x = self.backbone(x)
-        if isinstance(x, (list, tuple)):
-            x = x[-1]  # last feature if backbone outputs list/tuple of features
-        x = self.proj(x)
-        return x.flatten(2).transpose(1, 2), x.shape[-2:]
-
-
-def _create_vision_transformer_hybrid(variant, backbone, pretrained=False, **kwargs):
-    embed_layer = partial(HybridEmbed, backbone=backbone)
-    kwargs.setdefault('patch_size', 1)  # default patch size for hybrid models if not set
-    return _create_vision_transformer(variant, pretrained=pretrained, embed_layer=embed_layer, **kwargs)
+        in_chs = in_chans
+        for i in range(len(channels)):
+            last_conv = i == len(channels) - 1
+            self.add_module(f'{i}', ConvNormAct(
+                in_chs,
+                channels[i],
+                kernel_size=kernel_size[i],
+                stride=stride[i],
+                padding=padding[i],
+                bias=last_conv,
+                apply_norm=not last_conv,
+                apply_act=not last_conv,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            ))
+            in_chs = channels[i]
 
 
 def _resnetv2(layers=(3, 4, 9), **kwargs):
@@ -158,6 +82,66 @@ def _resnetv2(layers=(3, 4, 9), **kwargs):
         backbone = create_resnetv2_stem(
             kwargs.get('in_chans', 3), stem_type=stem_type, preact=False, conv_layer=conv_layer)
     return backbone
+
+
+def _convert_mobileclip(state_dict, model, prefix='image_encoder.model.'):
+    out = {}
+    for k, v in state_dict.items():
+        if not k.startswith(prefix):
+            continue
+        k = k.replace(prefix, '')
+        k = k.replace('patch_emb.', 'patch_embed.backbone.')
+        k = k.replace('block.conv', 'conv')
+        k = k.replace('block.norm', 'bn')
+        k = k.replace('post_transformer_norm.', 'norm.')
+        k = k.replace('pre_norm_mha.0', 'norm1')
+        k = k.replace('pre_norm_mha.1', 'attn')
+        k = k.replace('pre_norm_ffn.0', 'norm2')
+        k = k.replace('pre_norm_ffn.1', 'mlp.fc1')
+        k = k.replace('pre_norm_ffn.4', 'mlp.fc2')
+        k = k.replace('qkv_proj.', 'qkv.')
+        k = k.replace('out_proj.', 'proj.')
+        k = k.replace('transformer.', 'blocks.')
+        if k == 'pos_embed.pos_embed.pos_embed':
+            k = 'pos_embed'
+            v = v.squeeze(0)
+        if 'classifier.proj' in k:
+            bias_k = k.replace('classifier.proj', 'head.bias')
+            k = k.replace('classifier.proj', 'head.weight')
+            v = v.T
+            out[bias_k] = torch.zeros(v.shape[0])
+        out[k] = v
+    return out
+
+
+def checkpoint_filter_fn(
+        state_dict: Dict[str, torch.Tensor],
+        model: VisionTransformer,
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+) -> Dict[str, torch.Tensor]:
+    from .vision_transformer import checkpoint_filter_fn as _filter_fn
+
+    if 'image_encoder.model.patch_emb.0.block.conv.weight' in state_dict:
+        state_dict = _convert_mobileclip(state_dict, model)
+
+    return _filter_fn(state_dict, model, interpolation=interpolation, antialias=antialias)
+
+
+def _create_vision_transformer_hybrid(variant, backbone, embed_args=None, pretrained=False, **kwargs):
+    out_indices = kwargs.pop('out_indices', 3)
+    embed_args = embed_args or {}
+    embed_layer = partial(HybridEmbed, backbone=backbone, **embed_args)
+    kwargs.setdefault('embed_layer', embed_layer)
+    kwargs.setdefault('patch_size', 1)  # default patch size for hybrid models if not set
+    return build_model_with_cfg(
+        VisionTransformer,
+        variant,
+        pretrained,
+        pretrained_filter_fn=checkpoint_filter_fn,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
+        **kwargs,
+    )
 
 
 def _cfg(url='', **kwargs):
@@ -234,6 +218,19 @@ default_cfgs = generate_default_cfgs({
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
     'vit_base_resnet50d_224.untrained': _cfg(
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, first_conv='patch_embed.backbone.conv1.0'),
+
+    'vit_base_mci_224.apple_mclip_lt': _cfg(
+        hf_hub_id='apple/mobileclip_b_lt_timm',
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_blt.pt',
+        num_classes=512,
+        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
+    ),
+    'vit_base_mci_224.apple_mclip': _cfg(
+        hf_hub_id='apple/mobileclip_b_timm',
+        url='https://docs-assets.developer.apple.com/ml-research/datasets/mobileclip/mobileclip_b.pt',
+        num_classes=512,
+        mean=(0., 0., 0.), std=(1., 1., 1.), first_conv='patch_embed.backbone.0.conv',
+    ),
 })
 
 
@@ -378,6 +375,26 @@ def vit_base_resnet50d_224(pretrained=False, **kwargs) -> VisionTransformer:
     model_args = dict(embed_dim=768, depth=12, num_heads=12)
     model = _create_vision_transformer_hybrid(
         'vit_base_resnet50d_224', backbone=backbone, pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_mci_224(pretrained=False, **kwargs) -> VisionTransformer:
+    """ Custom ViT base hybrid w/ ResNet50D stride 32. No pretrained weights.
+    """
+    backbone = ConvStem(
+        channels=(768//4, 768//4, 768),
+        stride=(4, 2, 2),
+        kernel_size=(4, 2, 2),
+        padding=0,
+        in_chans=kwargs.get('in_chans', 3),
+        act_layer=nn.GELU,
+    )
+    model_args = dict(embed_dim=768, depth=12, num_heads=12, no_embed_class=True)
+    model = _create_vision_transformer_hybrid(
+        'vit_base_mci_224', backbone=backbone, embed_args=dict(proj=False),
+        pretrained=pretrained, **dict(model_args, **kwargs)
+    )
     return model
 
 

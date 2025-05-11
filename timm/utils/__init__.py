@@ -1,4 +1,5 @@
 from .agc import adaptive_clip_grad
+from .attention_extract import AttentionExtract
 from .checkpoint_saver import CheckpointSaver
 from .clip_grad import dispatch_clip_grad
 from .cuda import ApexScaler, NativeScaler
@@ -10,6 +11,6 @@ from .log import setup_default_logging, FormatterNoInfo
 from .metrics import AverageMeter, accuracy
 from .misc import natural_key, add_bool_arg, ParseKwargs
 from .model import unwrap_model, get_state_dict, freeze, unfreeze, reparameterize_model
-from .model_ema import ModelEma, ModelEmaV2
+from .model_ema import ModelEma, ModelEmaV2, ModelEmaV3
 from .random import random_seed
 from .summary import update_summary, get_outdir

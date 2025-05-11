@@ -10,7 +10,7 @@ from typing import Type
 
 import torch.nn as nn
 
-from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm
+from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm, RmsNorm2d
 from torchvision.ops.misc import FrozenBatchNorm2d
 
 _NORM_MAP = dict(
@@ -22,6 +22,7 @@ _NORM_MAP = dict(
     layernorm=LayerNorm,
     layernorm2d=LayerNorm2d,
     rmsnorm=RmsNorm,
+    rmsnorm2d=RmsNorm2d,
     frozenbatchnorm2d=FrozenBatchNorm2d,
 )
 _NORM_TYPES = {m for n, m in _NORM_MAP.items()}
@@ -47,7 +48,7 @@ def get_norm_layer(norm_layer):
     if isinstance(norm_layer, str):
         if not norm_layer:
             return None
-        layer_name = norm_layer.replace('_', '')
+        layer_name = norm_layer.replace('_', '').lower()
         norm_layer = _NORM_MAP[layer_name]
     else:
         norm_layer = norm_layer

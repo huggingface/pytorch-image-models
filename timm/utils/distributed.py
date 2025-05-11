@@ -2,17 +2,16 @@
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
+import logging
 import os
+from typing import Optional
 
 import torch
 from torch import distributed as dist
 
-try:
-    import horovod.torch as hvd
-except ImportError:
-    hvd = None
-
 from .model import unwrap_model
+
+_logger = logging.getLogger(__name__)
 
 
 def reduce_tensor(tensor, n):
@@ -84,9 +83,47 @@ def init_distributed_device(args):
     args.world_size = 1
     args.rank = 0  # global rank
     args.local_rank = 0
+    result = init_distributed_device_so(
+        device=getattr(args, 'device', 'cuda'),
+        dist_backend=getattr(args, 'dist_backend', None),
+        dist_url=getattr(args, 'dist_url', None),
+    )
+    args.device = result['device']
+    args.world_size = result['world_size']
+    args.rank = result['global_rank']
+    args.local_rank = result['local_rank']
+    args.distributed = result['distributed']
+    device = torch.device(args.device)
+    return device
+
+
+def init_distributed_device_so(
+        device: str = 'cuda',
+        dist_backend: Optional[str] = None,
+        dist_url: Optional[str] = None,
+):
+    # Distributed training = training on more than one GPU.
+    # Works in both single and multi-node scenarios.
+    distributed = False
+    world_size = 1
+    global_rank = 0
+    local_rank = 0
+    device_type, *device_idx = device.split(':', maxsplit=1)
+
+    if dist_backend is None:
+        # FIXME: verify that ROCm transform nccl to rccl
+        dist_backends = {
+            "xpu": "ccl",
+            "hpu": "hccl",
+            "cuda": "nccl",
+            "npu": "hccl",
+        }
+        dist_backend = dist_backends.get(device_type, 'gloo')
+    dist_url = dist_url or 'env://'
 
     # TBD, support horovod?
     # if args.horovod:
+    #     import horovod.torch as hvd
     #     assert hvd is not None, "Horovod is not installed"
     #     hvd.init()
     #     args.local_rank = int(hvd.local_rank())
@@ -96,42 +133,50 @@ def init_distributed_device(args):
     #     os.environ['LOCAL_RANK'] = str(args.local_rank)
     #     os.environ['RANK'] = str(args.rank)
     #     os.environ['WORLD_SIZE'] = str(args.world_size)
-    dist_backend = getattr(args, 'dist_backend', 'nccl')
-    dist_url = getattr(args, 'dist_url', 'env://')
     if is_distributed_env():
         if 'SLURM_PROCID' in os.environ:
             # DDP via SLURM
-            args.local_rank, args.rank, args.world_size = world_info_from_env()
+            local_rank, global_rank, world_size = world_info_from_env()
             # SLURM var -> torch.distributed vars in case needed
-            os.environ['LOCAL_RANK'] = str(args.local_rank)
-            os.environ['RANK'] = str(args.rank)
-            os.environ['WORLD_SIZE'] = str(args.world_size)
+            os.environ['LOCAL_RANK'] = str(local_rank)
+            os.environ['RANK'] = str(global_rank)
+            os.environ['WORLD_SIZE'] = str(world_size)
             torch.distributed.init_process_group(
                 backend=dist_backend,
                 init_method=dist_url,
-                world_size=args.world_size,
-                rank=args.rank,
+                world_size=world_size,
+                rank=global_rank,
             )
         else:
             # DDP via torchrun, torch.distributed.launch
-            args.local_rank, _, _ = world_info_from_env()
+            local_rank, _, _ = world_info_from_env()
             torch.distributed.init_process_group(
                 backend=dist_backend,
                 init_method=dist_url,
             )
-            args.world_size = torch.distributed.get_world_size()
-            args.rank = torch.distributed.get_rank()
-        args.distributed = True
+            world_size = torch.distributed.get_world_size()
+            global_rank = torch.distributed.get_rank()
+        distributed = True
 
-    if torch.cuda.is_available():
-        if args.distributed:
-            device = 'cuda:%d' % args.local_rank
-        else:
-            device = 'cuda:0'
+    if device_type == 'cuda':
+        assert torch.cuda.is_available(), f'CUDA is not available but {device} was specified.'
+    if device_type == 'npu':
+        assert torch.npu.is_available(), f'Ascend NPU is not available but {device} was specified.'
+
+    if distributed and device != 'cpu':
+        # Ignore manually specified device index in distributed mode and
+        # override with resolved local rank, fewer headaches in most setups.
+        if device_idx:
+            _logger.warning(f'device index {device_idx[0]} removed from specified ({device}).')
+        device = f'{device_type}:{local_rank}'
+
+    if device.startswith('cuda:'):
         torch.cuda.set_device(device)
-    else:
-        device = 'cpu'
 
-    args.device = device
-    device = torch.device(device)
-    return device
+    return dict(
+        device=device,
+        global_rank=global_rank,
+        local_rank=local_rank,
+        world_size=world_size,
+        distributed=distributed,
+    )

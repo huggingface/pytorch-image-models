@@ -7,8 +7,7 @@ Official CoaT code at: https://github.com/mlpc-ucsd/CoaT
 
 Modified from timm/models/vision_transformer.py
 """
-from functools import partial
-from typing import Tuple, List, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -381,7 +380,7 @@ class CoaT(nn.Module):
         self.return_interm_layers = return_interm_layers
         self.out_features = out_features
         self.embed_dims = embed_dims
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.num_classes = num_classes
         self.global_pool = global_pool
 
@@ -557,10 +556,10 @@ class CoaT(nn.Module):
         return matcher
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('token', 'avg')

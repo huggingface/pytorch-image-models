@@ -578,7 +578,7 @@ class HighResolutionNet(nn.Module):
         head_conv_bias = cfg.pop('head_conv_bias', True)
         if head == 'classification':
             # Classification Head
-            self.num_features = 2048
+            self.num_features = self.head_hidden_size = 2048
             self.incre_modules, self.downsamp_modules, self.final_layer = self._make_head(
                 pre_stage_channels,
                 conv_bias=head_conv_bias,
@@ -591,10 +591,10 @@ class HighResolutionNet(nn.Module):
             )
         else:
             if head == 'incre':
-                self.num_features = 2048
+                self.num_features = self.head_hidden_size = 2048
                 self.incre_modules, _, _ = self._make_head(pre_stage_channels, incre_only=True)
             else:
-                self.num_features = 256
+                self.num_features = self.head_hidden_size = 256
                 self.incre_modules = None
             self.global_pool = nn.Identity()
             self.head_drop = nn.Identity()
@@ -736,10 +736,10 @@ class HighResolutionNet(nn.Module):
         assert not enable, "gradient checkpointing not supported"
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
@@ -834,7 +834,7 @@ class HighResolutionNetFeatures(HighResolutionNet):
     def forward_features(self, x):
         assert False, 'Not supported'
 
-    def forward(self, x) -> List[torch.tensor]:
+    def forward(self, x) -> List[torch.Tensor]:
         out = []
         x = self.conv1(x)
         x = self.bn1(x)
@@ -862,12 +862,17 @@ def _create_hrnet(variant, pretrained=False, cfg_variant=None, **model_kwargs):
         kwargs_filter = ('num_classes', 'global_pool')
         features_only = True
     cfg_variant = cfg_variant or variant
+
+    pretrained_strict = model_kwargs.pop(
+        'pretrained_strict',
+        not features_only and model_kwargs.get('head', 'classification') == 'classification'
+    )
     model = build_model_with_cfg(
         model_cls,
         variant,
         pretrained,
         model_cfg=cfg_cls[cfg_variant],
-        pretrained_strict=not features_only,
+        pretrained_strict=pretrained_strict,
         kwargs_filter=kwargs_filter,
         **model_kwargs,
     )

@@ -1,7 +1,7 @@
 """ Scheduler Factory
 Hacked together by / Copyright 2021 Ross Wightman
 """
-from typing import List, Union
+from typing import List, Optional, Union
 
 from torch.optim import Optimizer
 
@@ -13,12 +13,15 @@ from .step_lr import StepLRScheduler
 from .tanh_lr import TanhLRScheduler
 
 
-def scheduler_kwargs(cfg):
+def scheduler_kwargs(cfg, decreasing_metric: Optional[bool] = None):
     """ cfg/argparse to kwargs helper
     Convert scheduler args in argparse args or cfg (.dot) like object to keyword args.
     """
     eval_metric = getattr(cfg, 'eval_metric', 'top1')
-    plateau_mode = 'min' if 'loss' in eval_metric else 'max'
+    if decreasing_metric is not None:
+        plateau_mode = 'min' if decreasing_metric else 'max'
+    else:
+        plateau_mode = 'min' if 'loss' in eval_metric else 'max'
     kwargs = dict(
         sched=cfg.sched,
         num_epochs=getattr(cfg, 'epochs', 100),
@@ -193,11 +196,15 @@ def create_scheduler_v2(
         )
 
     if hasattr(lr_scheduler, 'get_cycle_length'):
-        # for cycle based schedulers (cosine, tanh, poly) recalculate total epochs w/ cycles & cooldown
+        # For cycle based schedulers (cosine, tanh, poly) recalculate total epochs w/ cycles & cooldown
+        # NOTE: Warmup prefix added in get_cycle_lengths() if enabled
         t_with_cycles_and_cooldown = lr_scheduler.get_cycle_length() + cooldown_t
         if step_on_epochs:
             num_epochs = t_with_cycles_and_cooldown
         else:
             num_epochs = t_with_cycles_and_cooldown // updates_per_epoch
+    else:
+        if warmup_prefix:
+            num_epochs += warmup_epochs
 
     return lr_scheduler, num_epochs

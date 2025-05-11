@@ -7,12 +7,12 @@ Original model: https://github.com/mrT23/TResNet
 """
 from collections import OrderedDict
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
 
-from timm.layers import SpaceToDepth, BlurPool2d, ClassifierHead, SEModule,\
-    ConvNormActAa, ConvNormAct, DropPath
+from timm.layers import SpaceToDepth, BlurPool2d, ClassifierHead, SEModule, ConvNormAct, DropPath
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
@@ -38,13 +38,8 @@ class BasicBlock(nn.Module):
         self.stride = stride
         act_layer = partial(nn.LeakyReLU, negative_slope=1e-3)
 
-        if stride == 1:
-            self.conv1 = ConvNormAct(inplanes, planes, kernel_size=3, stride=1, act_layer=act_layer)
-        else:
-            self.conv1 = ConvNormActAa(
-                inplanes, planes, kernel_size=3, stride=2, act_layer=act_layer, aa_layer=aa_layer)
-
-        self.conv2 = ConvNormAct(planes, planes, kernel_size=3, stride=1, apply_act=False, act_layer=None)
+        self.conv1 = ConvNormAct(inplanes, planes, kernel_size=3, stride=stride, act_layer=act_layer, aa_layer=aa_layer)
+        self.conv2 = ConvNormAct(planes, planes, kernel_size=3, stride=1, apply_act=False)
         self.act = nn.ReLU(inplace=True)
 
         rd_chs = max(planes * self.expansion // 4, 64)
@@ -86,18 +81,14 @@ class Bottleneck(nn.Module):
 
         self.conv1 = ConvNormAct(
             inplanes, planes, kernel_size=1, stride=1, act_layer=act_layer)
-        if stride == 1:
-            self.conv2 = ConvNormAct(
-                planes, planes, kernel_size=3, stride=1, act_layer=act_layer)
-        else:
-            self.conv2 = ConvNormActAa(
-                planes, planes, kernel_size=3, stride=2, act_layer=act_layer, aa_layer=aa_layer)
+        self.conv2 = ConvNormAct(
+            planes, planes, kernel_size=3, stride=stride, act_layer=act_layer, aa_layer=aa_layer)
 
         reduction_chs = max(planes * self.expansion // 8, 64)
         self.se = SEModule(planes, rd_channels=reduction_chs) if use_se else None
 
         self.conv3 = ConvNormAct(
-            planes, planes * self.expansion, kernel_size=1, stride=1, apply_act=False, act_layer=None)
+            planes, planes * self.expansion, kernel_size=1, stride=1, apply_act=False)
 
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0 else nn.Identity()
         self.act = nn.ReLU(inplace=True)
@@ -178,7 +169,7 @@ class TResNet(nn.Module):
         ]
 
         # head
-        self.num_features = (self.planes * 8) * Bottleneck.expansion
+        self.num_features = self.head_hidden_size = (self.planes * 8) * Bottleneck.expansion
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
         # model initialization
@@ -203,7 +194,7 @@ class TResNet(nn.Module):
                 # avg pooling before 1x1 conv
                 layers.append(nn.AvgPool2d(kernel_size=2, stride=2, ceil_mode=True, count_include_pad=False))
             layers += [ConvNormAct(
-                self.inplanes, planes * block.expansion, kernel_size=1, stride=1, apply_act=False, act_layer=None)]
+                self.inplanes, planes * block.expansion, kernel_size=1, stride=1, apply_act=False)]
             downsample = nn.Sequential(*layers)
 
         layers = []
@@ -230,10 +221,10 @@ class TResNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
@@ -251,7 +242,7 @@ class TResNet(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return x if pre_logits else self.head(x)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)

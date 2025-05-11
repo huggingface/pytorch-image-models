@@ -3,3 +3,4 @@ torchvision
 pyyaml
 huggingface_hub
 safetensors>=0.2
+numpy<2.0

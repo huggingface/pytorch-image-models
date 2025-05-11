@@ -17,11 +17,28 @@ from .adamp import projection
 
 
 class SGDP(Optimizer):
-    def __init__(self, params, lr=required, momentum=0, dampening=0,
-                 weight_decay=0, nesterov=False, eps=1e-8, delta=0.1, wd_ratio=0.1):
+    def __init__(
+            self,
+            params,
+            lr=required,
+            momentum=0,
+            dampening=0,
+            weight_decay=0,
+            nesterov=False,
+            eps=1e-8,
+            delta=0.1,
+            wd_ratio=0.1
+    ):
         defaults = dict(
-            lr=lr, momentum=momentum, dampening=dampening, weight_decay=weight_decay,
-            nesterov=nesterov, eps=eps, delta=delta, wd_ratio=wd_ratio)
+            lr=lr,
+            momentum=momentum,
+            dampening=dampening,
+            weight_decay=weight_decay,
+            nesterov=nesterov,
+            eps=eps,
+            delta=delta,
+            wd_ratio=wd_ratio,
+        )
         super(SGDP, self).__init__(params, defaults)
 
     @torch.no_grad()

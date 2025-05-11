@@ -20,6 +20,7 @@ class AttentionPoolLatent(nn.Module):
             out_features: int = None,
             embed_dim: int = None,
             num_heads: int = 8,
+            feat_size: Optional[int] = None,
             mlp_ratio: float = 4.0,
             qkv_bias: bool = True,
             qk_norm: bool = False,
@@ -36,13 +37,14 @@ class AttentionPoolLatent(nn.Module):
         assert embed_dim % num_heads == 0
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
+        self.feat_size = feat_size
         self.scale = self.head_dim ** -0.5
         self.pool = pool_type
         self.fused_attn = use_fused_attn()
 
         if pos_embed == 'abs':
-            spatial_len = self.feat_size
-            self.pos_embed = nn.Parameter(torch.zeros(spatial_len, in_features))
+            assert feat_size is not None
+            self.pos_embed = nn.Parameter(torch.zeros(feat_size, in_features))
         else:
             self.pos_embed = None
 

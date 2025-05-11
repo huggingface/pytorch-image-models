@@ -16,18 +16,20 @@ Modifications and timm support by / Copyright 2023, Ross Wightman
 """
 import math
 from functools import partial
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import create_conv2d, create_norm_layer, get_act_layer, get_norm_layer, ConvNormAct
-from timm.layers import DropPath, trunc_normal_, to_2tuple, to_ntuple
+from timm.layers import DropPath, trunc_normal_, to_2tuple, to_ntuple, ndgrid
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
+
+__all__ = ['EfficientFormerV2']
 
 EfficientFormer_width = {
     'L': (40, 80, 192, 384),  # 26m 83.3% 6attn
@@ -129,7 +131,7 @@ class Attention2d(torch.nn.Module):
         self.act = act_layer()
         self.proj = ConvNorm(self.dh, dim, 1)
 
-        pos = torch.stack(torch.meshgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
         self.attention_biases = torch.nn.Parameter(torch.zeros(num_heads, self.N))
@@ -231,12 +233,11 @@ class Attention2dDownsample(torch.nn.Module):
         self.proj = ConvNorm(self.dh, self.out_dim, 1)
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, self.N))
-        k_pos = torch.stack(torch.meshgrid(torch.arange(
-            self.resolution[0]),
-            torch.arange(self.resolution[1]))).flatten(1)
-        q_pos = torch.stack(torch.meshgrid(
+        k_pos = torch.stack(ndgrid(torch.arange(self.resolution[0]), torch.arange(self.resolution[1]))).flatten(1)
+        q_pos = torch.stack(ndgrid(
             torch.arange(0, self.resolution[0], step=2),
-            torch.arange(0, self.resolution[1], step=2))).flatten(1)
+            torch.arange(0, self.resolution[1], step=2)
+        )).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * self.resolution[1]) + rel_pos[1]
         self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
@@ -572,7 +573,7 @@ class EfficientFormerV2(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         # Classifier head
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.norm = norm_layer(embed_dims[-1])
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
@@ -610,10 +611,10 @@ class EfficientFormerV2(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool

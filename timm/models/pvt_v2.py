@@ -16,7 +16,7 @@ Modifications and timm support by / Copyright 2022, Ross Wightman
 """
 
 import math
-from typing import Tuple, List, Callable, Union
+from typing import Callable, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -338,7 +338,7 @@ class PyramidVisionTransformerV2(nn.Module):
         self.stages = nn.Sequential(*stages)
 
         # classification head
-        self.num_features = embed_dims[-1]
+        self.num_features = self.head_hidden_size = embed_dims[-1]
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
 
@@ -376,10 +376,10 @@ class PyramidVisionTransformerV2(nn.Module):
         for s in self.stages:
             s.grad_checkpointing = enable
 
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('avg', '')
@@ -403,7 +403,7 @@ class PyramidVisionTransformerV2(nn.Module):
         return x
 
 
-def _checkpoint_filter_fn(state_dict, model):
+def checkpoint_filter_fn(state_dict, model):
     """ Remap original checkpoints -> timm """
     if 'patch_embed.proj.weight' in state_dict:
         return state_dict  # non-original checkpoint, no remapping needed
@@ -430,7 +430,7 @@ def _create_pvt2(variant, pretrained=False, **kwargs):
         PyramidVisionTransformerV2,
         variant,
         pretrained,
-        pretrained_filter_fn=_checkpoint_filter_fn,
+        pretrained_filter_fn=checkpoint_filter_fn,
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
         **kwargs,
     )

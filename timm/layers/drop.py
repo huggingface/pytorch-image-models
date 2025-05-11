@@ -18,10 +18,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .grid import ndgrid
+
 
 def drop_block_2d(
-        x, drop_prob: float = 0.1, block_size: int = 7, gamma_scale: float = 1.0,
-        with_noise: bool = False, inplace: bool = False, batchwise: bool = False):
+        x,
+        drop_prob: float = 0.1,
+        block_size: int = 7,
+        gamma_scale: float = 1.0,
+        with_noise: bool = False,
+        inplace: bool = False,
+        batchwise: bool = False
+):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
     DropBlock with an experimental gaussian noise option. This layer has been tested on a few training
@@ -35,7 +43,7 @@ def drop_block_2d(
             (W - block_size + 1) * (H - block_size + 1))
 
     # Forces the block to be inside the feature map.
-    w_i, h_i = torch.meshgrid(torch.arange(W).to(x.device), torch.arange(H).to(x.device))
+    w_i, h_i = ndgrid(torch.arange(W, device=x.device), torch.arange(H, device=x.device))
     valid_block = ((w_i >= clipped_block_size // 2) & (w_i < W - (clipped_block_size - 1) // 2)) & \
                   ((h_i >= clipped_block_size // 2) & (h_i < H - (clipped_block_size - 1) // 2))
     valid_block = torch.reshape(valid_block, (1, 1, H, W)).to(dtype=x.dtype)
@@ -68,8 +76,13 @@ def drop_block_2d(
 
 
 def drop_block_fast_2d(
-        x: torch.Tensor, drop_prob: float = 0.1, block_size: int = 7,
-        gamma_scale: float = 1.0, with_noise: bool = False, inplace: bool = False):
+        x: torch.Tensor,
+        drop_prob: float = 0.1,
+        block_size: int = 7,
+        gamma_scale: float = 1.0,
+        with_noise: bool = False,
+        inplace: bool = False,
+):
     """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
 
     DropBlock with an experimental gaussian noise option. Simplied from above without concern for valid

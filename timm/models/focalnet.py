@@ -367,7 +367,7 @@ class FocalNet(nn.Module):
 
         self.num_classes = num_classes
         self.embed_dim = embed_dim
-        self.num_features = embed_dim[-1]
+        self.num_features = self.head_hidden_size = embed_dim[-1]
         self.feature_info = []
 
         self.stem = Downsample(
@@ -407,6 +407,7 @@ class FocalNet(nn.Module):
 
         if head_hidden_size:
             self.norm = nn.Identity()
+            self.head_hidden_size = head_hidden_size
             self.head = NormMlpClassifierHead(
                 self.num_features,
                 num_classes,
@@ -451,10 +452,10 @@ class FocalNet(nn.Module):
             l.set_grad_checkpointing(enable=enable)
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
@@ -464,7 +465,7 @@ class FocalNet(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return self.head(x, pre_logits=pre_logits)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)

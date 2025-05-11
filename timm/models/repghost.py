@@ -6,6 +6,7 @@ Original implementation: https://github.com/ChengpengChen/RepGhost
 """
 import copy
 from functools import partial
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -258,7 +259,8 @@ class RepGhostNet(nn.Module):
         self.blocks = nn.Sequential(*stages)        
 
         # building last several layers
-        self.num_features = out_chs = 1280
+        self.num_features = prev_chs
+        self.head_hidden_size = out_chs = 1280
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.conv_head = nn.Conv2d(prev_chs, out_chs, 1, 1, 0, bias=True)
         self.act2 = nn.ReLU(inplace=True)
@@ -281,15 +283,16 @@ class RepGhostNet(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.classifier
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
-        # cannot meaningfully change pooling of efficient head after creation
-        self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
-        self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.classifier = Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        if global_pool is not None:
+            # NOTE: cannot meaningfully change pooling of efficient head after creation
+            self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
+            self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
+        self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
         x = self.conv_stem(x)
@@ -301,15 +304,14 @@ class RepGhostNet(nn.Module):
             x = self.blocks(x)
         return x
 
-    def forward_head(self, x):
+    def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.act2(x)
         x = self.flatten(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
-        x = self.classifier(x)
-        return x
+        return x if pre_logits else self.classifier(x)
 
     def forward(self, x):
         x = self.forward_features(x)

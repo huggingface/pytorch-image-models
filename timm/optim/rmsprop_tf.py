@@ -10,6 +10,8 @@ Modifications Copyright 2021 Ross Wightman
 import torch
 from torch.optim import Optimizer
 
+from ._types import ParamsT
+
 
 class RMSpropTF(Optimizer):
     """Implements RMSprop algorithm (TensorFlow style epsilon)
@@ -28,25 +30,32 @@ class RMSpropTF(Optimizer):
     The centered version first appears in `Generating Sequences
     With Recurrent Neural Networks <https://arxiv.org/pdf/1308.0850v5.pdf>`_.
 
-    Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float, optional): learning rate (default: 1e-2)
-        momentum (float, optional): momentum factor (default: 0)
-        alpha (float, optional): smoothing (decay) constant (default: 0.9)
-        eps (float, optional): term added to the denominator to improve
-            numerical stability (default: 1e-10)
-        centered (bool, optional) : if ``True``, compute the centered RMSProp,
-            the gradient is normalized by an estimation of its variance
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        decoupled_decay (bool, optional): decoupled weight decay as per https://arxiv.org/abs/1711.05101
-        lr_in_momentum (bool, optional): learning rate scaling is included in the momentum buffer
-            update as per defaults in Tensorflow
-
+    Args:
+        params: iterable of parameters to optimize or dicts defining parameter groups
+        lr: learning rate
+        momentum: momentum factor
+        alpha: smoothing (decay) constant
+        eps: term added to the denominator to improve numerical stability
+        centered: if ``True``, compute the centered RMSProp, the gradient is normalized by an estimation of its variance
+        weight_decay: weight decay (L2 penalty) (default: 0)
+        decoupled_decay: decoupled weight decay as per https://arxiv.org/abs/1711.05101
+        lr_in_momentum: learning rate scaling is included in the momentum buffer update as per defaults in Tensorflow
+        caution: apply caution
     """
 
-    def __init__(self, params, lr=1e-2, alpha=0.9, eps=1e-10, weight_decay=0, momentum=0., centered=False,
-                 decoupled_decay=False, lr_in_momentum=True):
+    def __init__(
+            self,
+            params: ParamsT,
+            lr: float = 1e-2,
+            alpha: float = 0.9,
+            eps: float = 1e-10,
+            weight_decay: float = 0,
+            momentum: float = 0.,
+            centered: bool = False,
+            decoupled_decay: bool = False,
+            lr_in_momentum: bool = True,
+            caution: bool = False,
+    ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -59,8 +68,16 @@ class RMSpropTF(Optimizer):
             raise ValueError("Invalid alpha value: {}".format(alpha))
 
         defaults = dict(
-            lr=lr, momentum=momentum, alpha=alpha, eps=eps, centered=centered, weight_decay=weight_decay,
-            decoupled_decay=decoupled_decay, lr_in_momentum=lr_in_momentum)
+            lr=lr,
+            momentum=momentum,
+            alpha=alpha,
+            eps=eps,
+            centered=centered,
+            weight_decay=weight_decay,
+            decoupled_decay=decoupled_decay,
+            lr_in_momentum=lr_in_momentum,
+            caution=caution,
+        )
         super(RMSpropTF, self).__init__(params, defaults)
 
     def __setstate__(self, state):
@@ -68,6 +85,7 @@ class RMSpropTF(Optimizer):
         for group in self.param_groups:
             group.setdefault('momentum', 0)
             group.setdefault('centered', False)
+            group.setdefault('caution', False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -125,13 +143,25 @@ class RMSpropTF(Optimizer):
 
                 if group['momentum'] > 0:
                     buf = state['momentum_buffer']
-                    # Tensorflow accumulates the LR scaling in the momentum buffer
+                    buf.mul_(group['momentum'])
+
+                    def _apply_caution(_m, _g):
+                        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                        mask = (_m * _g > 0).to(_g.dtype)
+                        mask.div_(mask.mean().clamp_(min=1e-3))
+                        return _m * mask
+
                     if group['lr_in_momentum']:
-                        buf.mul_(group['momentum']).addcdiv_(grad, avg, value=group['lr'])
+                        # Tensorflow accumulates the LR scaling in the momentum buffer
+                        buf.addcdiv_(grad, avg, value=group['lr'])
+                        if group['caution']:
+                            buf = _apply_caution(buf, grad)
                         p.add_(-buf)
                     else:
                         # PyTorch scales the param update by LR
-                        buf.mul_(group['momentum']).addcdiv_(grad, avg)
+                        buf.addcdiv_(grad, avg)
+                        if group['caution']:
+                            buf = _apply_caution(buf, grad)
                         p.add_(buf, alpha=-group['lr'])
                 else:
                     p.addcdiv_(grad, avg, value=-group['lr'])

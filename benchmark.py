@@ -32,13 +32,6 @@ try:
 except ImportError:
     pass
 
-has_native_amp = False
-try:
-    if getattr(torch.cuda.amp, 'autocast') is not None:
-        has_native_amp = True
-except AttributeError:
-    pass
-
 try:
     from deepspeed.profiling.flops_profiler import get_model_profile
     has_deepspeed_profiling = True
@@ -120,6 +113,8 @@ parser.add_argument('--fast-norm', default=False, action='store_true',
 parser.add_argument('--reparam', default=False, action='store_true',
                     help='Reparameterize model')
 parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
+parser.add_argument('--torchcompile-mode', type=str, default=None,
+                    help="torch.compile mode (default: None).")
 
 # codegen (model compilation) options
 scripting_group = parser.add_mutually_exclusive_group()
@@ -224,6 +219,7 @@ class BenchmarkRunner:
             device='cuda',
             torchscript=False,
             torchcompile=None,
+            torchcompile_mode=None,
             aot_autograd=False,
             reparam=False,
             precision='float32',
@@ -239,7 +235,7 @@ class BenchmarkRunner:
         self.amp_dtype, self.model_dtype, self.data_dtype = resolve_precision(precision)
         self.channels_last = kwargs.pop('channels_last', False)
         if self.amp_dtype is not None:
-            self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=self.amp_dtype)
+            self.amp_autocast = partial(torch.amp.autocast, device_type=device, dtype=self.amp_dtype)
         else:
             self.amp_autocast = suppress
 
@@ -278,7 +274,7 @@ class BenchmarkRunner:
         elif torchcompile:
             assert has_compile, 'A version of torch w/ torch.compile() is required, possibly a nightly.'
             torch._dynamo.reset()
-            self.model = torch.compile(self.model, backend=torchcompile)
+            self.model = torch.compile(self.model, backend=torchcompile, mode=torchcompile_mode)
             self.compiled = True
         elif aot_autograd:
             assert has_functorch, "functorch is needed for --aot-autograd"

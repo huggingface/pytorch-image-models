@@ -12,19 +12,302 @@
 
 ## What's New
 
-❗Updates after Oct 10, 2022 are available in version >= 0.9❗
-* Many changes since the last 0.6.x stable releases. They were previewed in 0.8.x dev releases but not everyone transitioned.
-* `timm.models.layers` moved to `timm.layers`:
-  * `from timm.models.layers import name` will still work via deprecation mapping (but please transition to `timm.layers`).
-  * `import timm.models.layers.module` or `from timm.models.layers.module import name` needs to be changed now.
-* Builder, helper, non-model modules in `timm.models` have a `_` prefix added, ie `timm.models.helpers` -> `timm.models._helpers`, there are temporary deprecation mapping files but those will be removed.
-* All models now support `architecture.pretrained_tag` naming (ex `resnet50.rsb_a1`).
-  * The pretrained_tag is the specific weight variant (different head) for the architecture.
-  * Using only `architecture` defaults to the first weights in the default_cfgs for that model architecture.
-  * In adding pretrained tags, many model names that existed to differentiate were renamed to use the tag  (ex: `vit_base_patch16_224_in21k` -> `vit_base_patch16_224.augreg_in21k`). There are deprecation mappings for these.
-* A number of models had their checkpoints remaped to match architecture changes needed to better support `features_only=True`, there are `checkpoint_filter_fn` methods in any model module that was remapped. These can be passed to `timm.models.load_checkpoint(..., filter_fn=timm.models.swin_transformer_v2.checkpoint_filter_fn)` to remap your existing checkpoint.
-* The Hugging Face Hub (https://huggingface.co/timm) is now the primary source for `timm` weights. Model cards include link to papers, original source, license. 
-* Previous 0.6.x can be cloned from [0.6.x](https://github.com/rwightman/pytorch-image-models/tree/0.6.x) branch or installed via pip with version.
+## Nov 28, 2024
+* More optimizers
+  * Add MARS optimizer (https://arxiv.org/abs/2411.10438, https://github.com/AGI-Arena/MARS)
+  * Add LaProp optimizer (https://arxiv.org/abs/2002.04839, https://github.com/Z-T-WANG/LaProp-Optimizer)
+  * Add masking from 'Cautious Optimizers' (https://arxiv.org/abs/2411.16085, https://github.com/kyleliang919/C-Optim) to Adafactor, Adafactor Big Vision, AdamW (legacy), Adopt, Lamb, LaProp, Lion, NadamW, RMSPropTF, SGDW
+  * Cleanup some docstrings and type annotations re optimizers and factory
+* Add MobileNet-V4 Conv Medium models pretrained on in12k and fine-tuned in1k @ 384x384
+  * https://huggingface.co/timm/mobilenetv4_conv_medium.e250_r384_in12k_ft_in1k
+  * https://huggingface.co/timm/mobilenetv4_conv_medium.e250_r384_in12k
+  * https://huggingface.co/timm/mobilenetv4_conv_medium.e180_ad_r384_in12k
+  * https://huggingface.co/timm/mobilenetv4_conv_medium.e180_r384_in12k
+* Add small cs3darknet, quite good for the speed
+  * https://huggingface.co/timm/cs3darknet_focus_s.ra4_e3600_r256_in1k
+
+## Nov 12, 2024
+* Optimizer factory refactor
+  * New factory works by registering optimizers using an OptimInfo dataclass w/ some key traits
+  * Add `list_optimizers`, `get_optimizer_class`, `get_optimizer_info` to reworked `create_optimizer_v2` fn to explore optimizers, get info or class
+  * deprecate `optim.optim_factory`, move fns to `optim/_optim_factory.py` and `optim/_param_groups.py` and encourage import via `timm.optim`
+* Add Adopt (https://github.com/iShohei220/adopt) optimizer
+* Add 'Big Vision' variant of Adafactor (https://github.com/google-research/big_vision/blob/main/big_vision/optax.py) optimizer
+* Fix original Adafactor to pick better factorization dims for convolutions
+* Tweak LAMB optimizer with some improvements in torch.where functionality since original, refactor clipping a bit
+* dynamic img size support in vit, deit, eva improved to support resize from non-square patch grids, thanks https://github.com/wojtke
+* 
+## Oct 31, 2024
+Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weights. See https://huggingface.co/blog/rwightman/resnet-trick-or-treat
+
+## Oct 19, 2024
+* Cleanup torch amp usage to avoid cuda specific calls, merge support for Ascend (NPU) devices from [MengqingCao](https://github.com/MengqingCao) that should work now in PyTorch 2.5 w/ new device extension autoloading feature. Tested Intel Arc (XPU) in Pytorch 2.5 too and it (mostly) worked.
+
+## Oct 16, 2024
+* Fix error on importing from deprecated path `timm.models.registry`, increased priority of existing deprecation warnings to be visible
+* Port weights of InternViT-300M (https://huggingface.co/OpenGVLab/InternViT-300M-448px) to `timm` as `vit_intern300m_patch14_448`
+
+### Oct 14, 2024
+* Pre-activation (ResNetV2) version of 18/18d/34/34d ResNet model defs added by request (weights pending)
+* Release 1.0.10
+
+### Oct 11, 2024
+* MambaOut (https://github.com/yuweihao/MambaOut) model & weights added. A cheeky take on SSM vision models w/o the SSM (essentially ConvNeXt w/ gating). A mix of original weights + custom variations & weights.
+
+|model                                                                                                                |img_size|top1  |top5  |param_count|
+|---------------------------------------------------------------------------------------------------------------------|--------|------|------|-----------|
+|[mambaout_base_plus_rw.sw_e150_r384_in12k_ft_in1k](http://huggingface.co/timm/mambaout_base_plus_rw.sw_e150_r384_in12k_ft_in1k)|384     |87.506|98.428|101.66     |
+|[mambaout_base_plus_rw.sw_e150_in12k_ft_in1k](http://huggingface.co/timm/mambaout_base_plus_rw.sw_e150_in12k_ft_in1k)|288     |86.912|98.236|101.66     |
+|[mambaout_base_plus_rw.sw_e150_in12k_ft_in1k](http://huggingface.co/timm/mambaout_base_plus_rw.sw_e150_in12k_ft_in1k)|224     |86.632|98.156|101.66     |
+|[mambaout_base_tall_rw.sw_e500_in1k](http://huggingface.co/timm/mambaout_base_tall_rw.sw_e500_in1k)                  |288     |84.974|97.332|86.48      |
+|[mambaout_base_wide_rw.sw_e500_in1k](http://huggingface.co/timm/mambaout_base_wide_rw.sw_e500_in1k)                  |288     |84.962|97.208|94.45      |
+|[mambaout_base_short_rw.sw_e500_in1k](http://huggingface.co/timm/mambaout_base_short_rw.sw_e500_in1k)                |288     |84.832|97.27 |88.83      |
+|[mambaout_base.in1k](http://huggingface.co/timm/mambaout_base.in1k)                                                  |288     |84.72 |96.93 |84.81      |
+|[mambaout_small_rw.sw_e450_in1k](http://huggingface.co/timm/mambaout_small_rw.sw_e450_in1k)                          |288     |84.598|97.098|48.5       |
+|[mambaout_small.in1k](http://huggingface.co/timm/mambaout_small.in1k)                                                |288     |84.5  |96.974|48.49      |
+|[mambaout_base_wide_rw.sw_e500_in1k](http://huggingface.co/timm/mambaout_base_wide_rw.sw_e500_in1k)                  |224     |84.454|96.864|94.45      |
+|[mambaout_base_tall_rw.sw_e500_in1k](http://huggingface.co/timm/mambaout_base_tall_rw.sw_e500_in1k)                  |224     |84.434|96.958|86.48      |
+|[mambaout_base_short_rw.sw_e500_in1k](http://huggingface.co/timm/mambaout_base_short_rw.sw_e500_in1k)                |224     |84.362|96.952|88.83      |
+|[mambaout_base.in1k](http://huggingface.co/timm/mambaout_base.in1k)                                                  |224     |84.168|96.68 |84.81      |
+|[mambaout_small.in1k](http://huggingface.co/timm/mambaout_small.in1k)                                                |224     |84.086|96.63 |48.49      |
+|[mambaout_small_rw.sw_e450_in1k](http://huggingface.co/timm/mambaout_small_rw.sw_e450_in1k)                          |224     |84.024|96.752|48.5       |
+|[mambaout_tiny.in1k](http://huggingface.co/timm/mambaout_tiny.in1k)                                                  |288     |83.448|96.538|26.55      |
+|[mambaout_tiny.in1k](http://huggingface.co/timm/mambaout_tiny.in1k)                                                  |224     |82.736|96.1  |26.55      |
+|[mambaout_kobe.in1k](http://huggingface.co/timm/mambaout_kobe.in1k)                                                  |288     |81.054|95.718|9.14       |
+|[mambaout_kobe.in1k](http://huggingface.co/timm/mambaout_kobe.in1k)                                                  |224     |79.986|94.986|9.14       |
+|[mambaout_femto.in1k](http://huggingface.co/timm/mambaout_femto.in1k)                                                |288     |79.848|95.14 |7.3        |
+|[mambaout_femto.in1k](http://huggingface.co/timm/mambaout_femto.in1k)                                                |224     |78.87 |94.408|7.3        |
+
+* SigLIP SO400M ViT fine-tunes on ImageNet-1k @ 378x378, added 378x378 option for existing SigLIP 384x384 models
+  *  [vit_so400m_patch14_siglip_378.webli_ft_in1k](https://huggingface.co/timm/vit_so400m_patch14_siglip_378.webli_ft_in1k) - 89.42 top-1
+  *  [vit_so400m_patch14_siglip_gap_378.webli_ft_in1k](https://huggingface.co/timm/vit_so400m_patch14_siglip_gap_378.webli_ft_in1k) - 89.03
+* SigLIP SO400M ViT encoder from recent multi-lingual (i18n) variant, patch16 @ 256x256 (https://huggingface.co/timm/ViT-SO400M-16-SigLIP-i18n-256). OpenCLIP update pending.
+* Add two ConvNeXt 'Zepto' models & weights (one w/ overlapped stem and one w/ patch stem). Uses RMSNorm, smaller than previous 'Atto', 2.2M params.
+  * [convnext_zepto_rms_ols.ra4_e3600_r224_in1k](https://huggingface.co/timm/convnext_zepto_rms_ols.ra4_e3600_r224_in1k) - 73.20 top-1 @ 224
+  * [convnext_zepto_rms.ra4_e3600_r224_in1k](https://huggingface.co/timm/convnext_zepto_rms.ra4_e3600_r224_in1k) - 72.81 @ 224
+
+### Sept 2024
+* Add a suite of tiny test models for improved unit tests and niche low-resource applications (https://huggingface.co/blog/rwightman/timm-tiny-test)
+* Add MobileNetV4-Conv-Small (0.5x) model (https://huggingface.co/posts/rwightman/793053396198664)
+  * [mobilenetv4_conv_small_050.e3000_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small_050.e3000_r224_in1k) - 65.81 top-1 @ 256, 64.76 @ 224
+* Add MobileNetV3-Large variants trained with MNV4 Small recipe
+  * [mobilenetv3_large_150d.ra4_e3600_r256_in1k](http://hf.co/timm/mobilenetv3_large_150d.ra4_e3600_r256_in1k) - 81.81 @ 320, 80.94 @ 256
+  * [mobilenetv3_large_100.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv3_large_100.ra4_e3600_r224_in1k) - 77.16 @ 256, 76.31 @ 224
+
+
+### Aug 21, 2024
+* Updated SBB ViT models trained on ImageNet-12k and fine-tuned on ImageNet-1k, challenging quite a number of much larger, slower models
+
+| model | top1 | top5 | param_count | img_size |
+| -------------------------------------------------- | ------ | ------ | ----------- | -------- |
+| [vit_mediumd_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_mediumd_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k) | 87.438 | 98.256 | 64.11 | 384 |
+| [vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k) | 86.608 | 97.934 | 64.11 | 256 |
+| [vit_betwixt_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k) | 86.594 | 98.02 | 60.4 | 384 |
+| [vit_betwixt_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k) | 85.734 | 97.61 | 60.4 | 256 |
+* MobileNet-V1 1.25, EfficientNet-B1, & ResNet50-D weights w/ MNV4 baseline challenge recipe
+
+| model                                                                                                                    | top1   | top5   | param_count | img_size |
+|--------------------------------------------------------------------------------------------------------------------------|--------|--------|-------------|----------|
+| [resnet50d.ra4_e3600_r224_in1k](http://hf.co/timm/resnet50d.ra4_e3600_r224_in1k)                                         | 81.838 | 95.922 | 25.58       | 288      |
+| [efficientnet_b1.ra4_e3600_r240_in1k](http://hf.co/timm/efficientnet_b1.ra4_e3600_r240_in1k)                             | 81.440 | 95.700 | 7.79        | 288      |
+| [resnet50d.ra4_e3600_r224_in1k](http://hf.co/timm/resnet50d.ra4_e3600_r224_in1k)                                         | 80.952 | 95.384 | 25.58       | 224      |
+| [efficientnet_b1.ra4_e3600_r240_in1k](http://hf.co/timm/efficientnet_b1.ra4_e3600_r240_in1k)                             | 80.406 | 95.152 | 7.79        | 240      |
+| [mobilenetv1_125.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_125.ra4_e3600_r224_in1k)                             | 77.600 | 93.804 | 6.27        | 256      |
+| [mobilenetv1_125.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_125.ra4_e3600_r224_in1k)                             | 76.924 | 93.234 | 6.27        | 224      |
+
+* Add SAM2 (HieraDet) backbone arch & weight loading support
+* Add Hiera Small weights trained w/ abswin pos embed on in12k & fine-tuned on 1k
+
+|model                            |top1  |top5  |param_count|
+|---------------------------------|------|------|-----------|
+|hiera_small_abswin_256.sbb2_e200_in12k_ft_in1k    |84.912|97.260|35.01      |
+|hiera_small_abswin_256.sbb2_pd_e200_in12k_ft_in1k |84.560|97.106|35.01      |
+
+### Aug 8, 2024
+* Add RDNet ('DenseNets Reloaded', https://arxiv.org/abs/2403.19588), thanks [Donghyun Kim](https://github.com/dhkim0225)
+  
+### July 28, 2024
+* Add `mobilenet_edgetpu_v2_m` weights w/ `ra4` mnv4-small based recipe. 80.1% top-1 @ 224 and 80.7 @ 256.
+* Release 1.0.8
+
+### July 26, 2024
+* More MobileNet-v4 weights, ImageNet-12k pretrain w/ fine-tunes, and anti-aliased ConvLarge models
+
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k)|84.99 |15.01   |97.294|2.706   |32.59      |544     |
+| [mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k)|84.772|15.228  |97.344|2.656   |32.59      |480     |
+| [mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r448_in12k_ft_in1k)|84.64 |15.36   |97.114|2.886   |32.59      |448     |
+| [mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e230_r384_in12k_ft_in1k)|84.314|15.686  |97.102|2.898   |32.59      |384     |
+| [mobilenetv4_conv_aa_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e600_r384_in1k)     |83.824|16.176  |96.734|3.266   |32.59      |480     |
+| [mobilenetv4_conv_aa_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_conv_aa_large.e600_r384_in1k)             |83.244|16.756  |96.392|3.608   |32.59      |384     |
+| [mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k)|82.99 |17.01   |96.67 |3.33    |11.07      |320     |
+| [mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e200_r256_in12k_ft_in1k)|82.364|17.636  |96.256|3.744   |11.07      |256     |
+
+* Impressive MobileNet-V1 and EfficientNet-B0 baseline challenges (https://huggingface.co/blog/rwightman/mobilenet-baselines)
+  
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [efficientnet_b0.ra4_e3600_r224_in1k](http://hf.co/timm/efficientnet_b0.ra4_e3600_r224_in1k)                       |79.364|20.636  |94.754|5.246   |5.29       |256     |
+| [efficientnet_b0.ra4_e3600_r224_in1k](http://hf.co/timm/efficientnet_b0.ra4_e3600_r224_in1k)                       |78.584|21.416  |94.338|5.662   |5.29       |224     |    
+| [mobilenetv1_100h.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100h.ra4_e3600_r224_in1k)                     |76.596|23.404  |93.272|6.728   |5.28       |256     |
+| [mobilenetv1_100.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100.ra4_e3600_r224_in1k)                       |76.094|23.906  |93.004|6.996   |4.23       |256     |
+| [mobilenetv1_100h.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100h.ra4_e3600_r224_in1k)                     |75.662|24.338  |92.504|7.496   |5.28       |224     |
+| [mobilenetv1_100.ra4_e3600_r224_in1k](http://hf.co/timm/mobilenetv1_100.ra4_e3600_r224_in1k)                       |75.382|24.618  |92.312|7.688   |4.23       |224     |
+
+* Prototype of `set_input_size()` added to vit and swin v1/v2 models to allow changing image size, patch size, window size after model creation.
+* Improved support in swin for different size handling, in addition to `set_input_size`, `always_partition` and `strict_img_size` args have been added to `__init__` to allow more flexible input size constraints
+* Fix out of order indices info for intermediate 'Getter' feature wrapper, check out or range indices for same.
+* Add several `tiny` < .5M param models for testing that are actually trained on ImageNet-1k
+
+|model                       |top1  |top1_err|top5  |top5_err|param_count|img_size|crop_pct|
+|----------------------------|------|--------|------|--------|-----------|--------|--------|
+|test_efficientnet.r160_in1k |47.156|52.844  |71.726|28.274  |0.36       |192     |1.0     |
+|test_byobnet.r160_in1k      |46.698|53.302  |71.674|28.326  |0.46       |192     |1.0     |
+|test_efficientnet.r160_in1k |46.426|53.574  |70.928|29.072  |0.36       |160     |0.875   |
+|test_byobnet.r160_in1k      |45.378|54.622  |70.572|29.428  |0.46       |160     |0.875   |
+|test_vit.r160_in1k|42.0  |58.0    |68.664|31.336  |0.37       |192     |1.0     |
+|test_vit.r160_in1k|40.822|59.178  |67.212|32.788  |0.37       |160     |0.875   |
+
+* Fix vit reg token init, thanks [Promisery](https://github.com/Promisery)
+* Other misc fixes
+
+### June 24, 2024
+* 3 more MobileNetV4 hyrid weights with different MQA weight init scheme
+
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [mobilenetv4_hybrid_large.ix_e600_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_large.ix_e600_r384_in1k) |84.356|15.644  |96.892 |3.108  |37.76      |448     |
+| [mobilenetv4_hybrid_large.ix_e600_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_large.ix_e600_r384_in1k) |83.990|16.010  |96.702 |3.298  |37.76      |384     |
+| [mobilenetv4_hybrid_medium.ix_e550_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r384_in1k)       |83.394|16.606  |96.760|3.240   |11.07      |448     |
+| [mobilenetv4_hybrid_medium.ix_e550_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r384_in1k)       |82.968|17.032  |96.474|3.526   |11.07      |384     |
+| [mobilenetv4_hybrid_medium.ix_e550_r256_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r256_in1k)       |82.492|17.508  |96.278|3.722   |11.07      |320     |
+| [mobilenetv4_hybrid_medium.ix_e550_r256_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.ix_e550_r256_in1k)       |81.446|18.554  |95.704|4.296   |11.07      |256     |
+* florence2 weight loading in DaViT model
+
+### June 12, 2024
+* MobileNetV4 models and initial set of `timm` trained weights added:
+
+| model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
+|--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
+| [mobilenetv4_hybrid_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_large.e600_r384_in1k) |84.266|15.734  |96.936 |3.064  |37.76      |448     |
+| [mobilenetv4_hybrid_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_hybrid_large.e600_r384_in1k) |83.800|16.200  |96.770 |3.230  |37.76      |384     |
+| [mobilenetv4_conv_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_conv_large.e600_r384_in1k) |83.392|16.608  |96.622 |3.378  |32.59      |448     |
+| [mobilenetv4_conv_large.e600_r384_in1k](http://hf.co/timm/mobilenetv4_conv_large.e600_r384_in1k) |82.952|17.048  |96.266 |3.734  |32.59      |384     |
+| [mobilenetv4_conv_large.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_large.e500_r256_in1k) |82.674|17.326  |96.31 |3.69    |32.59      |320     |
+| [mobilenetv4_conv_large.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_large.e500_r256_in1k)                   |81.862|18.138  |95.69 |4.31    |32.59      |256     |
+| [mobilenetv4_hybrid_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e500_r224_in1k)             |81.276|18.724  |95.742|4.258   |11.07      |256     |
+| [mobilenetv4_conv_medium.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r256_in1k)                 |80.858|19.142  |95.768|4.232   |9.72       |320     |
+| [mobilenetv4_hybrid_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_hybrid_medium.e500_r224_in1k)             |80.442|19.558  |95.38 |4.62    |11.07      |224     |
+| [mobilenetv4_conv_blur_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_blur_medium.e500_r224_in1k)       |80.142|19.858  |95.298|4.702   |9.72       |256     |
+| [mobilenetv4_conv_medium.e500_r256_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r256_in1k)                 |79.928|20.072  |95.184|4.816   |9.72       |256     |
+| [mobilenetv4_conv_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r224_in1k)                 |79.808|20.192  |95.186|4.814   |9.72       |256     |
+| [mobilenetv4_conv_blur_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_blur_medium.e500_r224_in1k)       |79.438|20.562  |94.932|5.068   |9.72       |224     |
+| [mobilenetv4_conv_medium.e500_r224_in1k](http://hf.co/timm/mobilenetv4_conv_medium.e500_r224_in1k)                 |79.094|20.906  |94.77 |5.23    |9.72       |224     |
+| [mobilenetv4_conv_small.e2400_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e2400_r224_in1k)                 |74.616|25.384  |92.072|7.928   |3.77       |256     |
+| [mobilenetv4_conv_small.e1200_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e1200_r224_in1k)                 |74.292|25.708  |92.116|7.884   |3.77       |256     |
+| [mobilenetv4_conv_small.e2400_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e2400_r224_in1k)                 |73.756|26.244  |91.422|8.578   |3.77       |224     |
+| [mobilenetv4_conv_small.e1200_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e1200_r224_in1k)                 |73.454|26.546  |91.34 |8.66    |3.77       |224     |
+
+* Apple MobileCLIP (https://arxiv.org/pdf/2311.17049, FastViT and ViT-B) image tower model support & weights added (part of OpenCLIP support).
+* ViTamin (https://arxiv.org/abs/2404.02132) CLIP image tower model & weights added (part of OpenCLIP support).
+* OpenAI CLIP Modified ResNet image tower modelling & weight support (via ByobNet). Refactor AttentionPool2d.
+
+### May 14, 2024
+* Support loading PaliGemma jax weights into SigLIP ViT models with average pooling.
+* Add Hiera models from Meta (https://github.com/facebookresearch/hiera).
+* Add `normalize=` flag for transorms, return non-normalized torch.Tensor with original dytpe (for `chug`)
+* Version 1.0.3 release
+
+### May 11, 2024
+* `Searching for Better ViT Baselines (For the GPU Poor)` weights and vit variants released. Exploring model shapes between Tiny and Base.
+
+| model | top1 | top5 | param_count | img_size |
+| -------------------------------------------------- | ------ | ------ | ----------- | -------- |
+| [vit_mediumd_patch16_reg4_gap_256.sbb_in12k_ft_in1k](https://huggingface.co/timm/vit_mediumd_patch16_reg4_gap_256.sbb_in12k_ft_in1k) | 86.202 | 97.874 | 64.11 | 256 |
+| [vit_betwixt_patch16_reg4_gap_256.sbb_in12k_ft_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_256.sbb_in12k_ft_in1k)  | 85.418 | 97.48 | 60.4 | 256 |
+| [vit_mediumd_patch16_rope_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_mediumd_patch16_rope_reg1_gap_256.sbb_in1k)  | 84.322 | 96.812 | 63.95 | 256 |
+| [vit_betwixt_patch16_rope_reg4_gap_256.sbb_in1k](https://huggingface.co/timm/vit_betwixt_patch16_rope_reg4_gap_256.sbb_in1k)  | 83.906 | 96.684 | 60.23 | 256 |
+| [vit_base_patch16_rope_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_base_patch16_rope_reg1_gap_256.sbb_in1k)  | 83.866 | 96.67 | 86.43 | 256 |
+| [vit_medium_patch16_rope_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_medium_patch16_rope_reg1_gap_256.sbb_in1k)  | 83.81 | 96.824 | 38.74 | 256 |
+| [vit_betwixt_patch16_reg4_gap_256.sbb_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_256.sbb_in1k)  | 83.706 | 96.616 | 60.4 | 256 |
+| [vit_betwixt_patch16_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_betwixt_patch16_reg1_gap_256.sbb_in1k)  | 83.628 | 96.544 | 60.4 | 256 |
+| [vit_medium_patch16_reg4_gap_256.sbb_in1k](https://huggingface.co/timm/vit_medium_patch16_reg4_gap_256.sbb_in1k)  | 83.47 | 96.622 | 38.88 | 256 |
+| [vit_medium_patch16_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_medium_patch16_reg1_gap_256.sbb_in1k)  | 83.462 | 96.548 | 38.88 | 256 |
+| [vit_little_patch16_reg4_gap_256.sbb_in1k](https://huggingface.co/timm/vit_little_patch16_reg4_gap_256.sbb_in1k)  | 82.514 | 96.262 | 22.52 | 256 |
+| [vit_wee_patch16_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_wee_patch16_reg1_gap_256.sbb_in1k)  | 80.256 | 95.360 | 13.42 | 256 |
+| [vit_pwee_patch16_reg1_gap_256.sbb_in1k](https://huggingface.co/timm/vit_pwee_patch16_reg1_gap_256.sbb_in1k)  | 80.072 | 95.136 | 15.25 | 256 |
+| [vit_mediumd_patch16_reg4_gap_256.sbb_in12k](https://huggingface.co/timm/vit_mediumd_patch16_reg4_gap_256.sbb_in12k) | N/A | N/A | 64.11 | 256 |
+| [vit_betwixt_patch16_reg4_gap_256.sbb_in12k](https://huggingface.co/timm/vit_betwixt_patch16_reg4_gap_256.sbb_in12k)  | N/A | N/A | 60.4 | 256 |
+
+* AttentionExtract helper added to extract attention maps from `timm` models. See example in https://github.com/huggingface/pytorch-image-models/discussions/1232#discussioncomment-9320949
+* `forward_intermediates()` API refined and added to more models including some ConvNets that have other extraction methods.
+* 1017 of 1047 model architectures support `features_only=True` feature extraction. Remaining 34 architectures can be supported but based on priority requests.
+* Remove torch.jit.script annotated functions including old JIT activations. Conflict with dynamo and dynamo does a much better job when used.
+
+### April 11, 2024
+* Prepping for a long overdue 1.0 release, things have been stable for a while now.
+* Significant feature that's been missing for a while, `features_only=True` support for ViT models with flat hidden states or non-std module layouts (so far covering  `'vit_*', 'twins_*', 'deit*', 'beit*', 'mvitv2*', 'eva*', 'samvit_*', 'flexivit*'`)
+* Above feature support achieved through a new `forward_intermediates()` API that can be used with a feature wrapping module or direclty.
+```python
+model = timm.create_model('vit_base_patch16_224')
+final_feat, intermediates = model.forward_intermediates(input) 
+output = model.forward_head(final_feat)  # pooling + classifier head
+
+print(final_feat.shape)
+torch.Size([2, 197, 768])
+
+for f in intermediates:
+    print(f.shape)
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+torch.Size([2, 768, 14, 14])
+
+print(output.shape)
+torch.Size([2, 1000])
+```
+
+```python
+model = timm.create_model('eva02_base_patch16_clip_224', pretrained=True, img_size=512, features_only=True, out_indices=(-3, -2,))
+output = model(torch.randn(2, 3, 512, 512))
+
+for o in output:    
+    print(o.shape)   
+torch.Size([2, 768, 32, 32])
+torch.Size([2, 768, 32, 32])
+```
+* TinyCLIP vision tower weights added, thx [Thien Tran](https://github.com/gau-nernst)
+
+### Feb 19, 2024
+* Next-ViT models added. Adapted from https://github.com/bytedance/Next-ViT
+* HGNet and PP-HGNetV2 models added. Adapted from https://github.com/PaddlePaddle/PaddleClas by [SeeFun](https://github.com/seefun)
+* Removed setup.py, moved to pyproject.toml based build supported by PDM
+* Add updated model EMA impl using _for_each for less overhead
+* Support device args in train script for non GPU devices
+* Other misc fixes and small additions
+* Min supported Python version increased to 3.8
+* Release 0.9.16
+
+### Jan 8, 2024
+Datasets & transform refactoring
+* HuggingFace streaming (iterable) dataset support (`--dataset hfids:org/dataset`)
+* Webdataset wrapper tweaks for improved split info fetching, can auto fetch splits from supported HF hub webdataset
+* Tested HF `datasets` and webdataset wrapper streaming from HF hub with recent `timm` ImageNet uploads to https://huggingface.co/timm
+* Make input & target column/field keys consistent across datasets and pass via args
+* Full monochrome support when using e:g: `--input-size 1 224 224` or `--in-chans 1`, sets PIL image conversion appropriately in dataset
+* Improved several alternate crop & resize transforms (ResizeKeepRatio, RandomCropOrPad, etc) for use in PixParse document AI project
+* Add SimCLR style color jitter prob along with grayscale and gaussian blur options to augmentations and args
+* Allow train without validation set (`--val-split ''`) in train script
+* Add `--bce-sum` (sum over class dim) and `--bce-pos-weight` (positive weighting) args for training as they're common BCE loss tweaks I was often hard coding 
 
 ### Nov 23, 2023
 * Added EfficientViT-Large models, thanks [SeeFun](https://github.com/seefun)
@@ -61,385 +344,15 @@
 * Fix EfficientViT (MIT) to use torch.autocast so it works back to PT 1.10
 * 0.9.7 release
 
-### Aug 28, 2023
-* Add dynamic img size support to models in `vision_transformer.py`, `vision_transformer_hybrid.py`, `deit.py`, and `eva.py` w/o breaking backward compat.
-  * Add `dynamic_img_size=True` to args at model creation time to allow changing the grid size (interpolate abs and/or ROPE pos embed each forward pass).
-  * Add `dynamic_img_pad=True` to allow image sizes that aren't divisible by patch size (pad bottom right to patch size each forward pass).
-  * Enabling either dynamic mode will break FX tracing unless PatchEmbed module added as leaf.
-  * Existing method of resizing position embedding by passing different `img_size` (interpolate pretrained embed weights once) on creation still works.
-  * Existing method of changing `patch_size` (resize pretrained patch_embed weights once) on creation still works.
-  * Example validation cmd `python validate.py /imagenet --model vit_base_patch16_224 --amp --amp-dtype bfloat16 --img-size 255 --crop-pct 1.0 --model-kwargs dynamic_img_size=True dyamic_img_pad=True`
-
-### Aug 25, 2023
-* Many new models since last release
-  * FastViT - https://arxiv.org/abs/2303.14189
-  * MobileOne - https://arxiv.org/abs/2206.04040
-  * InceptionNeXt - https://arxiv.org/abs/2303.16900
-  * RepGhostNet - https://arxiv.org/abs/2211.06088 (thanks https://github.com/ChengpengChen)
-  * GhostNetV2 - https://arxiv.org/abs/2211.12905 (thanks https://github.com/yehuitang)
-  * EfficientViT (MSRA) - https://arxiv.org/abs/2305.07027 (thanks https://github.com/seefun)
-  * EfficientViT (MIT) - https://arxiv.org/abs/2205.14756 (thanks https://github.com/seefun)
-* Add `--reparam` arg to `benchmark.py`, `onnx_export.py`, and `validate.py` to trigger layer reparameterization / fusion for models with any one of `reparameterize()`, `switch_to_deploy()` or `fuse()`
-  * Including FastViT, MobileOne, RepGhostNet, EfficientViT (MSRA), RepViT, RepVGG, and LeViT
-* Preparing 0.9.6 'back to school' release
-
-### Aug 11, 2023
-* Swin, MaxViT, CoAtNet, and BEiT models support resizing of image/window size on creation with adaptation of pretrained weights
-* Example validation cmd to test w/ non-square resize `python validate.py /imagenet --model swin_base_patch4_window7_224.ms_in22k_ft_in1k --amp --amp-dtype bfloat16 --input-size 3 256 320 --model-kwargs window_size=8,10 img_size=256,320`
- 
-### Aug 3, 2023
-* Add GluonCV weights for HRNet w18_small and w18_small_v2. Converted by [SeeFun](https://github.com/seefun)
-* Fix `selecsls*` model naming regression
-* Patch and position embedding for ViT/EVA works for bfloat16/float16 weights on load (or activations for on-the-fly resize)
-* v0.9.5 release prep
-
-### July 27, 2023
-* Added timm trained `seresnextaa201d_32x8d.sw_in12k_ft_in1k_384` weights (and `.sw_in12k` pretrain) with 87.3% top-1 on ImageNet-1k, best ImageNet ResNet family model I'm aware of.
-* RepViT model and weights (https://arxiv.org/abs/2307.09283) added by [wangao](https://github.com/jameslahm)
-* I-JEPA ViT feature weights (no classifier) added by [SeeFun](https://github.com/seefun)
-* SAM-ViT (segment anything) feature weights (no classifier) added by [SeeFun](https://github.com/seefun)
-* Add support for alternative feat extraction methods and -ve indices to EfficientNet
-* Add NAdamW optimizer
-* Misc fixes
-
-### May 11, 2023
-* `timm` 0.9 released, transition from 0.8.xdev releases
-
-### May 10, 2023
-* Hugging Face Hub downloading is now default, 1132 models on https://huggingface.co/timm, 1163 weights in `timm`
-* DINOv2 vit feature backbone weights added thanks to [Leng Yue](https://github.com/leng-yue)
-* FB MAE vit feature backbone weights added
-* OpenCLIP DataComp-XL L/14 feat backbone weights added
-* MetaFormer (poolformer-v2, caformer, convformer, updated poolformer (v1)) w/ weights added by [Fredo Guan](https://github.com/fffffgggg54)
-* Experimental `get_intermediate_layers` function on vit/deit models for grabbing hidden states (inspired by DINO impl). This is WIP and may change significantly... feedback welcome.
-* Model creation throws error if `pretrained=True` and no weights exist (instead of continuing with random initialization)
-* Fix regression with inception / nasnet TF sourced weights with 1001 classes in original classifiers
-* bitsandbytes (https://github.com/TimDettmers/bitsandbytes) optimizers added to factory, use `bnb` prefix, ie `bnbadam8bit`
-* Misc cleanup and fixes
-* Final testing before switching to a 0.9 and bringing `timm` out of pre-release state
-
-### April 27, 2023
-* 97% of `timm` models uploaded to HF Hub and almost all updated to support multi-weight pretrained configs
-* Minor cleanup and refactoring of another batch of models as multi-weight added. More fused_attn (F.sdpa) and features_only support, and torchscript fixes.
-
-### April 21, 2023
-* Gradient accumulation support added to train script and tested (`--grad-accum-steps`), thanks [Taeksang Kim](https://github.com/voidbag)
-* More weights on HF Hub (cspnet, cait, volo, xcit, tresnet, hardcorenas, densenet, dpn, vovnet, xception_aligned)
-* Added `--head-init-scale` and `--head-init-bias` to train.py to scale classiifer head and set fixed bias for fine-tune
-* Remove all InplaceABN (`inplace_abn`) use, replaced use in tresnet with standard BatchNorm (modified weights accordingly). 
-
-### April 12, 2023
-* Add ONNX export script, validate script, helpers that I've had kicking around for along time. Tweak 'same' padding for better export w/ recent ONNX + pytorch.
-* Refactor dropout args for vit and vit-like models, separate drop_rate into `drop_rate` (classifier dropout), `proj_drop_rate` (block mlp / out projections), `pos_drop_rate` (position embedding drop), `attn_drop_rate` (attention dropout). Also add patch dropout (FLIP) to vit and eva models.
-* fused F.scaled_dot_product_attention support to more vit models, add env var (TIMM_FUSED_ATTN) to control, and config interface to enable/disable
-* Add EVA-CLIP backbones w/ image tower weights, all the way up to 4B param 'enormous' model, and 336x336 OpenAI ViT mode that was missed.
-
-### April 5, 2023
-* ALL ResNet models pushed to Hugging Face Hub with multi-weight support
-  * All past `timm` trained weights added with recipe based tags to differentiate
-  * All ResNet strikes back A1/A2/A3 (seed 0) and R50 example B/C1/C2/D weights available
-  * Add torchvision v2 recipe weights to existing torchvision originals
-  * See comparison table in https://huggingface.co/timm/seresnextaa101d_32x8d.sw_in12k_ft_in1k_288#model-comparison
-* New ImageNet-12k + ImageNet-1k fine-tunes available for a few anti-aliased ResNet models
-  * `resnetaa50d.sw_in12k_ft_in1k` - 81.7 @ 224, 82.6 @ 288
-  * `resnetaa101d.sw_in12k_ft_in1k` - 83.5 @ 224, 84.1 @ 288
-  * `seresnextaa101d_32x8d.sw_in12k_ft_in1k` - 86.0 @ 224, 86.5 @ 288 
-  * `seresnextaa101d_32x8d.sw_in12k_ft_in1k_288` - 86.5 @ 288, 86.7 @ 320
-
-### March 31, 2023
-* Add first ConvNext-XXLarge CLIP -> IN-1k fine-tune and IN-12k intermediate fine-tunes for convnext-base/large CLIP models.
-
-| model                                                                                                                |top1  |top5  |img_size|param_count|gmacs |macts |
-|----------------------------------------------------------------------------------------------------------------------|------|------|--------|-----------|------|------|
-| [convnext_xxlarge.clip_laion2b_soup_ft_in1k](https://huggingface.co/timm/convnext_xxlarge.clip_laion2b_soup_ft_in1k) |88.612|98.704|256     |846.47     |198.09|124.45|
-| convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_384                                                               |88.312|98.578|384     |200.13     |101.11|126.74|
-| convnext_large_mlp.clip_laion2b_soup_ft_in12k_in1k_320                                                               |87.968|98.47 |320     |200.13     |70.21 |88.02 |
-| convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384                                                                  |87.138|98.212|384     |88.59      |45.21 |84.49 |
-| convnext_base.clip_laion2b_augreg_ft_in12k_in1k                                                                      |86.344|97.97 |256     |88.59      |20.09 |37.55 |
-
-* Add EVA-02 MIM pretrained and fine-tuned weights, push to HF hub and update model cards for all EVA models. First model over 90% top-1 (99% top-5)! Check out the original code & weights at https://github.com/baaivision/EVA for more details on their work blending MIM, CLIP w/ many model, dataset, and train recipe tweaks.
-
-| model                                              |top1  |top5  |param_count|img_size|
-|----------------------------------------------------|------|------|-----------|--------|
-| [eva02_large_patch14_448.mim_m38m_ft_in22k_in1k](https://huggingface.co/timm/eva02_large_patch14_448.mim_m38m_ft_in1k) |90.054|99.042|305.08     |448     |
-| eva02_large_patch14_448.mim_in22k_ft_in22k_in1k    |89.946|99.01 |305.08     |448     |
-| eva_giant_patch14_560.m30m_ft_in22k_in1k           |89.792|98.992|1014.45    |560     |
-| eva02_large_patch14_448.mim_in22k_ft_in1k          |89.626|98.954|305.08     |448     |
-| eva02_large_patch14_448.mim_m38m_ft_in1k           |89.57 |98.918|305.08     |448     |
-| eva_giant_patch14_336.m30m_ft_in22k_in1k           |89.56 |98.956|1013.01    |336     |
-| eva_giant_patch14_336.clip_ft_in1k                 |89.466|98.82 |1013.01    |336     |
-| eva_large_patch14_336.in22k_ft_in22k_in1k          |89.214|98.854|304.53     |336     |
-| eva_giant_patch14_224.clip_ft_in1k                 |88.882|98.678|1012.56    |224     |
-| eva02_base_patch14_448.mim_in22k_ft_in22k_in1k     |88.692|98.722|87.12      |448     |
-| eva_large_patch14_336.in22k_ft_in1k                |88.652|98.722|304.53     |336     |
-| eva_large_patch14_196.in22k_ft_in22k_in1k          |88.592|98.656|304.14     |196     |
-| eva02_base_patch14_448.mim_in22k_ft_in1k           |88.23 |98.564|87.12      |448     |
-| eva_large_patch14_196.in22k_ft_in1k                |87.934|98.504|304.14     |196     |
-| eva02_small_patch14_336.mim_in22k_ft_in1k          |85.74 |97.614|22.13      |336     |
-| eva02_tiny_patch14_336.mim_in22k_ft_in1k           |80.658|95.524|5.76       |336     |
-
-* Multi-weight and HF hub for DeiT and MLP-Mixer based models
-
-### March 22, 2023
-* More weights pushed to HF hub along with multi-weight support, including: `regnet.py`, `rexnet.py`, `byobnet.py`, `resnetv2.py`, `swin_transformer.py`, `swin_transformer_v2.py`, `swin_transformer_v2_cr.py`
-* Swin Transformer models support feature extraction (NCHW feat maps for `swinv2_cr_*`, and NHWC for all others) and spatial embedding outputs.
-* FocalNet (from https://github.com/microsoft/FocalNet) models and weights added with significant refactoring, feature extraction, no fixed resolution / sizing constraint
-* RegNet weights increased with HF hub push, SWAG, SEER, and torchvision v2 weights. SEER is pretty poor wrt to performance for model size, but possibly useful.
-* More ImageNet-12k pretrained and 1k fine-tuned `timm` weights:
-  * `rexnetr_200.sw_in12k_ft_in1k` - 82.6 @ 224, 83.2 @ 288
-  * `rexnetr_300.sw_in12k_ft_in1k` - 84.0 @ 224, 84.5 @ 288
-  * `regnety_120.sw_in12k_ft_in1k` - 85.0 @ 224, 85.4 @ 288
-  * `regnety_160.lion_in12k_ft_in1k` - 85.6 @ 224, 86.0 @ 288
-  * `regnety_160.sw_in12k_ft_in1k` - 85.6 @ 224, 86.0 @ 288  (compare to SWAG PT + 1k FT this is same BUT much lower res, blows SEER FT away)
-* Model name deprecation + remapping functionality added (a milestone for bringing 0.8.x out of pre-release). Mappings being added...
-* Minor bug fixes and improvements.
-
-### Feb 26, 2023
-* Add ConvNeXt-XXLarge CLIP pretrained image tower weights for fine-tune & features (fine-tuning TBD) -- see [model card](https://huggingface.co/laion/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup)
-* Update `convnext_xxlarge` default LayerNorm eps to 1e-5 (for CLIP weights, improved stability)
-* 0.8.15dev0
-
-### Feb 20, 2023
-* Add 320x320 `convnext_large_mlp.clip_laion2b_ft_320` and `convnext_lage_mlp.clip_laion2b_ft_soup_320` CLIP image tower weights for features & fine-tune
-* 0.8.13dev0 pypi release for latest changes w/ move to huggingface org
-
-### Feb 16, 2023
-* `safetensor` checkpoint support added
-* Add ideas from 'Scaling Vision Transformers to 22 B. Params' (https://arxiv.org/abs/2302.05442) -- qk norm, RmsNorm, parallel block
-* Add F.scaled_dot_product_attention support (PyTorch 2.0 only) to `vit_*`, `vit_relpos*`, `coatnet` / `maxxvit` (to start)
-* Lion optimizer (w/ multi-tensor option) added (https://arxiv.org/abs/2302.06675)
-* gradient checkpointing works with `features_only=True`
-
-### Feb 7, 2023
-* New inference benchmark numbers added in [results](results/) folder.
-* Add convnext LAION CLIP trained weights and initial set of in1k fine-tunes
-  * `convnext_base.clip_laion2b_augreg_ft_in1k` - 86.2% @ 256x256
-  * `convnext_base.clip_laiona_augreg_ft_in1k_384` - 86.5% @ 384x384
-  * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k` - 87.3% @ 256x256
-  * `convnext_large_mlp.clip_laion2b_augreg_ft_in1k_384` - 87.9% @ 384x384
-* Add DaViT models. Supports `features_only=True`. Adapted from https://github.com/dingmyu/davit by [Fredo](https://github.com/fffffgggg54).
-* Use a common NormMlpClassifierHead across MaxViT, ConvNeXt, DaViT
-* Add EfficientFormer-V2 model, update EfficientFormer, and refactor LeViT (closely related architectures). Weights on HF hub.
-  * New EfficientFormer-V2 arch, significant refactor from original at (https://github.com/snap-research/EfficientFormer). Supports `features_only=True`.
-  * Minor updates to EfficientFormer.
-  * Refactor LeViT models to stages, add `features_only=True` support to new `conv` variants, weight remap required.
-* Move ImageNet meta-data (synsets, indices) from `/results` to [`timm/data/_info`](timm/data/_info/).
-* Add ImageNetInfo / DatasetInfo classes to provide labelling for various ImageNet classifier layouts in `timm`
-  * Update `inference.py` to use, try: `python inference.py /folder/to/images --model convnext_small.in12k --label-type detail --topk 5`
-* Ready for 0.8.10 pypi pre-release (final testing).
-
-### Jan 20, 2023
-* Add two convnext 12k -> 1k fine-tunes at 384x384
-  * `convnext_tiny.in12k_ft_in1k_384` - 85.1 @ 384
-  * `convnext_small.in12k_ft_in1k_384` - 86.2 @ 384
-
-* Push all MaxxViT weights to HF hub, and add new ImageNet-12k -> 1k fine-tunes for `rw` base MaxViT and CoAtNet 1/2 models
-
-|model                                                                                                                   |top1 |top5 |samples / sec  |Params (M)     |GMAC  |Act (M)|
-|------------------------------------------------------------------------------------------------------------------------|----:|----:|--------------:|--------------:|-----:|------:|
-|[maxvit_xlarge_tf_512.in21k_ft_in1k](https://huggingface.co/timm/maxvit_xlarge_tf_512.in21k_ft_in1k)                    |88.53|98.64|          21.76|         475.77|534.14|1413.22|
-|[maxvit_xlarge_tf_384.in21k_ft_in1k](https://huggingface.co/timm/maxvit_xlarge_tf_384.in21k_ft_in1k)                    |88.32|98.54|          42.53|         475.32|292.78| 668.76|
-|[maxvit_base_tf_512.in21k_ft_in1k](https://huggingface.co/timm/maxvit_base_tf_512.in21k_ft_in1k)                        |88.20|98.53|          50.87|         119.88|138.02| 703.99|
-|[maxvit_large_tf_512.in21k_ft_in1k](https://huggingface.co/timm/maxvit_large_tf_512.in21k_ft_in1k)                      |88.04|98.40|          36.42|         212.33|244.75| 942.15|
-|[maxvit_large_tf_384.in21k_ft_in1k](https://huggingface.co/timm/maxvit_large_tf_384.in21k_ft_in1k)                      |87.98|98.56|          71.75|         212.03|132.55| 445.84|
-|[maxvit_base_tf_384.in21k_ft_in1k](https://huggingface.co/timm/maxvit_base_tf_384.in21k_ft_in1k)                        |87.92|98.54|         104.71|         119.65| 73.80| 332.90|
-|[maxvit_rmlp_base_rw_384.sw_in12k_ft_in1k](https://huggingface.co/timm/maxvit_rmlp_base_rw_384.sw_in12k_ft_in1k)        |87.81|98.37|         106.55|         116.14| 70.97| 318.95|
-|[maxxvitv2_rmlp_base_rw_384.sw_in12k_ft_in1k](https://huggingface.co/timm/maxxvitv2_rmlp_base_rw_384.sw_in12k_ft_in1k)  |87.47|98.37|         149.49|         116.09| 72.98| 213.74|
-|[coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_rmlp_2_rw_384.sw_in12k_ft_in1k)            |87.39|98.31|         160.80|          73.88| 47.69| 209.43|
-|[maxvit_rmlp_base_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/maxvit_rmlp_base_rw_224.sw_in12k_ft_in1k)        |86.89|98.02|         375.86|         116.14| 23.15|  92.64|
-|[maxxvitv2_rmlp_base_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/maxxvitv2_rmlp_base_rw_224.sw_in12k_ft_in1k)  |86.64|98.02|         501.03|         116.09| 24.20|  62.77|
-|[maxvit_base_tf_512.in1k](https://huggingface.co/timm/maxvit_base_tf_512.in1k)                                          |86.60|97.92|          50.75|         119.88|138.02| 703.99|
-|[coatnet_2_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_2_rw_224.sw_in12k_ft_in1k)                      |86.57|97.89|         631.88|          73.87| 15.09|  49.22|
-|[maxvit_large_tf_512.in1k](https://huggingface.co/timm/maxvit_large_tf_512.in1k)                                        |86.52|97.88|          36.04|         212.33|244.75| 942.15|
-|[coatnet_rmlp_2_rw_224.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_rmlp_2_rw_224.sw_in12k_ft_in1k)            |86.49|97.90|         620.58|          73.88| 15.18|  54.78|
-|[maxvit_base_tf_384.in1k](https://huggingface.co/timm/maxvit_base_tf_384.in1k)                                          |86.29|97.80|         101.09|         119.65| 73.80| 332.90|
-|[maxvit_large_tf_384.in1k](https://huggingface.co/timm/maxvit_large_tf_384.in1k)                                        |86.23|97.69|          70.56|         212.03|132.55| 445.84|
-|[maxvit_small_tf_512.in1k](https://huggingface.co/timm/maxvit_small_tf_512.in1k)                                        |86.10|97.76|          88.63|          69.13| 67.26| 383.77|
-|[maxvit_tiny_tf_512.in1k](https://huggingface.co/timm/maxvit_tiny_tf_512.in1k)                                          |85.67|97.58|         144.25|          31.05| 33.49| 257.59|
-|[maxvit_small_tf_384.in1k](https://huggingface.co/timm/maxvit_small_tf_384.in1k)                                        |85.54|97.46|         188.35|          69.02| 35.87| 183.65|
-|[maxvit_tiny_tf_384.in1k](https://huggingface.co/timm/maxvit_tiny_tf_384.in1k)                                          |85.11|97.38|         293.46|          30.98| 17.53| 123.42|
-|[maxvit_large_tf_224.in1k](https://huggingface.co/timm/maxvit_large_tf_224.in1k)                                        |84.93|96.97|         247.71|         211.79| 43.68| 127.35|
-|[coatnet_rmlp_1_rw2_224.sw_in12k_ft_in1k](https://huggingface.co/timm/coatnet_rmlp_1_rw2_224.sw_in12k_ft_in1k)          |84.90|96.96|        1025.45|          41.72|  8.11|  40.13|
-|[maxvit_base_tf_224.in1k](https://huggingface.co/timm/maxvit_base_tf_224.in1k)                                          |84.85|96.99|         358.25|         119.47| 24.04|  95.01|
-|[maxxvit_rmlp_small_rw_256.sw_in1k](https://huggingface.co/timm/maxxvit_rmlp_small_rw_256.sw_in1k)                      |84.63|97.06|         575.53|          66.01| 14.67|  58.38|
-|[coatnet_rmlp_2_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_rmlp_2_rw_224.sw_in1k)                              |84.61|96.74|         625.81|          73.88| 15.18|  54.78|
-|[maxvit_rmlp_small_rw_224.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_small_rw_224.sw_in1k)                        |84.49|96.76|         693.82|          64.90| 10.75|  49.30|
-|[maxvit_small_tf_224.in1k](https://huggingface.co/timm/maxvit_small_tf_224.in1k)                                        |84.43|96.83|         647.96|          68.93| 11.66|  53.17|
-|[maxvit_rmlp_tiny_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_tiny_rw_256.sw_in1k)                          |84.23|96.78|         807.21|          29.15|  6.77|  46.92|
-|[coatnet_1_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_1_rw_224.sw_in1k)                                        |83.62|96.38|         989.59|          41.72|  8.04|  34.60|
-|[maxvit_tiny_rw_224.sw_in1k](https://huggingface.co/timm/maxvit_tiny_rw_224.sw_in1k)                                    |83.50|96.50|        1100.53|          29.06|  5.11|  33.11|
-|[maxvit_tiny_tf_224.in1k](https://huggingface.co/timm/maxvit_tiny_tf_224.in1k)                                          |83.41|96.59|        1004.94|          30.92|  5.60|  35.78|
-|[coatnet_rmlp_1_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_rmlp_1_rw_224.sw_in1k)                              |83.36|96.45|        1093.03|          41.69|  7.85|  35.47|
-|[maxxvitv2_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxxvitv2_nano_rw_256.sw_in1k)                              |83.11|96.33|        1276.88|          23.70|  6.26|  23.05|
-|[maxxvit_rmlp_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxxvit_rmlp_nano_rw_256.sw_in1k)                        |83.03|96.34|        1341.24|          16.78|  4.37|  26.05|
-|[maxvit_rmlp_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_nano_rw_256.sw_in1k)                          |82.96|96.26|        1283.24|          15.50|  4.47|  31.92|
-|[maxvit_nano_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_nano_rw_256.sw_in1k)                                    |82.93|96.23|        1218.17|          15.45|  4.46|  30.28|
-|[coatnet_bn_0_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_bn_0_rw_224.sw_in1k)                                  |82.39|96.19|        1600.14|          27.44|  4.67|  22.04|
-|[coatnet_0_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_0_rw_224.sw_in1k)                                        |82.39|95.84|        1831.21|          27.44|  4.43|  18.73|
-|[coatnet_rmlp_nano_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_rmlp_nano_rw_224.sw_in1k)                        |82.05|95.87|        2109.09|          15.15|  2.62|  20.34|
-|[coatnext_nano_rw_224.sw_in1k](https://huggingface.co/timm/coatnext_nano_rw_224.sw_in1k)                                |81.95|95.92|        2525.52|          14.70|  2.47|  12.80|
-|[coatnet_nano_rw_224.sw_in1k](https://huggingface.co/timm/coatnet_nano_rw_224.sw_in1k)                                  |81.70|95.64|        2344.52|          15.14|  2.41|  15.41|
-|[maxvit_rmlp_pico_rw_256.sw_in1k](https://huggingface.co/timm/maxvit_rmlp_pico_rw_256.sw_in1k)                          |80.53|95.21|        1594.71|           7.52|  1.85|  24.86|
-
-### Jan 11, 2023
-* Update ConvNeXt ImageNet-12k pretrain series w/ two new fine-tuned weights (and pre FT `.in12k` tags)
-  * `convnext_nano.in12k_ft_in1k` - 82.3 @ 224, 82.9 @ 288  (previously released)
-  * `convnext_tiny.in12k_ft_in1k` - 84.2 @ 224, 84.5 @ 288
-  * `convnext_small.in12k_ft_in1k` - 85.2 @ 224, 85.3 @ 288
-
-### Jan 6, 2023
-* Finally got around to adding `--model-kwargs` and `--opt-kwargs` to scripts to pass through rare args directly to model classes from cmd line
-  * `train.py /imagenet --model resnet50 --amp --model-kwargs output_stride=16 act_layer=silu`
-  * `train.py /imagenet --model vit_base_patch16_clip_224 --img-size 240 --amp --model-kwargs img_size=240 patch_size=12`
-* Cleanup some popular models to better support arg passthrough / merge with model configs, more to go.
-
-### Jan 5, 2023
-* ConvNeXt-V2 models and weights added to existing `convnext.py`
-  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](http://arxiv.org/abs/2301.00808)
-  * Reference impl: https://github.com/facebookresearch/ConvNeXt-V2 (NOTE: weights currently CC-BY-NC)
-
-### Dec 23, 2022 🎄☃
-* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
-  * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
-* Many more models updated to multi-weight and downloadable via HF hub now (convnext, efficientnet, mobilenet, vision_transformer*, beit)
-* More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
-* More ImageNet-12k (subset of 22k) pretrain models popping up:
-  * `efficientnet_b5.in12k_ft_in1k` - 85.9 @ 448x448
-  * `vit_medium_patch16_gap_384.in12k_ft_in1k` - 85.5 @ 384x384
-  * `vit_medium_patch16_gap_256.in12k_ft_in1k` - 84.5 @ 256x256
-  * `convnext_nano.in12k_ft_in1k` - 82.9 @ 288x288
-
-### Dec 8, 2022
-* Add 'EVA l' to `vision_transformer.py`, MAE style ViT-L/14 MIM pretrain w/ EVA-CLIP targets, FT on ImageNet-1k (w/ ImageNet-22k intermediate for some)
-  * original source: https://github.com/baaivision/EVA
-
-| model                                     | top1 | param_count |  gmac | macts | hub                                     |
-|:------------------------------------------|-----:|------------:|------:|------:|:----------------------------------------|
-| eva_large_patch14_336.in22k_ft_in22k_in1k | 89.2 |       304.5 | 191.1 | 270.2 | [link](https://huggingface.co/BAAI/EVA) |
-| eva_large_patch14_336.in22k_ft_in1k       | 88.7 |       304.5 | 191.1 | 270.2 | [link](https://huggingface.co/BAAI/EVA) |
-| eva_large_patch14_196.in22k_ft_in22k_in1k | 88.6 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
-| eva_large_patch14_196.in22k_ft_in1k       | 87.9 |       304.1 |  61.6 |  63.5 | [link](https://huggingface.co/BAAI/EVA) |
-
-### Dec 6, 2022
-* Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`.
-  * original source: https://github.com/baaivision/EVA
-  * paper: https://arxiv.org/abs/2211.07636
-
-| model                                    |   top1 |   param_count |   gmac |   macts | hub                                     |
-|:-----------------------------------------|-------:|--------------:|-------:|--------:|:----------------------------------------|
-| eva_giant_patch14_560.m30m_ft_in22k_in1k |   89.8 |        1014.4 | 1906.8 |  2577.2 | [link](https://huggingface.co/BAAI/EVA) |
-| eva_giant_patch14_336.m30m_ft_in22k_in1k |   89.6 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
-| eva_giant_patch14_336.clip_ft_in1k       |   89.4 |        1013   |  620.6 |   550.7 | [link](https://huggingface.co/BAAI/EVA) |
-| eva_giant_patch14_224.clip_ft_in1k       |   89.1 |        1012.6 |  267.2 |   192.6 | [link](https://huggingface.co/BAAI/EVA) |
-
-### Dec 5, 2022
-
-* Pre-release (`0.8.0dev0`) of multi-weight support (`model_arch.pretrained_tag`). Install with `pip install --pre timm`
-  * vision_transformer, maxvit, convnext are the first three model impl w/ support
-  * model names are changing with this (previous _21k, etc. fn will merge), still sorting out deprecation handling
-  * bugs are likely, but I need feedback so please try it out
-  * if stability is needed, please use 0.6.x pypi releases or clone from [0.6.x branch](https://github.com/rwightman/pytorch-image-models/tree/0.6.x)
-* Support for PyTorch 2.0 compile is added in train/validate/inference/benchmark, use `--torchcompile` argument
-* Inference script allows more control over output, select k for top-class index + prob json, csv or parquet output
-* Add a full set of fine-tuned CLIP image tower weights from both LAION-2B and original OpenAI CLIP models
-
-| model                                            |   top1 |   param_count |   gmac |   macts | hub                                                                                  |
-|:-------------------------------------------------|-------:|--------------:|-------:|--------:|:-------------------------------------------------------------------------------------|
-| vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k  |   88.6 |         632.5 |  391   |   407.5 | [link](https://huggingface.co/timm/vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k)  |
-| vit_large_patch14_clip_336.openai_ft_in12k_in1k  |   88.3 |         304.5 |  191.1 |   270.2 | [link](https://huggingface.co/timm/vit_large_patch14_clip_336.openai_ft_in12k_in1k)  |
-| vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k  |   88.2 |         632   |  167.4 |   139.4 | [link](https://huggingface.co/timm/vit_huge_patch14_clip_224.laion2b_ft_in12k_in1k)  |
-| vit_large_patch14_clip_336.laion2b_ft_in12k_in1k |   88.2 |         304.5 |  191.1 |   270.2 | [link](https://huggingface.co/timm/vit_large_patch14_clip_336.laion2b_ft_in12k_in1k) |
-| vit_large_patch14_clip_224.openai_ft_in12k_in1k  |   88.2 |         304.2 |   81.1 |    88.8 | [link](https://huggingface.co/timm/vit_large_patch14_clip_224.openai_ft_in12k_in1k)  |
-| vit_large_patch14_clip_224.laion2b_ft_in12k_in1k |   87.9 |         304.2 |   81.1 |    88.8 | [link](https://huggingface.co/timm/vit_large_patch14_clip_224.laion2b_ft_in12k_in1k) |
-| vit_large_patch14_clip_224.openai_ft_in1k        |   87.9 |         304.2 |   81.1 |    88.8 | [link](https://huggingface.co/timm/vit_large_patch14_clip_224.openai_ft_in1k)        |
-| vit_large_patch14_clip_336.laion2b_ft_in1k       |   87.9 |         304.5 |  191.1 |   270.2 | [link](https://huggingface.co/timm/vit_large_patch14_clip_336.laion2b_ft_in1k)       |
-| vit_huge_patch14_clip_224.laion2b_ft_in1k        |   87.6 |         632   |  167.4 |   139.4 | [link](https://huggingface.co/timm/vit_huge_patch14_clip_224.laion2b_ft_in1k)        |
-| vit_large_patch14_clip_224.laion2b_ft_in1k       |   87.3 |         304.2 |   81.1 |    88.8 | [link](https://huggingface.co/timm/vit_large_patch14_clip_224.laion2b_ft_in1k)       |
-| vit_base_patch16_clip_384.laion2b_ft_in12k_in1k  |   87.2 |          86.9 |   55.5 |   101.6 | [link](https://huggingface.co/timm/vit_base_patch16_clip_384.laion2b_ft_in12k_in1k)  |
-| vit_base_patch16_clip_384.openai_ft_in12k_in1k   |   87   |          86.9 |   55.5 |   101.6 | [link](https://huggingface.co/timm/vit_base_patch16_clip_384.openai_ft_in12k_in1k)   |
-| vit_base_patch16_clip_384.laion2b_ft_in1k        |   86.6 |          86.9 |   55.5 |   101.6 | [link](https://huggingface.co/timm/vit_base_patch16_clip_384.laion2b_ft_in1k)        |
-| vit_base_patch16_clip_384.openai_ft_in1k         |   86.2 |          86.9 |   55.5 |   101.6 | [link](https://huggingface.co/timm/vit_base_patch16_clip_384.openai_ft_in1k)         |
-| vit_base_patch16_clip_224.laion2b_ft_in12k_in1k  |   86.2 |          86.6 |   17.6 |    23.9 | [link](https://huggingface.co/timm/vit_base_patch16_clip_224.laion2b_ft_in12k_in1k)  |
-| vit_base_patch16_clip_224.openai_ft_in12k_in1k   |   85.9 |          86.6 |   17.6 |    23.9 | [link](https://huggingface.co/timm/vit_base_patch16_clip_224.openai_ft_in12k_in1k)   |
-| vit_base_patch32_clip_448.laion2b_ft_in12k_in1k  |   85.8 |          88.3 |   17.9 |    23.9 | [link](https://huggingface.co/timm/vit_base_patch32_clip_448.laion2b_ft_in12k_in1k)  |
-| vit_base_patch16_clip_224.laion2b_ft_in1k        |   85.5 |          86.6 |   17.6 |    23.9 | [link](https://huggingface.co/timm/vit_base_patch16_clip_224.laion2b_ft_in1k)        |
-| vit_base_patch32_clip_384.laion2b_ft_in12k_in1k  |   85.4 |          88.3 |   13.1 |    16.5 | [link](https://huggingface.co/timm/vit_base_patch32_clip_384.laion2b_ft_in12k_in1k)  |
-| vit_base_patch16_clip_224.openai_ft_in1k         |   85.3 |          86.6 |   17.6 |    23.9 | [link](https://huggingface.co/timm/vit_base_patch16_clip_224.openai_ft_in1k)         |
-| vit_base_patch32_clip_384.openai_ft_in12k_in1k   |   85.2 |          88.3 |   13.1 |    16.5 | [link](https://huggingface.co/timm/vit_base_patch32_clip_384.openai_ft_in12k_in1k)   |
-| vit_base_patch32_clip_224.laion2b_ft_in12k_in1k  |   83.3 |          88.2 |    4.4 |     5   | [link](https://huggingface.co/timm/vit_base_patch32_clip_224.laion2b_ft_in12k_in1k)  |
-| vit_base_patch32_clip_224.laion2b_ft_in1k        |   82.6 |          88.2 |    4.4 |     5   | [link](https://huggingface.co/timm/vit_base_patch32_clip_224.laion2b_ft_in1k)        |
-| vit_base_patch32_clip_224.openai_ft_in1k         |   81.9 |          88.2 |    4.4 |     5   | [link](https://huggingface.co/timm/vit_base_patch32_clip_224.openai_ft_in1k)         |
-
-* Port of MaxViT Tensorflow Weights from official impl at https://github.com/google-research/maxvit
-  * There was larger than expected drops for the upscaled 384/512 in21k fine-tune weights, possible detail missing, but the 21k FT did seem sensitive to small preprocessing
-
-| model                              |   top1 |   param_count |   gmac |   macts | hub                                                                    |
-|:-----------------------------------|-------:|--------------:|-------:|--------:|:-----------------------------------------------------------------------|
-| maxvit_xlarge_tf_512.in21k_ft_in1k |   88.5 |         475.8 |  534.1 |  1413.2 | [link](https://huggingface.co/timm/maxvit_xlarge_tf_512.in21k_ft_in1k) |
-| maxvit_xlarge_tf_384.in21k_ft_in1k |   88.3 |         475.3 |  292.8 |   668.8 | [link](https://huggingface.co/timm/maxvit_xlarge_tf_384.in21k_ft_in1k) |
-| maxvit_base_tf_512.in21k_ft_in1k   |   88.2 |         119.9 |  138   |   704   | [link](https://huggingface.co/timm/maxvit_base_tf_512.in21k_ft_in1k)   |
-| maxvit_large_tf_512.in21k_ft_in1k  |   88   |         212.3 |  244.8 |   942.2 | [link](https://huggingface.co/timm/maxvit_large_tf_512.in21k_ft_in1k)  |
-| maxvit_large_tf_384.in21k_ft_in1k  |   88   |         212   |  132.6 |   445.8 | [link](https://huggingface.co/timm/maxvit_large_tf_384.in21k_ft_in1k)  |
-| maxvit_base_tf_384.in21k_ft_in1k   |   87.9 |         119.6 |   73.8 |   332.9 | [link](https://huggingface.co/timm/maxvit_base_tf_384.in21k_ft_in1k)   |
-| maxvit_base_tf_512.in1k            |   86.6 |         119.9 |  138   |   704   | [link](https://huggingface.co/timm/maxvit_base_tf_512.in1k)            |
-| maxvit_large_tf_512.in1k           |   86.5 |         212.3 |  244.8 |   942.2 | [link](https://huggingface.co/timm/maxvit_large_tf_512.in1k)           |
-| maxvit_base_tf_384.in1k            |   86.3 |         119.6 |   73.8 |   332.9 | [link](https://huggingface.co/timm/maxvit_base_tf_384.in1k)            |
-| maxvit_large_tf_384.in1k           |   86.2 |         212   |  132.6 |   445.8 | [link](https://huggingface.co/timm/maxvit_large_tf_384.in1k)           |
-| maxvit_small_tf_512.in1k           |   86.1 |          69.1 |   67.3 |   383.8 | [link](https://huggingface.co/timm/maxvit_small_tf_512.in1k)           |
-| maxvit_tiny_tf_512.in1k            |   85.7 |          31   |   33.5 |   257.6 | [link](https://huggingface.co/timm/maxvit_tiny_tf_512.in1k)            |
-| maxvit_small_tf_384.in1k           |   85.5 |          69   |   35.9 |   183.6 | [link](https://huggingface.co/timm/maxvit_small_tf_384.in1k)           |
-| maxvit_tiny_tf_384.in1k            |   85.1 |          31   |   17.5 |   123.4 | [link](https://huggingface.co/timm/maxvit_tiny_tf_384.in1k)            |
-| maxvit_large_tf_224.in1k           |   84.9 |         211.8 |   43.7 |   127.4 | [link](https://huggingface.co/timm/maxvit_large_tf_224.in1k)           |
-| maxvit_base_tf_224.in1k            |   84.9 |         119.5 |   24   |    95   | [link](https://huggingface.co/timm/maxvit_base_tf_224.in1k)            |
-| maxvit_small_tf_224.in1k           |   84.4 |          68.9 |   11.7 |    53.2 | [link](https://huggingface.co/timm/maxvit_small_tf_224.in1k)           |
-| maxvit_tiny_tf_224.in1k            |   83.4 |          30.9 |    5.6 |    35.8 | [link](https://huggingface.co/timm/maxvit_tiny_tf_224.in1k)            |
-
-### Oct 15, 2022
-* Train and validation script enhancements
-* Non-GPU (ie CPU) device support
-* SLURM compatibility for train script
-* HF datasets support (via ReaderHfds)
-* TFDS/WDS dataloading improvements (sample padding/wrap for distributed use fixed wrt sample count estimate)
-* in_chans !=3 support for scripts / loader
-* Adan optimizer
-* Can enable per-step LR scheduling via args
-* Dataset 'parsers' renamed to 'readers', more descriptive of purpose
-* AMP args changed, APEX via `--amp-impl apex`, bfloat16 supportedf via `--amp-dtype bfloat16`
-* main branch switched to 0.7.x version, 0.6x forked for stable release of weight only adds
-* master -> main branch rename
-
-### Oct 10, 2022
-* More weights in `maxxvit` series, incl first ConvNeXt block based `coatnext` and `maxxvit` experiments:
-  * `coatnext_nano_rw_224` - 82.0 @ 224 (G) -- (uses ConvNeXt conv block, no BatchNorm)
-  * `maxxvit_rmlp_nano_rw_256` - 83.0 @ 256, 83.7 @ 320  (G) (uses ConvNeXt conv block, no BN)
-  * `maxvit_rmlp_small_rw_224` - 84.5 @ 224, 85.1 @ 320 (G)
-  * `maxxvit_rmlp_small_rw_256` - 84.6 @ 256, 84.9 @ 288 (G) -- could be trained better, hparams need tuning (uses ConvNeXt block, no BN)
-  * `coatnet_rmlp_2_rw_224` - 84.6 @ 224, 85 @ 320  (T)
-  * NOTE: official MaxVit weights (in1k) have been released at https://github.com/google-research/maxvit -- some extra work is needed to port and adapt since my impl was created independently of theirs and has a few small differences + the whole TF same padding fun.
-
-### Sept 23, 2022
-* LAION-2B CLIP image towers supported as pretrained backbones for fine-tune or features (no classifier)
-  * vit_base_patch32_224_clip_laion2b
-  * vit_large_patch14_224_clip_laion2b
-  * vit_huge_patch14_224_clip_laion2b
-  * vit_giant_patch14_224_clip_laion2b
-
-### Sept 7, 2022
-* Hugging Face [`timm` docs](https://huggingface.co/docs/hub/timm) home now exists, look for more here in the future
-* Add BEiT-v2 weights for base and large 224x224 models from https://github.com/microsoft/unilm/tree/master/beit2
-* Add more weights in `maxxvit` series incl a `pico` (7.5M params, 1.9 GMACs), two `tiny` variants:
-  * `maxvit_rmlp_pico_rw_256` - 80.5 @ 256, 81.3 @ 320  (T)
-  * `maxvit_tiny_rw_224` - 83.5 @ 224 (G)
-  * `maxvit_rmlp_tiny_rw_256` - 84.2 @ 256, 84.8 @ 320 (T)
-
-
 ## Introduction
 
 Py**T**orch **Im**age **M**odels (`timm`) is a collection of image models, layers, utilities, optimizers, schedulers, data-loaders / augmentations, and reference training / validation scripts that aim to pull together a wide variety of SOTA models with ability to reproduce ImageNet training results.
 
 The work of many others is present here. I've tried to make sure all source material is acknowledged via links to github, arxiv papers, etc in the README, documentation, and code docstrings. Please let me know if I missed anything.
 
-## Models
+## Features
+
+### Models
 
 All model architecture families include variants with pretrained weights. There are specific model variants without any weights, it is NOT a bug. Help training new or better weights is always appreciated.
 
@@ -486,31 +399,37 @@ All model architecture families include variants with pretrained weights. There 
 * gMLP - https://arxiv.org/abs/2105.08050
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
+* HGNet / HGNet-V2 - TBD
 * HRNet - https://arxiv.org/abs/1908.07919
 * InceptionNeXt - https://arxiv.org/abs/2303.16900
 * Inception-V3 - https://arxiv.org/abs/1512.00567
 * Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
 * Lambda Networks - https://arxiv.org/abs/2102.08602
 * LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
+* MambaOut - https://arxiv.org/abs/2405.07992
 * MaxViT (Multi-Axis Vision Transformer) - https://arxiv.org/abs/2204.01697
 * MetaFormer (PoolFormer-v2, ConvFormer, CAFormer) - https://arxiv.org/abs/2210.13452
 * MLP-Mixer - https://arxiv.org/abs/2105.01601
+* MobileCLIP - https://arxiv.org/abs/2311.17049
 * MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
   * FBNet-V3 - https://arxiv.org/abs/2006.02049
   * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
   * LCNet - https://arxiv.org/abs/2109.15099
+* MobileNetV4 - https://arxiv.org/abs/2404.10518
 * MobileOne - https://arxiv.org/abs/2206.04040
 * MobileViT - https://arxiv.org/abs/2110.02178
 * MobileViT-V2 - https://arxiv.org/abs/2206.02680
 * MViT-V2 (Improved Multiscale Vision Transformer) - https://arxiv.org/abs/2112.01526
 * NASNet-A - https://arxiv.org/abs/1707.07012
 * NesT - https://arxiv.org/abs/2105.12723
+* Next-ViT - https://arxiv.org/abs/2207.05501
 * NFNet-F - https://arxiv.org/abs/2102.06171
 * NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
 * PNasNet - https://arxiv.org/abs/1712.00559
 * PoolFormer (MetaFormer) - https://arxiv.org/abs/2111.11418
 * Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
 * PVT-V2 (Improved Pyramid Vision Transformer) - https://arxiv.org/abs/2106.13797
+* RDNet (DenseNets Reloaded) - https://arxiv.org/abs/2403.19588
 * RegNet - https://arxiv.org/abs/2003.13678
 * RegNetZ - https://arxiv.org/abs/2103.06877
 * RepVGG - https://arxiv.org/abs/2101.03697
@@ -540,6 +459,7 @@ All model architecture families include variants with pretrained weights. There 
 * Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
 * Visformer - https://arxiv.org/abs/2104.12533
 * Vision Transformer - https://arxiv.org/abs/2010.11929
+* ViTamin - https://arxiv.org/abs/2404.02132
 * VOLO (Vision Outlooker) - https://arxiv.org/abs/2106.13112
 * VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
 * Xception - https://arxiv.org/abs/1610.02357
@@ -547,7 +467,49 @@ All model architecture families include variants with pretrained weights. There 
 * Xception (Modified Aligned, TF) - https://arxiv.org/abs/1802.02611
 * XCiT (Cross-Covariance Image Transformers) - https://arxiv.org/abs/2106.09681
 
-## Features
+### Optimizers
+To see full list of optimizers w/ descriptions: `timm.optim.list_optimizers(with_description=True)`
+
+Included optimizers available via `timm.optim.create_optimizer_v2` factory method:
+* `adabelief` an implementation of AdaBelief adapted from https://github.com/juntang-zhuang/Adabelief-Optimizer - https://arxiv.org/abs/2010.07468
+* `adafactor` adapted from [FAIRSeq impl](https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py) - https://arxiv.org/abs/1804.04235
+* `adafactorbv` adapted from [Big Vision](https://github.com/google-research/big_vision/blob/main/big_vision/optax.py) - https://arxiv.org/abs/2106.04560
+* `adahessian` by [David Samuel](https://github.com/davda54/ada-hessian) - https://arxiv.org/abs/2006.00719
+* `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) - https://arxiv.org/abs/2006.08217
+* `adan` an implementation of Adan adapted from https://github.com/sail-sg/Adan - https://arxiv.org/abs/2208.06677
+* `adopt` ADOPT adapted from https://github.com/iShohei220/adopt - https://arxiv.org/abs/2411.02853
+* `lamb` an implementation of Lamb and LambC (w/ trust-clipping) cleaned up and modified to support use with XLA - https://arxiv.org/abs/1904.00962
+* `laprop` optimizer from https://github.com/Z-T-WANG/LaProp-Optimizer - https://arxiv.org/abs/2002.04839
+* `lars` an implementation of LARS and LARC (w/ trust-clipping) - https://arxiv.org/abs/1708.03888
+* `lion` and implementation of Lion adapted from https://github.com/google/automl/tree/master/lion - https://arxiv.org/abs/2302.06675
+* `lookahead` adapted from impl by [Liam](https://github.com/alphadl/lookahead.pytorch) - https://arxiv.org/abs/1907.08610
+* `madgrad` an implementation of MADGRAD adapted from https://github.com/facebookresearch/madgrad - https://arxiv.org/abs/2101.11075
+* `mars` MARS optimizer from https://github.com/AGI-Arena/MARS - https://arxiv.org/abs/2411.10438
+* `nadam` an implementation of Adam w/ Nesterov momentum
+* `nadamw` an impementation of AdamW (Adam w/ decoupled weight-decay) w/ Nesterov momentum. A simplified impl based on https://github.com/mlcommons/algorithmic-efficiency
+* `novograd` by [Masashi Kimura](https://github.com/convergence-lab/novograd) - https://arxiv.org/abs/1905.11286
+* `radam` by [Liyuan Liu](https://github.com/LiyuanLucasLiu/RAdam) - https://arxiv.org/abs/1908.03265
+* `rmsprop_tf` adapted from PyTorch RMSProp by myself. Reproduces much improved Tensorflow RMSProp behaviour
+* `sgdw` and implementation of SGD w/ decoupled weight-decay
+* `fused<name>` optimizers by name with [NVIDIA Apex](https://github.com/NVIDIA/apex/tree/master/apex/optimizers) installed
+* `bnb<name>` optimizers by name with [BitsAndBytes](https://github.com/TimDettmers/bitsandbytes) installed
+* `cadamw`, `clion`, and more 'Cautious' optimizers from https://github.com/kyleliang919/C-Optim - https://arxiv.org/abs/2411.16085
+* `adam`, `adamw`, `rmsprop`, `adadelta`, `adagrad`, and `sgd` pass through to `torch.optim` implementations
+
+### Augmentations
+* Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py) - https://arxiv.org/abs/1708.04896)
+* Mixup - https://arxiv.org/abs/1710.09412
+* CutMix - https://arxiv.org/abs/1905.04899
+* AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
+* AugMix w/ JSD loss, JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well - https://arxiv.org/abs/1912.02781
+* SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
+
+### Regularization
+* DropPath aka "Stochastic Depth" - https://arxiv.org/abs/1603.09382
+* DropBlock - https://arxiv.org/abs/1810.12890
+* Blur Pooling - https://arxiv.org/abs/1904.11486
+
+### Other
 
 Several (less common) features that I often utilize in my projects are included. Many of their additions are the reason why I maintain my own set of models, instead of using others' via PIP:
 
@@ -573,24 +535,6 @@ Several (less common) features that I often utilize in my projects are included.
      * [FAIRseq lr_scheduler](https://github.com/pytorch/fairseq/tree/master/fairseq/optim/lr_scheduler)
      * SGDR: Stochastic Gradient Descent with Warm Restarts (https://arxiv.org/abs/1608.03983)
   * Schedulers include `step`, `cosine` w/ restarts, `tanh` w/ restarts, `plateau`
-* Optimizers:
-    * `rmsprop_tf` adapted from PyTorch RMSProp by myself. Reproduces much improved Tensorflow RMSProp behaviour.
-    * `radam` by [Liyuan Liu](https://github.com/LiyuanLucasLiu/RAdam) (https://arxiv.org/abs/1908.03265)
-    * `novograd` by [Masashi Kimura](https://github.com/convergence-lab/novograd) (https://arxiv.org/abs/1905.11286)
-    * `lookahead` adapted from impl by [Liam](https://github.com/alphadl/lookahead.pytorch) (https://arxiv.org/abs/1907.08610)
-    * `fused<name>` optimizers by name with [NVIDIA Apex](https://github.com/NVIDIA/apex/tree/master/apex/optimizers) installed
-    * `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) (https://arxiv.org/abs/2006.08217)
-    * `adafactor` adapted from [FAIRSeq impl](https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py) (https://arxiv.org/abs/1804.04235)
-    * `adahessian` by [David Samuel](https://github.com/davda54/ada-hessian) (https://arxiv.org/abs/2006.00719)
-* Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py)  (https://arxiv.org/abs/1708.04896)
-* Mixup (https://arxiv.org/abs/1710.09412)
-* CutMix (https://arxiv.org/abs/1905.04899)
-* AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
-* AugMix w/ JSD loss (https://arxiv.org/abs/1912.02781), JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well
-* SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
-* DropPath aka "Stochastic Depth" (https://arxiv.org/abs/1603.09382)
-* DropBlock (https://arxiv.org/abs/1810.12890)
-* Blur Pooling (https://arxiv.org/abs/1904.11486)
 * Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
 * Adaptive Gradient Clipping (https://arxiv.org/abs/2102.06171, https://github.com/deepmind/deepmind-research/tree/master/nfnets)
 * An extensive selection of channel and/or spatial attention modules:

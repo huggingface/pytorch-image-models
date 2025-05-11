@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import ClassifierHead, ConvNormAct, ConvNormActAa, DropPath, get_attn, create_act_layer, make_divisible
+from timm.layers import ClassifierHead, ConvNormAct, DropPath, get_attn, create_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._manipulate import named_apply, MATCH_PREV_GROUP
 from ._registry import register_model, generate_default_cfgs
@@ -296,10 +296,10 @@ class CrossStage(nn.Module):
             if avg_down:
                 self.conv_down = nn.Sequential(
                     nn.AvgPool2d(2) if stride == 2 else nn.Identity(),  # FIXME dilation handling
-                    ConvNormActAa(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
                 )
             else:
-                self.conv_down = ConvNormActAa(
+                self.conv_down = ConvNormAct(
                     in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                     aa_layer=aa_layer, **conv_kwargs)
             prev_chs = down_chs
@@ -375,10 +375,10 @@ class CrossStage3(nn.Module):
             if avg_down:
                 self.conv_down = nn.Sequential(
                     nn.AvgPool2d(2) if stride == 2 else nn.Identity(),  # FIXME dilation handling
-                    ConvNormActAa(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                    ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
                 )
             else:
-                self.conv_down = ConvNormActAa(
+                self.conv_down = ConvNormAct(
                     in_chs, down_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                     aa_layer=aa_layer, **conv_kwargs)
             prev_chs = down_chs
@@ -442,10 +442,10 @@ class DarkStage(nn.Module):
         if avg_down:
             self.conv_down = nn.Sequential(
                 nn.AvgPool2d(2) if stride == 2 else nn.Identity(),   # FIXME dilation handling
-                ConvNormActAa(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
+                ConvNormAct(in_chs, out_chs, kernel_size=1, stride=1, groups=groups, **conv_kwargs)
             )
         else:
-            self.conv_down = ConvNormActAa(
+            self.conv_down = ConvNormAct(
                 in_chs, out_chs, kernel_size=3, stride=stride, dilation=first_dilation, groups=groups,
                 aa_layer=aa_layer, **conv_kwargs)
 
@@ -675,9 +675,13 @@ class CspNet(nn.Module):
         self.feature_info.extend(stage_feat_info)
 
         # Construct the head
-        self.num_features = prev_chs
+        self.num_features = self.head_hidden_size = prev_chs
         self.head = ClassifierHead(
-            in_features=prev_chs, num_classes=num_classes, pool_type=global_pool, drop_rate=drop_rate)
+            in_features=prev_chs,
+            num_classes=num_classes,
+            pool_type=global_pool,
+            drop_rate=drop_rate,
+        )
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
@@ -698,11 +702,12 @@ class CspNet(nn.Module):
         assert not enable, 'gradient checkpointing not supported'
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -710,7 +715,7 @@ class CspNet(nn.Module):
         return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        return self.head(x, pre_logits=pre_logits)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
@@ -958,7 +963,10 @@ default_cfgs = generate_default_cfgs({
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_x_c2ns-4e4490aa.pth',
         interpolation='bicubic', crop_pct=0.95, test_input_size=(3, 288, 288), test_crop_pct=1.0),
 
-    'cs3darknet_focus_s.untrained': _cfg(interpolation='bicubic'),
+    'cs3darknet_focus_s.ra4_e3600_r256_in1k': _cfg(
+        hf_hub_id='timm/',
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        interpolation='bicubic', test_input_size=(3, 320, 320), test_crop_pct=1.0),
     'cs3darknet_focus_m.c2ns_in1k': _cfg(
         hf_hub_id='timm/',
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-tpu-weights/cs3darknet_focus_m_c2ns-e23bed41.pth',

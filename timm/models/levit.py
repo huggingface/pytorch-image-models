@@ -25,14 +25,15 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # Copyright 2020 Ross Wightman, Apache-2.0 License
 from collections import OrderedDict
 from functools import partial
-from typing import Dict
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_STD, IMAGENET_DEFAULT_MEAN
-from timm.layers import to_ntuple, to_2tuple, get_act_layer, DropPath, trunc_normal_
+from timm.layers import to_ntuple, to_2tuple, get_act_layer, DropPath, trunc_normal_, ndgrid
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
@@ -194,7 +195,7 @@ class Attention(nn.Module):
         ]))
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
-        pos = torch.stack(torch.meshgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
         rel_pos = (pos[..., :, None] - pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
         self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
@@ -290,10 +291,11 @@ class AttentionDownsample(nn.Module):
         ]))
 
         self.attention_biases = nn.Parameter(torch.zeros(num_heads, resolution[0] * resolution[1]))
-        k_pos = torch.stack(torch.meshgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
-        q_pos = torch.stack(torch.meshgrid(
+        k_pos = torch.stack(ndgrid(torch.arange(resolution[0]), torch.arange(resolution[1]))).flatten(1)
+        q_pos = torch.stack(ndgrid(
             torch.arange(0, resolution[0], step=stride),
-            torch.arange(0, resolution[1], step=stride))).flatten(1)
+            torch.arange(0, resolution[1], step=stride)
+        )).flatten(1)
         rel_pos = (q_pos[..., :, None] - k_pos[..., None, :]).abs()
         rel_pos = (rel_pos[0] * resolution[1]) + rel_pos[1]
         self.register_buffer('attention_bias_idxs', rel_pos, persistent=False)
@@ -553,7 +555,7 @@ class Levit(nn.Module):
         self.use_conv = use_conv
         self.num_classes = num_classes
         self.global_pool = global_pool
-        self.num_features = embed_dim[-1]
+        self.num_features = self.head_hidden_size = embed_dim[-1]
         self.embed_dim = embed_dim
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
@@ -623,15 +625,79 @@ class Levit(nn.Module):
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
+    def reset_classifier(self, num_classes: int , global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
         self.head = NormLinear(
-            self.embed_dim[-1], num_classes, drop=self.drop_rate) if num_classes > 0 else nn.Identity()
+            self.num_features, num_classes, drop=self.drop_rate) if num_classes > 0 else nn.Identity()
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        # forward pass
+        x = self.stem(x)
+        B, C, H, W = x.shape
+        if not self.use_conv:
+            x = x.flatten(2).transpose(1, 2)
+
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                if self.use_conv:
+                    intermediates.append(x)
+                else:
+                    intermediates.append(x.reshape(B, H, W, -1).permute(0, 3, 1, 2))
+            H = (H + 2 - 1) // 2
+            W = (W + 2 - 1) // 2
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -661,10 +727,10 @@ class LevitDistilled(Levit):
         self.distilled_training = False  # must set this True to train w/ distillation token
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes, global_pool=None, distillation=None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -745,9 +811,8 @@ model_cfgs = dict(
 def create_levit(variant, cfg_variant=None, pretrained=False, distilled=True, **kwargs):
     is_conv = '_conv' in variant
     out_indices = kwargs.pop('out_indices', (0, 1, 2))
-    if kwargs.get('features_only', None):
-        if not is_conv:
-            raise RuntimeError('features_only not implemented for LeVit in non-convolutional mode.')
+    if kwargs.get('features_only', False) and not is_conv:
+        kwargs.setdefault('feature_cls', 'getter')
     if cfg_variant is None:
         if variant in model_cfgs:
             cfg_variant = variant

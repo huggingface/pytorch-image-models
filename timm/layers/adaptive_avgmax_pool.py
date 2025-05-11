@@ -134,19 +134,22 @@ class SelectAdaptivePool2d(nn.Module):
         super(SelectAdaptivePool2d, self).__init__()
         assert input_fmt in ('NCHW', 'NHWC')
         self.pool_type = pool_type or ''  # convert other falsy values to empty string for consistent TS typing
+        pool_type = pool_type.lower()
         if not pool_type:
             self.pool = nn.Identity()  # pass through
             self.flatten = nn.Flatten(1) if flatten else nn.Identity()
         elif pool_type.startswith('fast') or input_fmt != 'NCHW':
             assert output_size == 1, 'Fast pooling and non NCHW input formats require output_size == 1.'
-            if pool_type.endswith('avgmax'):
-                self.pool = FastAdaptiveAvgMaxPool(flatten, input_fmt=input_fmt)
-            elif pool_type.endswith('catavgmax'):
+            if pool_type.endswith('catavgmax'):
                 self.pool = FastAdaptiveCatAvgMaxPool(flatten, input_fmt=input_fmt)
+            elif pool_type.endswith('avgmax'):
+                self.pool = FastAdaptiveAvgMaxPool(flatten, input_fmt=input_fmt)
             elif pool_type.endswith('max'):
                 self.pool = FastAdaptiveMaxPool(flatten, input_fmt=input_fmt)
-            else:
+            elif pool_type == 'fast' or pool_type.endswith('avg'):
                 self.pool = FastAdaptiveAvgPool(flatten, input_fmt=input_fmt)
+            else:
+                assert False, 'Invalid pool type: %s' % pool_type
             self.flatten = nn.Identity()
         else:
             assert input_fmt == 'NCHW'
@@ -156,8 +159,10 @@ class SelectAdaptivePool2d(nn.Module):
                 self.pool = AdaptiveCatAvgMaxPool2d(output_size)
             elif pool_type == 'max':
                 self.pool = nn.AdaptiveMaxPool2d(output_size)
-            else:
+            elif pool_type == 'avg':
                 self.pool = nn.AdaptiveAvgPool2d(output_size)
+            else:
+                assert False, 'Invalid pool type: %s' % pool_type
             self.flatten = nn.Flatten(1) if flatten else nn.Identity()
 
     def is_identity(self):

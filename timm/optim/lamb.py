@@ -52,46 +52,85 @@ Modifications Copyright 2021 Ross Wightman
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import math
+from typing import Optional, Tuple
 
 import torch
 from torch.optim import Optimizer
+
+from ._types import ParamsT
 
 
 class Lamb(Optimizer):
     """Implements a pure pytorch variant of FuseLAMB (NvLamb variant) optimizer from apex.optimizers.FusedLAMB
     reference: https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/LanguageModeling/Transformer-XL/pytorch/lamb.py
 
-    LAMB was proposed in `Large Batch Optimization for Deep Learning: Training BERT in 76 minutes`_.
+    LAMB was proposed in:
+    - Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:  https://arxiv.org/abs/1904.00962
+    - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
 
-    Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining parameter groups.
-        lr (float, optional): learning rate. (default: 1e-3)
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its norm. (default: (0.9, 0.999))
-        eps (float, optional): term added to the denominator to improve
-            numerical stability. (default: 1e-8)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        grad_averaging (bool, optional): whether apply (1-beta2) to grad when
-            calculating running averages of gradient. (default: True)
-        max_grad_norm (float, optional): value used to clip global grad norm (default: 1.0)
-        trust_clip (bool): enable LAMBC trust ratio clipping (default: False)
-        always_adapt (boolean, optional): Apply adaptive learning rate to 0.0
-            weight decay parameter (default: False)
-
-    .. _Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:
-        https://arxiv.org/abs/1904.00962
-    .. _On the Convergence of Adam and Beyond:
-        https://openreview.net/forum?id=ryQu7f-RZ
+    Args:
+        params: Iterable of parameters to optimize or dicts defining parameter groups.
+        lr: Learning rate
+        betas: Coefficients used for computing running averages of gradient and its norm.
+        eps: Term added to the denominator to improve numerical stability.
+        weight_decay: Weight decay
+        grad_averaging: Whether apply (1-beta2) to grad when calculating running averages of gradient.
+        max_grad_norm: Value used to clip global grad norm.
+        trust_clip: Enable LAMBC trust ratio clipping.
+        always_adapt: Apply adaptive learning rate to 0.0 weight decay parameter.
+        caution: Apply caution.
     """
 
     def __init__(
-            self, params, lr=1e-3, bias_correction=True, betas=(0.9, 0.999), eps=1e-6,
-            weight_decay=0.01, grad_averaging=True, max_grad_norm=1.0, trust_clip=False, always_adapt=False):
+            self,
+            params: ParamsT,
+            lr: float = 1e-3,
+            bias_correction: bool = True,
+            betas: Tuple[float, float] = (0.9, 0.999),
+            eps: float = 1e-6,
+            weight_decay: float = 0.01,
+            grad_averaging: bool = True,
+            max_grad_norm: Optional[float] = 1.0,
+            trust_clip: bool = False,
+            always_adapt: bool = False,
+            caution: bool = False,
+    ):
         defaults = dict(
-            lr=lr, bias_correction=bias_correction, betas=betas, eps=eps, weight_decay=weight_decay,
-            grad_averaging=grad_averaging, max_grad_norm=max_grad_norm,
-            trust_clip=trust_clip, always_adapt=always_adapt)
+            lr=lr,
+            bias_correction=bias_correction,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            grad_averaging=grad_averaging,
+            max_grad_norm=max_grad_norm,
+            trust_clip=trust_clip,
+            always_adapt=always_adapt,
+            caution=caution,
+        )
         super().__init__(params, defaults)
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault('caution', False)
+
+    def _get_clip_grad_norm(self):
+        max_grad_norm = self.defaults['max_grad_norm']
+        if max_grad_norm is None:
+            return None
+
+        norms = []
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad = p.grad
+                if grad.is_sparse:
+                    raise RuntimeError('Lamb does not support sparse gradients, consider SparseAdam instead.')
+                norms.append(torch.linalg.vector_norm(grad))
+        global_norm = torch.linalg.vector_norm(torch.stack(norms))
+        clip_global_norm = (global_norm / max_grad_norm).clamp_(min=1.0)
+        return clip_global_norm
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -105,26 +144,7 @@ class Lamb(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        device = self.param_groups[0]['params'][0].device
-        one_tensor = torch.tensor(1.0, device=device)  # because torch.where doesn't handle scalars correctly
-        global_grad_norm = torch.zeros(1, device=device)
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                grad = p.grad
-                if grad.is_sparse:
-                    raise RuntimeError('Lamb does not support sparse gradients, consider SparseAdam instad.')
-                global_grad_norm.add_(grad.pow(2).sum())
-
-        global_grad_norm = torch.sqrt(global_grad_norm)
-        # FIXME it'd be nice to remove explicit tensor conversion of scalars when torch.where promotes
-        # scalar types properly https://github.com/pytorch/pytorch/issues/9190
-        max_grad_norm = torch.tensor(self.defaults['max_grad_norm'], device=device)
-        clip_global_grad_norm = torch.where(
-            global_grad_norm > max_grad_norm,
-            global_grad_norm / max_grad_norm,
-            one_tensor)
+        clip_grad_norm = self._get_clip_grad_norm() # None if disabled
 
         for group in self.param_groups:
             bias_correction = 1 if group['bias_correction'] else 0
@@ -148,7 +168,11 @@ class Lamb(Optimizer):
             for p in group['params']:
                 if p.grad is None:
                     continue
-                grad = p.grad.div_(clip_global_grad_norm)
+                grad = p.grad
+
+                if clip_grad_norm is not None:
+                    grad.div_(clip_grad_norm)
+
                 state = self.state[p]
 
                 # State initialization
@@ -167,6 +191,12 @@ class Lamb(Optimizer):
                 denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
                 update = (exp_avg / bias_correction1).div_(denom)
 
+                if group['caution']:
+                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    mask = (update * grad > 0).to(grad.dtype)
+                    mask.div_(mask.mean().clamp_(min=1e-3))
+                    update.mul_(mask)
+
                 weight_decay = group['weight_decay']
                 if weight_decay != 0:
                     update.add_(p, alpha=weight_decay)
@@ -176,15 +206,17 @@ class Lamb(Optimizer):
                     # excluded from weight decay, unless always_adapt == True, then always enabled.
                     w_norm = p.norm(2.0)
                     g_norm = update.norm(2.0)
+                    trust_ratio = w_norm / g_norm
                     # FIXME nested where required since logical and/or not working in PT XLA
+                    # Set the ratio to 1.0 (no change) if either weight norm or grad norm is zero
                     trust_ratio = torch.where(
                         w_norm > 0,
-                        torch.where(g_norm > 0, w_norm / g_norm, one_tensor),
-                        one_tensor,
+                        torch.where(g_norm > 0, trust_ratio, 1.0),
+                        1.0,
                     )
                     if group['trust_clip']:
                         # LAMBC trust clipping, upper bound fixed at one
-                        trust_ratio = torch.minimum(trust_ratio, one_tensor)
+                        trust_ratio = torch.clamp(trust_ratio, max=1.0)
                     update.mul_(trust_ratio)
 
                 p.add_(update, alpha=-group['lr'])

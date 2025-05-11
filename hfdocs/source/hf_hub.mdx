@@ -39,8 +39,8 @@ Here is where you would normally train or fine-tune the model. We'll skip that f
 Let's pretend we've now fine-tuned the model. The next step would be to push it to the Hub! We can do this with the `timm.models.hub.push_to_hf_hub` function.
 
 ```py
->>> model_cfg = dict(labels=['a', 'b', 'c', 'd'])
->>> timm.models.hub.push_to_hf_hub(model, 'resnet18-random', model_config=model_cfg)
+>>> model_cfg = dict(label_names=['a', 'b', 'c', 'd'])
+>>> timm.models.push_to_hf_hub(model, 'resnet18-random', model_config=model_cfg)
 ```
 
 Running the above would push the model to `<your-username>/resnet18-random` on the Hub. You can now share this model with your friends, or use it in your own code!

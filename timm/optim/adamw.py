@@ -1,43 +1,48 @@
 """ AdamW Optimizer
 Impl copied from PyTorch master
 
-NOTE: Builtin optim.AdamW is used by the factory, this impl only serves as a Python based reference, will be removed
-someday
+NOTE: This impl has been deprecated in favour of torch.optim.AdamW and remains as a reference
 """
 import math
+from typing import Tuple
+
 import torch
 from torch.optim.optimizer import Optimizer
 
+from ._types import ParamsT
 
-class AdamW(Optimizer):
+
+class AdamWLegacy(Optimizer):
     r"""Implements AdamW algorithm.
 
-    The original Adam algorithm was proposed in `Adam: A Method for Stochastic Optimization`_.
-    The AdamW variant was proposed in `Decoupled Weight Decay Regularization`_.
+    NOTE: This impl has been deprecated in favour of torch.optim.NAdam and remains as a reference
 
-    Arguments:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float, optional): learning rate (default: 1e-3)
-        betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.9, 0.999))
-        eps (float, optional): term added to the denominator to improve
-            numerical stability (default: 1e-8)
-        weight_decay (float, optional): weight decay coefficient (default: 1e-2)
-        amsgrad (boolean, optional): whether to use the AMSGrad variant of this
-            algorithm from the paper `On the Convergence of Adam and Beyond`_
-            (default: False)
+    References:
+        - Adam: A Method for Stochastic Optimization: https://arxiv.org/abs/1412.6980
+        - Decoupled Weight Decay Regularization: https://arxiv.org/abs/1711.05101
+        - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
 
-    .. _Adam\: A Method for Stochastic Optimization:
-        https://arxiv.org/abs/1412.6980
-    .. _Decoupled Weight Decay Regularization:
-        https://arxiv.org/abs/1711.05101
-    .. _On the Convergence of Adam and Beyond:
-        https://openreview.net/forum?id=ryQu7f-RZ
+    Args:
+        params: iterable of parameters to optimize or dicts defining parameter groups
+        lr: learning rate
+        betas: coefficients used for computing running averages of gradient and its square
+        eps: term added to the denominator to improve numerical stability
+        weight_decay: weight decay coefficient
+        amsgrad: whether to use the AMSGrad variant of this algorithm
+            from the paper `On the Convergence of Adam and Beyond`
+        caution: apply caution when using AdamW
     """
 
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=1e-2, amsgrad=False):
+    def __init__(
+            self,
+            params: ParamsT,
+            lr: float = 1e-3,
+            betas: Tuple[float, float] = (0.9, 0.999),
+            eps: float = 1e-8,
+            weight_decay: float = 1e-2,
+            amsgrad: bool = False,
+            caution: bool = False,
+    ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -46,14 +51,21 @@ class AdamW(Optimizer):
             raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
         if not 0.0 <= betas[1] < 1.0:
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
-        defaults = dict(lr=lr, betas=betas, eps=eps,
-                        weight_decay=weight_decay, amsgrad=amsgrad)
-        super(AdamW, self).__init__(params, defaults)
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
+            caution=caution,
+        )
+        super(AdamWLegacy, self).__init__(params, defaults)
 
     def __setstate__(self, state):
-        super(AdamW, self).__setstate__(state)
+        super(AdamWLegacy, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
+            group.setdefault('caution', False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -116,6 +128,12 @@ class AdamW(Optimizer):
                     denom = (exp_avg_sq.sqrt() / math.sqrt(bias_correction2)).add_(group['eps'])
 
                 step_size = group['lr'] / bias_correction1
+
+                if group['caution']:
+                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    mask = (exp_avg * grad > 0).to(grad.dtype)
+                    mask.div_(mask.mean().clamp_(min=1e-3))
+                    exp_avg = exp_avg * mask
 
                 p.addcdiv_(exp_avg, denom, value=-step_size)
 

@@ -105,7 +105,7 @@ class Xception(nn.Module):
         self.drop_rate = drop_rate
         self.global_pool = global_pool
         self.num_classes = num_classes
-        self.num_features = 2048
+        self.num_features = self.head_hidden_size = 2048
 
         self.conv1 = nn.Conv2d(in_chans, 32, 3, 2, 0, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
@@ -171,10 +171,10 @@ class Xception(nn.Module):
         assert not enable, "gradient checkpointing not supported"
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 

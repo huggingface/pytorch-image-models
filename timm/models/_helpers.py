@@ -4,7 +4,6 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import logging
 import os
-from collections import OrderedDict
 from typing import Any, Callable, Dict, Optional, Union
 
 import torch
@@ -19,12 +18,24 @@ _logger = logging.getLogger(__name__)
 __all__ = ['clean_state_dict', 'load_state_dict', 'load_checkpoint', 'remap_state_dict', 'resume_checkpoint']
 
 
+def _remove_prefix(text, prefix):
+    # FIXME replace with 3.9 stdlib fn when min at 3.9
+    if text.startswith(prefix):
+        return text[len(prefix):]
+    return text
+
+
 def clean_state_dict(state_dict: Dict[str, Any]) -> Dict[str, Any]:
     # 'clean' checkpoint by removing .module prefix from state dict if it exists from parallel training
     cleaned_state_dict = {}
+    to_remove = (
+        'module.',  # DDP wrapper
+        '_orig_mod.',  # torchcompile dynamo wrapper
+    )
     for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
-        cleaned_state_dict[name] = v
+        for r in to_remove:
+            k = _remove_prefix(k, r)
+        cleaned_state_dict[k] = v
     return cleaned_state_dict
 
 
@@ -32,6 +43,7 @@ def load_state_dict(
         checkpoint_path: str,
         use_ema: bool = True,
         device: Union[str, torch.device] = 'cpu',
+        weights_only: bool = False,
 ) -> Dict[str, Any]:
     if checkpoint_path and os.path.isfile(checkpoint_path):
         # Check if safetensors or not and load weights accordingly
@@ -39,7 +51,10 @@ def load_state_dict(
             assert _has_safetensors, "`pip install safetensors` to use .safetensors"
             checkpoint = safetensors.torch.load_file(checkpoint_path, device=device)
         else:
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+            try:
+                checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=weights_only)
+            except TypeError:
+                checkpoint = torch.load(checkpoint_path, map_location=device)
 
         state_dict_key = ''
         if isinstance(checkpoint, dict):
@@ -67,6 +82,7 @@ def load_checkpoint(
         strict: bool = True,
         remap: bool = False,
         filter_fn: Optional[Callable] = None,
+        weights_only: bool = False,
 ):
     if os.path.splitext(checkpoint_path)[-1].lower() in ('.npz', '.npy'):
         # numpy checkpoint, try to load via model specific load_pretrained fn
@@ -76,7 +92,7 @@ def load_checkpoint(
             raise NotImplementedError('Model cannot load numpy checkpoint')
         return
 
-    state_dict = load_state_dict(checkpoint_path, use_ema, device=device)
+    state_dict = load_state_dict(checkpoint_path, use_ema, device=device, weights_only=weights_only)
     if remap:
         state_dict = remap_state_dict(state_dict, model)
     elif filter_fn:
@@ -114,7 +130,7 @@ def resume_checkpoint(
 ):
     resume_epoch = None
     if os.path.isfile(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
             if log_info:
                 _logger.info('Restoring model state from checkpoint...')

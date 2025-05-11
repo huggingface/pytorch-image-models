@@ -11,7 +11,7 @@ for some reference, rewrote most of the code.
 Hacked together by / Copyright 2020 Ross Wightman
 """
 
-from typing import List
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
@@ -134,9 +134,17 @@ class OsaStage(nn.Module):
             else:
                 drop_path = None
             blocks += [OsaBlock(
-                in_chs, mid_chs, out_chs, layer_per_block, residual=residual and i > 0, depthwise=depthwise,
-                attn=attn if last_block else '', norm_layer=norm_layer, act_layer=act_layer, drop_path=drop_path)
-            ]
+                in_chs,
+                mid_chs,
+                out_chs,
+                layer_per_block,
+                residual=residual and i > 0,
+                depthwise=depthwise,
+                attn=attn if last_block else '',
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+                drop_path=drop_path
+            )]
             in_chs = out_chs
         self.blocks = nn.Sequential(*blocks)
 
@@ -227,6 +235,7 @@ class VovNet(nn.Module):
 
         self.stages = nn.Sequential(*stages)
 
+        self.head_hidden_size = self.num_features
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=drop_rate)
 
         for n, m in self.named_modules():
@@ -248,18 +257,19 @@ class VovNet(nn.Module):
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes, global_pool='avg'):
-        self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
+    def reset_classifier(self, num_classes, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
 
     def forward_features(self, x):
         x = self.stem(x)
         return self.stages(x)
 
     def forward_head(self, x, pre_logits: bool = False):
-        return self.head(x, pre_logits=pre_logits)
+        return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
     def forward(self, x):
         x = self.forward_features(x)
