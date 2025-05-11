@@ -34,7 +34,7 @@ class MLDecoderHead(nn.Module):
         self.head = type(self.head)(in_features=in_features, num_classes=num_classes)
 
 
-    def forward(self, x, pre_logits: bool = False):
+    def forward(self, x, q=None, pre_logits: bool = False):
         # pool for compatibility with ClassifierHead
         if self.input_fmt == 'NHWC':
             x = x.permute(0, 3, 1, 2)
@@ -42,7 +42,7 @@ class MLDecoderHead(nn.Module):
             x = self.global_pool(x)
             return x.flatten(1)
         else:
-            x = self.head(x)
+            x = self.head(x, q=q)
             return self.flatten(x)
 
 def add_ml_decoder_head(model, head_version='new', **kwargs):
