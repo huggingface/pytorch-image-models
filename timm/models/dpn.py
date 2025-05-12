@@ -87,8 +87,8 @@ class DualPathBlock(nn.Module):
             self.c1x1_c2 = create_conv2d(num_3x3_b, inc, kernel_size=1)
         else:
             self.c1x1_c = BnActConv2d(in_chs=num_3x3_b, out_chs=num_1x1_c + inc, kernel_size=1, stride=1)
-            self.c1x1_c1 = None
-            self.c1x1_c2 = None
+            self.c1x1_c1 = nn.Identity()
+            self.c1x1_c2 = nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_s = self.c1x1_w(x)
