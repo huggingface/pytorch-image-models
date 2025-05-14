@@ -402,7 +402,11 @@ class SwiftFormer(nn.Module):
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         matcher = dict(
             stem=r'^stem',  # stem and embed
-            blocks=[(r'^stages\.(\d+)', None), (r'^norm', (99999,))]
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^norm', (99999,)),
+            ]
         )
         return matcher
 

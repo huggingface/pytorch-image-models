@@ -16,7 +16,7 @@ Modifications by / Copyright 2025 Ryan Hou & Ross Wightman, original copyrights 
 # Licensed under the MIT License.
 
 from functools import partial
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -118,6 +118,7 @@ class Block(nn.Module):
             merge_size: Union[int, Tuple[int, int]] = 2,
     ):
         super().__init__()
+        self.grad_checkpointing = False
         self.blocks = nn.Sequential(*[
             MLPBlock(
                 dim=dim,
@@ -127,18 +128,22 @@ class Block(nn.Module):
                 layer_scale_init_value=layer_scale_init_value,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
-                pconv_fw_type=pconv_fw_type
+                pconv_fw_type=pconv_fw_type,
             )
             for i in range(depth)
         ])
-        self.down = PatchMerging(
+        self.downsample = PatchMerging(
             dim=dim // 2,
             patch_size=merge_size,
             norm_layer=norm_layer,
         ) if use_merge else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.blocks(self.down(x))
+        x = self.downsample(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x, flatten=True)
+        else:
+            x = self.blocks(x)
         return x
 
 
@@ -202,7 +207,6 @@ class FasterNet(nn.Module):
             depths = (depths)  # it means the model has only one stage
         self.num_stages = len(depths)
         self.feature_info = []
-        self.grad_checkpointing = False
 
         self.patch_embed = PatchEmbed(
             in_chans=in_chans,
@@ -256,19 +260,25 @@ class FasterNet(nn.Module):
                     nn.init.constant_(m.bias, 0)
 
     @torch.jit.ignore
+    def no_weight_decay(self) -> Set:
+        return set()
+
+    @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         matcher = dict(
-            stem=r'patch_embed',
-            blocks=[
-                (r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.(\d+)', None),
-                (r'conv_head', (99999,))
+            stem=r'^patch_embed',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+                (r'^conv_head', (99999,)),
             ]
         )
         return matcher
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable: bool = True):
-        self.grad_checkpointing = enable
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.stages:
+            s.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -339,10 +349,7 @@ class FasterNet(nn.Module):
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
-        if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.stages, x, flatten=True)
-        else:
-            x = self.stages(x)
+        x = self.stages(x)
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
@@ -371,11 +378,11 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
     }
 
     stage_mapping = {
-        'stages.1.': 'stages.1.down.',
+        'stages.1.': 'stages.1.downsample.',
         'stages.2.': 'stages.1.',
-        'stages.3.': 'stages.2.down.',
+        'stages.3.': 'stages.2.downsample.',
         'stages.4.': 'stages.2.',
-        'stages.5.': 'stages.3.down.',
+        'stages.5.': 'stages.3.downsample.',
         'stages.6.': 'stages.3.'
     }
 

@@ -34,7 +34,7 @@ class ConvBN(nn.Sequential):
             stride: int = 1,
             padding: int = 0,
             with_bn: bool = True,
-            **kwargs
+            **kwargs,
     ):
         super().__init__()
         self.add_module('conv', nn.Conv2d(
@@ -141,7 +141,10 @@ class StarNet(nn.Module):
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
         matcher = dict(
             stem=r'^stem\.\d+',
-            blocks=[(r'^stages\.(\d+)', None), (r'^norm', (99999,))]
+            blocks=[
+                (r'^stages\.(\d+)' if coarse else r'^stages\.(\d+)\.(\d+)', None),
+                (r'norm', (99999,))
+            ]
         )
         return matcher
 
@@ -206,7 +209,8 @@ class StarNet(nn.Module):
         if intermediates_only:
             return intermediates
 
-        x = self.norm(x)
+        if feat_idx == last_idx:
+            x = self.norm(x)
 
         return x, intermediates
 

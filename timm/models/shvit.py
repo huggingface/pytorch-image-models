@@ -58,7 +58,7 @@ class Conv2d_BN(nn.Sequential):
             stride: int = 1,
             padding: int = 0,
             bn_weight_init: int = 1,
-            **kwargs
+            **kwargs,
     ):
         super().__init__()
         self.add_module('c', nn.Conv2d(
@@ -229,7 +229,8 @@ class StageBlock(nn.Module):
             act_layer: LayerType = nn.ReLU,
     ):
         super().__init__()
-        self.down = nn.Sequential(
+        self.grad_checkpointing = False
+        self.downsample = nn.Sequential(
             Residule(Conv2d_BN(prev_dim, prev_dim, 3, 1, 1, groups=prev_dim)),
             Residule(FFN(prev_dim, int(prev_dim * 2), act_layer)),
             PatchMerging(prev_dim, dim, act_layer),
@@ -237,13 +238,16 @@ class StageBlock(nn.Module):
             Residule(FFN(dim, int(dim * 2), act_layer)),
         ) if prev_dim != dim else nn.Identity()
 
-        self.block = nn.Sequential(*[
+        self.blocks = nn.Sequential(*[
             BasicBlock(dim, qk_dim, pdim, type, norm_layer, act_layer) for _ in range(depth)
         ])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.down(x)
-        x = self.block(x)
+        x = self.downsample(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x, flatten=True)
+        else:
+            x = self.blocks(x)
         return x
 
 
@@ -265,7 +269,6 @@ class SHViT(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
-        self.grad_checkpointing = False
         self.feature_info = []
 
         # Patch embedding
@@ -281,10 +284,10 @@ class SHViT(nn.Module):
         )
 
         # Build SHViT blocks
-        blocks = []
+        stages = []
         prev_chs = stem_chs
         for i in range(len(embed_dim)):
-            blocks.append(StageBlock(
+            stages.append(StageBlock(
                 prev_dim=prev_chs,
                 dim=embed_dim[i],
                 qk_dim=qk_dim[i],
@@ -295,9 +298,9 @@ class SHViT(nn.Module):
                 act_layer=act_layer,
             ))
             prev_chs = embed_dim[i]
-            self.feature_info.append(dict(num_chs=prev_chs, reduction=2**(i+4), module=f'blocks.{i}'))
-            
-        self.blocks = nn.Sequential(*blocks)
+            self.feature_info.append(dict(num_chs=prev_chs, reduction=2**(i+4), module=f'stages.{i}'))
+        self.stages = nn.Sequential(*stages)
+
         # Classifier head
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
@@ -310,12 +313,19 @@ class SHViT(nn.Module):
 
     @torch.jit.ignore
     def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
-        matcher = dict(stem=r'^patch_embed', blocks=[(r'^blocks\.(\d+)', None)])
+        matcher = dict(
+            stem=r'^patch_embed',  # stem and embed
+            blocks=r'^stages\.(\d+)' if coarse else [
+                (r'^stages\.(\d+).downsample', (0,)),
+                (r'^stages\.(\d+)\.blocks\.(\d+)', None),
+            ]
+        )
         return matcher
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable: bool = True):
-        self.grad_checkpointing = enable
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.stages:
+            s.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -351,14 +361,14 @@ class SHViT(nn.Module):
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
-        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
 
         # forward pass
         x = self.patch_embed(x)
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
-            stages = self.blocks
+            stages = self.stages
         else:
-            stages = self.blocks[:max_index + 1]
+            stages = self.stages[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
@@ -378,18 +388,15 @@ class SHViT(nn.Module):
     ):
         """ Prune layers not required for specified intermediates.
         """
-        take_indices, max_index = feature_take_indices(len(self.blocks), indices)
-        self.blocks = self.blocks[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
             self.reset_classifier(0, '')
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
-        if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.blocks, x, flatten=True)
-        else:
-            x = self.blocks(x)
+        x = self.stages(x)
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
@@ -424,19 +431,19 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
     out_dict = {}
 
     replace_rules = [
-        (re.compile(r'^blocks1\.'), 'blocks.0.block.'),
-        (re.compile(r'^blocks2\.'), 'blocks.1.block.'),
-        (re.compile(r'^blocks3\.'), 'blocks.2.block.'),
+        (re.compile(r'^blocks1\.'), 'stages.0.blocks.'),
+        (re.compile(r'^blocks2\.'), 'stages.1.blocks.'),
+        (re.compile(r'^blocks3\.'), 'stages.2.blocks.'),
     ]
     downsample_mapping = {}
     for i in range(1, 3):
-        downsample_mapping[f'^blocks\\.{i}\\.block\\.0\\.0\\.'] = f'blocks.{i}.down.0.'
-        downsample_mapping[f'^blocks\\.{i}\\.block\\.0\\.1\\.'] = f'blocks.{i}.down.1.'
-        downsample_mapping[f'^blocks\\.{i}\\.block\\.1\\.'] = f'blocks.{i}.down.2.'
-        downsample_mapping[f'^blocks\\.{i}\\.block\\.2\\.0\\.'] = f'blocks.{i}.down.3.'
-        downsample_mapping[f'^blocks\\.{i}\\.block\\.2\\.1\\.'] = f'blocks.{i}.down.4.'
+        downsample_mapping[f'^stages\\.{i}\\.blocks\\.0\\.0\\.'] = f'stages.{i}.downsample.0.'
+        downsample_mapping[f'^stages\\.{i}\\.blocks\\.0\\.1\\.'] = f'stages.{i}.downsample.1.'
+        downsample_mapping[f'^stages\\.{i}\\.blocks\\.1\\.'] = f'stages.{i}.downsample.2.'
+        downsample_mapping[f'^stages\\.{i}\\.blocks\\.2\\.0\\.'] = f'stages.{i}.downsample.3.'
+        downsample_mapping[f'^stages\\.{i}\\.blocks\\.2\\.1\\.'] = f'stages.{i}.downsample.4.'
         for j in range(3, 10):
-            downsample_mapping[f'^blocks\\.{i}\\.block\\.{j}\\.'] = f'blocks.{i}.block.{j - 3}.'
+            downsample_mapping[f'^stages\\.{i}\\.blocks\\.{j}\\.'] = f'stages.{i}.blocks.{j - 3}.'
 
     downsample_patterns = [
         (re.compile(pattern), replacement) for pattern, replacement in downsample_mapping.items()]
