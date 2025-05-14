@@ -19,6 +19,7 @@ import collections.abc
 import logging
 import math
 from functools import partial
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -28,6 +29,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, create_classifier, trunc_normal_, _assert
 from timm.layers import create_conv2d, create_pool2d, to_ntuple, use_fused_attn, LayerNorm
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
 from ._manipulate import checkpoint_seq, named_apply
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
@@ -419,6 +421,73 @@ class Nest(nn.Module):
         self.num_classes = num_classes
         self.global_pool, self.head = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.levels), indices)
+
+        # forward pass
+        x = self.patch_embed(x)
+        last_idx = len(self.num_blocks) - 1
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.levels
+        else:
+            stages = self.levels[:max_index + 1]
+
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                if norm and feat_idx == last_idx:
+                    x_inter = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+                    intermediates.append(x_inter)
+                else:
+                    intermediates.append(x)
+
+        if intermediates_only:
+            return intermediates
+
+        if feat_idx == last_idx:
+            # Layer norm done over channel dim only (to NHWC and back)
+            x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.levels), indices)
+        self.levels = self.levels[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.patch_embed(x)
