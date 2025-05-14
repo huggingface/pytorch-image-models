@@ -102,6 +102,7 @@ class MLPBlock(nn.Module):
             x = shortcut + self.drop_path(self.mlp(x))
         return x
 
+
 class Block(nn.Module):
     def __init__(
             self,
