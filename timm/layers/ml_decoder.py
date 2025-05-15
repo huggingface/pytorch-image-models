@@ -347,7 +347,7 @@ class GroupLinear(nn.Module):
         x += self.bias
         return x
 
-class Zero(Module):
+class Zero(nn.Module):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__()
 
