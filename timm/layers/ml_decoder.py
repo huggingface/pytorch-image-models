@@ -271,11 +271,13 @@ class CrossAttention(nn.Module):
             self,
             dim: int,
             query_dim: Optional[int] = None,
+            kv_dim: Optional[int] = None,
             num_heads: int = 8,
             qkv_bias: bool = True,
             qk_norm: bool = False,
             attn_drop: float = 0.1,
             proj_drop: float = 0.1,
+            use_out_proj: bool = True,
             norm_layer: nn.Module = nn.LayerNorm,
     ) -> None:
         super().__init__()
@@ -284,15 +286,16 @@ class CrossAttention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
-        self.query_dim = dim if query_dim is None else query_dim
+        self.query_dim = query_dim or dim
+        self.kv_dim = kv_dim or dim
         
-        self.q = nn.Linear(query_dim, dim, bias=qkv_bias)
-        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.q = nn.Linear(self.query_dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(self.kv_dim, dim * 2, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
+        self.proj = nn.Linear(dim, dim) if use_out_proj else nn.Identity()
+        self.proj_drop = nn.Dropout(proj_drop) if use_out_proj else nn.Identity()
 
     def forward(self, q, x) -> torch.Tensor:
         K, _ = q.shape # [K, C_q]
@@ -344,6 +347,13 @@ class GroupLinear(nn.Module):
         x += self.bias
         return x
 
+class Zero(Module):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__()
+
+    def forward(self, input: Tensor) -> int:
+        return 0
+
 class MLDecoder(nn.Module):
     def __init__(
         self,
@@ -361,10 +371,13 @@ class MLDecoder(nn.Module):
         qk_norm: bool = False,
         attn_drop: float = 0.1,
         mlp_ratio: float = 8/3,
+        use_mlp: bool = True,
         proj_drop: float = 0.1,
         norm_layer: nn.Module = nn.LayerNorm,
         act_layer: nn.Module = nn.GELU,
         post_input_proj_act: bool = True,
+        use_input_proj: bool = True,
+        attn_out_proj: bool = True,
         shared_fc: bool = False,
     ):
         super().__init__()
@@ -419,19 +432,24 @@ class MLDecoder(nn.Module):
         self.embed_drop = nn.Dropout(embed_drop)
         self.embed_norm = norm_layer(self.query_dim)
         
-        self.proj = nn.Linear(in_features, dim)
+        self.proj = nn.Linear(in_features, dim) if use_input_proj else nn.Identity()
         self.act = act_layer() if post_input_proj_act else nn.Identity()
         self.norm1 = norm_layer(dim)
         
         
-        self.attn = CrossAttention(dim, query_dim=self.query_dim, num_heads=num_heads)
-        self.norm2 = norm_layer(dim)
+        self.attn = CrossAttention(
+            dim, 
+            query_dim=self.query_dim, 
+            kv_dim=dim if use_input_proj else in_features, 
+            num_heads=num_heads,
+            use_out_proj=attn_out_proj)
+        self.norm2 = norm_layer(dim) if use_mlp else nn.Identity()
         self.mlp = Mlp(
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
             drop=proj_drop,
-        )
+        ) if use_mlp else Zero()
         
         self.fc = GroupLinear(dim, num_classes, num_groups, shared=self.shared_fc)
     
