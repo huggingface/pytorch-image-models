@@ -474,6 +474,7 @@ class MLDecoder(nn.Module):
         # BCHW to BNC
         if(len(x.shape) == 4):
             x = x.flatten(2).transpose(1, 2)
+        x = self.input_norm(x)
         if(self.pool_input):
             x = x.mean(-2, keepdim=True)
         x = self.act(self.proj(x))
