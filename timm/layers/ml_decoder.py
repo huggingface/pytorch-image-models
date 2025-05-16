@@ -282,6 +282,7 @@ class CrossAttention(nn.Module):
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        self.dim = dim
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
@@ -299,7 +300,7 @@ class CrossAttention(nn.Module):
 
     def forward(self, q, x) -> torch.Tensor:
         K, _ = q.shape # [K, C_q]
-        B, N, C = x.shape # [B, N, C]
+        B, N, _ = x.shape # [B, N, C]
         q = self.q(q).reshape(1, K, self.num_heads, self.head_dim).permute(0, 2, 1, 3) # [1, n_h, K, d_h]
         kv = self.kv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4) # [2, B, n_h, N, d_h]
         k, v = kv.unbind(0)
@@ -317,7 +318,7 @@ class CrossAttention(nn.Module):
             attn = self.attn_drop(attn)
             x = attn @ v # [B, n_h, K, d_h]
 
-        x = x.permute(2, 0, 1, 3).reshape(K, B, C)
+        x = x.permute(2, 0, 1, 3).reshape(K, B, self.dim)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
