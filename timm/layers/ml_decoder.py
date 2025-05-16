@@ -375,8 +375,6 @@ class MLDecoder(nn.Module):
         proj_drop: float = 0.1,
         norm_layer: nn.Module = nn.LayerNorm,
         act_layer: nn.Module = nn.GELU,
-        pool_input: bool = False,
-        use_input_norm: bool = False,
         post_input_proj_act: bool = True,
         use_input_proj: bool = True,
         attn_out_proj: bool = True,
@@ -434,8 +432,7 @@ class MLDecoder(nn.Module):
         self.embed_drop = nn.Dropout(embed_drop)
         self.embed_norm = norm_layer(self.query_dim)
         
-        self.input_norm = norm_layer(in_features) if use_input_norm else nn.Identity()
-        self.pool_input = pool_input
+
         self.proj = nn.Linear(in_features, dim) if use_input_proj else nn.Identity()
         self.act = act_layer() if post_input_proj_act else nn.Identity()
         self.norm1 = norm_layer(dim)
@@ -474,9 +471,7 @@ class MLDecoder(nn.Module):
         # BCHW to BNC
         if(len(x.shape) == 4):
             x = x.flatten(2).transpose(1, 2)
-        x = self.input_norm(x)
-        if(self.pool_input):
-            x = x.mean(-2, keepdim=True)
+
         x = self.act(self.proj(x))
         q = self._resolve_query(q)
         q = self.embed_norm(self.embed_drop(q))
@@ -484,10 +479,4 @@ class MLDecoder(nn.Module):
         x = x + self.mlp(self.norm2(x))
         x = self.fc(x)
         return x
-        
-
-            
-
-        
-
         
