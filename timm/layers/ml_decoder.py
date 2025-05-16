@@ -27,7 +27,7 @@ class MLDecoderHead(nn.Module):
     def reset(self, num_classes, global_pool=None):
         if global_pool is not None:
             if global_pool != self.global_pool.pool_type:
-                self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv)
+                self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv, self.input_fmt)
             self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
         num_pooled_features = self.in_features * self.global_pool.feat_mult()
         # TODO fix this it is incorrect, need to impl a reset for mldecoder itself i think
@@ -375,6 +375,7 @@ class MLDecoder(nn.Module):
         proj_drop: float = 0.1,
         norm_layer: nn.Module = nn.LayerNorm,
         act_layer: nn.Module = nn.GELU,
+        pool_input: bool = False,
         post_input_proj_act: bool = True,
         use_input_proj: bool = True,
         attn_out_proj: bool = True,
@@ -432,6 +433,8 @@ class MLDecoder(nn.Module):
         self.embed_drop = nn.Dropout(embed_drop)
         self.embed_norm = norm_layer(self.query_dim)
         
+
+        self.pool_input = pool_input
         self.proj = nn.Linear(in_features, dim) if use_input_proj else nn.Identity()
         self.act = act_layer() if post_input_proj_act else nn.Identity()
         self.norm1 = norm_layer(dim)
@@ -470,7 +473,8 @@ class MLDecoder(nn.Module):
         # BCHW to BNC
         if(len(x.shape) == 4):
             x = x.flatten(2).transpose(1, 2)
-                
+        if(self.pool_input):
+            x = x.mean(-2, keepdim=True)
         x = self.act(self.proj(x))
         q = self._resolve_query(q)
         q = self.embed_norm(self.embed_drop(q))
