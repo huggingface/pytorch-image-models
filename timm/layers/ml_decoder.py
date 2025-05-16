@@ -27,7 +27,7 @@ class MLDecoderHead(nn.Module):
     def reset(self, num_classes, global_pool=None):
         if global_pool is not None:
             if global_pool != self.global_pool.pool_type:
-                self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv, self.input_fmt)
+                self.global_pool, _ = _create_pool(self.in_features, num_classes, global_pool, use_conv=self.use_conv, input_fmt=self.input_fmt)
             self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
         num_pooled_features = self.in_features * self.global_pool.feat_mult()
         # TODO fix this it is incorrect, need to impl a reset for mldecoder itself i think
