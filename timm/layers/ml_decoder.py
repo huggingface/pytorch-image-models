@@ -435,7 +435,7 @@ class MLDecoder(nn.Module):
 
         self.proj = nn.Linear(in_features, dim) if use_input_proj else nn.Identity()
         self.act = act_layer() if post_input_proj_act else nn.Identity()
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(in_features if use_input_proj else dim)
         
         
         self.attn = CrossAttention(
