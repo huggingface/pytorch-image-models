@@ -376,6 +376,7 @@ class MLDecoder(nn.Module):
         norm_layer: nn.Module = nn.LayerNorm,
         act_layer: nn.Module = nn.GELU,
         pool_input: bool = False,
+        use_input_norm: bool = False,
         post_input_proj_act: bool = True,
         use_input_proj: bool = True,
         attn_out_proj: bool = True,
@@ -433,7 +434,7 @@ class MLDecoder(nn.Module):
         self.embed_drop = nn.Dropout(embed_drop)
         self.embed_norm = norm_layer(self.query_dim)
         
-
+        self.input_norm = norm_layer(in_features) if use_input_norm else nn.Identity()
         self.pool_input = pool_input
         self.proj = nn.Linear(in_features, dim) if use_input_proj else nn.Identity()
         self.act = act_layer() if post_input_proj_act else nn.Identity()
