@@ -1,4 +1,5 @@
 from .beit import *
+from .beit3 import *
 from .byoanet import *
 from .byobnet import *
 from .cait import *
