@@ -49,7 +49,7 @@ parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD',
                     help='Override std deviation of of dataset')
-parser.add_argument('--num-classes', type=int, default=1000,
+parser.add_argument('--num-classes', type=int, default=None,
                     help='Number classes in dataset')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
                     help='path to checkpoint (default: none)')
