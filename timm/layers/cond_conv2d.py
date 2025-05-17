@@ -1,7 +1,7 @@
 """ PyTorch Conditionally Parameterized Convolution (CondConv)
 
 Paper: CondConv: Conditionally Parameterized Convolutions for Efficient Inference
-(https://arxiv.org/abs/1904.04971)
+(https://huggingface.co/papers/1904.04971)
 
 Hacked together by / Copyright 2020 Ross Wightman
 """

@@ -1,7 +1,7 @@
 """ Transformer in Transformer (TNT) in PyTorch
 
 A PyTorch implement of TNT as described in
-'Transformer in Transformer' - https://arxiv.org/abs/2103.00112
+'Transformer in Transformer' - https://huggingface.co/papers/2103.00112
 
 The official mindspore code is released and available at
 https://gitee.com/mindspore/mindspore/tree/master/model_zoo/research/cv/TNT
@@ -216,7 +216,7 @@ class PixelEmbed(nn.Module):
 
 
 class TNT(nn.Module):
-    """ Transformer in Transformer - https://arxiv.org/abs/2103.00112
+    """ Transformer in Transformer - https://huggingface.co/papers/2103.00112
     """
 
     def __init__(

@@ -17,7 +17,7 @@ def _gen_hardcorenas(pretrained, variant, arch_def, **kwargs):
     """Creates a hardcorenas model
 
     Ref impl: https://github.com/Alibaba-MIIL/HardCoReNAS
-    Paper: https://arxiv.org/abs/2102.11646
+    Paper: https://huggingface.co/papers/2102.11646
 
     """
     num_features = 1280

@@ -2,7 +2,7 @@
 ECA module from ECAnet
 
 paper: ECA-Net: Efficient Channel Attention for Deep Convolutional Neural Networks
-https://arxiv.org/abs/1910.03151
+https://huggingface.co/papers/1910.03151
 
 Original ECA model borrowed from https://github.com/BangguWu/ECANet
 
@@ -49,7 +49,7 @@ class EcaModule(nn.Module):
         channels: Number of channels of the input feature map for use in adaptive kernel sizes
             for actual calculations according to channel.
             gamma, beta: when channel is given parameters of mapping function
-            refer to original paper https://arxiv.org/pdf/1910.03151.pdf
+            refer to original paper https://huggingface.co/papers/1910.03151
             (default=None. if channel size not given, use k_size given for kernel size.)
         kernel_size: Adaptive selection of kernel size (default=3)
         gamm: used in kernel_size calc, see above
@@ -109,7 +109,7 @@ class CecaModule(nn.Module):
         channels: Number of channels of the input feature map for use in adaptive kernel sizes
             for actual calculations according to channel.
             gamma, beta: when channel is given parameters of mapping function
-            refer to original paper https://arxiv.org/pdf/1910.03151.pdf
+            refer to original paper https://huggingface.co/papers/1910.03151
             (default=None. if channel size not given, use k_size given for kernel size.)
         kernel_size: Adaptive selection of kernel size (default=3)
         gamm: used in kernel_size calc, see above

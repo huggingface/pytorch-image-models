@@ -5,15 +5,15 @@ A flexible network w/ dataclass based config for stacking those NN blocks.
 This model is currently used to implement the following networks:
 
 GPU Efficient (ResNets) - gernet_l/m/s (original versions called genet, but this was already used (by SENet author)).
-Paper: `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+Paper: `Neural Architecture Design for GPU-Efficient Networks` - https://huggingface.co/papers/2006.14090
 Code and weights: https://github.com/idstcv/GPU-Efficient-Networks, licensed Apache 2.0
 
 RepVGG - repvgg_*
-Paper: `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+Paper: `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
 Code and weights: https://github.com/DingXiaoH/RepVGG, licensed MIT
 
 MobileOne - mobileone_*
-Paper: `MobileOne: An Improved One millisecond Mobile Backbone` - https://arxiv.org/abs/2206.04040
+Paper: `MobileOne: An Improved One millisecond Mobile Backbone` - https://huggingface.co/papers/2206.04040
 Code and weights: https://github.com/apple/ml-mobileone, licensed MIT
 
 In all cases the models have been modified to fit within the design of ByobNet. I've remapped
@@ -553,7 +553,7 @@ class RepVggBlock(nn.Module):
 
     def reparameterize(self):
         """ Following works like `RepVGG: Making VGG-style ConvNets Great Again` -
-        https://arxiv.org/pdf/2101.03697.pdf. We re-parameterize multi-branched
+        https://huggingface.co/papers/2101.03697. We re-parameterize multi-branched
         architecture used at training time to obtain a plain CNN-like structure
         for inference.
         """
@@ -649,7 +649,7 @@ class MobileOneBlock(nn.Module):
         and plain-CNN style architecture at inference time
         For more details, please refer to our paper:
         `An Improved One millisecond Mobile Backbone` -
-        https://arxiv.org/pdf/2206.04040.pdf
+        https://huggingface.co/papers/2206.04040
     """
 
     def __init__(
@@ -738,7 +738,7 @@ class MobileOneBlock(nn.Module):
 
     def reparameterize(self):
         """ Following works like `RepVGG: Making VGG-style ConvNets Great Again` -
-        https://arxiv.org/pdf/2101.03697.pdf. We re-parameterize multi-branched
+        https://huggingface.co/papers/2101.03697. We re-parameterize multi-branched
         architecture used at training time to obtain a plain CNN-like structure
         for inference.
         """
@@ -2386,7 +2386,7 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def gernet_l(pretrained=False, **kwargs) -> ByobNet:
     """ GEResNet-Large (GENet-Large from official impl)
-    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+    `Neural Architecture Design for GPU-Efficient Networks` - https://huggingface.co/papers/2006.14090
     """
     return _create_byobnet('gernet_l', pretrained=pretrained, **kwargs)
 
@@ -2394,7 +2394,7 @@ def gernet_l(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def gernet_m(pretrained=False, **kwargs) -> ByobNet:
     """ GEResNet-Medium (GENet-Normal from official impl)
-    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+    `Neural Architecture Design for GPU-Efficient Networks` - https://huggingface.co/papers/2006.14090
     """
     return _create_byobnet('gernet_m', pretrained=pretrained, **kwargs)
 
@@ -2402,7 +2402,7 @@ def gernet_m(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def gernet_s(pretrained=False, **kwargs) -> ByobNet:
     """ EResNet-Small (GENet-Small from official impl)
-    `Neural Architecture Design for GPU-Efficient Networks` - https://arxiv.org/abs/2006.14090
+    `Neural Architecture Design for GPU-Efficient Networks` - https://huggingface.co/papers/2006.14090
     """
     return _create_byobnet('gernet_s', pretrained=pretrained, **kwargs)
 
@@ -2410,7 +2410,7 @@ def gernet_s(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_a0(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-A0
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_a0', pretrained=pretrained, **kwargs)
 
@@ -2418,7 +2418,7 @@ def repvgg_a0(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_a1(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-A1
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_a1', pretrained=pretrained, **kwargs)
 
@@ -2426,7 +2426,7 @@ def repvgg_a1(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_a2(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-A2
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_a2', pretrained=pretrained, **kwargs)
 
@@ -2434,7 +2434,7 @@ def repvgg_a2(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b0(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B0
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b0', pretrained=pretrained, **kwargs)
 
@@ -2442,7 +2442,7 @@ def repvgg_b0(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b1(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B1
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b1', pretrained=pretrained, **kwargs)
 
@@ -2450,7 +2450,7 @@ def repvgg_b1(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b1g4(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B1g4
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b1g4', pretrained=pretrained, **kwargs)
 
@@ -2458,7 +2458,7 @@ def repvgg_b1g4(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b2(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B2
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b2', pretrained=pretrained, **kwargs)
 
@@ -2466,7 +2466,7 @@ def repvgg_b2(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b2g4(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B2g4
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b2g4', pretrained=pretrained, **kwargs)
 
@@ -2474,7 +2474,7 @@ def repvgg_b2g4(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b3(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B3
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b3', pretrained=pretrained, **kwargs)
 
@@ -2482,7 +2482,7 @@ def repvgg_b3(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_b3g4(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-B3g4
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_b3g4', pretrained=pretrained, **kwargs)
 
@@ -2490,7 +2490,7 @@ def repvgg_b3g4(pretrained=False, **kwargs) -> ByobNet:
 @register_model
 def repvgg_d2se(pretrained=False, **kwargs) -> ByobNet:
     """ RepVGG-D2se
-    `Making VGG-style ConvNets Great Again` - https://arxiv.org/abs/2101.03697
+    `Making VGG-style ConvNets Great Again` - https://huggingface.co/papers/2101.03697
     """
     return _create_byobnet('repvgg_d2se', pretrained=pretrained, **kwargs)
 

@@ -4,7 +4,7 @@ This impl originally based on MLP-Mixer paper.
 
 Official JAX impl: https://github.com/google-research/vision_transformer/blob/linen/vit_jax/models_mixer.py
 
-Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
 
 @article{tolstikhin2021,
   title={MLP-Mixer: An all-MLP Architecture for Vision},
@@ -17,7 +17,7 @@ Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2
 Also supporting ResMlp, and a preliminary (not verified) implementations of gMLP
 
 Code: https://github.com/facebookresearch/deit
-Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+Paper: `ResMLP: Feedforward networks for image classification...` - https://huggingface.co/papers/2105.03404
 @misc{touvron2021resmlp,
       title={ResMLP: Feedforward networks for image classification with data-efficient training},
       author={Hugo Touvron and Piotr Bojanowski and Mathilde Caron and Matthieu Cord and Alaaeldin El-Nouby and
@@ -26,7 +26,7 @@ Paper: `ResMLP: Feedforward networks for image classification...` - https://arxi
       eprint={2105.03404},
 }
 
-Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+Paper: `Pay Attention to MLPs` - https://huggingface.co/papers/2105.08050
 @misc{liu2021pay,
       title={Pay Attention to MLPs},
       author={Hanxiao Liu and Zihang Dai and David R. So and Quoc V. Le},
@@ -57,7 +57,7 @@ __all__ = ['MixerBlock', 'MlpMixer']  # model_registry will add each entrypoint 
 
 class MixerBlock(nn.Module):
     """ Residual Block w/ token mixing and channel MLPs
-    Based on: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Based on: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     def __init__(
             self,
@@ -97,7 +97,7 @@ class Affine(nn.Module):
 class ResBlock(nn.Module):
     """ Residual MLP block w/ LayerScale and Affine 'norm'
 
-    Based on: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Based on: `ResMLP: Feedforward networks for image classification...` - https://huggingface.co/papers/2105.03404
     """
     def __init__(
             self,
@@ -130,7 +130,7 @@ class ResBlock(nn.Module):
 class SpatialGatingUnit(nn.Module):
     """ Spatial Gating Unit
 
-    Based on: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+    Based on: `Pay Attention to MLPs` - https://huggingface.co/papers/2105.08050
     """
     def __init__(self, dim, seq_len, norm_layer=nn.LayerNorm):
         super().__init__()
@@ -153,7 +153,7 @@ class SpatialGatingUnit(nn.Module):
 class SpatialGatingBlock(nn.Module):
     """ Residual Block w/ Spatial Gating
 
-    Based on: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+    Based on: `Pay Attention to MLPs` - https://huggingface.co/papers/2105.08050
     """
     def __init__(
             self,
@@ -531,7 +531,7 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def mixer_s32_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-S/32 224x224
-    Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Paper: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     model_args = dict(patch_size=32, num_blocks=8, embed_dim=512, **kwargs)
     model = _create_mixer('mixer_s32_224', pretrained=pretrained, **model_args)
@@ -541,7 +541,7 @@ def mixer_s32_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def mixer_s16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-S/16 224x224
-    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     model_args = dict(patch_size=16, num_blocks=8, embed_dim=512, **kwargs)
     model = _create_mixer('mixer_s16_224', pretrained=pretrained, **model_args)
@@ -551,7 +551,7 @@ def mixer_s16_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def mixer_b32_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-B/32 224x224
-    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     model_args = dict(patch_size=32, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b32_224', pretrained=pretrained, **model_args)
@@ -561,7 +561,7 @@ def mixer_b32_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def mixer_b16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-B/16 224x224. ImageNet-1k pretrained weights.
-    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     model_args = dict(patch_size=16, num_blocks=12, embed_dim=768, **kwargs)
     model = _create_mixer('mixer_b16_224', pretrained=pretrained, **model_args)
@@ -571,7 +571,7 @@ def mixer_b16_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def mixer_l32_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-L/32 224x224.
-    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     model_args = dict(patch_size=32, num_blocks=24, embed_dim=1024, **kwargs)
     model = _create_mixer('mixer_l32_224', pretrained=pretrained, **model_args)
@@ -581,7 +581,7 @@ def mixer_l32_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def mixer_l16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ Mixer-L/16 224x224. ImageNet-1k pretrained weights.
-    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    Paper:  'MLP-Mixer: An all-MLP Architecture for Vision' - https://huggingface.co/papers/2105.01601
     """
     model_args = dict(patch_size=16, num_blocks=24, embed_dim=1024, **kwargs)
     model = _create_mixer('mixer_l16_224', pretrained=pretrained, **model_args)
@@ -615,7 +615,7 @@ def gmixer_24_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_12_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-12
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://huggingface.co/papers/2105.03404
     """
     model_args = dict(
         patch_size=16, num_blocks=12, embed_dim=384, mlp_ratio=4, block_layer=ResBlock, norm_layer=Affine, **kwargs)
@@ -626,7 +626,7 @@ def resmlp_12_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-24
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://huggingface.co/papers/2105.03404
     """
     model_args = dict(
         patch_size=16, num_blocks=24, embed_dim=384, mlp_ratio=4,
@@ -638,7 +638,7 @@ def resmlp_24_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_36_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-36
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://huggingface.co/papers/2105.03404
     """
     model_args = dict(
         patch_size=16, num_blocks=36, embed_dim=384, mlp_ratio=4,
@@ -650,7 +650,7 @@ def resmlp_36_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def resmlp_big_24_224(pretrained=False, **kwargs) -> MlpMixer:
     """ ResMLP-B-24
-    Paper: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
+    Paper: `ResMLP: Feedforward networks for image classification...` - https://huggingface.co/papers/2105.03404
     """
     model_args = dict(
         patch_size=8, num_blocks=24, embed_dim=768, mlp_ratio=4,
@@ -662,7 +662,7 @@ def resmlp_big_24_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def gmlp_ti16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ gMLP-Tiny
-    Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+    Paper: `Pay Attention to MLPs` - https://huggingface.co/papers/2105.08050
     """
     model_args = dict(
         patch_size=16, num_blocks=30, embed_dim=128, mlp_ratio=6, block_layer=SpatialGatingBlock,
@@ -674,7 +674,7 @@ def gmlp_ti16_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def gmlp_s16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ gMLP-Small
-    Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+    Paper: `Pay Attention to MLPs` - https://huggingface.co/papers/2105.08050
     """
     model_args = dict(
         patch_size=16, num_blocks=30, embed_dim=256, mlp_ratio=6, block_layer=SpatialGatingBlock,
@@ -686,7 +686,7 @@ def gmlp_s16_224(pretrained=False, **kwargs) -> MlpMixer:
 @register_model
 def gmlp_b16_224(pretrained=False, **kwargs) -> MlpMixer:
     """ gMLP-Base
-    Paper: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
+    Paper: `Pay Attention to MLPs` - https://huggingface.co/papers/2105.08050
     """
     model_args = dict(
         patch_size=16, num_blocks=30, embed_dim=512, mlp_ratio=6, block_layer=SpatialGatingBlock,

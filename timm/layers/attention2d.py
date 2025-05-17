@@ -14,7 +14,7 @@ class MultiQueryAttentionV2(nn.Module):
     """Multi Query Attention.
 
     Fast Transformer Decoding: One Write-Head is All You Need
-    https://arxiv.org/pdf/1911.02150.pdf
+    https://huggingface.co/papers/1911.02150
 
     This is an acceletor optimized version - removing multiple unnecessary
     tensor transpose by re-arranging indices according to the following rules: 1)

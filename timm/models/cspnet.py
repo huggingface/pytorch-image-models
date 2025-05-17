@@ -6,7 +6,7 @@ A PyTorch implementation of Cross Stage Partial Networks including:
 * CSPDarkNet53
 * and DarkNet53 for good measure
 
-Based on paper `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
+Based on paper `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://huggingface.co/papers/1911.11929
 
 Reference impl via darknet cfg files at https://github.com/WongKinYiu/CrossStagePartialNetworks
 
@@ -616,7 +616,7 @@ def create_csp_stages(
 class CspNet(nn.Module):
     """Cross Stage Partial base model.
 
-    Paper: `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://arxiv.org/abs/1911.11929
+    Paper: `CSPNet: A New Backbone that can Enhance Learning Capability of CNN` - https://huggingface.co/papers/1911.11929
     Ref Impl: https://github.com/WongKinYiu/CrossStagePartialNetworks
 
     NOTE: There are differences in the way I handle the 1x1 'expansion' conv in this impl vs the

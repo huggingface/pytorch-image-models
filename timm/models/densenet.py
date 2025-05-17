@@ -145,7 +145,7 @@ class DenseTransition(nn.Sequential):
 
 class DenseNet(nn.Module):
     r"""Densenet-BC model class, based on
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`_
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`_
 
     Args:
         growth_rate (int) - how many filters to add each layer (`k` in paper)
@@ -156,7 +156,7 @@ class DenseNet(nn.Module):
         proj_drop_rate (float) - dropout rate after each dense layer
         num_classes (int) - number of classification classes
         memory_efficient (bool) - If True, uses checkpointing. Much more memory efficient,
-          but slower. Default: *False*. See `"paper" <https://arxiv.org/pdf/1707.06990.pdf>`_
+          but slower. Default: *False*. See `"paper" <https://huggingface.co/papers/1707.06990>`_
     """
 
     def __init__(
@@ -361,7 +361,7 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def densenet121(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-121 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`
     """
     model_args = dict(growth_rate=32, block_config=(6, 12, 24, 16))
     model = _create_densenet('densenet121', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -371,7 +371,7 @@ def densenet121(pretrained=False, **kwargs) -> DenseNet:
 @register_model
 def densenetblur121d(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-121 w/ blur-pooling & 3-layer 3x3 stem
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`
     """
     model_args = dict(growth_rate=32, block_config=(6, 12, 24, 16), stem_type='deep', aa_layer=BlurPool2d)
     model = _create_densenet('densenetblur121d', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -381,7 +381,7 @@ def densenetblur121d(pretrained=False, **kwargs) -> DenseNet:
 @register_model
 def densenet169(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-169 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`
     """
     model_args = dict(growth_rate=32, block_config=(6, 12, 32, 32))
     model = _create_densenet('densenet169', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -391,7 +391,7 @@ def densenet169(pretrained=False, **kwargs) -> DenseNet:
 @register_model
 def densenet201(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-201 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`
     """
     model_args = dict(growth_rate=32, block_config=(6, 12, 48, 32))
     model = _create_densenet('densenet201', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -401,7 +401,7 @@ def densenet201(pretrained=False, **kwargs) -> DenseNet:
 @register_model
 def densenet161(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-161 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`
     """
     model_args = dict(growth_rate=48, block_config=(6, 12, 36, 24))
     model = _create_densenet('densenet161', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -411,7 +411,7 @@ def densenet161(pretrained=False, **kwargs) -> DenseNet:
 @register_model
 def densenet264d(pretrained=False, **kwargs) -> DenseNet:
     r"""Densenet-264 model from
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`
+    `"Densely Connected Convolutional Networks" <https://huggingface.co/papers/1608.06993>`
     """
     model_args = dict(growth_rate=48, block_config=(6, 12, 64, 48), stem_type='deep')
     model = _create_densenet('densenet264d', pretrained=pretrained, **dict(model_args, **kwargs))
