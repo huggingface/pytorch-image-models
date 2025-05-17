@@ -1,7 +1,7 @@
 """ 
 CoaT architecture.
 
-Paper: Co-Scale Conv-Attentional Image Transformers - https://arxiv.org/abs/2104.06399
+Paper: Co-Scale Conv-Attentional Image Transformers - https://huggingface.co/papers/2104.06399
 
 Official CoaT code at: https://github.com/mlpc-ucsd/CoaT
 

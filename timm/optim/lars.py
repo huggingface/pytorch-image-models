@@ -17,7 +17,7 @@ from torch.optim.optimizer import Optimizer
 class Lars(Optimizer):
     """ LARS for PyTorch
     
-    Paper: `Large batch training of Convolutional Networks` - https://arxiv.org/pdf/1708.03888.pdf
+    Paper: `Large batch training of Convolutional Networks` - https://huggingface.co/papers/1708.03888
 
     Args:
         params (iterable): iterable of parameters to optimize or dicts defining parameter groups.

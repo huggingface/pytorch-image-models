@@ -11,7 +11,7 @@ Code: https://github.com/joe-siyuan-qiao/WeightStandardization
 
 ScaledStdConv:
 Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-    - https://arxiv.org/abs/2101.08692
+    - https://huggingface.co/papers/2101.08692
 Official Deepmind JAX code: https://github.com/deepmind/deepmind-research/tree/master/nfnets
 
 Hacked together by / copyright Ross Wightman, 2021.
@@ -27,7 +27,7 @@ class StdConv2d(nn.Conv2d):
     """Conv2d with Weight Standardization. Used for BiT ResNet-V2 models.
 
     Paper: `Micro-Batch Training with Batch-Channel Normalization and Weight Standardization` -
-        https://arxiv.org/abs/1903.10520v2
+        https://huggingface.co/papers/1903.10520v2
     """
     def __init__(
             self, in_channel, out_channels, kernel_size, stride=1, padding=None,
@@ -51,7 +51,7 @@ class StdConv2dSame(nn.Conv2d):
     """Conv2d with Weight Standardization. TF compatible SAME padding. Used for ViT Hybrid model.
 
     Paper: `Micro-Batch Training with Batch-Channel Normalization and Weight Standardization` -
-        https://arxiv.org/abs/1903.10520v2
+        https://huggingface.co/papers/1903.10520v2
     """
     def __init__(
             self, in_channel, out_channels, kernel_size, stride=1, padding='SAME',
@@ -77,7 +77,7 @@ class ScaledStdConv2d(nn.Conv2d):
     """Conv2d layer with Scaled Weight Standardization.
 
     Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets` -
-        https://arxiv.org/abs/2101.08692
+        https://huggingface.co/papers/2101.08692
 
     NOTE: the operations used in this impl differ slightly from the DeepMind Haiku impl. The impact is minor.
     """
@@ -106,7 +106,7 @@ class ScaledStdConv2dSame(nn.Conv2d):
     """Conv2d layer with Scaled Weight Standardization and Tensorflow-like SAME padding support
 
     Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets` -
-        https://arxiv.org/abs/2101.08692
+        https://huggingface.co/papers/2101.08692
 
     NOTE: the operations used in this impl differ slightly from the DeepMind Haiku impl. The impact is minor.
     """

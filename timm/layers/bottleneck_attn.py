@@ -1,6 +1,6 @@
 """ Bottleneck Self Attention (Bottleneck Transformers)
 
-Paper: `Bottleneck Transformers for Visual Recognition` - https://arxiv.org/abs/2101.11605
+Paper: `Bottleneck Transformers for Visual Recognition` - https://huggingface.co/papers/2101.11605
 
 @misc{2101.11605,
 Author = {Aravind Srinivas and Tsung-Yi Lin and Niki Parmar and Jonathon Shlens and Pieter Abbeel and Ashish Vaswani},
@@ -29,7 +29,7 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     """ Compute relative logits along one dimension
 
     As per: https://gist.github.com/aravindsrinivas/56359b79f0ce4449bcb04ab4b56a57a2
-    Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
+    Originally from: `Attention Augmented Convolutional Networks` - https://huggingface.co/papers/1904.09925
 
     Args:
         q: (batch, heads, height, width, dim)
@@ -56,7 +56,7 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
 class PosEmbedRel(nn.Module):
     """ Relative Position Embedding
     As per: https://gist.github.com/aravindsrinivas/56359b79f0ce4449bcb04ab4b56a57a2
-    Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
+    Originally from: `Attention Augmented Convolutional Networks` - https://huggingface.co/papers/1904.09925
     """
     def __init__(self, feat_size, dim_head, scale):
         super().__init__()
@@ -83,7 +83,7 @@ class PosEmbedRel(nn.Module):
 
 class BottleneckAttn(nn.Module):
     """ Bottleneck Attention
-    Paper: `Bottleneck Transformers for Visual Recognition` - https://arxiv.org/abs/2101.11605
+    Paper: `Bottleneck Transformers for Visual Recognition` - https://huggingface.co/papers/2101.11605
 
     The internal dimensions of the attention module are controlled by the interaction of several arguments.
       * the output dimension of the module is specified by dim_out, which falls back to input dim if not set

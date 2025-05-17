@@ -16,7 +16,7 @@ Adapted for timm from originals at https://github.com/facebookresearch/hiera
 # Po-Yao Huang, Vaibhav Aggarwal, Arkabandhu Chowdhury, Omid Poursaeed,
 # Judy Hoffman, Jitendra Malik, Yanghao Li, Christoph Feichtenhofer.
 #
-# Paper: https://arxiv.org/abs/2306.00989/
+# Paper: https://huggingface.co/papers/2306.00989/
 #
 # References:
 # slowfast: https://github.com/facebookresearch/SlowFast
@@ -644,7 +644,7 @@ class Hiera(nn.Module):
     def _pos_embed(self, x) -> torch.Tensor:
         if self.pos_embed_win is not None:
             # absolute win position embedding, from
-            # Window Attention is Bugged: How not to Interpolate Position Embeddings (https://arxiv.org/abs/2311.05613)
+            # Window Attention is Bugged: How not to Interpolate Position Embeddings (https://huggingface.co/papers/2311.05613)
             pos_embed_win = self.pos_embed_win.tile(self.mask_spatial_shape)
             pos_embed = F.interpolate(
                 self.pos_embed,

@@ -10,7 +10,7 @@ class JsdCrossEntropy(nn.Module):
 
     Based on impl here: https://github.com/google-research/augmix/blob/master/imagenet.py
     From paper: 'AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty -
-    https://arxiv.org/abs/1912.02781
+    https://huggingface.co/papers/1912.02781
 
     Hacked together by / Copyright 2020 Ross Wightman
     """

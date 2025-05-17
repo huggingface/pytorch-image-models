@@ -65,7 +65,7 @@ class Lamb(Optimizer):
     reference: https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/LanguageModeling/Transformer-XL/pytorch/lamb.py
 
     LAMB was proposed in:
-    - Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:  https://arxiv.org/abs/1904.00962
+    - Large Batch Optimization for Deep Learning - Training BERT in 76 minutes:  https://huggingface.co/papers/1904.00962
     - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
 
     Args:
@@ -195,7 +195,7 @@ class Lamb(Optimizer):
                 update = (exp_avg / bias_correction1).div_(denom)
 
                 if group['caution']:
-                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                     mask = (update * grad > 0).to(grad.dtype)
                     mask.div_(mask.mean().clamp_(min=1e-3))
                     update.mul_(mask)

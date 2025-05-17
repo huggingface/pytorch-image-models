@@ -1,7 +1,7 @@
 """ EfficientViT (by MSRA)
 
 Paper: `EfficientViT: Memory Efficient Vision Transformer with Cascaded Group Attention`
-    - https://arxiv.org/abs/2305.07027
+    - https://huggingface.co/papers/2305.07027
 
 Adapted from official impl at https://github.com/microsoft/Cream/tree/main/EfficientViT
 """

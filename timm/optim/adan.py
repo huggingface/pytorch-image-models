@@ -1,7 +1,7 @@
 """ Adan Optimizer
 
 Adan: Adaptive Nesterov Momentum Algorithm for Faster Optimizing Deep Models[J]. arXiv preprint arXiv:2208.06677, 2022.
-    https://arxiv.org/abs/2208.06677
+    https://huggingface.co/papers/2208.06677
 
 Implementation adapted from https://github.com/sail-sg/Adan
 """
@@ -47,7 +47,7 @@ class Adan(Optimizer):
     """ Implements a pytorch variant of Adan.
 
     Adan was proposed in Adan: Adaptive Nesterov Momentum Algorithm for Faster Optimizing Deep Models
-    https://arxiv.org/abs/2208.06677
+    https://huggingface.co/papers/2208.06677
 
     Arguments:
         params: Iterable of parameters to optimize or dicts defining parameter groups.
@@ -244,7 +244,7 @@ def _single_tensor_adan(
         step_size = lr / bias_correction1
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             mask = (exp_avg * grad > 0).to(grad.dtype)
             mask.div_(mask.mean().clamp_(min=1e-3))
             exp_avg = exp_avg * mask
@@ -306,7 +306,7 @@ def _multi_tensor_adan(
     step_size = lr / bias_correction1
 
     if caution:
-        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+        # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
         masks = torch._foreach_mul(exp_avgs, grads)
         masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
         mask_scale = [m.mean() for m in masks]

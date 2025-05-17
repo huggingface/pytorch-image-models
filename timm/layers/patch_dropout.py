@@ -6,7 +6,7 @@ import torch.nn as nn
 
 class PatchDropout(nn.Module):
     """
-    https://arxiv.org/abs/2212.00794 and https://arxiv.org/pdf/2208.07220
+    https://huggingface.co/papers/2212.00794 and https://huggingface.co/papers/2208.07220
     """
     return_indices: torch.jit.Final[bool]
 

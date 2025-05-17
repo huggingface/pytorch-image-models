@@ -1,6 +1,6 @@
 """RAdam Optimizer.
 Implementation lifted from: https://github.com/LiyuanLucasLiu/RAdam
-Paper: `On the Variance of the Adaptive Learning Rate and Beyond` - https://arxiv.org/abs/1908.03265
+Paper: `On the Variance of the Adaptive Learning Rate and Beyond` - https://huggingface.co/papers/1908.03265
 
 NOTE: This impl has been deprecated in favour of torch.optim.RAdam and remains as a reference
 """

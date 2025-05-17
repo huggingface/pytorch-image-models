@@ -17,12 +17,12 @@ from ._types import ParamsT
 class NAdamW(torch.optim.Optimizer):
     """ Implements NAdamW algorithm.
 
-    See Table 1 in https://arxiv.org/abs/1910.05446 for the implementation of
+    See Table 1 in https://huggingface.co/papers/1910.05446 for the implementation of
     the NAdam algorithm (there is also a comment in the code which highlights
     the only difference of NAdamW and AdamW).
 
     For further details regarding the algorithm we refer to
-        - Decoupled Weight Decay Regularization: https://arxiv.org/abs/1711.05101
+        - Decoupled Weight Decay Regularization: https://huggingface.co/papers/1711.05101
         - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
 
     Args:
@@ -250,7 +250,7 @@ def _single_tensor_nadamw(
             denom = (exp_avg_sq.sqrt() / (bias_correction2_sqrt * step_size_neg)).add_(eps / step_size_neg)
 
             if caution:
-                # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                 # FIXME not 100% sure if this remains capturable?
                 mask = (exp_avg * grad > 0).to(grad.dtype)
                 mask.div_(mask.mean().clamp_(min=1e-3))
@@ -270,7 +270,7 @@ def _single_tensor_nadamw(
             denom = (exp_avg_sq.sqrt() / bias_correction2_sqrt).add_(eps)
 
             if caution:
-                # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                 mask = (exp_avg * grad > 0).to(grad.dtype)
                 mask.div_(mask.mean().clamp_(min=1e-3))
                 exp_avg.mul_(mask)
@@ -355,7 +355,7 @@ def _multi_tensor_nadamw(
         denom = torch._foreach_add(exp_avg_sq_sqrt, eps_over_step_size)
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             masks = torch._foreach_mul(exp_avgs, grads)
             masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]  # capturable?
             mask_scale = [m.mean() for m in masks]
@@ -382,7 +382,7 @@ def _multi_tensor_nadamw(
         denom = torch._foreach_add(exp_avg_sq_sqrt, eps)
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             masks = torch._foreach_mul(exp_avgs, grads)
             masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
             mask_scale = [m.mean() for m in masks]

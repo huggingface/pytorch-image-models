@@ -3,28 +3,28 @@
 An implementation of EfficienNet that covers variety of related models with efficient architectures:
 
 * EfficientNet-V2
-  - `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+  - `EfficientNetV2: Smaller Models and Faster Training` - https://huggingface.co/papers/2104.00298
 
 * EfficientNet (B0-B8, L2 + Tensorflow pretrained AutoAug/RandAug/AdvProp/NoisyStudent weight ports)
-  - EfficientNet: Rethinking Model Scaling for CNNs - https://arxiv.org/abs/1905.11946
-  - CondConv: Conditionally Parameterized Convolutions for Efficient Inference - https://arxiv.org/abs/1904.04971
-  - Adversarial Examples Improve Image Recognition - https://arxiv.org/abs/1911.09665
-  - Self-training with Noisy Student improves ImageNet classification - https://arxiv.org/abs/1911.04252
+  - EfficientNet: Rethinking Model Scaling for CNNs - https://huggingface.co/papers/1905.11946
+  - CondConv: Conditionally Parameterized Convolutions for Efficient Inference - https://huggingface.co/papers/1904.04971
+  - Adversarial Examples Improve Image Recognition - https://huggingface.co/papers/1911.09665
+  - Self-training with Noisy Student improves ImageNet classification - https://huggingface.co/papers/1911.04252
 
 * MixNet (Small, Medium, and Large)
-  - MixConv: Mixed Depthwise Convolutional Kernels - https://arxiv.org/abs/1907.09595
+  - MixConv: Mixed Depthwise Convolutional Kernels - https://huggingface.co/papers/1907.09595
 
 * MNasNet B1, A1 (SE), Small
-  - MnasNet: Platform-Aware Neural Architecture Search for Mobile - https://arxiv.org/abs/1807.11626
+  - MnasNet: Platform-Aware Neural Architecture Search for Mobile - https://huggingface.co/papers/1807.11626
 
 * FBNet-C
-  - FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable NAS - https://arxiv.org/abs/1812.03443
+  - FBNet: Hardware-Aware Efficient ConvNet Design via Differentiable NAS - https://huggingface.co/papers/1812.03443
 
 * Single-Path NAS Pixel1
-  - Single-Path NAS: Designing Hardware-Efficient ConvNets - https://arxiv.org/abs/1904.02877
+  - Single-Path NAS: Designing Hardware-Efficient ConvNets - https://huggingface.co/papers/1904.02877
 
 * TinyNet
-    - Model Rubik's Cube: Twisting Resolution, Depth and Width for TinyNets - https://arxiv.org/abs/2010.14819
+    - Model Rubik's Cube: Twisting Resolution, Depth and Width for TinyNets - https://huggingface.co/papers/2010.14819
     - Definitions & weights borrowed from https://github.com/huawei-noah/CV-Backbones/tree/master/tinynet_pytorch
 
 * And likely more...
@@ -389,7 +389,7 @@ def _gen_mnasnet_a1(variant, channel_multiplier=1.0, pretrained=False, **kwargs)
     """Creates a mnasnet-a1 model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet
-    Paper: https://arxiv.org/pdf/1807.11626.pdf.
+    Paper: https://huggingface.co/papers/1807.11626.
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -425,7 +425,7 @@ def _gen_mnasnet_b1(variant, channel_multiplier=1.0, pretrained=False, **kwargs)
     """Creates a mnasnet-b1 model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet
-    Paper: https://arxiv.org/pdf/1807.11626.pdf.
+    Paper: https://huggingface.co/papers/1807.11626.
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -461,7 +461,7 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
     """Creates a mnasnet-b1 model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet
-    Paper: https://arxiv.org/pdf/1807.11626.pdf.
+    Paper: https://huggingface.co/papers/1807.11626.
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -492,7 +492,7 @@ def _gen_mobilenet_v1(
 ):
     """
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
-    Paper: https://arxiv.org/abs/1801.04381
+    Paper: https://huggingface.co/papers/1801.04381
     """
     arch_def = [
         ['dsa_r1_k3_s1_c64'],
@@ -528,7 +528,7 @@ def _gen_mobilenet_v2(
 ):
     """ Generate MobileNet-V2 network
     Ref impl: https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet_v2.py
-    Paper: https://arxiv.org/abs/1801.04381
+    Paper: https://huggingface.co/papers/1801.04381
     """
     arch_def = [
         ['ds_r1_k3_s1_c16'],
@@ -562,7 +562,7 @@ def _gen_mobilenet_v2(
 def _gen_fbnetc(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """ FBNet-C
 
-        Paper: https://arxiv.org/abs/1812.03443
+        Paper: https://huggingface.co/papers/1812.03443
         Ref Impl: https://github.com/facebookresearch/maskrcnn-benchmark/blob/master/maskrcnn_benchmark/modeling/backbone/fbnet_modeldef.py
 
         NOTE: the impl above does not relate to the 'C' variant here, that was derived from paper,
@@ -592,7 +592,7 @@ def _gen_fbnetc(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
 def _gen_spnasnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """Creates the Single-Path NAS model from search targeted for Pixel1 phone.
 
-    Paper: https://arxiv.org/abs/1904.02877
+    Paper: https://huggingface.co/papers/1904.02877
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -631,7 +631,7 @@ def _gen_efficientnet(
     """Creates an EfficientNet model.
 
     Ref impl: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
-    Paper: https://arxiv.org/abs/1905.11946
+    Paper: https://huggingface.co/papers/1905.11946
 
     EfficientNet params
     name: (channel_multiplier, depth_multiplier, resolution, dropout_rate)
@@ -742,7 +742,7 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
     """Creates an EfficientNet-Lite model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/efficientnet/lite
-    Paper: https://arxiv.org/abs/1905.11946
+    Paper: https://huggingface.co/papers/1905.11946
 
     EfficientNet params
     name: (channel_multiplier, depth_multiplier, resolution, dropout_rate)
@@ -785,7 +785,7 @@ def _gen_efficientnetv2_base(
     """ Creates an EfficientNet-V2 base model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
-    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://huggingface.co/papers/2104.00298
     """
     arch_def = [
         ['cn_r1_k3_s1_e1_c16_skip'],
@@ -815,7 +815,7 @@ def _gen_efficientnetv2_s(
     """ Creates an EfficientNet-V2 Small model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
-    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://huggingface.co/papers/2104.00298
 
     NOTE: `rw` flag sets up 'small' variant to behave like my initial v2 small model,
         before ref the impl was released.
@@ -855,7 +855,7 @@ def _gen_efficientnetv2_m(
     """ Creates an EfficientNet-V2 Medium model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
-    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://huggingface.co/papers/2104.00298
     """
 
     arch_def = [
@@ -887,7 +887,7 @@ def _gen_efficientnetv2_l(
     """ Creates an EfficientNet-V2 Large model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
-    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://huggingface.co/papers/2104.00298
     """
 
     arch_def = [
@@ -919,7 +919,7 @@ def _gen_efficientnetv2_xl(
     """ Creates an EfficientNet-V2 Xtra-Large model
 
     Ref impl: https://github.com/google/automl/tree/master/efficientnetv2
-    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://arxiv.org/abs/2104.00298
+    Paper: `EfficientNetV2: Smaller Models and Faster Training` - https://huggingface.co/papers/2104.00298
     """
 
     arch_def = [
@@ -952,7 +952,7 @@ def _gen_efficientnet_x(
     """Creates an EfficientNet model.
 
     Ref impl: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/efficientnet_model.py
-    Paper: https://arxiv.org/abs/1905.11946
+    Paper: https://huggingface.co/papers/1905.11946
 
     EfficientNet params
     name: (channel_multiplier, depth_multiplier, resolution, dropout_rate)
@@ -1032,7 +1032,7 @@ def _gen_mixnet_s(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
     """Creates a MixNet Small model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet
-    Paper: https://arxiv.org/abs/1907.09595
+    Paper: https://huggingface.co/papers/1907.09595
     """
     arch_def = [
         # stage 0, 112x112 in
@@ -1065,7 +1065,7 @@ def _gen_mixnet_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrai
     """Creates a MixNet Medium-Large model.
 
     Ref impl: https://github.com/tensorflow/tpu/tree/master/models/official/mnasnet/mixnet
-    Paper: https://arxiv.org/abs/1907.09595
+    Paper: https://huggingface.co/papers/1907.09595
     """
     arch_def = [
         # stage 0, 112x112 in
@@ -2231,7 +2231,7 @@ def efficientnet_lite4(pretrained=False, **kwargs) -> EfficientNet:
 
 @register_model
 def efficientnet_b1_pruned(pretrained=False, **kwargs) -> EfficientNet:
-    """ EfficientNet-B1 Pruned. The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf  """
+    """ EfficientNet-B1 Pruned. The pruning has been obtained using https://huggingface.co/papers/2002.08258  """
     kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
     kwargs.setdefault('pad_type', 'same')
     variant = 'efficientnet_b1_pruned'
@@ -2242,7 +2242,7 @@ def efficientnet_b1_pruned(pretrained=False, **kwargs) -> EfficientNet:
 
 @register_model
 def efficientnet_b2_pruned(pretrained=False, **kwargs) -> EfficientNet:
-    """ EfficientNet-B2 Pruned. The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf """
+    """ EfficientNet-B2 Pruned. The pruning has been obtained using https://huggingface.co/papers/2002.08258 """
     kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
     kwargs.setdefault('pad_type', 'same')
     model = _gen_efficientnet(
@@ -2253,7 +2253,7 @@ def efficientnet_b2_pruned(pretrained=False, **kwargs) -> EfficientNet:
 
 @register_model
 def efficientnet_b3_pruned(pretrained=False, **kwargs) -> EfficientNet:
-    """ EfficientNet-B3 Pruned. The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf """
+    """ EfficientNet-B3 Pruned. The pruning has been obtained using https://huggingface.co/papers/2002.08258 """
     kwargs.setdefault('bn_eps', BN_EPS_TF_DEFAULT)
     kwargs.setdefault('pad_type', 'same')
     model = _gen_efficientnet(

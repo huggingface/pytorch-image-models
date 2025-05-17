@@ -9,9 +9,9 @@ extra padding support to allow porting of official Hybrid ResNet pretrained weig
 https://github.com/google-research/vision_transformer
 
 Thanks to the Google team for the above two repositories and associated papers:
-* Big Transfer (BiT): General Visual Representation Learning - https://arxiv.org/abs/1912.11370
-* An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale - https://arxiv.org/abs/2010.11929
-* Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
+* Big Transfer (BiT): General Visual Representation Learning - https://huggingface.co/papers/1912.11370
+* An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale - https://huggingface.co/papers/2010.11929
+* Knowledge distillation: A good teacher is patient and consistent - https://huggingface.co/papers/2106.05237
 
 Original copyright of Google code below, modifications by Ross Wightman, Copyright 2020.
 """
@@ -719,7 +719,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = generate_default_cfgs({
-    #  Paper: Knowledge distillation: A good teacher is patient and consistent - https://arxiv.org/abs/2106.05237
+    #  Paper: Knowledge distillation: A good teacher is patient and consistent - https://huggingface.co/papers/2106.05237
     'resnetv2_50x1_bit.goog_distilled_in1k': _cfg(
         hf_hub_id='timm/',
         interpolation='bicubic', custom_load=True),

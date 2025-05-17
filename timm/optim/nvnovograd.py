@@ -2,7 +2,7 @@
 Original impl by Nvidia from Jasper example:
     - https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/SpeechRecognition/Jasper
 Paper: `Stochastic Gradient Methods with Layer-wise Adaptive Moments for Training of Deep Networks`
-    - https://arxiv.org/abs/1905.11286
+    - https://huggingface.co/papers/1905.11286
 """
 
 import torch

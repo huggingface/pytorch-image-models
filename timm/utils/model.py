@@ -98,7 +98,7 @@ def extract_spp_stats(
     """Extract average square channel mean and variance of activations during 
         forward pass to plot Signal Propagation Plots (SPP).
     
-    Paper: https://arxiv.org/abs/2101.08692
+    Paper: https://huggingface.co/papers/2101.08692
 
     Example Usage: https://gist.github.com/amaarora/6e56942fcb46e67ba203f3009b30d950
     """

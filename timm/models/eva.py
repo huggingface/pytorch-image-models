@@ -1,6 +1,6 @@
 """ EVA
 
-EVA from https://github.com/baaivision/EVA , paper: https://arxiv.org/abs/2211.07636
+EVA from https://github.com/baaivision/EVA , paper: https://huggingface.co/papers/2211.07636
 
 @article{EVA,
   title={EVA: Exploring the Limits of Masked Visual Representation Learning at Scale},
@@ -10,7 +10,7 @@ EVA from https://github.com/baaivision/EVA , paper: https://arxiv.org/abs/2211.0
   year={2022}
 }
 
-EVA-02: A Visual Representation for Neon Genesis - https://arxiv.org/abs/2303.11331
+EVA-02: A Visual Representation for Neon Genesis - https://huggingface.co/papers/2303.11331
 @article{EVA02,
   title={EVA-02: A Visual Representation for Neon Genesis},
   author={Fang, Yuxin and Sun, Quan and Wang, Xinggang and Huang, Tiejun and Wang, Xinlong and Cao, Yue},
@@ -1204,7 +1204,7 @@ default_cfgs = generate_default_cfgs({
 
 @register_model
 def eva_giant_patch14_224(pretrained=False, **kwargs) -> Eva:
-    """ EVA-g model https://arxiv.org/abs/2211.07636 """
+    """ EVA-g model https://huggingface.co/papers/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -1212,7 +1212,7 @@ def eva_giant_patch14_224(pretrained=False, **kwargs) -> Eva:
 
 @register_model
 def eva_giant_patch14_336(pretrained=False, **kwargs) -> Eva:
-    """ EVA-g model https://arxiv.org/abs/2211.07636 """
+    """ EVA-g model https://huggingface.co/papers/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -1220,7 +1220,7 @@ def eva_giant_patch14_336(pretrained=False, **kwargs) -> Eva:
 
 @register_model
 def eva_giant_patch14_560(pretrained=False, **kwargs) -> Eva:
-    """ EVA-g model https://arxiv.org/abs/2211.07636 """
+    """ EVA-g model https://huggingface.co/papers/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_560', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

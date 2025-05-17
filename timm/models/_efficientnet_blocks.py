@@ -201,11 +201,11 @@ class DepthwiseSeparableConv(nn.Module):
 class InvertedResidual(nn.Module):
     """ Inverted residual block w/ optional SE
 
-    Originally used in MobileNet-V2 - https://arxiv.org/abs/1801.04381v4, this layer is often
+    Originally used in MobileNet-V2 - https://huggingface.co/papers/1801.04381v4, this layer is often
     referred to as 'MBConv' for (Mobile inverted bottleneck conv) and is also used in
-      * MNasNet - https://arxiv.org/abs/1807.11626
-      * EfficientNet - https://arxiv.org/abs/1905.11946
-      * MobileNet-V3 - https://arxiv.org/abs/1905.02244
+      * MNasNet - https://huggingface.co/papers/1807.11626
+      * EfficientNet - https://huggingface.co/papers/1905.11946
+      * MobileNet-V3 - https://huggingface.co/papers/1905.02244
     """
 
     def __init__(
@@ -487,7 +487,7 @@ class MobileAttention(nn.Module):
         self.has_query_stride = any([s > 1 for s in self.query_strides])
 
         # This CPE is different than the one suggested in the original paper.
-        # https://arxiv.org/abs/2102.10882
+        # https://huggingface.co/papers/2102.10882
         # 1. Rather than adding one CPE before the attention blocks, we add a CPE
         #    into every attention block.
         # 2. We replace the expensive Conv2D by a Separable DW Conv.
@@ -632,9 +632,9 @@ class EdgeResidual(nn.Module):
         - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
 
     This layer is also called FusedMBConv in the MobileDet, EfficientNet-X, and EfficientNet-V2 papers
-      * MobileDet - https://arxiv.org/abs/2004.14525
-      * EfficientNet-X - https://arxiv.org/abs/2102.05610
-      * EfficientNet-V2 - https://arxiv.org/abs/2104.00298
+      * MobileDet - https://huggingface.co/papers/2004.14525
+      * EfficientNet-X - https://huggingface.co/papers/2102.05610
+      * EfficientNet-V2 - https://huggingface.co/papers/2104.00298
     """
 
     def __init__(

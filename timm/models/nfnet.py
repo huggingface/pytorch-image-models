@@ -1,10 +1,10 @@
 """ Normalization Free Nets. NFNet, NF-RegNet, NF-ResNet (pre-activation) Models
 
 Paper: `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-    - https://arxiv.org/abs/2101.08692
+    - https://huggingface.co/papers/2101.08692
 
 Paper: `High-Performance Large-Scale Image Recognition Without Normalization`
-    - https://arxiv.org/abs/2102.06171
+    - https://huggingface.co/papers/2102.06171
 
 Official Deepmind JAX code: https://github.com/deepmind/deepmind-research/tree/master/nfnets
 
@@ -272,9 +272,9 @@ class NormFreeNet(nn.Module):
 
     As described in :
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     and
-    `High-Performance Large-Scale Image Recognition Without Normalization` - https://arxiv.org/abs/2102.06171
+    `High-Performance Large-Scale Image Recognition Without Normalization` - https://huggingface.co/papers/2102.06171
 
     This model aims to cover both the NFRegNet-Bx models as detailed in the paper's code snippets and
     the (preact) ResNet models described earlier in the paper.
@@ -747,7 +747,7 @@ default_cfgs = generate_default_cfgs({
 def dm_nfnet_f0(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F0 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f0', pretrained=pretrained, **kwargs)
 
@@ -756,7 +756,7 @@ def dm_nfnet_f0(pretrained=False, **kwargs) -> NormFreeNet:
 def dm_nfnet_f1(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F1 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f1', pretrained=pretrained, **kwargs)
 
@@ -765,7 +765,7 @@ def dm_nfnet_f1(pretrained=False, **kwargs) -> NormFreeNet:
 def dm_nfnet_f2(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F2 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f2', pretrained=pretrained, **kwargs)
 
@@ -774,7 +774,7 @@ def dm_nfnet_f2(pretrained=False, **kwargs) -> NormFreeNet:
 def dm_nfnet_f3(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F3 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f3', pretrained=pretrained, **kwargs)
 
@@ -783,7 +783,7 @@ def dm_nfnet_f3(pretrained=False, **kwargs) -> NormFreeNet:
 def dm_nfnet_f4(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F4 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f4', pretrained=pretrained, **kwargs)
 
@@ -792,7 +792,7 @@ def dm_nfnet_f4(pretrained=False, **kwargs) -> NormFreeNet:
 def dm_nfnet_f5(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F5 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f5', pretrained=pretrained, **kwargs)
 
@@ -801,7 +801,7 @@ def dm_nfnet_f5(pretrained=False, **kwargs) -> NormFreeNet:
 def dm_nfnet_f6(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F6 (DeepMind weight compatible)
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('dm_nfnet_f6', pretrained=pretrained, **kwargs)
 
@@ -810,7 +810,7 @@ def dm_nfnet_f6(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f0(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F0
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f0', pretrained=pretrained, **kwargs)
 
@@ -819,7 +819,7 @@ def nfnet_f0(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f1(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F1
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f1', pretrained=pretrained, **kwargs)
 
@@ -828,7 +828,7 @@ def nfnet_f1(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f2(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F2
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f2', pretrained=pretrained, **kwargs)
 
@@ -837,7 +837,7 @@ def nfnet_f2(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f3(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F3
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f3', pretrained=pretrained, **kwargs)
 
@@ -846,7 +846,7 @@ def nfnet_f3(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f4(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F4
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f4', pretrained=pretrained, **kwargs)
 
@@ -855,7 +855,7 @@ def nfnet_f4(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f5(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F5
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f5', pretrained=pretrained, **kwargs)
 
@@ -864,7 +864,7 @@ def nfnet_f5(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f6(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F6
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f6', pretrained=pretrained, **kwargs)
 
@@ -873,7 +873,7 @@ def nfnet_f6(pretrained=False, **kwargs) -> NormFreeNet:
 def nfnet_f7(pretrained=False, **kwargs) -> NormFreeNet:
     """ NFNet-F7
     `High-Performance Large-Scale Image Recognition Without Normalization`
-        - https://arxiv.org/abs/2102.06171
+        - https://huggingface.co/papers/2102.06171
     """
     return _create_normfreenet('nfnet_f7', pretrained=pretrained, **kwargs)
 
@@ -922,7 +922,7 @@ def eca_nfnet_l3(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_regnet_b0(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free RegNet-B0
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_regnet_b0', pretrained=pretrained, **kwargs)
 
@@ -931,7 +931,7 @@ def nf_regnet_b0(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_regnet_b1(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free RegNet-B1
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_regnet_b1', pretrained=pretrained, **kwargs)
 
@@ -940,7 +940,7 @@ def nf_regnet_b1(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_regnet_b2(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free RegNet-B2
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_regnet_b2', pretrained=pretrained, **kwargs)
 
@@ -949,7 +949,7 @@ def nf_regnet_b2(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_regnet_b3(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free RegNet-B3
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_regnet_b3', pretrained=pretrained, **kwargs)
 
@@ -958,7 +958,7 @@ def nf_regnet_b3(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_regnet_b4(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free RegNet-B4
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_regnet_b4', pretrained=pretrained, **kwargs)
 
@@ -967,7 +967,7 @@ def nf_regnet_b4(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_regnet_b5(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free RegNet-B5
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_regnet_b5', pretrained=pretrained, **kwargs)
 
@@ -976,7 +976,7 @@ def nf_regnet_b5(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_resnet26(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free ResNet-26
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_resnet26', pretrained=pretrained, **kwargs)
 
@@ -985,7 +985,7 @@ def nf_resnet26(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_resnet50(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free ResNet-50
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_resnet50', pretrained=pretrained, **kwargs)
 
@@ -994,7 +994,7 @@ def nf_resnet50(pretrained=False, **kwargs) -> NormFreeNet:
 def nf_resnet101(pretrained=False, **kwargs) -> NormFreeNet:
     """ Normalization-Free ResNet-101
     `Characterizing signal propagation to close the performance gap in unnormalized ResNets`
-        - https://arxiv.org/abs/2101.08692
+        - https://huggingface.co/papers/2101.08692
     """
     return _create_normfreenet('nf_resnet101', pretrained=pretrained, **kwargs)
 

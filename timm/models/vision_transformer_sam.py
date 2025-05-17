@@ -3,7 +3,7 @@
 A PyTorch implement of Vision Transformers as described in:
 
 'Exploring Plain Vision Transformer Backbones for Object Detection'
-    - https://arxiv.org/abs/2203.16527
+    - https://huggingface.co/papers/2203.16527
 
 'Segment Anything Model (SAM)'
     - https://github.com/facebookresearch/segment-anything/
@@ -320,7 +320,7 @@ class VisionTransformerSAM(nn.Module):
     """ Vision Transformer for Segment-Anything Model(SAM)
 
     A PyTorch impl of : `Exploring Plain Vision Transformer Backbones for Object Detection` or `Segment Anything Model (SAM)`
-        - https://arxiv.org/abs/2010.11929
+        - https://huggingface.co/papers/2010.11929
     """
 
     def __init__(

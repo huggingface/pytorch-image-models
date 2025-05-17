@@ -1,7 +1,7 @@
 """ Cross-Covariance Image Transformer (XCiT) in PyTorch
 
 Paper:
-    - https://arxiv.org/abs/2106.09681
+    - https://huggingface.co/papers/2106.09681
 
 Same as the official implementation, with some minor adaptations, original copyright below
     - https://github.com/facebookresearch/xcit/blob/master/xcit.py
@@ -144,7 +144,7 @@ class LPI(nn.Module):
 
 
 class ClassAttentionBlock(nn.Module):
-    """Class Attention Layer as in CaiT https://arxiv.org/abs/2103.17239"""
+    """Class Attention Layer as in CaiT https://huggingface.co/papers/2103.17239"""
 
     def __init__(
             self,

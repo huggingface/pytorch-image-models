@@ -1,7 +1,7 @@
 """ LeViT
 
 Paper: `LeViT: a Vision Transformer in ConvNet's Clothing for Faster Inference`
-    - https://arxiv.org/abs/2104.01136
+    - https://huggingface.co/papers/2104.01136
 
 @article{graham2021levit,
   title={LeViT: a Vision Transformer in ConvNet's Clothing for Faster Inference},

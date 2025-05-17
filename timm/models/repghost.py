@@ -1,6 +1,6 @@
 """
 An implementation of RepGhostNet Model as defined in:
-RepGhost: A Hardware-Efficient Ghost Module via Re-parameterization. https://arxiv.org/abs/2211.06088
+RepGhost: A Hardware-Efficient Ghost Module via Re-parameterization. https://huggingface.co/papers/2211.06088
 
 Original implementation: https://github.com/ChengpengChen/RepGhost
 """

@@ -12,7 +12,7 @@ from torch.nn import functional as F
 
 
 def swish(x, inplace: bool = False):
-    """Swish - Described in: https://arxiv.org/abs/1710.05941
+    """Swish - Described in: https://huggingface.co/papers/1710.05941
     """
     return x.mul_(x.sigmoid()) if inplace else x.mul(x.sigmoid())
 
@@ -27,14 +27,14 @@ class Swish(nn.Module):
 
 
 def mish(x, inplace: bool = False):
-    """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://arxiv.org/abs/1908.08681
+    """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://huggingface.co/papers/1908.08681
     NOTE: I don't have a working inplace variant
     """
     return x.mul(F.softplus(x).tanh())
 
 
 class Mish(nn.Module):
-    """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://arxiv.org/abs/1908.08681
+    """Mish: A Self Regularized Non-Monotonic Neural Activation Function - https://huggingface.co/papers/1908.08681
     """
     def __init__(self, inplace: bool = False):
         super(Mish, self).__init__()

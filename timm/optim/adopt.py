@@ -1,6 +1,6 @@
 """ ADOPT PyTorch Optimizer
 
-ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate: https://arxiv.org/abs/2411.02853
+ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate: https://huggingface.co/papers/2411.02853
 
 Modified for reduced dependencies on PyTorch internals from original at: https://github.com/iShohei220/adopt
 
@@ -54,7 +54,7 @@ def _get_value(x):
 
 class Adopt(Optimizer):
     """
-    ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate: https://arxiv.org/abs/2411.02853
+    ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate: https://huggingface.co/papers/2411.02853
 
     """
     def __init__(
@@ -311,7 +311,7 @@ def _single_tensor_adopt(
         exp_avg.lerp_(normed_grad, 1 - beta1)
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             mask = (exp_avg * grad > 0).to(grad.dtype)
             mask.div_(mask.mean().clamp_(min=1e-3))
             exp_avg = exp_avg * mask
@@ -425,7 +425,7 @@ def _multi_tensor_adopt(
         torch._foreach_lerp_(device_exp_avgs, normed_grad, 1 - beta1)
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             masks = torch._foreach_mul(device_exp_avgs, device_grads)
             masks = [(m > 0).to(g.dtype) for m, g in zip(masks, device_grads)]
             mask_scale = [m.mean() for m in masks]

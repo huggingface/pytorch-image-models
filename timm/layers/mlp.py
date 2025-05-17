@@ -52,7 +52,7 @@ class Mlp(nn.Module):
 
 class GluMlp(nn.Module):
     """ MLP w/ GLU style gating
-    See: https://arxiv.org/abs/1612.08083, https://arxiv.org/abs/2002.05202
+    See: https://huggingface.co/papers/1612.08083, https://huggingface.co/papers/2002.05202
 
     NOTE: When use_conv=True, expects 2D NCHW tensors, otherwise N*C expected.
     """

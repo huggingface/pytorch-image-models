@@ -1,6 +1,6 @@
 """ Vision OutLOoker (VOLO) implementation
 
-Paper: `VOLO: Vision Outlooker for Visual Recognition` - https://arxiv.org/abs/2106.13112
+Paper: `VOLO: Vision Outlooker for Visual Recognition` - https://huggingface.co/papers/2106.13112
 
 Code adapted from official impl at https://github.com/sail-sg/volo, original copyright in comment below
 

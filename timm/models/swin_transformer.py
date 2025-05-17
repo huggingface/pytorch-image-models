@@ -1,10 +1,10 @@
 """ Swin Transformer
 A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`
-    - https://arxiv.org/pdf/2103.14030
+    - https://huggingface.co/papers/2103.14030
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 
-S3 (AutoFormerV2, https://arxiv.org/abs/2111.14725) Swin weights from
+S3 (AutoFormerV2, https://huggingface.co/papers/2111.14725) Swin weights from
     - https://github.com/microsoft/Cream/tree/main/AutoFormerV2
 
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
@@ -564,7 +564,7 @@ class SwinTransformer(nn.Module):
     """ Swin Transformer
 
     A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
-          https://arxiv.org/pdf/2103.14030
+          https://huggingface.co/papers/2103.14030
     """
 
     def __init__(
@@ -1036,7 +1036,7 @@ def swin_large_patch4_window12_384(pretrained=False, **kwargs) -> SwinTransforme
 
 @register_model
 def swin_s3_tiny_224(pretrained=False, **kwargs) -> SwinTransformer:
-    """ Swin-S3-T @ 224x224, https://arxiv.org/abs/2111.14725
+    """ Swin-S3-T @ 224x224, https://huggingface.co/papers/2111.14725
     """
     model_args = dict(
         patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
@@ -1045,7 +1045,7 @@ def swin_s3_tiny_224(pretrained=False, **kwargs) -> SwinTransformer:
 
 @register_model
 def swin_s3_small_224(pretrained=False, **kwargs) -> SwinTransformer:
-    """ Swin-S3-S @ 224x224, https://arxiv.org/abs/2111.14725
+    """ Swin-S3-S @ 224x224, https://huggingface.co/papers/2111.14725
     """
     model_args = dict(
         patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
@@ -1054,7 +1054,7 @@ def swin_s3_small_224(pretrained=False, **kwargs) -> SwinTransformer:
 
 @register_model
 def swin_s3_base_224(pretrained=False, **kwargs) -> SwinTransformer:
-    """ Swin-S3-B @ 224x224, https://arxiv.org/abs/2111.14725
+    """ Swin-S3-B @ 224x224, https://huggingface.co/papers/2111.14725
     """
     model_args = dict(
         patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2), num_heads=(3, 6, 12, 24))

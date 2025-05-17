@@ -1,7 +1,7 @@
 """ ConvNeXt
 
 Papers:
-* `A ConvNet for the 2020s` - https://arxiv.org/pdf/2201.03545.pdf
+* `A ConvNet for the 2020s` - https://huggingface.co/papers/2201.03545
 @Article{liu2022convnet,
   author  = {Zhuang Liu and Hanzi Mao and Chao-Yuan Wu and Christoph Feichtenhofer and Trevor Darrell and Saining Xie},
   title   = {A ConvNet for the 2020s},
@@ -9,7 +9,7 @@ Papers:
   year    = {2022},
 }
 
-* `ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://arxiv.org/abs/2301.00808
+* `ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://huggingface.co/papers/2301.00808
 @article{Woo2023ConvNeXtV2,
   title={ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders},
   author={Sanghyun Woo, Shoubhik Debnath, Ronghang Hu, Xinlei Chen, Zhuang Liu, In So Kweon and Saining Xie},
@@ -265,7 +265,7 @@ def _get_norm_layers(norm_layer: Union[Callable, str], conv_mlp: bool, norm_eps:
 
 class ConvNeXt(nn.Module):
     r""" ConvNeXt
-        A PyTorch impl of : `A ConvNet for the 2020s`  - https://arxiv.org/pdf/2201.03545.pdf
+        A PyTorch impl of : `A ConvNet for the 2020s`  - https://huggingface.co/papers/2201.03545
     """
 
     def __init__(

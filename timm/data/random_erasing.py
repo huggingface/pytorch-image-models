@@ -26,7 +26,7 @@ def _get_pixels(per_pixel, rand_color, patch_size, dtype=torch.float32, device='
 class RandomErasing:
     """ Randomly selects a rectangle region in an image and erases its pixels.
         'Random Erasing Data Augmentation' by Zhong et al.
-        See https://arxiv.org/pdf/1708.04896.pdf
+        See https://huggingface.co/papers/1708.04896
 
         This variant of RandomErasing is intended to be applied to either a batch
         or single image tensor after it has been normalized by dataset mean and std.

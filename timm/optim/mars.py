@@ -2,7 +2,7 @@
 
 Code simplified from https://github.com/AGI-Arena/MARS
 
-Paper: MARS: Unleashing the Power of Variance Reduction for Training Large Models - https://arxiv.org/abs/2411.10438
+Paper: MARS: Unleashing the Power of Variance Reduction for Training Large Models - https://huggingface.co/papers/2411.10438
 
 @article{yuan2024mars,
   title={MARS: Unleashing the Power of Variance Reduction for Training Large Models},
@@ -56,7 +56,7 @@ def _mars_single_tensor_step(
         exp_avg.mul_(beta1).add_(c_t, alpha=one_minus_beta1)
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             mask = (exp_avg * grad > 0).to(grad.dtype)
             mask.div_(mask.mean().clamp_(min=1e-3))
             exp_avg = exp_avg * mask
@@ -92,7 +92,7 @@ class Mars(Optimizer):
     """ MARS Optimizer
 
     Paper: MARS: Unleashing the Power of Variance Reduction for Training Large Models
-        https://arxiv.org/abs/2411.10438
+        https://huggingface.co/papers/2411.10438
 
     """
     def __init__(

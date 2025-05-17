@@ -1,6 +1,6 @@
 """ FocalNet
 
-As described in `Focal Modulation Networks` - https://arxiv.org/abs/2203.11926
+As described in `Focal Modulation Networks` - https://huggingface.co/papers/2203.11926
 
 Significant modifications and refactoring from the original impl at https://github.com/microsoft/FocalNet
 

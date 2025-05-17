@@ -8,7 +8,7 @@ Creates an Xception Model as defined in:
 
 Francois Chollet
 Xception: Deep Learning with Depthwise Separable Convolutions
-https://arxiv.org/pdf/1610.02357.pdf
+https://huggingface.co/papers/1610.02357
 
 This weights ported from the Keras implementation. Achieves the following performance on the validation set:
 
@@ -93,7 +93,7 @@ class Block(nn.Module):
 class Xception(nn.Module):
     """
     Xception optimized for the ImageNet dataset, as specified in
-    https://arxiv.org/pdf/1610.02357.pdf
+    https://huggingface.co/papers/1610.02357
     """
 
     def __init__(self, num_classes=1000, in_chans=3, drop_rate=0., global_pool='avg'):

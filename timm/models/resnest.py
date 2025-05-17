@@ -1,6 +1,6 @@
 """ ResNeSt Models
 
-Paper: `ResNeSt: Split-Attention Networks` - https://arxiv.org/abs/2004.08955
+Paper: `ResNeSt: Split-Attention Networks` - https://huggingface.co/papers/2004.08955
 
 Adapted from original PyTorch impl w/ weights at https://github.com/zhanghang1989/ResNeSt by Hang Zhang
 
@@ -183,7 +183,7 @@ def resnest26d(pretrained=False, **kwargs) -> ResNet:
 
 @register_model
 def resnest50d(pretrained=False, **kwargs) -> ResNet:
-    """ ResNeSt-50d model. Matches paper ResNeSt-50 model, https://arxiv.org/abs/2004.08955
+    """ ResNeSt-50d model. Matches paper ResNeSt-50 model, https://huggingface.co/papers/2004.08955
     Since this codebase supports all possible variations, 'd' for deep stem, stem_width 32, avg in downsample.
     """
     model_kwargs = dict(
@@ -195,7 +195,7 @@ def resnest50d(pretrained=False, **kwargs) -> ResNet:
 
 @register_model
 def resnest101e(pretrained=False, **kwargs) -> ResNet:
-    """ ResNeSt-101e model. Matches paper ResNeSt-101 model, https://arxiv.org/abs/2004.08955
+    """ ResNeSt-101e model. Matches paper ResNeSt-101 model, https://huggingface.co/papers/2004.08955
      Since this codebase supports all possible variations, 'e' for deep stem, stem_width 64, avg in downsample.
     """
     model_kwargs = dict(
@@ -207,7 +207,7 @@ def resnest101e(pretrained=False, **kwargs) -> ResNet:
 
 @register_model
 def resnest200e(pretrained=False, **kwargs) -> ResNet:
-    """ ResNeSt-200e model. Matches paper ResNeSt-200 model, https://arxiv.org/abs/2004.08955
+    """ ResNeSt-200e model. Matches paper ResNeSt-200 model, https://huggingface.co/papers/2004.08955
     Since this codebase supports all possible variations, 'e' for deep stem, stem_width 64, avg in downsample.
     """
     model_kwargs = dict(
@@ -219,7 +219,7 @@ def resnest200e(pretrained=False, **kwargs) -> ResNet:
 
 @register_model
 def resnest269e(pretrained=False, **kwargs) -> ResNet:
-    """ ResNeSt-269e model. Matches paper ResNeSt-269 model, https://arxiv.org/abs/2004.08955
+    """ ResNeSt-269e model. Matches paper ResNeSt-269 model, https://huggingface.co/papers/2004.08955
     Since this codebase supports all possible variations, 'e' for deep stem, stem_width 64, avg in downsample.
     """
     model_kwargs = dict(

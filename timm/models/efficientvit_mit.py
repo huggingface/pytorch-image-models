@@ -1,7 +1,7 @@
 """ EfficientViT (by MIT Song Han's Lab)
 
 Paper: `Efficientvit: Enhanced linear attention for high-resolution low-computation visual recognition`
-    - https://arxiv.org/abs/2205.14756
+    - https://huggingface.co/papers/2205.14756
 
 Adapted from official impl at https://github.com/mit-han-lab/efficientvit
 """

@@ -18,8 +18,8 @@ class AdamWLegacy(Optimizer):
     NOTE: This impl has been deprecated in favour of torch.optim.NAdam and remains as a reference
 
     References:
-        - Adam: A Method for Stochastic Optimization: https://arxiv.org/abs/1412.6980
-        - Decoupled Weight Decay Regularization: https://arxiv.org/abs/1711.05101
+        - Adam: A Method for Stochastic Optimization: https://huggingface.co/papers/1412.6980
+        - Decoupled Weight Decay Regularization: https://huggingface.co/papers/1711.05101
         - On the Convergence of Adam and Beyond: https://openreview.net/forum?id=ryQu7f-RZ
 
     Args:
@@ -130,7 +130,7 @@ class AdamWLegacy(Optimizer):
                 step_size = group['lr'] / bias_correction1
 
                 if group['caution']:
-                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                     mask = (exp_avg * grad > 0).to(grad.dtype)
                     mask.div_(mask.mean().clamp_(min=1e-3))
                     exp_avg = exp_avg * mask

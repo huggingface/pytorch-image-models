@@ -1,4 +1,4 @@
-""" BEiT: BERT Pre-Training of Image Transformers (https://arxiv.org/abs/2106.08254)
+""" BEiT: BERT Pre-Training of Image Transformers (https://huggingface.co/papers/2106.08254)
 
 Model from official source: https://github.com/microsoft/unilm/tree/master/beit
 
@@ -27,7 +27,7 @@ see original source above for pre-training models and procedure.
 Modifications by / Copyright 2021 Ross Wightman, original copyrights below
 """
 # --------------------------------------------------------
-# BEIT: BERT Pre-Training of Image Transformers (https://arxiv.org/abs/2106.08254)
+# BEIT: BERT Pre-Training of Image Transformers (https://huggingface.co/papers/2106.08254)
 # Github source: https://github.com/microsoft/unilm/tree/master/beit
 # Copyright (c) 2021 Microsoft
 # Licensed under The MIT License [see LICENSE for details]

@@ -177,12 +177,12 @@ class MlpHead(nn.Module):
 
 
 class GatedConvBlock(nn.Module):
-    r""" Our implementation of Gated CNN Block: https://arxiv.org/pdf/1612.08083
+    r""" Our implementation of Gated CNN Block: https://huggingface.co/papers/1612.08083
     Args:
         conv_ratio: control the number of channels to conduct depthwise convolution.
             Conduct convolution on partial channels can improve paraitcal efficiency.
-            The idea of partial channels is from ShuffleNet V2 (https://arxiv.org/abs/1807.11164) and
-            also used by InceptionNeXt (https://arxiv.org/abs/2303.16900) and FasterNet (https://arxiv.org/abs/2303.03667)
+            The idea of partial channels is from ShuffleNet V2 (https://huggingface.co/papers/1807.11164) and
+            also used by InceptionNeXt (https://huggingface.co/papers/2303.16900) and FasterNet (https://huggingface.co/papers/2303.03667)
     """
 
     def __init__(
@@ -283,7 +283,7 @@ class MambaOutStage(nn.Module):
 class MambaOut(nn.Module):
     r""" MetaFormer
         A PyTorch impl of : `MetaFormer Baselines for Vision`  -
-          https://arxiv.org/abs/2210.13452
+          https://huggingface.co/papers/2210.13452
 
     Args:
         in_chans (int): Number of input image channels. Default: 3.

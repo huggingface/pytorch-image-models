@@ -14,7 +14,7 @@ match paper, BUT, without any official pretrained weights it's difficult to conf
 
 Papers:
 
-MaxViT: Multi-Axis Vision Transformer - https://arxiv.org/abs/2204.01697
+MaxViT: Multi-Axis Vision Transformer - https://huggingface.co/papers/2204.01697
 @article{tu2022maxvit,
   title={MaxViT: Multi-Axis Vision Transformer},
   author={Tu, Zhengzhong and Talebi, Hossein and Zhang, Han and Yang, Feng and Milanfar, Peyman and Bovik, Alan and Li, Yinxiao},
@@ -22,7 +22,7 @@ MaxViT: Multi-Axis Vision Transformer - https://arxiv.org/abs/2204.01697
   year={2022},
 }
 
-CoAtNet: Marrying Convolution and Attention for All Data Sizes - https://arxiv.org/abs/2106.04803
+CoAtNet: Marrying Convolution and Attention for All Data Sizes - https://huggingface.co/papers/2106.04803
 @article{DBLP:journals/corr/abs-2106-04803,
   author    = {Zihang Dai and Hanxiao Liu and Quoc V. Le and Mingxing Tan},
   title     = {CoAtNet: Marrying Convolution and Attention for All Data Sizes},

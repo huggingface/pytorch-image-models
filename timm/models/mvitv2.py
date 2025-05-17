@@ -692,12 +692,12 @@ class MultiScaleVit(nn.Module):
     Improved Multiscale Vision Transformers for Classification and Detection
     Yanghao Li*, Chao-Yuan Wu*, Haoqi Fan, Karttikeya Mangalam, Bo Xiong, Jitendra Malik,
         Christoph Feichtenhofer*
-    https://arxiv.org/abs/2112.01526
+    https://huggingface.co/papers/2112.01526
 
     Multiscale Vision Transformers
     Haoqi Fan*, Bo Xiong*, Karttikeya Mangalam*, Yanghao Li*, Zhicheng Yan, Jitendra Malik,
         Christoph Feichtenhofer*
-    https://arxiv.org/abs/2104.11227
+    https://huggingface.co/papers/2104.11227
     """
 
     def __init__(

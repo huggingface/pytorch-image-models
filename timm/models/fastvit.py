@@ -38,7 +38,7 @@ class MobileOneBlock(nn.Module):
     and plain-CNN style architecture at inference time
     For more details, please refer to our paper:
     `An Improved One millisecond Mobile Backbone` -
-    https://arxiv.org/pdf/2206.04040.pdf
+    https://huggingface.co/papers/2206.04040
     """
 
     def __init__(
@@ -160,7 +160,7 @@ class MobileOneBlock(nn.Module):
 
     def reparameterize(self):
         """Following works like `RepVGG: Making VGG-style ConvNets Great Again` -
-        https://arxiv.org/pdf/2101.03697.pdf. We re-parameterize multi-branched
+        https://huggingface.co/papers/2101.03697. We re-parameterize multi-branched
         architecture used at training time to obtain a plain CNN-like structure
         for inference.
         """
@@ -276,7 +276,7 @@ class ReparamLargeKernelConv(nn.Module):
     """Building Block of RepLKNet
 
     This class defines overparameterized large kernel conv block
-    introduced in `RepLKNet <https://arxiv.org/abs/2203.06717>`_
+    introduced in `RepLKNet <https://huggingface.co/papers/2203.06717>`_
 
     Reference: https://github.com/DingXiaoH/RepLKNet-pytorch
     """
@@ -379,7 +379,7 @@ class ReparamLargeKernelConv(nn.Module):
     def reparameterize(self) -> None:
         """
         Following works like `RepVGG: Making VGG-style ConvNets Great Again` -
-        https://arxiv.org/pdf/2101.03697.pdf. We re-parameterize multi-branched
+        https://huggingface.co/papers/2101.03697. We re-parameterize multi-branched
         architecture used at training time to obtain a plain CNN-like structure
         for inference.
         """
@@ -602,7 +602,7 @@ class RepMixer(nn.Module):
     """Reparameterizable token mixer.
 
     For more details, please refer to our paper:
-    `FastViT: A Fast Hybrid Vision Transformer using Structural Reparameterization <https://arxiv.org/pdf/2303.14189.pdf>`_
+    `FastViT: A Fast Hybrid Vision Transformer using Structural Reparameterization <https://huggingface.co/papers/2303.14189>`_
     """
 
     def __init__(
@@ -766,7 +766,7 @@ class RepConditionalPosEnc(nn.Module):
     """Implementation of conditional positional encoding.
 
     For more details refer to paper:
-    `Conditional Positional Encodings for Vision Transformers <https://arxiv.org/pdf/2102.10882.pdf>`_
+    `Conditional Positional Encodings for Vision Transformers <https://huggingface.co/papers/2102.10882>`_
 
     In our implementation, we can reparameterize this module to eliminate a skip connection.
     """
@@ -882,7 +882,7 @@ class RepMixerBlock(nn.Module):
     """Implementation of Metaformer block with RepMixer as token mixer.
 
     For more details on Metaformer structure, please refer to:
-    `MetaFormer Is Actually What You Need for Vision <https://arxiv.org/pdf/2111.11418.pdf>`_
+    `MetaFormer Is Actually What You Need for Vision <https://huggingface.co/papers/2111.11418>`_
     """
 
     def __init__(
@@ -940,7 +940,7 @@ class AttentionBlock(nn.Module):
     """Implementation of metaformer block with MHSA as token mixer.
 
     For more details on Metaformer structure, please refer to:
-    `MetaFormer Is Actually What You Need for Vision <https://arxiv.org/pdf/2111.11418.pdf>`_
+    `MetaFormer Is Actually What You Need for Vision <https://huggingface.co/papers/2111.11418>`_
     """
 
     def __init__(
@@ -1096,7 +1096,7 @@ class FastVit(nn.Module):
     fork_feat: torch.jit.Final[bool]
 
     """
-    This class implements `FastViT architecture <https://arxiv.org/pdf/2303.14189.pdf>`_
+    This class implements `FastViT architecture <https://huggingface.co/papers/2303.14189>`_
     """
 
     def __init__(

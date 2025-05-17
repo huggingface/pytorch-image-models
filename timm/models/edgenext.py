@@ -1,7 +1,7 @@
 """ EdgeNeXt
 
 Paper: `EdgeNeXt: Efficiently Amalgamated CNN-Transformer Architecture for Mobile Vision Applications`
- - https://arxiv.org/abs/2206.10589
+ - https://huggingface.co/papers/2206.10589
 
 Original code and weights from https://github.com/mmaaz60/EdgeNeXt
 

@@ -64,9 +64,9 @@
 
 ## Nov 28, 2024
 * More optimizers
-  * Add MARS optimizer (https://arxiv.org/abs/2411.10438, https://github.com/AGI-Arena/MARS)
-  * Add LaProp optimizer (https://arxiv.org/abs/2002.04839, https://github.com/Z-T-WANG/LaProp-Optimizer)
-  * Add masking from 'Cautious Optimizers' (https://arxiv.org/abs/2411.16085, https://github.com/kyleliang919/C-Optim) to Adafactor, Adafactor Big Vision, AdamW (legacy), Adopt, Lamb, LaProp, Lion, NadamW, RMSPropTF, SGDW
+  * Add MARS optimizer (https://huggingface.co/papers/2411.10438, https://github.com/AGI-Arena/MARS)
+  * Add LaProp optimizer (https://huggingface.co/papers/2002.04839, https://github.com/Z-T-WANG/LaProp-Optimizer)
+  * Add masking from 'Cautious Optimizers' (https://huggingface.co/papers/2411.16085, https://github.com/kyleliang919/C-Optim) to Adafactor, Adafactor Big Vision, AdamW (legacy), Adopt, Lamb, LaProp, Lion, NadamW, RMSPropTF, SGDW
   * Cleanup some docstrings and type annotations re optimizers and factory
 * Add MobileNet-V4 Conv Medium models pretrained on in12k and fine-tuned in1k @ 384x384
   * https://huggingface.co/timm/mobilenetv4_conv_medium.e250_r384_in12k_ft_in1k
@@ -173,7 +173,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 |hiera_small_abswin_256.sbb2_pd_e200_in12k_ft_in1k |84.560|97.106|35.01      |
 
 ### Aug 8, 2024
-* Add RDNet ('DenseNets Reloaded', https://arxiv.org/abs/2403.19588), thanks [Donghyun Kim](https://github.com/dhkim0225)
+* Add RDNet ('DenseNets Reloaded', https://huggingface.co/papers/2403.19588), thanks [Donghyun Kim](https://github.com/dhkim0225)
   
 ### July 28, 2024
 * Add `mobilenet_edgetpu_v2_m` weights w/ `ra4` mnv4-small based recipe. 80.1% top-1 @ 224 and 80.7 @ 256.
@@ -258,8 +258,8 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 | [mobilenetv4_conv_small.e2400_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e2400_r224_in1k)                 |73.756|26.244  |91.422|8.578   |3.77       |224     |
 | [mobilenetv4_conv_small.e1200_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e1200_r224_in1k)                 |73.454|26.546  |91.34 |8.66    |3.77       |224     |
 
-* Apple MobileCLIP (https://arxiv.org/pdf/2311.17049, FastViT and ViT-B) image tower model support & weights added (part of OpenCLIP support).
-* ViTamin (https://arxiv.org/abs/2404.02132) CLIP image tower model & weights added (part of OpenCLIP support).
+* Apple MobileCLIP (https://huggingface.co/papers/2311.17049, FastViT and ViT-B) image tower model support & weights added (part of OpenCLIP support).
+* ViTamin (https://huggingface.co/papers/2404.02132) CLIP image tower model & weights added (part of OpenCLIP support).
 * OpenAI CLIP Modified ResNet image tower modelling & weight support (via ByobNet). Refactor AttentionPool2d.
 
 ### May 14, 2024
@@ -358,161 +358,161 @@ The work of many others is present here. I've tried to make sure all source mate
 
 All model architecture families include variants with pretrained weights. There are specific model variants without any weights, it is NOT a bug. Help training new or better weights is always appreciated.
 
-* Aggregating Nested Transformers - https://arxiv.org/abs/2105.12723
-* BEiT - https://arxiv.org/abs/2106.08254
-* Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
-* Bottleneck Transformers - https://arxiv.org/abs/2101.11605
-* CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
-* CoaT (Co-Scale Conv-Attentional Image Transformers) - https://arxiv.org/abs/2104.06399
-* CoAtNet (Convolution and Attention) - https://arxiv.org/abs/2106.04803
-* ConvNeXt - https://arxiv.org/abs/2201.03545
-* ConvNeXt-V2 - http://arxiv.org/abs/2301.00808
-* ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://arxiv.org/abs/2103.10697
-* CspNet (Cross-Stage Partial Networks) - https://arxiv.org/abs/1911.11929
-* DeiT - https://arxiv.org/abs/2012.12877
-* DeiT-III - https://arxiv.org/pdf/2204.07118.pdf
-* DenseNet - https://arxiv.org/abs/1608.06993
-* DLA - https://arxiv.org/abs/1707.06484
-* DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
-* EdgeNeXt - https://arxiv.org/abs/2206.10589
-* EfficientFormer - https://arxiv.org/abs/2206.01191
+* Aggregating Nested Transformers - https://huggingface.co/papers/2105.12723
+* BEiT - https://huggingface.co/papers/2106.08254
+* Big Transfer ResNetV2 (BiT) - https://huggingface.co/papers/1912.11370
+* Bottleneck Transformers - https://huggingface.co/papers/2101.11605
+* CaiT (Class-Attention in Image Transformers) - https://huggingface.co/papers/2103.17239
+* CoaT (Co-Scale Conv-Attentional Image Transformers) - https://huggingface.co/papers/2104.06399
+* CoAtNet (Convolution and Attention) - https://huggingface.co/papers/2106.04803
+* ConvNeXt - https://huggingface.co/papers/2201.03545
+* ConvNeXt-V2 - https://huggingface.co/papers/2301.00808
+* ConViT (Soft Convolutional Inductive Biases Vision Transformers)- https://huggingface.co/papers/2103.10697
+* CspNet (Cross-Stage Partial Networks) - https://huggingface.co/papers/1911.11929
+* DeiT - https://huggingface.co/papers/2012.12877
+* DeiT-III - https://huggingface.co/papers/2204.07118
+* DenseNet - https://huggingface.co/papers/1608.06993
+* DLA - https://huggingface.co/papers/1707.06484
+* DPN (Dual-Path Network) - https://huggingface.co/papers/1707.01629
+* EdgeNeXt - https://huggingface.co/papers/2206.10589
+* EfficientFormer - https://huggingface.co/papers/2206.01191
 * EfficientNet (MBConvNet Family)
-    * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
-    * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
-    * EfficientNet (B0-B7) - https://arxiv.org/abs/1905.11946
+    * EfficientNet NoisyStudent (B0-B7, L2) - https://huggingface.co/papers/1911.04252
+    * EfficientNet AdvProp (B0-B8) - https://huggingface.co/papers/1911.09665
+    * EfficientNet (B0-B7) - https://huggingface.co/papers/1905.11946
     * EfficientNet-EdgeTPU (S, M, L) - https://ai.googleblog.com/2019/08/efficientnet-edgetpu-creating.html
-    * EfficientNet V2 - https://arxiv.org/abs/2104.00298
-    * FBNet-C - https://arxiv.org/abs/1812.03443
-    * MixNet - https://arxiv.org/abs/1907.09595
-    * MNASNet B1, A1 (Squeeze-Excite), and Small - https://arxiv.org/abs/1807.11626
-    * MobileNet-V2 - https://arxiv.org/abs/1801.04381
-    * Single-Path NAS - https://arxiv.org/abs/1904.02877
-    * TinyNet - https://arxiv.org/abs/2010.14819
-* EfficientViT (MIT) - https://arxiv.org/abs/2205.14756
-* EfficientViT (MSRA) - https://arxiv.org/abs/2305.07027
-* EVA - https://arxiv.org/abs/2211.07636
-* EVA-02 - https://arxiv.org/abs/2303.11331
-* FastViT - https://arxiv.org/abs/2303.14189
-* FlexiViT - https://arxiv.org/abs/2212.08013
-* FocalNet (Focal Modulation Networks) - https://arxiv.org/abs/2203.11926
-* GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
-* GhostNet - https://arxiv.org/abs/1911.11907
-* GhostNet-V2 - https://arxiv.org/abs/2211.12905
-* gMLP - https://arxiv.org/abs/2105.08050
-* GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
-* Halo Nets - https://arxiv.org/abs/2103.12731
+    * EfficientNet V2 - https://huggingface.co/papers/2104.00298
+    * FBNet-C - https://huggingface.co/papers/1812.03443
+    * MixNet - https://huggingface.co/papers/1907.09595
+    * MNASNet B1, A1 (Squeeze-Excite), and Small - https://huggingface.co/papers/1807.11626
+    * MobileNet-V2 - https://huggingface.co/papers/1801.04381
+    * Single-Path NAS - https://huggingface.co/papers/1904.02877
+    * TinyNet - https://huggingface.co/papers/2010.14819
+* EfficientViT (MIT) - https://huggingface.co/papers/2205.14756
+* EfficientViT (MSRA) - https://huggingface.co/papers/2305.07027
+* EVA - https://huggingface.co/papers/2211.07636
+* EVA-02 - https://huggingface.co/papers/2303.11331
+* FastViT - https://huggingface.co/papers/2303.14189
+* FlexiViT - https://huggingface.co/papers/2212.08013
+* FocalNet (Focal Modulation Networks) - https://huggingface.co/papers/2203.11926
+* GCViT (Global Context Vision Transformer) - https://huggingface.co/papers/2206.09959
+* GhostNet - https://huggingface.co/papers/1911.11907
+* GhostNet-V2 - https://huggingface.co/papers/2211.12905
+* gMLP - https://huggingface.co/papers/2105.08050
+* GPU-Efficient Networks - https://huggingface.co/papers/2006.14090
+* Halo Nets - https://huggingface.co/papers/2103.12731
 * HGNet / HGNet-V2 - TBD
-* HRNet - https://arxiv.org/abs/1908.07919
-* InceptionNeXt - https://arxiv.org/abs/2303.16900
-* Inception-V3 - https://arxiv.org/abs/1512.00567
-* Inception-ResNet-V2 and Inception-V4 - https://arxiv.org/abs/1602.07261
-* Lambda Networks - https://arxiv.org/abs/2102.08602
-* LeViT (Vision Transformer in ConvNet's Clothing) - https://arxiv.org/abs/2104.01136
-* MambaOut - https://arxiv.org/abs/2405.07992
-* MaxViT (Multi-Axis Vision Transformer) - https://arxiv.org/abs/2204.01697
-* MetaFormer (PoolFormer-v2, ConvFormer, CAFormer) - https://arxiv.org/abs/2210.13452
-* MLP-Mixer - https://arxiv.org/abs/2105.01601
-* MobileCLIP - https://arxiv.org/abs/2311.17049
-* MobileNet-V3 (MBConvNet w/ Efficient Head) - https://arxiv.org/abs/1905.02244
-  * FBNet-V3 - https://arxiv.org/abs/2006.02049
-  * HardCoRe-NAS - https://arxiv.org/abs/2102.11646
-  * LCNet - https://arxiv.org/abs/2109.15099
-* MobileNetV4 - https://arxiv.org/abs/2404.10518
-* MobileOne - https://arxiv.org/abs/2206.04040
-* MobileViT - https://arxiv.org/abs/2110.02178
-* MobileViT-V2 - https://arxiv.org/abs/2206.02680
-* MViT-V2 (Improved Multiscale Vision Transformer) - https://arxiv.org/abs/2112.01526
-* NASNet-A - https://arxiv.org/abs/1707.07012
-* NesT - https://arxiv.org/abs/2105.12723
-* Next-ViT - https://arxiv.org/abs/2207.05501
-* NFNet-F - https://arxiv.org/abs/2102.06171
-* NF-RegNet / NF-ResNet - https://arxiv.org/abs/2101.08692
-* PNasNet - https://arxiv.org/abs/1712.00559
-* PoolFormer (MetaFormer) - https://arxiv.org/abs/2111.11418
-* Pooling-based Vision Transformer (PiT) - https://arxiv.org/abs/2103.16302
-* PVT-V2 (Improved Pyramid Vision Transformer) - https://arxiv.org/abs/2106.13797
-* RDNet (DenseNets Reloaded) - https://arxiv.org/abs/2403.19588
-* RegNet - https://arxiv.org/abs/2003.13678
-* RegNetZ - https://arxiv.org/abs/2103.06877
-* RepVGG - https://arxiv.org/abs/2101.03697
-* RepGhostNet - https://arxiv.org/abs/2211.06088
-* RepViT - https://arxiv.org/abs/2307.09283
-* ResMLP - https://arxiv.org/abs/2105.03404
+* HRNet - https://huggingface.co/papers/1908.07919
+* InceptionNeXt - https://huggingface.co/papers/2303.16900
+* Inception-V3 - https://huggingface.co/papers/1512.00567
+* Inception-ResNet-V2 and Inception-V4 - https://huggingface.co/papers/1602.07261
+* Lambda Networks - https://huggingface.co/papers/2102.08602
+* LeViT (Vision Transformer in ConvNet's Clothing) - https://huggingface.co/papers/2104.01136
+* MambaOut - https://huggingface.co/papers/2405.07992
+* MaxViT (Multi-Axis Vision Transformer) - https://huggingface.co/papers/2204.01697
+* MetaFormer (PoolFormer-v2, ConvFormer, CAFormer) - https://huggingface.co/papers/2210.13452
+* MLP-Mixer - https://huggingface.co/papers/2105.01601
+* MobileCLIP - https://huggingface.co/papers/2311.17049
+* MobileNet-V3 (MBConvNet w/ Efficient Head) - https://huggingface.co/papers/1905.02244
+  * FBNet-V3 - https://huggingface.co/papers/2006.02049
+  * HardCoRe-NAS - https://huggingface.co/papers/2102.11646
+  * LCNet - https://huggingface.co/papers/2109.15099
+* MobileNetV4 - https://huggingface.co/papers/2404.10518
+* MobileOne - https://huggingface.co/papers/2206.04040
+* MobileViT - https://huggingface.co/papers/2110.02178
+* MobileViT-V2 - https://huggingface.co/papers/2206.02680
+* MViT-V2 (Improved Multiscale Vision Transformer) - https://huggingface.co/papers/2112.01526
+* NASNet-A - https://huggingface.co/papers/1707.07012
+* NesT - https://huggingface.co/papers/2105.12723
+* Next-ViT - https://huggingface.co/papers/2207.05501
+* NFNet-F - https://huggingface.co/papers/2102.06171
+* NF-RegNet / NF-ResNet - https://huggingface.co/papers/2101.08692
+* PNasNet - https://huggingface.co/papers/1712.00559
+* PoolFormer (MetaFormer) - https://huggingface.co/papers/2111.11418
+* Pooling-based Vision Transformer (PiT) - https://huggingface.co/papers/2103.16302
+* PVT-V2 (Improved Pyramid Vision Transformer) - https://huggingface.co/papers/2106.13797
+* RDNet (DenseNets Reloaded) - https://huggingface.co/papers/2403.19588
+* RegNet - https://huggingface.co/papers/2003.13678
+* RegNetZ - https://huggingface.co/papers/2103.06877
+* RepVGG - https://huggingface.co/papers/2101.03697
+* RepGhostNet - https://huggingface.co/papers/2211.06088
+* RepViT - https://huggingface.co/papers/2307.09283
+* ResMLP - https://huggingface.co/papers/2105.03404
 * ResNet/ResNeXt
-    * ResNet (v1b/v1.5) - https://arxiv.org/abs/1512.03385
-    * ResNeXt - https://arxiv.org/abs/1611.05431
-    * 'Bag of Tricks' / Gluon C, D, E, S variations - https://arxiv.org/abs/1812.01187
-    * Weakly-supervised (WSL) Instagram pretrained / ImageNet tuned ResNeXt101 - https://arxiv.org/abs/1805.00932
-    * Semi-supervised (SSL) / Semi-weakly Supervised (SWSL) ResNet/ResNeXts - https://arxiv.org/abs/1905.00546
-    * ECA-Net (ECAResNet) - https://arxiv.org/abs/1910.03151v4
-    * Squeeze-and-Excitation Networks (SEResNet) - https://arxiv.org/abs/1709.01507
-    * ResNet-RS - https://arxiv.org/abs/2103.07579
-* Res2Net - https://arxiv.org/abs/1904.01169
-* ResNeSt - https://arxiv.org/abs/2004.08955
-* ReXNet - https://arxiv.org/abs/2007.00992
-* SelecSLS - https://arxiv.org/abs/1907.00837
-* Selective Kernel Networks - https://arxiv.org/abs/1903.06586
-* Sequencer2D - https://arxiv.org/abs/2205.01972
-* SigLIP (image encoder) - https://arxiv.org/abs/2303.15343
-* SigLIP 2 (image encoder) - https://arxiv.org/abs/2502.14786
-* Swin S3 (AutoFormerV2) - https://arxiv.org/abs/2111.14725
-* Swin Transformer - https://arxiv.org/abs/2103.14030
-* Swin Transformer V2 - https://arxiv.org/abs/2111.09883
-* Transformer-iN-Transformer (TNT) - https://arxiv.org/abs/2103.00112
-* TResNet - https://arxiv.org/abs/2003.13630
-* Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
-* Visformer - https://arxiv.org/abs/2104.12533
-* Vision Transformer - https://arxiv.org/abs/2010.11929
-* ViTamin - https://arxiv.org/abs/2404.02132
-* VOLO (Vision Outlooker) - https://arxiv.org/abs/2106.13112
-* VovNet V2 and V1 - https://arxiv.org/abs/1911.06667
-* Xception - https://arxiv.org/abs/1610.02357
-* Xception (Modified Aligned, Gluon) - https://arxiv.org/abs/1802.02611
-* Xception (Modified Aligned, TF) - https://arxiv.org/abs/1802.02611
-* XCiT (Cross-Covariance Image Transformers) - https://arxiv.org/abs/2106.09681
+    * ResNet (v1b/v1.5) - https://huggingface.co/papers/1512.03385
+    * ResNeXt - https://huggingface.co/papers/1611.05431
+    * 'Bag of Tricks' / Gluon C, D, E, S variations - https://huggingface.co/papers/1812.01187
+    * Weakly-supervised (WSL) Instagram pretrained / ImageNet tuned ResNeXt101 - https://huggingface.co/papers/1805.00932
+    * Semi-supervised (SSL) / Semi-weakly Supervised (SWSL) ResNet/ResNeXts - https://huggingface.co/papers/1905.00546
+    * ECA-Net (ECAResNet) - https://huggingface.co/papers/1910.03151v4
+    * Squeeze-and-Excitation Networks (SEResNet) - https://huggingface.co/papers/1709.01507
+    * ResNet-RS - https://huggingface.co/papers/2103.07579
+* Res2Net - https://huggingface.co/papers/1904.01169
+* ResNeSt - https://huggingface.co/papers/2004.08955
+* ReXNet - https://huggingface.co/papers/2007.00992
+* SelecSLS - https://huggingface.co/papers/1907.00837
+* Selective Kernel Networks - https://huggingface.co/papers/1903.06586
+* Sequencer2D - https://huggingface.co/papers/2205.01972
+* SigLIP (image encoder) - https://huggingface.co/papers/2303.15343
+* SigLIP 2 (image encoder) - https://huggingface.co/papers/2502.14786
+* Swin S3 (AutoFormerV2) - https://huggingface.co/papers/2111.14725
+* Swin Transformer - https://huggingface.co/papers/2103.14030
+* Swin Transformer V2 - https://huggingface.co/papers/2111.09883
+* Transformer-iN-Transformer (TNT) - https://huggingface.co/papers/2103.00112
+* TResNet - https://huggingface.co/papers/2003.13630
+* Twins (Spatial Attention in Vision Transformers) - https://huggingface.co/papers/2104.13840
+* Visformer - https://huggingface.co/papers/2104.12533
+* Vision Transformer - https://huggingface.co/papers/2010.11929
+* ViTamin - https://huggingface.co/papers/2404.02132
+* VOLO (Vision Outlooker) - https://huggingface.co/papers/2106.13112
+* VovNet V2 and V1 - https://huggingface.co/papers/1911.06667
+* Xception - https://huggingface.co/papers/1610.02357
+* Xception (Modified Aligned, Gluon) - https://huggingface.co/papers/1802.02611
+* Xception (Modified Aligned, TF) - https://huggingface.co/papers/1802.02611
+* XCiT (Cross-Covariance Image Transformers) - https://huggingface.co/papers/2106.09681
 
 ### Optimizers
 To see full list of optimizers w/ descriptions: `timm.optim.list_optimizers(with_description=True)`
 
 Included optimizers available via `timm.optim.create_optimizer_v2` factory method:
-* `adabelief` an implementation of AdaBelief adapted from https://github.com/juntang-zhuang/Adabelief-Optimizer - https://arxiv.org/abs/2010.07468
-* `adafactor` adapted from [FAIRSeq impl](https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py) - https://arxiv.org/abs/1804.04235
-* `adafactorbv` adapted from [Big Vision](https://github.com/google-research/big_vision/blob/main/big_vision/optax.py) - https://arxiv.org/abs/2106.04560
-* `adahessian` by [David Samuel](https://github.com/davda54/ada-hessian) - https://arxiv.org/abs/2006.00719
-* `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) - https://arxiv.org/abs/2006.08217
-* `adan` an implementation of Adan adapted from https://github.com/sail-sg/Adan - https://arxiv.org/abs/2208.06677
-* `adopt` ADOPT adapted from https://github.com/iShohei220/adopt - https://arxiv.org/abs/2411.02853
+* `adabelief` an implementation of AdaBelief adapted from https://github.com/juntang-zhuang/Adabelief-Optimizer - https://huggingface.co/papers/2010.07468
+* `adafactor` adapted from [FAIRSeq impl](https://github.com/pytorch/fairseq/blob/master/fairseq/optim/adafactor.py) - https://huggingface.co/papers/1804.04235
+* `adafactorbv` adapted from [Big Vision](https://github.com/google-research/big_vision/blob/main/big_vision/optax.py) - https://huggingface.co/papers/2106.04560
+* `adahessian` by [David Samuel](https://github.com/davda54/ada-hessian) - https://huggingface.co/papers/2006.00719
+* `adamp` and `sgdp` by [Naver ClovAI](https://github.com/clovaai) - https://huggingface.co/papers/2006.08217
+* `adan` an implementation of Adan adapted from https://github.com/sail-sg/Adan - https://huggingface.co/papers/2208.06677
+* `adopt` ADOPT adapted from https://github.com/iShohei220/adopt - https://huggingface.co/papers/2411.02853
 * `kron` PSGD w/ Kronecker-factored preconditioner from https://github.com/evanatyourservice/kron_torch - https://sites.google.com/site/lixilinx/home/psgd
-* `lamb` an implementation of Lamb and LambC (w/ trust-clipping) cleaned up and modified to support use with XLA - https://arxiv.org/abs/1904.00962
-* `laprop` optimizer from https://github.com/Z-T-WANG/LaProp-Optimizer - https://arxiv.org/abs/2002.04839
-* `lars` an implementation of LARS and LARC (w/ trust-clipping) - https://arxiv.org/abs/1708.03888
-* `lion` and implementation of Lion adapted from https://github.com/google/automl/tree/master/lion - https://arxiv.org/abs/2302.06675
-* `lookahead` adapted from impl by [Liam](https://github.com/alphadl/lookahead.pytorch) - https://arxiv.org/abs/1907.08610
-* `madgrad` an implementation of MADGRAD adapted from https://github.com/facebookresearch/madgrad - https://arxiv.org/abs/2101.11075
-* `mars` MARS optimizer from https://github.com/AGI-Arena/MARS - https://arxiv.org/abs/2411.10438
+* `lamb` an implementation of Lamb and LambC (w/ trust-clipping) cleaned up and modified to support use with XLA - https://huggingface.co/papers/1904.00962
+* `laprop` optimizer from https://github.com/Z-T-WANG/LaProp-Optimizer - https://huggingface.co/papers/2002.04839
+* `lars` an implementation of LARS and LARC (w/ trust-clipping) - https://huggingface.co/papers/1708.03888
+* `lion` and implementation of Lion adapted from https://github.com/google/automl/tree/master/lion - https://huggingface.co/papers/2302.06675
+* `lookahead` adapted from impl by [Liam](https://github.com/alphadl/lookahead.pytorch) - https://huggingface.co/papers/1907.08610
+* `madgrad` an implementation of MADGRAD adapted from https://github.com/facebookresearch/madgrad - https://huggingface.co/papers/2101.11075
+* `mars` MARS optimizer from https://github.com/AGI-Arena/MARS - https://huggingface.co/papers/2411.10438
 * `nadam` an implementation of Adam w/ Nesterov momentum
 * `nadamw` an implementation of AdamW (Adam w/ decoupled weight-decay) w/ Nesterov momentum. A simplified impl based on https://github.com/mlcommons/algorithmic-efficiency
-* `novograd` by [Masashi Kimura](https://github.com/convergence-lab/novograd) - https://arxiv.org/abs/1905.11286
-* `radam` by [Liyuan Liu](https://github.com/LiyuanLucasLiu/RAdam) - https://arxiv.org/abs/1908.03265
+* `novograd` by [Masashi Kimura](https://github.com/convergence-lab/novograd) - https://huggingface.co/papers/1905.11286
+* `radam` by [Liyuan Liu](https://github.com/LiyuanLucasLiu/RAdam) - https://huggingface.co/papers/1908.03265
 * `rmsprop_tf` adapted from PyTorch RMSProp by myself. Reproduces much improved Tensorflow RMSProp behaviour
 * `sgdw` and implementation of SGD w/ decoupled weight-decay
 * `fused<name>` optimizers by name with [NVIDIA Apex](https://github.com/NVIDIA/apex/tree/master/apex/optimizers) installed
 * `bnb<name>` optimizers by name with [BitsAndBytes](https://github.com/TimDettmers/bitsandbytes) installed
-* `cadamw`, `clion`, and more 'Cautious' optimizers from https://github.com/kyleliang919/C-Optim - https://arxiv.org/abs/2411.16085
+* `cadamw`, `clion`, and more 'Cautious' optimizers from https://github.com/kyleliang919/C-Optim - https://huggingface.co/papers/2411.16085
 * `adam`, `adamw`, `rmsprop`, `adadelta`, `adagrad`, and `sgd` pass through to `torch.optim` implementations
 
 ### Augmentations
-* Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py) - https://arxiv.org/abs/1708.04896)
-* Mixup - https://arxiv.org/abs/1710.09412
-* CutMix - https://arxiv.org/abs/1905.04899
-* AutoAugment (https://arxiv.org/abs/1805.09501) and RandAugment (https://arxiv.org/abs/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
-* AugMix w/ JSD loss, JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well - https://arxiv.org/abs/1912.02781
+* Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py) - https://huggingface.co/papers/1708.04896
+* Mixup - https://huggingface.co/papers/1710.09412
+* CutMix - https://huggingface.co/papers/1905.04899
+* AutoAugment (https://huggingface.co/papers/1805.09501) and RandAugment (https://huggingface.co/papers/1909.13719) ImageNet configurations modeled after impl for EfficientNet training (https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py)
+* AugMix w/ JSD loss, JSD w/ clean + augmented mixing support works with AutoAugment and RandAugment as well - https://huggingface.co/papers/1912.02781
 * SplitBachNorm - allows splitting batch norm layers between clean and augmented (auxiliary batch norm) data
 
 ### Regularization
-* DropPath aka "Stochastic Depth" - https://arxiv.org/abs/1603.09382
-* DropBlock - https://arxiv.org/abs/1810.12890
-* Blur Pooling - https://arxiv.org/abs/1904.11486
+* DropPath aka "Stochastic Depth" - https://huggingface.co/papers/1603.09382
+* DropBlock - https://huggingface.co/papers/1810.12890
+* Blur Pooling - https://huggingface.co/papers/1904.11486
 
 ### Other
 
@@ -538,25 +538,25 @@ Several (less common) features that I often utilize in my projects are included.
   * Ideas adopted from
      * [AllenNLP schedulers](https://github.com/allenai/allennlp/tree/master/allennlp/training/learning_rate_schedulers)
      * [FAIRseq lr_scheduler](https://github.com/pytorch/fairseq/tree/master/fairseq/optim/lr_scheduler)
-     * SGDR: Stochastic Gradient Descent with Warm Restarts (https://arxiv.org/abs/1608.03983)
+     * SGDR: Stochastic Gradient Descent with Warm Restarts (https://huggingface.co/papers/1608.03983)
   * Schedulers include `step`, `cosine` w/ restarts, `tanh` w/ restarts, `plateau`
-* Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://arxiv.org/abs/1801.04590) -- original paper?
-* Adaptive Gradient Clipping (https://arxiv.org/abs/2102.06171, https://github.com/deepmind/deepmind-research/tree/master/nfnets)
+* Space-to-Depth by [mrT23](https://github.com/mrT23/TResNet/blob/master/src/models/tresnet/layers/space_to_depth.py) (https://huggingface.co/papers/1801.04590) -- original paper?
+* Adaptive Gradient Clipping (https://huggingface.co/papers/2102.06171, https://github.com/deepmind/deepmind-research/tree/master/nfnets)
 * An extensive selection of channel and/or spatial attention modules:
-    * Bottleneck Transformer - https://arxiv.org/abs/2101.11605
-    * CBAM - https://arxiv.org/abs/1807.06521
-    * Effective Squeeze-Excitation (ESE) - https://arxiv.org/abs/1911.06667
-    * Efficient Channel Attention (ECA) - https://arxiv.org/abs/1910.03151
-    * Gather-Excite (GE) - https://arxiv.org/abs/1810.12348
-    * Global Context (GC) - https://arxiv.org/abs/1904.11492
-    * Halo - https://arxiv.org/abs/2103.12731
-    * Involution - https://arxiv.org/abs/2103.06255
-    * Lambda Layer - https://arxiv.org/abs/2102.08602
-    * Non-Local (NL) -  https://arxiv.org/abs/1711.07971
-    * Squeeze-and-Excitation (SE) - https://arxiv.org/abs/1709.01507
-    * Selective Kernel (SK) - (https://arxiv.org/abs/1903.06586
-    * Split (SPLAT) - https://arxiv.org/abs/2004.08955
-    * Shifted Window (SWIN) - https://arxiv.org/abs/2103.14030
+    * Bottleneck Transformer - https://huggingface.co/papers/2101.11605
+    * CBAM - https://huggingface.co/papers/1807.06521
+    * Effective Squeeze-Excitation (ESE) - https://huggingface.co/papers/1911.06667
+    * Efficient Channel Attention (ECA) - https://huggingface.co/papers/1910.03151
+    * Gather-Excite (GE) - https://huggingface.co/papers/1810.12348
+    * Global Context (GC) - https://huggingface.co/papers/1904.11492
+    * Halo - https://huggingface.co/papers/2103.12731
+    * Involution - https://huggingface.co/papers/2103.06255
+    * Lambda Layer - https://huggingface.co/papers/2102.08602
+    * Non-Local (NL) -  https://huggingface.co/papers/1711.07971
+    * Squeeze-and-Excitation (SE) - https://huggingface.co/papers/1709.01507
+    * Selective Kernel (SK) - https://huggingface.co/papers/1903.06586
+    * Split (SPLAT) - https://huggingface.co/papers/2004.08955
+    * Shifted Window (SWIN) - https://huggingface.co/papers/2103.14030
 
 ## Results
 

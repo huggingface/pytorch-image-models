@@ -3,7 +3,7 @@
 A PyTorch implement of Aggregating Nested Transformers as described in:
 
 'Aggregating Nested Transformers'
-    - https://arxiv.org/abs/2105.12723
+    - https://huggingface.co/papers/2105.12723
 
 The official Jax code is released and available at https://github.com/google-research/nested-transformer. The weights
 have been converted with convert/convert_nest_flax.py
@@ -248,7 +248,7 @@ class Nest(nn.Module):
     """ Nested Transformer (NesT)
 
     A PyTorch impl of : `Aggregating Nested Transformers`
-        - https://arxiv.org/abs/2105.12723
+        - https://huggingface.co/papers/2105.12723
     """
 
     def __init__(

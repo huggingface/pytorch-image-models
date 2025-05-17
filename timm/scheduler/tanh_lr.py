@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 class TanhLRScheduler(Scheduler):
     """
     Hyberbolic-Tangent decay with restarts.
-    This is described in the paper https://arxiv.org/abs/1806.01593
+    This is described in the paper https://huggingface.co/papers/1806.01593
     """
 
     def __init__(

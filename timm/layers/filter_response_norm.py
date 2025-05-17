@@ -1,6 +1,6 @@
 """ Filter Response Norm in PyTorch
 
-Based on `Filter Response Normalization Layer` - https://arxiv.org/abs/1911.09737
+Based on `Filter Response Normalization Layer` - https://huggingface.co/papers/1911.09737
 
 Hacked together by / Copyright 2021 Ross Wightman
 """

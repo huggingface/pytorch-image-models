@@ -1,8 +1,8 @@
 """ MobileViT
 
 Paper:
-V1: `MobileViT: Light-weight, General-purpose, and Mobile-friendly Vision Transformer` - https://arxiv.org/abs/2110.02178
-V2: `Separable Self-attention for Mobile Vision Transformers` - https://arxiv.org/abs/2206.02680
+V1: `MobileViT: Light-weight, General-purpose, and Mobile-friendly Vision Transformer` - https://huggingface.co/papers/2110.02178
+V2: `Separable Self-attention for Mobile Vision Transformers` - https://huggingface.co/papers/2206.02680
 
 MobileVitBlock and checkpoints adapted from https://github.com/apple/ml-cvnets (original copyright below)
 License: https://github.com/apple/ml-cvnets/blob/main/LICENSE (Apple open source)
@@ -164,7 +164,7 @@ model_cfgs = dict(
 @register_notrace_module
 class MobileVitBlock(nn.Module):
     """ MobileViT block
-        Paper: https://arxiv.org/abs/2110.02178?context=cs.LG
+        Paper: https://huggingface.co/papers/2110.02178?context=cs.LG
     """
     def __init__(
             self,
@@ -271,7 +271,7 @@ class MobileVitBlock(nn.Module):
 
 class LinearSelfAttention(nn.Module):
     """
-    This layer applies a self-attention with linear complexity, as described in `https://arxiv.org/abs/2206.02680`
+    This layer applies a self-attention with linear complexity, as described in `https://huggingface.co/papers/2206.02680`
     This layer can be used for self- as well as cross-attention.
     Args:
         embed_dim (int): :math:`C` from an expected input of size :math:`(N, C, H, W)`

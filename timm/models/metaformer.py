@@ -1,8 +1,8 @@
 """
-Poolformer from MetaFormer is Actually What You Need for Vision https://arxiv.org/abs/2111.11418
+Poolformer from MetaFormer is Actually What You Need for Vision https://huggingface.co/papers/2111.11418
 
 IdentityFormer, RandFormer, PoolFormerV2, ConvFormer, and CAFormer
-from MetaFormer Baselines for Vision https://arxiv.org/abs/2210.13452
+from MetaFormer Baselines for Vision https://huggingface.co/papers/2210.13452
 
 All implemented models support feature extraction and variable input resolution.
 
@@ -121,7 +121,7 @@ class Scale(nn.Module):
 
 class SquaredReLU(nn.Module):
     """
-        Squared ReLU: https://arxiv.org/abs/2109.08668
+        Squared ReLU: https://huggingface.co/papers/2109.08668
     """
 
     def __init__(self, inplace=False):
@@ -158,7 +158,7 @@ class StarReLU(nn.Module):
 
 class Attention(nn.Module):
     """
-    Vanilla self-attention from Transformer: https://arxiv.org/abs/1706.03762.
+    Vanilla self-attention from Transformer: https://huggingface.co/papers/1706.03762.
     Modified from timm.
     """
     fused_attn: Final[bool]
@@ -239,7 +239,7 @@ class LayerNormNoBias(nn.LayerNorm):
 
 class SepConv(nn.Module):
     r"""
-    Inverted separable convolution from MobileNetV2: https://arxiv.org/abs/1801.04381.
+    Inverted separable convolution from MobileNetV2: https://huggingface.co/papers/1801.04381.
     """
 
     def __init__(
@@ -274,7 +274,7 @@ class SepConv(nn.Module):
 
 class Pooling(nn.Module):
     """
-    Implementation of pooling for PoolFormer: https://arxiv.org/abs/2111.11418
+    Implementation of pooling for PoolFormer: https://huggingface.co/papers/2111.11418
     """
 
     def __init__(self, pool_size=3, **kwargs):
@@ -448,7 +448,7 @@ class MetaFormerStage(nn.Module):
 class MetaFormer(nn.Module):
     r""" MetaFormer
         A PyTorch impl of : `MetaFormer Baselines for Vision`  -
-          https://arxiv.org/abs/2210.13452
+          https://huggingface.co/papers/2210.13452
 
     Args:
         in_chans (int): Number of input image channels.
@@ -462,9 +462,9 @@ class MetaFormer(nn.Module):
         drop_path_rate (float): Stochastic depth rate.
         drop_rate (float): Dropout rate.
         layer_scale_init_values (list, tuple, float or None): Init value for Layer Scale.
-            None means not use the layer scale. Form: https://arxiv.org/abs/2103.17239.
+            None means not use the layer scale. Form: https://huggingface.co/papers/2103.17239.
         res_scale_init_values (list, tuple, float or None): Init value for res Scale on residual connections.
-            None means not use the res scale. From: https://arxiv.org/abs/2110.09456.
+            None means not use the res scale. From: https://huggingface.co/papers/2110.09456.
         downsample_norm (nn.Module): Norm layer used in stem and downsampling layers.
         norm_layers (list, tuple or norm_fcn): Norm layers for each stage.
         output_norm: Norm layer before classifier head.

@@ -3,13 +3,13 @@
 A PyTorch implement of Vision Transformers as described in:
 
 'An Image Is Worth 16 x 16 Words: Transformers for Image Recognition at Scale'
-    - https://arxiv.org/abs/2010.11929
+    - https://huggingface.co/papers/2010.11929
 
 `How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers`
-    - https://arxiv.org/abs/2106.10270
+    - https://huggingface.co/papers/2106.10270
 
 `FlexiViT: One Model for All Patch Sizes`
-    - https://arxiv.org/abs/2212.08013
+    - https://huggingface.co/papers/2212.08013
 
 The official jax code is released and available at
   * https://github.com/google-research/vision_transformer
@@ -231,7 +231,7 @@ class ResPostBlock(nn.Module):
 class ParallelScalingBlock(nn.Module):
     """ Parallel ViT block (MLP & Attention in parallel)
     Based on:
-      'Scaling Vision Transformers to 22 Billion Parameters` - https://arxiv.org/abs/2302.05442
+      'Scaling Vision Transformers to 22 Billion Parameters` - https://huggingface.co/papers/2302.05442
     """
     fused_attn: Final[bool]
 
@@ -327,7 +327,7 @@ class ParallelScalingBlock(nn.Module):
 class ParallelThingsBlock(nn.Module):
     """ Parallel ViT block (N parallel attention followed by N parallel MLP)
     Based on:
-      `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
+      `Three things everyone should know about Vision Transformers` - https://huggingface.co/papers/2203.09795
     """
     def __init__(
             self,
@@ -426,7 +426,7 @@ class VisionTransformer(nn.Module):
     """ Vision Transformer
 
     A PyTorch impl of : `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale`
-        - https://arxiv.org/abs/2010.11929
+        - https://huggingface.co/papers/2010.11929
     """
     dynamic_img_size: Final[bool]
 
@@ -1414,7 +1414,7 @@ default_cfgs = {
         hf_hub_id='timm/',
         custom_load=True, num_classes=21843),
 
-    # SAM trained models (https://arxiv.org/abs/2106.01548)
+    # SAM trained models (https://huggingface.co/papers/2106.01548)
     'vit_base_patch32_224.sam_in1k': _cfg(
         url='https://storage.googleapis.com/vit_models/sam/ViT-B_32.npz', custom_load=True,
         hf_hub_id='timm/'),
@@ -1422,7 +1422,7 @@ default_cfgs = {
         url='https://storage.googleapis.com/vit_models/sam/ViT-B_16.npz', custom_load=True,
         hf_hub_id='timm/'),
 
-    # DINO pretrained - https://arxiv.org/abs/2104.14294 (no classifier head, for fine-tune only)
+    # DINO pretrained - https://huggingface.co/papers/2104.14294 (no classifier head, for fine-tune only)
     'vit_small_patch16_224.dino': _cfg(
         url='https://dl.fbaipublicfiles.com/dino/dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth',
         hf_hub_id='timm/',
@@ -1440,7 +1440,7 @@ default_cfgs = {
         hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 
-    # DINOv2 pretrained - https://arxiv.org/abs/2304.07193 (no classifier head, for fine-tune/features only)
+    # DINOv2 pretrained - https://huggingface.co/papers/2304.07193 (no classifier head, for fine-tune/features only)
     'vit_small_patch14_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth',
         hf_hub_id='timm/',
@@ -1466,7 +1466,7 @@ default_cfgs = {
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0,
         input_size=(3, 518, 518), crop_pct=1.0),
 
-    # DINOv2 pretrained w/ registers - https://arxiv.org/abs/2309.16588 (no classifier head, for fine-tune/features only)
+    # DINOv2 pretrained w/ registers - https://huggingface.co/papers/2309.16588 (no classifier head, for fine-tune/features only)
     'vit_small_patch14_reg4_dinov2.lvd142m': _cfg(
         url='https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_reg4_pretrain.pth',
         hf_hub_id='timm/',
@@ -2479,7 +2479,7 @@ def vit_small_patch8_224(pretrained: bool = False, **kwargs) -> VisionTransforme
 
 @register_model
 def vit_base_patch32_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Base (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Base (ViT-B/32) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12)
@@ -2489,7 +2489,7 @@ def vit_base_patch32_224(pretrained: bool = False, **kwargs) -> VisionTransforme
 
 @register_model
 def vit_base_patch32_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Base model (ViT-B/32) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=32, embed_dim=768, depth=12, num_heads=12)
@@ -2499,7 +2499,7 @@ def vit_base_patch32_384(pretrained: bool = False, **kwargs) -> VisionTransforme
 
 @register_model
 def vit_base_patch16_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Base (ViT-B/16) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12)
@@ -2509,7 +2509,7 @@ def vit_base_patch16_224(pretrained: bool = False, **kwargs) -> VisionTransforme
 
 @register_model
 def vit_base_patch16_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Base model (ViT-B/16) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12)
@@ -2519,7 +2519,7 @@ def vit_base_patch16_384(pretrained: bool = False, **kwargs) -> VisionTransforme
 
 @register_model
 def vit_base_patch8_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Base (ViT-B/8) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Base (ViT-B/8) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=8, embed_dim=768, depth=12, num_heads=12)
@@ -2529,7 +2529,7 @@ def vit_base_patch8_224(pretrained: bool = False, **kwargs) -> VisionTransformer
 
 @register_model
 def vit_large_patch32_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929). No pretrained weights.
+    """ ViT-Large model (ViT-L/32) from original paper (https://huggingface.co/papers/2010.11929). No pretrained weights.
     """
     model_args = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16)
     model = _create_vision_transformer('vit_large_patch32_224', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2538,7 +2538,7 @@ def vit_large_patch32_224(pretrained: bool = False, **kwargs) -> VisionTransform
 
 @register_model
 def vit_large_patch32_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Large model (ViT-L/32) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=32, embed_dim=1024, depth=24, num_heads=16)
@@ -2548,7 +2548,7 @@ def vit_large_patch32_384(pretrained: bool = False, **kwargs) -> VisionTransform
 
 @register_model
 def vit_large_patch16_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Large model (ViT-L/16) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16)
@@ -2558,7 +2558,7 @@ def vit_large_patch16_224(pretrained: bool = False, **kwargs) -> VisionTransform
 
 @register_model
 def vit_large_patch16_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Large model (ViT-L/16) from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
     model_args = dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16)
@@ -2577,7 +2577,7 @@ def vit_large_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransform
 
 @register_model
 def vit_huge_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Huge model (ViT-H/14) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Huge model (ViT-H/14) from original paper (https://huggingface.co/papers/2010.11929).
     """
     model_args = dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16)
     model = _create_vision_transformer('vit_huge_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2586,7 +2586,7 @@ def vit_huge_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransforme
 
 @register_model
 def vit_giant_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Giant (little-g) model (ViT-g/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    """ ViT-Giant (little-g) model (ViT-g/14) from `Scaling Vision Transformers` - https://huggingface.co/papers/2106.04560
     """
     model_args = dict(patch_size=14, embed_dim=1408, mlp_ratio=48/11, depth=40, num_heads=16)
     model = _create_vision_transformer('vit_giant_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -2595,7 +2595,7 @@ def vit_giant_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransform
 
 @register_model
 def vit_gigantic_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Gigantic (big-G) model (ViT-G/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    """ ViT-Gigantic (big-G) model (ViT-G/14) from `Scaling Vision Transformers` - https://huggingface.co/papers/2106.04560
     """
     model_args = dict(patch_size=14, embed_dim=1664, mlp_ratio=64/13, depth=48, num_heads=16)
     model = _create_vision_transformer(
@@ -2605,7 +2605,7 @@ def vit_gigantic_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransf
 
 @register_model
 def vit_base_patch16_224_miil(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
+    """ ViT-Base (ViT-B/16) from original paper (https://huggingface.co/papers/2010.11929).
     Weights taken from: https://github.com/Alibaba-MIIL/ImageNet21K
     """
     model_args = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, qkv_bias=False)
@@ -2871,7 +2871,7 @@ def vit_huge_patch14_clip_378(pretrained: bool = False, **kwargs) -> VisionTrans
 
 @register_model
 def vit_giant_patch14_clip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-Giant (little-g) model (ViT-g/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    """ ViT-Giant (little-g) model (ViT-g/14) from `Scaling Vision Transformers` - https://huggingface.co/papers/2106.04560
     Pretrained weights from CLIP image tower.
     """
     model_args = dict(
@@ -2883,7 +2883,7 @@ def vit_giant_patch14_clip_224(pretrained: bool = False, **kwargs) -> VisionTran
 
 @register_model
 def vit_gigantic_patch14_clip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ ViT-bigG model (ViT-G/14) from `Scaling Vision Transformers` - https://arxiv.org/abs/2106.04560
+    """ ViT-bigG model (ViT-G/14) from `Scaling Vision Transformers` - https://huggingface.co/papers/2106.04560
     Pretrained weights from CLIP image tower.
     """
     model_args = dict(
@@ -3014,7 +3014,7 @@ def vit_base_patch16_rpn_224(pretrained: bool = False, **kwargs) -> VisionTransf
 @register_model
 def vit_small_patch16_36x1_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-Base w/ LayerScale + 36 x 1 (36 block serial) config. Experimental, may remove.
-    Based on `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
+    Based on `Three things everyone should know about Vision Transformers` - https://huggingface.co/papers/2203.09795
     Paper focuses on 24x2 + 48x1 for 'Small' width but those are extremely slow.
     """
     model_args = dict(patch_size=16, embed_dim=384, depth=36, num_heads=6, init_values=1e-5)
@@ -3026,7 +3026,7 @@ def vit_small_patch16_36x1_224(pretrained: bool = False, **kwargs) -> VisionTran
 @register_model
 def vit_small_patch16_18x2_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-Small w/ LayerScale + 18 x 2 (36 block parallel) config. Experimental, may remove.
-    Based on `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
+    Based on `Three things everyone should know about Vision Transformers` - https://huggingface.co/papers/2203.09795
     Paper focuses on 24x2 + 48x1 for 'Small' width but those are extremely slow.
     """
     model_args = dict(
@@ -3039,7 +3039,7 @@ def vit_small_patch16_18x2_224(pretrained: bool = False, **kwargs) -> VisionTran
 @register_model
 def vit_base_patch16_18x2_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ ViT-Base w/ LayerScale + 18 x 2 (36 block parallel) config. Experimental, may remove.
-    Based on `Three things everyone should know about Vision Transformers` - https://arxiv.org/abs/2203.09795
+    Based on `Three things everyone should know about Vision Transformers` - https://huggingface.co/papers/2203.09795
     """
     model_args = dict(
         patch_size=16, embed_dim=768, depth=18, num_heads=12, init_values=1e-5, block_fn=ParallelThingsBlock)
@@ -3050,7 +3050,7 @@ def vit_base_patch16_18x2_224(pretrained: bool = False, **kwargs) -> VisionTrans
 
 @register_model
 def eva_large_patch14_196(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ EVA-large model https://arxiv.org/abs/2211.07636 /via MAE MIM pretrain"""
+    """ EVA-large model https://huggingface.co/papers/2211.07636 /via MAE MIM pretrain"""
     model_args = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg')
     model = _create_vision_transformer(
         'eva_large_patch14_196', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -3059,7 +3059,7 @@ def eva_large_patch14_196(pretrained: bool = False, **kwargs) -> VisionTransform
 
 @register_model
 def eva_large_patch14_336(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ EVA-large model https://arxiv.org/abs/2211.07636 via MAE MIM pretrain"""
+    """ EVA-large model https://huggingface.co/papers/2211.07636 via MAE MIM pretrain"""
     model_args = dict(patch_size=14, embed_dim=1024, depth=24, num_heads=16, global_pool='avg')
     model = _create_vision_transformer('eva_large_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
     return model

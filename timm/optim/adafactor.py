@@ -22,7 +22,7 @@ class Adafactor(torch.optim.Optimizer):
     """Implements Adafactor algorithm.
 
     This implementation is based on: `Adafactor: Adaptive Learning Rates with Sublinear Memory Cost`
-    (see https://arxiv.org/abs/1804.04235)
+    (see https://huggingface.co/papers/1804.04235)
 
     Note that this optimizer internally adjusts the learning rate depending on the
     *scale_parameter*, *relative_step* and *warmup_init* options.
@@ -212,7 +212,7 @@ class Adafactor(torch.optim.Optimizer):
                     exp_avg = state['exp_avg']
                     exp_avg.mul_(group['beta1']).add_(update, alpha=1 - group['beta1'])
                     if group['caution']:
-                        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                        # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                         mask = (exp_avg * grad > 0).to(grad.dtype)
                         mask.div_(mask.mean().clamp_(min=1e-3))
                         update = exp_avg * mask

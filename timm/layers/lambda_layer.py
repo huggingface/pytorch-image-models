@@ -1,7 +1,7 @@
 """ Lambda Layer
 
 Paper: `LambdaNetworks: Modeling Long-Range Interactions Without Attention`
-    - https://arxiv.org/abs/2102.08602
+    - https://huggingface.co/papers/2102.08602
 
 @misc{2102.08602,
 Author = {Irwan Bello},
@@ -42,7 +42,7 @@ class LambdaLayer(nn.Module):
     """Lambda Layer
 
     Paper: `LambdaNetworks: Modeling Long-Range Interactions Without Attention`
-        - https://arxiv.org/abs/2102.08602
+        - https://huggingface.co/papers/2102.08602
 
     NOTE: intra-depth parameter 'u' is fixed at 1. It did not appear worth the complexity to add.
 

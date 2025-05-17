@@ -2,7 +2,7 @@
 
 Adapted from the implementation in big vision: https://github.com/google-research/big_vision
 
-Described in 'Scaling Vision Transformers': https://arxiv.org/abs/2106.04560
+Described in 'Scaling Vision Transformers': https://huggingface.co/papers/2106.04560
 
 Adaptation and PyTorch modifications by Ross Wightman
 """
@@ -274,7 +274,7 @@ def _single_tensor_adafactor(
                 update = exp_avg.clone()
 
             if caution:
-                # apply caution as per 'Cautious Optimizers': https://arxiv.org/abs/2411.16085
+                # apply caution as per 'Cautious Optimizers': https://huggingface.co/papers/2411.16085
                 mask = (update * grad > 0).to(grad.dtype)
                 mask.div_(mask.mean().clamp_(min=1e-3))
                 update.mul_(mask)

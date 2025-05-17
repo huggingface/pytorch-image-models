@@ -1,6 +1,6 @@
 """ Twins
 A PyTorch impl of : `Twins: Revisiting the Design of Spatial Attention in Vision Transformers`
-    - https://arxiv.org/pdf/2104.13840.pdf
+    - https://huggingface.co/papers/2104.13840
 
 Code/weights from https://github.com/Meituan-AutoML/Twins, original copyright/license info below
 
@@ -230,7 +230,7 @@ class Block(nn.Module):
 
 
 class PosConv(nn.Module):
-    # PEG  from https://arxiv.org/abs/2102.10882
+    # PEG  from https://huggingface.co/papers/2102.10882
     def __init__(self, in_chans, embed_dim=768, stride=1):
         super(PosConv, self).__init__()
         self.proj = nn.Sequential(
