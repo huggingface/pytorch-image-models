@@ -52,7 +52,7 @@ class DualPathBlock(nn.Module):
             num_1x1_c: int,
             inc: int,
             groups: int,
-            block_type: str = 'normal', 
+            block_type: str = 'normal',
             b: bool = False,
     ):
         super(DualPathBlock, self).__init__()
