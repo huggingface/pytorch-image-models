@@ -10,6 +10,7 @@ from .loader import create_loader
 from .mixup import Mixup, FastCollateMixup
 from .naflex_dataset import VariableSeqMapWrapper
 from .naflex_loader import create_naflex_loader
+from .naflex_mixup import NaFlexMixup, pairwise_mixup_target, mix_batch_variable_size
 from .naflex_transforms import (
     ResizeToSequence,
     CenterCropToSequence,

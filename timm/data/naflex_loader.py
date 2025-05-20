@@ -3,11 +3,13 @@ from contextlib import suppress
 from functools import partial
 from typing import Callable, List, Optional, Tuple, Union
 
+
 import torch
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from .loader import _worker_init
+from .loader import _worker_init, adapt_to_chs
 from .naflex_dataset import VariableSeqMapWrapper, NaFlexCollator
+from .naflex_random_erasing import PatchRandomErasing
 from .transforms_factory import create_transform
 
 
@@ -16,19 +18,41 @@ class NaFlexPrefetchLoader:
 
     def __init__(
             self,
-            loader,
-            mean=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225),
-            img_dtype=torch.float32,
-            device=torch.device('cuda')
+            loader: torch.utils.data.DataLoader,
+            mean: Tuple[float, ...] = IMAGENET_DEFAULT_MEAN,
+            std: Tuple[float, ...] = IMAGENET_DEFAULT_STD,
+            channels: int = 3,
+            device: torch.device = torch.device('cuda'),
+            img_dtype: Optional[torch.dtype] = None,
+            re_prob: float = 0.,
+            re_mode: str = 'const',
+            re_count: int = 1,
+            re_num_splits: int = 0,
         ):
         self.loader = loader
         self.device = device
         self.img_dtype = img_dtype or torch.float32
 
         # Create mean/std tensors for normalization (will be applied to patches)
-        self.mean = torch.tensor([x * 255 for x in mean], device=device, dtype=self.img_dtype).view(1, 1, 3)
-        self.std = torch.tensor([x * 255 for x in std], device=device, dtype=self.img_dtype).view(1, 1, 3)
+        mean = adapt_to_chs(mean, channels)
+        std = adapt_to_chs(std, channels)
+        normalization_shape = (1, 1, channels)
+        self.channels = channels
+        self.mean = torch.tensor(
+            [x * 255 for x in mean], device=device, dtype=self.img_dtype).view(normalization_shape)
+        self.std = torch.tensor(
+            [x * 255 for x in std], device=device, dtype=self.img_dtype).view(normalization_shape)
+
+        if re_prob > 0.:
+            self.random_erasing = PatchRandomErasing(
+                erase_prob=re_prob,
+                mode=re_mode,
+                max_count=re_count,
+                num_splits=re_num_splits,
+                device=device,
+            )
+        else:
+            self.random_erasing = None
 
         # Check for CUDA/NPU availability
         self.is_cuda = device.type == 'cuda' and torch.cuda.is_available()
@@ -62,8 +86,17 @@ class NaFlexPrefetchLoader:
 
                 # Normalize patch values (assuming patches are in format [B, N, P*P*C])
                 batch_size, num_patches, patch_pixels = next_input_dict['patches'].shape
-                patches = next_input_dict['patches'].view(batch_size, -1, 3) # to [B*N, P*P, C] for normalization
+
+                # To [B*N, P*P, C] for normalization and erasing
+                patches = next_input_dict['patches'].view(batch_size, num_patches, -1, self.channels)
                 patches = patches.sub(self.mean).div(self.std)
+
+                if self.random_erasing is not None:
+                    patches = self.random_erasing(
+                        patches,
+                        patch_coord=next_input_dict['patch_coord'],
+                        patch_valid=next_input_dict.get('patch_valid', None),
+                    )
 
                 # Reshape back
                 next_input_dict['patches'] = patches.reshape(batch_size, num_patches, patch_pixels)
@@ -103,6 +136,7 @@ def create_naflex_loader(
         max_seq_len: int = 576,  # Fixed sequence length for validation
         batch_size: int = 32,  # Used for max_seq_len and max(train_seq_lens)
         is_training: bool = False,
+        mixup_fn: Optional[Callable] = None,
 
         no_aug: bool = False,
         re_prob: float = 0.,
@@ -141,7 +175,8 @@ def create_naflex_loader(
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
     ):
-    """Create a data loader with dynamic sequence length sampling for training."""
+    """Create a data loader with dynamic sequence length sampling for training.
+    """
 
     if is_training:
         # For training, use the dynamic sequence length mechanism
@@ -186,6 +221,7 @@ def create_naflex_loader(
             patch_size=patch_size,
             seq_lens=train_seq_lens,
             max_tokens_per_batch=max_tokens_per_batch,
+            mixup_fn=mixup_fn,
             seed=seed,
             distributed=distributed,
             rank=rank,
@@ -219,6 +255,9 @@ def create_naflex_loader(
                 std=std,
                 img_dtype=img_dtype,
                 device=device,
+                re_prob=re_prob,
+                re_mode=re_mode,
+                re_count=re_count,
             )
 
     else:

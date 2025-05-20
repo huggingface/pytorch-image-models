@@ -26,7 +26,7 @@ def mix_batch_variable_size(
         cutmix_alpha: float = 1.0,
         switch_prob: float = 0.5,
         local_shuffle: int = 4,
-) -> Tuple[List[torch.Tensor], List[float], Dict[int, int], bool]:
+) -> Tuple[List[torch.Tensor], List[float], Dict[int, int]]:
     """Apply Mixup or CutMix on a batch of variable‑sized images.
 
     The function first sorts images by aspect ratio and pairs neighbouring
@@ -34,19 +34,16 @@ def mix_batch_variable_size(
     epochs).  Only the mutual central‑overlap region of each pair is mixed
 
     Args:
-        imgs: List of transformed images shaped (C, H, W).  Heights and
-            widths may differ between samples.
-        mixup_alpha: Beta‑distribution *α* for Mixup.  Set to 0 to disable Mixup.
-        cutmix_alpha: Beta‑distribution *α* for CutMix.  Set to 0 to disable CutMix.
+        imgs: List of transformed images shaped (C, H, W).  Heights and widths may differ between samples.
+        mixup_alpha: Beta‑distribution alpha for Mixup.  Set to 0 to disable Mixup.
+        cutmix_alpha: Beta‑distribution alpha for CutMix.  Set to 0 to disable CutMix.
         switch_prob: Probability of using CutMix when both Mixup and CutMix are enabled.
-        local_shuffle: Size of local windows that are randomly shuffled after aspect sorting.
-            A value of 0 turns shuffling off.
+        local_shuffle: Size of local windows that are randomly shuffled after aspect sorting. Off if <= 1.
 
     Returns:
         mixed_imgs: List of mixed images.
         lam_list: Per‑sample lambda values representing the degree of mixing.
         pair_to: Mapping i -> j describing which sample was mixed with which (absent for unmatched odd sample).
-        use_cutmix: True if CutMix was used for this call, False if Mixup was used.
     """
     if len(imgs) < 2:
         raise ValueError("Need at least two images to perform Mixup/CutMix.")
@@ -71,7 +68,7 @@ def mix_batch_variable_size(
     order = sorted(range(len(imgs)), key=lambda i: imgs[i].shape[2] / imgs[i].shape[1])
     if local_shuffle > 1:
         for start in range(0, len(order), local_shuffle):
-            random.shuffle(order[start: start + local_shuffle])
+            random.shuffle(order[start:start + local_shuffle])
 
     pair_to: Dict[int, int] = {}
     for a, b in zip(order[::2], order[1::2]):
@@ -119,22 +116,41 @@ def mix_batch_variable_size(
             #print(i, 'Doing cutmix', yl_i, xl_i, yl_j, xl_j, ch, cw, lam_raw, corrected_lam)
         else:
             # Mixup: blend the entire overlap region
-            patch_i = xi[:, top_i: top_i + oh, left_i: left_i + ow]
-            patch_j = xj[:, top_j: top_j + oh, left_j: left_j + ow]
+            patch_i = xi[:, top_i:top_i + oh, left_i:left_i + ow]
+            patch_j = xj[:, top_j:top_j + oh, left_j:left_j + ow]
 
             blended = patch_i.mul(lam_raw).add_(patch_j, alpha=1.0 - lam_raw)
-            xi[:, top_i: top_i + oh, left_i: left_i + ow] = blended
+            xi[:, top_i:top_i + oh, left_i:left_i + ow] = blended
             mixed_imgs[i] = xi
 
             corrected_lam = (dest_area - overlap_area) / dest_area + lam_raw * overlap_area / dest_area
             lam_list[i] = corrected_lam
             #print(i, 'Doing mixup', top_i, left_i, top_j, left_j, (oh, ow), (hi, wi), (hj, wj), lam_raw, corrected_lam)
 
-    return mixed_imgs, lam_list, pair_to, use_cutmix
+    return mixed_imgs, lam_list, pair_to
+
+
+def smoothed_sparse_target(
+        targets: torch.Tensor,
+        *,
+        num_classes: int,
+        smoothing: float = 0.0,
+) -> torch.Tensor:
+    off_val = smoothing / num_classes
+    on_val = 1.0 - smoothing + off_val
+
+    y_onehot = torch.full(
+        (targets.size(0), num_classes),
+        off_val,
+        dtype=torch.float32,
+        device=targets.device
+    )
+    y_onehot.scatter_(1, targets.unsqueeze(1), on_val)
+    return y_onehot
 
 
 def pairwise_mixup_target(
-        labels: torch.Tensor,
+        targets: torch.Tensor,
         pair_to: Dict[int, int],
         lam_list: List[float],
         *,
@@ -144,21 +160,16 @@ def pairwise_mixup_target(
     """Create soft targets that match the pixel‑level mixing performed.
 
     Args:
-        labels: (B,) tensor of integer class indices.
+        targets: (B,) tensor of integer class indices.
         pair_to: Mapping of sample index to its mixed partner as returned by mix_batch_variable_size().
-        lam_list: Per‑sample fractions of self pixels, also from the mixer.
+        lam_list: Per‑sample fractions of own pixels, also from the mixer.
         num_classes: Total number of classes in the dataset.
         smoothing: Label‑smoothing value in the range [0, 1).
 
     Returns:
         Tensor of shape (B, num_classes) whose rows sum to 1.
     """
-    off_val = smoothing / num_classes
-    on_val = 1.0 - smoothing + off_val
-
-    y_onehot = torch.full((labels.size(0), num_classes), off_val, dtype=torch.float32, device=labels.device)
-    y_onehot.scatter_(1, labels.unsqueeze(1), on_val)
-
+    y_onehot = smoothed_sparse_target(targets, num_classes=num_classes, smoothing=smoothing)
     targets = y_onehot.clone()
     for i, j in pair_to.items():
         lam = lam_list[i]
@@ -177,8 +188,9 @@ class NaFlexMixup:
             mixup_alpha: float = 0.8,
             cutmix_alpha: float = 1.0,
             switch_prob: float = 0.5,
+            prob: float = 1.0,
             local_shuffle: int = 4,
-            smoothing: float = 0.0,
+            label_smoothing: float = 0.0,
     ) -> None:
         """Configure the augmentation.
 
@@ -187,6 +199,7 @@ class NaFlexMixup:
             mixup_alpha: Beta α for Mixup. 0 disables Mixup.
             cutmix_alpha: Beta α for CutMix. 0 disables CutMix.
             switch_prob: Probability of selecting CutMix when both modes are enabled.
+            prob: Probability of applying any mixing per batch.
             local_shuffle: Window size used to shuffle images after aspect sorting so pairings vary between epochs.
             smoothing: Label‑smoothing value. 0 disables smoothing.
         """
@@ -194,28 +207,33 @@ class NaFlexMixup:
         self.mixup_alpha = mixup_alpha
         self.cutmix_alpha = cutmix_alpha
         self.switch_prob = switch_prob
+        self.prob = prob
         self.local_shuffle = local_shuffle
-        self.smoothing = smoothing
+        self.smoothing = label_smoothing
 
     def __call__(
             self,
             imgs: List[torch.Tensor],
-            labels: torch.Tensor,
-    ) -> Tuple[List[torch.Tensor], torch.Tensor]:
+            targets: torch.Tensor,
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
         """Apply the augmentation and generate matching targets.
 
         Args:
-            imgs: List of already‑transformed images shaped (C, H, W).
-            labels: Hard labels with shape (B,).
+            imgs: List of already transformed images shaped (C, H, W).
+            targets: Hard labels with shape (B,).
 
         Returns:
             mixed_imgs: List of mixed images in the same order and shapes as the input.
             targets: Soft‑label tensor shaped (B, num_classes) suitable for cross‑entropy with soft targets.
         """
-        if isinstance(labels, (list, tuple)):
-            labels = torch.tensor(labels)
+        if not isinstance(targets, torch.Tensor):
+            targets = torch.tensor(targets)
 
-        mixed_imgs, lam_list, pair_to, _ = mix_batch_variable_size(
+        if random.random() > self.prob:
+            targets = smoothed_sparse_target(targets, num_classes=self.num_classes, smoothing=self.smoothing)
+            return imgs, targets.unbind(0)
+
+        mixed_imgs, lam_list, pair_to = mix_batch_variable_size(
             imgs,
             mixup_alpha=self.mixup_alpha,
             cutmix_alpha=self.cutmix_alpha,
@@ -224,7 +242,7 @@ class NaFlexMixup:
         )
 
         targets = pairwise_mixup_target(
-            labels,
+            targets,
             pair_to,
             lam_list,
             num_classes=self.num_classes,

@@ -697,32 +697,6 @@ def main():
             trust_remote_code=args.dataset_trust_remote_code,
         )
 
-    # setup mixup / cutmix
-    collate_fn = None
-    mixup_fn = None
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-    if mixup_active:
-        assert not args.naflex_loader, "Mixup/Cutmix not currently supported for NaFlex loading."
-        mixup_args = dict(
-            mixup_alpha=args.mixup,
-            cutmix_alpha=args.cutmix,
-            cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob,
-            switch_prob=args.mixup_switch_prob,
-            mode=args.mixup_mode,
-            label_smoothing=args.smoothing,
-            num_classes=args.num_classes
-        )
-        if args.prefetcher:
-            assert not num_aug_splits  # collate conflict (need to support de-interleaving in collate mixup)
-            collate_fn = FastCollateMixup(**mixup_args)
-        else:
-            mixup_fn = Mixup(**mixup_args)
-
-    # wrap dataset in AugMix helper
-    if num_aug_splits > 1:
-        dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
-
     # create data loaders w/ augmentation pipeline
     train_interpolation = args.train_interpolation
     if args.no_aug or not train_interpolation:
@@ -764,22 +738,59 @@ def main():
         worker_seeding=args.worker_seeding,
     )
 
+    mixup_fn = None
+    mixup_args = {}
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        mixup_args = dict(
+            mixup_alpha=args.mixup,
+            cutmix_alpha=args.cutmix,
+            cutmix_minmax=args.cutmix_minmax,
+            prob=args.mixup_prob,
+            switch_prob=args.mixup_switch_prob,
+            mode=args.mixup_mode,
+            label_smoothing=args.smoothing,
+            num_classes=args.num_classes
+        )
+
     naflex_mode = False
     if args.naflex_loader:
         if utils.is_primary(args):
             _logger.info('Using NaFlex loader')
+
+        assert num_aug_splits <= 1, 'Augmentation splits not supported in NaFlex mode'
+        naflex_mixup_fn = None
+        if mixup_active:
+            from timm.data import NaFlexMixup
+            mixup_args.pop('mode')  # not supported
+            mixup_args.pop('cutmix_minmax')  # not supported
+            naflex_mixup_fn = NaFlexMixup(**mixup_args)
 
         naflex_mode = True
         loader_train = create_naflex_loader(
             dataset=dataset_train,
             patch_size=16,  # Could be derived from model config 
             train_seq_lens=args.naflex_train_seq_lens,
+            mixup_fn=naflex_mixup_fn,
             rank=args.rank,
             world_size=args.world_size,
             **common_loader_kwargs,
             **train_loader_kwargs,
         )
     else:
+        # setup mixup / cutmix
+        collate_fn = None
+        if mixup_active:
+            if args.prefetcher:
+                assert not num_aug_splits  # collate conflict (need to support de-interleaving in collate mixup)
+                collate_fn = FastCollateMixup(**mixup_args)
+            else:
+                mixup_fn = Mixup(**mixup_args)
+
+        # wrap dataset in AugMix helper
+        if num_aug_splits > 1:
+            dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
+
         # Use standard loader
         loader_train = create_loader(
             dataset_train,

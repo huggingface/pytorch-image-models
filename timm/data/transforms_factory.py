@@ -132,9 +132,13 @@ def transforms_imagenet_train(
 
     primary_tfl = []
     if naflex:
+        scale = tuple(scale or (0.08, 1.0))  # default imagenet scale range
+        ratio = tuple(ratio or (3. / 4., 4. / 3.))  # default imagenet ratio range
         primary_tfl += [RandomResizedCropToSequence(
             patch_size=patch_size,
             max_seq_len=max_seq_len,
+            scale=scale,
+            ratio=ratio,
             interpolation=interpolation
         )]
     else:

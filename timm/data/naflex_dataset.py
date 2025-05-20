@@ -83,8 +83,11 @@ class NaFlexCollator:
         batch_size = len(batch)
 
         # Extract targets
-        # FIXME need to handle dense (float) targets or always done downstream of this?
-        targets = torch.tensor([item[1] for item in batch], dtype=torch.int64)
+        targets = [item[1] for item in batch]
+        if isinstance(targets[0], torch.Tensor):
+            targets = torch.stack(targets)
+        else:
+            targets = torch.tensor(targets, dtype=torch.int64)
 
         # Get patch dictionaries
         patch_dicts = [item[0] for item in batch]
@@ -139,6 +142,7 @@ class VariableSeqMapWrapper(IterableDataset):
             seq_lens: List[int] = (128, 256, 576, 784, 1024),
             max_tokens_per_batch: int = 4096 * 4, # Example: 16k tokens
             transform_factory: Optional[Callable] = None,
+            mixup_fn: Optional[Callable] = None,
             seed: int = 42,
             shuffle: bool = True,
             distributed: bool = False,
@@ -172,6 +176,7 @@ class VariableSeqMapWrapper(IterableDataset):
             else:
                 self.transforms[seq_len] = None # No transform
             self.collate_fns[seq_len] = NaFlexCollator(seq_len)
+        self.mixup_fn = mixup_fn
         self.patchifier = Patchify(self.patch_size)
 
         # --- Canonical Schedule Calculation (Done Once) ---
@@ -393,6 +398,8 @@ class VariableSeqMapWrapper(IterableDataset):
             transform = self.transforms.get(seq_len)
 
             batch_samples = []
+            batch_imgs = []
+            batch_targets = []
             for idx in indices:
                 try:
                     # Get original image and label from map-style dataset
@@ -405,9 +412,8 @@ class VariableSeqMapWrapper(IterableDataset):
                         warnings.warn(f"Transform returned None for index {idx}. Skipping sample.")
                         continue
 
-                    # Apply patching
-                    patch_data = self.patchifier(processed_img)
-                    batch_samples.append((patch_data, label))
+                    batch_imgs.append(processed_img)
+                    batch_targets.append(label)
 
                 except IndexError:
                      warnings.warn(f"IndexError encountered for index {idx} (possibly due to padding/repeated indices). Skipping sample.")
@@ -417,8 +423,13 @@ class VariableSeqMapWrapper(IterableDataset):
                     warnings.warn(f"Error processing sample index {idx}. Error: {e}. Skipping sample.")
                     continue # Skip problematic sample
 
-            # Collate the processed samples into a batch
+            if self.mixup_fn is not None:
+                batch_imgs, batch_targets = self.mixup_fn(batch_imgs, batch_targets)
+
+            batch_imgs = [self.patchifier(img) for img in batch_imgs]
+            batch_samples = list(zip(batch_imgs, batch_targets))
             if batch_samples: # Only yield if we successfully processed samples
+                # Collate the processed samples into a batch
                 yield self.collate_fns[seq_len](batch_samples)
 
             # If batch_samples is empty after processing 'indices', an empty batch is skipped.
