@@ -1678,6 +1678,7 @@ def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
         rope_grid_indexing='xy',
         use_pre_transformer_norm=True,
         use_post_transformer_norm=False,
+        use_fc_norm=False,  # explicitly disable
         init_values=0.1,
         norm_layer=partial(LayerNorm, eps=1e-5),
         #dynamic_img_size=True,
