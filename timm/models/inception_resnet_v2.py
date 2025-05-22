@@ -319,7 +319,7 @@ default_cfgs = generate_default_cfgs({
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'conv2d_1a.conv', 'classifier': 'classif',
     },
-    # As per https://arxiv.org/abs/1705.07204 and
+    # As per https://huggingface.co/papers/1705.07204 and
     # ported from http://download.tensorflow.org/models/ens_adv_inception_resnet_v2_2017_08_18.tar.gz
     'inception_resnet_v2.tf_ens_adv_in1k': {
         'hf_hub_id': 'timm/',

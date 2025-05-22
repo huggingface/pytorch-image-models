@@ -209,7 +209,7 @@ def _single_tensor_sgdw(
             if caution:
                 if nesterov:
                     buf = grad.add(buf, alpha=momentum)
-                # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                 mask = (buf * grad > 0).to(grad.dtype)
                 mask.div_(mask.mean().clamp_(min=1e-3))
                 grad = buf * mask
@@ -279,7 +279,7 @@ def _multi_tensor_sgdw(
                 if nesterov:
                     # Can't do nesterov in-place if we want to compare against orig grad for caution
                     bufs = torch._foreach_add(device_grads, bufs, alpha=momentum)
-                # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                 masks = torch._foreach_mul(bufs, device_grads)
                 masks = [(m > 0).to(g.dtype) for m, g in zip(masks, device_grads)]
                 mask_scale = [m.mean() for m in masks]

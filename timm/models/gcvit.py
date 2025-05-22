@@ -2,7 +2,7 @@
 
 From scratch implementation of GCViT in the style of timm swin_transformer_v2_cr.py
 
-Global Context Vision Transformers -https://arxiv.org/abs/2206.09959
+Global Context Vision Transformers -https://huggingface.co/papers/2206.09959
 
 @article{hatamizadeh2022global,
   title={Global Context Vision Transformers},

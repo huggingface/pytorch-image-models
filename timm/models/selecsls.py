@@ -4,7 +4,7 @@ Author: Dushyant Mehta (@mehtadushy)
 
 SelecSLS (core) Network Architecture as proposed in "XNect: Real-time Multi-person 3D
 Human Pose Estimation with a Single RGB Camera, Mehta et al."
-https://arxiv.org/abs/1907.00837
+https://huggingface.co/papers/1907.00837
 
 Based on ResNet implementation in https://github.com/rwightman/pytorch-image-models
 and SelecSLS Net implementation in https://github.com/mehtadushy/SelecSLS-Pytorch

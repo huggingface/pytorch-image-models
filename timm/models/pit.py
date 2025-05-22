@@ -1,7 +1,7 @@
 """ Pooling-based Vision Transformer (PiT) in PyTorch
 
 A PyTorch implement of Pooling-based Vision Transformers as described in
-'Rethinking Spatial Dimensions of Vision Transformers' - https://arxiv.org/abs/2103.16302
+'Rethinking Spatial Dimensions of Vision Transformers' - https://huggingface.co/papers/2103.16302
 
 This code was adapted from the original version at https://github.com/naver-ai/pit, original copyright below.
 
@@ -144,7 +144,7 @@ class PoolingVisionTransformer(nn.Module):
     """ Pooling-based Vision Transformer
 
     A PyTorch implement of 'Rethinking Spatial Dimensions of Vision Transformers'
-        - https://arxiv.org/abs/2103.16302
+        - https://huggingface.co/papers/2103.16302
     """
     def __init__(
             self,

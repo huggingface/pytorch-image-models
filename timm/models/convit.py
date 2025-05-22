@@ -7,7 +7,7 @@
   year={2021}
 }
 
-Paper link: https://arxiv.org/abs/2103.10697
+Paper link: https://huggingface.co/papers/2103.10697
 Original code: https://github.com/facebookresearch/convit, original copyright below
 
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman

@@ -33,9 +33,9 @@
 
 ## Nov 28, 2024
 * More optimizers
-  * Add MARS optimizer (https://arxiv.org/abs/2411.10438, https://github.com/AGI-Arena/MARS)
-  * Add LaProp optimizer (https://arxiv.org/abs/2002.04839, https://github.com/Z-T-WANG/LaProp-Optimizer)
-  * Add masking from 'Cautious Optimizers' (https://arxiv.org/abs/2411.16085, https://github.com/kyleliang919/C-Optim) to Adafactor, Adafactor Big Vision, AdamW (legacy), Adopt, Lamb, LaProp, Lion, NadamW, RMSPropTF, SGDW
+  * Add MARS optimizer (https://huggingface.co/papers/2411.10438, https://github.com/AGI-Arena/MARS)
+  * Add LaProp optimizer (https://huggingface.co/papers/2002.04839, https://github.com/Z-T-WANG/LaProp-Optimizer)
+  * Add masking from 'Cautious Optimizers' (https://huggingface.co/papers/2411.16085, https://github.com/kyleliang919/C-Optim) to Adafactor, Adafactor Big Vision, AdamW (legacy), Adopt, Lamb, LaProp, Lion, NadamW, RMSPropTF, SGDW
   * Cleanup some docstrings and type annotations re optimizers and factory
 * Add MobileNet-V4 Conv Medium models pretrained on in12k and fine-tuned in1k @ 384x384
   * https://huggingface.co/timm/mobilenetv4_conv_medium.e250_r384_in12k_ft_in1k
@@ -142,7 +142,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 |hiera_small_abswin_256.sbb2_pd_e200_in12k_ft_in1k |84.560|97.106|35.01      |
 
 ### Aug 8, 2024
-* Add RDNet ('DenseNets Reloaded', https://arxiv.org/abs/2403.19588), thanks [Donghyun Kim](https://github.com/dhkim0225)
+* Add RDNet ('DenseNets Reloaded', https://huggingface.co/papers/2403.19588), thanks [Donghyun Kim](https://github.com/dhkim0225)
 
 ### July 28, 2024
 * Add `mobilenet_edgetpu_v2_m` weights w/ `ra4` mnv4-small based recipe. 80.1% top-1 @ 224 and 80.7 @ 256.
@@ -227,8 +227,8 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 | [mobilenetv4_conv_small.e2400_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e2400_r224_in1k)                 |73.756|26.244  |91.422|8.578   |3.77       |224     |
 | [mobilenetv4_conv_small.e1200_r224_in1k](http://hf.co/timm/mobilenetv4_conv_small.e1200_r224_in1k)                 |73.454|26.546  |91.34 |8.66    |3.77       |224     |
 
-* Apple MobileCLIP (https://arxiv.org/pdf/2311.17049, FastViT and ViT-B) image tower model support & weights added (part of OpenCLIP support).
-* ViTamin (https://arxiv.org/abs/2404.02132) CLIP image tower model & weights added (part of OpenCLIP support).
+* Apple MobileCLIP (https://huggingface.co/papers/2311.17049, FastViT and ViT-B) image tower model support & weights added (part of OpenCLIP support).
+* ViTamin (https://huggingface.co/papers/2404.02132) CLIP image tower model & weights added (part of OpenCLIP support).
 * OpenAI CLIP Modified ResNet image tower modelling & weight support (via ByobNet). Refactor AttentionPool2d.
 
 ### May 14, 2024
@@ -373,13 +373,13 @@ Datasets & transform refactoring
 
 ### Aug 25, 2023
 * Many new models since last release
-  * FastViT - https://arxiv.org/abs/2303.14189
-  * MobileOne - https://arxiv.org/abs/2206.04040
-  * InceptionNeXt - https://arxiv.org/abs/2303.16900
-  * RepGhostNet - https://arxiv.org/abs/2211.06088 (thanks https://github.com/ChengpengChen)
-  * GhostNetV2 - https://arxiv.org/abs/2211.12905 (thanks https://github.com/yehuitang)
-  * EfficientViT (MSRA) - https://arxiv.org/abs/2305.07027 (thanks https://github.com/seefun)
-  * EfficientViT (MIT) - https://arxiv.org/abs/2205.14756 (thanks https://github.com/seefun)
+  * FastViT - https://huggingface.co/papers/2303.14189
+  * MobileOne - https://huggingface.co/papers/2206.04040
+  * InceptionNeXt - https://huggingface.co/papers/2303.16900
+  * RepGhostNet - https://huggingface.co/papers/2211.06088 (thanks https://github.com/ChengpengChen)
+  * GhostNetV2 - https://huggingface.co/papers/2211.12905 (thanks https://github.com/yehuitang)
+  * EfficientViT (MSRA) - https://huggingface.co/papers/2305.07027 (thanks https://github.com/seefun)
+  * EfficientViT (MIT) - https://huggingface.co/papers/2205.14756 (thanks https://github.com/seefun)
 * Add `--reparam` arg to `benchmark.py`, `onnx_export.py`, and `validate.py` to trigger layer reparameterization / fusion for models with any one of `reparameterize()`, `switch_to_deploy()` or `fuse()`
   * Including FastViT, MobileOne, RepGhostNet, EfficientViT (MSRA), RepViT, RepVGG, and LeViT
 * Preparing 0.9.6 'back to school' release
@@ -396,7 +396,7 @@ Datasets & transform refactoring
 
 ### July 27, 2023
 * Added timm trained `seresnextaa201d_32x8d.sw_in12k_ft_in1k_384` weights (and `.sw_in12k` pretrain) with 87.3% top-1 on ImageNet-1k, best ImageNet ResNet family model I'm aware of.
-* RepViT model and weights (https://arxiv.org/abs/2307.09283) added by [wangao](https://github.com/jameslahm)
+* RepViT model and weights (https://huggingface.co/papers/2307.09283) added by [wangao](https://github.com/jameslahm)
 * I-JEPA ViT feature weights (no classifier) added by [SeeFun](https://github.com/seefun)
 * SAM-ViT (segment anything) feature weights (no classifier) added by [SeeFun](https://github.com/seefun)
 * Add support for alternative feat extraction methods and -ve indices to EfficientNet
@@ -506,9 +506,9 @@ Datasets & transform refactoring
 
 ### Feb 16, 2023
 * `safetensor` checkpoint support added
-* Add ideas from 'Scaling Vision Transformers to 22 B. Params' (https://arxiv.org/abs/2302.05442) -- qk norm, RmsNorm, parallel block
+* Add ideas from 'Scaling Vision Transformers to 22 B. Params' (https://huggingface.co/papers/2302.05442) -- qk norm, RmsNorm, parallel block
 * Add F.scaled_dot_product_attention support (PyTorch 2.0 only) to `vit_*`, `vit_relpos*`, `coatnet` / `maxxvit` (to start)
-* Lion optimizer (w/ multi-tensor option) added (https://arxiv.org/abs/2302.06675)
+* Lion optimizer (w/ multi-tensor option) added (https://huggingface.co/papers/2302.06675)
 * gradient checkpointing works with `features_only=True`
 
 ### Feb 7, 2023
@@ -596,11 +596,11 @@ Datasets & transform refactoring
 
 ### Jan 5, 2023
 * ConvNeXt-V2 models and weights added to existing `convnext.py`
-  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](http://arxiv.org/abs/2301.00808)
+  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](https://huggingface.co/papers/2301.00808)
   * Reference impl: https://github.com/facebookresearch/ConvNeXt-V2 (NOTE: weights currently CC-BY-NC)
 @dataclass
 ### Dec 23, 2022 🎄☃
-* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
+* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://huggingface.co/papers/2212.08013)
   * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
 * Many more models updated to multi-weight and downloadable via HF hub now (convnext, efficientnet, mobilenet, vision_transformer*, beit)
 * More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
@@ -624,7 +624,7 @@ Datasets & transform refactoring
 ### Dec 6, 2022
 * Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`.
   * original source: https://github.com/baaivision/EVA
-  * paper: https://arxiv.org/abs/2211.07636
+  * paper: https://huggingface.co/papers/2211.07636
 
 | model                                    |   top1 |   param_count |   gmac |   macts | hub                                     |
 |:-----------------------------------------|-------:|--------------:|-------:|--------:|:----------------------------------------|
@@ -738,7 +738,7 @@ Datasets & transform refactoring
   * `maxvit_rmlp_nano_rw_256` - 83.0 @ 256, 83.6 @ 320  (T)
 
 ### Aug 26, 2022
-* CoAtNet (https://arxiv.org/abs/2106.04803) and MaxVit (https://arxiv.org/abs/2204.01697) `timm` original models
+* CoAtNet (https://huggingface.co/papers/2106.04803) and MaxVit (https://huggingface.co/papers/2204.01697) `timm` original models
   * both found in [`maxxvit.py`](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/maxxvit.py) model def, contains numerous experiments outside scope of original papers
   * an unfinished Tensorflow version from MaxVit authors can be found https://github.com/google-research/maxvit
 * Initial CoAtNet and MaxVit timm pretrained weights (working on more):
@@ -834,7 +834,7 @@ More models, more fixes
   * `vit_relpos_base_patch16_gapcls_224` - 82.8 @ 224, 83.9 @ 320 -- rel pos, layer scale, class token, avg pool (by mistake)
 * Bring 512 dim, 8-head 'medium' ViT model variant back to life (after using in a pre DeiT 'small' model for first ViT impl back in 2020)
 * Add ViT relative position support for switching btw existing impl and some additions in official Swin-V2 impl for future trials
-* Sequencer2D impl (https://arxiv.org/abs/2205.01972), added via PR from author (https://github.com/okojoalg)
+* Sequencer2D impl (https://huggingface.co/papers/2205.01972), added via PR from author (https://github.com/okojoalg)
 
 ### May 2, 2022
 * Vision Transformer experiments adding Relative Position (Swin-V2 log-coord) (`vision_transformer_relpos.py`) and Residual Post-Norm branches (from Swin-V2) (`vision_transformer*.py`)
@@ -851,7 +851,7 @@ More models, more fixes
   * `seresnextaa101d_32x8d` (anti-aliased w/ AvgPool2d) - 83.85 @ 224, 84.57 @ 288
 
 ### March 23, 2022
-* Add `ParallelBlock` and `LayerScale` option to base vit models to support model configs in [Three things everyone should know about ViT](https://arxiv.org/abs/2203.09795)
+* Add `ParallelBlock` and `LayerScale` option to base vit models to support model configs in [Three things everyone should know about ViT](https://huggingface.co/papers/2203.09795)
 * `convnext_tiny_hnf` (head norm first) weights trained with (close to) A2 recipe, 82.2% top-1, could do better with more epochs.
 
 ### March 21, 2022
@@ -908,11 +908,11 @@ More models, more fixes
 
 ### Jan 5, 2023
 * ConvNeXt-V2 models and weights added to existing `convnext.py`
-  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](http://arxiv.org/abs/2301.00808)
+  * Paper: [ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders](https://huggingface.co/papers/2301.00808)
   * Reference impl: https://github.com/facebookresearch/ConvNeXt-V2 (NOTE: weights currently CC-BY-NC)
 
 ### Dec 23, 2022 🎄☃
-* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://arxiv.org/abs/2212.08013)
+* Add FlexiViT models and weights from https://github.com/google-research/big_vision (check out paper at https://huggingface.co/papers/2212.08013)
   * NOTE currently resizing is static on model creation, on-the-fly dynamic / train patch size sampling is a WIP
 * Many more models updated to multi-weight and downloadable via HF hub now (convnext, efficientnet, mobilenet, vision_transformer*, beit)
 * More model pretrained tag and adjustments, some model names changed (working on deprecation translations, consider main branch DEV branch right now, use 0.6.x for stable use)
@@ -936,7 +936,7 @@ More models, more fixes
 ### Dec 6, 2022
 * Add 'EVA g', BEiT style ViT-g/14 model weights w/ both MIM pretrain and CLIP pretrain to `beit.py`. 
   * original source: https://github.com/baaivision/EVA
-  * paper: https://arxiv.org/abs/2211.07636
+  * paper: https://huggingface.co/papers/2211.07636
 
 | model                                    |   top1 |   param_count |   gmac |   macts | hub                                     |
 |:-----------------------------------------|-------:|--------------:|-------:|--------:|:----------------------------------------|
@@ -1050,7 +1050,7 @@ More models, more fixes
   * `maxvit_rmlp_nano_rw_256` - 83.0 @ 256, 83.6 @ 320  (T)
 
 ### Aug 26, 2022
-* CoAtNet (https://arxiv.org/abs/2106.04803) and MaxVit (https://arxiv.org/abs/2204.01697) `timm` original models
+* CoAtNet (https://huggingface.co/papers/2106.04803) and MaxVit (https://huggingface.co/papers/2204.01697) `timm` original models
   * both found in [`maxxvit.py`](https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/maxxvit.py) model def, contains numerous experiments outside scope of original papers
   * an unfinished Tensorflow version from MaxVit authors can be found https://github.com/google-research/maxvit
 * Initial CoAtNet and MaxVit timm pretrained weights (working on more):
@@ -1147,7 +1147,7 @@ More models, more fixes
   * `vit_relpos_base_patch16_gapcls_224` - 82.8 @ 224, 83.9 @ 320 -- rel pos, layer scale, class token, avg pool (by mistake)
 * Bring 512 dim, 8-head 'medium' ViT model variant back to life (after using in a pre DeiT 'small' model for first ViT impl back in 2020)
 * Add ViT relative position support for switching btw existing impl and some additions in official Swin-V2 impl for future trials
-* Sequencer2D impl (https://arxiv.org/abs/2205.01972), added via PR from author (https://github.com/okojoalg)
+* Sequencer2D impl (https://huggingface.co/papers/2205.01972), added via PR from author (https://github.com/okojoalg)
 
 ### May 2, 2022
 * Vision Transformer experiments adding Relative Position (Swin-V2 log-coord) (`vision_transformer_relpos.py`) and Residual Post-Norm branches (from Swin-V2) (`vision_transformer*.py`)
@@ -1164,7 +1164,7 @@ More models, more fixes
   * `seresnextaa101d_32x8d` (anti-aliased w/ AvgPool2d) - 83.85 @ 224, 84.57 @ 288
 
 ### March 23, 2022
-* Add `ParallelBlock` and `LayerScale` option to base vit models to support model configs in [Three things everyone should know about ViT](https://arxiv.org/abs/2203.09795)
+* Add `ParallelBlock` and `LayerScale` option to base vit models to support model configs in [Three things everyone should know about ViT](https://huggingface.co/papers/2203.09795)
 * `convnext_tiny_hnf` (head norm first) weights trained with (close to) A2 recipe, 82.2% top-1, could do better with more epochs.
 
 ### March 21, 2022

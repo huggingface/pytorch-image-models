@@ -12,11 +12,11 @@ AugMix adapted from:
 3-Augment based on: https://github.com/facebookresearch/deit/blob/main/README_revenge.md
 
 Papers:
-    AutoAugment: Learning Augmentation Policies from Data - https://arxiv.org/abs/1805.09501
-    Learning Data Augmentation Strategies for Object Detection - https://arxiv.org/abs/1906.11172
-    RandAugment: Practical automated data augmentation... - https://arxiv.org/abs/1909.13719
-    AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty - https://arxiv.org/abs/1912.02781
-    3-Augment: DeiT III: Revenge of the ViT - https://arxiv.org/abs/2204.07118
+    AutoAugment: Learning Augmentation Policies from Data - https://huggingface.co/papers/1805.09501
+    Learning Data Augmentation Strategies for Object Detection - https://huggingface.co/papers/1906.11172
+    RandAugment: Practical automated data augmentation... - https://huggingface.co/papers/1909.13719
+    AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty - https://huggingface.co/papers/1912.02781
+    3-Augment: DeiT III: Revenge of the ViT - https://huggingface.co/papers/2204.07118
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
@@ -472,7 +472,7 @@ def auto_augment_policy_v0r(hparams):
 
 
 def auto_augment_policy_original(hparams):
-    # ImageNet policy from https://arxiv.org/abs/1805.09501
+    # ImageNet policy from https://huggingface.co/papers/1805.09501
     policy = [
         [('PosterizeOriginal', 0.4, 8), ('Rotate', 0.6, 9)],
         [('Solarize', 0.6, 5), ('AutoContrast', 0.6, 5)],
@@ -505,7 +505,7 @@ def auto_augment_policy_original(hparams):
 
 
 def auto_augment_policy_originalr(hparams):
-    # ImageNet policy from https://arxiv.org/abs/1805.09501 with research posterize variation
+    # ImageNet policy from https://huggingface.co/papers/1805.09501 with research posterize variation
     policy = [
         [('PosterizeIncreasing', 0.4, 8), ('Rotate', 0.6, 9)],
         [('Solarize', 0.6, 5), ('AutoContrast', 0.6, 5)],
@@ -879,7 +879,7 @@ class AugMixAugment:
     """ AugMix Transform
     Adapted and improved from impl here: https://github.com/google-research/augmix/blob/master/imagenet.py
     From paper: 'AugMix: A Simple Data Processing Method to Improve Robustness and Uncertainty -
-    https://arxiv.org/abs/1912.02781
+    https://huggingface.co/papers/1912.02781
     """
     def __init__(self, ops, alpha=1., width=3, depth=-1, blended=False):
         self.ops = ops

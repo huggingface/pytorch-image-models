@@ -1,6 +1,6 @@
 """ PyTorch MADGRAD optimizer
 
-MADGRAD: https://arxiv.org/abs/2101.11075
+MADGRAD: https://huggingface.co/papers/2101.11075
 
 Code from: https://github.com/facebookresearch/madgrad
 """
@@ -26,7 +26,7 @@ class MADGRAD(torch.optim.Optimizer):
     MADGRAD_: A Momentumized, Adaptive, Dual Averaged Gradient Method for Stochastic
     Optimization.
 
-    .. _MADGRAD: https://arxiv.org/abs/2101.11075
+    .. _MADGRAD: https://huggingface.co/papers/2101.11075
 
     MADGRAD is a general purpose optimizer that can be used in place of SGD or
     Adam may converge faster and generalize better. Currently GPU-only.

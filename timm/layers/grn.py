@@ -1,7 +1,7 @@
 """ Global Response Normalization Module
 
 Based on the GRN layer presented in
-`ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://arxiv.org/abs/2301.00808
+`ConvNeXt-V2 - Co-designing and Scaling ConvNets with Masked Autoencoders` - https://huggingface.co/papers/2301.00808
 
 This implementation
 * works for both NCHW and NHWC tensor layouts

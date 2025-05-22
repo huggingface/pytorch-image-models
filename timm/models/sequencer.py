@@ -1,6 +1,6 @@
 """ Sequencer
 
-Paper: `Sequencer: Deep LSTM for Image Classification` - https://arxiv.org/pdf/2205.01972.pdf
+Paper: `Sequencer: Deep LSTM for Image Classification` - https://huggingface.co/papers/2205.01972
 
 """
 #  Copyright (c) 2022. Yuki Tatsunami

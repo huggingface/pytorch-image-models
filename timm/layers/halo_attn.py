@@ -1,7 +1,7 @@
 """ Halo Self Attention
 
 Paper: `Scaling Local Self-Attention for Parameter Efficient Visual Backbones`
-    - https://arxiv.org/abs/2103.12731
+    - https://huggingface.co/papers/2103.12731
 
 @misc{2103.12731,
 Author = {Ashish Vaswani and Prajit Ramachandran and Aravind Srinivas and Niki Parmar and Blake Hechtman and
@@ -31,7 +31,7 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
     """ Compute relative logits along one dimension
 
     As per: https://gist.github.com/aravindsrinivas/56359b79f0ce4449bcb04ab4b56a57a2
-    Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
+    Originally from: `Attention Augmented Convolutional Networks` - https://huggingface.co/papers/1904.09925
 
     Args:
         q: (batch, height, width, dim)
@@ -61,7 +61,7 @@ def rel_logits_1d(q, rel_k, permute_mask: List[int]):
 class PosEmbedRel(nn.Module):
     """ Relative Position Embedding
     As per: https://gist.github.com/aravindsrinivas/56359b79f0ce4449bcb04ab4b56a57a2
-    Originally from: `Attention Augmented Convolutional Networks` - https://arxiv.org/abs/1904.09925
+    Originally from: `Attention Augmented Convolutional Networks` - https://huggingface.co/papers/1904.09925
 
     """
     def __init__(self, block_size, win_size, dim_head, scale):
@@ -98,7 +98,7 @@ class HaloAttn(nn.Module):
     """ Halo Attention
 
     Paper: `Scaling Local Self-Attention for Parameter Efficient Visual Backbones`
-        - https://arxiv.org/abs/2103.12731
+        - https://huggingface.co/papers/2103.12731
 
     The internal dimensions of the attention module are controlled by the interaction of several arguments.
       * the output dimension of the module is specified by dim_out, which falls back to input dim if not set

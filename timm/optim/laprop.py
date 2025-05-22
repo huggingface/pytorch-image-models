@@ -2,7 +2,7 @@
 
 Code simplified from https://github.com/Z-T-WANG/LaProp-Optimizer, MIT License
 
-Paper: LaProp: Separating Momentum and Adaptivity in Adam, https://arxiv.org/abs/2002.04839
+Paper: LaProp: Separating Momentum and Adaptivity in Adam, https://huggingface.co/papers/2002.04839
 
 @article{ziyin2020laprop,
   title={LaProp: a Better Way to Combine Momentum with Adaptive Gradient},
@@ -23,7 +23,7 @@ from ._types import ParamsT
 class LaProp(Optimizer):
     """ LaProp Optimizer
 
-    Paper: LaProp: Separating Momentum and Adaptivity in Adam, https://arxiv.org/abs/2002.04839
+    Paper: LaProp: Separating Momentum and Adaptivity in Adam, https://huggingface.co/papers/2002.04839
     """
     def __init__(
             self,
@@ -108,7 +108,7 @@ class LaProp(Optimizer):
                 exp_avg.mul_(beta1).add_(step_of_this_grad, alpha=group['lr'] * one_minus_beta1)
 
                 if group['caution']:
-                    # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                    # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                     mask = (exp_avg * grad > 0).to(grad.dtype)
                     mask.div_(mask.mean().clamp_(min=1e-3))
                     exp_avg = exp_avg * mask

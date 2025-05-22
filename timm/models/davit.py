@@ -1,6 +1,6 @@
 """ DaViT: Dual Attention Vision Transformers
 
-As described in https://arxiv.org/abs/2204.03645
+As described in https://huggingface.co/papers/2204.03645
 
 Input size invariant transformer architecture that combines channel and spacial
 attention in each block. The attention mechanisms used are linear in complexity.
@@ -501,7 +501,7 @@ class DaVitStage(nn.Module):
 
 class DaVit(nn.Module):
     r""" DaViT
-        A PyTorch implementation of `DaViT: Dual Attention Vision Transformers`  - https://arxiv.org/abs/2204.03645
+        A PyTorch implementation of `DaViT: Dual Attention Vision Transformers`  - https://huggingface.co/papers/2204.03645
         Supports arbitrary input sizes and pyramid feature extraction
         
     Args:
