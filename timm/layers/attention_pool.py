@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Type
 
 import torch
 import torch.nn as nn
@@ -28,8 +28,8 @@ class AttentionPoolLatent(nn.Module):
             latent_dim: int = None,
             pos_embed: str = '',
             pool_type: str = 'token',
-            norm_layer: Optional[nn.Module] = None,
-            act_layer: Optional[nn.Module] = nn.GELU,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            act_layer: Optional[Type[nn.Module]] = nn.GELU,
             drop: float = 0.0,
     ):
         super().__init__()

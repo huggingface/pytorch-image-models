@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 from timm.layers import set_layer_config
 from ._helpers import load_checkpoint
-from ._hub import load_model_config_from_hf
+from ._hub import load_model_config_from_hf, load_model_config_from_path
 from ._pretrained import PretrainedCfg
 from ._registry import is_model, model_entrypoint, split_model_name_tag
 
@@ -18,13 +18,15 @@ def parse_model_name(model_name: str):
         # NOTE for backwards compat, deprecate hf_hub use
         model_name = model_name.replace('hf_hub', 'hf-hub')
     parsed = urlsplit(model_name)
-    assert parsed.scheme in ('', 'timm', 'hf-hub')
+    assert parsed.scheme in ('', 'hf-hub', 'local-dir')
     if parsed.scheme == 'hf-hub':
         # FIXME may use fragment as revision, currently `@` in URI path
         return parsed.scheme, parsed.path
+    elif parsed.scheme == 'local-dir':
+        return parsed.scheme, parsed.path
     else:
         model_name = os.path.split(parsed.path)[-1]
-        return 'timm', model_name
+        return None, model_name
 
 
 def safe_model_name(model_name: str, remove_source: bool = True):
@@ -100,20 +102,27 @@ def create_model(
     # non-supporting models don't break and default args remain in effect.
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
-    model_source, model_name = parse_model_name(model_name)
-    if model_source == 'hf-hub':
+    model_source, model_id = parse_model_name(model_name)
+    if model_source:
         assert not pretrained_cfg, 'pretrained_cfg should not be set when sourcing model from Hugging Face Hub.'
-        # For model names specified in the form `hf-hub:path/architecture_name@revision`,
-        # load model weights + pretrained_cfg from Hugging Face hub.
-        pretrained_cfg, model_name, model_args = load_model_config_from_hf(
-            model_name,
-            cache_dir=cache_dir,
-        )
+        if model_source == 'hf-hub':
+            # For model names specified in the form `hf-hub:path/architecture_name@revision`,
+            # load model weights + pretrained_cfg from Hugging Face hub.
+            pretrained_cfg, model_name, model_args = load_model_config_from_hf(
+                model_id,
+                cache_dir=cache_dir,
+            )
+        elif model_source == 'local-dir':
+            pretrained_cfg, model_name, model_args = load_model_config_from_path(
+                model_id,
+            )
+        else:
+            assert False, f'Unknown model_source {model_source}'
         if model_args:
             for k, v in model_args.items():
                 kwargs.setdefault(k, v)
     else:
-        model_name, pretrained_tag = split_model_name_tag(model_name)
+        model_name, pretrained_tag = split_model_name_tag(model_id)
         if pretrained_tag and not pretrained_cfg:
             # a valid pretrained_cfg argument takes priority over tag in model name
             pretrained_cfg = pretrained_tag

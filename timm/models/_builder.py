@@ -11,8 +11,8 @@ from torch.hub import load_state_dict_from_url
 from timm.models._features import FeatureListNet, FeatureDictNet, FeatureHookNet, FeatureGetterNet
 from timm.models._features_fx import FeatureGraphNet
 from timm.models._helpers import load_state_dict
-from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf,\
-    load_custom_from_hf
+from timm.models._hub import has_hf_hub, download_cached_file, check_cached_file, load_state_dict_from_hf, \
+    load_state_dict_from_path, load_custom_from_hf
 from timm.models._manipulate import adapt_input_conv
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
@@ -45,6 +45,9 @@ def _resolve_pretrained_source(pretrained_cfg):
         load_from = 'hf-hub'
         assert hf_hub_id
         pretrained_loc = hf_hub_id
+    elif cfg_source == 'local-dir':
+        load_from = 'local-dir'
+        pretrained_loc = pretrained_file
     else:
         # default source == timm or unspecified
         if pretrained_sd:
@@ -211,6 +214,13 @@ def load_pretrained(
                 state_dict = load_state_dict_from_hf(*pretrained_loc, cache_dir=cache_dir)
         else:
             state_dict = load_state_dict_from_hf(pretrained_loc, weights_only=True, cache_dir=cache_dir)
+    elif load_from == 'local-dir':
+        _logger.info(f'Loading pretrained weights from local directory ({pretrained_loc})')
+        pretrained_path = Path(pretrained_loc)
+        if pretrained_path.is_dir():
+            state_dict = load_state_dict_from_path(pretrained_path)
+        else:
+            RuntimeError(f"Specified path is not a directory: {pretrained_loc}")
     else:
         model_name = pretrained_cfg.get('architecture', 'this model')
         raise RuntimeError(f"No pretrained weights exist for {model_name}. Use `pretrained=False` for random init.")

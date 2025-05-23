@@ -43,7 +43,7 @@ def onnx_export(
 
     if example_input is None:
         if not input_size:
-            assert hasattr(model, 'default_cfg')
+            assert hasattr(model, 'default_cfg'), 'Cannot file model default config, input size must be provided'
             input_size = model.default_cfg.get('input_size')
         example_input = torch.randn((batch_size,) + input_size, requires_grad=training)
 
@@ -78,9 +78,8 @@ def onnx_export(
             export_options=export_options,
         )
         export_output.save(output_file)
-        torch_out = None
     else:
-        torch_out = torch.onnx._export(
+        torch.onnx.export(
             model,
             example_input,
             output_file,
@@ -101,9 +100,5 @@ def onnx_export(
         if check_forward and not training:
             import numpy as np
             onnx_out = onnx_forward(output_file, example_input)
-            if torch_out is not None:
-                np.testing.assert_almost_equal(torch_out.numpy(), onnx_out, decimal=3)
-                np.testing.assert_almost_equal(original_out.numpy(), torch_out.numpy(), decimal=5)
-            else:
-                np.testing.assert_almost_equal(original_out.numpy(), onnx_out, decimal=3)
+            np.testing.assert_almost_equal(original_out.numpy(), onnx_out, decimal=3)
 

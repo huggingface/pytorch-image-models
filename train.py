@@ -954,6 +954,7 @@ def main():
                 optimizer,
                 train_loss_fn,
                 args,
+                device=device,
                 lr_scheduler=lr_scheduler,
                 saver=saver,
                 output_dir=output_dir,
