@@ -362,7 +362,7 @@ def create_attention_mask(
     symmetric: bool = True,
     q_len: Optional[int] = None,
     dtype: torch.dtype = torch.float32,
-) -> torch.Tensor:
+) -> Optional[torch.Tensor]:
     """Creates an attention mask from patch validity information.
 
     Supports two modes controlled by `symmetric`:
@@ -392,6 +392,9 @@ def create_attention_mask(
         Shape is [B, 1, seq_len, seq_len] if symmetric=True,
         or [B, 1, q_len, kv_len] if symmetric=False.
     """
+    if patch_valid is None:
+        return None
+
     patch_valid = patch_valid.bool() # Ensure boolean type
     B, N = patch_valid.shape
     kv_len = N # Initial key/value length is the number of patches
