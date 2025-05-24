@@ -738,7 +738,7 @@ class RandomResizedCropToSequence(torch.nn.Module):
         return format_string
 
 
-def patchify(
+def patchify_image(
         img: torch.Tensor,
         patch_size: Tuple[int, int],
         pad: bool = True,
@@ -794,7 +794,7 @@ class Patchify(torch.nn.Module):
             # Convert PIL Image to tensor [C, H, W]
             img = transforms.functional.to_tensor(img)
 
-        patches, coord, valid = patchify(img, self.patch_size)
+        patches, coord, valid = patchify_image(img, self.patch_size)
 
         return {
             'patches': patches,

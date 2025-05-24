@@ -24,10 +24,10 @@ from torchvision import transforms
 from PIL import Image
 
 
-from .naflex_transforms import Patchify, patchify
+from .naflex_transforms import Patchify, patchify_image
 
 
-def calculate_batch_size(
+def calculate_naflex_batch_size(
         tokens_per_batch: int,
         seq_len: int,
         max_size: Optional[int] = None,
@@ -240,7 +240,7 @@ class VariableSeqMapWrapper(IterableDataset):
             seq_len = self.seq_lens[seq_idx]
 
             # Calculate batch size
-            batch_size = calculate_batch_size(
+            batch_size = calculate_naflex_batch_size(
                 tokens_per_batch=self.max_tokens_per_batch,
                 seq_len=seq_len,
                 # max_size should be remaining_samples to avoid overshooting

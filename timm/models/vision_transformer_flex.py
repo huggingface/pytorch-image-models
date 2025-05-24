@@ -1027,6 +1027,7 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 default_cfgs = generate_default_cfgs({
     'vit_naflex_base_patch16_gap': _cfg(),
     'vit_naflex_base_patch16_map': _cfg(),
+    'vit_naflex_so400m_patch16_map': _cfg(),
 
     # sbb model testijg
     'vit_naflex_mediumd_patch16_reg4_gap.sbb2_r256_e200_in12k_ft_in1k': _cfg(
@@ -1109,4 +1110,16 @@ def vit_naflex_base_patch16(pretrained: bool = False, **kwargs):
         patch_size=16, embed_dim=768, depth=12, num_heads=12,
         global_pool='token', class_token=True, pos_embed_grid_size=(14, 14))
     model = _create_vision_transformer_flex('vit_naflex_base_patch16', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_naflex_so400m_patch16_map(pretrained=False, **kwargs):
+    """ViT-SO400M with NaFlex functionality for variable aspect ratios and resolutions.
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, init_values=1e-5,
+        global_pool='map', class_token=False, reg_tokens=1, act_layer='gelu_tanh')
+    model = _create_vision_transformer_flex(
+        'vit_naflex_so400m_patch16_map', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
