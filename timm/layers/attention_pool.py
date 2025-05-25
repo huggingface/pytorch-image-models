@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .attention import maybe_add_mask
 from .config import use_fused_attn
 from .mlp import Mlp
 from .weight_init import trunc_normal_tf_
@@ -95,8 +96,7 @@ class AttentionPoolLatent(nn.Module):
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-            if attn_mask is not None:
-                attn = attn + attn_mask
+            attn = maybe_add_mask(attn, attn_mask)
             attn = attn.softmax(dim=-1)
             x = attn @ v
         x = x.transpose(1, 2).reshape(B, self.latent_len, C)

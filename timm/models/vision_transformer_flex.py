@@ -823,7 +823,7 @@ class VisionTransformerFlex(nn.Module):
             attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
 
-        if attn_mask is None and patch_valid is not None:
+        if attn_mask is None:
             attn_mask = create_attention_mask(
                 patch_valid,
                 num_prefix_tokens=self.num_prefix_tokens,

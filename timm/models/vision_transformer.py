@@ -43,7 +43,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCE
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import Attention, PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, \
     SwiGLUPacked, SwiGLU, trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
-    get_act_layer, get_norm_layer, LayerType
+    get_act_layer, get_norm_layer, LayerType, maybe_add_mask
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
@@ -256,8 +256,7 @@ class ParallelScalingBlock(nn.Module):
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
-            if attn_mask is not None:
-                attn = attn + attn_mask
+            attn = maybe_add_mask(attn, attn_mask)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x_attn = attn @ v
