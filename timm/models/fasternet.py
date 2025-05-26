@@ -369,32 +369,31 @@ class FasterNet(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
-    if 'avgpool_pre_head' in state_dict:
-        return state_dict
-
-    out_dict = {
-        'conv_head.weight': state_dict.pop('avgpool_pre_head.1.weight'),
-        'classifier.weight': state_dict.pop('head.weight'),
-        'classifier.bias': state_dict.pop('head.bias')
-    }
-
-    stage_mapping = {
-        'stages.1.': 'stages.1.downsample.',
-        'stages.2.': 'stages.1.',
-        'stages.3.': 'stages.2.downsample.',
-        'stages.4.': 'stages.2.',
-        'stages.5.': 'stages.3.downsample.',
-        'stages.6.': 'stages.3.'
-    }
-
-    for k, v in state_dict.items():
-        for old_prefix, new_prefix in stage_mapping.items():
-            if k.startswith(old_prefix):
-                k = k.replace(old_prefix, new_prefix)
-                break
-        out_dict[k] = v
-
-    return out_dict
+    # if 'avgpool_pre_head' in state_dict:
+    #     return state_dict
+    #
+    # out_dict = {
+    #     'conv_head.weight': state_dict.pop('avgpool_pre_head.1.weight'),
+    #     'classifier.weight': state_dict.pop('head.weight'),
+    #     'classifier.bias': state_dict.pop('head.bias')
+    # }
+    #
+    # stage_mapping = {
+    #     'stages.1.': 'stages.1.downsample.',
+    #     'stages.2.': 'stages.1.',
+    #     'stages.3.': 'stages.2.downsample.',
+    #     'stages.4.': 'stages.2.',
+    #     'stages.5.': 'stages.3.downsample.',
+    #     'stages.6.': 'stages.3.'
+    # }
+    #
+    # for k, v in state_dict.items():
+    #     for old_prefix, new_prefix in stage_mapping.items():
+    #         if k.startswith(old_prefix):
+    #             k = k.replace(old_prefix, new_prefix)
+    #             break
+    #     out_dict[k] = v
+    return state_dict
 
 
 def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
@@ -412,28 +411,28 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
 
 default_cfgs = generate_default_cfgs({
     'fasternet_t0.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_t0-epoch.281-val_acc1.71.9180.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_t0-epoch.281-val_acc1.71.9180.pth',
     ),
     'fasternet_t1.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_t1-epoch.291-val_acc1.76.2180.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_t1-epoch.291-val_acc1.76.2180.pth',
     ),
     'fasternet_t2.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_t2-epoch.289-val_acc1.78.8860.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_t2-epoch.289-val_acc1.78.8860.pth',
     ),
     'fasternet_s.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_s-epoch.299-val_acc1.81.2840.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_s-epoch.299-val_acc1.81.2840.pth',
     ),
     'fasternet_m.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_m-epoch.291-val_acc1.82.9620.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_m-epoch.291-val_acc1.82.9620.pth',
     ),
     'fasternet_l.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_l-epoch.299-val_acc1.83.5060.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/JierunChen/FasterNet/releases/download/v1.0/fasternet_l-epoch.299-val_acc1.83.5060.pth',
     ),
 })
 

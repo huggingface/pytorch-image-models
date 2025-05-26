@@ -523,8 +523,9 @@ class SwiftFormer(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
-    if 'model' in state_dict:
-        state_dict = state_dict['model']
+    state_dict = state_dict.get('model', state_dict)
+    if 'stem.0.weight' in state_dict:
+        return state_dict
 
     out_dict = {}
     for k, v in state_dict.items():
@@ -562,14 +563,18 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
-    # 'swiftformer_xs.dist_in1k': _cfg(hf_hub_id='timm/'),
-    # 'swiftformer_s.dist_in1k': _cfg(hf_hub_id='timm/'),
-    # 'swiftformer_l1.dist_in1k': _cfg(hf_hub_id='timm/'),
-    # 'swiftformer_l3.dist_in1k': _cfg(hf_hub_id='timm/'),
-    'swiftformer_xs.untrained': _cfg(),
-    'swiftformer_s.untrained': _cfg(),
-    'swiftformer_l1.untrained': _cfg(),
-    'swiftformer_l3.untrained': _cfg(),
+    'swiftformer_xs.dist_in1k': _cfg(
+        hf_hub_id='timm/',
+    ),
+    'swiftformer_s.dist_in1k': _cfg(
+        hf_hub_id='timm/'
+    ),
+    'swiftformer_l1.dist_in1k': _cfg(
+        hf_hub_id='timm/'
+    ),
+    'swiftformer_l3.dist_in1k': _cfg(
+        hf_hub_id='timm/'
+    ),
 })
 
 

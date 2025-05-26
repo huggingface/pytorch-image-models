@@ -28,7 +28,7 @@ from ._registry import register_model, generate_default_cfgs
 __all__ = ['SHViT']
 
 
-class Residule(nn.Module):
+class Residual(nn.Module):
     def __init__(self, m: nn.Module):
         super().__init__()
         self.m = m
@@ -38,7 +38,7 @@ class Residule(nn.Module):
 
     @torch.no_grad()
     def fuse(self) -> nn.Module:
-        if isinstance(self.m, Conv2d_BN):
+        if isinstance(self.m, Conv2dNorm):
             m = self.m.fuse()
             assert(m.groups == m.in_channels)
             identity = torch.ones(m.weight.shape[0], m.weight.shape[1], 1, 1)
@@ -49,7 +49,7 @@ class Residule(nn.Module):
             return self
 
 
-class Conv2d_BN(nn.Sequential):
+class Conv2dNorm(nn.Sequential):
     def __init__(
             self,
             in_channels: int,
@@ -89,7 +89,7 @@ class Conv2d_BN(nn.Sequential):
         return m
 
 
-class BN_Linear(nn.Sequential):
+class NormLinear(nn.Sequential):
     def __init__(
             self,
             in_features: int,
@@ -124,12 +124,12 @@ class PatchMerging(nn.Module):
     def __init__(self, dim: int, out_dim: int, act_layer: LayerType = nn.ReLU):
         super().__init__()
         hid_dim = int(dim * 4)
-        self.conv1 = Conv2d_BN(dim, hid_dim)
+        self.conv1 = Conv2dNorm(dim, hid_dim)
         self.act1 = act_layer()
-        self.conv2 = Conv2d_BN(hid_dim, hid_dim, 3, 2, 1, groups=hid_dim)
+        self.conv2 = Conv2dNorm(hid_dim, hid_dim, 3, 2, 1, groups=hid_dim)
         self.act2 = act_layer()
         self.se = SqueezeExcite(hid_dim, 0.25)
-        self.conv3 = Conv2d_BN(hid_dim, out_dim)
+        self.conv3 = Conv2dNorm(hid_dim, out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
@@ -144,9 +144,9 @@ class PatchMerging(nn.Module):
 class FFN(nn.Module):
     def __init__(self, dim: int, embed_dim: int, act_layer: LayerType = nn.ReLU):
         super().__init__()
-        self.pw1 = Conv2d_BN(dim, embed_dim)
+        self.pw1 = Conv2dNorm(dim, embed_dim)
         self.act = act_layer()
-        self.pw2 = Conv2d_BN(embed_dim, dim, bn_weight_init=0)
+        self.pw2 = Conv2dNorm(embed_dim, dim, bn_weight_init=0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.pw1(x)
@@ -173,8 +173,8 @@ class SHSA(nn.Module):
 
         self.pre_norm = norm_layer(pdim)
 
-        self.qkv = Conv2d_BN(pdim, qk_dim * 2 + pdim)
-        self.proj = nn.Sequential(act_layer(), Conv2d_BN(dim, dim, bn_weight_init=0)) 
+        self.qkv = Conv2dNorm(pdim, qk_dim * 2 + pdim)
+        self.proj = nn.Sequential(act_layer(), Conv2dNorm(dim, dim, bn_weight_init=0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x.shape
@@ -202,12 +202,12 @@ class BasicBlock(nn.Module):
             act_layer: LayerType = nn.ReLU,
     ):
         super().__init__()
-        self.conv = Residule(Conv2d_BN(dim, dim, 3, 1, 1, groups=dim, bn_weight_init=0))
+        self.conv = Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim, bn_weight_init=0))
         if type == "s": 
-            self.mixer = Residule(SHSA(dim, qk_dim, pdim, norm_layer, act_layer))
+            self.mixer = Residual(SHSA(dim, qk_dim, pdim, norm_layer, act_layer))
         else: 
             self.mixer = nn.Identity()
-        self.ffn = Residule(FFN(dim, int(dim * 2)))
+        self.ffn = Residual(FFN(dim, int(dim * 2)))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv(x)
@@ -231,11 +231,11 @@ class StageBlock(nn.Module):
         super().__init__()
         self.grad_checkpointing = False
         self.downsample = nn.Sequential(
-            Residule(Conv2d_BN(prev_dim, prev_dim, 3, 1, 1, groups=prev_dim)),
-            Residule(FFN(prev_dim, int(prev_dim * 2), act_layer)),
+            Residual(Conv2dNorm(prev_dim, prev_dim, 3, 1, 1, groups=prev_dim)),
+            Residual(FFN(prev_dim, int(prev_dim * 2), act_layer)),
             PatchMerging(prev_dim, dim, act_layer),
-            Residule(Conv2d_BN(dim, dim, 3, 1, 1, groups=dim)),
-            Residule(FFN(dim, int(dim * 2), act_layer)),
+            Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim)),
+            Residual(FFN(dim, int(dim * 2), act_layer)),
         ) if prev_dim != dim else nn.Identity()
 
         self.blocks = nn.Sequential(*[
@@ -274,13 +274,13 @@ class SHViT(nn.Module):
         # Patch embedding
         stem_chs = embed_dim[0]
         self.patch_embed = nn.Sequential(
-            Conv2d_BN(in_chans, stem_chs // 8, 3, 2, 1),
+            Conv2dNorm(in_chans, stem_chs // 8, 3, 2, 1),
             act_layer(),
-            Conv2d_BN(stem_chs // 8, stem_chs // 4, 3, 2, 1),
+            Conv2dNorm(stem_chs // 8, stem_chs // 4, 3, 2, 1),
             act_layer(),
-            Conv2d_BN(stem_chs // 4, stem_chs // 2, 3, 2, 1),
+            Conv2dNorm(stem_chs // 4, stem_chs // 2, 3, 2, 1),
             act_layer(),
-            Conv2d_BN(stem_chs // 2, stem_chs, 3, 2, 1)
+            Conv2dNorm(stem_chs // 2, stem_chs, 3, 2, 1)
         )
 
         # Build SHViT blocks
@@ -305,7 +305,7 @@ class SHViT(nn.Module):
         self.num_features = self.head_hidden_size = embed_dim[-1]
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = BN_Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = NormLinear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
 
     @torch.jit.ignore
     def no_weight_decay(self) -> Set:
@@ -336,7 +336,7 @@ class SHViT(nn.Module):
         # cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
         self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
-        self.head = BN_Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = NormLinear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_intermediates(
             self,
@@ -426,36 +426,36 @@ class SHViT(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
-    if 'model' in state_dict:
-        state_dict = state_dict['model']
-    out_dict = {}
+    state_dict = state_dict.get('model', state_dict)
 
-    replace_rules = [
-        (re.compile(r'^blocks1\.'), 'stages.0.blocks.'),
-        (re.compile(r'^blocks2\.'), 'stages.1.blocks.'),
-        (re.compile(r'^blocks3\.'), 'stages.2.blocks.'),
-    ]
-    downsample_mapping = {}
-    for i in range(1, 3):
-        downsample_mapping[f'^stages\\.{i}\\.blocks\\.0\\.0\\.'] = f'stages.{i}.downsample.0.'
-        downsample_mapping[f'^stages\\.{i}\\.blocks\\.0\\.1\\.'] = f'stages.{i}.downsample.1.'
-        downsample_mapping[f'^stages\\.{i}\\.blocks\\.1\\.'] = f'stages.{i}.downsample.2.'
-        downsample_mapping[f'^stages\\.{i}\\.blocks\\.2\\.0\\.'] = f'stages.{i}.downsample.3.'
-        downsample_mapping[f'^stages\\.{i}\\.blocks\\.2\\.1\\.'] = f'stages.{i}.downsample.4.'
-        for j in range(3, 10):
-            downsample_mapping[f'^stages\\.{i}\\.blocks\\.{j}\\.'] = f'stages.{i}.blocks.{j - 3}.'
+    # out_dict = {}
+    #
+    # replace_rules = [
+    #     (re.compile(r'^blocks1\.'), 'stages.0.blocks.'),
+    #     (re.compile(r'^blocks2\.'), 'stages.1.blocks.'),
+    #     (re.compile(r'^blocks3\.'), 'stages.2.blocks.'),
+    # ]
+    # downsample_mapping = {}
+    # for i in range(1, 3):
+    #     downsample_mapping[f'^stages\\.{i}\\.blocks\\.0\\.0\\.'] = f'stages.{i}.downsample.0.'
+    #     downsample_mapping[f'^stages\\.{i}\\.blocks\\.0\\.1\\.'] = f'stages.{i}.downsample.1.'
+    #     downsample_mapping[f'^stages\\.{i}\\.blocks\\.1\\.'] = f'stages.{i}.downsample.2.'
+    #     downsample_mapping[f'^stages\\.{i}\\.blocks\\.2\\.0\\.'] = f'stages.{i}.downsample.3.'
+    #     downsample_mapping[f'^stages\\.{i}\\.blocks\\.2\\.1\\.'] = f'stages.{i}.downsample.4.'
+    #     for j in range(3, 10):
+    #         downsample_mapping[f'^stages\\.{i}\\.blocks\\.{j}\\.'] = f'stages.{i}.blocks.{j - 3}.'
+    #
+    # downsample_patterns = [
+    #     (re.compile(pattern), replacement) for pattern, replacement in downsample_mapping.items()]
+    #
+    # for k, v in state_dict.items():
+    #     for pattern, replacement in replace_rules:
+    #         k = pattern.sub(replacement, k)
+    #     for pattern, replacement in downsample_patterns:
+    #         k = pattern.sub(replacement, k)
+    #     out_dict[k] = v
 
-    downsample_patterns = [
-        (re.compile(pattern), replacement) for pattern, replacement in downsample_mapping.items()]
-
-    for k, v in state_dict.items():
-        for pattern, replacement in replace_rules:
-            k = pattern.sub(replacement, k)
-        for pattern, replacement in downsample_patterns:
-            k = pattern.sub(replacement, k)
-        out_dict[k] = v
-
-    return out_dict
+    return state_dict
 
 
 def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
@@ -473,20 +473,20 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
 
 default_cfgs = generate_default_cfgs({
     'shvit_s1.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s1.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s1.pth',
     ),
     'shvit_s2.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s2.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s2.pth',
     ),
     'shvit_s3.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s3.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s3.pth',
     ),
     'shvit_s4.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s4.pth',
+        hf_hub_id='timm/',
+        #url='https://github.com/ysj9909/SHViT/releases/download/v1.0/shvit_s4.pth',
         input_size=(3, 256, 256),
     ),
 })

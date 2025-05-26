@@ -872,8 +872,8 @@ default_cfgs = generate_default_cfgs({
     ),
     'ghostnetv3_050.untrained': _cfg(),
     'ghostnetv3_100.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/huawei-noah/Efficient-AI-Backbones/releases/download/GhostNetV3/ghostnetv3-1.0.pth.tar'
+        hf_hub_id='timm/',
+        #url='https://github.com/huawei-noah/Efficient-AI-Backbones/releases/download/GhostNetV3/ghostnetv3-1.0.pth.tar'
     ),
     'ghostnetv3_130.untrained': _cfg(),
     'ghostnetv3_160.untrained': _cfg(),

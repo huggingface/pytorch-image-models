@@ -253,10 +253,7 @@ class StarNet(nn.Module):
 
 
 def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
-    if 'state_dict' in state_dict:
-        state_dict = state_dict['state_dict']
-    out_dict = state_dict
-    return out_dict
+    return state_dict.get('state_dict', state_dict)
 
 
 def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
@@ -274,20 +271,20 @@ def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
 
 default_cfgs = generate_default_cfgs({
     'starnet_s1.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s1.pth.tar',
+        hf_hub_id='timm/',
+        #url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s1.pth.tar',
     ),
     'starnet_s2.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s2.pth.tar',
+        hf_hub_id='timm/',
+        #url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s2.pth.tar',
     ),
     'starnet_s3.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s3.pth.tar',
+        hf_hub_id='timm/',
+        #url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s3.pth.tar',
     ),
     'starnet_s4.in1k': _cfg(
-        # hf_hub_id='timm/',
-        url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s4.pth.tar',
+        hf_hub_id='timm/',
+        #url='https://github.com/ma-xu/Rewrite-the-Stars/releases/download/checkpoints_v1/starnet_s4.pth.tar',
     ),
     'starnet_s050.untrained': _cfg(),
     'starnet_s100.untrained': _cfg(),
