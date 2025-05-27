@@ -87,6 +87,8 @@ def build_fourier_pos_embed(
         include_grid: bool = False,
         in_pixels: bool = True,
         ref_feat_shape: Optional[List[int]] = None,
+        grid_offset: float = 0.,
+        grid_indexing: str = 'ij',
         dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
 ) -> List[torch.Tensor]:
@@ -102,6 +104,8 @@ def build_fourier_pos_embed(
         include_grid: Include the spatial grid in output.
         in_pixels: Output in pixel freq.
         ref_feat_shape: Reference feature shape for resize / fine-tune.
+        grid_offset: Constant offset to add to grid for non-pixel freq.
+        grid_indexing: Indexing mode for meshgrid ('ij' or 'xy')
         dtype: Output dtype.
         device: Output device.
 
@@ -130,15 +134,21 @@ def build_fourier_pos_embed(
             dtype = bands.dtype
 
     if in_pixels:
-        t = [torch.linspace(-1., 1., steps=s, device=device, dtype=torch.float32) for s in feat_shape]
+        t = [
+            torch.linspace(-1., 1., steps=s, device=device, dtype=torch.float32)
+            for s in feat_shape
+        ]
     else:
-        t = [torch.arange(s, device=device, dtype=torch.int64).to(torch.float32) for s in feat_shape]
+        t = [
+            torch.arange(s, device=device, dtype=torch.int64).to(torch.float32) + grid_offset
+            for s in feat_shape
+        ]
 
     if ref_feat_shape is not None:
         # eva's scheme for resizing rope embeddings (ref shape = pretrain)
         t = [x / f * r for x, f, r in zip(t, feat_shape, ref_feat_shape)]
 
-    grid = torch.stack(ndgrid(t), dim=-1)
+    grid = torch.stack(torch.meshgrid(t, indexing=grid_indexing), dim=-1)
     grid = grid.unsqueeze(-1)
     pos = grid * bands
 
@@ -229,6 +239,8 @@ def build_rotary_pos_embed(
         linear_bands: bool = False,
         in_pixels: bool = True,
         ref_feat_shape: Optional[List[int]] = None,
+        grid_offset: float = 0.,
+        grid_indexing: str = 'ij',
         dtype: torch.dtype = torch.float32,
         device: Optional[torch.device] = None,
 ):
@@ -242,6 +254,9 @@ def build_rotary_pos_embed(
         temperature: Temperature (inv freq) for non-pixel mode
         linear_bands: Linearly (instead of log) spaced bands for pixel mode
         in_pixels: Pixel vs language (inv freq) mode.
+        ref_feat_shape: Reference feature shape for resize / fine-tune.
+        grid_offset: Constant offset to add to grid for non-pixel freq.
+        grid_indexing: Indexing mode for meshgrid ('ij' or 'xy')
         dtype: Output dtype.
         device: Output device.
 
@@ -257,6 +272,8 @@ def build_rotary_pos_embed(
         linear_bands=linear_bands,
         in_pixels=in_pixels,
         ref_feat_shape=ref_feat_shape,
+        grid_offset=grid_offset,
+        grid_indexing=grid_indexing,
         device=device,
         dtype=dtype,
     )
@@ -289,6 +306,8 @@ class RotaryEmbedding(nn.Module):
             linear_bands: bool = False,
             feat_shape: Optional[List[int]] = None,
             ref_feat_shape: Optional[List[int]] = None,
+            grid_offset: float = 0.,
+            grid_indexing: str = 'ij',
     ):
         super().__init__()
         self.dim = dim
@@ -297,6 +316,8 @@ class RotaryEmbedding(nn.Module):
         self.in_pixels = in_pixels
         self.feat_shape = feat_shape
         self.ref_feat_shape = ref_feat_shape
+        self.grid_offset = grid_offset
+        self.grid_indexing = grid_indexing
 
         if feat_shape is None:
             # only cache bands
@@ -328,6 +349,8 @@ class RotaryEmbedding(nn.Module):
                 linear_bands=linear_bands,
                 in_pixels=in_pixels,
                 ref_feat_shape=self.ref_feat_shape,
+                grid_offset=self.grid_offset,
+                grid_indexing=self.grid_indexing,
             )
             self.bands = None
             self.register_buffer(
@@ -349,6 +372,9 @@ class RotaryEmbedding(nn.Module):
                 shape,
                 self.bands,
                 in_pixels=self.in_pixels,
+                ref_feat_shape=self.ref_feat_shape,
+                grid_offset=self.grid_offset,
+                grid_indexing=self.grid_indexing,
             )
         else:
             return self.pos_embed_sin, self.pos_embed_cos
@@ -376,6 +402,8 @@ class RotaryEmbeddingCat(nn.Module):
             linear_bands: bool = False,
             feat_shape: Optional[List[int]] = None,
             ref_feat_shape: Optional[List[int]] = None,
+            grid_offset: float = 0.,
+            grid_indexing: str = 'ij',
     ):
         super().__init__()
         self.dim = dim
@@ -384,6 +412,8 @@ class RotaryEmbeddingCat(nn.Module):
         self.in_pixels = in_pixels
         self.feat_shape = feat_shape
         self.ref_feat_shape = ref_feat_shape
+        self.grid_offset = grid_offset
+        self.grid_indexing = grid_indexing
 
         if feat_shape is None:
             # only cache bands
@@ -414,6 +444,8 @@ class RotaryEmbeddingCat(nn.Module):
                 linear_bands=linear_bands,
                 in_pixels=in_pixels,
                 ref_feat_shape=self.ref_feat_shape,
+                grid_offset=self.grid_offset,
+                grid_indexing=self.grid_indexing,
             )
             self.bands = None
             self.register_buffer(
@@ -430,6 +462,8 @@ class RotaryEmbeddingCat(nn.Module):
                 self.bands,
                 in_pixels=self.in_pixels,
                 ref_feat_shape=self.ref_feat_shape,
+                grid_offset=self.grid_offset,
+                grid_indexing=self.grid_indexing,
             )
             return torch.cat(embeds, -1)
         elif self.pos_embed is not None:

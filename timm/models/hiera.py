@@ -29,7 +29,6 @@ from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, Mlp, LayerScale, ClNormMlpClassifierHead, use_fused_attn, \
@@ -39,7 +38,7 @@ from ._registry import generate_default_cfgs, register_model
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
-from ._manipulate import named_apply
+from ._manipulate import named_apply, checkpoint
 
 
 __all__ = ['Hiera']
@@ -317,8 +316,8 @@ class HieraBlock(nn.Module):
             mlp_ratio: float = 4.0,
             drop_path: float = 0.0,
             init_values: Optional[float] = None,
-            norm_layer: nn.Module = nn.LayerNorm,
-            act_layer: nn.Module = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            act_layer: Type[nn.Module] = nn.GELU,
             q_stride: int = 1,
             window_size: int = 0,
             use_expand_proj: bool = True,

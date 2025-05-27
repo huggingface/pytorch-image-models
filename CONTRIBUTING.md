@@ -10,7 +10,7 @@ Code linting and auto-format (black) are not currently in place but open to cons
 
 A few specific differences from Google style (or black)
 1. Line length is 120 char. Going over is okay in some cases (e.g. I prefer not to break URL across lines).
-2. Hanging indents are always prefered, please avoid aligning arguments with closing brackets or braces.
+2. Hanging indents are always preferred, please avoid aligning arguments with closing brackets or braces.
 
 Example, from Google guide, but this is a NO here:
 ```

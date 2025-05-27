@@ -4,7 +4,7 @@ A PyTorch implementation of ResNetV2 adapted from the Google Big-Transfer (BiT) 
 at https://github.com/google-research/big_transfer to match timm interfaces. The BiT weights have
 been included here as pretrained models from their original .NPZ checkpoints.
 
-Additionally, supports non pre-activation bottleneck for use as a backbone for Vision Transfomers (ViT) and
+Additionally, supports non pre-activation bottleneck for use as a backbone for Vision Transformers (ViT) and
 extra padding support to allow porting of official Hybrid ResNet pretrained weights from
 https://github.com/google-research/vision_transformer
 
@@ -31,7 +31,7 @@ Original copyright of Google code below, modifications by Ross Wightman, Copyrig
 
 from collections import OrderedDict  # pylint: disable=g-importing-member
 from functools import partial
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -40,6 +40,7 @@ from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterResponseNormTlu2d, ClassifierHead, \
     DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq, named_apply, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
@@ -436,7 +437,7 @@ class ResNetV2(nn.Module):
             stem_chs (int): stem width (default: 64)
             stem_type (str): stem type (default: '' == 7x7)
             avg_down (bool): average pooling in residual downsampling (default: False)
-            preact (bool): pre-activiation (default: True)
+            preact (bool): pre-activation (default: True)
             act_layer (Union[str, nn.Module]): activation layer
             norm_layer (Union[str, nn.Module]): normalization layer
             conv_layer (nn.Module): convolution module
@@ -542,6 +543,79 @@ class ResNetV2(nn.Module):
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(5, indices)
+        
+        # forward pass
+        feat_idx = 0
+        H, W = x.shape[-2:]
+        for stem in self.stem:
+            x = stem(x)
+            if x.shape[-2:] == (H //2, W //2):
+                x_down = x
+        if feat_idx in take_indices:
+            intermediates.append(x_down)
+        last_idx = len(self.stages)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index]
+
+        for feat_idx, stage in enumerate(stages, start=1):
+            x = stage(x)
+            if feat_idx in take_indices:
+                if feat_idx == last_idx:
+                    x_inter = self.norm(x) if norm else x
+                    intermediates.append(x_inter)
+                else:
+                    intermediates.append(x) 
+
+        if intermediates_only:
+            return intermediates
+        
+        if feat_idx == last_idx:
+            x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(5, indices)
+        self.stages = self.stages[:max_index]  # truncate blocks w/ stem as idx 0
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)

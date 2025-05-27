@@ -16,7 +16,6 @@ from typing import Callable, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, PatchDropout, LayerNorm2d, ClassifierHead, NormMlpClassifierHead, \
     Format, resample_abs_pos_embed_nhwc, RotaryEmbeddingCat, apply_rot_embed_cat, to_2tuple, use_fused_attn
@@ -365,7 +364,7 @@ class VisionTransformerSAM(nn.Module):
             img_size: Input image size.
             patch_size: Patch size.
             in_chans: Number of image input channels.
-            num_classes: Mumber of classes for classification head.
+            num_classes: Number of classes for classification head.
             global_pool: Type of global pooling for final sequence (default: 'token').
             embed_dim: Transformer embedding dimension.
             depth: Depth of transformer.
@@ -538,6 +537,7 @@ class VisionTransformerSAM(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
     def forward_intermediates(
@@ -668,7 +668,7 @@ def _cfg(url='', **kwargs):
 
 default_cfgs = generate_default_cfgs({
 
-    # Segment-Anyhing Model (SAM) pretrained - https://github.com/facebookresearch/segment-anything (no classifier head, for fine-tune/features only)
+    # Segment-Anything Model (SAM) pretrained - https://github.com/facebookresearch/segment-anything (no classifier head, for fine-tune/features only)
     'samvit_base_patch16.sa1b': _cfg(
         url='https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth',
         hf_hub_id='timm/',

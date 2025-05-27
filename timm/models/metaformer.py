@@ -28,7 +28,7 @@ Adapted from https://github.com/sail-sg/metaformer, original copyright below
 
 from collections import OrderedDict
 from functools import partial
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -40,6 +40,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import trunc_normal_, DropPath, SelectAdaptivePool2d, GroupNorm1, LayerNorm, LayerNorm2d, Mlp, \
     use_fused_attn
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
@@ -584,6 +585,7 @@ class MetaFormer(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
         if global_pool is not None:
             self.head.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.head.flatten = nn.Flatten(1) if global_pool else nn.Identity()
@@ -595,6 +597,62 @@ class MetaFormer(nn.Module):
         else:
             final = nn.Identity()
         self.head.fc = final
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        # forward pass
+        x = self.stem(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                intermediates.append(x) 
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_head(self, x: Tensor, pre_logits: bool = False):
         # NOTE nn.Sequential in head broken down since can't call head[:-1](x) in torchscript :(
@@ -618,7 +676,7 @@ class MetaFormer(nn.Module):
         return x
 
 
-# this works but it's long and breaks backwards compatability with weights from the poolformer-only impl
+# this works but it's long and breaks backwards compatibility with weights from the poolformer-only impl
 def checkpoint_filter_fn(state_dict, model):
     if 'stem.conv.weight' in state_dict:
         return state_dict

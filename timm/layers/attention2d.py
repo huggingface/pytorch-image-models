@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Type, Union
 
 import torch
 from torch import nn as nn
@@ -16,7 +16,7 @@ class MultiQueryAttentionV2(nn.Module):
     Fast Transformer Decoding: One Write-Head is All You Need
     https://arxiv.org/pdf/1911.02150.pdf
 
-    This is an acceletor optimized version - removing multiple unneccessary
+    This is an acceletor optimized version - removing multiple unnecessary
     tensor transpose by re-arranging indices according to the following rules: 1)
     contracted indices are at the end, 2) other indices have the same order in the
     input and output tensores.
@@ -59,8 +59,8 @@ class MultiQueryAttentionV2(nn.Module):
 
     def forward(self, x, m: Optional[torch.Tensor] = None):
         """Run layer computation."""
-        s = x.shape
-        m = m or x
+        b, _, h, w = x.shape
+        m = m if m is not None else x
 
         reshaped_x = self._reshape_input(x)
         reshaped_m = self._reshape_input(m)
@@ -68,15 +68,15 @@ class MultiQueryAttentionV2(nn.Module):
         q = torch.einsum('bnd,hkd->bnhk', reshaped_x, self.query_proj)
         k = torch.einsum('bmd,dk->bmk', reshaped_m, self.key_proj)
 
-        attn = torch.einsum('bnhk,bmk->bnhm', q, k)
+        attn = torch.einsum('bnhk,bmk->bnhm', q, k) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         v = torch.einsum('bmd,dv->bmv', reshaped_m, self.value_proj)
         o = torch.einsum('bnhm,bmv->bnhv', attn, v)
-        result = torch.einsum('bnhv,dhv->bnd', o, self.out_proj)
+        result = torch.einsum('bnhv,dhv->bdn', o, self.out_proj)
         result = self.proj_drop(result)
-        return result.reshape(s)
+        return result.reshape(b, -1, h, w)
 
 
 class MultiQueryAttention2d(nn.Module):
@@ -87,7 +87,7 @@ class MultiQueryAttention2d(nn.Module):
      2. query_strides: horizontal & vertical strides on Query only.
 
     This is an optimized version.
-    1. Projections in Attention is explict written out as 1x1 Conv2D.
+    1. Projections in Attention is explicit written out as 1x1 Conv2D.
     2. Additional reshapes are introduced to bring a up to 3x speed up.
     """
     fused_attn: torch.jit.Final[bool]
@@ -106,7 +106,7 @@ class MultiQueryAttention2d(nn.Module):
             padding: Union[str, int, List[int]] = '',
             attn_drop: float = 0.,
             proj_drop: float = 0.,
-            norm_layer: nn.Module = nn.BatchNorm2d,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
             use_bias: bool = False,
     ):
         """Initializer.
@@ -312,7 +312,6 @@ class Attention2d(nn.Module):
         self.num_heads = num_heads
         self.dim_head = dim_attn // num_heads
         self.head_first = head_first
-        self.scale = num_heads ** -0.5
         self.fused_attn = use_fused_attn()
 
         self.qkv = nn.Conv2d(dim, dim_attn * 3, 1, bias=bias)
@@ -337,14 +336,15 @@ class Attention2d(nn.Module):
                 dropout_p=self.attn_drop.p if self.training else 0.,
             ).transpose(-1, -2).reshape(B, -1, H, W)
         else:
-            q = q * self.scale
-            attn = q.transpose(-2, -1) @ k
+            q = q.transpose(-1, -2)
+            v = v.transpose(-1, -2)
+            attn = q @ k * q.size(-1) ** -0.5
             if attn_mask is not None:
                 # NOTE: assumes mask is float and in correct shape
                 attn = attn + attn_mask
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
-            x = (v @ attn.transpose(-2, -1)).view(B, -1, H, W)
+            x = (attn @ v).transpose(-1, -2).reshape(B, -1, H, W)
 
         x = self.proj(x)
         x = self.proj_drop(x)

@@ -954,7 +954,7 @@ def augment_and_mix_transform(config_str: str, hparams: Optional[Dict] = None):
     Args:
         config_str (str): String defining configuration of random augmentation. Consists of multiple sections separated
             by dashes ('-'). The first section defines the specific variant of rand augment (currently only 'rand').
-            The remaining sections, not order sepecific determine
+            The remaining sections, not order specific determine
                 'm' - integer magnitude (severity) of augmentation mix (default: 3)
                 'w' - integer width of augmentation chain (default: 3)
                 'd' - integer depth of augmentation chain (-1 is random [1, 3], default: -1)

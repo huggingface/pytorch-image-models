@@ -175,7 +175,7 @@ def create_shortcut(
 class Bottleneck(nn.Module):
     """ RegNet Bottleneck
 
-    This is almost exactly the same as a ResNet Bottlneck. The main difference is the SE block is moved from
+    This is almost exactly the same as a ResNet Bottleneck. The main difference is the SE block is moved from
     after conv3 to after conv2. Otherwise, it's just redefining the arguments for groups/bottleneck channels.
     """
 
@@ -250,7 +250,7 @@ class Bottleneck(nn.Module):
 class PreBottleneck(nn.Module):
     """ RegNet Bottleneck
 
-    This is almost exactly the same as a ResNet Bottlneck. The main difference is the SE block is moved from
+    This is almost exactly the same as a ResNet Bottleneck. The main difference is the SE block is moved from
     after conv3 to after conv2. Otherwise, it's just redefining the arguments for groups/bottleneck channels.
     """
 
@@ -515,6 +515,7 @@ class RegNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_intermediates(

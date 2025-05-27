@@ -20,7 +20,7 @@ Implementation adapted from https://github.com/sail-sg/Adan
 # limitations under the License.
 
 import math
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -56,6 +56,7 @@ class Adan(Optimizer):
         eps: Term added to the denominator to improve numerical stability.
         weight_decay: Decoupled weight decay (L2 penalty)
         no_prox: How to perform the weight decay
+        caution: Enable caution from 'Cautious Optimizers'
         foreach: If True would use torch._foreach implementation. Faster but uses slightly more memory.
     """
 
@@ -66,7 +67,8 @@ class Adan(Optimizer):
             eps: float = 1e-8,
             weight_decay: float = 0.0,
             no_prox: bool = False,
-            foreach: bool = True,
+            caution: bool = False,
+            foreach: Optional[bool] = None,
     ):
         if not 0.0 <= lr:
             raise ValueError('Invalid learning rate: {}'.format(lr))
@@ -85,6 +87,7 @@ class Adan(Optimizer):
             eps=eps,
             weight_decay=weight_decay,
             no_prox=no_prox,
+            caution=caution,
             foreach=foreach,
         )
         super().__init__(params, defaults)
@@ -93,6 +96,7 @@ class Adan(Optimizer):
         super(Adan, self).__setstate__(state)
         for group in self.param_groups:
             group.setdefault('no_prox', False)
+            group.setdefault('caution', False)
 
     @torch.no_grad()
     def restart_opt(self):
@@ -117,6 +121,11 @@ class Adan(Optimizer):
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
+
+        try:
+            has_scalar_maximum = 'Scalar' in torch.ops.aten._foreach_maximum_.overloads()
+        except:
+            has_scalar_maximum = False
 
         for group in self.param_groups:
             params_with_grad = []
@@ -161,9 +170,19 @@ class Adan(Optimizer):
             if not params_with_grad:
                 continue
 
-            kwargs = dict(
-                params=params_with_grad,
-                grads=grads,
+            if group['foreach'] is None:
+                use_foreach = not group['caution'] or has_scalar_maximum
+            else:
+                use_foreach = group['foreach']
+
+            if use_foreach:
+                func = _multi_tensor_adan
+            else:
+                func = _single_tensor_adan
+
+            func(
+                params_with_grad,
+                grads,
                 exp_avgs=exp_avgs,
                 exp_avg_sqs=exp_avg_sqs,
                 exp_avg_diffs=exp_avg_diffs,
@@ -178,12 +197,8 @@ class Adan(Optimizer):
                 weight_decay=group['weight_decay'],
                 eps=group['eps'],
                 no_prox=group['no_prox'],
+                caution=group['caution'],
             )
-
-            if group['foreach']:
-                _multi_tensor_adan(**kwargs)
-            else:
-                _single_tensor_adan(**kwargs)
 
         return loss
 
@@ -206,6 +221,7 @@ def _single_tensor_adan(
         weight_decay: float,
         eps: float,
         no_prox: bool,
+        caution: bool,
 ):
     for i, param in enumerate(params):
         grad = grads[i]
@@ -226,6 +242,12 @@ def _single_tensor_adan(
         denom = (exp_avg_sq.sqrt() / bias_correction3_sqrt).add_(eps)
         step_size_diff = lr * beta2 / bias_correction2
         step_size = lr / bias_correction1
+
+        if caution:
+            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            mask = (exp_avg * grad > 0).to(grad.dtype)
+            mask.div_(mask.mean().clamp_(min=1e-3))
+            exp_avg = exp_avg * mask
 
         if no_prox:
             param.mul_(1 - lr * weight_decay)
@@ -257,6 +279,7 @@ def _multi_tensor_adan(
         weight_decay: float,
         eps: float,
         no_prox: bool,
+        caution: bool,
 ):
     if len(params) == 0:
         return
@@ -281,6 +304,15 @@ def _multi_tensor_adan(
 
     step_size_diff = lr * beta2 / bias_correction2
     step_size = lr / bias_correction1
+
+    if caution:
+        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+        masks = torch._foreach_mul(exp_avgs, grads)
+        masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
+        mask_scale = [m.mean() for m in masks]
+        torch._foreach_maximum_(mask_scale, 1e-3)
+        torch._foreach_div_(masks, mask_scale)
+        exp_avgs = torch._foreach_mul(exp_avgs, masks)
 
     if no_prox:
         torch._foreach_mul_(params, 1 - lr * weight_decay)

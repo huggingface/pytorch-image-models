@@ -62,7 +62,7 @@ class ActivationStatsHook:
     Inspiration from https://docs.fast.ai/callback.hook.html.
 
     Refer to https://gist.github.com/amaarora/6e56942fcb46e67ba203f3009b30d950 for an example 
-    on how to plot Signal Propogation Plots using `ActivationStatsHook`.
+    on how to plot Signal Propagation Plots using `ActivationStatsHook`.
     """
 
     def __init__(self, model, hook_fn_locs, hook_fns):
@@ -96,7 +96,7 @@ def extract_spp_stats(
         hook_fns,
         input_shape=[8, 3, 224, 224]):
     """Extract average square channel mean and variance of activations during 
-        forward pass to plot Signal Propogation Plots (SPP).
+        forward pass to plot Signal Propagation Plots (SPP).
     
     Paper: https://arxiv.org/abs/2101.08692
 

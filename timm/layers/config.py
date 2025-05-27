@@ -8,7 +8,8 @@ import torch
 
 __all__ = [
     'is_exportable', 'is_scriptable', 'is_no_jit', 'use_fused_attn',
-    'set_exportable', 'set_scriptable', 'set_no_jit', 'set_layer_config', 'set_fused_attn'
+    'set_exportable', 'set_scriptable', 'set_no_jit', 'set_layer_config', 'set_fused_attn',
+    'set_reentrant_ckpt', 'use_reentrant_ckpt'
 ]
 
 # Set to True if prefer to have layers with no jit optimization (includes activations)
@@ -32,6 +33,12 @@ if 'TIMM_FUSED_ATTN' in os.environ:
     _USE_FUSED_ATTN = int(os.environ['TIMM_FUSED_ATTN'])
 else:
     _USE_FUSED_ATTN = 1  # 0 == off, 1 == on (for tested use), 2 == on (for experimental use)
+
+
+if 'TIMM_REENTRANT_CKPT' in os.environ:
+    _USE_REENTRANT_CKPT = bool(os.environ['TIMM_REENTRANT_CKPT'])
+else:
+    _USE_REENTRANT_CKPT = False  # defaults to disabled (off)
 
 
 def is_no_jit():
@@ -147,3 +154,12 @@ def set_fused_attn(enable: bool = True, experimental: bool = False):
         _USE_FUSED_ATTN = 1
     else:
         _USE_FUSED_ATTN = 0
+
+
+def use_reentrant_ckpt() -> bool:
+    return _USE_REENTRANT_CKPT
+
+
+def set_reentrant_ckpt(enable: bool = True):
+    global _USE_REENTRANT_CKPT
+    _USE_REENTRANT_CKPT = enable

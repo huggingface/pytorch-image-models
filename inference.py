@@ -12,6 +12,7 @@ import os
 import time
 from contextlib import suppress
 from functools import partial
+from sys import maxsize
 
 import numpy as np
 import pandas as pd
@@ -68,8 +69,8 @@ parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
 parser.add_argument('--in-chans', type=int, default=None, metavar='N',
                     help='Image input channels (default: None => 3)')
-parser.add_argument('--input-size', default=None, nargs=3, type=int,
-                    metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
+parser.add_argument('--input-size', default=None, nargs=3, type=int, metavar='N',
+                    help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 parser.add_argument('--use-train-size', action='store_true', default=False,
                     help='force use of train input size, even when test size is specified in pretrained cfg')
 parser.add_argument('--crop-pct', default=None, type=float,
@@ -104,6 +105,8 @@ parser.add_argument('--amp', action='store_true', default=False,
                     help='use Native AMP for mixed precision training')
 parser.add_argument('--amp-dtype', default='float16', type=str,
                     help='lower precision AMP dtype (default: float16)')
+parser.add_argument('--model-dtype', default=None, type=str,
+                   help='Model dtype override (non-AMP) (default: float32)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
@@ -146,6 +149,8 @@ parser.add_argument('--include-index', action='store_true', default=False,
                     help='include the class index in results')
 parser.add_argument('--exclude-output', action='store_true', default=False,
                     help='exclude logits/probs from results, just indices. topk must be set !=0.')
+parser.add_argument('--no-console-results', action='store_true', default=False,
+                    help='disable printing the inference results to the console')
 
 
 def main():
@@ -160,9 +165,15 @@ def main():
 
     device = torch.device(args.device)
 
+    model_dtype = None
+    if args.model_dtype:
+        assert args.model_dtype in ('float32', 'float16', 'bfloat16')
+        model_dtype = getattr(torch, args.model_dtype)
+
     # resolve AMP arguments based on PyTorch / Apex availability
     amp_autocast = suppress
     if args.amp:
+        assert model_dtype is None or model_dtype == torch.float32, 'float32 model dtype must be used with AMP'
         assert args.amp_dtype in ('float16', 'bfloat16')
         amp_dtype = torch.bfloat16 if args.amp_dtype == 'bfloat16' else torch.float16
         amp_autocast = partial(torch.autocast, device_type=device.type, dtype=amp_dtype)
@@ -200,7 +211,7 @@ def main():
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config)
 
-    model = model.to(device)
+    model = model.to(device=device, dtype=model_dtype)
     model.eval()
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
@@ -236,6 +247,7 @@ def main():
         use_prefetcher=True,
         num_workers=workers,
         device=device,
+        img_dtype=model_dtype or torch.float32,
         **data_config,
     )
 
@@ -279,7 +291,7 @@ def main():
                     np_labels = to_label(np_indices)
                     all_labels.append(np_labels)
 
-            all_outputs.append(output.cpu().numpy())
+            all_outputs.append(output.float().cpu().numpy())
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -338,11 +350,13 @@ def main():
     for fmt in args.results_format:
         save_results(df, results_filename, fmt)
 
-    print(f'--result')
-    print(df.set_index(args.filename_col).to_json(orient='index', indent=4))
+    if not args.no_console_results:
+        print(f'--result')
+        print(df.set_index(args.filename_col).to_json(orient='index', indent=4))
 
 
 def save_results(df, results_filename, results_format='csv', filename_col='filename'):
+    np.set_printoptions(threshold=maxsize)
     results_filename += _FMT_EXT[results_format]
     if results_format == 'parquet':
         df.set_index(filename_col).to_parquet(results_filename)

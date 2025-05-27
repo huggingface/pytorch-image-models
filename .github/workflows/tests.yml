@@ -17,7 +17,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         python: ['3.10', '3.12']
-        torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.4.1', vision: '0.19.1'}]
+        torch: [{base: '1.13.0', vision: '0.14.0'}, {base: '2.5.1', vision: '0.20.1'}]
         testmarker: ['-k "not test_models"', '-m base', '-m cfg', '-m torchscript', '-m features', '-m fxforward', '-m fxbackward']
         exclude:
           - python: '3.12'
@@ -50,6 +50,9 @@ jobs:
     - name: Install requirements
       run: |
         pip install -r requirements.txt
+    - name: Force old numpy for old torch
+      if: ${{ matrix.torch.base == '1.13.0' }}
+      run: pip install --upgrade 'numpy<2.0'
     - name: Run tests on Windows
       if: startsWith(matrix.os, 'windows')
       env:

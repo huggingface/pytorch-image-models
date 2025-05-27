@@ -13,19 +13,19 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # Written by Ze Liu
 # --------------------------------------------------------
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, ClassifierHead,\
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, ClassifierHead,\
     resample_patch_embed, ndgrid, get_act_layer, LayerType
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
+from ._manipulate import checkpoint
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['SwinTransformerV2']  # model_registry will add each entrypoint fn to this
@@ -230,7 +230,7 @@ class SwinTransformerV2Block(nn.Module):
             attn_drop: float = 0.,
             drop_path: float = 0.,
             act_layer: LayerType = "gelu",
-            norm_layer: nn.Module = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             pretrained_window_size: _int_or_tuple_2_t = 0,
     ):
         """
@@ -422,7 +422,7 @@ class PatchMerging(nn.Module):
             self,
             dim: int,
             out_dim: Optional[int] = None,
-            norm_layer: nn.Module = nn.LayerNorm
+            norm_layer: Type[nn.Module] = nn.LayerNorm
     ):
         """
         Args:
@@ -470,7 +470,7 @@ class SwinTransformerV2Stage(nn.Module):
             attn_drop: float = 0.,
             drop_path: float = 0.,
             act_layer: Union[str, Callable] = 'gelu',
-            norm_layer: nn.Module = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
             pretrained_window_size: _int_or_tuple_2_t = 0,
             output_nchw: bool = False,
     ) -> None:

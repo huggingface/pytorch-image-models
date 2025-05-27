@@ -37,12 +37,11 @@ except ImportError:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.utils.checkpoint
 from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, SwiGLUPacked, \
+from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, SwiGLUPacked, SwiGLU, \
     trunc_normal_, lecun_normal_, resample_patch_embed, resample_abs_pos_embed, use_fused_attn, \
     get_act_layer, get_norm_layer, LayerType
 from ._builder import build_model_with_cfg
@@ -65,9 +64,10 @@ class Attention(nn.Module):
             num_heads: int = 8,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
-            norm_layer: nn.Module = nn.LayerNorm,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -80,7 +80,7 @@ class Attention(nn.Module):
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -130,13 +130,14 @@ class Block(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             init_values: Optional[float] = None,
             drop_path: float = 0.,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.LayerNorm,
-            mlp_layer: nn.Module = Mlp,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            mlp_layer: Type[nn.Module] = Mlp,
     ) -> None:
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -145,6 +146,7 @@ class Block(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
+            proj_bias=proj_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
@@ -157,6 +159,7 @@ class Block(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
+            bias=proj_bias,
             drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
@@ -176,13 +179,14 @@ class ResPostBlock(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             init_values: Optional[float] = None,
             drop_path: float = 0.,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.LayerNorm,
-            mlp_layer: nn.Module = Mlp,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            mlp_layer: Type[nn.Module] = Mlp,
     ) -> None:
         super().__init__()
         self.init_values = init_values
@@ -192,6 +196,7 @@ class ResPostBlock(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
+            proj_bias=proj_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
@@ -203,6 +208,7 @@ class ResPostBlock(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
+            bias=proj_bias,
             drop=proj_drop,
         )
         self.norm2 = norm_layer(dim)
@@ -236,13 +242,14 @@ class ParallelScalingBlock(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             init_values: Optional[float] = None,
             drop_path: float = 0.,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.LayerNorm,
-            mlp_layer: Optional[nn.Module] = None,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            mlp_layer: Optional[Type[nn.Module]] = None,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -266,11 +273,11 @@ class ParallelScalingBlock(nn.Module):
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.attn_out_proj = nn.Linear(dim, dim)
+        self.attn_out_proj = nn.Linear(dim, dim, bias=proj_bias)
 
         self.mlp_drop = nn.Dropout(proj_drop)
         self.mlp_act = act_layer()
-        self.mlp_out_proj = nn.Linear(mlp_hidden_dim, dim)
+        self.mlp_out_proj = nn.Linear(mlp_hidden_dim, dim, bias=proj_bias)
 
         self.ls = LayerScale(dim, init_values=init_values) if init_values is not None else nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -330,13 +337,14 @@ class ParallelThingsBlock(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             init_values: Optional[float] = None,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             drop_path: float = 0.,
-            act_layer: nn.Module = nn.GELU,
-            norm_layer: nn.Module = nn.LayerNorm,
-            mlp_layer: nn.Module = Mlp,
+            act_layer: Type[nn.Module] = nn.GELU,
+            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            mlp_layer: Type[nn.Module] = Mlp,
     ) -> None:
         super().__init__()
         self.num_parallel = num_parallel
@@ -350,6 +358,7 @@ class ParallelThingsBlock(nn.Module):
                     num_heads=num_heads,
                     qkv_bias=qkv_bias,
                     qk_norm=qk_norm,
+                    proj_bias=proj_bias,
                     attn_drop=attn_drop,
                     proj_drop=proj_drop,
                     norm_layer=norm_layer,
@@ -363,6 +372,7 @@ class ParallelThingsBlock(nn.Module):
                     dim,
                     hidden_features=int(dim * mlp_ratio),
                     act_layer=act_layer,
+                    bias=proj_bias,
                     drop=proj_drop,
                 )),
                 ('ls', LayerScale(dim, init_values=init_values) if init_values else nn.Identity()),
@@ -433,6 +443,7 @@ class VisionTransformer(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = True,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             init_values: Optional[float] = None,
             class_token: bool = True,
             pos_embed: str = 'learn',
@@ -452,6 +463,7 @@ class VisionTransformer(nn.Module):
             weight_init: Literal['skip', 'jax', 'jax_nlhb', 'moco', ''] = '',
             fix_init: bool = False,
             embed_layer: Callable = PatchEmbed,
+            embed_norm_layer: Optional[LayerType] = None,
             norm_layer: Optional[LayerType] = None,
             act_layer: Optional[LayerType] = None,
             block_fn: Type[nn.Module] = Block,
@@ -483,6 +495,7 @@ class VisionTransformer(nn.Module):
             weight_init: Weight initialization scheme.
             fix_init: Apply weight initialization fix (scaling w/ layer index).
             embed_layer: Patch embedding layer.
+            embed_norm_layer: Normalization layer to use / override in patch embed module.
             norm_layer: Normalization layer.
             act_layer: MLP activation layer.
             block_fn: Transformer block layer.
@@ -493,6 +506,7 @@ class VisionTransformer(nn.Module):
         assert pos_embed in ('', 'none', 'learn')
         use_fc_norm = global_pool in ('avg', 'avgmax', 'max') if fc_norm is None else fc_norm
         norm_layer = get_norm_layer(norm_layer) or partial(nn.LayerNorm, eps=1e-6)
+        embed_norm_layer = get_norm_layer(embed_norm_layer)
         act_layer = get_act_layer(act_layer) or nn.GELU
 
         self.num_classes = num_classes
@@ -510,6 +524,8 @@ class VisionTransformer(nn.Module):
         if dynamic_img_size:
             # flatten deferred until after pos embed
             embed_args.update(dict(strict_img_size=False, output_fmt='NHWC'))
+        if embed_norm_layer is not None:
+            embed_args['norm_layer'] = embed_norm_layer
         self.patch_embed = embed_layer(
             img_size=img_size,
             patch_size=patch_size,
@@ -547,6 +563,7 @@ class VisionTransformer(nn.Module):
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 qk_norm=qk_norm,
+                proj_bias=proj_bias,
                 init_values=init_values,
                 proj_drop=proj_drop_rate,
                 attn_drop=attn_drop_rate,
@@ -567,6 +584,7 @@ class VisionTransformer(nn.Module):
                 num_heads=num_heads,
                 mlp_ratio=mlp_ratio,
                 norm_layer=norm_layer,
+                act_layer=act_layer,
             )
         else:
             self.attn_pool = None
@@ -751,11 +769,14 @@ class VisionTransformer(nn.Module):
             # split prefix (e.g. class, distill) and spatial feature tokens
             prefix_tokens = [y[:, 0:self.num_prefix_tokens] for y in intermediates]
             intermediates = [y[:, self.num_prefix_tokens:] for y in intermediates]
+        else:
+            prefix_tokens = None
+
         if reshape:
             # reshape to BCHW output format
             H, W = self.patch_embed.dynamic_feat_size((height, width))
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
-        if not torch.jit.is_scripting() and return_prefix_tokens:
+        if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
             # return_prefix not support in torchscript due to poor type handling
             intermediates = list(zip(intermediates, prefix_tokens))
 
@@ -912,26 +933,40 @@ def resize_pos_embed(
 
 
 @torch.no_grad()
-def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = '') -> None:
+def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = '', load_bfloat16: bool = False) -> None:
     """ Load weights from .npz checkpoints for official Google Brain Flax implementation
     """
     import numpy as np
+    if load_bfloat16:
+        import jax.numpy as jnp
+        import ml_dtypes
 
-    def _n2p(w, t=True, idx=None):
+    def _n2p(_w, t=True, idx=None):
         if idx is not None:
-            w = w[idx]
-        if w.ndim == 4 and w.shape[0] == w.shape[1] == w.shape[2] == 1:
-            w = w.flatten()
-        if t:
-            if w.ndim == 4:
-                w = w.transpose([3, 2, 0, 1])
-            elif w.ndim == 3:
-                w = w.transpose([2, 0, 1])
-            elif w.ndim == 2:
-                w = w.transpose([1, 0])
-        return torch.from_numpy(w)
+            _w = _w[idx]
 
-    w = np.load(checkpoint_path)
+        if load_bfloat16:
+            _w = _w.view(ml_dtypes.bfloat16).astype(jnp.float32)
+            _w = np.array(_w)
+
+        if _w.ndim == 4 and _w.shape[0] == _w.shape[1] == _w.shape[2] == 1:
+            _w = _w.flatten()
+        if t:
+            if _w.ndim == 4:
+                _w = _w.transpose([3, 2, 0, 1])
+            elif _w.ndim == 3:
+                _w = _w.transpose([2, 0, 1])
+            elif _w.ndim == 2:
+                _w = _w.transpose([1, 0])
+
+        _w = torch.from_numpy(_w)
+        return _w
+
+    if load_bfloat16:
+        w = jnp.load(checkpoint_path)
+    else:
+        w = np.load(checkpoint_path)
+
     interpolation = 'bilinear'
     antialias = False
     big_vision = False
@@ -987,7 +1022,6 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
     else:
         pos_embed_w = _n2p(w[f'{prefix}Transformer/posembed_input/pos_embedding'], t=False)
     if pos_embed_w.shape != model.pos_embed.shape:
-        old_shape = pos_embed_w.shape
         num_prefix_tokens = 0 if getattr(model, 'no_embed_class', False) else getattr(model, 'num_prefix_tokens', 1)
         pos_embed_w = resample_abs_pos_embed(  # resize pos embedding when different size from pretrained weights
             pos_embed_w,
@@ -1114,6 +1148,24 @@ def _convert_dinov2(
     return out_dict
 
 
+def _convert_aimv2(
+        state_dict: Dict[str, torch.Tensor],
+        model: VisionTransformer,
+) -> Dict[str, torch.Tensor]:
+    out_dict = {}
+    for k, v in state_dict.items():
+        k = k.replace('norm_1', 'norm1')
+        k = k.replace('norm_2', 'norm2')
+        k = k.replace('preprocessor.patchifier.', 'patch_embed.')
+        k = k.replace('preprocessor.pos_embed', 'pos_embed')
+        k = k.replace('trunk.', '')
+        k = k.replace('post_trunk_norm.', 'norm.')
+        k = k.replace('mlp.fc1', 'mlp.fc1_g')
+        k = k.replace('mlp.fc3', 'mlp.fc1_x')
+        out_dict[k] = v
+    return out_dict
+
+
 def checkpoint_filter_fn(
         state_dict: Dict[str, torch.Tensor],
         model: VisionTransformer,
@@ -1145,6 +1197,8 @@ def checkpoint_filter_fn(
             # remap final nn.Linear if it exists outside of the timm .trunk (ie in visual.head.proj)
             out_dict['head.weight'] = state_dict['visual.head.proj.weight']
             out_dict['head.bias'] = torch.zeros(state_dict['visual.head.proj.weight'].shape[0])
+    elif 'preprocessor.patchifier.proj.weight' in state_dict:
+        state_dict = _convert_aimv2(state_dict, model)
 
     if prefix:
         # filter on & remove prefix string from keys
@@ -1556,9 +1610,6 @@ default_cfgs = {
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0),
 
-    'vit_base_patch32_clip_224.laion2b_ft_in12k': _cfg(
-        #hf_hub_id='timm/vit_base_patch32_clip_224.laion2b_ft_in12k',  # FIXME weight exists, need to push
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.laion2b_ft_in12k': _cfg(
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
@@ -1569,9 +1620,6 @@ default_cfgs = {
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
 
-    'vit_base_patch32_clip_224.openai_ft_in12k': _cfg(
-        # hf_hub_id='timm/vit_base_patch32_clip_224.openai_ft_in12k',  # FIXME weight exists, need to push
-        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
     'vit_base_patch16_clip_224.openai_ft_in12k': _cfg(
         hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=11821),
@@ -1580,121 +1628,119 @@ default_cfgs = {
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=11821),
 
     'vit_base_patch32_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-32-laion2B-s34B-b79K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-16-laion2B-s34B-b88K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-L-14-laion2B-s32B-b82K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-H-14-laion2B-s32B-b79K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
     'vit_giant_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-g-14-laion2B-s12B-b42K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
     'vit_gigantic_patch14_clip_224.laion2b': _cfg(
-        hf_hub_id='laion/CLIP-ViT-bigG-14-laion2B-39B-b160k',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
 
     'vit_base_patch32_clip_224.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_base_patch16_clip_224.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch16_plus_clip_240.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
-        input_size=(3, 240, 240), crop_pct=1.0, num_classes=512),
+        input_size=(3, 240, 240), crop_pct=1.0, num_classes=640),
     'vit_large_patch14_clip_224.laion400m_e32': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch32_clip_224.datacompxl': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch32_clip_256.datacompxl': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 256, 256), num_classes=512),
     'vit_base_patch16_clip_224.datacompxl': _cfg(
-        hf_hub_id='laion/CLIP-ViT-B-16-DataComp.XL-s13B-b90K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.datacompxl': _cfg(
-        hf_hub_id='laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
 
     'vit_base_patch16_clip_224.dfn2b': _cfg(
-        hf_hub_id='apple/DFN2B-CLIP-ViT-B-16',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
+        license='apple-ascl',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
+    'vit_large_patch14_clip_224.dfn2b_s39b': _cfg(
+        hf_hub_id='timm/',
+        license='apple-ascl',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_large_patch14_clip_224.dfn2b': _cfg(
-        hf_hub_id='apple/DFN2B-CLIP-ViT-L-14',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
+        license='apple-ascl',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.dfn5b': _cfg(
-        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
+        license='apple-ascl',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
     'vit_huge_patch14_clip_378.dfn5b': _cfg(
-        hf_hub_id='apple/DFN5B-CLIP-ViT-H-14-378',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
+        license='apple-ascl',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         crop_pct=1.0, input_size=(3, 378, 378), num_classes=1024),
 
     'vit_base_patch32_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch16_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_huge_patch14_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
+    'vit_huge_patch14_clip_224.metaclip_altogether': _cfg(
+        hf_hub_id='timm/',
+        license='cc-by-nc-4.0',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1024),
     'vit_gigantic_patch14_clip_224.metaclip_2pt5b': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=1280),
     'vit_base_patch32_clip_224.metaclip_400m': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_base_patch16_clip_224.metaclip_400m': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=512),
     'vit_large_patch14_clip_224.metaclip_400m': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         license='cc-by-nc-4.0',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
@@ -1712,7 +1758,7 @@ default_cfgs = {
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, crop_pct=1.0, num_classes=768),
     'vit_large_patch14_clip_336.openai': _cfg(
-        hf_hub_id='timm/', hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         notes=('natively QuickGELU, use quickgelu model variant for original results',),
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD,
         crop_pct=1.0, input_size=(3, 336, 336), num_classes=768),
@@ -1845,140 +1891,287 @@ default_cfgs = {
         license='cc-by-nc-4.0',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, num_classes=0),
 
+    'vit_base_patch32_siglip_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_base_patch16_siglip_224.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
     'vit_base_patch16_siglip_224.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_base_patch16_siglip_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_256.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_base_patch16_siglip_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
         num_classes=0),
     'vit_base_patch16_siglip_384.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
-    'vit_base_patch16_siglip_512.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-512',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_base_patch16_siglip_512.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 512, 512),
         num_classes=0),
-    'vit_large_patch16_siglip_256.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_base_patch16_siglip_512.webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512),
+        num_classes=0),
+    'vit_large_patch16_siglip_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
-    'vit_large_patch16_siglip_384.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_large_patch16_siglip_256.webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_large_patch16_siglip_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
-    'vit_so400m_patch14_siglip_224.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_large_patch16_siglip_384.webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
         num_classes=0),
-    'vit_so400m_patch16_siglip_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        input_size=(3, 256, 256),
+    'vit_large_patch16_siglip_512.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512),
+        num_classes=0),
+    'vit_so400m_patch14_siglip_224.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_so400m_patch14_siglip_224.webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_so400m_patch14_siglip_378.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 378, 378),
         num_classes=0),
     'vit_so400m_patch14_siglip_378.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 378, 378),
         num_classes=0),
     'vit_so400m_patch14_siglip_384.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_256.webli_i18n': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_512.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512),
+        num_classes=0),
+    'vit_giantopt_patch16_siglip_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_giantopt_patch16_siglip_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
 
+    'vit_base_patch32_siglip_gap_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_base_patch16_siglip_gap_224.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
     'vit_base_patch16_siglip_gap_224.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_base_patch16_siglip_gap_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_gap_256.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
     'vit_base_patch16_siglip_gap_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_base_patch16_siglip_gap_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
         num_classes=0),
     'vit_base_patch16_siglip_gap_384.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
-    'vit_base_patch16_siglip_gap_512.webli': _cfg(
-        hf_hub_id='timm/ViT-B-16-SigLIP-512',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_base_patch16_siglip_gap_512.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 512, 512),
         num_classes=0),
-    'vit_large_patch16_siglip_gap_256.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_base_patch16_siglip_gap_512.webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512),
+        num_classes=0),
+    'vit_large_patch16_siglip_gap_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 256, 256),
         num_classes=0),
-    'vit_large_patch16_siglip_gap_384.webli': _cfg(
-        hf_hub_id='timm/ViT-L-16-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+    'vit_large_patch16_siglip_gap_256.webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_large_patch16_siglip_gap_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 384, 384),
         num_classes=0),
+    'vit_large_patch16_siglip_gap_384.webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
+        num_classes=0),
+    'vit_large_patch16_siglip_gap_512.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512),
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_224.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.pali_mix': _cfg(
-        hf_hub_id='google/paligemma-3b-mix-224-jax',
-        hf_hub_filename='paligemma-3b-mix-224.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_224.pali_pt': _cfg(
-        hf_hub_id='google/paligemma-3b-pt-224-jax',
-        hf_hub_filename='paligemma-3b-pt-224.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         num_classes=0),
-    'vit_so400m_patch16_siglip_gap_256.webli_i18n': _cfg(
-        hf_hub_id='timm/ViT-SO400M-16-SigLIP-i18n-256',
-        hf_hub_filename='open_clip_pytorch_model.bin',
-        input_size=(3, 256, 256),
+    'vit_so400m_patch14_siglip_gap_224.pali2_3b_pt': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_224.pali2_10b_pt': _cfg(
+        hf_hub_id='timm/',
+        num_classes=0),
+    # 'vit_so400m_patch14_siglip_gap_224.pali2_28b_pt': _cfg(
+    #     hf_hub_id='google/paligemma2-28b-pt-224-jax',
+    #     hf_hub_filename='pt_27b_224.npz',
+    #     custom_load='hf',
+    #     num_classes=0),
+    'vit_so400m_patch14_siglip_gap_378.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 378, 378),
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_378.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 378, 378), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_384.webli': _cfg(
-        hf_hub_id='timm/ViT-SO400M-14-SigLIP-384',
-        hf_hub_filename='open_clip_pytorch_model.bin',
+        hf_hub_id='timm/',
         input_size=(3, 384, 384), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_448.pali_mix': _cfg(
-        hf_hub_id='google/paligemma-3b-mix-448-jax',
-        hf_hub_filename='paligemma-3b-mix-448.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         input_size=(3, 448, 448), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_448.pali_pt': _cfg(
-        hf_hub_id='google/paligemma-3b-pt-448-jax',
-        hf_hub_filename='paligemma-3b-pt-448.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali_refcoco_seg': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali_ocrvqa': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_3b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_10b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    # 'vit_so400m_patch14_siglip_gap_448.pali2_28b_pt': _cfg(
+    #     hf_hub_id='google/paligemma2-28b-pt-448-jax',
+    #     hf_hub_filename='pt_27b_448.npz',
+    #     custom_load='hf',
+    #     input_size=(3, 448, 448), crop_pct=1.0,
+    #     num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_3b_docci': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_448.pali2_10b_docci': _cfg(
+        hf_hub_id='timm/',
         input_size=(3, 448, 448), crop_pct=1.0,
         num_classes=0),
     'vit_so400m_patch14_siglip_gap_896.pali_pt': _cfg(
-        hf_hub_id='google/paligemma-3b-pt-896-jax',
-        hf_hub_filename='paligemma-3b-pt-896.npz',
-        custom_load='hf',
+        hf_hub_id='timm/',
         input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali_refcoco_seg': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali_ocrvqa': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali2_3b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    'vit_so400m_patch14_siglip_gap_896.pali2_10b_pt': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 896, 896), crop_pct=1.0,
+        num_classes=0),
+    # 'vit_so400m_patch14_siglip_gap_896.pali2_28b_pt': _cfg(
+    #     hf_hub_id='google/paligemma2-28b-pt-896-jax',
+    #     hf_hub_filename='pt_27b_896.npz',
+    #     custom_load='hf',
+    #     input_size=(3, 896, 896), crop_pct=1.0,
+    #     num_classes=0),
+    'vit_so400m_patch16_siglip_gap_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_gap_256.webli_i18n': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_gap_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
+        num_classes=0),
+    'vit_so400m_patch16_siglip_gap_512.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 512, 512),
+        num_classes=0),
+    'vit_giantopt_patch16_siglip_gap_256.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256),
+        num_classes=0),
+    'vit_giantopt_patch16_siglip_gap_384.v2_webli': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384),
         num_classes=0),
 
     'vit_so400m_patch14_siglip_378.webli_ft_in1k': _cfg(
@@ -1992,22 +2185,18 @@ default_cfgs = {
 
     'vit_xsmall_patch16_clip_224.tinyclip_yfcc15m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_medium_patch32_clip_224.tinyclip_laion400m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_medium_patch16_clip_224.tinyclip_yfcc15m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
     'vit_betwixt_patch32_clip_224.tinyclip_laion400m': _cfg(
         hf_hub_id='timm/',
-        hf_hub_filename='open_clip_pytorch_model.bin',
         license='mit',
         mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, num_classes=512),
 
@@ -2083,16 +2272,99 @@ default_cfgs = {
     'vit_base_patch16_reg4_gap_256.untrained': _cfg(
         input_size=(3, 256, 256)),
 
-    'vit_so150m_patch16_reg4_gap_256.untrained': _cfg(
-        input_size=(3, 256, 256)),
+    'vit_so150m_patch16_reg4_gap_256.sbb_e250_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_so150m_patch16_reg4_gap_256.sbb_e250_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=0.95),
+    'vit_so150m_patch16_reg4_gap_384.sbb_e250_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0),
     'vit_so150m_patch16_reg4_map_256.untrained': _cfg(
         input_size=(3, 256, 256)),
+    'vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 256, 256), crop_pct=1.0),
+    'vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k': _cfg(
+        hf_hub_id='timm/',
+        num_classes=11821,
+        input_size=(3, 256, 256), crop_pct=1.0),
+    'vit_so150m2_patch16_reg1_gap_384.sbb_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 384, 384), crop_pct=1.0),
+    'vit_so150m2_patch16_reg1_gap_448.sbb_e200_in12k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        input_size=(3, 448, 448), crop_pct=1.0, crop_mode='squash'),
 
     'vit_intern300m_patch14_448.ogvl_dist': _cfg(
         hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
         input_size=(3, 448, 448), crop_pct=1.0, num_classes=0,
     ),
+    'vit_intern300m_patch14_448.ogvl_2pt5': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD,
+        input_size=(3, 448, 448), crop_pct=1.0, num_classes=0,
+    ),
+
+    'aimv2_large_patch14_224.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        crop_pct=1.0, num_classes=0),
+    'aimv2_large_patch14_224.apple_pt_dist': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        crop_pct=1.0, num_classes=0),
+    'aimv2_huge_patch14_224.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        crop_pct=1.0, num_classes=0),
+    'aimv2_1b_patch14_224.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        crop_pct=1.0, num_classes=0),
+    'aimv2_3b_patch14_224.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        crop_pct=1.0, num_classes=0),
+    'aimv2_large_patch14_336.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 336, 336), crop_pct=1.0, num_classes=0),
+    'aimv2_large_patch14_336.apple_pt_dist': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 336, 336), crop_pct=1.0, num_classes=0),
+    'aimv2_huge_patch14_336.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 336, 336), crop_pct=1.0, num_classes=0),
+    'aimv2_1b_patch14_336.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 336, 336), crop_pct=1.0, num_classes=0),
+    'aimv2_3b_patch14_336.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 336, 336), crop_pct=1.0, num_classes=0),
+    'aimv2_large_patch14_448.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 448, 448), crop_pct=1.0, num_classes=0),
+    'aimv2_huge_patch14_448.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 448, 448), crop_pct=1.0, num_classes=0),
+    'aimv2_1b_patch14_448.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 448, 448), crop_pct=1.0, num_classes=0),
+    'aimv2_3b_patch14_448.apple_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=OPENAI_CLIP_MEAN, std=OPENAI_CLIP_STD, license='apple-ascl',
+        input_size=(3, 448, 448), crop_pct=1.0, num_classes=0),
 
     'test_vit.r160_in1k': _cfg(
         hf_hub_id='timm/',
@@ -2102,6 +2374,8 @@ default_cfgs = {
         input_size=(3, 160, 160), crop_pct=0.95),
     'test_vit3.r160_in1k': _cfg(
         hf_hub_id='timm/',
+        input_size=(3, 160, 160), crop_pct=0.95),
+    'test_vit4.r160_in1k': _cfg(
         input_size=(3, 160, 160), crop_pct=0.95),
 }
 
@@ -2961,6 +3235,17 @@ def vit_giant_patch14_reg4_dinov2(pretrained: bool = False, **kwargs) -> VisionT
 
 
 @register_model
+def vit_base_patch32_siglip_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, class_token=False, global_pool='map',
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_base_patch32_siglip_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_base_patch16_siglip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, class_token=False, global_pool='map',
@@ -3021,23 +3306,23 @@ def vit_large_patch16_siglip_384(pretrained: bool = False, **kwargs) -> VisionTr
 
 
 @register_model
+def vit_large_patch16_siglip_512(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1024, depth=24, num_heads=16, class_token=False, global_pool='map',
+        act_layer='gelu_tanh'
+    )
+    model = _create_vision_transformer(
+        'vit_large_patch16_siglip_512', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_so400m_patch14_siglip_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     model_args = dict(
         patch_size=14, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
     )
     model = _create_vision_transformer(
         'vit_so400m_patch14_siglip_224', pretrained=pretrained, **dict(model_args, **kwargs))
-    return model
-
-
-@register_model
-def vit_so400m_patch16_siglip_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    # this is a corrected variant of the 384 with a res properly divisible by patch size (no padding/truncation)
-    model_args = dict(
-        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
-    )
-    model = _create_vision_transformer(
-        'vit_so400m_patch16_siglip_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -3059,6 +3344,72 @@ def vit_so400m_patch14_siglip_384(pretrained: bool = False, **kwargs) -> VisionT
     )
     model = _create_vision_transformer(
         'vit_so400m_patch14_siglip_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_512(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False, global_pool='map',
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_512', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giantopt_patch16_siglip_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1536, depth=40, num_heads=16, class_token=False, global_pool='map',
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_giantopt_patch16_siglip_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giantopt_patch16_siglip_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1536, depth=40, num_heads=16, class_token=False, global_pool='map',
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_giantopt_patch16_siglip_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_base_patch32_siglip_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=32, embed_dim=768, depth=12, num_heads=12, class_token=False, global_pool='avg', fc_norm=False,
+        act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_base_patch32_siglip_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -3129,6 +3480,17 @@ def vit_large_patch16_siglip_gap_384(pretrained: bool = False, **kwargs) -> Visi
 
 
 @register_model
+def vit_large_patch16_siglip_gap_512(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1024, depth=24, num_heads=16, class_token=False,
+        global_pool='avg', fc_norm=False, act_layer='gelu_tanh'
+    )
+    model = _create_vision_transformer(
+        'vit_large_patch16_siglip_gap_512', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
 def vit_so400m_patch14_siglip_gap_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """ A SigLIP variant of ViT with global average pooling (GAP) instead of attention pooling (MAP)."""
     model_args = dict(
@@ -3137,18 +3499,6 @@ def vit_so400m_patch14_siglip_gap_224(pretrained: bool = False, **kwargs) -> Vis
     )
     model = _create_vision_transformer(
         'vit_so400m_patch14_siglip_gap_224', pretrained=pretrained, **dict(model_args, **kwargs))
-    return model
-
-
-@register_model
-def vit_so400m_patch16_siglip_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
-    """ A SigLIP variant of ViT with global average pooling (GAP) instead of attention pooling (MAP)."""
-    model_args = dict(
-        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362,
-        class_token=False, global_pool='avg', fc_norm=False,
-    )
-    model = _create_vision_transformer(
-        'vit_so400m_patch16_siglip_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -3198,6 +3548,63 @@ def vit_so400m_patch14_siglip_gap_896(pretrained: bool = False, **kwargs) -> Vis
     model = _create_vision_transformer(
         'vit_so400m_patch14_siglip_gap_896', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ A SigLIP variant of ViT with global average pooling (GAP) instead of attention pooling (MAP)."""
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362,
+        class_token=False, global_pool='avg', fc_norm=False, act_layer='gelu_tanh',
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False,
+        global_pool='avg', fc_norm=False, act_layer='gelu_tanh'
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so400m_patch16_siglip_gap_512(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362, class_token=False,
+        global_pool='avg', fc_norm=False, act_layer='gelu_tanh'
+    )
+    model = _create_vision_transformer(
+        'vit_so400m_patch16_siglip_gap_512', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giantopt_patch16_siglip_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1536, depth=40, num_heads=16, class_token=False,
+        global_pool='avg', fc_norm=False, act_layer='gelu_tanh'
+    )
+    model = _create_vision_transformer(
+        'vit_giantopt_patch16_siglip_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_giantopt_patch16_siglip_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    model_args = dict(
+        patch_size=16, embed_dim=1536, depth=40, num_heads=16, class_token=False,
+        global_pool='avg', fc_norm=False, act_layer='gelu_tanh'
+    )
+    model = _create_vision_transformer(
+        'vit_giantopt_patch16_siglip_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
 
 
 @register_model
@@ -3334,6 +3741,7 @@ def vit_base_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionT
 
 @register_model
 def vit_so150m_patch16_reg4_map_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M (shape optimized, but diff than paper def, optimized for GPU) """
     model_args = dict(
         patch_size=16, embed_dim=896, depth=18, num_heads=14, mlp_ratio=2.572,
         class_token=False, reg_tokens=4, global_pool='map',
@@ -3345,12 +3753,61 @@ def vit_so150m_patch16_reg4_map_256(pretrained: bool = False, **kwargs) -> Visio
 
 @register_model
 def vit_so150m_patch16_reg4_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M (shape optimized, but diff than paper def, optimized for GPU) """
     model_args = dict(
         patch_size=16, embed_dim=896, depth=18, num_heads=14, mlp_ratio=2.572,
         class_token=False, reg_tokens=4, global_pool='avg', fc_norm=False,
     )
     model = _create_vision_transformer(
         'vit_so150m_patch16_reg4_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m_patch16_reg4_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M (shape optimized, but diff than paper def, optimized for GPU) """
+    model_args = dict(
+        patch_size=16, embed_dim=896, depth=18, num_heads=14, mlp_ratio=2.572,
+        class_token=False, reg_tokens=4, global_pool='avg', fc_norm=False,
+    )
+    model = _create_vision_transformer(
+        'vit_so150m_patch16_reg4_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m2_patch16_reg1_gap_256(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M v2 (shape optimized, but diff than paper def, optimized for GPU) """
+    model_args = dict(
+        patch_size=16, embed_dim=832, depth=21, num_heads=13, mlp_ratio=34/13, init_values=1e-5,
+        qkv_bias=False, class_token=False, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_so150m2_patch16_reg1_gap_256', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m2_patch16_reg1_gap_384(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M v2 (shape optimized, but diff than paper def, optimized for GPU) """
+    model_args = dict(
+        patch_size=16, embed_dim=832, depth=21, num_heads=13, mlp_ratio=34/13, init_values=1e-5,
+        qkv_bias=False, class_token=False, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_so150m2_patch16_reg1_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def vit_so150m2_patch16_reg1_gap_448(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ SO150M v2 (shape optimized, but diff than paper def, optimized for GPU) """
+    model_args = dict(
+        patch_size=16, embed_dim=832, depth=21, num_heads=13, mlp_ratio=34/13, init_values=1e-5,
+        qkv_bias=False, class_token=False, reg_tokens=1, global_pool='avg',
+    )
+    model = _create_vision_transformer(
+        'vit_so150m2_patch16_reg1_gap_448', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -3362,6 +3819,175 @@ def vit_intern300m_patch14_448(pretrained: bool = False, **kwargs) -> VisionTran
     )
     model = _create_vision_transformer(
         'vit_intern300m_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_large_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Large AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=8, class_token=False, fc_norm=False,
+        mlp_ratio=2.75, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_large_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_huge_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Huge AIM-v2 model
+    """
+
+    model_args = dict(
+        patch_size=14, embed_dim=1536, depth=24, num_heads=12, class_token=False, fc_norm=False,
+        mlp_ratio=2.6667, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_huge_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_1b_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT 1B AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=2048, depth=24, num_heads=16, class_token=False, fc_norm=False,
+        mlp_ratio=2.75, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_1b_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_3b_patch14_224(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT 3B AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=3072, depth=24, num_heads=24, class_token=False, fc_norm=False,
+        mlp_ratio=2.6667, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_3b_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_large_patch14_336(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Large AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=8, class_token=False, fc_norm=False,
+        mlp_ratio=2.75, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_large_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_huge_patch14_336(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Huge AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1536, depth=24, num_heads=12, class_token=False, fc_norm=False,
+        mlp_ratio=2.6667, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_huge_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_1b_patch14_336(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT 1B AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=2048, depth=24, num_heads=16, class_token=False, fc_norm=False,
+        mlp_ratio=2.75, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_1b_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_3b_patch14_336(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT 3B AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=3072, depth=24, num_heads=24, class_token=False, fc_norm=False,
+        mlp_ratio=2.6667, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_3b_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_large_patch14_448(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Large AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1024, depth=24, num_heads=8, class_token=False, fc_norm=False,
+        mlp_ratio=2.75, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_large_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_huge_patch14_448(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Huge AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=1536, depth=24, num_heads=12, class_token=False, fc_norm=False,
+        mlp_ratio=2.6667, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_huge_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_1b_patch14_448(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT 1B AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=2048, depth=24, num_heads=16, class_token=False, fc_norm=False,
+        mlp_ratio=2.75, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_1b_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def aimv2_3b_patch14_448(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT 3B AIM-v2 model
+    """
+    model_args = dict(
+        patch_size=14, embed_dim=3072, depth=24, num_heads=24, class_token=False, fc_norm=False,
+        mlp_ratio=2.6667, global_pool='avg', qkv_bias=False, proj_bias=False, act_layer='silu',
+        norm_layer=partial(RmsNorm, eps=1e-5), embed_norm_layer=partial(RmsNorm, eps=1e-5), mlp_layer=SwiGLU,
+    )
+    model = _create_vision_transformer(
+        'aimv2_3b_patch14_448', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -3393,6 +4019,19 @@ def test_vit3(pretrained: bool = False, **kwargs) -> VisionTransformer:
         patch_size=16, embed_dim=96, depth=9, num_heads=3, mlp_ratio=2,
         class_token=False, reg_tokens=1, global_pool='map', init_values=1e-5)
     model = _create_vision_transformer('test_vit3', pretrained=pretrained, **dict(model_args, **kwargs))
+    return model
+
+
+@register_model
+def test_vit4(pretrained: bool = False, **kwargs) -> VisionTransformer:
+    """ ViT Test
+    """
+    model_args = dict(
+        patch_size=16, embed_dim=96, depth=9, num_heads=3, mlp_ratio=3,
+        class_token=False, reg_tokens=1, global_pool='avg', init_values=1e-5, dynamic_img_size=True,
+        norm_layer='rmsnorm',
+    )
+    model = _create_vision_transformer('test_vit4', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 

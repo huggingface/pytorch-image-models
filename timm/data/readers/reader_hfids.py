@@ -80,7 +80,7 @@ class ReaderHfids(Reader):
             self.num_samples = split_info.num_examples
         else:
             raise ValueError(
-                "Dataset length is unknown, please pass `num_samples` explicitely. "
+                "Dataset length is unknown, please pass `num_samples` explicitly. "
                 "The number of steps needs to be known in advance for the learning rate scheduler."
             )
 

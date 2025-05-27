@@ -280,7 +280,7 @@ class PatchEmbed(nn.Module):
 
 
 class Twins(nn.Module):
-    """ Twins Vision Transfomer (Revisiting Spatial Attention)
+    """ Twins Vision Transformer (Revisiting Spatial Attention)
 
     Adapted from PVT (PyramidVisionTransformer) class at https://github.com/whai362/PVT.git
     """

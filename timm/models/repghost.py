@@ -6,7 +6,7 @@ Original implementation: https://github.com/ChengpengChen/RepGhost
 """
 import copy
 from functools import partial
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -16,6 +16,7 @@ from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import SelectAdaptivePool2d, Linear, make_divisible
 from ._builder import build_model_with_cfg
 from ._efficientnet_blocks import SqueezeExcite, ConvBnAct
+from ._features import feature_take_indices
 from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
@@ -293,6 +294,72 @@ class RepGhostNet(nn.Module):
             self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
             self.flatten = nn.Flatten(1) if global_pool else nn.Identity()  # don't flatten if pooling disabled
         self.classifier = Linear(self.head_hidden_size, num_classes) if num_classes > 0 else nn.Identity()
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        stage_ends = [-1] + [int(info['module'].split('.')[-1]) for info in self.feature_info[1:]]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        take_indices = [stage_ends[i]+1 for i in take_indices]
+        max_index = stage_ends[max_index]
+
+        # forward pass
+        feat_idx = 0
+        x = self.conv_stem(x)
+        if feat_idx in take_indices:
+            intermediates.append(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.blocks
+        else:
+            stages = self.blocks[:max_index + 1]
+
+        for feat_idx, stage in enumerate(stages, start=1):
+            x = stage(x)
+            if feat_idx in take_indices:
+                intermediates.append(x) 
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        stage_ends = [-1] + [int(info['module'].split('.')[-1]) for info in self.feature_info[1:]]
+        take_indices, max_index = feature_take_indices(len(stage_ends), indices)
+        max_index = stage_ends[max_index]
+        self.blocks = self.blocks[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.conv_stem(x)

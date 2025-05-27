@@ -26,12 +26,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, Mlp, to_2tuple, to_ntuple, trunc_normal_, use_fused_attn
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
+from ._manipulate import checkpoint
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['VOLO']  # model_registry will add each entrypoint fn to this
@@ -507,7 +507,7 @@ class VOLO(nn.Module):
         )
         r = patch_size
 
-        # inital positional encoding, we add positional encoding after outlooker blocks
+        # initial positional encoding, we add positional encoding after outlooker blocks
         patch_grid = (img_size[0] // patch_size // pooling_scale, img_size[1] // patch_size // pooling_scale)
         self.pos_embed = nn.Parameter(torch.zeros(1, patch_grid[0], patch_grid[1], embed_dims[-1]))
         self.pos_drop = nn.Dropout(p=pos_drop_rate)

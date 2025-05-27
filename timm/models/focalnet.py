@@ -18,16 +18,16 @@ This impl is/has:
 # Written by Jianwei Yang (jianwyan@microsoft.com)
 # --------------------------------------------------------
 from functools import partial
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import Mlp, DropPath, LayerNorm2d, trunc_normal_, ClassifierHead, NormMlpClassifierHead
 from ._builder import build_model_with_cfg
-from ._manipulate import named_apply
+from ._features import feature_take_indices
+from ._manipulate import named_apply, checkpoint
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['FocalNet']
@@ -79,7 +79,7 @@ class FocalModulation(nn.Module):
         x = self.f(x)
         q, ctx, gates = torch.split(x, self.input_split, 1)
 
-        # context aggreation
+        # context aggregation
         ctx_all = 0
         for l, focal_layer in enumerate(self.focal_layers):
             ctx = focal_layer(ctx)
@@ -354,7 +354,7 @@ class FocalNet(nn.Module):
             focal_levels: How many focal levels at all stages. Note that this excludes the finest-grain level.
             focal_windows: The focal window size at all stages.
             use_overlap_down: Whether to use convolutional embedding.
-            use_post_norm: Whether to use layernorm after modulation (it helps stablize training of large models)
+            use_post_norm: Whether to use layernorm after modulation (it helps stabilize training of large models)
             layerscale_value: Value for layer scale.
             drop_rate: Dropout rate.
             drop_path_rate: Stochastic depth rate.
@@ -456,7 +456,74 @@ class FocalNet(nn.Module):
         return self.head.fc
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool)
+
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.layers), indices)
+
+        # forward pass
+        x = self.stem(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.layers
+        else:
+            stages = self.layers[:max_index + 1]
+
+        last_idx = len(self.layers) - 1
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                if norm and feat_idx == last_idx:
+                    x_inter = self.norm(x)  # applying final norm to last intermediate
+                else:
+                    x_inter = x
+                intermediates.append(x_inter)
+
+        if intermediates_only:
+            return intermediates
+        
+        if feat_idx == last_idx:
+            x = self.norm(x)
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.layers), indices)
+        self.layers = self.layers[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_norm:
+            self.norm = nn.Identity()
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
 
     def forward_features(self, x):
         x = self.stem(x)

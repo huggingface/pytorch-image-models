@@ -53,13 +53,16 @@ FEAT_INTER_FILTERS = [
     'vision_transformer', 'vision_transformer_sam', 'vision_transformer_hybrid', 'vision_transformer_relpos',
     'beit', 'mvitv2', 'eva', 'cait', 'xcit', 'volo', 'twins', 'deit', 'swin_transformer', 'swin_transformer_v2',
     'swin_transformer_v2_cr', 'maxxvit', 'efficientnet', 'mobilenetv3', 'levit', 'efficientformer', 'resnet',
-    'regnet', 'byobnet', 'byoanet', 'mlp_mixer', 'hiera', 'fastvit', 'hieradet_sam2'
+    'regnet', 'byobnet', 'byoanet', 'mlp_mixer', 'hiera', 'fastvit', 'hieradet_sam2', 'aimv2*', 'tnt',
+    'tiny_vit', 'vovnet', 'tresnet', 'rexnet', 'resnetv2', 'repghost', 'repvit', 'pvt_v2', 'nextvit', 'nest',
+    'mambaout', 'inception_next', 'inception_v4', 'hgnet', 'gcvit', 'focalnet', 'efficientformer_v2', 'edgenext',
+    'davit', 'rdnet', 'convnext', 'pit', 'starnet', 'shvit', 'fasternet', 'swiftformer', 'ghostnet',
 ]
 
 # transformer / hybrid models don't support full set of spatial / feature APIs and/or have spatial output.
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*',
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'xcit_*', 'crossvit_*', 'beit*', 'aimv2*', 'swiftformer_*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'mvitv2*', 'gcvit*', 'efficientformer*', 'sam_hiera*',
     'eva_*', 'flexivit*', 'eva02*', 'samvit_*', 'efficientvit_m*', 'tiny_vit_*', 'hiera_*', 'vitamin*', 'test_vit*',
 ]
@@ -72,11 +75,11 @@ if 'GITHUB_ACTIONS' in os.environ:
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
-        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
-    NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*']
+        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560', '*_1b_*', '*_3b_*']
+    NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*', '*_1b_*', '*_3b_*']
 else:
     EXCLUDE_FILTERS = ['*enormous*']
-    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
+    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*', '*_3b_*']
 
 EXCLUDE_JIT_FILTERS = ['hiera_*']
 
@@ -218,6 +221,7 @@ def test_model_backward(model_name, batch_size):
 EARLY_POOL_MODELS = (
     timm.models.EfficientVit,
     timm.models.EfficientVitLarge,
+    timm.models.FasterNet,
     timm.models.HighPerfGpuNet,
     timm.models.GhostNet,
     timm.models.MetaNeXt, # InceptionNeXt
@@ -265,6 +269,7 @@ def test_model_default_cfgs(model_name, batch_size):
 
         # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
         model.reset_classifier(0)
+        assert model.num_classes == 0, f'Expected num_classes to be 0 after reset_classifier(0), but got {model.num_classes}'
         model.to(torch_device)
         outputs = model.forward(input_tensor)
         assert len(outputs.shape) == 2
@@ -339,6 +344,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
+    assert model.num_classes == 0, f'Expected num_classes to be 0 after reset_classifier(0), but got {model.num_classes}'
     model.to(torch_device)
     outputs = model.forward(input_tensor)
     if isinstance(outputs,  (tuple, list)):
@@ -506,8 +512,9 @@ def test_model_forward_intermediates(model_name, batch_size):
     spatial_axis = get_spatial_dim(output_fmt)
     import math
 
+    inpt = torch.randn((batch_size, *input_size))
     output, intermediates = model.forward_intermediates(
-        torch.randn((batch_size, *input_size)),
+        inpt,
         output_fmt=output_fmt,
     )
     assert len(expected_channels) == len(intermediates)
@@ -518,6 +525,9 @@ def test_model_forward_intermediates(model_name, batch_size):
         assert o.shape[spatial_axis[1]] <= math.ceil(spatial_size[1] / r) + 1
         assert o.shape[0] == batch_size
         assert not torch.isnan(o).any()
+
+    output2 = model.forward_features(inpt)
+    assert torch.allclose(output, output2)
 
 
 def _create_fx_model(model, train=False):

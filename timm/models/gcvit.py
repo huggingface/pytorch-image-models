@@ -25,14 +25,14 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import DropPath, to_2tuple, to_ntuple, Mlp, ClassifierHead, LayerNorm2d, \
     get_attn, get_act_layer, get_norm_layer, RelPosBias, _assert
 from ._builder import build_model_with_cfg
+from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
-from ._manipulate import named_apply
+from ._manipulate import named_apply, checkpoint
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['GlobalContextVit']
@@ -398,7 +398,7 @@ class GlobalContextVit(nn.Module):
         act_layer = get_act_layer(act_layer)
         norm_layer = partial(get_norm_layer(norm_layer), eps=norm_eps)
         norm_layer_cl = partial(get_norm_layer(norm_layer_cl), eps=norm_eps)
-
+        self.feature_info = []
         img_size = to_2tuple(img_size)
         feat_size = tuple(d // 4 for d in img_size)  # stem reduction by 4
         self.global_pool = global_pool
@@ -442,6 +442,7 @@ class GlobalContextVit(nn.Module):
                 norm_layer=norm_layer,
                 norm_layer_cl=norm_layer_cl,
             ))
+            self.feature_info += [dict(num_chs=stages[-1].dim, reduction=2**(i+2), module=f'stages.{i}')]
         self.stages = nn.Sequential(*stages)
 
         # Classifier head
@@ -495,6 +496,62 @@ class GlobalContextVit(nn.Module):
             global_pool = self.head.global_pool.pool_type
         self.head = ClassifierHead(self.num_features, num_classes, pool_type=global_pool, drop_rate=self.drop_rate)
 
+    def forward_intermediates(
+            self,
+            x: torch.Tensor,
+            indices: Optional[Union[int, List[int]]] = None,
+            norm: bool = False,
+            stop_early: bool = False,
+            output_fmt: str = 'NCHW',
+            intermediates_only: bool = False,
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """ Forward features that returns intermediates.
+
+        Args:
+            x: Input image tensor
+            indices: Take last n blocks if int, all if None, select matching indices if sequence
+            norm: Apply norm layer to compatible intermediates
+            stop_early: Stop iterating over blocks when last desired intermediate hit
+            output_fmt: Shape of intermediate feature outputs
+            intermediates_only: Only return intermediate features
+        Returns:
+
+        """
+        assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
+        intermediates = []
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+
+        # forward pass
+        x = self.stem(x)
+        if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
+            stages = self.stages
+        else:
+            stages = self.stages[:max_index + 1]
+
+        for feat_idx, stage in enumerate(stages):
+            x = stage(x)
+            if feat_idx in take_indices:
+                intermediates.append(x) 
+
+        if intermediates_only:
+            return intermediates
+
+        return x, intermediates
+
+    def prune_intermediate_layers(
+            self,
+            indices: Union[int, List[int]] = 1,
+            prune_norm: bool = False,
+            prune_head: bool = True,
+    ):
+        """ Prune layers not required for specified intermediates.
+        """
+        take_indices, max_index = feature_take_indices(len(self.stages), indices)
+        self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
+        if prune_head:
+            self.reset_classifier(0, '')
+        return take_indices
+
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.stem(x)
         x = self.stages(x)
@@ -510,9 +567,11 @@ class GlobalContextVit(nn.Module):
 
 
 def _create_gcvit(variant, pretrained=False, **kwargs):
-    if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
-    model = build_model_with_cfg(GlobalContextVit, variant, pretrained, **kwargs)
+    model = build_model_with_cfg(
+        GlobalContextVit, variant, pretrained,
+        feature_cfg=dict(out_indices=(0, 1, 2, 3), flatten_sequential=True),
+        **kwargs
+    )
     return model
 
 

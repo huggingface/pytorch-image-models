@@ -81,17 +81,17 @@ group = parser.add_argument_group('Dataset parameters')
 # Keep this argument outside the dataset group because it is positional.
 parser.add_argument('data', nargs='?', metavar='DIR', const=None,
                     help='path to dataset (positional is *deprecated*, use --data-dir)')
-parser.add_argument('--data-dir', metavar='DIR',
+group.add_argument('--data-dir', metavar='DIR',
                     help='path to dataset (root dir)')
-parser.add_argument('--dataset', metavar='NAME', default='',
+group.add_argument('--dataset', metavar='NAME', default='',
                     help='dataset type + name ("<type>/<name>") (default: ImageFolder or ImageTar if empty)')
 group.add_argument('--train-split', metavar='NAME', default='train',
                    help='dataset train split (default: train)')
 group.add_argument('--val-split', metavar='NAME', default='validation',
                    help='dataset validation split (default: validation)')
-parser.add_argument('--train-num-samples', default=None, type=int,
+group.add_argument('--train-num-samples', default=None, type=int,
                     metavar='N', help='Manually specify num samples in train split, for IterableDatasets.')
-parser.add_argument('--val-num-samples', default=None, type=int,
+group.add_argument('--val-num-samples', default=None, type=int,
                     metavar='N', help='Manually specify num samples in validation split, for IterableDatasets.')
 group.add_argument('--dataset-download', action='store_true', default=False,
                    help='Allow download of dataset for torch/ and tfds/ datasets that support it.')
@@ -128,8 +128,7 @@ group.add_argument('--img-size', type=int, default=None, metavar='N',
                    help='Image size (default: None => model default)')
 group.add_argument('--in-chans', type=int, default=None, metavar='N',
                    help='Image input channels (default: None => 3)')
-group.add_argument('--input-size', default=None, nargs=3, type=int,
-                   metavar='N N N',
+group.add_argument('--input-size', default=None, nargs=3, type=int, metavar='N',
                    help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 group.add_argument('--crop-pct', default=None, type=float,
                    metavar='N', help='Input image center crop percent (for validation only)')
@@ -178,12 +177,14 @@ group.add_argument('--amp-dtype', default='float16', type=str,
                    help='lower precision AMP dtype (default: float16)')
 group.add_argument('--amp-impl', default='native', type=str,
                    help='AMP impl to use, "native" or "apex" (default: native)')
+group.add_argument('--model-dtype', default=None, type=str,
+                   help='Model dtype override (non-AMP) (default: float32)')
 group.add_argument('--no-ddp-bb', action='store_true', default=False,
                    help='Force broadcast buffers for native DDP to off.')
 group.add_argument('--synchronize-step', action='store_true', default=False,
                    help='torch.cuda.synchronize() end of each step')
 group.add_argument("--local_rank", default=0, type=int)
-parser.add_argument('--device-modules', default=None, type=str, nargs='+',
+group.add_argument('--device-modules', default=None, type=str, nargs='+',
                     help="Python imports for device backend modules.")
 
 # Optimizer parameters
@@ -388,6 +389,8 @@ group.add_argument('--use-multi-epochs-loader', action='store_true', default=Fal
                    help='use the multi-epochs-loader to save time at the beginning of every epoch')
 group.add_argument('--log-wandb', action='store_true', default=False,
                    help='log training and validation metrics to wandb')
+group.add_argument('--wandb-project', default=None, type=str,
+                   help='wandb project name')
 group.add_argument('--wandb-tags', default=[], type=str, nargs='+',
                    help='wandb tags')
 group.add_argument('--wandb-resume-id', default='', type=str, metavar='ID',
@@ -434,10 +437,18 @@ def main():
         _logger.info(f'Training with a single process on 1 device ({args.device}).')
     assert args.rank >= 0
 
+    model_dtype = None
+    if args.model_dtype:
+        assert args.model_dtype in ('float32', 'float16', 'bfloat16')
+        model_dtype = getattr(torch, args.model_dtype)
+        if model_dtype == torch.float16:
+            _logger.warning('float16 is not recommended for training, for half precision bfloat16 is recommended.')
+
     # resolve AMP arguments based on PyTorch / Apex availability
     use_amp = None
     amp_dtype = torch.float16
     if args.amp:
+        assert model_dtype is None or model_dtype == torch.float32, 'float32 model dtype must be used with AMP'
         if args.amp_impl == 'apex':
             assert has_apex, 'AMP impl specified as APEX but APEX is not installed.'
             use_amp = 'apex'
@@ -517,7 +528,7 @@ def main():
         model = convert_splitbn_model(model, max(num_aug_splits, 2))
 
     # move model to GPU, enable channels last layout if set
-    model.to(device=device)
+    model.to(device=device, dtype=model_dtype)  # FIXME move model device & dtype into create_model
     if args.channels_last:
         model.to(memory_format=torch.channels_last)
 
@@ -587,7 +598,7 @@ def main():
             _logger.info('Using native Torch AMP. Training in mixed precision.')
     else:
         if utils.is_primary(args):
-            _logger.info('AMP not enabled. Training in float32.')
+            _logger.info(f'AMP not enabled. Training in {model_dtype or torch.float32}.')
 
     # optionally resume from a checkpoint
     resume_epoch = None
@@ -732,6 +743,7 @@ def main():
         distributed=args.distributed,
         collate_fn=collate_fn,
         pin_memory=args.pin_mem,
+        img_dtype=model_dtype or torch.float32,
         device=device,
         use_prefetcher=args.prefetcher,
         use_multi_epochs_loader=args.use_multi_epochs_loader,
@@ -756,6 +768,7 @@ def main():
             distributed=args.distributed,
             crop_pct=data_config['crop_pct'],
             pin_memory=args.pin_mem,
+            img_dtype=model_dtype or torch.float32,
             device=device,
             use_prefetcher=args.prefetcher,
         )
@@ -820,16 +833,21 @@ def main():
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
-    if utils.is_primary(args) and args.log_wandb:
-        if has_wandb:
-            assert not args.wandb_resume_id or args.resume
-            wandb.init(project=args.experiment, config=args, tags=args.wandb_tags,
-                       resume='must' if args.wandb_resume_id else None,
-                       id=args.wandb_resume_id if args.wandb_resume_id else None)
-        else:
-            _logger.warning(
-                "You've requested to log metrics to wandb but package not found. "
-                "Metrics not being logged to wandb, try `pip install wandb`")
+        if args.log_wandb:
+            if has_wandb:
+                assert not args.wandb_resume_id or args.resume
+                wandb.init(
+                    project=args.wandb_project,
+                    name=exp_name,
+                    config=args,
+                    tags=args.wandb_tags,
+                    resume="must" if args.wandb_resume_id else None,
+                    id=args.wandb_resume_id if args.wandb_resume_id else None,
+                )
+            else:
+                _logger.warning(
+                    "You've requested to log metrics to wandb but package not found. "
+                    "Metrics not being logged to wandb, try `pip install wandb`")
 
     # setup learning rate schedule and starting epoch
     updates_per_epoch = (len(loader_train) + args.grad_accum_steps - 1) // args.grad_accum_steps
@@ -874,11 +892,13 @@ def main():
                 optimizer,
                 train_loss_fn,
                 args,
+                device=device,
                 lr_scheduler=lr_scheduler,
                 saver=saver,
                 output_dir=output_dir,
                 amp_autocast=amp_autocast,
                 loss_scaler=loss_scaler,
+                model_dtype=model_dtype,
                 model_ema=model_ema,
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
@@ -897,6 +917,7 @@ def main():
                     args,
                     device=device,
                     amp_autocast=amp_autocast,
+                    model_dtype=model_dtype,
                 )
 
                 if model_ema is not None and not args.model_ema_force_cpu:
@@ -979,6 +1000,7 @@ def train_one_epoch(
         output_dir=None,
         amp_autocast=suppress,
         loss_scaler=None,
+        model_dtype=None,
         model_ema=None,
         mixup_fn=None,
         num_updates_total=None,
@@ -1015,7 +1037,7 @@ def train_one_epoch(
             accum_steps = last_accum_steps
 
         if not args.prefetcher:
-            input, target = input.to(device), target.to(device)
+            input, target = input.to(device=device, dtype=model_dtype), target.to(device=device)
             if mixup_fn is not None:
                 input, target = mixup_fn(input, target)
         if args.channels_last:
@@ -1142,6 +1164,7 @@ def validate(
         args,
         device=torch.device('cuda'),
         amp_autocast=suppress,
+        model_dtype=None,
         log_suffix=''
 ):
     batch_time_m = utils.AverageMeter()
@@ -1157,8 +1180,8 @@ def validate(
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher:
-                input = input.to(device)
-                target = target.to(device)
+                input = input.to(device=device, dtype=model_dtype)
+                target = target.to(device=device)
             if args.channels_last:
                 input = input.contiguous(memory_format=torch.channels_last)
 
