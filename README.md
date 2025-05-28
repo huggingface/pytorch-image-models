@@ -12,6 +12,21 @@
 
 ## What's New
 
+## May 28, 2025
+* Add a number of small/fast models thanks to https://github.com/brianhou0208
+  * SwiftFormer - [(ICCV2023) SwiftFormer: Efficient Additive Attention for Transformer-based Real-time Mobile Vision Applications](https://github.com/Amshaker/SwiftFormer) 
+  * FasterNet - [(CVPR2023) Run, Don’t Walk: Chasing Higher FLOPS for Faster Neural Networks](https://github.com/JierunChen/FasterNet)
+  * SHViT - [(CVPR2024) SHViT: Single-Head Vision Transformer with Memory Efficient](https://github.com/ysj9909/SHViT)
+  * StarNet - [(CVPR2024) Rewrite the Stars](https://github.com/ma-xu/Rewrite-the-Stars)
+  * GhostNet-V3 [GhostNetV3: Exploring the Training Strategies for Compact Models](https://github.com/huawei-noah/Efficient-AI-Backbones/tree/master/ghostnetv3_pytorch)
+* Update EVA ViT (closest match) to support Perception Encoder models (https://arxiv.org/abs/2504.13181) from Meta, loading Hub weights but I still need to push dedicated `timm` weights
+  * Add some flexibility to ROPE impl
+* Big increase in number of models supporting `forward_intermediates()` and some additional fixes thanks to https://github.com/brianhou0208
+  * DaViT, EdgeNeXt, EfficientFormerV2, EfficientViT(MIT), EfficientViT(MSRA), FocalNet, GCViT, HGNet /V2, InceptionNeXt, Inception-V4, MambaOut, MetaFormer, NesT, Next-ViT, PiT, PVT V2, RepGhostNet, RepViT, ResNetV2, ReXNet, TinyViT, TResNet, VoV
+* TNT model updated w/ new weights `forward_intermediates()` thanks to https://github.com/brianhou0208
+* Add `local-dir:` pretrained schema, can use `local-dir:/path/to/model/folder` for model name to source model / pretrained cfg & weights Hugging Face Hub models (config.json + weights file) from a local folder.
+* Fixes, improvements for onnx export
+    
 ## Feb 21, 2025
 * SigLIP 2 ViT image encoders added (https://huggingface.co/collections/timm/siglip-2-67b8e72ba08b09dd97aecaf9)
   * Variable resolution / aspect NaFlex versions are a WIP
