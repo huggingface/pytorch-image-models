@@ -427,7 +427,10 @@ class VisionTransformerRelPos(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x, shared_rel_pos=shared_rel_pos)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, shared_rel_pos=shared_rel_pos)
+            else:
+                x = blk(x, shared_rel_pos=shared_rel_pos)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)

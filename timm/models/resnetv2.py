@@ -41,7 +41,7 @@ from timm.layers import GroupNormAct, BatchNormAct2d, EvoNorm2dS0, FilterRespons
     DropPath, AvgPool2dSame, create_pool2d, StdConv2d, create_conv2d, get_act_layer, get_norm_act_layer, make_divisible
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import checkpoint_seq, named_apply, adapt_input_conv
+from ._manipulate import checkpoint, checkpoint_seq, named_apply, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['ResNetV2']  # model_registry will add each entrypoint fn to this
@@ -585,7 +585,10 @@ class ResNetV2(nn.Module):
             stages = self.stages[:max_index]
 
         for feat_idx, stage in enumerate(stages, start=1):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 if feat_idx == last_idx:
                     x_inter = self.norm(x) if norm else x

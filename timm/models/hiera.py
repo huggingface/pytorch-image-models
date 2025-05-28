@@ -24,7 +24,7 @@ Adapted for timm from originals at https://github.com/facebookresearch/hiera
 # --------------------------------------------------------
 import math
 from functools import partial
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -719,7 +719,10 @@ class Hiera(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
             if i in take_indices:
                 x_int = self.reroll(x, i, mask=mask)
                 intermediates.append(x_int.permute(0, 3, 1, 2) if output_fmt == 'NCHW' else x_int)
