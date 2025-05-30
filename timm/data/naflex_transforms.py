@@ -749,11 +749,9 @@ def patchify_image(
 
     # Ensure the image is divisible by patch size
     if pad and (h % ph != 0 or w % pw != 0):
-        new_h = math.ceil(h / ph) * ph
-        new_w = math.ceil(w / pw) * pw
-        padded_img = torch.zeros(c, new_h, new_w, dtype=img.dtype)
-        padded_img[:, :h, :w] = img
-        img = padded_img
+        pad_h = (ph - h % ph) % ph  # amount to add on bottom
+        pad_w = (pw - w % pw) % pw  # amount to add on right
+        img = torch.nn.functional.pad(img, (0, pad_w, 0, pad_h))
         c, h, w = img.shape
 
     # Calculate number of patches in each dimension
