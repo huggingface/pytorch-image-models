@@ -503,7 +503,7 @@ class FocalNet(nn.Module):
 
         if intermediates_only:
             return intermediates
-        
+
         if feat_idx == last_idx:
             x = self.norm(x)
 

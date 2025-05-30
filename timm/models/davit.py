@@ -447,7 +447,7 @@ class DaVitStage(nn.Module):
         '''
          repeating alternating attention blocks in each stage
          default: (spatial -> channel) x depth
-         
+
          potential opportunity to integrate with a more general version of ByobNet/ByoaNet
          since the logic is similar
         '''
@@ -503,7 +503,7 @@ class DaVit(nn.Module):
     r""" DaViT
         A PyTorch implementation of `DaViT: Dual Attention Vision Transformers`  - https://arxiv.org/abs/2204.03645
         Supports arbitrary input sizes and pyramid feature extraction
-        
+
     Args:
         in_chans (int): Number of input image channels. Default: 3
         num_classes (int): Number of classes for classification head. Default: 1000
@@ -669,7 +669,7 @@ class DaVit(nn.Module):
             stages = self.stages
         else:
             stages = self.stages[:max_index + 1]
- 
+
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:

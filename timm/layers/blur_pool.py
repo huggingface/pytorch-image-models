@@ -6,12 +6,12 @@ BlurPool layer inspired by
 Hacked together by Chris Ha and Ross Wightman
 """
 from functools import partial
+from math import comb  # Python 3.8
 from typing import Optional, Type
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from .padding import get_padding
 from .typing import LayerType
@@ -45,7 +45,11 @@ class BlurPool2d(nn.Module):
         self.pad_mode = pad_mode
         self.padding = [get_padding(filt_size, stride, dilation=1)] * 4
 
-        coeffs = torch.tensor((np.poly1d((0.5, 0.5)) ** (self.filt_size - 1)).coeffs.astype(np.float32))
+        # (0.5 + 0.5 x)^N => coefficients = C(N,k) / 2^N,  k = 0..N
+        coeffs = torch.tensor(
+            [comb(filt_size - 1, k) for k in range(filt_size)],
+            dtype=torch.float32,
+        ) / (2 ** (filt_size - 1))  # normalise so coefficients sum to 1
         blur_filter = (coeffs[:, None] * coeffs[None, :])[None, None, :, :]
         if channels is not None:
             blur_filter = blur_filter.repeat(self.channels, 1, 1, 1)

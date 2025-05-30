@@ -3,7 +3,7 @@ import logging
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
 from torch import nn as nn
 from torch.hub import load_state_dict_from_url
@@ -26,11 +26,21 @@ _DOWNLOAD_PROGRESS = False
 _CHECK_HASH = False
 _USE_OLD_CACHE = int(os.environ.get('TIMM_USE_OLD_CACHE', 0)) > 0
 
-__all__ = ['set_pretrained_download_progress', 'set_pretrained_check_hash', 'load_custom_pretrained', 'load_pretrained',
-           'pretrained_cfg_for_features', 'resolve_pretrained_cfg', 'build_model_with_cfg']
+__all__ = [
+    'set_pretrained_download_progress',
+    'set_pretrained_check_hash',
+    'load_custom_pretrained',
+    'load_pretrained',
+    'pretrained_cfg_for_features',
+    'resolve_pretrained_cfg',
+    'build_model_with_cfg',
+]
 
 
-def _resolve_pretrained_source(pretrained_cfg):
+ModelT = TypeVar("ModelT", bound=nn.Module)              # any subclass of nn.Module
+
+
+def _resolve_pretrained_source(pretrained_cfg: Dict[str, Any]) -> Tuple[str, str]:
     cfg_source = pretrained_cfg.get('source', '')
     pretrained_url = pretrained_cfg.get('url', None)
     pretrained_file = pretrained_cfg.get('file', None)
@@ -78,13 +88,13 @@ def _resolve_pretrained_source(pretrained_cfg):
     return load_from, pretrained_loc
 
 
-def set_pretrained_download_progress(enable=True):
+def set_pretrained_download_progress(enable: bool = True) -> None:
     """ Set download progress for pretrained weights on/off (globally). """
     global _DOWNLOAD_PROGRESS
     _DOWNLOAD_PROGRESS = enable
 
 
-def set_pretrained_check_hash(enable=True):
+def set_pretrained_check_hash(enable: bool = True) -> None:
     """ Set hash checking for pretrained weights on/off (globally). """
     global _CHECK_HASH
     _CHECK_HASH = enable
@@ -92,11 +102,11 @@ def set_pretrained_check_hash(enable=True):
 
 def load_custom_pretrained(
         model: nn.Module,
-        pretrained_cfg: Optional[Dict] = None,
+        pretrained_cfg: Optional[Dict[str, Any]] = None,
         load_fn: Optional[Callable] = None,
         cache_dir: Optional[Union[str, Path]] = None,
-):
-    r"""Loads a custom (read non .pth) weight file
+) -> None:
+    """Loads a custom (read non .pth) weight file
 
     Downloads checkpoint file into cache-dir like torch.hub based loaders, but calls
     a passed in custom load fun, or the `load_pretrained` model member fn.
@@ -141,13 +151,13 @@ def load_custom_pretrained(
 
 def load_pretrained(
         model: nn.Module,
-        pretrained_cfg: Optional[Dict] = None,
+        pretrained_cfg: Optional[Dict[str, Any]] = None,
         num_classes: int = 1000,
         in_chans: int = 3,
         filter_fn: Optional[Callable] = None,
         strict: bool = True,
         cache_dir: Optional[Union[str, Path]] = None,
-):
+) -> None:
     """ Load pretrained checkpoint
 
     Args:
@@ -278,7 +288,7 @@ def load_pretrained(
             f' This may be expected if model is being adapted.')
 
 
-def pretrained_cfg_for_features(pretrained_cfg):
+def pretrained_cfg_for_features(pretrained_cfg: Dict[str, Any]) -> Dict[str, Any]:
     pretrained_cfg = deepcopy(pretrained_cfg)
     # remove default pretrained cfg fields that don't have much relevance for feature backbone
     to_remove = ('num_classes', 'classifier', 'global_pool')  # add default final pool size?
@@ -287,14 +297,14 @@ def pretrained_cfg_for_features(pretrained_cfg):
     return pretrained_cfg
 
 
-def _filter_kwargs(kwargs, names):
+def _filter_kwargs(kwargs: Dict[str, Any], names: List[str]) -> None:
     if not kwargs or not names:
         return
     for n in names:
         kwargs.pop(n, None)
 
 
-def _update_default_model_kwargs(pretrained_cfg, kwargs, kwargs_filter):
+def _update_default_model_kwargs(pretrained_cfg, kwargs, kwargs_filter) -> None:
     """ Update the default_cfg and kwargs before passing to model
 
     Args:
@@ -340,6 +350,7 @@ def resolve_pretrained_cfg(
         pretrained_cfg: Optional[Union[str, Dict[str, Any]]] = None,
         pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
 ) -> PretrainedCfg:
+    """Resolve pretrained configuration from various sources."""
     model_with_tag = variant
     pretrained_tag = None
     if pretrained_cfg:
@@ -371,7 +382,7 @@ def resolve_pretrained_cfg(
 
 
 def build_model_with_cfg(
-        model_cls: Callable,
+        model_cls: Union[Type[ModelT], Callable[..., ModelT]],
         variant: str,
         pretrained: bool,
         pretrained_cfg: Optional[Dict] = None,
@@ -383,7 +394,7 @@ def build_model_with_cfg(
         cache_dir: Optional[Union[str, Path]] = None,
         kwargs_filter: Optional[Tuple[str]] = None,
         **kwargs,
-):
+) -> ModelT:
     """ Build model with specified default_cfg and optional model_cfg
 
     This helper fn aids in the construction of a model including:

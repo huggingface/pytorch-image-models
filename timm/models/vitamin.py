@@ -124,11 +124,11 @@ class StridedConv(nn.Module):
     """ downsample 2d as well
     """
     def __init__(
-            self, 
-            kernel_size=3, 
-            stride=2, 
+            self,
+            kernel_size=3,
+            stride=2,
             padding=1,
-            in_chans=3, 
+            in_chans=3,
             embed_dim=768
     ):
         super().__init__()
@@ -138,7 +138,7 @@ class StridedConv(nn.Module):
         self.norm = norm_layer(in_chans) # affine over C
 
     def forward(self, x):
-        x = self.norm(x) 
+        x = self.norm(x)
         x = self.proj(x)
         return x
 
@@ -163,7 +163,7 @@ class MbConvLNBlock(nn.Module):
         mid_chs = make_divisible(out_chs * expand_ratio)
         prenorm_act_layer = partial(get_norm_act_layer(norm_layer, act_layer), eps=norm_eps)
 
-        if stride == 2: 
+        if stride == 2:
             self.shortcut = Downsample2d(in_chs, out_chs, pool_type='avg', bias=True)
         elif in_chs != out_chs:
             self.shortcut = nn.Conv2d(in_chs, out_chs, 1, bias=True)
@@ -188,11 +188,11 @@ class MbConvLNBlock(nn.Module):
         shortcut = self.shortcut(x)
 
         x = self.pre_norm(x)
-        x = self.down(x) # nn.Identity() 
+        x = self.down(x) # nn.Identity()
 
         # 1x1 expansion conv & act
         x = self.conv1_1x1(x)
-        x = self.act1(x) 
+        x = self.act1(x)
 
         # (strided) depthwise 3x3 conv & act
         x = self.conv2_kxk(x)
@@ -255,8 +255,8 @@ class MbConvStages(nn.Module):
 
 class GeGluMlp(nn.Module):
     def __init__(
-            self, 
-            in_features, 
+            self,
+            in_features,
             hidden_features,
             act_layer = 'gelu',
             norm_layer = None,

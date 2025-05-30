@@ -12,6 +12,8 @@ Consider all of the models definitions here as experimental WIP and likely to ch
 
 Hacked together by / copyright Ross Wightman, 2021.
 """
+from typing import Any, Dict, Optional
+
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ._builder import build_model_with_cfg
 from ._registry import register_model, generate_default_cfgs
@@ -260,7 +262,18 @@ model_cfgs = dict(
 )
 
 
-def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
+def _create_byoanet(variant: str, cfg_variant: Optional[str] = None, pretrained: bool = False, **kwargs) -> ByobNet:
+    """Create a Bring-Your-Own-Attention network model.
+
+    Args:
+        variant: Model variant name.
+        cfg_variant: Config variant name if different from model variant.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        Instantiated ByobNet model.
+    """
     return build_model_with_cfg(
         ByobNet, variant, pretrained,
         model_cfg=model_cfgs[variant] if not cfg_variant else model_cfgs[cfg_variant],
@@ -269,7 +282,16 @@ def _create_byoanet(variant, cfg_variant=None, pretrained=False, **kwargs):
     )
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Generate default model configuration.
+
+    Args:
+        url: URL for pretrained weights.
+        **kwargs: Override default configuration values.
+
+    Returns:
+        Model configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.95, 'interpolation': 'bicubic',
@@ -346,7 +368,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def botnet26t_256(pretrained=False, **kwargs) -> ByobNet:
+def botnet26t_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Bottleneck Transformer w/ ResNet26-T backbone.
     """
     kwargs.setdefault('img_size', 256)
@@ -354,14 +376,14 @@ def botnet26t_256(pretrained=False, **kwargs) -> ByobNet:
 
 
 @register_model
-def sebotnet33ts_256(pretrained=False, **kwargs) -> ByobNet:
+def sebotnet33ts_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Bottleneck Transformer w/ a ResNet33-t backbone, SE attn for non Halo blocks, SiLU,
     """
     return _create_byoanet('sebotnet33ts_256', 'sebotnet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def botnet50ts_256(pretrained=False, **kwargs) -> ByobNet:
+def botnet50ts_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Bottleneck Transformer w/ ResNet50-T backbone, silu act.
     """
     kwargs.setdefault('img_size', 256)
@@ -369,7 +391,7 @@ def botnet50ts_256(pretrained=False, **kwargs) -> ByobNet:
 
 
 @register_model
-def eca_botnext26ts_256(pretrained=False, **kwargs) -> ByobNet:
+def eca_botnext26ts_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Bottleneck Transformer w/ ResNet26-T backbone, silu act.
     """
     kwargs.setdefault('img_size', 256)
@@ -377,7 +399,7 @@ def eca_botnext26ts_256(pretrained=False, **kwargs) -> ByobNet:
 
 
 @register_model
-def halonet_h1(pretrained=False, **kwargs) -> ByobNet:
+def halonet_h1(pretrained: bool = False, **kwargs) -> ByobNet:
     """ HaloNet-H1. Halo attention in all stages as per the paper.
     NOTE: This runs very slowly!
     """
@@ -385,49 +407,49 @@ def halonet_h1(pretrained=False, **kwargs) -> ByobNet:
 
 
 @register_model
-def halonet26t(pretrained=False, **kwargs) -> ByobNet:
+def halonet26t(pretrained: bool = False, **kwargs) -> ByobNet:
     """ HaloNet w/ a ResNet26-t backbone. Halo attention in final two stages
     """
     return _create_byoanet('halonet26t', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def sehalonet33ts(pretrained=False, **kwargs) -> ByobNet:
+def sehalonet33ts(pretrained: bool = False, **kwargs) -> ByobNet:
     """ HaloNet w/ a ResNet33-t backbone, SE attn for non Halo blocks, SiLU, 1-2 Halo in stage 2,3,4.
     """
     return _create_byoanet('sehalonet33ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def halonet50ts(pretrained=False, **kwargs) -> ByobNet:
+def halonet50ts(pretrained: bool = False, **kwargs) -> ByobNet:
     """ HaloNet w/ a ResNet50-t backbone, silu act. Halo attention in final two stages
     """
     return _create_byoanet('halonet50ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def eca_halonext26ts(pretrained=False, **kwargs) -> ByobNet:
+def eca_halonext26ts(pretrained: bool = False, **kwargs) -> ByobNet:
     """ HaloNet w/ a ResNet26-t backbone, silu act. Halo attention in final two stages
     """
     return _create_byoanet('eca_halonext26ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def lambda_resnet26t(pretrained=False, **kwargs) -> ByobNet:
+def lambda_resnet26t(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Lambda-ResNet-26-T. Lambda layers w/ conv pos in last two stages.
     """
     return _create_byoanet('lambda_resnet26t', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def lambda_resnet50ts(pretrained=False, **kwargs) -> ByobNet:
+def lambda_resnet50ts(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Lambda-ResNet-50-TS. SiLU act. Lambda layers w/ conv pos in last two stages.
     """
     return _create_byoanet('lambda_resnet50ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def lambda_resnet26rpt_256(pretrained=False, **kwargs) -> ByobNet:
+def lambda_resnet26rpt_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Lambda-ResNet-26-R-T. Lambda layers w/ rel pos embed in last two stages.
     """
     kwargs.setdefault('img_size', 256)
@@ -435,21 +457,21 @@ def lambda_resnet26rpt_256(pretrained=False, **kwargs) -> ByobNet:
 
 
 @register_model
-def haloregnetz_b(pretrained=False, **kwargs) -> ByobNet:
+def haloregnetz_b(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Halo + RegNetZ
     """
     return _create_byoanet('haloregnetz_b', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def lamhalobotnet50ts_256(pretrained=False, **kwargs) -> ByobNet:
+def lamhalobotnet50ts_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Combo Attention (Lambda + Halo + Bot) Network
     """
     return _create_byoanet('lamhalobotnet50ts_256', 'lamhalobotnet50ts', pretrained=pretrained, **kwargs)
 
 
 @register_model
-def halo2botnet50ts_256(pretrained=False, **kwargs) -> ByobNet:
+def halo2botnet50ts_256(pretrained: bool = False, **kwargs) -> ByobNet:
     """ Combo Attention (Halo + Halo + Bot) Network
     """
     return _create_byoanet('halo2botnet50ts_256', 'halo2botnet50ts', pretrained=pretrained, **kwargs)

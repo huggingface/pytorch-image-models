@@ -17,7 +17,7 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Dict, Callable, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -43,15 +43,14 @@ def window_partition(
         x: torch.Tensor,
         window_size: Tuple[int, int],
 ) -> torch.Tensor:
-    """
-    Partition into non-overlapping windows with padding if needed.
+    """Partition into non-overlapping windows.
+
     Args:
-        x (tensor): input tokens with [B, H, W, C].
-        window_size (int): window size.
+        x: Input tokens with shape [B, H, W, C].
+        window_size: Window size.
 
     Returns:
-        windows: windows after partition with [B * num_windows, window_size, window_size, C].
-        (Hp, Wp): padded height and width before partition
+        Windows after partition with shape [B * num_windows, window_size, window_size, C].
     """
     B, H, W, C = x.shape
     x = x.view(B, H // window_size[0], window_size[0], W // window_size[1], window_size[1], C)
@@ -60,16 +59,17 @@ def window_partition(
 
 
 @register_notrace_function  # reason: int argument is a Proxy
-def window_reverse(windows, window_size: Tuple[int, int], H: int, W: int):
-    """
+def window_reverse(windows: torch.Tensor, window_size: Tuple[int, int], H: int, W: int) -> torch.Tensor:
+    """Reverse window partition.
+
     Args:
-        windows: (num_windows*B, window_size, window_size, C)
-        window_size (int): Window size
-        H (int): Height of image
-        W (int): Width of image
+        windows: Windows with shape (num_windows*B, window_size, window_size, C).
+        window_size: Window size.
+        H: Height of image.
+        W: Width of image.
 
     Returns:
-        x: (B, H, W, C)
+        Tensor with shape (B, H, W, C).
     """
     C = windows.shape[-1]
     x = windows.view(-1, H // window_size[0], W // window_size[1], window_size[0], window_size[1], C)
@@ -77,7 +77,16 @@ def window_reverse(windows, window_size: Tuple[int, int], H: int, W: int):
     return x
 
 
-def get_relative_position_index(win_h: int, win_w: int):
+def get_relative_position_index(win_h: int, win_w: int) -> torch.Tensor:
+    """Get pair-wise relative position index for each token inside the window.
+
+    Args:
+        win_h: Window height.
+        win_w: Window width.
+
+    Returns:
+        Relative position index tensor.
+    """
     # get pair-wise relative position index for each token inside the window
     coords = torch.stack(ndgrid(torch.arange(win_h), torch.arange(win_w)))  # 2, Wh, Ww
     coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
@@ -90,8 +99,9 @@ def get_relative_position_index(win_h: int, win_w: int):
 
 
 class WindowAttention(nn.Module):
-    """ Window based multi-head self attention (W-MSA) module with relative position bias.
-    It supports shifted and non-shifted windows.
+    """Window based multi-head self attention (W-MSA) module with relative position bias.
+
+    Supports both shifted and non-shifted windows.
     """
     fused_attn: torch.jit.Final[bool]
 
@@ -167,11 +177,15 @@ class WindowAttention(nn.Module):
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         return relative_position_bias.unsqueeze(0)
 
-    def forward(self, x, mask: Optional[torch.Tensor] = None):
-        """
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass.
+
         Args:
-            x: input features with shape of (num_windows*B, N, C)
-            mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
+            x: Input features with shape of (num_windows*B, N, C).
+            mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None.
+
+        Returns:
+            Output features with shape of (num_windows*B, N, C).
         """
         B_, N, C = x.shape
         qkv = self.qkv(x).reshape(B_, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
@@ -207,7 +221,9 @@ class WindowAttention(nn.Module):
 
 
 class SwinTransformerBlock(nn.Module):
-    """ Swin Transformer Block.
+    """Swin Transformer Block.
+
+    A transformer block with window-based self-attention and shifted windows.
     """
 
     def __init__(
@@ -401,7 +417,15 @@ class SwinTransformerBlock(nn.Module):
             x = shifted_x
         return x
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input features with shape (B, H, W, C).
+
+        Returns:
+            Output features with shape (B, H, W, C).
+        """
         B, H, W, C = x.shape
         x = x + self.drop_path1(self._attn(self.norm1(x)))
         x = x.reshape(B, -1, C)
@@ -411,7 +435,9 @@ class SwinTransformerBlock(nn.Module):
 
 
 class PatchMerging(nn.Module):
-    """ Patch Merging Layer.
+    """Patch Merging Layer.
+
+    Downsample features by merging 2x2 neighboring patches.
     """
 
     def __init__(
@@ -432,7 +458,15 @@ class PatchMerging(nn.Module):
         self.norm = norm_layer(4 * dim)
         self.reduction = nn.Linear(4 * dim, self.out_dim, bias=False)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input features with shape (B, H, W, C).
+
+        Returns:
+            Output features with shape (B, H//2, W//2, out_dim).
+        """
         B, H, W, C = x.shape
 
         pad_values = (0, 0, 0, W % 2, 0, H % 2)
@@ -446,7 +480,9 @@ class PatchMerging(nn.Module):
 
 
 class SwinTransformerStage(nn.Module):
-    """ A basic Swin Transformer layer for one stage.
+    """A basic Swin Transformer layer for one stage.
+
+    Contains multiple Swin Transformer blocks and optional downsampling.
     """
 
     def __init__(
@@ -550,7 +586,15 @@ class SwinTransformerStage(nn.Module):
                 always_partition=always_partition,
             )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input features.
+
+        Returns:
+            Output features.
+        """
         x = self.downsample(x)
 
         if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -561,7 +605,7 @@ class SwinTransformerStage(nn.Module):
 
 
 class SwinTransformer(nn.Module):
-    """ Swin Transformer
+    """Swin Transformer.
 
     A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
           https://arxiv.org/pdf/2103.14030
@@ -690,13 +734,19 @@ class SwinTransformer(nn.Module):
             self.init_weights(weight_init)
 
     @torch.jit.ignore
-    def init_weights(self, mode=''):
+    def init_weights(self, mode: str = '') -> None:
+        """Initialize model weights.
+
+        Args:
+            mode: Weight initialization mode ('jax', 'jax_nlhb', 'moco', or '').
+        """
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         named_apply(get_init_weights_vit(mode, head_bias=head_bias), self)
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self) -> Set[str]:
+        """Parameters that should not use weight decay."""
         nwd = set()
         for n, _ in self.named_parameters():
             if 'relative_position_bias_table' in n:
@@ -711,14 +761,14 @@ class SwinTransformer(nn.Module):
             window_ratio: int = 8,
             always_partition: Optional[bool] = None,
     ) -> None:
-        """ Updates the image resolution and window size.
+        """Update the image resolution and window size.
 
         Args:
-            img_size: New input resolution, if None current resolution is used
-            patch_size (Optional[Tuple[int, int]): New patch size, if None use current patch size
-            window_size: New window size, if None based on new_img_size // window_div
-            window_ratio: divisor for calculating window size from grid size
-            always_partition: always partition into windows and shift (even if window size < feat size)
+            img_size: New input resolution, if None current resolution is used.
+            patch_size: New patch size, if None use current patch size.
+            window_size: New window size, if None based on new_img_size // window_div.
+            window_ratio: Divisor for calculating window size from grid size.
+            always_partition: Always partition into windows and shift (even if window size < feat size).
         """
         if img_size is not None or patch_size is not None:
             self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
@@ -736,7 +786,8 @@ class SwinTransformer(nn.Module):
             )
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Group parameters for optimization."""
         return dict(
             stem=r'^patch_embed',  # stem and embed
             blocks=r'^layers\.(\d+)' if coarse else [
@@ -747,15 +798,23 @@ class SwinTransformer(nn.Module):
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
         for l in self.layers:
             l.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool)
 
@@ -768,17 +827,18 @@ class SwinTransformer(nn.Module):
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
-            x: Input image tensor
-            indices: Take last n blocks if int, all if None, select matching indices if sequence
-            norm: Apply norm layer to compatible intermediates
-            stop_early: Stop iterating over blocks when last desired intermediate hit
-            output_fmt: Shape of intermediate feature outputs
-            intermediates_only: Only return intermediate features
-        Returns:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
 
+        Returns:
+            List of intermediate features or tuple of (final features, intermediates).
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
@@ -814,8 +874,16 @@ class SwinTransformer(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.layers), indices)
         self.layers = self.layers[:max_index + 1]  # truncate blocks
@@ -825,23 +893,49 @@ class SwinTransformer(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers."""
         x = self.patch_embed(x)
         x = self.layers(x)
         x = self.norm(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier.
+
+        Returns:
+            Output tensor.
+        """
         return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output logits.
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def checkpoint_filter_fn(state_dict, model):
-    """ convert patch embedding weight from manual patchify + linear proj to conv"""
+def checkpoint_filter_fn(state_dict: dict, model: nn.Module) -> Dict[str, torch.Tensor]:
+    """Convert patch embedding weight from manual patchify + linear proj to conv.
+
+    Args:
+        state_dict: State dictionary from checkpoint.
+        model: Model instance.
+
+    Returns:
+        Filtered state dictionary.
+    """
     old_weights = True
     if 'head.fc.weight' in state_dict:
         old_weights = False
@@ -881,7 +975,17 @@ def checkpoint_filter_fn(state_dict, model):
     return out_dict
 
 
-def _create_swin_transformer(variant, pretrained=False, **kwargs):
+def _create_swin_transformer(variant: str, pretrained: bool = False, **kwargs) -> SwinTransformer:
+    """Create a Swin Transformer model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        SwinTransformer model instance.
+    """
     default_out_indices = tuple(i for i, _ in enumerate(kwargs.get('depths', (1, 1, 3, 1))))
     out_indices = kwargs.pop('out_indices', default_out_indices)
 
@@ -894,7 +998,8 @@ def _create_swin_transformer(variant, pretrained=False, **kwargs):
     return model
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create default configuration for Swin Transformer models."""
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),

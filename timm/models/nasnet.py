@@ -132,7 +132,7 @@ class CellStem1(nn.Module):
         self.path_1 = nn.Sequential()
         self.path_1.add_module('avgpool', nn.AvgPool2d(1, stride=2, count_include_pad=False))
         self.path_1.add_module('conv', nn.Conv2d(self.stem_size, self.num_channels // 2, 1, stride=1, bias=False))
-       
+
         self.path_2 = nn.Sequential()
         self.path_2.add_module('pad', nn.ZeroPad2d((-1, 1, -1, 1)))
         self.path_2.add_module('avgpool', nn.AvgPool2d(1, stride=2, count_include_pad=False))
