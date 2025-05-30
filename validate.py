@@ -158,6 +158,12 @@ parser.add_argument('--valid-labels', default='', type=str, metavar='FILENAME',
 parser.add_argument('--retry', default=False, action='store_true',
                     help='Enable batch size decay & retry for single model validation')
 
+# NaFlex loader arguments
+parser.add_argument('--naflex-loader', action='store_true', default=False,
+                   help='Use NaFlex loader (Requires NaFlex compatible model)')
+parser.add_argument('--naflex-max-seq-len', type=int, default=576,
+                   help='Fixed maximum sequence length for NaFlex loader (validation)')
+
 
 def validate(args):
     # might as well try to validate something
@@ -293,23 +299,43 @@ def validate(args):
         real_labels = None
 
     crop_pct = 1.0 if test_time_pool else data_config['crop_pct']
-    loader = create_loader(
-        dataset,
-        input_size=data_config['input_size'],
-        batch_size=args.batch_size,
-        use_prefetcher=args.prefetcher,
-        interpolation=data_config['interpolation'],
-        mean=data_config['mean'],
-        std=data_config['std'],
-        num_workers=args.workers,
-        crop_pct=crop_pct,
-        crop_mode=data_config['crop_mode'],
-        crop_border_pixels=args.crop_border_pixels,
-        pin_memory=args.pin_mem,
-        device=device,
-        img_dtype=model_dtype or torch.float32,
-        tf_preprocessing=args.tf_preprocessing,
-    )
+    if args.naflex_loader:
+        from timm.data  import create_naflex_loader
+        loader = create_naflex_loader(
+            dataset,
+            batch_size=args.batch_size,
+            use_prefetcher=args.prefetcher,
+            interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=args.workers,
+            crop_pct=crop_pct,
+            crop_mode=data_config['crop_mode'],
+            crop_border_pixels=args.crop_border_pixels,
+            pin_memory=args.pin_mem,
+            device=device,
+            img_dtype=model_dtype or torch.float32,
+            patch_size=16,  # Could be derived from model config
+            max_seq_len=args.naflex_max_seq_len,
+        )
+    else:
+        loader = create_loader(
+            dataset,
+            input_size=data_config['input_size'],
+            batch_size=args.batch_size,
+            use_prefetcher=args.prefetcher,
+            interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=args.workers,
+            crop_pct=crop_pct,
+            crop_mode=data_config['crop_mode'],
+            crop_border_pixels=args.crop_border_pixels,
+            pin_memory=args.pin_mem,
+            device=device,
+            img_dtype=model_dtype or torch.float32,
+            tf_preprocessing=args.tf_preprocessing,
+        )
 
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -345,10 +371,11 @@ def validate(args):
                 real_labels.add_result(output)
 
             # measure accuracy and record loss
+            batch_size = output.shape[0]
             acc1, acc5 = accuracy(output.detach(), target, topk=(1, 5))
-            losses.update(loss.item(), input.size(0))
-            top1.update(acc1.item(), input.size(0))
-            top5.update(acc5.item(), input.size(0))
+            losses.update(loss.item(), batch_size)
+            top1.update(acc1.item(), batch_size)
+            top5.update(acc5.item(), batch_size)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -364,7 +391,7 @@ def validate(args):
                         batch_idx,
                         len(loader),
                         batch_time=batch_time,
-                        rate_avg=input.size(0) / batch_time.avg,
+                        rate_avg=batch_size / batch_time.avg,
                         loss=losses,
                         top1=top1,
                         top5=top5

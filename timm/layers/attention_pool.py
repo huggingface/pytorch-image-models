@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .attention import maybe_add_mask
 from .config import use_fused_attn
 from .mlp import Mlp
 from .weight_init import trunc_normal_tf_
@@ -75,7 +76,7 @@ class AttentionPoolLatent(nn.Module):
             trunc_normal_tf_(self.pos_embed, std=self.pos_embed.shape[1] ** -0.5)
         trunc_normal_tf_(self.latent, std=self.latent_dim ** -0.5)
 
-    def forward(self, x):
+    def forward(self, x, attn_mask: Optional[torch.Tensor] = None):
         B, N, C = x.shape
 
         if self.pos_embed is not None:
@@ -91,10 +92,11 @@ class AttentionPoolLatent(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.fused_attn:
-            x = F.scaled_dot_product_attention(q, k, v)
+            x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
+            attn = maybe_add_mask(attn, attn_mask)
             attn = attn.softmax(dim=-1)
             x = attn @ v
         x = x.transpose(1, 2).reshape(B, self.latent_len, C)
