@@ -78,21 +78,37 @@ _logger = logging.getLogger(__name__)
 
 
 class LayerScale(nn.Module):
+    """Layer scale module.
+
+    References:
+      - https://arxiv.org/abs/2103.17239
+    """
+
     def __init__(
             self,
             dim: int,
             init_values: float = 1e-5,
             inplace: bool = False,
     ) -> None:
+        """Initialize LayerScale module.
+
+        Args:
+            dim: Dimension.
+            init_values: Initial value for scaling.
+            inplace: If True, perform inplace operations.
+        """
         super().__init__()
         self.inplace = inplace
         self.gamma = nn.Parameter(init_values * torch.ones(dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply layer scaling."""
         return x.mul_(self.gamma) if self.inplace else x * self.gamma
 
 
 class Block(nn.Module):
+    """Transformer block with pre-normalization."""
+
     def __init__(
             self,
             dim: int,
@@ -111,6 +127,23 @@ class Block(nn.Module):
             norm_layer: Type[nn.Module] = LayerNorm,
             mlp_layer: Type[nn.Module] = Mlp,
     ) -> None:
+        """Initialize Block.
+
+        Args:
+            dim: Number of input channels.
+            num_heads: Number of attention heads.
+            mlp_ratio: Ratio of mlp hidden dim to embedding dim.
+            qkv_bias: If True, add a learnable bias to query, key, value.
+            qk_norm: If True, apply normalization to query and key.
+            proj_bias: If True, add bias to output projection.
+            proj_drop: Projection dropout rate.
+            attn_drop: Attention dropout rate.
+            init_values: Initial values for layer scale.
+            drop_path: Stochastic depth rate.
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+            mlp_layer: MLP layer.
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -293,7 +326,7 @@ class ParallelScalingBlock(nn.Module):
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x_attn = attn @ v
-            
+
         x_attn = x_attn.transpose(1, 2).reshape(B, N, C)
         x_attn = self.attn_out_proj(x_attn)
 
@@ -589,7 +622,8 @@ class VisionTransformer(nn.Module):
         if fix_init:
             self.fix_init_weight()
 
-    def fix_init_weight(self):
+    def fix_init_weight(self) -> None:
+        """Apply weight initialization fix (scaling w/ layer index)."""
         def rescale(param, _layer_id):
             param.div_(math.sqrt(2.0 * _layer_id))
 
@@ -598,6 +632,11 @@ class VisionTransformer(nn.Module):
             rescale(layer.mlp.fc2.weight.data, layer_id + 1)
 
     def init_weights(self, mode: str = '') -> None:
+        """Initialize model weights.
+
+        Args:
+            mode: Weight initialization mode ('jax', 'jax_nlhb', 'moco', or '').
+        """
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
         if self.pos_embed is not None:
@@ -609,19 +648,35 @@ class VisionTransformer(nn.Module):
         named_apply(get_init_weights_vit(mode, head_bias), self)
 
     def _init_weights(self, m: nn.Module) -> None:
+        """Initialize weights for a single module (compatibility method)."""
         # this fn left here for compat with downstream users
         init_weights_vit_timm(m)
 
     @torch.jit.ignore()
     def load_pretrained(self, checkpoint_path: str, prefix: str = '') -> None:
+        """Load pretrained weights.
+
+        Args:
+            checkpoint_path: Path to checkpoint.
+            prefix: Prefix for state dict keys.
+        """
         _load_weights(self, checkpoint_path, prefix)
 
     @torch.jit.ignore
-    def no_weight_decay(self) -> Set:
+    def no_weight_decay(self) -> Set[str]:
+        """Set of parameters that should not use weight decay."""
         return {'pos_embed', 'cls_token', 'dist_token'}
 
     @torch.jit.ignore
-    def group_matcher(self, coarse: bool = False) -> Dict:
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Union[str, List]]:
+        """Create regex patterns for parameter grouping.
+
+        Args:
+            coarse: Use coarse grouping.
+
+        Returns:
+            Dictionary mapping group names to regex patterns.
+        """
         return dict(
             stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
@@ -629,15 +684,27 @@ class VisionTransformer(nn.Module):
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
         if hasattr(self.patch_embed, 'set_grad_checkpointing'):
             self.patch_embed.set_grad_checkpointing(enable)
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
@@ -652,12 +719,12 @@ class VisionTransformer(nn.Module):
             self,
             img_size: Optional[Tuple[int, int]] = None,
             patch_size: Optional[Tuple[int, int]] = None,
-    ):
-        """Method updates the input image resolution, patch size
+    ) -> None:
+        """Update the input image resolution and patch size.
 
         Args:
-            img_size: New input resolution, if None current resolution is used
-            patch_size: New patch size, if None existing patch size is used
+            img_size: New input resolution, if None current resolution is used.
+            patch_size: New patch size, if None existing patch size is used.
         """
         prev_grid_size = self.patch_embed.grid_size
         self.patch_embed.set_input_size(img_size=img_size, patch_size=patch_size)
@@ -674,6 +741,7 @@ class VisionTransformer(nn.Module):
                 ))
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply positional embedding to input."""
         if self.pos_embed is None:
             return x.view(x.shape[0], -1, x.shape[-1])
 
@@ -773,7 +841,7 @@ class VisionTransformer(nn.Module):
             # reshape to BCHW output format
             H, W = self.patch_embed.dynamic_feat_size((height, width))
             intermediates = [y.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous() for y in intermediates]
-            
+
         # For dictionary output, handle prefix tokens separately
         if output_dict:
             result_dict = {}
@@ -781,14 +849,14 @@ class VisionTransformer(nn.Module):
             result_dict['image_intermediates'] = intermediates
             if prefix_tokens is not None and return_prefix_tokens:
                 result_dict['image_intermediates_prefix'] = prefix_tokens
-                
+
             # Only include features if not intermediates_only
             if not intermediates_only:
                 x_final = self.norm(x)
                 result_dict['image_features'] = x_final
-                
+
             return result_dict
-            
+
         # For non-dictionary output, maintain the original behavior
         if not torch.jit.is_scripting() and return_prefix_tokens and prefix_tokens is not None:
             # return_prefix not support in torchscript due to poor type handling
@@ -806,8 +874,16 @@ class VisionTransformer(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
@@ -827,8 +903,19 @@ class VisionTransformer(nn.Module):
             norm: bool = False,
             attn_mask: Optional[torch.Tensor] = None,
     ) -> List[torch.Tensor]:
-        """ Intermediate layer accessor inspired by DINO / DINOv2 interface.
+        """Get intermediate layer outputs (DINO interface compatibility).
+
         NOTE: This API is for backwards compat, favour using forward_intermediates() directly.
+
+        Args:
+            x: Input tensor.
+            n: Number or indices of layers.
+            reshape: Reshape to NCHW format.
+            return_prefix_tokens: Return prefix tokens.
+            norm: Apply normalization.
+
+        Returns:
+            List of intermediate features.
         """
         return self.forward_intermediates(
             x, n,
@@ -840,11 +927,12 @@ class VisionTransformer(nn.Module):
         )
 
     def forward_features(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass through feature layers (embeddings, transformer blocks, post-transformer norm)."""
         x = self.patch_embed(x)
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        
+
         if attn_mask is not None:
             # If mask provided, we need to apply blocks one by one
             for blk in self.blocks:
@@ -853,11 +941,20 @@ class VisionTransformer(nn.Module):
             x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
-            
+
         x = self.norm(x)
         return x
 
     def pool(self, x: torch.Tensor, pool_type: Optional[str] = None) -> torch.Tensor:
+        """Apply pooling to feature tokens.
+
+        Args:
+            x: Feature tensor.
+            pool_type: Pooling type override.
+
+        Returns:
+            Pooled features.
+        """
         if self.attn_pool is not None:
             if not self.pool_include_prefix:
                 x = x[:, self.num_prefix_tokens:]
@@ -873,6 +970,15 @@ class VisionTransformer(nn.Module):
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier.
+
+        Returns:
+            Output tensor.
+        """
         x = self.pool(x)
         x = self.fc_norm(x)
         x = self.head_drop(x)
@@ -885,7 +991,12 @@ class VisionTransformer(nn.Module):
 
 
 def init_weights_vit_timm(module: nn.Module, name: str = '') -> None:
-    """ ViT weight initialization, original timm impl (for reproducibility) """
+    """ViT weight initialization, original timm impl (for reproducibility).
+
+    Args:
+        module: Module to initialize.
+        name: Module name for context.
+    """
     if isinstance(module, nn.Linear):
         trunc_normal_(module.weight, std=.02)
         if module.bias is not None:
@@ -895,7 +1006,13 @@ def init_weights_vit_timm(module: nn.Module, name: str = '') -> None:
 
 
 def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0.0) -> None:
-    """ ViT weight initialization, matching JAX (Flax) impl """
+    """ViT weight initialization, matching JAX (Flax) impl.
+
+    Args:
+        module: Module to initialize.
+        name: Module name for context.
+        head_bias: Bias value for head layer.
+    """
     if isinstance(module, nn.Linear):
         if name.startswith('head'):
             nn.init.zeros_(module.weight)
@@ -913,7 +1030,12 @@ def init_weights_vit_jax(module: nn.Module, name: str = '', head_bias: float = 0
 
 
 def init_weights_vit_moco(module: nn.Module, name: str = '') -> None:
-    """ ViT weight initialization, matching moco-v3 impl minus fixed PatchEmbed """
+    """ViT weight initialization, matching moco-v3 impl minus fixed PatchEmbed.
+
+    Args:
+        module: Module to initialize.
+        name: Module name for context.
+    """
     if isinstance(module, nn.Linear):
         if 'qkv' in name:
             # treat the weights of Q, K, V separately

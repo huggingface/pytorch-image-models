@@ -52,7 +52,7 @@ class Partial_conv3(nn.Module):
         x[:, :self.dim_conv3, :, :] = self.partial_conv3(x[:, :self.dim_conv3, :, :])
         return x
 
-    def forward_split_cat(self, x: torch.Tensor) -> torch.Tensor: 
+    def forward_split_cat(self, x: torch.Tensor) -> torch.Tensor:
         # for training/inference
         x1, x2 = torch.split(x, [self.dim_conv3, self.dim_untouched], dim=1)
         x1 = self.partial_conv3(x1)
@@ -74,7 +74,7 @@ class MLPBlock(nn.Module):
     ):
         super().__init__()
         mlp_hidden_dim = int(dim * mlp_ratio)
-        
+
         self.mlp = nn.Sequential(*[
             nn.Conv2d(dim, mlp_hidden_dim, 1, bias=False),
             norm_layer(mlp_hidden_dim),
@@ -152,7 +152,7 @@ class PatchEmbed(nn.Module):
     def __init__(
             self,
             in_chans: int,
-            embed_dim: int, 
+            embed_dim: int,
             patch_size: Union[int, Tuple[int, int]] = 4,
             norm_layer: LayerType = nn.BatchNorm2d,
     ):
@@ -327,7 +327,7 @@ class FasterNet(nn.Module):
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates
@@ -361,7 +361,7 @@ class FasterNet(nn.Module):
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return x if pre_logits else self.classifier(x)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)

@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 from urllib.parse import urlsplit
+
+from torch import nn
 
 from timm.layers import set_layer_config
 from ._helpers import load_checkpoint
@@ -13,7 +15,8 @@ from ._registry import is_model, model_entrypoint, split_model_name_tag
 __all__ = ['parse_model_name', 'safe_model_name', 'create_model']
 
 
-def parse_model_name(model_name: str):
+def parse_model_name(model_name: str) -> Tuple[Optional[str], str]:
+    """Parse source and name from potentially prefixed model name."""
     if model_name.startswith('hf_hub'):
         # NOTE for backwards compat, deprecate hf_hub use
         model_name = model_name.replace('hf_hub', 'hf-hub')
@@ -29,9 +32,9 @@ def parse_model_name(model_name: str):
         return None, model_name
 
 
-def safe_model_name(model_name: str, remove_source: bool = True):
-    # return a filename / path safe model name
-    def make_safe(name):
+def safe_model_name(model_name: str, remove_source: bool = True) -> str:
+    """Return a filename / path safe model name."""
+    def make_safe(name: str) -> str:
         return ''.join(c if c.isalnum() else '_' for c in name).rstrip('_')
     if remove_source:
         model_name = parse_model_name(model_name)[-1]
@@ -42,14 +45,14 @@ def create_model(
         model_name: str,
         pretrained: bool = False,
         pretrained_cfg: Optional[Union[str, Dict[str, Any], PretrainedCfg]] = None,
-        pretrained_cfg_overlay:  Optional[Dict[str, Any]] = None,
+        pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
         checkpoint_path: Optional[Union[str, Path]] = None,
         cache_dir: Optional[Union[str, Path]] = None,
         scriptable: Optional[bool] = None,
         exportable: Optional[bool] = None,
         no_jit: Optional[bool] = None,
-        **kwargs,
-):
+        **kwargs: Any,
+) -> nn.Module:
     """Create a model.
 
     Lookup model's entrypoint function and pass relevant args to create a new model.
