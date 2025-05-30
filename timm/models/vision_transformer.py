@@ -2463,23 +2463,43 @@ default_cfgs = {
     'test_vit4.r160_in1k': _cfg(
         input_size=(3, 160, 160), crop_pct=0.95),
 
-    # BEiT3 models (remapped to VisionTransformer with scale_norm=True)
+    # BEiT3 models (remapped to VisionTransformer with scale_attn_norm=True, scale_mlp_norm=True)
     'beit3_base_patch16_224.in22k_ft_in1k': _cfg(
-        url='https://github.com/addf400/files/releases/download/beit3/beit3_base_patch16_224_in1k.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0),
-    'beit3_base_patch16_224.in22k_indomain_ft_in1k': _cfg(
-        url='https://github.com/addf400/files/releases/download/beit3/beit3_base_indomain_patch16_224_in1k.pth',
+    'beit3_base_patch16_224.indomain_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0),
     'beit3_large_patch16_224.in22k_ft_in1k': _cfg(
-        url='https://github.com/addf400/files/releases/download/beit3/beit3_large_patch16_224_in1k.pth',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0),
-    'beit3_large_patch16_224.in22k_indomain_ft_in1k': _cfg(
-        url='https://github.com/addf400/files/releases/download/beit3/beit3_large_indomain_patch16_224_in1k.pth',
+    'beit3_large_patch16_224.indomain_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0),
     'beit3_giant_patch14_224.untrained': _cfg(
         url='', mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0),
     'beit3_giant_patch14_336.untrained': _cfg(
         url='', input_size=(3, 336, 336), mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0),
+    'beit3_base_patch16_224.pt': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0,
+        num_classes=0,
+    ),
+    'beit3_base_patch16_224.indomain_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0,
+        num_classes=0,
+    ),
+    'beit3_large_patch16_224.pt': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0,
+        num_classes=0,
+    ),
+    'beit3_large_patch16_224.indomain_pt': _cfg(
+        hf_hub_id='timm/',
+        mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD, crop_pct=1.0,
+        num_classes=0,
+    ),
 }
 
 _quick_gelu_cfgs = [n for n, c in default_cfgs.items() if c.get('notes', ()) and 'quickgelu' in c['notes'][0]]
@@ -3726,7 +3746,6 @@ def vit_giantopt_patch16_siglip_gap_384(pretrained: bool = False, **kwargs) -> V
     model = _create_vision_transformer(
         'vit_giantopt_patch16_siglip_gap_384', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
-
 
 
 @register_model
