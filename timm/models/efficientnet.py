@@ -36,7 +36,7 @@ the models and weights open source!
 Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -57,7 +57,7 @@ __all__ = ['EfficientNet', 'EfficientNetFeatures']
 
 
 class EfficientNet(nn.Module):
-    """ EfficientNet
+    """EfficientNet model architecture.
 
     A flexible and performant PyTorch implementation of efficient network architectures, including:
       * EfficientNet-V2 Small, Medium, Large, XL & B0-B3
@@ -70,6 +70,12 @@ class EfficientNet(nn.Module):
       * FBNet C
       * Single-Path NAS Pixel1
       * TinyNet
+
+    References:
+      - EfficientNet: https://arxiv.org/abs/1905.11946
+      - EfficientNetV2: https://arxiv.org/abs/2104.00298
+      - MixNet: https://arxiv.org/abs/1907.09595
+      - MnasNet: https://arxiv.org/abs/1807.11626
     """
 
     def __init__(
@@ -91,7 +97,28 @@ class EfficientNet(nn.Module):
             drop_rate: float = 0.,
             drop_path_rate: float = 0.,
             global_pool: str = 'avg'
-    ):
+    ) -> None:
+        """Initialize EfficientNet model.
+
+        Args:
+            block_args: Arguments for building blocks.
+            num_classes: Number of classifier classes.
+            num_features: Number of features for penultimate layer.
+            in_chans: Number of input channels.
+            stem_size: Number of output channels in stem.
+            stem_kernel_size: Kernel size for stem convolution.
+            fix_stem: If True, don't scale stem channels.
+            output_stride: Output stride of network.
+            pad_type: Padding type.
+            act_layer: Activation layer class.
+            norm_layer: Normalization layer class.
+            aa_layer: Anti-aliasing layer class.
+            se_layer: Squeeze-and-excitation layer class.
+            round_chs_fn: Channel rounding function.
+            drop_rate: Dropout rate for classifier.
+            drop_path_rate: Drop path rate for stochastic depth.
+            global_pool: Global pooling type.
+        """
         super(EfficientNet, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
@@ -138,7 +165,8 @@ class EfficientNet(nn.Module):
 
         efficientnet_init_weights(self)
 
-    def as_sequential(self):
+    def as_sequential(self) -> nn.Sequential:
+        """Convert model to sequential for feature extraction."""
         layers = [self.conv_stem, self.bn1]
         layers.extend(self.blocks)
         layers.extend([self.conv_head, self.bn2, self.global_pool])
@@ -146,7 +174,15 @@ class EfficientNet(nn.Module):
         return nn.Sequential(*layers)
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Union[str, List]]:
+        """Create regex patterns for parameter groups.
+
+        Args:
+            coarse: Use coarse (stage-level) grouping.
+
+        Returns:
+            Dictionary mapping group names to regex patterns.
+        """
         return dict(
             stem=r'^conv_stem|bn1',
             blocks=[
@@ -156,14 +192,26 @@ class EfficientNet(nn.Module):
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier module."""
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
@@ -178,18 +226,19 @@ class EfficientNet(nn.Module):
             intermediates_only: bool = False,
             extra_blocks: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
-            x: Input image tensor
-            indices: Take last n blocks if int, all if None, select matching indices if sequence
-            norm: Apply norm layer to compatible intermediates
-            stop_early: Stop iterating over blocks when last desired intermediate hit
-            output_fmt: Shape of intermediate feature outputs
-            intermediates_only: Only return intermediate features
-            extra_blocks: Include outputs of all blocks and head conv in output, does not align with feature_info
-        Returns:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
+            extra_blocks: Include outputs of all blocks and head conv in output, does not align with feature_info.
 
+        Returns:
+            List of intermediate features or tuple of (final features, intermediates).
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
@@ -231,8 +280,17 @@ class EfficientNet(nn.Module):
             prune_norm: bool = False,
             prune_head: bool = True,
             extra_blocks: bool = False,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers.
+            prune_head: Whether to prune the classifier head.
+            extra_blocks: Include all blocks in indexing.
+
+        Returns:
+            List of indices that were kept.
         """
         if extra_blocks:
             take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
@@ -247,7 +305,8 @@ class EfficientNet(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers."""
         x = self.conv_stem(x)
         x = self.bn1(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -258,13 +317,23 @@ class EfficientNet(nn.Module):
         x = self.bn2(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier.
+
+        Returns:
+            Output tensor.
+        """
         x = self.global_pool(x)
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return x if pre_logits else self.classifier(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
@@ -335,7 +404,12 @@ class EfficientNetFeatures(nn.Module):
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     def forward(self, x) -> List[torch.Tensor]:

@@ -26,9 +26,8 @@ Hacked together by / Copyright 2020 Ross Wightman
 import math
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Callable, List, Optional, Union, Tuple
+from typing import Any, Callable, Dict, List, Optional, Union, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -45,6 +44,7 @@ __all__ = ['RegNet', 'RegNetCfg']  # model_registry will add each entrypoint fn 
 
 @dataclass
 class RegNetCfg:
+    """RegNet architecture configuration."""
     depth: int = 21
     w0: int = 80
     wa: float = 42.63
@@ -62,13 +62,36 @@ class RegNetCfg:
     norm_layer: Union[str, Callable] = 'batchnorm'
 
 
-def quantize_float(f, q):
-    """Converts a float to the closest non-zero int divisible by q."""
+def quantize_float(f: float, q: int) -> int:
+    """Converts a float to the closest non-zero int divisible by q.
+
+    Args:
+        f: Input float value.
+        q: Quantization divisor.
+
+    Returns:
+        Quantized integer value.
+    """
     return int(round(f / q) * q)
 
 
-def adjust_widths_groups_comp(widths, bottle_ratios, groups, min_ratio=0.):
-    """Adjusts the compatibility of widths and groups."""
+def adjust_widths_groups_comp(
+        widths: List[int],
+        bottle_ratios: List[float],
+        groups: List[int],
+        min_ratio: float = 0.
+) -> Tuple[List[int], List[int]]:
+    """Adjusts the compatibility of widths and groups.
+
+    Args:
+        widths: List of channel widths.
+        bottle_ratios: List of bottleneck ratios.
+        groups: List of group sizes.
+        min_ratio: Minimum ratio for divisibility.
+
+    Returns:
+        Tuple of adjusted widths and groups.
+    """
     bottleneck_widths = [int(w * b) for w, b in zip(widths, bottle_ratios)]
     groups = [min(g, w_bot) for g, w_bot in zip(groups, bottleneck_widths)]
     if min_ratio:
@@ -80,29 +103,62 @@ def adjust_widths_groups_comp(widths, bottle_ratios, groups, min_ratio=0.):
     return widths, groups
 
 
-def generate_regnet(width_slope, width_initial, width_mult, depth, group_size, quant=8):
-    """Generates per block widths from RegNet parameters."""
+def generate_regnet(
+        width_slope: float,
+        width_initial: int,
+        width_mult: float,
+        depth: int,
+        group_size: int,
+        quant: int = 8
+) -> Tuple[List[int], int, List[int]]:
+    """Generates per block widths from RegNet parameters.
+
+    Args:
+        width_slope: Slope parameter for width progression.
+        width_initial: Initial width.
+        width_mult: Width multiplier.
+        depth: Network depth.
+        group_size: Group convolution size.
+        quant: Quantization factor.
+
+    Returns:
+        Tuple of (widths, num_stages, groups).
+    """
     assert width_slope >= 0 and width_initial > 0 and width_mult > 1 and width_initial % quant == 0
     # TODO dWr scaling?
     # depth = int(depth * (scale ** 0.1))
     # width_scale = scale ** 0.4  # dWr scale, exp 0.8 / 2, applied to both group and layer widths
-    widths_cont = np.arange(depth) * width_slope + width_initial
-    width_exps = np.round(np.log(widths_cont / width_initial) / np.log(width_mult))
-    widths = np.round(np.divide(width_initial * np.power(width_mult, width_exps), quant)) * quant
-    num_stages, max_stage = len(np.unique(widths)), width_exps.max() + 1
-    groups = np.array([group_size for _ in range(num_stages)])
-    return widths.astype(int).tolist(), num_stages, groups.astype(int).tolist()
+    widths_cont = torch.arange(depth, dtype=torch.float32) * width_slope + width_initial
+    width_exps = torch.round(torch.log(widths_cont / width_initial) / math.log(width_mult))
+    widths = torch.round((width_initial * torch.pow(width_mult, width_exps)) / quant) * quant
+    num_stages, max_stage = len(torch.unique(widths)), int(width_exps.max().item()) + 1
+    groups = torch.tensor([group_size for _ in range(num_stages)], dtype=torch.int32)
+    return widths.int().tolist(), num_stages, groups.tolist()
 
 
 def downsample_conv(
-        in_chs,
-        out_chs,
-        kernel_size=1,
-        stride=1,
-        dilation=1,
-        norm_layer=None,
-        preact=False,
-):
+        in_chs: int,
+        out_chs: int,
+        kernel_size: int = 1,
+        stride: int = 1,
+        dilation: int = 1,
+        norm_layer: Optional[Callable] = None,
+        preact: bool = False,
+) -> nn.Module:
+    """Create convolutional downsampling module.
+
+    Args:
+        in_chs: Input channels.
+        out_chs: Output channels.
+        kernel_size: Convolution kernel size.
+        stride: Convolution stride.
+        dilation: Convolution dilation.
+        norm_layer: Normalization layer.
+        preact: Use pre-activation.
+
+    Returns:
+        Downsampling module.
+    """
     norm_layer = norm_layer or nn.BatchNorm2d
     kernel_size = 1 if stride == 1 and dilation == 1 else kernel_size
     dilation = dilation if kernel_size > 1 else 1
@@ -127,15 +183,30 @@ def downsample_conv(
 
 
 def downsample_avg(
-        in_chs,
-        out_chs,
-        kernel_size=1,
-        stride=1,
-        dilation=1,
-        norm_layer=None,
-        preact=False,
-):
-    """ AvgPool Downsampling as in 'D' ResNet variants. This is not in RegNet space but I might experiment."""
+        in_chs: int,
+        out_chs: int,
+        kernel_size: int = 1,
+        stride: int = 1,
+        dilation: int = 1,
+        norm_layer: Optional[Callable] = None,
+        preact: bool = False,
+) -> nn.Sequential:
+    """Create average pool downsampling module.
+
+    AvgPool Downsampling as in 'D' ResNet variants. This is not in RegNet space but I might experiment.
+
+    Args:
+        in_chs: Input channels.
+        out_chs: Output channels.
+        kernel_size: Convolution kernel size.
+        stride: Convolution stride.
+        dilation: Convolution dilation.
+        norm_layer: Normalization layer.
+        preact: Use pre-activation.
+
+    Returns:
+        Sequential downsampling module.
+    """
     norm_layer = norm_layer or nn.BatchNorm2d
     avg_stride = stride if dilation == 1 else 1
     pool = nn.Identity()
@@ -150,15 +221,30 @@ def downsample_avg(
 
 
 def create_shortcut(
-        downsample_type,
-        in_chs,
-        out_chs,
-        kernel_size,
-        stride,
-        dilation=(1, 1),
-        norm_layer=None,
-        preact=False,
-):
+        downsample_type: Optional[str],
+        in_chs: int,
+        out_chs: int,
+        kernel_size: int,
+        stride: int,
+        dilation: Tuple[int, int] = (1, 1),
+        norm_layer: Optional[Callable] = None,
+        preact: bool = False,
+) -> Optional[nn.Module]:
+    """Create shortcut connection for residual blocks.
+
+    Args:
+        downsample_type: Type of downsampling ('avg', 'conv1x1', or None).
+        in_chs: Input channels.
+        out_chs: Output channels.
+        kernel_size: Kernel size for conv downsampling.
+        stride: Stride for downsampling.
+        dilation: Dilation rates.
+        norm_layer: Normalization layer.
+        preact: Use pre-activation.
+
+    Returns:
+        Shortcut module or None.
+    """
     assert downsample_type in ('avg', 'conv1x1', '', None)
     if in_chs != out_chs or stride != 1 or dilation[0] != dilation[1]:
         dargs = dict(stride=stride, dilation=dilation[0], norm_layer=norm_layer, preact=preact)
@@ -173,7 +259,7 @@ def create_shortcut(
 
 
 class Bottleneck(nn.Module):
-    """ RegNet Bottleneck
+    """RegNet Bottleneck block.
 
     This is almost exactly the same as a ResNet Bottleneck. The main difference is the SE block is moved from
     after conv3 to after conv2. Otherwise, it's just redefining the arguments for groups/bottleneck channels.
@@ -181,20 +267,37 @@ class Bottleneck(nn.Module):
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride=1,
-            dilation=(1, 1),
-            bottle_ratio=1,
-            group_size=1,
-            se_ratio=0.25,
-            downsample='conv1x1',
-            linear_out=False,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
+            in_chs: int,
+            out_chs: int,
+            stride: int = 1,
+            dilation: Tuple[int, int] = (1, 1),
+            bottle_ratio: float = 1,
+            group_size: int = 1,
+            se_ratio: float = 0.25,
+            downsample: str = 'conv1x1',
+            linear_out: bool = False,
+            act_layer: Callable = nn.ReLU,
+            norm_layer: Callable = nn.BatchNorm2d,
             drop_block=None,
-            drop_path_rate=0.,
+            drop_path_rate: float = 0.,
     ):
+        """Initialize RegNet Bottleneck block.
+
+        Args:
+            in_chs: Input channels.
+            out_chs: Output channels.
+            stride: Convolution stride.
+            dilation: Dilation rates for conv2 and shortcut.
+            bottle_ratio: Bottleneck ratio (reduction factor).
+            group_size: Group convolution size.
+            se_ratio: Squeeze-and-excitation ratio.
+            downsample: Shortcut downsampling type.
+            linear_out: Use linear activation for output.
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+            drop_block: Drop block layer.
+            drop_path_rate: Stochastic depth drop rate.
+        """
         super(Bottleneck, self).__init__()
         act_layer = get_act_layer(act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
@@ -230,10 +333,19 @@ class Bottleneck(nn.Module):
         )
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0 else nn.Identity()
 
-    def zero_init_last(self):
+    def zero_init_last(self) -> None:
+        """Zero-initialize the last batch norm in the block."""
         nn.init.zeros_(self.conv3.bn.weight)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         shortcut = x
         x = self.conv1(x)
         x = self.conv2(x)
@@ -248,28 +360,44 @@ class Bottleneck(nn.Module):
 
 
 class PreBottleneck(nn.Module):
-    """ RegNet Bottleneck
+    """Pre-activation RegNet Bottleneck block.
 
-    This is almost exactly the same as a ResNet Bottleneck. The main difference is the SE block is moved from
-    after conv3 to after conv2. Otherwise, it's just redefining the arguments for groups/bottleneck channels.
+    Similar to Bottleneck but with pre-activation normalization.
     """
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            stride=1,
-            dilation=(1, 1),
-            bottle_ratio=1,
-            group_size=1,
-            se_ratio=0.25,
-            downsample='conv1x1',
-            linear_out=False,
-            act_layer=nn.ReLU,
-            norm_layer=nn.BatchNorm2d,
+            in_chs: int,
+            out_chs: int,
+            stride: int = 1,
+            dilation: Tuple[int, int] = (1, 1),
+            bottle_ratio: float = 1,
+            group_size: int = 1,
+            se_ratio: float = 0.25,
+            downsample: str = 'conv1x1',
+            linear_out: bool = False,
+            act_layer: Callable = nn.ReLU,
+            norm_layer: Callable = nn.BatchNorm2d,
             drop_block=None,
-            drop_path_rate=0.,
+            drop_path_rate: float = 0.,
     ):
+        """Initialize pre-activation RegNet Bottleneck block.
+
+        Args:
+            in_chs: Input channels.
+            out_chs: Output channels.
+            stride: Convolution stride.
+            dilation: Dilation rates for conv2 and shortcut.
+            bottle_ratio: Bottleneck ratio (reduction factor).
+            group_size: Group convolution size.
+            se_ratio: Squeeze-and-excitation ratio.
+            downsample: Shortcut downsampling type.
+            linear_out: Use linear activation for output.
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+            drop_block: Drop block layer.
+            drop_path_rate: Stochastic depth drop rate.
+        """
         super(PreBottleneck, self).__init__()
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         bottleneck_chs = int(round(out_chs * bottle_ratio))
@@ -304,10 +432,19 @@ class PreBottleneck(nn.Module):
         )
         self.drop_path = DropPath(drop_path_rate) if drop_path_rate > 0 else nn.Identity()
 
-    def zero_init_last(self):
+    def zero_init_last(self) -> None:
+        """Zero-initialize the last batch norm (no-op for pre-activation)."""
         pass
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         x = self.norm1(x)
         shortcut = x
         x = self.conv1(x)
@@ -324,19 +461,34 @@ class PreBottleneck(nn.Module):
 
 
 class RegStage(nn.Module):
-    """Stage (sequence of blocks w/ the same output shape)."""
+    """RegNet stage (sequence of blocks with the same output shape).
+
+    A stage consists of multiple bottleneck blocks with the same output dimensions.
+    """
 
     def __init__(
             self,
-            depth,
-            in_chs,
-            out_chs,
-            stride,
-            dilation,
-            drop_path_rates=None,
-            block_fn=Bottleneck,
+            depth: int,
+            in_chs: int,
+            out_chs: int,
+            stride: int,
+            dilation: int,
+            drop_path_rates: Optional[List[float]] = None,
+            block_fn: Callable = Bottleneck,
             **block_kwargs,
     ):
+        """Initialize RegNet stage.
+
+        Args:
+            depth: Number of blocks in stage.
+            in_chs: Input channels.
+            out_chs: Output channels.
+            stride: Stride for first block.
+            dilation: Dilation rate.
+            drop_path_rates: Drop path rates for each block.
+            block_fn: Block class to use.
+            **block_kwargs: Additional block arguments.
+        """
         super(RegStage, self).__init__()
         self.grad_checkpointing = False
 
@@ -360,7 +512,15 @@ class RegStage(nn.Module):
             )
             first_dilation = dilation
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through all blocks in the stage.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.children(), x)
         else:
@@ -370,7 +530,7 @@ class RegStage(nn.Module):
 
 
 class RegNet(nn.Module):
-    """RegNet-X, Y, and Z Models
+    """RegNet-X, Y, and Z Models.
 
     Paper: https://arxiv.org/abs/2003.13678
     Original Impl: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
@@ -379,27 +539,27 @@ class RegNet(nn.Module):
     def __init__(
             self,
             cfg: RegNetCfg,
-            in_chans=3,
-            num_classes=1000,
-            output_stride=32,
-            global_pool='avg',
-            drop_rate=0.,
-            drop_path_rate=0.,
-            zero_init_last=True,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            output_stride: int = 32,
+            global_pool: str = 'avg',
+            drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            zero_init_last: bool = True,
             **kwargs,
     ):
-        """
+        """Initialize RegNet model.
 
         Args:
-            cfg (RegNetCfg): Model architecture configuration
-            in_chans (int): Number of input channels (default: 3)
-            num_classes (int): Number of classifier classes (default: 1000)
-            output_stride (int): Output stride of network, one of (8, 16, 32) (default: 32)
-            global_pool (str): Global pooling type (default: 'avg')
-            drop_rate (float): Dropout rate (default: 0.)
-            drop_path_rate (float): Stochastic depth drop-path rate (default: 0.)
-            zero_init_last (bool): Zero-init last weight of residual path
-            kwargs (dict): Extra kwargs overlayed onto cfg
+            cfg: Model architecture configuration.
+            in_chans: Number of input channels.
+            num_classes: Number of classifier classes.
+            output_stride: Output stride of network, one of (8, 16, 32).
+            global_pool: Global pooling type.
+            drop_rate: Dropout rate.
+            drop_path_rate: Stochastic depth drop-path rate.
+            zero_init_last: Zero-init last weight of residual path.
+            kwargs: Extra kwargs overlayed onto cfg.
         """
         super().__init__()
         self.num_classes = num_classes
@@ -459,12 +619,30 @@ class RegNet(nn.Module):
 
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
-    def _get_stage_args(self, cfg: RegNetCfg, default_stride=2, output_stride=32, drop_path_rate=0.):
+    def _get_stage_args(
+            self,
+            cfg: RegNetCfg,
+            default_stride: int = 2,
+            output_stride: int = 32,
+            drop_path_rate: float = 0.
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Generate stage arguments from configuration.
+
+        Args:`
+            cfg: RegNet configuration.
+            default_stride: Default stride for stages.
+            output_stride: Target output stride.
+            drop_path_rate: Stochastic depth rate.
+
+        Returns:
+            Tuple of (per_stage_args, common_args).
+        """
         # Generate RegNet ws per block
         widths, num_stages, stage_gs = generate_regnet(cfg.wa, cfg.w0, cfg.wm, cfg.depth, cfg.group_size)
 
         # Convert to per stage format
-        stage_widths, stage_depths = np.unique(widths, return_counts=True)
+        stage_widths, stage_depths = torch.unique(torch.tensor(widths), return_counts=True)
+        stage_widths, stage_depths = stage_widths.tolist(), stage_depths.tolist()
         stage_br = [cfg.bottle_ratio for _ in range(num_stages)]
         stage_strides = []
         stage_dilations = []
@@ -479,7 +657,10 @@ class RegNet(nn.Module):
                 net_stride *= stride
             stage_strides.append(stride)
             stage_dilations.append(dilation)
-        stage_dpr = np.split(np.linspace(0, drop_path_rate, sum(stage_depths)), np.cumsum(stage_depths[:-1]))
+        dpr_tensor = torch.linspace(0, drop_path_rate, sum(stage_depths))
+        split_indices = torch.cumsum(torch.tensor(stage_depths[:-1]), dim=0)
+        stage_dpr = torch.tensor_split(dpr_tensor, split_indices.tolist())
+        stage_dpr = [dpr.tolist() for dpr in stage_dpr]
 
         # Adjust the compatibility of ws and gws
         stage_widths, stage_gs = adjust_widths_groups_comp(
@@ -499,22 +680,31 @@ class RegNet(nn.Module):
         return per_stage_args, common_args
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Group parameters for optimization."""
         return dict(
             stem=r'^stem',
             blocks=r'^s(\d+)' if coarse else r'^s(\d+)\.b(\d+)',
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
         for s in list(self.children())[1:-1]:
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool)
 
@@ -571,8 +761,16 @@ class RegNet(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(5, indices)
         layer_names = ('s1', 's2', 's3', 's4')
@@ -585,7 +783,15 @@ class RegNet(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Feature tensor.
+        """
         x = self.stem(x)
         x = self.s1(x)
         x = self.s2(x)
@@ -594,16 +800,40 @@ class RegNet(nn.Module):
         x = self.final_conv(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Input features.
+            pre_logits: Return features before final linear layer.
+
+        Returns:
+            Classification logits or features.
+        """
         return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output logits.
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _init_weights(module, name='', zero_init_last=False):
+def _init_weights(module: nn.Module, name: str = '', zero_init_last: bool = False) -> None:
+    """Initialize module weights.
+
+    Args:
+        module: PyTorch module to initialize.
+        name: Module name.
+        zero_init_last: Zero-initialize last layer weights.
+    """
     if isinstance(module, nn.Conv2d):
         fan_out = module.kernel_size[0] * module.kernel_size[1] * module.out_channels
         fan_out //= module.groups
@@ -618,7 +848,15 @@ def _init_weights(module, name='', zero_init_last=False):
         module.zero_init_last()
 
 
-def _filter_fn(state_dict):
+def _filter_fn(state_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Filter and remap state dict keys for compatibility.
+
+    Args:
+        state_dict: Raw state dictionary.
+
+    Returns:
+        Filtered state dictionary.
+    """
     state_dict = state_dict.get('model', state_dict)
     replaces = [
         ('f.a.0', 'conv1.conv'),
@@ -740,7 +978,17 @@ model_cfgs = dict(
 )
 
 
-def _create_regnet(variant, pretrained, **kwargs):
+def _create_regnet(variant: str, pretrained: bool, **kwargs) -> RegNet:
+    """Create a RegNet model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        RegNet model instance.
+    """
     return build_model_with_cfg(
         RegNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
@@ -748,7 +996,16 @@ def _create_regnet(variant, pretrained, **kwargs):
         **kwargs)
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create default configuration dictionary.
+
+    Args:
+        url: Model weight URL.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'test_input_size': (3, 288, 288), 'crop_pct': 0.95, 'test_crop_pct': 1.0,
@@ -758,7 +1015,16 @@ def _cfg(url='', **kwargs):
     }
 
 
-def _cfgpyc(url='', **kwargs):
+def _cfgpyc(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create pycls configuration dictionary.
+
+    Args:
+        url: Model weight URL.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',
@@ -768,7 +1034,16 @@ def _cfgpyc(url='', **kwargs):
     }
 
 
-def _cfgtv2(url='', **kwargs):
+def _cfgtv2(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create torchvision v2 configuration dictionary.
+
+    Args:
+        url: Model weight URL.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.965, 'interpolation': 'bicubic',
@@ -963,205 +1238,205 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def regnetx_002(pretrained=False, **kwargs) -> RegNet:
+def regnetx_002(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-200MF"""
     return _create_regnet('regnetx_002', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_004(pretrained=False, **kwargs) -> RegNet:
+def regnetx_004(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-400MF"""
     return _create_regnet('regnetx_004', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_004_tv(pretrained=False, **kwargs) -> RegNet:
+def regnetx_004_tv(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-400MF w/ torchvision group rounding"""
     return _create_regnet('regnetx_004_tv', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_006(pretrained=False, **kwargs) -> RegNet:
+def regnetx_006(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-600MF"""
     return _create_regnet('regnetx_006', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_008(pretrained=False, **kwargs) -> RegNet:
+def regnetx_008(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-800MF"""
     return _create_regnet('regnetx_008', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_016(pretrained=False, **kwargs) -> RegNet:
+def regnetx_016(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-1.6GF"""
     return _create_regnet('regnetx_016', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_032(pretrained=False, **kwargs) -> RegNet:
+def regnetx_032(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-3.2GF"""
     return _create_regnet('regnetx_032', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_040(pretrained=False, **kwargs) -> RegNet:
+def regnetx_040(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-4.0GF"""
     return _create_regnet('regnetx_040', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_064(pretrained=False, **kwargs) -> RegNet:
+def regnetx_064(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-6.4GF"""
     return _create_regnet('regnetx_064', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_080(pretrained=False, **kwargs) -> RegNet:
+def regnetx_080(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-8.0GF"""
     return _create_regnet('regnetx_080', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_120(pretrained=False, **kwargs) -> RegNet:
+def regnetx_120(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-12GF"""
     return _create_regnet('regnetx_120', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_160(pretrained=False, **kwargs) -> RegNet:
+def regnetx_160(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-16GF"""
     return _create_regnet('regnetx_160', pretrained, **kwargs)
 
 
 @register_model
-def regnetx_320(pretrained=False, **kwargs) -> RegNet:
+def regnetx_320(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetX-32GF"""
     return _create_regnet('regnetx_320', pretrained, **kwargs)
 
 
 @register_model
-def regnety_002(pretrained=False, **kwargs) -> RegNet:
+def regnety_002(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-200MF"""
     return _create_regnet('regnety_002', pretrained, **kwargs)
 
 
 @register_model
-def regnety_004(pretrained=False, **kwargs) -> RegNet:
+def regnety_004(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-400MF"""
     return _create_regnet('regnety_004', pretrained, **kwargs)
 
 
 @register_model
-def regnety_006(pretrained=False, **kwargs) -> RegNet:
+def regnety_006(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-600MF"""
     return _create_regnet('regnety_006', pretrained, **kwargs)
 
 
 @register_model
-def regnety_008(pretrained=False, **kwargs) -> RegNet:
+def regnety_008(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-800MF"""
     return _create_regnet('regnety_008', pretrained, **kwargs)
 
 
 @register_model
-def regnety_008_tv(pretrained=False, **kwargs) -> RegNet:
+def regnety_008_tv(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-800MF w/ torchvision group rounding"""
     return _create_regnet('regnety_008_tv', pretrained, **kwargs)
 
 
 @register_model
-def regnety_016(pretrained=False, **kwargs) -> RegNet:
+def regnety_016(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-1.6GF"""
     return _create_regnet('regnety_016', pretrained, **kwargs)
 
 
 @register_model
-def regnety_032(pretrained=False, **kwargs) -> RegNet:
+def regnety_032(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-3.2GF"""
     return _create_regnet('regnety_032', pretrained, **kwargs)
 
 
 @register_model
-def regnety_040(pretrained=False, **kwargs) -> RegNet:
+def regnety_040(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-4.0GF"""
     return _create_regnet('regnety_040', pretrained, **kwargs)
 
 
 @register_model
-def regnety_064(pretrained=False, **kwargs) -> RegNet:
+def regnety_064(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-6.4GF"""
     return _create_regnet('regnety_064', pretrained, **kwargs)
 
 
 @register_model
-def regnety_080(pretrained=False, **kwargs) -> RegNet:
+def regnety_080(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-8.0GF"""
     return _create_regnet('regnety_080', pretrained, **kwargs)
 
 
 @register_model
-def regnety_080_tv(pretrained=False, **kwargs) -> RegNet:
+def regnety_080_tv(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-8.0GF w/ torchvision group rounding"""
     return _create_regnet('regnety_080_tv', pretrained, **kwargs)
 
 
 @register_model
-def regnety_120(pretrained=False, **kwargs) -> RegNet:
+def regnety_120(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-12GF"""
     return _create_regnet('regnety_120', pretrained, **kwargs)
 
 
 @register_model
-def regnety_160(pretrained=False, **kwargs) -> RegNet:
+def regnety_160(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-16GF"""
     return _create_regnet('regnety_160', pretrained, **kwargs)
 
 
 @register_model
-def regnety_320(pretrained=False, **kwargs) -> RegNet:
+def regnety_320(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-32GF"""
     return _create_regnet('regnety_320', pretrained, **kwargs)
 
 
 @register_model
-def regnety_640(pretrained=False, **kwargs) -> RegNet:
+def regnety_640(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-64GF"""
     return _create_regnet('regnety_640', pretrained, **kwargs)
 
 
 @register_model
-def regnety_1280(pretrained=False, **kwargs) -> RegNet:
+def regnety_1280(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-128GF"""
     return _create_regnet('regnety_1280', pretrained, **kwargs)
 
 
 @register_model
-def regnety_2560(pretrained=False, **kwargs) -> RegNet:
+def regnety_2560(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-256GF"""
     return _create_regnet('regnety_2560', pretrained, **kwargs)
 
 
 @register_model
-def regnety_040_sgn(pretrained=False, **kwargs) -> RegNet:
+def regnety_040_sgn(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetY-4.0GF w/ GroupNorm """
     return _create_regnet('regnety_040_sgn', pretrained, **kwargs)
 
 
 @register_model
-def regnetv_040(pretrained=False, **kwargs) -> RegNet:
+def regnetv_040(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetV-4.0GF (pre-activation)"""
     return _create_regnet('regnetv_040', pretrained, **kwargs)
 
 
 @register_model
-def regnetv_064(pretrained=False, **kwargs) -> RegNet:
+def regnetv_064(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetV-6.4GF (pre-activation)"""
     return _create_regnet('regnetv_064', pretrained, **kwargs)
 
 
 @register_model
-def regnetz_005(pretrained=False, **kwargs) -> RegNet:
+def regnetz_005(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetZ-500MF
     NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
     but it's not clear it is equivalent to paper model as not detailed in the paper.
@@ -1170,7 +1445,7 @@ def regnetz_005(pretrained=False, **kwargs) -> RegNet:
 
 
 @register_model
-def regnetz_040(pretrained=False, **kwargs) -> RegNet:
+def regnetz_040(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetZ-4.0GF
     NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
     but it's not clear it is equivalent to paper model as not detailed in the paper.
@@ -1179,7 +1454,7 @@ def regnetz_040(pretrained=False, **kwargs) -> RegNet:
 
 
 @register_model
-def regnetz_040_h(pretrained=False, **kwargs) -> RegNet:
+def regnetz_040_h(pretrained: bool = False, **kwargs) -> RegNet:
     """RegNetZ-4.0GF
     NOTE: config found in https://github.com/facebookresearch/ClassyVision/blob/main/classy_vision/models/regnet.py
     but it's not clear it is equivalent to paper model as not detailed in the paper.

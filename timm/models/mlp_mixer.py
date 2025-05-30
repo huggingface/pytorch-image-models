@@ -40,7 +40,7 @@ Hacked together by / Copyright 2021 Ross Wightman
 """
 import math
 from functools import partial
-from typing import List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import torch
 import torch.nn as nn
@@ -56,20 +56,33 @@ __all__ = ['MixerBlock', 'MlpMixer']  # model_registry will add each entrypoint 
 
 
 class MixerBlock(nn.Module):
-    """ Residual Block w/ token mixing and channel MLPs
+    """Residual Block w/ token mixing and channel MLPs.
+
     Based on: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
     """
     def __init__(
             self,
-            dim,
-            seq_len,
-            mlp_ratio=(0.5, 4.0),
-            mlp_layer=Mlp,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            drop=0.,
-            drop_path=0.,
-    ):
+            dim: int,
+            seq_len: int,
+            mlp_ratio: Union[float, Tuple[float, float]] = (0.5, 4.0),
+            mlp_layer: type = Mlp,
+            norm_layer: type = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: type = nn.GELU,
+            drop: float = 0.,
+            drop_path: float = 0.,
+    ) -> None:
+        """Initialize MixerBlock.
+
+        Args:
+            dim: Dimension of input features.
+            seq_len: Sequence length.
+            mlp_ratio: Expansion ratios for token mixing and channel MLPs.
+            mlp_layer: MLP layer class.
+            norm_layer: Normalization layer.
+            act_layer: Activation layer.
+            drop: Dropout rate.
+            drop_path: Drop path rate.
+        """
         super().__init__()
         tokens_dim, channels_dim = [int(x * dim) for x in to_2tuple(mlp_ratio)]
         self.norm1 = norm_layer(dim)
@@ -78,39 +91,61 @@ class MixerBlock(nn.Module):
         self.norm2 = norm_layer(dim)
         self.mlp_channels = mlp_layer(dim, channels_dim, act_layer=act_layer, drop=drop)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = x + self.drop_path(self.mlp_tokens(self.norm1(x).transpose(1, 2)).transpose(1, 2))
         x = x + self.drop_path(self.mlp_channels(self.norm2(x)))
         return x
 
 
 class Affine(nn.Module):
-    def __init__(self, dim):
+    """Affine transformation layer."""
+
+    def __init__(self, dim: int) -> None:
+        """Initialize Affine layer.
+
+        Args:
+            dim: Dimension of features.
+        """
         super().__init__()
         self.alpha = nn.Parameter(torch.ones((1, 1, dim)))
         self.beta = nn.Parameter(torch.zeros((1, 1, dim)))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply affine transformation."""
         return torch.addcmul(self.beta, self.alpha, x)
 
 
 class ResBlock(nn.Module):
-    """ Residual MLP block w/ LayerScale and Affine 'norm'
+    """Residual MLP block w/ LayerScale and Affine 'norm'.
 
     Based on: `ResMLP: Feedforward networks for image classification...` - https://arxiv.org/abs/2105.03404
     """
     def __init__(
             self,
-            dim,
-            seq_len,
-            mlp_ratio=4,
-            mlp_layer=Mlp,
-            norm_layer=Affine,
-            act_layer=nn.GELU,
-            init_values=1e-4,
-            drop=0.,
-            drop_path=0.,
-    ):
+            dim: int,
+            seq_len: int,
+            mlp_ratio: float = 4,
+            mlp_layer: type = Mlp,
+            norm_layer: type = Affine,
+            act_layer: type = nn.GELU,
+            init_values: float = 1e-4,
+            drop: float = 0.,
+            drop_path: float = 0.,
+    ) -> None:
+        """Initialize ResBlock.
+
+        Args:
+            dim: Dimension of input features.
+            seq_len: Sequence length.
+            mlp_ratio: Channel MLP expansion ratio.
+            mlp_layer: MLP layer class.
+            norm_layer: Normalization layer.
+            act_layer: Activation layer.
+            init_values: Initial values for layer scale.
+            drop: Dropout rate.
+            drop_path: Drop path rate.
+        """
         super().__init__()
         channel_dim = int(dim * mlp_ratio)
         self.norm1 = norm_layer(dim)
@@ -121,29 +156,39 @@ class ResBlock(nn.Module):
         self.ls1 = nn.Parameter(init_values * torch.ones(dim))
         self.ls2 = nn.Parameter(init_values * torch.ones(dim))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = x + self.drop_path(self.ls1 * self.linear_tokens(self.norm1(x).transpose(1, 2)).transpose(1, 2))
         x = x + self.drop_path(self.ls2 * self.mlp_channels(self.norm2(x)))
         return x
 
 
 class SpatialGatingUnit(nn.Module):
-    """ Spatial Gating Unit
+    """Spatial Gating Unit.
 
     Based on: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
-    def __init__(self, dim, seq_len, norm_layer=nn.LayerNorm):
+    def __init__(self, dim: int, seq_len: int, norm_layer: type = nn.LayerNorm) -> None:
+        """Initialize Spatial Gating Unit.
+
+        Args:
+            dim: Dimension of input features.
+            seq_len: Sequence length.
+            norm_layer: Normalization layer.
+        """
         super().__init__()
         gate_dim = dim // 2
         self.norm = norm_layer(gate_dim)
         self.proj = nn.Linear(seq_len, seq_len)
 
-    def init_weights(self):
+    def init_weights(self) -> None:
+        """Initialize weights for projection gate."""
         # special init for the projection gate, called as override by base model init
         nn.init.normal_(self.proj.weight, std=1e-6)
         nn.init.ones_(self.proj.bias)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply spatial gating."""
         u, v = x.chunk(2, dim=-1)
         v = self.norm(v)
         v = self.proj(v.transpose(-1, -2))
@@ -151,21 +196,33 @@ class SpatialGatingUnit(nn.Module):
 
 
 class SpatialGatingBlock(nn.Module):
-    """ Residual Block w/ Spatial Gating
+    """Residual Block w/ Spatial Gating.
 
     Based on: `Pay Attention to MLPs` - https://arxiv.org/abs/2105.08050
     """
     def __init__(
             self,
-            dim,
-            seq_len,
-            mlp_ratio=4,
-            mlp_layer=GatedMlp,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            drop=0.,
-            drop_path=0.,
-    ):
+            dim: int,
+            seq_len: int,
+            mlp_ratio: float = 4,
+            mlp_layer: type = GatedMlp,
+            norm_layer: type = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: type = nn.GELU,
+            drop: float = 0.,
+            drop_path: float = 0.,
+    ) -> None:
+        """Initialize SpatialGatingBlock.
+
+        Args:
+            dim: Dimension of input features.
+            seq_len: Sequence length.
+            mlp_ratio: Channel MLP expansion ratio.
+            mlp_layer: MLP layer class.
+            norm_layer: Normalization layer.
+            act_layer: Activation layer.
+            drop: Dropout rate.
+            drop_path: Drop path rate.
+        """
         super().__init__()
         channel_dim = int(dim * mlp_ratio)
         self.norm = norm_layer(dim)
@@ -173,33 +230,59 @@ class SpatialGatingBlock(nn.Module):
         self.mlp_channels = mlp_layer(dim, channel_dim, act_layer=act_layer, gate_layer=sgu, drop=drop)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = x + self.drop_path(self.mlp_channels(self.norm(x)))
         return x
 
 
 class MlpMixer(nn.Module):
+    """MLP-Mixer model architecture.
+
+    Based on: 'MLP-Mixer: An all-MLP Architecture for Vision' - https://arxiv.org/abs/2105.01601
+    """
 
     def __init__(
             self,
-            num_classes=1000,
-            img_size=224,
-            in_chans=3,
-            patch_size=16,
-            num_blocks=8,
-            embed_dim=512,
-            mlp_ratio=(0.5, 4.0),
-            block_layer=MixerBlock,
-            mlp_layer=Mlp,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            act_layer=nn.GELU,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            drop_path_rate=0.,
-            nlhb=False,
-            stem_norm=False,
-            global_pool='avg',
-    ):
+            num_classes: int = 1000,
+            img_size: int = 224,
+            in_chans: int = 3,
+            patch_size: int = 16,
+            num_blocks: int = 8,
+            embed_dim: int = 512,
+            mlp_ratio: Union[float, Tuple[float, float]] = (0.5, 4.0),
+            block_layer: type = MixerBlock,
+            mlp_layer: type = Mlp,
+            norm_layer: type = partial(nn.LayerNorm, eps=1e-6),
+            act_layer: type = nn.GELU,
+            drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            nlhb: bool = False,
+            stem_norm: bool = False,
+            global_pool: str = 'avg',
+    ) -> None:
+        """Initialize MLP-Mixer.
+
+        Args:
+            num_classes: Number of classes for classification.
+            img_size: Input image size.
+            in_chans: Number of input channels.
+            patch_size: Patch size.
+            num_blocks: Number of mixer blocks.
+            embed_dim: Embedding dimension.
+            mlp_ratio: MLP expansion ratio(s).
+            block_layer: Block layer class.
+            mlp_layer: MLP layer class.
+            norm_layer: Normalization layer.
+            act_layer: Activation layer.
+            drop_rate: Head dropout rate.
+            proj_drop_rate: Projection dropout rate.
+            drop_path_rate: Drop path rate.
+            nlhb: Use negative log bias initialization.
+            stem_norm: Apply normalization to stem.
+            global_pool: Global pooling type.
+        """
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -236,26 +319,51 @@ class MlpMixer(nn.Module):
         self.init_weights(nlhb=nlhb)
 
     @torch.jit.ignore
-    def init_weights(self, nlhb=False):
+    def init_weights(self, nlhb: bool = False) -> None:
+        """Initialize model weights.
+
+        Args:
+            nlhb: Use negative log bias initialization for head.
+        """
         head_bias = -math.log(self.num_classes) if nlhb else 0.
         named_apply(partial(_init_weights, head_bias=head_bias), module=self)  # depth-first
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Create regex patterns for parameter grouping.
+
+        Args:
+            coarse: Use coarse grouping.
+
+        Returns:
+            Dictionary mapping group names to regex patterns.
+        """
         return dict(
             stem=r'^stem',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))]
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier module."""
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ('', 'avg')
@@ -271,18 +379,18 @@ class MlpMixer(nn.Module):
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
-            x: Input image tensor
-            indices: Take last n blocks if int, all if None, select matching indices if sequence
-            return_prefix_tokens: Return both prefix and spatial intermediate tokens
-            norm: Apply norm layer to all intermediates
-            stop_early: Stop iterating over blocks when last desired intermediate hit
-            output_fmt: Shape of intermediate feature outputs
-            intermediates_only: Only return intermediate features
-        Returns:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to all intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs ('NCHW' or 'NLC').
+            intermediates_only: Only return intermediate features.
 
+        Returns:
+            List of intermediate features or tuple of (final features, intermediates).
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
@@ -321,8 +429,16 @@ class MlpMixer(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
@@ -332,7 +448,8 @@ class MlpMixer(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers."""
         x = self.stem(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
@@ -341,20 +458,36 @@ class MlpMixer(nn.Module):
         x = self.norm(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier.
+
+        Returns:
+            Output tensor.
+        """
         if self.global_pool == 'avg':
             x = x.mean(dim=1)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _init_weights(module: nn.Module, name: str, head_bias: float = 0., flax=False):
-    """ Mixer weight initialization (trying to match Flax defaults)
+def _init_weights(module: nn.Module, name: str, head_bias: float = 0., flax: bool = False) -> None:
+    """Mixer weight initialization (trying to match Flax defaults).
+
+    Args:
+        module: Module to initialize.
+        name: Module name.
+        head_bias: Bias value for head layer.
+        flax: Use Flax-style initialization.
     """
     if isinstance(module, nn.Linear):
         if name.startswith('head'):
@@ -404,7 +537,7 @@ def checkpoint_filter_fn(state_dict, model):
     return state_dict
 
 
-def _create_mixer(variant, pretrained=False, **kwargs):
+def _create_mixer(variant, pretrained=False, **kwargs) -> MlpMixer:
     out_indices = kwargs.pop('out_indices', 3)
     model = build_model_with_cfg(
         MlpMixer,
@@ -417,7 +550,7 @@ def _create_mixer(variant, pretrained=False, **kwargs):
     return model
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url='', **kwargs) -> Dict[str, Any]:
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,

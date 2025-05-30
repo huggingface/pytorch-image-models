@@ -36,7 +36,7 @@ class LayerScale2d(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.mul_(self.gamma) if self.inplace else x * self.gamma
-    
+
 
 class Embedding(nn.Module):
     """
@@ -73,7 +73,7 @@ class ConvEncoder(nn.Module):
     Output: tensor with shape [B, C, H, W]
     """
     def __init__(
-            self, 
+            self,
             dim: int,
             hidden_dim: int = 64,
             kernel_size: int = 3,
@@ -150,7 +150,7 @@ class EfficientAdditiveAttention(nn.Module):
         self.to_key = nn.Linear(in_dims, token_dim * num_heads)
 
         self.w_g = nn.Parameter(torch.randn(token_dim * num_heads, 1))
-        
+
         self.proj = nn.Linear(token_dim * num_heads, token_dim * num_heads)
         self.final = nn.Linear(token_dim * num_heads, token_dim)
 
@@ -203,7 +203,7 @@ class LocalRepresentation(nn.Module):
         x = self.layer_scale(x)
         x = skip + self.drop_path(x)
         return x
-    
+
 
 class Block(nn.Module):
     """
@@ -225,7 +225,7 @@ class Block(nn.Module):
     ):
         super().__init__()
         self.local_representation = LocalRepresentation(
-            dim=dim, 
+            dim=dim,
             use_layer_scale=use_layer_scale,
             act_layer=act_layer,
             norm_layer=norm_layer,
@@ -235,7 +235,7 @@ class Block(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
-            norm_layer=norm_layer, 
+            norm_layer=norm_layer,
             drop=drop_rate,
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -280,7 +280,7 @@ class Stage(nn.Module):
             block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
             if layers[index] - block_idx <= 1:
                 blocks.append(Block(
-                    dim, 
+                    dim,
                     mlp_ratio=mlp_ratio,
                     drop_rate=drop_rate,
                     drop_path=block_dpr,
@@ -291,8 +291,8 @@ class Stage(nn.Module):
                 ))
             else:
                 blocks.append(ConvEncoder(
-                    dim=dim, 
-                    hidden_dim=int(mlp_ratio * dim), 
+                    dim=dim,
+                    hidden_dim=int(mlp_ratio * dim),
                     kernel_size=3,
                     drop_path=block_dpr,
                     act_layer=act_layer,
@@ -357,9 +357,9 @@ class SwiftFormer(nn.Module):
                 padding=down_pad,
             ) if downsamples[i] else nn.Identity()
             stage = Stage(
-                dim=embed_dims[i], 
-                index=i, 
-                layers=layers, 
+                dim=embed_dims[i],
+                index=i,
+                layers=layers,
                 mlp_ratio=mlp_ratios,
                 act_layer=act_layer,
                 drop_rate=drop_rate,
@@ -429,7 +429,7 @@ class SwiftFormer(nn.Module):
     @torch.jit.ignore
     def set_distilled_training(self, enable: bool = True):
         self.distilled_training = enable
-    
+
     def forward_intermediates(
             self,
             x: torch.Tensor,
@@ -470,7 +470,7 @@ class SwiftFormer(nn.Module):
                     x_inter = self.norm(x)  # applying final norm last intermediate
                 else:
                     x_inter = x
-                intermediates.append(x_inter) 
+                intermediates.append(x_inter)
 
         if intermediates_only:
             return intermediates

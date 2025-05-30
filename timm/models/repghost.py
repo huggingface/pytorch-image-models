@@ -168,7 +168,7 @@ class RepGhostBottleneck(nn.Module):
 
         # Point-wise linear projection
         self.ghost2 = RepGhostModule(mid_chs, out_chs, relu=False, reparam=reparam)
-        
+
         # shortcut
         if in_chs == out_chs and self.stride == 1:
             self.shortcut = nn.Sequential()
@@ -199,7 +199,7 @@ class RepGhostBottleneck(nn.Module):
 
         # 2nd ghost bottleneck
         x = self.ghost2(x)
-        
+
         x += self.shortcut(shortcut)
         return x
 
@@ -256,8 +256,8 @@ class RepGhostNet(nn.Module):
         out_chs = make_divisible(exp_size * width * 2, 4)
         stages.append(nn.Sequential(ConvBnAct(prev_chs, out_chs, 1)))
         self.pool_dim = prev_chs = out_chs
-        
-        self.blocks = nn.Sequential(*stages)        
+
+        self.blocks = nn.Sequential(*stages)
 
         # building last several layers
         self.num_features = prev_chs
@@ -338,7 +338,7 @@ class RepGhostNet(nn.Module):
         for feat_idx, stage in enumerate(stages, start=1):
             x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates
@@ -408,7 +408,7 @@ def _create_repghostnet(variant, width=1.0, pretrained=False, **kwargs):
     Constructs a RepGhostNet model
     """
     cfgs = [
-        # k, t, c, SE, s 
+        # k, t, c, SE, s
         # stage1
         [[3,  8,  16, 0, 1]],
         # stage2

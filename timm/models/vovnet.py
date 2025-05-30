@@ -305,7 +305,7 @@ class VovNet(nn.Module):
         for feat_idx, stage in enumerate(stages, start=1):
             x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates

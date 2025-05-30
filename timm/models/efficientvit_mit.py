@@ -423,7 +423,7 @@ class ResidualBlock(nn.Module):
         return res
 
 
-def build_local_block(        
+def build_local_block(
         in_channels: int,
         out_channels: int,
         stride: int,
@@ -787,7 +787,7 @@ class EfficientVit(nn.Module):
             stages = self.stages
         else:
             stages = self.stages[:max_index + 1]
- 
+
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:
@@ -941,7 +941,7 @@ class EfficientVitLarge(nn.Module):
             stages = self.stages
         else:
             stages = self.stages[:max_index + 1]
- 
+
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:

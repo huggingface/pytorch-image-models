@@ -279,12 +279,12 @@ class PoolingVisionTransformer(nn.Module):
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.transformers), indices)
-        
+
         # forward pass
         x = self.patch_embed(x)
         x = self.pos_drop(x + self.pos_embed)
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
-  
+
         last_idx = len(self.transformers) - 1
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
             stages = self.transformers
@@ -294,11 +294,11 @@ class PoolingVisionTransformer(nn.Module):
         for feat_idx, stage in enumerate(stages):
             x, cls_tokens = stage((x, cls_tokens))
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates
-        
+
         if feat_idx == last_idx:
             cls_tokens = self.norm(cls_tokens)
 

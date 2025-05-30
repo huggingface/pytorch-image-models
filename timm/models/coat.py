@@ -1,4 +1,4 @@
-""" 
+"""
 CoaT architecture.
 
 Paper: Co-Scale Conv-Attentional Image Transformers - https://arxiv.org/abs/2104.06399
@@ -44,8 +44,8 @@ class ConvRelPosEnc(nn.Module):
         elif isinstance(window, dict):
             self.window = window
         else:
-            raise ValueError()            
-        
+            raise ValueError()
+
         self.conv_list = nn.ModuleList()
         self.head_splits = []
         for cur_window, cur_head_split in window.items():
@@ -56,9 +56,9 @@ class ConvRelPosEnc(nn.Module):
             cur_conv = nn.Conv2d(
                 cur_head_split * head_chs,
                 cur_head_split * head_chs,
-                kernel_size=(cur_window, cur_window), 
+                kernel_size=(cur_window, cur_window),
                 padding=(padding_size, padding_size),
-                dilation=(dilation, dilation),                          
+                dilation=(dilation, dilation),
                 groups=cur_head_split * head_chs,
             )
             self.conv_list.append(cur_conv)
@@ -138,13 +138,13 @@ class FactorAttnConvRelPosEnc(nn.Module):
 
 
 class ConvPosEnc(nn.Module):
-    """ Convolutional Position Encoding. 
+    """ Convolutional Position Encoding.
         Note: This module is similar to the conditional position encoding in CPVT.
     """
     def __init__(self, dim, k=3):
         super(ConvPosEnc, self).__init__()
-        self.proj = nn.Conv2d(dim, dim, k, 1, k//2, groups=dim) 
-    
+        self.proj = nn.Conv2d(dim, dim, k, 1, k//2, groups=dim)
+
     def forward(self, x, size: Tuple[int, int]):
         B, N, C = x.shape
         H, W = size
@@ -152,7 +152,7 @@ class ConvPosEnc(nn.Module):
 
         # Extract CLS token and image tokens.
         cls_token, img_tokens = x[:, :1], x[:, 1:]  # [B, 1, C], [B, H*W, C]
-        
+
         # Depthwise convolution.
         feat = img_tokens.transpose(1, 2).view(B, C, H, W)
         x = self.proj(feat) + feat
@@ -212,9 +212,9 @@ class SerialBlock(nn.Module):
         x = self.cpe(x, size)
         cur = self.norm1(x)
         cur = self.factoratt_crpe(cur, size)
-        x = x + self.drop_path(cur) 
+        x = x + self.drop_path(cur)
 
-        # MLP. 
+        # MLP.
         cur = self.norm2(x)
         cur = self.mlp(cur)
         x = x + self.drop_path(cur)
@@ -300,7 +300,7 @@ class ParallelBlock(nn.Module):
 
         cls_token = x[:, :1, :]
         img_tokens = x[:, 1:, :]
-        
+
         img_tokens = img_tokens.transpose(1, 2).reshape(B, C, H, W)
         img_tokens = F.interpolate(
             img_tokens,
@@ -310,7 +310,7 @@ class ParallelBlock(nn.Module):
             align_corners=False,
         )
         img_tokens = img_tokens.reshape(B, C, -1).transpose(1, 2)
-        
+
         out = torch.cat((cls_token, img_tokens), dim=1)
 
         return out
@@ -332,11 +332,11 @@ class ParallelBlock(nn.Module):
         cur2 = cur2 + upsample3_2 + upsample4_2
         cur3 = cur3 + upsample4_3 + downsample2_3
         cur4 = cur4 + downsample3_4 + downsample2_4
-        x2 = x2 + self.drop_path(cur2) 
-        x3 = x3 + self.drop_path(cur3) 
-        x4 = x4 + self.drop_path(cur4) 
+        x2 = x2 + self.drop_path(cur2)
+        x3 = x3 + self.drop_path(cur3)
+        x4 = x4 + self.drop_path(cur4)
 
-        # MLP. 
+        # MLP.
         cur2 = self.norm22(x2)
         cur3 = self.norm23(x3)
         cur4 = self.norm24(x4)
@@ -345,7 +345,7 @@ class ParallelBlock(nn.Module):
         cur4 = self.mlp4(cur4)
         x2 = x2 + self.drop_path(cur2)
         x3 = x3 + self.drop_path(cur3)
-        x4 = x4 + self.drop_path(cur4) 
+        x4 = x4 + self.drop_path(cur4)
 
         return x1, x2, x3, x4
 
@@ -576,7 +576,7 @@ class CoaT(nn.Module):
         for blk in self.serial_blocks1:
             x1 = blk(x1, size=(H1, W1))
         x1_nocls = remove_cls(x1).reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
-        
+
         # Serial blocks 2.
         x2 = self.patch_embed2(x1_nocls)
         H2, W2 = self.patch_embed2.grid_size
@@ -605,7 +605,7 @@ class CoaT(nn.Module):
         if self.parallel_blocks is None:
             if not torch.jit.is_scripting() and self.return_interm_layers:
                 # Return intermediate features for down-stream tasks (e.g. Deformable DETR and Detectron2).
-                feat_out = {}   
+                feat_out = {}
                 if 'x1_nocls' in self.out_features:
                     feat_out['x1_nocls'] = x1_nocls
                 if 'x2_nocls' in self.out_features:
@@ -627,7 +627,7 @@ class CoaT(nn.Module):
 
         if not torch.jit.is_scripting() and self.return_interm_layers:
             # Return intermediate features for down-stream tasks (e.g. Deformable DETR and Detectron2).
-            feat_out = {}   
+            feat_out = {}
             if 'x1_nocls' in self.out_features:
                 x1_nocls = remove_cls(x1).reshape(B, H1, W1, -1).permute(0, 3, 1, 2).contiguous()
                 feat_out['x1_nocls'] = x1_nocls
