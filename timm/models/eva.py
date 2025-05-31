@@ -716,7 +716,10 @@ class Eva(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x, rope=rot_pos_embed)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, rope=rot_pos_embed)
+            else:
+                x = blk(x, rope=rot_pos_embed)
             if i in take_indices:
                 intermediates.append(self.norm(x) if norm else x)
 

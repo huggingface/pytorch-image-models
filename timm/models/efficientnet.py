@@ -210,9 +210,11 @@ class EfficientNet(nn.Module):
             blocks = self.blocks
         else:
             blocks = self.blocks[:max_index]
-        for blk in blocks:
-            feat_idx += 1
-            x = blk(x)
+        for feat_idx, blk in enumerate(blocks, start=1):
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 

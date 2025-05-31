@@ -23,7 +23,7 @@ from timm.utils.model import reparameterize_model
 from ._builder import build_model_with_cfg
 from ._efficientnet_blocks import SqueezeExcite, ConvBnAct
 from ._features import feature_take_indices
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 __all__ = ['GhostNet']
@@ -727,7 +727,10 @@ class GhostNet(nn.Module):
             stages = self.blocks[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages, start=1):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x) 
 

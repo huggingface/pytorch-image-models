@@ -22,7 +22,7 @@ from timm.layers import ClassifierHead, create_act_layer, ConvNormAct, DropPath,
 from ._builder import build_model_with_cfg
 from ._efficientnet_builder import efficientnet_init_weights
 from ._features import feature_take_indices
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['RexNet']  # model_registry will add each entrypoint fn to this
@@ -271,7 +271,10 @@ class RexNet(nn.Module):
             stages = self.features[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x) 
 

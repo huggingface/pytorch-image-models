@@ -451,7 +451,10 @@ class Beit(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x, shared_rel_pos_bias=rel_pos_bias)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, shared_rel_pos_bias=rel_pos_bias)
+            else:
+                x = blk(x, shared_rel_pos_bias=rel_pos_bias)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)

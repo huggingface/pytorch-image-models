@@ -478,7 +478,10 @@ class Xcit(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x, Hp, Wp)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, Hp, Wp)
+            else:
+                x = blk(x, Hp, Wp)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)
