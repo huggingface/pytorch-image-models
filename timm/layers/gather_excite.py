@@ -1,6 +1,6 @@
 """ Gather-Excite Attention Block
 
-Paper: `Gather-Excite: Exploiting Feature Context in CNNs` - https://arxiv.org/abs/1810.12348
+Paper: `Gather-Excite: Exploiting Feature Context in CNNs` - https://huggingface.co/papers/1810.12348
 
 Official code here, but it's only partial impl in Caffe: https://github.com/hujie-frank/GENet
 

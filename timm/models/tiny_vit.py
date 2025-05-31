@@ -1,7 +1,7 @@
 """ TinyViT
 
 Paper: `TinyViT: Fast Pretraining Distillation for Small Vision Transformers`
-    - https://arxiv.org/abs/2207.10666
+    - https://huggingface.co/papers/2207.10666
 
 Adapted from official impl at https://github.com/microsoft/Cream/tree/main/TinyViT
 """

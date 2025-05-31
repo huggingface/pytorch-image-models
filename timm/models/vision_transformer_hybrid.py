@@ -3,10 +3,10 @@
 A PyTorch implement of the Hybrid Vision Transformers as described in:
 
 'An Image Is Worth 16 x 16 Words: Transformers for Image Recognition at Scale'
-    - https://arxiv.org/abs/2010.11929
+    - https://huggingface.co/papers/2010.11929
 
 `How to train your ViT? Data, Augmentation, and Regularization in Vision Transformers`
-    - https://arxiv.org/abs/2106.10270
+    - https://huggingface.co/papers/2106.10270
 
 NOTE These hybrid model definitions depend on code in vision_transformer.py.
 They were moved here to keep file sizes sane.
@@ -291,7 +291,7 @@ def vit_base_r26_s32_224(pretrained=False, **kwargs) -> VisionTransformer:
 
 @register_model
 def vit_base_r50_s16_224(pretrained=False, **kwargs) -> VisionTransformer:
-    """ R50+ViT-B/S16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
+    """ R50+ViT-B/S16 hybrid from original paper (https://huggingface.co/papers/2010.11929).
     """
     backbone = _resnetv2((3, 4, 9), **kwargs)
     model_args = dict(embed_dim=768, depth=12, num_heads=12)
@@ -302,7 +302,7 @@ def vit_base_r50_s16_224(pretrained=False, **kwargs) -> VisionTransformer:
 
 @register_model
 def vit_base_r50_s16_384(pretrained=False, **kwargs) -> VisionTransformer:
-    """ R50+ViT-B/16 hybrid from original paper (https://arxiv.org/abs/2010.11929).
+    """ R50+ViT-B/16 hybrid from original paper (https://huggingface.co/papers/2010.11929).
     ImageNet-1k weights fine-tuned from in21k @ 384x384, source https://github.com/google-research/vision_transformer.
     """
     backbone = _resnetv2((3, 4, 9), **kwargs)

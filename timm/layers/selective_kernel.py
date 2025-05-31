@@ -1,6 +1,6 @@
 """ Selective Kernel Convolution/Attention
 
-Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
+Paper: Selective Kernel Networks (https://huggingface.co/papers/1903.06586)
 
 Hacked together by / Copyright 2020 Ross Wightman
 """
@@ -53,7 +53,7 @@ class SelectiveKernel(nn.Module):
                  act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None, drop_layer=None):
         """ Selective Kernel Convolution Module
 
-        As described in Selective Kernel Networks (https://arxiv.org/abs/1903.06586) with some modifications.
+        As described in Selective Kernel Networks (https://huggingface.co/papers/1903.06586) with some modifications.
 
         Largest change is the input split, which divides the input channels across each convolution path, this can
         be viewed as a grouping of sorts, but the output channel counts expand to the module level value. This keeps

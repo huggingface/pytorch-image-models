@@ -1,9 +1,9 @@
 """RegNet X, Y, Z, and more
 
-Paper: `Designing Network Design Spaces` - https://arxiv.org/abs/2003.13678
+Paper: `Designing Network Design Spaces` - https://huggingface.co/papers/2003.13678
 Original Impl: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
 
-Paper: `Fast and Accurate Model Scaling` - https://arxiv.org/abs/2103.06877
+Paper: `Fast and Accurate Model Scaling` - https://huggingface.co/papers/2103.06877
 Original Impl: None
 
 Based on original PyTorch impl linked above, but re-wrote to use my own blocks (adapted from ResNet here)
@@ -372,7 +372,7 @@ class RegStage(nn.Module):
 class RegNet(nn.Module):
     """RegNet-X, Y, and Z Models
 
-    Paper: https://arxiv.org/abs/2003.13678
+    Paper: https://huggingface.co/papers/2003.13678
     Original Impl: https://github.com/facebookresearch/pycls/blob/master/pycls/models/regnet.py
     """
 

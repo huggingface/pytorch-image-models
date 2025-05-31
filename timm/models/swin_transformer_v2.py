@@ -1,6 +1,6 @@
 """ Swin Transformer V2
 A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
-    - https://arxiv.org/abs/2111.09883
+    - https://huggingface.co/papers/2111.09883
 
 Code/weights from https://github.com/microsoft/Swin-Transformer, original copyright/license info below
 
@@ -581,7 +581,7 @@ class SwinTransformerV2(nn.Module):
     """ Swin Transformer V2
 
     A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
-        - https://arxiv.org/abs/2111.09883
+        - https://huggingface.co/papers/2111.09883
     """
 
     def __init__(

@@ -28,7 +28,7 @@ class RMSpropTF(Optimizer):
     `course <http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf>`_.
 
     The centered version first appears in `Generating Sequences
-    With Recurrent Neural Networks <https://arxiv.org/pdf/1308.0850v5.pdf>`_.
+    With Recurrent Neural Networks <https://huggingface.co/papers/1308.0850v5.pdf>`_.
 
     Args:
         params: iterable of parameters to optimize or dicts defining parameter groups
@@ -38,7 +38,7 @@ class RMSpropTF(Optimizer):
         eps: term added to the denominator to improve numerical stability
         centered: if ``True``, compute the centered RMSProp, the gradient is normalized by an estimation of its variance
         weight_decay: weight decay (L2 penalty) (default: 0)
-        decoupled_decay: decoupled weight decay as per https://arxiv.org/abs/1711.05101
+        decoupled_decay: decoupled weight decay as per https://huggingface.co/papers/1711.05101
         lr_in_momentum: learning rate scaling is included in the momentum buffer update as per defaults in Tensorflow
         caution: apply caution
     """
@@ -146,7 +146,7 @@ class RMSpropTF(Optimizer):
                     buf.mul_(group['momentum'])
 
                     def _apply_caution(_m, _g):
-                        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+                        # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
                         mask = (_m * _g > 0).to(_g.dtype)
                         mask.div_(mask.mean().clamp_(min=1e-3))
                         return _m * mask

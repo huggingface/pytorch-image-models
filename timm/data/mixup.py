@@ -1,9 +1,9 @@
 """ Mixup and Cutmix
 
 Papers:
-mixup: Beyond Empirical Risk Minimization (https://arxiv.org/abs/1710.09412)
+mixup: Beyond Empirical Risk Minimization (https://huggingface.co/papers/1710.09412)
 
-CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Features (https://arxiv.org/abs/1905.04899)
+CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Features (https://huggingface.co/papers/1905.04899)
 
 Code Reference:
 CutMix: https://github.com/clovaai/CutMix-PyTorch

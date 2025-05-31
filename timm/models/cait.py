@@ -1,6 +1,6 @@
 """ Class-Attention in Image Transformers (CaiT)
 
-Paper: 'Going deeper with Image Transformers' - https://arxiv.org/abs/2103.17239
+Paper: 'Going deeper with Image Transformers' - https://huggingface.co/papers/2103.17239
 
 Original code and weights from https://github.com/facebookresearch/deit, copyright below
 
@@ -116,7 +116,7 @@ class LayerScaleBlockClassAttn(nn.Module):
 
 class TalkingHeadAttn(nn.Module):
     # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
-    # with slight modifications to add Talking Heads Attention (https://arxiv.org/pdf/2003.02436v1.pdf)
+    # with slight modifications to add Talking Heads Attention (https://huggingface.co/papers/2003.02436v1.pdf)
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.):
         super().__init__()
 
