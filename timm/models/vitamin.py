@@ -259,11 +259,12 @@ class GeGluMlp(nn.Module):
             in_features, 
             hidden_features,
             act_layer = 'gelu',
+            norm_layer = None,
             bias = True,
             drop = 0.0,
     ):
         super().__init__()
-        norm_layer = partial(get_norm_layer('layernorm'), eps=1e-6)
+        norm_layer = partial(get_norm_layer(norm_layer or 'layernorm'), eps=1e-6)
 
         self.norm = norm_layer(in_features)
         self.w0 = nn.Linear(in_features, hidden_features, bias=bias)

@@ -20,6 +20,7 @@ from .efficientnet import *
 from .efficientvit_mit import *
 from .efficientvit_msra import *
 from .eva import *
+from .fasternet import *
 from .fastvit import *
 from .focalnet import *
 from .gcvit import *
@@ -61,7 +62,10 @@ from .rexnet import *
 from .selecsls import *
 from .senet import *
 from .sequencer import *
+from .shvit import *
 from .sknet import *
+from .starnet import *
+from .swiftformer import *
 from .swin_transformer import *
 from .swin_transformer_v2 import *
 from .swin_transformer_v2_cr import *

@@ -28,10 +28,11 @@ class Attention(nn.Module):
             num_heads: int = 8,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            scale_norm: bool = False,
             proj_bias: bool = True,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
-            norm_layer: Type[nn.Module] = nn.LayerNorm,
+            norm_layer: Optional[Type[nn.Module]] = None,
     ) -> None:
         """Initialize the Attention module.
 
@@ -47,6 +48,8 @@ class Attention(nn.Module):
         """
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        if qk_norm or scale_norm:
+            assert norm_layer is not None, 'norm_layer must be provided if qk_norm or scale_norm is True'
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
@@ -56,6 +59,7 @@ class Attention(nn.Module):
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
+        self.norm = norm_layer(dim) if scale_norm else nn.Identity()
         self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -84,6 +88,7 @@ class Attention(nn.Module):
             x = attn @ v
 
         x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.norm(x)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
