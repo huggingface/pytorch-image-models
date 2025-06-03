@@ -41,6 +41,7 @@ from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
 from .mvitv2 import *
+from .naflexvit import *
 from .nasnet import *
 from .nest import *
 from .nextvit import *
@@ -72,7 +73,6 @@ from .vgg import *
 from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
-from .vision_transformer_flex import *
 from .vision_transformer_relpos import *
 from .vision_transformer_sam import *
 from .vitamin import *

@@ -26,6 +26,7 @@ Hacked together by / Copyright 2020, Ross Wightman
 import copy
 import logging
 import math
+import os
 from collections import OrderedDict
 from functools import partial
 from typing import Any, Callable, Dict, Optional, Set, Tuple, Type, Union, List
@@ -401,6 +402,7 @@ class VisionTransformer(nn.Module):
             pre_norm: bool = False,
             final_norm: bool = True,
             fc_norm: Optional[bool] = None,
+            pool_include_prefix: bool = False,
             dynamic_img_size: bool = False,
             dynamic_img_pad: bool = False,
             drop_rate: float = 0.,
@@ -465,7 +467,8 @@ class VisionTransformer(nn.Module):
         self.num_prefix_tokens += reg_tokens
         self.num_reg_tokens = reg_tokens
         self.has_class_token = class_token
-        self.no_embed_class = no_embed_class  # don't embed prefix positions (includes reg)
+        self.no_embed_class = no_embed_class
+        self.pool_include_prefix = pool_include_prefix
         self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
 
@@ -816,10 +819,17 @@ class VisionTransformer(nn.Module):
 
     def pool(self, x: torch.Tensor, pool_type: Optional[str] = None) -> torch.Tensor:
         if self.attn_pool is not None:
+            if not self.pool_include_prefix:
+                x = x[:, self.num_prefix_tokens:]
             x = self.attn_pool(x)
             return x
         pool_type = self.global_pool if pool_type is None else pool_type
-        x = global_pool_nlc(x, pool_type=pool_type, num_prefix_tokens=self.num_prefix_tokens)
+        x = global_pool_nlc(
+            x,
+            pool_type=pool_type,
+            num_prefix_tokens=self.num_prefix_tokens,
+            reduce_include_prefix=self.pool_include_prefix,
+        )
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
@@ -2368,7 +2378,23 @@ for n in _quick_gelu_cfgs:
 default_cfgs = generate_default_cfgs(default_cfgs)
 
 
-def _create_vision_transformer(variant: str, pretrained: bool = False, **kwargs) -> VisionTransformer:
+# Global flag to use NaFlexVit instead of VisionTransformer
+_USE_NAFLEX_DEFAULT = os.environ.get('TIMM_USE_NAFLEXVIT', 'false').lower() == 'true'
+
+def _create_vision_transformer(
+        variant: str,
+        pretrained: bool = False,
+        use_naflex: Optional[bool] = None,
+        **kwargs,
+) -> Union[VisionTransformer, 'NaFlexVit']:
+    # Check if we should use NaFlexVit instead
+    if use_naflex is None:
+        use_naflex = _USE_NAFLEX_DEFAULT
+    if use_naflex:
+        # Import here to avoid circular imports
+        from .naflexvit import _create_naflexvit_from_classic
+        return _create_naflexvit_from_classic(variant, pretrained, **kwargs)
+
     out_indices = kwargs.pop('out_indices', 3)
     if 'flexi' in variant:
         # FIXME Google FlexiViT pretrained models have a strong preference for bilinear patch / embed
@@ -3996,7 +4022,7 @@ def test_vit3(pretrained: bool = False, **kwargs) -> VisionTransformer:
     """
     model_args = dict(
         patch_size=16, embed_dim=96, depth=9, num_heads=3, mlp_ratio=2,
-        class_token=False, reg_tokens=1, global_pool='map', init_values=1e-5)
+        class_token=False, reg_tokens=1, global_pool='map', pool_include_prefix=True, init_values=1e-5)
     model = _create_vision_transformer('test_vit3', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 

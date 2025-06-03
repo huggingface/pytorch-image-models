@@ -15,7 +15,7 @@ Copyright 2025
 
 import logging
 import math
-from collections import OrderedDict
+from dataclasses import dataclass, fields, replace
 from functools import partial
 from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union, Final, Any, Literal
 
@@ -42,7 +42,87 @@ from timm.models._manipulate import checkpoint_seq, named_apply
 
 from .vision_transformer import Block, global_pool_nlc
 
+__all__ = ['NaFlexVitCfg', 'NaFlexVit']
+
+
 _logger = logging.getLogger(__name__)
+
+
+@dataclass
+class NaFlexVitCfg:
+    """Configuration for FlexVit model.
+
+    This dataclass contains the bulk of model configuration parameters,
+    with core parameters (img_size, in_chans, num_classes, etc.) remaining
+    as direct constructor arguments for API compatibility.
+    """
+    # Architecture parameters
+    patch_size: Union[int, Tuple[int, int]] = 16
+    embed_dim: int = 768
+    depth: int = 12
+    num_heads: int = 12
+    mlp_ratio: float = 4.0
+
+    # Attention parameters
+    qkv_bias: bool = True
+    qk_norm: bool = False
+    proj_bias: bool = True
+    attn_drop_rate: float = 0.0
+
+    # Regularization
+    init_values: Optional[float] = None  # Layer-scale init values (layer-scale enabled if not None)
+    drop_rate: float = 0.0  # Dropout rate for classifier
+    pos_drop_rate: float = 0.0  # Dropout rate for position embeddings
+    patch_drop_rate: float = 0.0  # Dropout rate for patch tokens
+    proj_drop_rate: float = 0.0  # Dropout rate for linear projections
+    drop_path_rate: float = 0.0  # Stochastic depth drop rate
+
+    # Prefix token configuration
+    class_token: bool = False  # Use class token
+    reg_tokens: int = 0  # Number of register tokens
+
+    # Position embedding configuration
+    pos_embed: str = 'learned'  # Type of position embedding ('learned', 'factorized', 'rope', 'none')
+    pos_embed_grid_size: Optional[Tuple[int, int]] = (16, 16)  # Grid size for position embedding initialization
+    pos_embed_interp_mode: str = 'bicubic'  # Interpolation mode for position embedding resizing
+    pos_embed_ar_preserving: bool = False  # Whether to preserve aspect ratio during position embedding interpolation
+
+    # Image processing
+    dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
+
+    # Architecture choices
+    pre_norm: bool = False  # Whether to apply normalization before attention/MLP layers (start of blocks)
+    final_norm: bool = True  # Whether to apply final normalization before pooling and classifier (end of blocks)
+    fc_norm: Optional[bool] = None  # Whether to normalize features before final classifier (after pooling)
+    global_pool: str = 'map'  # Type of global pooling for final sequence
+    pool_include_prefix: bool = False  # Whether to include class/register prefix tokens in global pooling
+
+    # Weight initialization
+    weight_init: str = ''  # Weight initialization scheme
+    fix_init: bool = True  # Apply weight initialization fix (scaling w/ layer index)
+
+    # Embedding configuration
+    embed_proj_type: str = 'linear'  # Type of embedding layer ('conv' or 'linear')
+    input_norm_layer: Optional[str] = None  # Normalization layer for embeddings input (before input projection)
+    embed_norm_layer: Optional[str] = None  # Normalization layer for embeddings (after input projection)
+
+    # Layer implementations
+    norm_layer: Optional[str] = None  # Normalization layer for transformer blocks
+    act_layer: Optional[str] = None  # Activation layer for MLP blocks
+    block_fn: Optional[str] = None  # Transformer block implementation class name
+    mlp_layer: Optional[str] = None  # MLP implementation class name
+
+
+def _overlay_kwargs(cfg: NaFlexVitCfg, **kwargs) -> NaFlexVitCfg:
+    """Overlay kwargs onto config, replacing config values with provided kwargs."""
+    # Only update fields that exist in the config
+    config_fields = set(cfg.__dataclass_fields__.keys())
+    config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
+
+    if config_kwargs:
+        cfg = replace(cfg, **config_kwargs)
+
+    return cfg
 
 
 def batch_patchify(
@@ -67,7 +147,7 @@ def batch_patchify(
 
 
 @register_notrace_module
-class FlexEmbeds(nn.Module):
+class NaFlexEmbeds(nn.Module):
     """NaFlex Embedding module for Vision Transformers.
 
     This module encapsulates the complete embedding process for Vision Transformers,
@@ -93,10 +173,9 @@ class FlexEmbeds(nn.Module):
         patch_size: Size of patches for patch embedding
         in_chans: Number of input image channels
         embed_dim: Dimensionality of patch embedding
-        embed_layer: Type of embedding layer ('conv' or 'linear')
+        proj_type: Type of embedding projection layer ('conv' or 'linear')
         input_norm_layer: Normalization layer applied to input (linear mode only)
         proj_norm_layer: Normalization layer applied after projection
-        final_norm_layer: Final normalization layer before output
         pos_embed: Type of position embedding ('learned', 'factorized', 'rope', 'none')
         pos_drop_rate: Dropout rate for position embeddings
         patch_drop_rate: Dropout rate for patch tokens
@@ -115,21 +194,21 @@ class FlexEmbeds(nn.Module):
             patch_size: Union[int, Tuple[int, int]] = 16,
             in_chans: int = 3,
             embed_dim: int = 768,
-            embed_layer: Optional[str] = None,  # 'conv' or 'linear', default is 'linear'
-            input_norm_layer: Optional[Type[nn.Module]] = None,
-            proj_norm_layer: Optional[Type[nn.Module]] = None,
-            final_norm_layer: Optional[Type[nn.Module]] = None,
-            pos_embed: str = 'learned',
-            pos_drop_rate: float = 0.,
-            patch_drop_rate: float = 0.,
+            proj_type: Optional[str] = None,  # 'conv' or 'linear', default is 'linear'
+            proj_bias: bool = True,
             class_token: bool = True,
             reg_tokens: int = 0,
-            bias: bool = True,
             dynamic_img_pad: bool = False,
+            default_img_size: Union[int, Tuple[int, int]] = None,
+            pos_embed: str = 'learned',
             pos_embed_grid_size: Optional[Tuple[int, int]] = (14, 14),
             pos_embed_interp_mode: str = 'bicubic',
             pos_embed_ar_preserving: bool = False,
-            default_img_size: Union[int, Tuple[int, int]] = None,
+            input_norm_layer: Optional[Type[nn.Module]] = None,
+            proj_norm_layer: Union[bool, Optional[Type[nn.Module]]] = None,
+            norm_layer: Optional[Type[nn.Module]] = None,
+            pos_drop_rate: float = 0.,
+            patch_drop_rate: float = 0.,
     ):
         super().__init__()
         self.has_class_token = class_token
@@ -151,36 +230,42 @@ class FlexEmbeds(nn.Module):
 
         # Calculate grid size and number of patches
         self.default_img_size: Optional[Tuple[int, int]] = None
-        self.pos_embed_grid_size: Optional[
-            Tuple[int, int]] = None  # Stores the grid size used for learned pos embed init
-        if pos_embed_grid_size is None and default_img_size is not None:
+        self.pos_embed_grid_size: Optional[Tuple[int, int]] = None  # Grid size used for learned pos embed init
+        if pos_embed_grid_size is not None:
+            # Highest priority, use provided pos_embed_grid_size
+            self.pos_embed_grid_size = pos_embed_grid_size
+        elif default_img_size is not None:
+            # Fallback to calculating grid size from img_size + patch_size if img size provided.
             self.default_img_size = to_2tuple(default_img_size)
             self.pos_embed_grid_size = tuple([s // p for s, p in zip(self.default_img_size, self.patch_size)])
-        elif pos_embed_grid_size is not None:
-            # Use provided pos_embed_grid_size for NaFlex mode
-            self.pos_embed_grid_size = pos_embed_grid_size
 
         # Determine patch embedding type (linear or conv2d)
-        if embed_layer == 'linear':
+        if proj_type == 'linear':
             # Create linear projection for pre-patchified inputs
             # Input dimension is patch_size^2 * in_chans
             patch_dim = self.patch_size[0] * self.patch_size[1] * in_chans
-            self.norm_input = proj_norm_layer(patch_dim) if input_norm_layer else None
-            self.proj = nn.Linear(patch_dim, embed_dim, bias=bias)
+            assert not (input_norm_layer is True and norm_layer is None), \
+                "`norm_layer` must be given when input_norm_layer=True"
+            input_norm_layer = norm_layer if input_norm_layer is True else (input_norm_layer or None)
+            self.norm_input = input_norm_layer(patch_dim) if input_norm_layer else None
+            self.proj = nn.Linear(patch_dim, embed_dim, bias=proj_bias)
             self.flatten = False
             self.is_linear = True
         else:
             # Default to convolutional patch embedding for image inputs
-            assert input_norm_layer is None
+            assert not input_norm_layer
             self.norm_input = None
             self.proj = nn.Conv2d(
-                in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias
+                in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=proj_bias
             )
             self.flatten = True
             self.is_linear = False
 
         # Create normalization layer after the projection
-        self.norm_proj = proj_norm_layer(embed_dim) if proj_norm_layer else nn.Identity()
+        assert not (proj_norm_layer is True and norm_layer is None), \
+            "`norm_layer` must be given when proj_norm_layer=True"
+        proj_norm_layer = norm_layer if proj_norm_layer is True else (proj_norm_layer or None)
+        self.norm = proj_norm_layer(embed_dim) if proj_norm_layer else nn.Identity()
 
         # Create position embedding if needed - only for patches, never for prefix tokens
         if pos_embed in ('factorized', 'learned') and self.pos_embed_grid_size is None:
@@ -196,18 +281,16 @@ class FlexEmbeds(nn.Module):
             self.pos_embed_type = 'rope'
             # Rotary embeddings will be computed on-the-fly in the forward pass
         elif pos_embed == 'factorized':
+            assert self.pos_embed_grid_size is not None
             h, w = self.pos_embed_grid_size
             self.pos_embed_type = 'factorized'
             self.pos_embed_y = nn.Parameter(torch.randn(1, h, embed_dim) * .02)
             self.pos_embed_x = nn.Parameter(torch.randn(1, w, embed_dim) * .02)
         else:
-            # Store position embedding in (1, H, W, dim) format for easier resizing
+            assert self.pos_embed_grid_size is not None
             h, w = self.pos_embed_grid_size
             self.pos_embed = nn.Parameter(torch.randn(1, h, w, embed_dim) * .02)
             self.pos_embed_type = 'learned'
-
-        # Pre-normalization layer (separate from the main norm layer)
-        self.norm_final = final_norm_layer(embed_dim) if final_norm_layer is not None else nn.Identity()
 
         # Dropout layers
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
@@ -260,86 +343,6 @@ class FlexEmbeds(nn.Module):
             return math.ceil(img_size[0] / self.patch_size[0]), math.ceil(img_size[1] / self.patch_size[1])
         else:
             return img_size[0] // self.patch_size[0], img_size[1] // self.patch_size[1]
-
-    def forward(self, x: torch.Tensor, patch_coord: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Forward pass for patch embedding with position encoding.
-
-        Args:
-            x: Input tensor [B, C, H, W] for conv mode or [B, N, P*P*C] for pre-patchified linear mode
-            patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode
-
-        Returns:
-            Embedded tensor with position encoding and class/register tokens applied.
-            Shape: [B, num_prefix_tokens + N, embed_dim]
-        """
-        # Apply patch embedding
-        naflex_grid_sizes: Optional[List[Tuple[int, int]]] = None
-        grid_size: Optional[List[int]] = None
-
-        B = x.shape[0]
-        if self.is_linear:
-            # Linear embedding path, works with NaFlex mode or standard 2D mode
-            if patch_coord is not None:
-                _assert(x.ndim == 3, 'Expecting patchified input with ndim == 3')
-                # Pre-patchified NaFlex mode, input is expected to be (B, N, P*P*C) where N is num_patches
-                # Calculate the appropriate grid size from coords
-                max_y = patch_coord[:, :, 0].max(dim=1)[0] + 1
-                max_x = patch_coord[:, :, 1].max(dim=1)[0] + 1
-                naflex_grid_sizes = [(int(h.item()), int(w.item())) for h, w in zip(max_y, max_x)]
-            else:
-                _assert(x.ndim == 4, 'Expecting 2D image input with input ndim == 4')
-                x, grid_size = batch_patchify(x, self.patch_size, pad=self.dynamic_img_pad)
-
-            if self.norm_input is not None:
-                x = self.norm_input(x)
-
-            x = self.proj(x)
-        else:
-            assert x.ndim == 4, 'Convolutional input must be 4D'
-            if self.dynamic_img_pad:
-                H, W = x.shape[-2:]
-                pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
-                pad_w = (self.patch_size[1] - W % self.patch_size[1]) % self.patch_size[1]
-                x = F.pad(x, (0, pad_w, 0, pad_h))
-
-            x = self.proj(x)
-
-            grid_size = x.shape[-2:]
-            if self.flatten:
-                x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
-
-        # Apply normalization after flattening
-        x = self.norm_proj(x)
-
-        if self.pos_embed_type == 'learned':
-            if naflex_grid_sizes is not None:
-                self._apply_learned_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
-            else:
-                assert grid_size is not None
-                self._apply_learned_pos_embed(x, grid_size=grid_size)
-        elif self.pos_embed_type == 'factorized':
-            if naflex_grid_sizes is not None:
-                self._apply_factorized_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
-        elif self.pos_embed_type == 'rope':
-            assert False, "ROPE not yet implemented"
-
-        # Prepare and add class and register tokens
-        to_cat = []
-        if self.cls_token is not None:
-            to_cat.append(self.cls_token.expand(B, -1, -1))
-        if self.reg_token is not None:
-            to_cat.append(self.reg_token.expand(B, -1, -1))
-        # Add tokens to the beginning
-        if to_cat:
-            x = torch.cat(to_cat + [x], dim=1)
-
-        # Apply final pre-transformer normalization if specified
-        x = self.norm_final(x)
-
-        # Apply dropouts
-        x = self.patch_drop(self.pos_drop(x))
-
-        return x
 
     #@torch.compiler.disable()
     def _apply_learned_naflex_pos_embed(
@@ -463,14 +466,16 @@ class FlexEmbeds(nn.Module):
         for bi, k in enumerate(naflex_grid_sizes):
             size_to_indices.setdefault(k, []).append(bi)
 
-        def _interp1d(table: torch.Tensor, length: int) -> torch.Tensor:
+        def _interp1d(table: torch.Tensor, new_length: int, orig_length: int) -> torch.Tensor:
             """
             Resample a 1-D positional-embedding table to specified length
             and return it in (1, L, C) layout, dtype matching x.
             """
+            if new_length == orig_length:
+                return table.to(dtype=x.dtype)
             return F.interpolate(
                 table.permute(0, 2, 1).float(),  # (1,C,L) → (1,C,L_out)
-                size=length,
+                size=new_length,
                 mode='linear',
                 align_corners=False,
             ).permute(0, 2, 1).to(dtype=x.dtype)  # → (1,L_out,C)
@@ -482,8 +487,8 @@ class FlexEmbeds(nn.Module):
             else:
                 len_y, len_x = target_h, target_w
 
-            pe_y = _interp1d(self.pos_embed_y, len_y)[:, :target_h]  # (1,H,C)
-            pe_x = _interp1d(self.pos_embed_x, len_x)[:, :target_w]  # (1,W,C)
+            pe_y = _interp1d(self.pos_embed_y, len_y, orig_h)[:, :target_h]  # (1,H,C)
+            pe_x = _interp1d(self.pos_embed_x, len_x, orig_w)[:, :target_w]  # (1,W,C)
 
             # Broadcast, add and flatten to sequence layout (row major)
             pos = pe_y.unsqueeze(2) + pe_x.unsqueeze(1)        # (1,H,W,C)
@@ -495,6 +500,82 @@ class FlexEmbeds(nn.Module):
                 torch.as_tensor(batch_indices, device=x.device),
                 pos[:, :seq_len].expand(len(batch_indices), -1, -1)
             )
+
+    def forward(self, x: torch.Tensor, patch_coord: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass for patch embedding with position encoding.
+
+        Args:
+            x: Input tensor [B, C, H, W] for conv mode or [B, N, P*P*C] for pre-patchified linear mode
+            patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode
+
+        Returns:
+            Embedded tensor with position encoding and class/register tokens applied.
+            Shape: [B, num_prefix_tokens + N, embed_dim]
+        """
+        # Apply patch embedding
+        naflex_grid_sizes: Optional[List[Tuple[int, int]]] = None
+        grid_size: Optional[List[int]] = None
+
+        B = x.shape[0]
+        if self.is_linear:
+            # Linear embedding path, works with NaFlex mode or standard 2D mode
+            if patch_coord is not None:
+                _assert(x.ndim == 3, 'Expecting patchified input with ndim == 3')
+                # Pre-patchified NaFlex mode, input is expected to be (B, N, P*P*C) where N is num_patches
+                # Calculate the appropriate grid size from coords
+                max_y = patch_coord[:, :, 0].max(dim=1)[0] + 1
+                max_x = patch_coord[:, :, 1].max(dim=1)[0] + 1
+                naflex_grid_sizes = [(int(h.item()), int(w.item())) for h, w in zip(max_y, max_x)]
+            else:
+                _assert(x.ndim == 4, 'Expecting 2D image input with input ndim == 4')
+                x, grid_size = batch_patchify(x, self.patch_size, pad=self.dynamic_img_pad)
+
+            if self.norm_input is not None:
+                x = self.norm_input(x)
+
+            x = self.proj(x)
+        else:
+            assert x.ndim == 4, 'Convolutional input must be 4D'
+            if self.dynamic_img_pad:
+                H, W = x.shape[-2:]
+                pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
+                pad_w = (self.patch_size[1] - W % self.patch_size[1]) % self.patch_size[1]
+                x = F.pad(x, (0, pad_w, 0, pad_h))
+
+            x = self.proj(x)
+
+            grid_size = x.shape[-2:]
+            if self.flatten:
+                x = x.flatten(2).transpose(1, 2)  # NCHW -> NLC
+
+        # Apply normalization after flattening
+        x = self.norm(x)
+
+        if self.pos_embed_type == 'learned':
+            if naflex_grid_sizes is not None:
+                self._apply_learned_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
+            else:
+                assert grid_size is not None
+                self._apply_learned_pos_embed(x, grid_size=grid_size)
+        elif self.pos_embed_type == 'factorized':
+            if naflex_grid_sizes is not None:
+                self._apply_factorized_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
+        elif self.pos_embed_type == 'rope':
+            assert False, "ROPE not yet implemented"
+
+        # Prepare and add class and register tokens
+        to_cat = []
+        if self.cls_token is not None:
+            to_cat.append(self.cls_token.expand(B, -1, -1))
+        if self.reg_token is not None:
+            to_cat.append(self.reg_token.expand(B, -1, -1))
+        # Add tokens to the beginning
+        if to_cat:
+            x = torch.cat(to_cat + [x], dim=1)
+
+        # Apply dropouts
+        x = self.pos_drop(x)
+        return x
 
 
 @register_notrace_function
@@ -572,6 +653,7 @@ def global_pool_naflex(
         patch_valid: Optional[torch.Tensor] = None,
         pool_type: str = 'token',
         num_prefix_tokens: int = 1,
+        reduce_include_prefix: bool = False,
 ) -> torch.Tensor:
     """Global pooling with NaFlex support for masked tokens.
 
@@ -582,21 +664,32 @@ def global_pool_naflex(
         x: Input tensor with shape [B, N, C]
         patch_valid: Optional validity mask for patches [B, N-num_prefix_tokens]
         pool_type: Type of pooling ('token', 'avg', 'avgmax', 'max')
-        num_prefix_tokens: Number of prefix tokens (class/register) to exclude from masking
+        num_prefix_tokens: Number of prefix tokens (class/register)
+        reduce_include_prefix: Whether to include prefix tokens in pooling reduction
 
     Returns:
         Pooled tensor with shape [B, C]
     """
     if patch_valid is None or pool_type not in ('avg', 'avgmax', 'max'):
         # Fall back to standard pooling
-        x = global_pool_nlc(x, pool_type=pool_type, num_prefix_tokens=num_prefix_tokens)
+        x = global_pool_nlc(
+            x,
+            pool_type=pool_type,
+            num_prefix_tokens=num_prefix_tokens,
+            reduce_include_prefix=reduce_include_prefix,
+        )
         return x
 
     # For NaFlex mode, we need to apply masked pooling to exclude padding tokens
-    # Extract only the patch part of the mask (excluding prefix tokens)
     if num_prefix_tokens > 0:
-        # Apply the mask to extract only valid tokens
-        x = x[:, num_prefix_tokens:]  # prefix tokens not included in pooling
+        if reduce_include_prefix:
+            # Include prefix tokens in pooling - they are always considered valid
+            # patch_valid only covers patch tokens, so create combined validity mask
+            prefix_valid = patch_valid.new_ones(x.shape[0], num_prefix_tokens)
+            patch_valid = torch.cat([prefix_valid, patch_valid], dim=1)
+        else:
+            # Exclude prefix tokens from pooling (default behavior)
+            x = x[:, num_prefix_tokens:]
 
     patch_valid_float = patch_valid.to(x.dtype)
     if pool_type == 'avg':
@@ -627,8 +720,8 @@ def global_pool_naflex(
         assert False
 
 
-class VisionTransformerFlex(nn.Module):
-    """Vision Transformer with NaFlex support for flexible input handling.
+class NaFlexVit(nn.Module):
+    """NaFlexVit: Vision Transformer with NaFlex support for flexible input handling.
 
     A flexible implementation of Vision Transformer that supports:
     - Standard image classification with various pooling strategies
@@ -642,170 +735,125 @@ class VisionTransformerFlex(nn.Module):
 
     def __init__(
             self,
-            patch_size: Union[int, Tuple[int, int]] = 16,
+            cfg: NaFlexVitCfg = None,
             in_chans: int = 3,
-            embed_dim: int = 768,
-            depth: int = 12,
-            num_heads: int = 12,
-            mlp_ratio: float = 4.,
-            qkv_bias: bool = True,
-            qk_norm: bool = False,
-            proj_bias: bool = True,
-            init_values: Optional[float] = None,
-            class_token: bool = False,
-            reg_tokens: int = 0,
-            pos_embed: str = 'learned',
-            pos_embed_grid_size: Optional[Tuple[int, int]] = (16, 16),
-            pos_embed_interp_mode: str = 'bicubic',
-            pos_embed_ar_preserving: bool = False,
-            default_img_size: Union[int, Tuple[int, int]] = 256,
-            dynamic_img_pad: bool = False,
-            pre_norm: bool = False,
-            final_norm: bool = True,
-            fc_norm: Optional[bool] = None,
             num_classes: int = 1000,
-            global_pool: str = 'map',
-            drop_rate: float = 0.,
-            pos_drop_rate: float = 0.,
-            patch_drop_rate: float = 0.,
-            proj_drop_rate: float = 0.,
-            attn_drop_rate: float = 0.,
-            drop_path_rate: float = 0.,
-            weight_init: str = '',
-            fix_init: bool = True,
-            embed_layer_type: str = 'linear',
-            embed_norm_layer: Optional[LayerType] = None,
-            norm_layer: Optional[LayerType] = None,
-            act_layer: Optional[LayerType] = None,
-            block_fn: Type[nn.Module] = Block,
-            mlp_layer: Type[nn.Module] = Mlp,
+            img_size: Union[int, Tuple[int, int]] = None,
+            **kwargs,
     ) -> None:
-        """Initialize VisionTransformerFlex model.
+        """Initialize NaFlexVit model.
 
         Args:
-            patch_size: Size of patches for patch embedding
+            cfg: Model configuration. If None, uses default FlexVitCfg
             in_chans: Number of input image channels
-            embed_dim: Transformer embedding dimension
-            depth: Number of transformer blocks
-            num_heads: Number of attention heads
-            mlp_ratio: Ratio of MLP hidden dimension to embedding dimension
-            qkv_bias: Whether to use bias in query, key, value projections
-            qk_norm: Whether to normalize query and key projections
-            proj_bias: Whether to use bias in linear projections
-            init_values: Layer-scale init values (layer-scale enabled if not None)
-            class_token: Whether to include a class token
-            reg_tokens: Number of register tokens to include
-            pos_embed: Type of position embedding
-            pos_embed_grid_size: Grid size for position embedding initialization
-            pos_embed_interp_mode: Interpolation mode for position embedding resizing
-            pos_embed_ar_preserving: Whether to preserve aspect ratio during position embedding interpolation
-            default_img_size: Default image size for position embedding grid calculation
-            dynamic_img_pad: Whether to enable dynamic padding for variable resolution
-            pre_norm: Whether to apply normalization before attention/MLP layers
-            final_norm: Whether to apply final normalization before classifier
-            fc_norm: Whether to normalize features before final classifier
             num_classes: Number of classification classes
-            global_pool: Type of global pooling for final sequence
-            drop_rate: Dropout rate for classifier
-            pos_drop_rate: Dropout rate for position embeddings
-            patch_drop_rate: Dropout rate for patch tokens
-            proj_drop_rate: Dropout rate for linear projections
-            attn_drop_rate: Dropout rate for attention weights
-            drop_path_rate: Stochastic depth drop rate
-            weight_init: Weight initialization scheme
-            fix_init: Apply weight initialization fix (scaling w/ layer index)
-            embed_layer_type: Type of embedding layer ('conv' or 'linear')
-            embed_norm_layer: Normalization layer for embeddings
-            norm_layer: Normalization layer for transformer blocks
-            act_layer: Activation layer for MLP blocks
-            block_fn: Transformer block implementation class
-            mlp_layer: MLP implementation class
+            img_size: Input image size for bwd compat with original vit (if pos_embed_grid_size not specified)
+            **kwargs: Additional config parameters to override cfg values
         """
         super().__init__()
-        assert global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
-        assert class_token or global_pool != 'token'
-        assert pos_embed in ('', 'none', 'learned', 'factorized')
-        norm_layer = get_norm_layer(norm_layer) or LayerNorm
-        embed_norm_layer = get_norm_layer(embed_norm_layer)
-        act_layer = get_act_layer(act_layer) or nn.GELU
 
+        # Initialize config
+        cfg = cfg or NaFlexVitCfg()
+        if kwargs:
+            cfg = _overlay_kwargs(cfg, **kwargs)
+
+        # Validate configuration
+        assert cfg.global_pool in ('', 'avg', 'avgmax', 'max', 'token', 'map')
+        assert cfg.class_token or cfg.global_pool != 'token'
+        assert cfg.pos_embed in ('', 'none', 'learned', 'factorized')
+
+        # Resolve layer implementations
+        norm_layer = get_norm_layer(cfg.norm_layer) or LayerNorm
+        embed_norm_layer = get_norm_layer(cfg.embed_norm_layer)
+        act_layer = get_act_layer(cfg.act_layer) or nn.GELU
+        block_fn = Block  # TODO: Support configurable block_fn via string lookup
+        mlp_layer = Mlp   # TODO: Support configurable mlp_layer via string lookup
+
+        # Store instance variables
         self.num_classes = num_classes
-        self.global_pool = global_pool
-        self.num_features = self.head_hidden_size = self.embed_dim = embed_dim  # for consistency with other models
-        self.num_prefix_tokens = 1 if class_token else 0
-        self.num_prefix_tokens += reg_tokens
-        self.num_reg_tokens = reg_tokens
-        self.has_class_token = class_token
+        self.global_pool = cfg.global_pool
+        self.num_features = self.head_hidden_size = self.embed_dim = cfg.embed_dim  # for consistency with other models
+        self.num_prefix_tokens = 1 if cfg.class_token else 0
+        self.num_prefix_tokens += cfg.reg_tokens
+        self.num_reg_tokens = cfg.reg_tokens
+        self.has_class_token = cfg.class_token
+        self.pool_include_prefix = cfg.pool_include_prefix
         self.grad_checkpointing = False
 
         # Initialize embedding module (includes patch, position embedding, and class/reg tokens)
-        # VisionTransformerEmbeds is always used - handles both linear and conv embedding
-        self.embeds = FlexEmbeds(
-            patch_size=patch_size,
+        # FlexEmbeds is always used - handles both linear and conv embedding
+        self.embeds = NaFlexEmbeds(
+            patch_size=cfg.patch_size,
             in_chans=in_chans,
-            embed_dim=embed_dim,
-            embed_layer=embed_layer_type,
+            embed_dim=cfg.embed_dim,
+            proj_type=cfg.embed_proj_type,
+            proj_bias=not cfg.pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+            class_token=cfg.class_token,
+            reg_tokens=cfg.reg_tokens,
+            default_img_size=img_size,
+            dynamic_img_pad=cfg.dynamic_img_pad,
+            pos_embed=cfg.pos_embed,
+            pos_embed_grid_size=cfg.pos_embed_grid_size,
+            pos_embed_interp_mode=cfg.pos_embed_interp_mode,
+            pos_embed_ar_preserving=cfg.pos_embed_ar_preserving,
             proj_norm_layer=embed_norm_layer,
-            final_norm_layer=norm_layer if pre_norm else None,
-            pos_embed=pos_embed,
-            pos_embed_grid_size=pos_embed_grid_size,
-            pos_embed_interp_mode=pos_embed_interp_mode,
-            pos_embed_ar_preserving=pos_embed_ar_preserving,
-            pos_drop_rate=pos_drop_rate,
-            patch_drop_rate=patch_drop_rate,
-            class_token=class_token,
-            reg_tokens=reg_tokens,
-            default_img_size=default_img_size,
-            dynamic_img_pad=dynamic_img_pad,
-            bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+            pos_drop_rate=cfg.pos_drop_rate,
+            patch_drop_rate=cfg.patch_drop_rate,
         )
+        self.norm_pre = norm_layer(cfg.embed_dim) if cfg.pre_norm else nn.Identity()
 
         # Transformer blocks
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, cfg.drop_path_rate, cfg.depth)]  # stochastic depth decay rule
         self.blocks = nn.Sequential(*[
             block_fn(
-                dim=embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_norm=qk_norm,
-                proj_bias=proj_bias,
-                init_values=init_values,
-                proj_drop=proj_drop_rate,
-                attn_drop=attn_drop_rate,
+                dim=cfg.embed_dim,
+                num_heads=cfg.num_heads,
+                mlp_ratio=cfg.mlp_ratio,
+                qkv_bias=cfg.qkv_bias,
+                qk_norm=cfg.qk_norm,
+                proj_bias=cfg.proj_bias,
+                init_values=cfg.init_values,
+                proj_drop=cfg.proj_drop_rate,
+                attn_drop=cfg.attn_drop_rate,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 mlp_layer=mlp_layer,
             )
-            for i in range(depth)])
+            for i in range(cfg.depth)])
 
         # Feature info for downstream tasks
-        patch_reduction = to_2tuple(patch_size)
+        patch_reduction = self.embeds.feat_ratio(as_scalar=True)
         self.feature_info = [
-            dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=patch_reduction) for i in range(depth)]
+            dict(module=f'blocks.{i}', num_chs=cfg.embed_dim, reduction=patch_reduction)
+            for i in range(cfg.depth)
+        ]
 
-        self.norm = norm_layer(embed_dim) if final_norm and not fc_norm else nn.Identity()
+        self.norm = norm_layer(cfg.embed_dim) if cfg.final_norm and not cfg.fc_norm else nn.Identity()
 
         # Classifier Head
-        if global_pool == 'map':
+        if cfg.global_pool == 'map':
             self.attn_pool = AttentionPoolLatent(
                 self.embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
+                num_heads=cfg.num_heads,
+                mlp_ratio=cfg.mlp_ratio,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
             )
         else:
             self.attn_pool = None
 
-        self.fc_norm = norm_layer(embed_dim) if final_norm and fc_norm else nn.Identity()
-        self.head_drop = nn.Dropout(drop_rate)
+        # Handle fc_norm default value
+        fc_norm = cfg.fc_norm
+        if fc_norm is None:
+            fc_norm = cfg.global_pool == 'avg'
+        self.fc_norm = norm_layer(cfg.embed_dim) if cfg.final_norm and fc_norm else nn.Identity()
+        self.head_drop = nn.Dropout(cfg.drop_rate)
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-        if weight_init != 'skip':
-            self.init_weights(weight_init)
-        if fix_init:
+        if cfg.weight_init != 'skip':
+            self.init_weights(cfg.weight_init)
+        if cfg.fix_init:
             self.fix_init_weight()
 
     def fix_init_weight(self) -> None:
@@ -917,7 +965,7 @@ class VisionTransformerFlex(nn.Module):
 
     def forward_intermediates(
             self,
-            x: torch.Tensor,
+            x: Union[torch.Tensor, Dict[str, torch.Tensor]],
             indices: Optional[Union[int, List[int]]] = None,
             return_prefix_tokens: bool = False,
             norm: bool = False,
@@ -954,13 +1002,21 @@ class VisionTransformerFlex(nn.Module):
         reshape = output_fmt == 'NCHW'
         intermediates = []
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
+        if isinstance(x, Dict):
+            # Handle dictionary input from NaFlex collator
+            patch_coord = x['patch_coord']
+            patch_valid = x['patch_valid']
+            patches = x['patches']
+        else:
+            patches = x
 
         # Create attention mask if patch_type is provided and mask is not
         if mask is None and patch_valid is not None:
-            mask = create_attention_mask(patch_valid, self.num_prefix_tokens, x.dtype)
+            mask = create_attention_mask(patch_valid, self.num_prefix_tokens, patches.dtype)
 
         # Forward pass through embedding
-        x = self.embeds(x, patch_coord=patch_coord, patch_valid=patch_valid)
+        x = self.embeds(patches, patch_coord=patch_coord)
+        x = self.norm_pre(x)
 
         # Forward pass through blocks
         if torch.jit.is_scripting() or not stop_early:  # can't slice blocks in torchscript
@@ -990,8 +1046,10 @@ class VisionTransformerFlex(nn.Module):
                 H, W = self.embeds.dynamic_feat_size((height, width))
             else:
                 H, W = grid_size
-            intermediates = [y.reshape(y.shape[0], H, W, -1).permute(0, 3, 1, 2).contiguous()
-                           for y in intermediates]
+            intermediates = [
+                y.reshape(y.shape[0], H, W, -1).permute(0, 3, 1, 2).contiguous()
+                for y in intermediates
+            ]
 
         # For dictionary output
         if output_dict:
@@ -1037,7 +1095,7 @@ class VisionTransformerFlex(nn.Module):
 
         # Pass through embedding module with patch coordinate/type support
         x = self.embeds(x, patch_coord=patch_coord)
-
+        x = self.norm_pre(x)
         # Apply transformer blocks with masked attention if mask provided
         if attn_mask is not None:
             # We need to apply blocks one by one with mask
@@ -1059,13 +1117,26 @@ class VisionTransformerFlex(nn.Module):
     ) -> torch.Tensor:
         if self.attn_pool is not None:
             # For attention pooling, we need to pass the mask for NaFlex models
-            attn_mask = create_attention_mask(
-                patch_valid,
-                symmetric=False,
-                q_len=1,
-                dtype=x.dtype,
-            )
-            x = self.attn_pool(x[:, self.num_prefix_tokens:], attn_mask=attn_mask)
+            if self.pool_include_prefix:
+                # Include all tokens in attention pooling - create mask for all tokens including prefix
+                attn_mask = create_attention_mask(
+                    patch_valid,
+                    num_prefix_tokens=self.num_prefix_tokens,
+                    symmetric=False,
+                    q_len=1,
+                    dtype=x.dtype,
+                )
+                x = self.attn_pool(x, attn_mask=attn_mask)
+            else:
+                # Exclude prefix tokens from attention pooling (default behavior)
+                attn_mask = create_attention_mask(
+                    patch_valid,
+                    num_prefix_tokens=0,  # No prefix tokens when we slice them off
+                    symmetric=False,
+                    q_len=1,
+                    dtype=x.dtype,
+                )
+                x = self.attn_pool(x[:, self.num_prefix_tokens:], attn_mask=attn_mask)
             return x
 
         pool_type = self.global_pool if pool_type is None else pool_type
@@ -1075,6 +1146,7 @@ class VisionTransformerFlex(nn.Module):
             patch_valid,
             pool_type=pool_type,
             num_prefix_tokens=self.num_prefix_tokens,
+            reduce_include_prefix=self.pool_include_prefix,
         )
         return x
 
@@ -1158,7 +1230,7 @@ def get_init_weights_vit(mode: str = 'jax', head_bias: float = 0.0) -> Callable:
         return init_weights_vit_timm
 
 
-def checkpoint_filter_fn(state_dict: Dict[str, Any], model: VisionTransformerFlex) -> Dict[str, Any]:
+def checkpoint_filter_fn(state_dict: Dict[str, Any], model: NaFlexVit) -> Dict[str, Any]:
     """Handle state dict conversion from original ViT to the new version with combined embedding."""
     from .vision_transformer import checkpoint_filter_fn as orig_filter_fn
 
@@ -1182,8 +1254,9 @@ def checkpoint_filter_fn(state_dict: Dict[str, Any], model: VisionTransformerFle
                 num_patches_no_prefix = num_patches - num_prefix_tokens
                 grid_size_no_prefix = math.sqrt(num_patches_no_prefix)
                 grid_size = math.sqrt(num_patches)
-                if (grid_size_no_prefix != grid_size and (
-                        grid_size_no_prefix.is_integer() and not grid_size.is_integer())):
+                if (grid_size_no_prefix != grid_size
+                        and (grid_size_no_prefix.is_integer() and not grid_size.is_integer())
+                ):
                     # make a decision, did the pos_embed of the original include the prefix tokens?
                     num_patches = num_patches_no_prefix
                     cls_token_emb = v[:, 0:num_cls_token]
@@ -1224,7 +1297,6 @@ def checkpoint_filter_fn(state_dict: Dict[str, Any], model: VisionTransformerFle
         elif k.startswith('patch_embed.'):
             suffix = k[12:]
             if suffix == 'proj.weight':
-                # FIXME confirm patchify memory layout across use cases
                 v = v.permute(0, 2, 3, 1).flatten(1)
             new_key = 'embeds.' + suffix
             out_dict[new_key] = v
@@ -1252,115 +1324,186 @@ def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
 
 
 default_cfgs = generate_default_cfgs({
-    'vit_naflex_base_patch16_gap': _cfg(),
-    'vit_naflex_base_patch16_map': _cfg(),
+    'naflexvit_base_patch16_gap': _cfg(),
+    'naflexvit_base_patch16_map': _cfg(),
 
-    'vit_naflex_base_patch16_siglip': _cfg(),
-    'vit_naflex_so400m_patch16_siglip': _cfg(),
-
-    # sbb model testijg
-    'vit_naflex_mediumd_patch16_reg4_gap.sbb2_r256_e200_in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k',
-        input_size=(3, 256, 256), crop_pct=0.95),
-    'vit_naflex_so150m2_patch16_reg1_gap.sbb_r256_e200_in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_so150m2_patch16_reg1_gap_256.sbb_e200_in12k_ft_in1k',
-        input_size=(3, 256, 256), crop_pct=1.0),
-    'vit_naflex_so150m2_patch16_reg1_gap.sbb_r384_e200_in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_so150m2_patch16_reg1_gap_384.sbb_e200_in12k_ft_in1k',
-        input_size=(3, 384, 384), crop_pct=1.0),
-    'vit_naflex_so150m2_patch16_reg1_gap.sbb_r448_e200_in12k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_so150m2_patch16_reg1_gap_448.sbb_e200_in12k_ft_in1k',
-        input_size=(3, 448, 448), crop_pct=1.0, crop_mode='squash'),
-
-    # traditional vit testing
-    'vit_naflex_base_patch16.augreg2_r224_in21k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_224.augreg2_in21k_ft_in1k'),
-    'vit_naflex_base_patch8.augreg2_r224_in21k_ft_in1k': _cfg(
-        hf_hub_id='timm/vit_base_patch16_224.augreg2_in21k_ft_in1k'),
+    'naflexvit_base_patch16_siglip': _cfg(),
+    'naflexvit_so400m_patch16_siglip': _cfg(),
 })
 
 
-def _create_vision_transformer_flex(variant: str, pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
+def _create_naflexvit(variant: str, pretrained: bool = False, **kwargs) -> NaFlexVit:
+    out_indices = kwargs.pop('out_indices', 3)
+    cfg = kwargs.pop('cfg', NaFlexVitCfg())
+    cfg_field_names = {f.name for f in fields(NaFlexVitCfg)}
+    # pop in-place so the original kwargs is emptied of cfg-specific keys
+    cfg_updates = {k: kwargs.pop(k) for k in list(kwargs) if k in cfg_field_names}
+    if cfg_updates:
+        cfg = _overlay_kwargs(cfg, **cfg_updates)
+
     model = build_model_with_cfg(
-        VisionTransformerFlex, variant, pretrained,
+        NaFlexVit, variant, pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,
+        cfg=cfg,
+        feature_cfg=dict(out_indices=out_indices, feature_cls='getter'),
         **kwargs,
     )
     return model
 
 
-@register_model
-def vit_naflex_base_patch16_gap(pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
-    """ViT-New with NaFlex functionality for variable aspect ratios and resolutions.
+def _create_naflexvit_from_classic(
+        variant: str,
+        pretrained: bool = False,
+        **kwargs,
+) -> NaFlexVit:
+    """Create FlexVit model from classic VisionTransformer configuration.
+
+    This function handles the parameter mapping and configuration logic needed
+    to create FlexVit models that are compatible with classic VisionTransformer
+    configurations and pretrained weights.
+
+    Args:
+        variant: Model variant name
+        pretrained: Whether to load pretrained weights
+        **kwargs: Classic VisionTransformer parameters
+
+    Returns:
+        FlexVit model instance
     """
-    model_args = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, init_values=1e-5,
-        global_pool='avg', reg_tokens=4, fc_norm=True, **kwargs)
-    model = _create_vision_transformer_flex(
-        'vit_naflex_base_patch16_gap', pretrained=pretrained, **dict(model_args, **kwargs))
+    # Remove VisionTransformer-specific parameters that don't apply to FlexVit
+    kwargs.pop('no_embed_class', None)
+    kwargs.pop('dynamic_img_size', None)
+
+    # Handle global pooling and fc_norm defaults that differ between ViT and FlexVit
+    gp = kwargs.pop('global_pool', 'token')  # Original ViTs default to cls token pooling
+    fc_norm = kwargs.pop('fc_norm', None)    # Original ViTs used fc_norm when not set and avg pooling used
+    if fc_norm is None and gp == 'avg':
+        fc_norm = True
+
+    # Set FlexVit-specific defaults that differ from VisionTransformer
+    flex_kwargs = {
+        'pos_embed_grid_size': None,  # rely on img_size (// patch_size) that will be passed through
+        'class_token': kwargs.get('class_token', True),
+        'global_pool': gp,
+        'fc_norm': fc_norm,
+        **kwargs  # User overrides take precedence
+    }
+
+    return _create_naflexvit(variant, pretrained, **flex_kwargs)
+
+
+@register_model
+def naflexvit_base_patch16_gap(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-Base with NaFlex functionality and global average pooling.
+    """
+    cfg = NaFlexVitCfg(
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        init_values=1e-5,
+        global_pool='avg',
+        reg_tokens=4,
+        fc_norm=True,
+    )
+    model = _create_naflexvit('naflexvit_base_patch16_gap', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
 
 
 @register_model
-def vit_naflex_base_patch16_map(pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
-    """ViT-New with NaFlex functionality for variable aspect ratios and resolutions.
+def naflexvit_base_patch16_map(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-Base with NaFlex functionality and MAP attention pooling.
     """
-    model_args = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, init_values=1e-5,
-        global_pool='map', reg_tokens=1)
-    model = _create_vision_transformer_flex(
-        'vit_naflex_base_patch16_map', pretrained=pretrained, **dict(model_args, **kwargs))
+    cfg = NaFlexVitCfg(
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        init_values=1e-5,
+        global_pool='map',
+        reg_tokens=1,
+    )
+    model = _create_naflexvit('naflexvit_base_patch16_map', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
 
 
 @register_model
-def vit_naflex_so150m2_patch16_reg1_gap(pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
-    """ViT-New with NaFlex functionality for variable aspect ratios and resolutions.
+def naflexvit_so150m2_patch16_reg1_gap(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-SO150M2 with NaFlex functionality for variable aspect ratios and resolutions.
 
     This model supports:
     1. Variable aspect ratios and resolutions via patch coordinates
     2. Position embedding interpolation for arbitrary grid sizes
     3. Explicit patch coordinates and valid token masking
     """
-    model_args = dict(
-        patch_size=16, embed_dim=832, depth=21, num_heads=13, mlp_ratio=34/13, init_values=1e-5,
-        qkv_bias=False, reg_tokens=1, global_pool='avg', fc_norm=True)
-    model = _create_vision_transformer_flex(
-        'vit_naflex_so150m2_patch16_reg1_gap', pretrained=pretrained, **dict(model_args, **kwargs))
+    cfg = NaFlexVitCfg(
+        patch_size=16,
+        embed_dim=832,
+        depth=21,
+        num_heads=13,
+        mlp_ratio=34/13,
+        init_values=1e-5,
+        qkv_bias=False,
+        reg_tokens=1,
+        global_pool='avg',
+        fc_norm=True,
+    )
+    model = _create_naflexvit('naflexvit_so150m2_patch16_reg1_gap', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
 
 
 @register_model
-def vit_naflex_base_patch16(pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
-    """ ViT-Base (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-1k weights fine-tuned from in21k @ 224x224, source https://github.com/google-research/vision_transformer.
+def naflexvit_so150m2_patch16_reg1_map(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-SO150M2 with NaFlex functionality for variable aspect ratios and resolutions.
+
+    This model supports:
+    1. Variable aspect ratios and resolutions via patch coordinates
+    2. Position embedding interpolation for arbitrary grid sizes
+    3. Explicit patch coordinates and valid token masking
     """
-    model_args = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12,
-        global_pool='token', class_token=True, pos_embed_grid_size=(14, 14))
-    model = _create_vision_transformer_flex(
-        'vit_naflex_base_patch16', pretrained=pretrained, **dict(model_args, **kwargs))
+    cfg = NaFlexVitCfg(
+        patch_size=16,
+        embed_dim=832,
+        depth=21,
+        num_heads=13,
+        mlp_ratio=34/13,
+        init_values=1e-5,
+        qkv_bias=False,
+        reg_tokens=1,
+        global_pool='map',
+    )
+    model = _create_naflexvit('naflexvit_so150m2_patch16_reg1_map', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
 
 
 @register_model
-def vit_naflex_base_patch16_siglip(pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
-    """ViT-New with NaFlex functionality for variable aspect ratios and resolutions.
+def naflexvit_base_patch16_siglip(pretrained: bool = False, **kwargs) -> NaFlexVit:
+    """ViT-Base with NaFlex functionality and SigLIP-style configuration.
     """
-    model_args = dict(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12, act_layer='gelu_tanh', global_pool='map')
-    model = _create_vision_transformer_flex(
-        'vit_naflex_base_patch16_siglip', pretrained=pretrained, **dict(model_args, **kwargs))
+    cfg = NaFlexVitCfg(
+        patch_size=16,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        act_layer='gelu_tanh',
+        global_pool='map',
+    )
+    model = _create_naflexvit('naflexvit_base_patch16_siglip', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
 
 
 @register_model
-def vit_naflex_so400m_patch16_siglip(pretrained: bool = False, **kwargs) -> VisionTransformerFlex:
+def naflexvit_so400m_patch16_siglip(pretrained: bool = False, **kwargs) -> NaFlexVit:
     """ViT-SO400M with NaFlex functionality for variable aspect ratios and resolutions.
     """
-    model_args = dict(
-        patch_size=16, embed_dim=1152, depth=27, num_heads=16, mlp_ratio=3.7362,
-        act_layer='gelu_tanh', global_pool='map')
-    model = _create_vision_transformer_flex(
-        'vit_naflex_so400m_patch16_siglip', pretrained=pretrained, **dict(model_args, **kwargs))
+    cfg = NaFlexVitCfg(
+        patch_size=16,
+        embed_dim=1152,
+        depth=27,
+        num_heads=16,
+        mlp_ratio=3.7362,
+        act_layer='gelu_tanh',
+        global_pool='map',
+    )
+    model = _create_naflexvit('naflexvit_so400m_patch16_siglip', pretrained=pretrained, cfg=cfg, **kwargs)
     return model
