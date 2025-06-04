@@ -1007,8 +1007,11 @@ class NaFlexVit(nn.Module):
             patch_coord = x['patch_coord']
             patch_valid = x['patch_valid']
             patches = x['patches']
+            assert False, 'WIP, patch mode needs more work'
         else:
             patches = x
+            height, width = x.shape[-2:]
+            H, W = self.embeds.dynamic_feat_size((height, width))
 
         # Create attention mask if patch_type is provided and mask is not
         if mask is None and patch_valid is not None:
@@ -1040,12 +1043,6 @@ class NaFlexVit(nn.Module):
 
         if reshape:
             # reshape to BCHW output format
-            grid_size = self.embeds.pos_embed_grid_size
-            if hasattr(self.embeds, 'dynamic_feat_size') and len(x.shape) >= 4:
-                _, height, width, _ = x.shape if len(x.shape) == 4 else (None, *x.shape[-3:-1], None)
-                H, W = self.embeds.dynamic_feat_size((height, width))
-            else:
-                H, W = grid_size
             intermediates = [
                 y.reshape(y.shape[0], H, W, -1).permute(0, 3, 1, 2).contiguous()
                 for y in intermediates
