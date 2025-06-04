@@ -8,7 +8,7 @@ import torch
 
 from .constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .loader import _worker_init, adapt_to_chs
-from .naflex_dataset import VariableSeqMapWrapper, NaFlexCollator
+from .naflex_dataset import NaFlexMapDatasetWrapper, NaFlexCollator
 from .naflex_random_erasing import PatchRandomErasing
 from .transforms_factory import create_transform
 
@@ -215,7 +215,7 @@ def create_naflex_loader(
         if isinstance(dataset, torch.utils.data.IterableDataset):
             assert False, "IterableDataset Wrapper is a WIP"
 
-        naflex_dataset = VariableSeqMapWrapper(
+        naflex_dataset = NaFlexMapDatasetWrapper(
             dataset,
             transform_factory=transform_factory,
             patch_size=patch_size,
@@ -231,18 +231,12 @@ def create_naflex_loader(
         )
 
         # NOTE: Collation is handled by the dataset wrapper for training
-        # Create the collator (handles fixed-size collation)
-        # collate_fn = NaFlexCollator(
-        #     max_seq_len=max(seq_lens) + 1,  # +1 for class token
-        # )
-
         loader = torch.utils.data.DataLoader(
             naflex_dataset,
             batch_size=None,
             shuffle=False,
             num_workers=num_workers,
             sampler=None,
-            #collate_fn=collate_fn,
             pin_memory=pin_memory,
             worker_init_fn=partial(_worker_init, worker_seeding=worker_seeding),
             persistent_workers=persistent_workers

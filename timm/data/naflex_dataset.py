@@ -123,7 +123,7 @@ class NaFlexCollator:
         }, targets
 
 
-class VariableSeqMapWrapper(IterableDataset):
+class NaFlexMapDatasetWrapper(IterableDataset):
     """
     IterableDataset wrapper for a map-style base dataset.
 
