@@ -436,6 +436,166 @@ class PatchEmbedResamplerFixedOrigSize(nn.Module):
         return resampled_patch_embed
 
 
+class PatchEmbedInterpolator(nn.Module):
+    """Dynamically interpolates patch embedding weights for variable patch sizes.
+
+    This module wraps patch embedding weight resampling functionality to support
+    on-the-fly patch size variation during training. It handles both Conv2d and
+    Linear patch embeddings.
+
+    Args:
+        base_patch_size: The original patch size the model was initialized with
+        in_chans: Number of input channels
+        embed_dim: Embedding dimension
+        interpolation: Interpolation mode for resampling
+        antialias: Whether to use antialiasing during interpolation
+    """
+
+    def __init__(
+        self,
+        base_patch_size: Tuple[int, int],
+        in_chans: int = 3,
+        embed_dim: int = 768,
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+    ):
+        super().__init__()
+        self.base_patch_size = base_patch_size
+        self.in_chans = in_chans
+        self.embed_dim = embed_dim
+        self.interpolation = interpolation
+        self.antialias = antialias
+
+    def resample_linear_weight(
+        self,
+        weight: torch.Tensor,
+        target_patch_size: Tuple[int, int],
+    ) -> torch.Tensor:
+        """Resample linear patch embedding weights for a new patch size.
+
+        Args:
+            weight: Linear weight tensor of shape [embed_dim, patch_h * patch_w * in_chans]
+            target_patch_size: Target (patch_h, patch_w) to resample to
+
+        Returns:
+            Resampled weight tensor
+        """
+        if target_patch_size == self.base_patch_size:
+            return weight
+
+        embed_dim = weight.shape[0]
+        base_ph, base_pw = self.base_patch_size
+        target_ph, target_pw = target_patch_size
+
+        # Reshape linear weight to conv2d format
+        # [embed_dim, ph*pw*C] -> [embed_dim, C, ph, pw]
+        weight_conv = weight.reshape(embed_dim, base_ph, base_pw, self.in_chans)
+        weight_conv = weight_conv.permute(0, 3, 1, 2)
+
+        # Resample using existing function
+        weight_conv_resampled = resample_patch_embed(
+            weight_conv,
+            new_size=[target_ph, target_pw],
+            interpolation=self.interpolation,
+            antialias=self.antialias,
+            verbose=False,
+        )
+
+        # Reshape back to linear format
+        # [embed_dim, C, ph, pw] -> [embed_dim, ph*pw*C]
+        weight_resampled = weight_conv_resampled.permute(0, 2, 3, 1)
+        weight_resampled = weight_resampled.reshape(embed_dim, -1)
+
+        return weight_resampled
+
+    def resample_conv_weight(
+        self,
+        weight: torch.Tensor,
+        target_patch_size: Tuple[int, int],
+    ) -> torch.Tensor:
+        """Resample conv2d patch embedding weights for a new patch size.
+
+        Args:
+            weight: Conv2d weight tensor of shape [embed_dim, in_chans, patch_h, patch_w]
+            target_patch_size: Target (patch_h, patch_w) to resample to
+
+        Returns:
+            Resampled weight tensor
+        """
+        if target_patch_size == self.base_patch_size:
+            return weight
+
+        # Resample using existing function
+        weight_resampled = resample_patch_embed(
+            weight,
+            new_size=list(target_patch_size),
+            interpolation=self.interpolation,
+            antialias=self.antialias,
+            verbose=False,
+        )
+
+        return weight_resampled
+
+    def forward(
+        self,
+        patches: torch.Tensor,
+        proj_weight: torch.Tensor,
+        proj_bias: Optional[torch.Tensor] = None,
+        patch_size: Optional[Tuple[int, int]] = None,
+        is_linear: bool = True,
+    ) -> torch.Tensor:
+        """Apply patch embedding with dynamic weight resampling.
+
+        Args:
+            patches: Input patches
+                - For linear mode with resampling: [B, N, Ph, Pw, C]
+                - For linear mode without resampling: [B, N, Ph*Pw*C]
+                - For conv mode: [B, C, H, W]
+            proj_weight: Original projection weight
+            proj_bias: Optional projection bias
+            patch_size: Current patch size (if None, uses base_patch_size)
+            is_linear: Whether using linear (True) or conv2d (False) projection
+
+        Returns:
+            Embedded patches
+        """
+        if patch_size is None:
+            patch_size = self.base_patch_size
+
+        if is_linear:
+            if patch_size != self.base_patch_size:
+                # Need to resample - expects unflattened patches
+                assert patches.ndim == 5, "Patches must be [B, N, Ph, Pw, C] for resampling"
+                B, N, Ph, Pw, C = patches.shape
+
+                # Resample the weight
+                weight_resampled = self.resample_linear_weight(proj_weight, patch_size)
+
+                # Flatten patches and apply linear projection
+                patches_flat = patches.reshape(B, N, -1)
+                output = torch.nn.functional.linear(patches_flat, weight_resampled, proj_bias)
+            else:
+                # No resampling needed, patches can be pre-flattened
+                if patches.ndim == 5:
+                    B, N, Ph, Pw, C = patches.shape
+                    patches = patches.reshape(B, N, -1)
+                output = torch.nn.functional.linear(patches, proj_weight, proj_bias)
+        else:
+            # Conv mode
+            if patch_size != self.base_patch_size:
+                weight_resampled = self.resample_conv_weight(proj_weight, patch_size)
+                output = torch.nn.functional.conv2d(
+                    patches, weight_resampled, proj_bias,
+                    stride=patch_size, padding=0
+                )
+            else:
+                output = torch.nn.functional.conv2d(
+                    patches, proj_weight, proj_bias,
+                    stride=patch_size, padding=0
+                )
+
+        return output
+
 # def divs(n, m=None):
 #     m = m or n // 2
 #     if m == 1:
