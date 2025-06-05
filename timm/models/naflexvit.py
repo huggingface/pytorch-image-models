@@ -1199,7 +1199,7 @@ class NaFlexVit(nn.Module):
                 q_len=1,
                 dtype=x.dtype,
             )
-            if self.pool_include_prefix:
+            if not self.pool_include_prefix:
                 x = x[:, self.num_prefix_tokens:]
             x = self.attn_pool(x, attn_mask=attn_mask)
             return x
