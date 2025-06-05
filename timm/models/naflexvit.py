@@ -1192,27 +1192,16 @@ class NaFlexVit(nn.Module):
             patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         if self.attn_pool is not None:
-            # For attention pooling, we need to pass the mask for NaFlex models
-            if self.pool_include_prefix:
-                # Include all tokens in attention pooling - create mask for all tokens including prefix
-                attn_mask = create_attention_mask(
-                    patch_valid,
-                    num_prefix_tokens=self.num_prefix_tokens,
-                    symmetric=False,
-                    q_len=1,
-                    dtype=x.dtype,
-                )
-                x = self.attn_pool(x, attn_mask=attn_mask)
-            else:
-                # Exclude prefix tokens from attention pooling (default behavior)
-                attn_mask = create_attention_mask(
-                    patch_valid,
-                    num_prefix_tokens=0,  # No prefix tokens when we slice them off
-                    symmetric=False,
-                    q_len=1,
-                    dtype=x.dtype,
-                )
-                x = self.attn_pool(x[:, self.num_prefix_tokens:], attn_mask=attn_mask)
+            attn_mask = create_attention_mask(
+                patch_valid,
+                num_prefix_tokens=self.num_prefix_tokens if self.pool_include_prefix else 0,
+                symmetric=False,
+                q_len=1,
+                dtype=x.dtype,
+            )
+            if not self.pool_include_prefix:
+                x = x[:, self.num_prefix_tokens:]
+            x = self.attn_pool(x, attn_mask=attn_mask)
             return x
 
         pool_type = self.global_pool if pool_type is None else pool_type
