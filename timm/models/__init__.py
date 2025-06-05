@@ -42,6 +42,7 @@ from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
 from .mvitv2 import *
+from .naflexvit import *
 from .nasnet import *
 from .nest import *
 from .nextvit import *

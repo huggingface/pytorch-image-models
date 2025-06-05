@@ -229,6 +229,8 @@ class FastCollateMixup(Mixup):
         num_elem = batch_size // 2 if half else batch_size
         assert len(output) == num_elem
         lam_batch, use_cutmix = self._params_per_elem(num_elem)
+        is_np = isinstance(batch[0][0], np.ndarray)
+
         for i in range(num_elem):
             j = batch_size - i - 1
             lam = lam_batch[i]
@@ -236,15 +238,23 @@ class FastCollateMixup(Mixup):
             if lam != 1.:
                 if use_cutmix[i]:
                     if not half:
-                        mixed = mixed.copy()
+                        mixed = mixed.copy() if is_np else mixed.clone()
                     (yl, yh, xl, xh), lam = cutmix_bbox_and_lam(
-                        output.shape, lam, ratio_minmax=self.cutmix_minmax, correct_lam=self.correct_lam)
+                        output.shape,
+                        lam,
+                        ratio_minmax=self.cutmix_minmax,
+                        correct_lam=self.correct_lam,
+                    )
                     mixed[:, yl:yh, xl:xh] = batch[j][0][:, yl:yh, xl:xh]
                     lam_batch[i] = lam
                 else:
-                    mixed = mixed.astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
-                    np.rint(mixed, out=mixed)
-            output[i] += torch.from_numpy(mixed.astype(np.uint8))
+                    if is_np:
+                        mixed = mixed.astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
+                        np.rint(mixed, out=mixed)
+                    else:
+                        mixed = mixed.float() * lam + batch[j][0].float() * (1 - lam)
+                        torch.round(mixed, out=mixed)
+            output[i] += torch.from_numpy(mixed.astype(np.uint8)) if is_np else mixed.byte()
         if half:
             lam_batch = np.concatenate((lam_batch, np.ones(num_elem)))
         return torch.tensor(lam_batch).unsqueeze(1)
@@ -252,6 +262,8 @@ class FastCollateMixup(Mixup):
     def _mix_pair_collate(self, output, batch):
         batch_size = len(batch)
         lam_batch, use_cutmix = self._params_per_elem(batch_size // 2)
+        is_np = isinstance(batch[0][0], np.ndarray)
+
         for i in range(batch_size // 2):
             j = batch_size - i - 1
             lam = lam_batch[i]
@@ -261,39 +273,60 @@ class FastCollateMixup(Mixup):
             if lam < 1.:
                 if use_cutmix[i]:
                     (yl, yh, xl, xh), lam = cutmix_bbox_and_lam(
-                        output.shape, lam, ratio_minmax=self.cutmix_minmax, correct_lam=self.correct_lam)
-                    patch_i = mixed_i[:, yl:yh, xl:xh].copy()
+                        output.shape,
+                        lam,
+                        ratio_minmax=self.cutmix_minmax,
+                        correct_lam=self.correct_lam,
+                    )
+                    patch_i = mixed_i[:, yl:yh, xl:xh].copy() if is_np else mixed_i[:, yl:yh, xl:xh].clone()
                     mixed_i[:, yl:yh, xl:xh] = mixed_j[:, yl:yh, xl:xh]
                     mixed_j[:, yl:yh, xl:xh] = patch_i
                     lam_batch[i] = lam
                 else:
-                    mixed_temp = mixed_i.astype(np.float32) * lam + mixed_j.astype(np.float32) * (1 - lam)
-                    mixed_j = mixed_j.astype(np.float32) * lam + mixed_i.astype(np.float32) * (1 - lam)
-                    mixed_i = mixed_temp
-                    np.rint(mixed_j, out=mixed_j)
-                    np.rint(mixed_i, out=mixed_i)
-            output[i] += torch.from_numpy(mixed_i.astype(np.uint8))
-            output[j] += torch.from_numpy(mixed_j.astype(np.uint8))
+                    if is_np:
+                        mixed_temp = mixed_i.astype(np.float32) * lam + mixed_j.astype(np.float32) * (1 - lam)
+                        mixed_j = mixed_j.astype(np.float32) * lam + mixed_i.astype(np.float32) * (1 - lam)
+                        mixed_i = mixed_temp
+                        np.rint(mixed_j, out=mixed_j)
+                        np.rint(mixed_i, out=mixed_i)
+                    else:
+                        mixed_temp = mixed_i.float() * lam + mixed_j.float() * (1 - lam)
+                        mixed_j = mixed_j.float() * lam + mixed_i.float() * (1 - lam)
+                        mixed_i = mixed_temp
+                        torch.round(mixed_j, out=mixed_j)
+                        torch.round(mixed_i, out=mixed_i)
+            output[i] += torch.from_numpy(mixed_i.astype(np.uint8)) if is_np else mixed_i.byte()
+            output[j] += torch.from_numpy(mixed_j.astype(np.uint8)) if is_np else mixed_j.byte()
         lam_batch = np.concatenate((lam_batch, lam_batch[::-1]))
         return torch.tensor(lam_batch).unsqueeze(1)
 
     def _mix_batch_collate(self, output, batch):
         batch_size = len(batch)
         lam, use_cutmix = self._params_per_batch()
+        is_np = isinstance(batch[0][0], np.ndarray)
+
         if use_cutmix:
             (yl, yh, xl, xh), lam = cutmix_bbox_and_lam(
-                output.shape, lam, ratio_minmax=self.cutmix_minmax, correct_lam=self.correct_lam)
+                output.shape,
+                lam,
+                ratio_minmax=self.cutmix_minmax,
+                correct_lam=self.correct_lam,
+            )
         for i in range(batch_size):
             j = batch_size - i - 1
             mixed = batch[i][0]
             if lam != 1.:
                 if use_cutmix:
-                    mixed = mixed.copy()  # don't want to modify the original while iterating
+                    mixed = mixed.copy() if is_np else mixed.clone()  # don't want to modify the original while iterating
                     mixed[:, yl:yh, xl:xh] = batch[j][0][:, yl:yh, xl:xh]
                 else:
-                    mixed = mixed.astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
-                    np.rint(mixed, out=mixed)
-            output[i] += torch.from_numpy(mixed.astype(np.uint8))
+                    if is_np:
+                        mixed = mixed.astype(np.float32) * lam + batch[j][0].astype(np.float32) * (1 - lam)
+                        np.rint(mixed, out=mixed)
+                    else:
+                        mixed = mixed.float() * lam + batch[j][0].float() * (1 - lam)
+                        torch.round(mixed, out=mixed)
+            output[i] += torch.from_numpy(mixed.astype(np.uint8)) if is_np else mixed.byte()
         return lam
 
     def __call__(self, batch, _=None):
