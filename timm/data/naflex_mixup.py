@@ -11,6 +11,7 @@ This module provides:
   all augmentation hyper‑parameters in one place, making it easy to plug into
   different dataset wrappers.
 
+Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """
 import math
 import random
@@ -113,7 +114,6 @@ def mix_batch_variable_size(
 
             corrected_lam = 1.0 - cut_area / float(dest_area)
             lam_list[i] = corrected_lam
-            #print(i, 'Doing cutmix', yl_i, xl_i, yl_j, xl_j, ch, cw, lam_raw, corrected_lam)
         else:
             # Mixup: blend the entire overlap region
             patch_i = xi[:, top_i:top_i + oh, left_i:left_i + ow]
@@ -125,7 +125,6 @@ def mix_batch_variable_size(
 
             corrected_lam = (dest_area - overlap_area) / dest_area + lam_raw * overlap_area / dest_area
             lam_list[i] = corrected_lam
-            #print(i, 'Doing mixup', top_i, left_i, top_j, left_j, (oh, ow), (hi, wi), (hj, wj), lam_raw, corrected_lam)
 
     return mixed_imgs, lam_list, pair_to
 

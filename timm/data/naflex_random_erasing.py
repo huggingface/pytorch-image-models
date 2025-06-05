@@ -1,3 +1,16 @@
+"""Patch-level random erasing augmentation for NaFlex Vision Transformers.
+
+This module implements random erasing specifically designed for patchified images,
+operating at the patch granularity rather than pixel level. It supports two modes:
+- 'patch': Randomly erases individual patches (speckle-like noise)
+- 'region': Erases contiguous rectangular regions of patches (similar to original RandomErasing)
+
+The implementation is coordinate-aware, respecting valid patch boundaries and supporting
+variable patch sizes in NaFlex training.
+
+Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
+"""
+
 import random
 import math
 from typing import Optional, Union, Tuple

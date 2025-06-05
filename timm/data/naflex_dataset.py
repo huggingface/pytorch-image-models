@@ -1,15 +1,16 @@
-"""
-Dynamic Sequence Length Datasets for Variable Resolution Image Processing
+""" Dynamic Sequence Length Datasets for Variable Resolution Image Processing
 
 Implements two dataset wrappers:
-1. DynamicSeqMapDataset - Map-style dataset that returns batches with variable sequence lengths
-2. DynamicSeqIterDataset - Iterable dataset that yields batches with variable sequence lengths
+1. NaFlexMapDatasetWrapper - Map-style dataset that returns batches with variable sequence lengths
+TODO: 2. NaFlexIterableDatasetWrapper - Iterable dataset that yields batches with variable sequence lengths
 
 Both support:
 - Pre-initialized transforms for efficiency
 - Distributed training
 - Multiple workers
 - Variable batch sizes based on sequence length
+
+Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """
 
 import math
@@ -20,12 +21,10 @@ from typing import Any, Iterator, List, Tuple, Dict, Optional, Union, Callable
 
 import torch
 from torch.utils.data import Dataset, IterableDataset, DataLoader
-from torchvision import transforms
 from PIL import Image
 
-
-from .naflex_transforms import Patchify, patchify_image
-from ..layers import to_2tuple
+from .naflex_transforms import Patchify
+from timm.layers import to_2tuple
 
 
 def calculate_naflex_batch_size(
@@ -203,7 +202,7 @@ class NaFlexMapDatasetWrapper(IterableDataset):
     Yields batches with variable sequence lengths. It calculates a canonical
     batch schedule (sequence length, batch size pairs) once based on the
     total dataset size (padded for distribution). Each epoch, it shuffles
-    the *order* of this canonical schedule and the dataset indices.
+    the order of this canonical schedule and the dataset indices.
     This ensures a consistent number of batches and samples per epoch
     across all ranks. Handles distributed training and multiple workers.
     """
@@ -292,13 +291,13 @@ class NaFlexMapDatasetWrapper(IterableDataset):
 
         self.mixup_fn = mixup_fn
 
-        # --- Canonical Schedule Calculation (Done Once) ---
+        # Canonical Schedule Calculation (Done Once)
         self._canonical_batch_schedule: List[Tuple[int, int]] = []
         self._num_batches_per_rank: int = 0
         self._padded_samples_per_rank: int = 0
         self._create_canonical_schedule() # Calculate schedule based on padded size
 
-        # --- Per-Epoch State ---
+        # Per-Epoch State
         # Stores (seq_len, list_of_indices) for the current epoch, specific to this rank
         self._epoch_batches: List[Tuple[int, List[int]]] = []
         self._prepare_epoch_batches(self.epoch)  # setup for initial epoch
@@ -419,7 +418,6 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             # Ensure length matches expectation
             if len(indices_for_ranks) != padded_total_len:
                  raise RuntimeError(f"Internal Error: Padded index list length {len(indices_for_ranks)} does not match expected {padded_total_len}")
-
 
         # 3. Select indices for the current rank
         if self.distributed and self.world_size > 1:

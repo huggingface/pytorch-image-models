@@ -5,6 +5,8 @@ Implements PyTorch versions of the transforms described in the NaViT and FlexiVi
 - FlexiViT: https://arxiv.org/abs/2212.08013
 
 Enables variable resolution/aspect ratio image handling with efficient patching.
+
+Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """
 
 import math

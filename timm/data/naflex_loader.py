@@ -1,3 +1,14 @@
+"""NaFlex data loader for dynamic sequence length training.
+
+This module provides a specialized data loader for Vision Transformer models that supports:
+- Dynamic sequence length sampling during training for improved efficiency
+- Variable patch size training with probabilistic selection
+- Patch-level random erasing augmentation
+- Efficient GPU prefetching with normalization
+
+Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
+"""
+
 import math
 from contextlib import suppress
 from functools import partial

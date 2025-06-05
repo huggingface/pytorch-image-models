@@ -1,16 +1,19 @@
-""" Vision Transformer (New)
+""" NaFlex Vision Transformer
 
 An improved version of the Vision Transformer with:
 1. Encapsulated embedding and position encoding in a single module
 2. Support for linear patch embedding on pre-patchified inputs
-3. Support for NaFlex functionality (NaViT + FlexiViT)
+3. Support for NaFlex variable aspect, variable resolution
+4. Support for FlexiViT variable patch size
+5. Support for NaViT fractional/factorized position embedding
 
-Based on:
+Based on ideas from:
 - Original Vision Transformer: https://arxiv.org/abs/2010.11929
 - FlexiViT: https://arxiv.org/abs/2212.08013
 - NaViT: https://arxiv.org/abs/2307.06304
+- NaFlex (SigLip-2): https://arxiv.org/abs/2502.14786
 
-Copyright 2025
+Hacked together by / Copyright 2025, Ross Wightman, Hugging Face
 """
 
 import logging
