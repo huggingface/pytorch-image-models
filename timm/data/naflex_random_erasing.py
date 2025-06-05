@@ -6,28 +6,11 @@ import torch
 
 
 class PatchRandomErasing:
-    """
-    Random erasing for patchified images in NaFlex format.
+    """Random erasing for patchified images in NaFlex format.
 
-    Supports three modes:
+    Supports two modes:
     1. 'patch': Simple mode that erases randomly selected valid patches
     2. 'region': Erases rectangular regions at patch granularity
-
-    Args:
-        erase_prob: Probability that the Random Erasing operation will be performed.
-        patch_drop_prob: Patch dropout probability. Remove random patches instead of erasing.
-        min_area: Minimum percentage of valid patches/area to erase.
-        max_area: Maximum percentage of valid patches/area to erase.
-        min_aspect: Minimum aspect ratio of erased area (only used in 'region' mode).
-        max_aspect: Maximum aspect ratio of erased area (only used in 'region' mode).
-        mode: Patch content mode, one of 'const', 'rand', or 'pixel'
-            'const' - erase patch is constant color of 0 for all channels
-            'rand'  - erase patch has same random (normal) value across all elements
-            'pixel' - erase patch has per-element random (normal) values
-        spatial_mode: Erasing strategy, one of 'patch', 'region', or 'subregion'
-        patch_size: Size of each patch (required for 'subregion' mode)
-        num_splits: Number of splits to apply erasing to (0 for all)
-        device: Computation device
     """
 
     def __init__(
@@ -45,7 +28,24 @@ class PatchRandomErasing:
             spatial_mode: str = 'region',
             num_splits: int = 0,
             device: Union[str, torch.device] = 'cuda',
-    ):
+    ) -> None:
+        """Initialize PatchRandomErasing.
+
+        Args:
+            erase_prob: Probability that the Random Erasing operation will be performed.
+            patch_drop_prob: Patch dropout probability. Remove random patches instead of erasing.
+            min_count: Minimum number of erasing operations.
+            max_count: Maximum number of erasing operations.
+            min_area: Minimum percentage of valid patches/area to erase.
+            max_area: Maximum percentage of valid patches/area to erase.
+            min_aspect: Minimum aspect ratio of erased area (only used in 'region' mode).
+            max_aspect: Maximum aspect ratio of erased area (only used in 'region' mode).
+            mode: Patch content mode, one of 'const', 'rand', or 'pixel'.
+            value: Constant value for 'const' mode.
+            spatial_mode: Erasing strategy, one of 'patch' or 'region'.
+            num_splits: Number of splits to apply erasing to (0 for all).
+            device: Computation device.
+        """
         self.erase_prob = erase_prob
         self.patch_drop_prob = patch_drop_prob
         self.min_count = min_count
@@ -73,17 +73,21 @@ class PatchRandomErasing:
 
     def _get_values(
             self,
-            shape: Union[Tuple[int,...], torch.Size],
+            shape: Union[Tuple[int, ...], torch.Size],
             value: Optional[torch.Tensor] = None,
             dtype: torch.dtype = torch.float32,
             device: Optional[Union[str, torch.device]] = None
-    ):
+    ) -> torch.Tensor:
         """Generate values for erased patches based on the specified mode.
+
         Args:
             shape: Shape of patches to erase.
             value: Value to use in const (or rand) mode.
             dtype: Data type to use.
             device: Device to use.
+
+        Returns:
+            Tensor with values for erasing patches.
         """
         device = device or self.device
         if self.erase_mode == 'pixel':
@@ -107,11 +111,19 @@ class PatchRandomErasing:
             patches: torch.Tensor,
             patch_coord: torch.Tensor,
             patch_valid: torch.Tensor,
-    ):
-        """ Patch Dropout
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Patch Dropout.
 
         Fully drops patches from datastream. Only mode that saves compute BUT requires support
         for non-contiguous patches and associated patch coordinate and valid handling.
+
+        Args:
+            patches: Tensor of patches.
+            patch_coord: Tensor of patch coordinates.
+            patch_valid: Tensor indicating which patches are valid.
+
+        Returns:
+            Tuple of (patches, patch_coord, patch_valid) with some patches dropped.
         """
         # FIXME WIP, not completed. Downstream support in model needed for non-contiguous valid patches
         if random.random() > self.erase_prob:
@@ -142,11 +154,18 @@ class PatchRandomErasing:
             patch_valid: torch.Tensor,
             patch_shape: torch.Size,
             dtype: torch.dtype = torch.float32,
-    ):
+    ) -> None:
         """Apply erasing by selecting individual patches randomly.
 
         The simplest mode, aligned on patch boundaries. Behaves similarly to speckle or 'sprinkles'
         noise augmentation at patch size.
+
+        Args:
+            patches: Tensor of patches to modify in-place.
+            patch_coord: Tensor of patch coordinates.
+            patch_valid: Tensor indicating which patches are valid.
+            patch_shape: Shape of individual patches.
+            dtype: Data type for generated values.
         """
         if random.random() > self.erase_prob:
             return
@@ -181,11 +200,18 @@ class PatchRandomErasing:
             patch_valid: torch.Tensor,
             patch_shape: torch.Size,
             dtype: torch.dtype = torch.float32,
-    ):
-        """Apply erasing by selecting rectangular regions of patches randomly
+    ) -> None:
+        """Apply erasing by selecting rectangular regions of patches randomly.
 
         Closer to the original RandomErasing implementation. Erases
         spatially contiguous rectangular regions of patches (aligned with patches).
+
+        Args:
+            patches: Tensor of patches to modify in-place.
+            patch_coord: Tensor of patch coordinates.
+            patch_valid: Tensor indicating which patches are valid.
+            patch_shape: Shape of individual patches.
+            dtype: Data type for generated values.
         """
         if random.random() > self.erase_prob:
             return
@@ -245,18 +271,16 @@ class PatchRandomErasing:
             patches: torch.Tensor,
             patch_coord: torch.Tensor,
             patch_valid: Optional[torch.Tensor] = None,
-    ):
-        """
-        Apply random patch erasing.
+    ) -> torch.Tensor:
+        """Apply random patch erasing.
 
         Args:
-            patches: Tensor of shape [B, N, P*P, C]
-            patch_coord: Tensor of shape [B, N, 2] with (y, x) coordinates
-            patch_valid: Boolean tensor of shape [B, N] indicating which patches are valid
-                        If None, all patches are considered valid
+            patches: Tensor of shape [B, N, P*P, C] or [B, N, Ph, Pw, C].
+            patch_coord: Tensor of shape [B, N, 2] with (y, x) coordinates.
+            patch_valid: Boolean tensor of shape [B, N] indicating which patches are valid.
 
         Returns:
-            Erased patches tensor of same shape
+            Erased patches tensor of same shape as input.
         """
         if patches.ndim == 4:
             batch_size, num_patches, patch_dim, channels = patches.shape
@@ -305,7 +329,12 @@ class PatchRandomErasing:
 
         return patches
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Return string representation of PatchRandomErasing.
+
+        Returns:
+            String representation of the object.
+        """
         fs = self.__class__.__name__ + f'(p={self.erase_prob}, mode={self.erase_mode}'
         fs += f', spatial={self.spatial_mode}, area=({self.min_area}, {self.max_area}))'
         fs += f', count=({self.min_count}, {self.max_count}))'

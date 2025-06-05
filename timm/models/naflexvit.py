@@ -112,6 +112,9 @@ class NaFlexVitCfg:
     block_fn: Optional[str] = None  # Transformer block implementation class name
     mlp_layer: Optional[str] = None  # MLP implementation class name
 
+    # Variable patch size support
+    enable_patch_interpolator: bool = False  # Enable dynamic patch size support
+
 
 def _overlay_kwargs(cfg: NaFlexVitCfg, **kwargs) -> NaFlexVitCfg:
     """Overlay kwargs onto config, replacing config values with provided kwargs."""
@@ -130,6 +133,17 @@ def batch_patchify(
         patch_size: Tuple[int, int],
         pad: bool = True,
 ) -> Tuple[torch.Tensor, Tuple[int, int]]:
+    """Patchify a batch of images.
+
+    Args:
+        x: Input tensor of shape [B, C, H, W].
+        patch_size: Patch dimensions (patch_h, patch_w).
+        pad: Whether to pad images to be divisible by patch size.
+
+    Returns:
+        Tuple of (patches, grid_size) where patches has shape [B, N, P*P*C]
+        and grid_size is (num_patches_h, num_patches_w).
+    """
     B, C, H, W = x.shape
     ph, pw = patch_size
 
@@ -194,12 +208,12 @@ class NaFlexEmbeds(nn.Module):
             patch_size: Union[int, Tuple[int, int]] = 16,
             in_chans: int = 3,
             embed_dim: int = 768,
-            proj_type: Optional[str] = None,  # 'conv' or 'linear', default is 'linear'
+            proj_type: Optional[str] = None,
             proj_bias: bool = True,
             class_token: bool = True,
             reg_tokens: int = 0,
             dynamic_img_pad: bool = False,
-            default_img_size: Union[int, Tuple[int, int]] = None,
+            default_img_size: Optional[Union[int, Tuple[int, int]]] = None,
             pos_embed: str = 'learned',
             pos_embed_grid_size: Optional[Tuple[int, int]] = (14, 14),
             pos_embed_interp_mode: str = 'bicubic',
@@ -209,7 +223,31 @@ class NaFlexEmbeds(nn.Module):
             norm_layer: Optional[Type[nn.Module]] = None,
             pos_drop_rate: float = 0.,
             patch_drop_rate: float = 0.,
-    ):
+            enable_patch_interpolator: bool = False,
+    ) -> None:
+        """Initialize NaFlexEmbeds module.
+
+        Args:
+            patch_size: Size of patches for patch embedding.
+            in_chans: Number of input image channels.
+            embed_dim: Dimensionality of patch embedding.
+            proj_type: Type of embedding projection layer ('conv' or 'linear').
+            proj_bias: Whether to use bias in projection layers.
+            class_token: Whether to include a class token.
+            reg_tokens: Number of register tokens to include.
+            dynamic_img_pad: Whether to enable dynamic padding for variable resolution.
+            default_img_size: Default image size for position embedding grid calculation.
+            pos_embed: Type of position embedding ('learned', 'factorized', 'rope', 'none').
+            pos_embed_grid_size: Grid size for position embedding initialization.
+            pos_embed_interp_mode: Interpolation mode for position embedding resizing.
+            pos_embed_ar_preserving: Whether to preserve aspect ratio during interpolation.
+            input_norm_layer: Normalization layer applied to input (linear mode only).
+            proj_norm_layer: Normalization layer applied after projection.
+            norm_layer: Default normalization layer.
+            pos_drop_rate: Dropout rate for position embeddings.
+            patch_drop_rate: Dropout rate for patch tokens.
+            enable_patch_interpolator: Enable dynamic patch size support.
+        """
         super().__init__()
         self.has_class_token = class_token
         self.num_reg_tokens = reg_tokens
@@ -219,6 +257,7 @@ class NaFlexEmbeds(nn.Module):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
         self.dynamic_img_pad = dynamic_img_pad
+        self.enable_patch_interpolator = enable_patch_interpolator
 
         # Calculate number of prefix tokens
         self.num_prefix_tokens = 1 if class_token else 0
@@ -260,6 +299,19 @@ class NaFlexEmbeds(nn.Module):
             )
             self.flatten = True
             self.is_linear = False
+
+        # Create patch embedding interpolator if enabled
+        if self.enable_patch_interpolator:
+            from timm.layers import PatchEmbedInterpolator
+            self.patch_interpolator = PatchEmbedInterpolator(
+                base_patch_size=self.patch_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+                interpolation=pos_embed_interp_mode,
+                antialias=True,
+            )
+        else:
+            self.patch_interpolator = None
 
         # Create normalization layer after the projection
         assert not (proj_norm_layer is True and norm_layer is None), \
@@ -501,15 +553,22 @@ class NaFlexEmbeds(nn.Module):
                 pos[:, :seq_len].expand(len(batch_indices), -1, -1)
             )
 
-    def forward(self, x: torch.Tensor, patch_coord: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+            self,
+            x: torch.Tensor,
+            patch_coord: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """Forward pass for patch embedding with position encoding.
 
         Args:
-            x: Input tensor [B, C, H, W] for conv mode or [B, N, P*P*C] for pre-patchified linear mode
-            patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode
+            x: Input tensor. Supported formats:
+                - [B, C, H, W] for conv mode
+                - [B, N, P*P*C] for pre-patchified linear mode (normal)
+                - [B, N, Ph, Pw, C] for pre-patchified linear mode (variable patch size)
+            patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode.
 
         Returns:
-            Embedded tensor with position encoding and class/register tokens applied.
+            Embedded tensor with position encoding and class/register tokens.
             Shape: [B, num_prefix_tokens + N, embed_dim]
         """
         # Apply patch embedding
@@ -520,8 +579,9 @@ class NaFlexEmbeds(nn.Module):
         if self.is_linear:
             # Linear embedding path, works with NaFlex mode or standard 2D mode
             if patch_coord is not None:
-                _assert(x.ndim == 3, 'Expecting patchified input with ndim == 3')
-                # Pre-patchified NaFlex mode, input is expected to be (B, N, P*P*C) where N is num_patches
+                # Pre-patchified NaFlex mode
+                # Variable patch size mode: [B, N, Ph, Pw, C], normal mode: [B, N, P*P*C]
+                _assert(x.ndim == 5 or x.ndim == 3, 'Expecting patchified input with ndim == 3 or 5.')
                 # Calculate the appropriate grid size from coords
                 max_y = patch_coord[:, :, 0].max(dim=1)[0] + 1
                 max_x = patch_coord[:, :, 1].max(dim=1)[0] + 1
@@ -530,12 +590,26 @@ class NaFlexEmbeds(nn.Module):
                 _assert(x.ndim == 4, 'Expecting 2D image input with input ndim == 4')
                 x, grid_size = batch_patchify(x, self.patch_size, pad=self.dynamic_img_pad)
 
-            if self.norm_input is not None:
-                x = self.norm_input(x)
+            # Handle variable patch size projection
+            if self.enable_patch_interpolator and x.ndim == 5:
+                _assert(self.norm_input is None, 'input norm not supported with patch resizing')
 
-            x = self.proj(x)
+                # Apply projection with interpolation
+                x = self.patch_interpolator(
+                    x,
+                    self.proj.weight,
+                    self.proj.bias,
+                    patch_size=tuple(x.shape[2:4]),  # patch size from [B, N, Ph, Pw, C] shape
+                    is_linear=True,
+                )
+            else:
+                # Standard projection
+                x = x.flatten(2)  # ensure [B, N, P*P*C], flatten Ph*Pw*C if separate
+                if self.norm_input is not None:
+                    x = self.norm_input(x)
+                x = self.proj(x)
         else:
-            assert x.ndim == 4, 'Convolutional input must be 4D'
+            _assert(x.ndim == 4, 'Convolutional input must be 4D')
             if self.dynamic_img_pad:
                 H, W = x.shape[-2:]
                 pad_h = (self.patch_size[0] - H % self.patch_size[0]) % self.patch_size[0]
@@ -575,16 +649,17 @@ class NaFlexEmbeds(nn.Module):
 
         # Apply dropouts
         x = self.pos_drop(x)
+        x = self.patch_drop(x)
         return x
 
 
 @register_notrace_function
 def create_attention_mask(
-    patch_valid: torch.Tensor,
-    num_prefix_tokens: int = 0,
-    symmetric: bool = True,
-    q_len: Optional[int] = None,
-    dtype: torch.dtype = torch.float32,
+        patch_valid: torch.Tensor,
+        num_prefix_tokens: int = 0,
+        symmetric: bool = True,
+        q_len: Optional[int] = None,
+        dtype: torch.dtype = torch.float32,
 ) -> Optional[torch.Tensor]:
     """Creates an attention mask from patch validity information.
 
@@ -735,20 +810,20 @@ class NaFlexVit(nn.Module):
 
     def __init__(
             self,
-            cfg: NaFlexVitCfg = None,
+            cfg: Optional[NaFlexVitCfg] = None,
             in_chans: int = 3,
             num_classes: int = 1000,
-            img_size: Union[int, Tuple[int, int]] = None,
+            img_size: Optional[Union[int, Tuple[int, int]]] = None,
             **kwargs,
     ) -> None:
         """Initialize NaFlexVit model.
 
         Args:
-            cfg: Model configuration. If None, uses default FlexVitCfg
-            in_chans: Number of input image channels
-            num_classes: Number of classification classes
-            img_size: Input image size for bwd compat with original vit (if pos_embed_grid_size not specified)
-            **kwargs: Additional config parameters to override cfg values
+            cfg: Model configuration. If None, uses default NaFlexVitCfg.
+            in_chans: Number of input image channels.
+            num_classes: Number of classification classes.
+            img_size: Input image size for backwards compatibility.
+            **kwargs: Additional config parameters to override cfg values.
         """
         super().__init__()
 
@@ -799,6 +874,7 @@ class NaFlexVit(nn.Module):
             proj_norm_layer=embed_norm_layer,
             pos_drop_rate=cfg.pos_drop_rate,
             patch_drop_rate=cfg.patch_drop_rate,
+            enable_patch_interpolator=getattr(cfg, 'enable_patch_interpolator', False),
         )
         self.norm_pre = norm_layer(cfg.embed_dim) if cfg.pre_norm else nn.Identity()
 
@@ -1167,12 +1243,16 @@ class NaFlexVit(nn.Module):
         """Forward pass with optional NaFlex support.
 
         Args:
-            x: Input tensor [B, C, H, W] or pre-patchified tensor [B, N, P*P*C] or NaFlex dict
-            patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode
-            patch_valid: Optional patch type indicators (1=patch, 0=padding) for NaFlex
+            x: Input tensor. Supported formats:
+                - [B, C, H, W] standard image input
+                - [B, N, P*P*C] pre-patchified tensor (flattened patches)
+                - [B, N, Ph, Pw, C] pre-patchified tensor (variable patch size)
+                - Dict from NaFlex collator
+            patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode.
+            patch_valid: Optional patch validity indicators for NaFlex.
 
         Returns:
-            Model output tensor
+            Model output tensor.
         """
         if isinstance(x, Dict):
             # Handle dictionary input from NaFlex collator

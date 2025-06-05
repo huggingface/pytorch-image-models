@@ -14,7 +14,7 @@ This module provides:
 """
 import math
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import torch
 
@@ -27,23 +27,23 @@ def mix_batch_variable_size(
         switch_prob: float = 0.5,
         local_shuffle: int = 4,
 ) -> Tuple[List[torch.Tensor], List[float], Dict[int, int]]:
-    """Apply Mixup or CutMix on a batch of variable‑sized images.
+    """Apply Mixup or CutMix on a batch of variable-sized images.
 
-    The function first sorts images by aspect ratio and pairs neighbouring
-    samples (optionally shuffling within small windows so pairs vary between
-    epochs).  Only the mutual central‑overlap region of each pair is mixed
+    Sorts images by aspect ratio and pairs neighboring samples. Only the mutual
+    central overlap region of each pair is mixed.
 
     Args:
-        imgs: List of transformed images shaped (C, H, W).  Heights and widths may differ between samples.
-        mixup_alpha: Beta‑distribution alpha for Mixup.  Set to 0 to disable Mixup.
-        cutmix_alpha: Beta‑distribution alpha for CutMix.  Set to 0 to disable CutMix.
-        switch_prob: Probability of using CutMix when both Mixup and CutMix are enabled.
-        local_shuffle: Size of local windows that are randomly shuffled after aspect sorting. Off if <= 1.
+        imgs: List of transformed images shaped (C, H, W).
+        mixup_alpha: Beta distribution alpha for Mixup. Set to 0 to disable.
+        cutmix_alpha: Beta distribution alpha for CutMix. Set to 0 to disable.
+        switch_prob: Probability of using CutMix when both modes are enabled.
+        local_shuffle: Size of local windows for shuffling after aspect sorting.
 
     Returns:
-        mixed_imgs: List of mixed images.
-        lam_list: Per‑sample lambda values representing the degree of mixing.
-        pair_to: Mapping i -> j describing which sample was mixed with which (absent for unmatched odd sample).
+        Tuple of (mixed_imgs, lam_list, pair_to) where:
+            - mixed_imgs: List of mixed images
+            - lam_list: Per-sample lambda values representing mixing degree
+            - pair_to: Mapping i -> j of which sample was mixed with which
     """
     if len(imgs) < 2:
         raise ValueError("Need at least two images to perform Mixup/CutMix.")

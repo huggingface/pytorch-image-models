@@ -10,7 +10,7 @@ Enables variable resolution/aspect ratio image handling with efficient patching.
 import math
 import random
 import warnings
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 from PIL import Image
@@ -22,37 +22,29 @@ from .transforms import str_to_interp_mode, crop_or_pad, center_crop_or_pad
 
 
 def get_image_size_for_seq(
-        image_hw,
-        patch_size=16,
-        max_seq_len=1024,
-        divisible_by_patch=True,
-        max_ratio=None,
-        eps = 1e-5,
-):
-    """
-    Determine scaling ratio and image size so that when `image_hw` is scaled
-    by 'ratio', the total number of resulting patches does not exceed
-    'max_seq_len'.
+        image_hw: Tuple[int, int],
+        patch_size: Union[int, Tuple[int, int]] = 16,
+        max_seq_len: int = 1024,
+        divisible_by_patch: bool = True,
+        max_ratio: Optional[float] = None,
+        eps: float = 1e-5,
+) -> Tuple[float, Tuple[int, int]]:
+    """Determine scaling ratio and image size for sequence length constraint.
 
-    - Patch size can be an integer (square patch) or a tuple (patch_h, patch_w).
-    - Optionally cap the ratio at `max_ratio` to prevent upsampling beyond
-      a certain multiple of the original size.
+    Calculates the scaling ratio needed so that when image_hw is scaled,
+    the total number of resulting patches does not exceed max_seq_len.
 
     Args:
-        image_hw (tuple or list of int): (height, width) of the original image.
-        patch_size (int or tuple[int, int]): If int, patch is square. If tuple,
-            patch is rectangular (patch_h, patch_w).
-        max_seq_len (int): Maximum allowed sequence length for the resulting image.
-        divisible_by_patch (bool): If True, the resulting image height and width
-            must be multiples of patch_size.
-        eps (float): Small number for binary search convergence.
-        max_ratio (float or None): If provided, the scaling ratio found by the
-            binary search will be clamped to min(found_ratio, max_ratio). Set
-            max_ratio=1.0 to ensure no upsampling beyond original size.
+        image_hw: Original image dimensions (height, width).
+        patch_size: Patch dimensions. If int, patches are square.
+        max_seq_len: Maximum allowed sequence length.
+        divisible_by_patch: Whether resulting dimensions must be divisible by patch_size.
+        max_ratio: Optional cap on scaling ratio to prevent excessive upsampling.
+        eps: Convergence threshold for binary search.
 
     Returns:
-        ratio (float): Found scaling ratio (capped by `max_ratio` if provided).
-        target_hw (tuple of int): Target (height, width) after scaling.
+        Tuple of (ratio, target_hw) where ratio is the scaling factor and
+        target_hw is the resulting (height, width) after scaling.
     """
 
     # Handle patch size input, extract patch_h, patch_w
@@ -131,18 +123,27 @@ _RANDOM_INTERPOLATION = (str_to_interp_mode('bilinear'), str_to_interp_mode('bic
 
 class ResizeToSequence(torch.nn.Module):
     """Resize image to fit within a maximum sequence length constraint when patchified.
-    
+
     This maintains aspect ratio while ensuring the resulting image, when divided into patches,
     will not exceed the specified maximum sequence length.
     """
     def __init__(
-            self, 
-            patch_size: int, 
+            self,
+            patch_size: int,
             max_seq_len: int = 1024,
             divisible_by_patch: bool = True,
             max_ratio: Optional[float] = None,
-            interpolation='bicubic',
-        ):
+            interpolation: Union[str, InterpolationMode, Tuple[InterpolationMode, ...]] = 'bicubic',
+        ) -> None:
+        """Initialize ResizeToSequence transform.
+
+        Args:
+            patch_size: Size of patches.
+            max_seq_len: Maximum sequence length constraint.
+            divisible_by_patch: Whether dimensions must be divisible by patch_size.
+            max_ratio: Optional cap on scaling ratio.
+            interpolation: Interpolation method or methods.
+        """
         super().__init__()
         self.patch_size = patch_size
         self.max_seq_len = max_seq_len
@@ -155,20 +156,27 @@ class ResizeToSequence(torch.nn.Module):
                 self.interpolation = str_to_interp_mode(interpolation)
         else:
             self.interpolation = interpolation
-        
 
-    def forward(self, img):
-        """Resize image to maintain aspect ratio and fit sequence constraint."""
+
+    def forward(self, img: torch.Tensor) -> torch.Tensor:
+        """Resize image to maintain aspect ratio and fit sequence constraint.
+
+        Args:
+            img: Input image tensor.
+
+        Returns:
+            Resized image tensor.
+        """
         _, h, w = transforms.functional.get_dimensions(img)
 
         _, target_hw = get_image_size_for_seq(
-            (h, w), 
-            self.patch_size, 
+            (h, w),
+            self.patch_size,
             self.max_seq_len,
             divisible_by_patch=self.divisible_by_patch,
             max_ratio=self.max_ratio,
         )
-        
+
         if isinstance(self.interpolation, (tuple, list)):
             interpolation = random.choice(self.interpolation)
         else:
@@ -355,8 +363,8 @@ class ResizeKeepRatioToSequence(torch.nn.Module):
 class CenterCropToSequence(torch.nn.Module):
     """Center crop the image such that the resulting patch sequence length meets constraints."""
     def __init__(
-            self, 
-            patch_size: int, 
+            self,
+            patch_size: int,
             max_seq_len: int,
             divisible_by_patch: bool = True,
             fill: Union[int, Tuple[int, int, int]] = 0,
@@ -374,12 +382,12 @@ class CenterCropToSequence(torch.nn.Module):
         """Center crop the image to maintain aspect ratio and fit sequence constraint."""
         _, h, w = transforms.functional.get_dimensions(img)
         _, target_hw = get_image_size_for_seq(
-            (h, w), 
-            self.patch_size, 
+            (h, w),
+            self.patch_size,
             self.max_seq_len,
             self.divisible_by_patch
         )
-        
+
         # Use center crop
         return center_crop_or_pad(img, target_hw, fill=self.fill, padding_mode=self.padding_mode)
 
@@ -743,6 +751,7 @@ def patchify_image(
         patch_size: Tuple[int, int],
         pad: bool = True,
         include_info: bool = True,
+        flatten_patches: bool = True,
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     c, h, w = img.shape
     ph, pw = patch_size
@@ -756,8 +765,11 @@ def patchify_image(
 
     # Calculate number of patches in each dimension
     nh, nw = h // ph, w // pw
-    # Reshape image to patches [nh, nw, ph, pw, c]
-    patches = img.view(c, nh, ph, nw, pw).permute(1, 3, 2, 4, 0).reshape(nh * nw, ph * pw * c)
+    # Reshape image to patches
+    patches = img.view(c, nh, ph, nw, pw).permute(1, 3, 2, 4, 0)
+    # [nh, nw, ph, pw, c] -> [nh * nw, ph * pw * c] or [nh * nw, ph, pw, c]
+    patches = patches.reshape(-1, ph * pw * c) if flatten_patches else patches.reshape(-1, ph, pw, c)
+
     if include_info:
         # Create coordinate indices
         y_idx, x_idx = torch.meshgrid(torch.arange(nh), torch.arange(nw), indexing='ij')
@@ -772,19 +784,25 @@ def patchify_image(
 
 class Patchify(torch.nn.Module):
     """Transform an image into patches with corresponding coordinates and type indicators."""
-    
-    def __init__(self, patch_size):
+
+    def __init__(
+            self,
+            patch_size: Union[int, Tuple[int, int]],
+            flatten_patches: bool = True
+    ):
         super().__init__()
         self.patch_size = patch_size if isinstance(patch_size, tuple) else (patch_size, patch_size)
-        
+        self.flatten_patches = flatten_patches
+
     def forward(self, img):
         """
         Args:
             img: A PIL Image or tensor of shape [C, H, W]
-            
+
         Returns:
             A dictionary containing:
-                - patches: Tensor of shape [N, P*P*C] where N is the number of patches
+                - patches: Tensor of shape [N, P*P*C] if flatten_patches=True,
+                          or [N, Ph, Pw, C] if flatten_patches=False
                 - patch_coord: Tensor of shape [N, 2] with (y, x) coordinates
                 - patch_valid: Valid indicator (all 1s for non-padding patches)
         """
@@ -792,7 +810,7 @@ class Patchify(torch.nn.Module):
             # Convert PIL Image to tensor [C, H, W]
             img = transforms.functional.to_tensor(img)
 
-        patches, coord, valid = patchify_image(img, self.patch_size)
+        patches, coord, valid = patchify_image(img, self.patch_size, flatten_patches=self.flatten_patches)
 
         return {
             'patches': patches,

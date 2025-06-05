@@ -1,7 +1,7 @@
 import math
 from contextlib import suppress
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 
 import torch
@@ -28,7 +28,21 @@ class NaFlexPrefetchLoader:
             re_mode: str = 'const',
             re_count: int = 1,
             re_num_splits: int = 0,
-        ):
+        ) -> None:
+        """Initialize NaFlexPrefetchLoader.
+
+        Args:
+            loader: DataLoader to prefetch from.
+            mean: Mean values for normalization.
+            std: Standard deviation values for normalization.
+            channels: Number of image channels.
+            device: Device to move tensors to.
+            img_dtype: Data type for image tensors.
+            re_prob: Random erasing probability.
+            re_mode: Random erasing mode.
+            re_count: Maximum number of erasing rectangles.
+            re_num_splits: Number of augmentation splits.
+        """
         self.loader = loader
         self.device = device
         self.img_dtype = img_dtype or torch.float32
@@ -58,7 +72,12 @@ class NaFlexPrefetchLoader:
         self.is_cuda = device.type == 'cuda' and torch.cuda.is_available()
         self.is_npu = device.type == 'npu' and torch.npu.is_available()
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[Dict[str, torch.Tensor], torch.Tensor]]:
+        """Iterate through the loader with prefetching and normalization.
+
+        Yields:
+            Tuple of (input_dict, targets) with normalized patches.
+        """
         first = True
         if self.is_cuda:
             stream = torch.cuda.Stream()
@@ -84,11 +103,25 @@ class NaFlexPrefetchLoader:
 
                 next_target = next_target.to(device=self.device, non_blocking=True)
 
-                # Normalize patch values (assuming patches are in format [B, N, P*P*C])
-                batch_size, num_patches, patch_pixels = next_input_dict['patches'].shape
+                # Normalize patch values - handle both [B, N, P*P*C] and [B, N, Ph, Pw, C] formats
+                patches_tensor = next_input_dict['patches']
+                original_shape = patches_tensor.shape
 
-                # To [B*N, P*P, C] for normalization and erasing
-                patches = next_input_dict['patches'].view(batch_size, num_patches, -1, self.channels)
+                if patches_tensor.ndim == 3:
+                    # Format: [B, N, P*P*C] - flattened patches
+                    batch_size, num_patches, patch_pixels = original_shape
+                    # To [B*N, P*P, C] for normalization and erasing
+                    patches = patches_tensor.view(batch_size, num_patches, -1, self.channels)
+                elif patches_tensor.ndim == 5:
+                    # Format: [B, N, Ph, Pw, C] - unflattened patches (variable patch size mode)
+                    batch_size, num_patches, patch_h, patch_w, channels = original_shape
+                    assert channels == self.channels, f"Expected {self.channels} channels, got {channels}"
+                    # To [B*N, Ph*Pw, C] for normalization and erasing
+                    patches = patches_tensor.view(batch_size, num_patches, -1, self.channels)
+                else:
+                    raise ValueError(f"Unexpected patches tensor dimensions: {patches_tensor.ndim}. Expected 3 or 5.")
+
+                # Apply normalization
                 patches = patches.sub(self.mean).div(self.std)
 
                 if self.random_erasing is not None:
@@ -98,8 +131,8 @@ class NaFlexPrefetchLoader:
                         patch_valid=next_input_dict.get('patch_valid', None),
                     )
 
-                # Reshape back
-                next_input_dict['patches'] = patches.reshape(batch_size, num_patches, patch_pixels)
+                # Reshape back to original format
+                next_input_dict['patches'] = patches.view(original_shape)
 
             if not first:
                 yield input_dict, target
@@ -117,24 +150,41 @@ class NaFlexPrefetchLoader:
 
         yield input_dict, target
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Get length of underlying loader.
+
+        Returns:
+            Number of batches in the loader.
+        """
         return len(self.loader)
 
     @property
     def sampler(self):
+        """Get sampler from underlying loader.
+
+        Returns:
+            Sampler from the underlying DataLoader.
+        """
         return self.loader.sampler
 
     @property
     def dataset(self):
+        """Get dataset from underlying loader.
+
+        Returns:
+            Dataset from the underlying DataLoader.
+        """
         return self.loader.dataset
 
 
 def create_naflex_loader(
         dataset,
-        patch_size: Union[Tuple[int, int], int] = 16,
-        train_seq_lens: List[int] = (128, 256, 576, 784, 1024),  # Training sequence lengths
-        max_seq_len: int = 576,  # Fixed sequence length for validation
-        batch_size: int = 32,  # Used for max_seq_len and max(train_seq_lens)
+        patch_size: Optional[Union[Tuple[int, int], int]] = None,
+        patch_size_choices: Optional[List[int]] = None,
+        patch_size_choice_probs: Optional[List[float]] = None,
+        train_seq_lens: Tuple[int, ...] = (128, 256, 576, 784, 1024),
+        max_seq_len: int = 576,
+        batch_size: int = 32,
         is_training: bool = False,
         mixup_fn: Optional[Callable] = None,
 
@@ -174,8 +224,57 @@ def create_naflex_loader(
         device: Union[str, torch.device] = torch.device('cuda'),
         persistent_workers: bool = True,
         worker_seeding: str = 'all',
-    ):
+    ) -> Union[torch.utils.data.DataLoader, NaFlexPrefetchLoader]:
     """Create a data loader with dynamic sequence length sampling for training.
+
+    Args:
+        dataset: Dataset to load from.
+        patch_size: Single patch size to use.
+        patch_size_choices: List of patch sizes for variable patch size training.
+        patch_size_choice_probs: Probabilities for each patch size choice.
+        train_seq_lens: Training sequence lengths for dynamic batching.
+        max_seq_len: Fixed sequence length for validation.
+        batch_size: Batch size for validation and max training sequence length.
+        is_training: Whether this is for training (enables dynamic batching).
+        mixup_fn: Optional mixup function.
+        no_aug: Disable augmentation.
+        re_prob: Random erasing probability.
+        re_mode: Random erasing mode.
+        re_count: Maximum number of erasing rectangles.
+        re_split: Random erasing split flag.
+        train_crop_mode: Training crop mode.
+        scale: Scale range for random resize crop.
+        ratio: Aspect ratio range for random resize crop.
+        hflip: Horizontal flip probability.
+        vflip: Vertical flip probability.
+        color_jitter: Color jitter factor.
+        color_jitter_prob: Color jitter probability.
+        grayscale_prob: Grayscale conversion probability.
+        gaussian_blur_prob: Gaussian blur probability.
+        auto_augment: AutoAugment policy.
+        num_aug_repeats: Number of augmentation repeats.
+        num_aug_splits: Number of augmentation splits.
+        interpolation: Interpolation method.
+        mean: Normalization mean values.
+        std: Normalization standard deviation values.
+        crop_pct: Crop percentage for validation.
+        crop_mode: Crop mode.
+        crop_border_pixels: Crop border pixels.
+        num_workers: Number of data loading workers.
+        distributed: Whether using distributed training.
+        rank: Process rank for distributed training.
+        world_size: Total number of processes.
+        seed: Random seed.
+        epoch: Starting epoch.
+        use_prefetcher: Whether to use prefetching.
+        pin_memory: Whether to pin memory.
+        img_dtype: Image data type.
+        device: Device to move tensors to.
+        persistent_workers: Whether to use persistent workers.
+        worker_seeding: Worker seeding mode.
+
+    Returns:
+        DataLoader or NaFlexPrefetchLoader instance.
     """
 
     if is_training:
@@ -219,6 +318,8 @@ def create_naflex_loader(
             dataset,
             transform_factory=transform_factory,
             patch_size=patch_size,
+            patch_size_choices=patch_size_choices,
+            patch_size_choice_probs=patch_size_choice_probs,
             seq_lens=train_seq_lens,
             max_tokens_per_batch=max_tokens_per_batch,
             mixup_fn=mixup_fn,

@@ -25,6 +25,7 @@ from PIL import Image
 
 
 from .naflex_transforms import Patchify, patchify_image
+from ..layers import to_2tuple
 
 
 def calculate_naflex_batch_size(
@@ -32,9 +33,20 @@ def calculate_naflex_batch_size(
         seq_len: int,
         max_size: Optional[int] = None,
         divisor: int = 1,
-        rounding: str ='floor',
-):
-    """Calculate batch size based on sequence length with divisibility constraints."""
+        rounding: str = 'floor',
+) -> int:
+    """Calculate batch size based on sequence length with divisibility constraints.
+
+    Args:
+        tokens_per_batch: Target number of tokens per batch.
+        seq_len: Sequence length for this batch.
+        max_size: Optional maximum batch size.
+        divisor: Ensure batch size is divisible by this value.
+        rounding: Rounding method ('floor', 'ceil', 'round').
+
+    Returns:
+        Calculated batch size.
+    """
     # Calculate raw batch size based on sequence length
     raw_batch_size = tokens_per_batch / seq_len
 
@@ -64,14 +76,20 @@ class NaFlexCollator:
 
     def __init__(
             self,
-            max_seq_len=None,
-    ):
+            max_seq_len: Optional[int] = None,
+    ) -> None:
+        """Initialize NaFlexCollator.
+
+        Args:
+            max_seq_len: Maximum sequence length for batching.
+        """
         self.max_seq_len = max_seq_len or 576  # Default ViT-B/16 sequence length (577 = 24*24)
 
-    def __call__(self, batch):
-        """
+    def __call__(self, batch: List[Tuple[Dict[str, torch.Tensor], Union[int, torch.Tensor]]]) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+        """Collate batch of NaFlex samples.
+
         Args:
-            batch: List of tuples (patch_dict, target)
+            batch: List of tuples (patch_dict, target).
 
         Returns:
             A tuple of (input_dict, targets) where input_dict contains:
@@ -99,11 +117,20 @@ class NaFlexCollator:
             # Find the maximum number of patches in this batch
             max_patches = max(item['patches'].shape[0] for item in patch_dicts)
 
-        # Get patch dimensionality
-        patch_dim = patch_dicts[0]['patches'].shape[1]
+        # Check if patches are flattened or unflattened
+        patches_tensor = patch_dicts[0]['patches']
+        is_unflattened = patches_tensor.ndim == 4  # [N, Ph, Pw, C]
 
-        # Prepare tensors for the batch
-        patches = torch.zeros((batch_size, max_patches, patch_dim), dtype=torch.float32)
+        if is_unflattened:
+            # Patches are [N, Ph, Pw, C] - variable patch size mode
+            _, ph, pw, c = patches_tensor.shape
+            patches = torch.zeros((batch_size, max_patches, ph, pw, c), dtype=torch.float32)
+        else:
+            # Patches are [N, P*P*C] - normal mode
+            patch_dim = patches_tensor.shape[1]
+            patches = torch.zeros((batch_size, max_patches, patch_dim), dtype=torch.float32)
+
+        # Prepare other tensors
         patch_coord = torch.zeros((batch_size, max_patches, 2), dtype=torch.int64)  # [B, N, 2] for (y, x)
         patch_valid = torch.zeros((batch_size, max_patches), dtype=torch.bool)
 
@@ -115,12 +142,58 @@ class NaFlexCollator:
             patch_coord[i, :num_patches] = patch_dict['patch_coord'][:num_patches]
             patch_valid[i, :num_patches] = patch_dict['patch_valid'][:num_patches]
 
-        return {
+        result = {
             'patches': patches,
             'patch_coord': patch_coord,
             'patch_valid': patch_valid,
             'seq_len': max_patches,
-        }, targets
+        }
+
+        return result, targets
+
+
+def _resolve_patch_cfg(
+        patch_size: Optional[Union[int, Tuple[int, int]]],
+        patch_size_choices: Optional[List[int]],
+        patch_size_choice_probs: Optional[List[float]],
+) -> Tuple[List[Tuple[int, int]], List[float], bool]:
+    """Resolve patch size configuration.
+
+    Args:
+        patch_size: Single patch size to use.
+        patch_size_choices: List of patch sizes to choose from.
+        patch_size_choice_probs: Probabilities for each patch size choice.
+
+    Returns:
+        Tuple of (sizes, probs, variable) where sizes is list of patch size tuples,
+        probs is list of probabilities, and variable indicates if patch size varies.
+    """
+    # If both are None, default to patch_size=16
+    if patch_size is None and patch_size_choices is None:
+        patch_size = 16
+
+    if (patch_size is None) == (patch_size_choices is None):
+        raise ValueError(
+            "Specify exactly one of `patch_size` or `patch_size_choices`."
+        )
+
+    if patch_size is not None:
+        sizes = [to_2tuple(patch_size)]
+        probs = [1.0]
+        variable = False
+    else:
+        sizes = [to_2tuple(p) for p in patch_size_choices]
+        if patch_size_choice_probs is None:
+            probs = [1.0 / len(sizes)] * len(sizes)
+        else:
+            if len(patch_size_choice_probs) != len(sizes):
+                raise ValueError("`patch_size_choice_probs` length mismatch.")
+            s = float(sum(patch_size_choice_probs))
+            if s <= 0:
+                raise ValueError("`patch_size_choice_probs` sum to zero.")
+            probs = [p / s for p in patch_size_choice_probs]
+        variable = True
+    return sizes, probs, variable
 
 
 class NaFlexMapDatasetWrapper(IterableDataset):
@@ -138,9 +211,11 @@ class NaFlexMapDatasetWrapper(IterableDataset):
     def __init__(
             self,
             base_dataset: Dataset,
-            patch_size: Union[int, Tuple[int, int]] = 16,
-            seq_lens: List[int] = (128, 256, 576, 784, 1024),
-            max_tokens_per_batch: int = 4096 * 4, # Example: 16k tokens
+            patch_size: Optional[Union[int, Tuple[int, int]]] = None,
+            patch_size_choices: Optional[List[int]] = None,
+            patch_size_choice_probs: Optional[List[float]] = None,
+            seq_lens: Tuple[int, ...] = (128, 256, 576, 784, 1024),
+            max_tokens_per_batch: int = 4096 * 4,
             transform_factory: Optional[Callable] = None,
             mixup_fn: Optional[Callable] = None,
             seed: int = 42,
@@ -149,14 +224,32 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             rank: int = 0,
             world_size: int = 1,
             epoch: int = 0,
-            batch_divisor: int = 8, # Ensure batch size is divisible by this
-    ):
+            batch_divisor: int = 8,
+    ) -> None:
+        """Initialize NaFlexMapDatasetWrapper.
+
+        Args:
+            base_dataset: Map-style dataset to wrap.
+            patch_size: Single patch size to use.
+            patch_size_choices: List of patch sizes to randomly select from.
+            patch_size_choice_probs: Probabilities for each patch size.
+            seq_lens: Sequence lengths to use for batching.
+            max_tokens_per_batch: Target tokens per batch.
+            transform_factory: Factory function for creating transforms.
+            mixup_fn: Optional mixup function.
+            seed: Random seed.
+            shuffle: Whether to shuffle data.
+            distributed: Whether using distributed training.
+            rank: Process rank for distributed training.
+            world_size: Total number of processes.
+            epoch: Starting epoch.
+            batch_divisor: Ensure batch size is divisible by this.
+        """
         super().__init__()
         if not hasattr(base_dataset, '__len__') or not hasattr(base_dataset, '__getitem__'):
             raise TypeError("base_dataset must be a map-style dataset (implement __len__ and __getitem__)")
 
         self.base_dataset = base_dataset
-        self.patch_size = patch_size if isinstance(patch_size, tuple) else (patch_size, patch_size)
         self.seq_lens = sorted(list(set(seq_lens))) # Ensure unique and sorted
         self.max_tokens_per_batch = max_tokens_per_batch
         self.seed = seed
@@ -167,17 +260,37 @@ class NaFlexMapDatasetWrapper(IterableDataset):
         self.epoch = epoch
         self.batch_divisor = batch_divisor
 
-        # Pre-initialize transforms and collate fns for each sequence length
-        self.transforms: Dict[int, Optional[Callable]] = {}
+        # Resolve patch size configuration
+        self.patch_sizes, self.patch_size_probs, self.variable_patch_size = _resolve_patch_cfg(
+            patch_size,
+            patch_size_choices,
+            patch_size_choice_probs
+        )
+
+        # Pre-initialize transforms and collate fns for each (seq_len, patch_idx) combination
+        self.transforms: Dict[Tuple[int, int], Optional[Callable]] = {}
         self.collate_fns: Dict[int, Callable] = {}
+        self.patchifiers: List[Callable] = []
+
         for seq_len in self.seq_lens:
-            if transform_factory:
-                self.transforms[seq_len] = transform_factory(max_seq_len=seq_len, patch_size=self.patch_size)
-            else:
-                self.transforms[seq_len] = None # No transform
             self.collate_fns[seq_len] = NaFlexCollator(seq_len)
+
+        for patch_idx, patch_size_tuple in enumerate(self.patch_sizes):
+            # Pre-initialize patchifiers for each patch size (indexed by patch_idx)
+            self.patchifiers.append(Patchify(
+                patch_size=patch_size_tuple,
+                flatten_patches=not self.variable_patch_size
+            ))
+
+            # Create transforms for each (seq_len, patch_idx) combination
+            for seq_len in self.seq_lens:
+                key = (seq_len, patch_idx)
+                if transform_factory:
+                    self.transforms[key] = transform_factory(max_seq_len=seq_len, patch_size=patch_size_tuple)
+                else:
+                    self.transforms[key] = None # No transform
+
         self.mixup_fn = mixup_fn
-        self.patchifier = Patchify(self.patch_size)
 
         # --- Canonical Schedule Calculation (Done Once) ---
         self._canonical_batch_schedule: List[Tuple[int, int]] = []
@@ -363,25 +476,30 @@ class NaFlexMapDatasetWrapper(IterableDataset):
                 f"Indices remaining: {effective_samples_this_rank - scheduled_samples_count}."
              )
 
-    def set_epoch(self, epoch: int):
-        """Updates the epoch, regenerating the epoch-specific batches."""
+    def set_epoch(self, epoch: int) -> None:
+        """Updates the epoch, regenerating the epoch-specific batches.
+
+        Args:
+            epoch: New epoch number.
+        """
         # Only regenerate if the epoch actually changes
         if epoch != self.epoch:
             self.epoch = epoch
             self._prepare_epoch_batches(epoch)
 
     def __len__(self) -> int:
-        """
-        Returns the number of batches per **worker** for the current epoch.
-        Calculated based on the fixed number of batches per rank divided by
-        the number of workers.
+        """Returns the number of batches per worker for the current epoch.
+
+        Returns:
+            Number of batches this worker will process.
         """
         return self._num_batches_per_rank
 
     def __iter__(self) -> Iterator[Tuple[Dict[str, torch.Tensor], torch.Tensor]]:
-        """
-        Iterates through the pre-calculated batches for the current epoch,
-        distributing them among workers.
+        """Iterates through pre-calculated batches for the current epoch.
+
+        Yields:
+            Tuple of (input_dict, targets) for each batch.
         """
         worker_info = torch.utils.data.get_worker_info()
         num_workers = worker_info.num_workers if worker_info else 1
@@ -394,10 +512,17 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             if not indices: # Skip if a batch ended up with no indices (shouldn't happen often)
                  continue
 
-            # Get the pre-initialized transform for this sequence length
-            transform = self.transforms.get(seq_len)
+            # Select patch size for this batch
+            patch_idx = 0
+            if self.variable_patch_size:
+                # Use torch multinomial for weighted random choice
+                patch_idx = torch.multinomial(torch.tensor(self.patch_size_probs), 1).item()
 
-            batch_samples = []
+            # Get the pre-initialized transform and patchifier using patch_idx
+            transform_key = (seq_len, patch_idx)
+            transform = self.transforms.get(transform_key)
+            batch_patchifier = self.patchifiers[patch_idx]
+
             batch_imgs = []
             batch_targets = []
             for idx in indices:
@@ -426,7 +551,7 @@ class NaFlexMapDatasetWrapper(IterableDataset):
             if self.mixup_fn is not None:
                 batch_imgs, batch_targets = self.mixup_fn(batch_imgs, batch_targets)
 
-            batch_imgs = [self.patchifier(img) for img in batch_imgs]
+            batch_imgs = [batch_patchifier(img) for img in batch_imgs]
             batch_samples = list(zip(batch_imgs, batch_targets))
             if batch_samples: # Only yield if we successfully processed samples
                 # Collate the processed samples into a batch

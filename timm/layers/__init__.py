@@ -42,6 +42,7 @@ from .norm_act import BatchNormAct2d, GroupNormAct, GroupNorm1Act, LayerNormAct,
 from .padding import get_padding, get_same_padding, pad_same
 from .patch_dropout import PatchDropout
 from .patch_embed import PatchEmbed, PatchEmbedWithSize, resample_patch_embed
+from .patch_embed_interpolator import PatchEmbedInterpolator
 from .pool1d import global_pool_nlc
 from .pool2d_same import AvgPool2dSame, create_pool2d
 from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc

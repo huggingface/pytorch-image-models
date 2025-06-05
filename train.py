@@ -404,6 +404,10 @@ group.add_argument('--naflex-train-seq-lens', type=int, nargs='+', default=[128,
                    help='Sequence lengths to use for NaFlex loader')
 group.add_argument('--naflex-max-seq-len', type=int, default=576,
                    help='Fixed maximum sequence length for NaFlex loader (validation)')
+group.add_argument('--naflex-patch-sizes', type=int, nargs='+', default=None,
+                   help='List of patch sizes for variable patch size training (e.g., 8 12 16 24 32)')
+group.add_argument('--naflex-patch-size-probs', type=float, nargs='+', default=None,
+                   help='Probabilities for each patch size (must sum to 1.0, uniform if not specified)')
 group.add_argument('--naflex-loss-scale', default='linear', type=str,
                    help='Scale loss (gradient) by batch_size ("none", "sqrt", or "linear")')
 
@@ -754,6 +758,7 @@ def main():
         )
 
     naflex_mode = False
+    model_patch_size = None
     if args.naflex_loader:
         if utils.is_primary(args):
             _logger.info('Using NaFlex loader')
@@ -766,14 +771,41 @@ def main():
             mixup_args.pop('cutmix_minmax')  # not supported
             naflex_mixup_fn = NaFlexMixup(**mixup_args)
 
+        # Extract model's patch size for NaFlex mode
+        if hasattr(model, 'embeds') and hasattr(model.embeds, 'patch_size'):
+            # NaFlexVit models have embeds.patch_size
+            model_patch_size = model.embeds.patch_size
+        else:
+            # Fallback to default
+            model_patch_size = (16, 16)
+            if utils.is_primary(args):
+                _logger.warning(f'Could not determine model patch size, using default: {model_patch_size}')
+
+        # Configure patch sizes for NaFlex loader
+        patch_loader_kwargs = {}
+        if args.naflex_patch_sizes:
+            # Variable patch size mode
+            patch_loader_kwargs['patch_size_choices'] = args.naflex_patch_sizes
+            if args.naflex_patch_size_probs:
+                if len(args.naflex_patch_size_probs) != len(args.naflex_patch_sizes):
+                    parser.error('--naflex-patch-size-probs must have same length as --naflex-patch-sizes')
+                patch_loader_kwargs['patch_size_choice_probs'] = args.naflex_patch_size_probs
+            if utils.is_primary(args):
+                _logger.info(f'Using variable patch sizes: {args.naflex_patch_sizes}')
+        else:
+            # Single patch size mode - use model's patch size
+            patch_loader_kwargs['patch_size'] = model_patch_size
+            if utils.is_primary(args):
+                _logger.info(f'Using model patch size: {model_patch_size}')
+
         naflex_mode = True
         loader_train = create_naflex_loader(
             dataset=dataset_train,
-            patch_size=16,  # Could be derived from model config 
             train_seq_lens=args.naflex_train_seq_lens,
             mixup_fn=naflex_mixup_fn,
             rank=args.rank,
             world_size=args.world_size,
+            **patch_loader_kwargs,
             **common_loader_kwargs,
             **train_loader_kwargs,
         )
@@ -821,7 +853,7 @@ def main():
             # Use largest sequence length for validation
             loader_eval = create_naflex_loader(
                 dataset=dataset_eval,
-                patch_size=16,  # Could be derived from model config
+                patch_size=model_patch_size,  # Use model's native patch size (already determined above)
                 max_seq_len=args.naflex_max_seq_len,
                 **common_loader_kwargs,
                 **eval_loader_kwargs
