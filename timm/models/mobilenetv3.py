@@ -2,7 +2,7 @@
 
 A PyTorch impl of MobileNet-V3, compatible with TF weights from official impl.
 
-Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
+Paper: Searching for MobileNetV3 - https://huggingface.co/papers/1905.02244
 
 Hacked together by / Copyright 2019, Ross Wightman
 """
@@ -33,13 +33,13 @@ class MobileNetV3(nn.Module):
     'efficient head', where global pooling is done before the head convolution without a final batch-norm
     layer before the classifier.
 
-    Paper: `Searching for MobileNetV3` - https://arxiv.org/abs/1905.02244
+    Paper: `Searching for MobileNetV3` - https://huggingface.co/papers/1905.02244
 
     Other architectures utilizing MobileNet-V3 efficient head that are supported by this impl include:
-      * HardCoRe-NAS - https://arxiv.org/abs/2102.11646 (defn in hardcorenas.py uses this class)
-      * FBNet-V3 - https://arxiv.org/abs/2006.02049
-      * LCNet - https://arxiv.org/abs/2109.15099
-      * MobileNet-V4 - https://arxiv.org/abs/2404.10518
+      * HardCoRe-NAS - https://huggingface.co/papers/2102.11646 (defn in hardcorenas.py uses this class)
+      * FBNet-V3 - https://huggingface.co/papers/2006.02049
+      * LCNet - https://huggingface.co/papers/2109.15099
+      * MobileNet-V4 - https://huggingface.co/papers/2404.10518
     """
 
     def __init__(
@@ -417,7 +417,7 @@ def _gen_mobilenet_v3_rw(
     """Creates a MobileNet-V3 model.
 
     Ref impl: ?
-    Paper: https://arxiv.org/abs/1905.02244
+    Paper: https://huggingface.co/papers/1905.02244
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -458,7 +458,7 @@ def _gen_mobilenet_v3(
     """Creates a MobileNet-V3 model.
 
     Ref impl: ?
-    Paper: https://arxiv.org/abs/1905.02244
+    Paper: https://huggingface.co/papers/1905.02244
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -554,7 +554,7 @@ def _gen_mobilenet_v3(
 def _gen_fbnetv3(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs):
     """ FBNetV3
     Paper: `FBNetV3: Joint Architecture-Recipe Search using Predictor Pretraining`
-        - https://arxiv.org/abs/2006.02049
+        - https://huggingface.co/papers/2006.02049
     FIXME untested, this is a preliminary impl of some FBNet-V3 variants.
     """
     vl = variant.split('_')[-1]
@@ -616,7 +616,7 @@ def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool =
     """ LCNet
     Essentially a MobileNet-V3 crossed with a MobileNet-V1
 
-    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
+    Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://huggingface.co/papers/2109.15099
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.
@@ -656,7 +656,7 @@ def _gen_mobilenet_v4(
     """Creates a MobileNet-V4 model.
 
     Ref impl: ?
-    Paper: https://arxiv.org/abs/1905.02244
+    Paper: https://huggingface.co/papers/1905.02244
 
     Args:
       channel_multiplier: multiplier to number of channels per layer.

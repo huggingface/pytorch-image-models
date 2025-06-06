@@ -360,7 +360,7 @@ class ResNet(nn.Module):
 
     This ResNet impl supports a number of stem and downsample options based on the v1c, v1d, v1e, and v1s
     variants included in the MXNet Gluon ResNetV1b model. The C and D variants are also discussed in the
-    'Bag of Tricks' paper: https://arxiv.org/pdf/1812.01187. The B variant is equivalent to torchvision default.
+    'Bag of Tricks' paper: https://huggingface.co/papers/1812.01187. The B variant is equivalent to torchvision default.
 
     ResNet variants (the same modifications can be used in SE/ResNeXt models as well):
       * normal, b - 7x7 stem, stem_width = 64, same as torchvision ResNet, NVIDIA ResNet 'v1.5', Gluon v1b
@@ -1622,7 +1622,7 @@ def ecaresnet50d(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def ecaresnet50d_pruned(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-50-D model pruned with eca.
-        The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf
+        The pruning has been obtained using https://huggingface.co/papers/2002.08258
     """
     model_args = dict(
         block=Bottleneck, layers=(3, 4, 6, 3), stem_width=32, stem_type='deep', avg_down=True,
@@ -1664,7 +1664,7 @@ def ecaresnet101d(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def ecaresnet101d_pruned(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-101-D model pruned with eca.
-       The pruning has been obtained using https://arxiv.org/pdf/2002.08258.pdf
+       The pruning has been obtained using https://huggingface.co/papers/2002.08258
     """
     model_args = dict(
         block=Bottleneck, layers=(3, 4, 23, 3), stem_width=32, stem_type='deep', avg_down=True,
@@ -1963,7 +1963,7 @@ def seresnextaa201d_32x8d(pretrained: bool = False, **kwargs):
 @register_model
 def resnetrs50(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-50 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)
@@ -1976,7 +1976,7 @@ def resnetrs50(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def resnetrs101(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-101 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)
@@ -1989,7 +1989,7 @@ def resnetrs101(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def resnetrs152(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-152 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)
@@ -2002,7 +2002,7 @@ def resnetrs152(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def resnetrs200(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-200 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)
@@ -2015,7 +2015,7 @@ def resnetrs200(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def resnetrs270(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-270 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)
@@ -2029,7 +2029,7 @@ def resnetrs270(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def resnetrs350(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-350 model.
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)
@@ -2042,7 +2042,7 @@ def resnetrs350(pretrained: bool = False, **kwargs) -> ResNet:
 @register_model
 def resnetrs420(pretrained: bool = False, **kwargs) -> ResNet:
     """Constructs a ResNet-RS-420 model
-    Paper: Revisiting ResNets - https://arxiv.org/abs/2103.07579
+    Paper: Revisiting ResNets - https://huggingface.co/papers/2103.07579
     Pretrained weights from https://github.com/tensorflow/tpu/tree/bee9c4f6/models/official/resnet/resnet_rs
     """
     attn_layer = partial(get_attn('se'), rd_ratio=0.25)

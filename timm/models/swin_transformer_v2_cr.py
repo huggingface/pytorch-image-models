@@ -1,7 +1,7 @@
 """ Swin Transformer V2
 
 A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
-    - https://arxiv.org/pdf/2111.09883
+    - https://huggingface.co/papers/2111.09883
 
 Code adapted from https://github.com/ChristophReich1996/Swin-Transformer-V2, original copyright/license info below
 
@@ -613,7 +613,7 @@ class SwinTransformerV2CrStage(nn.Module):
 class SwinTransformerV2Cr(nn.Module):
     r""" Swin Transformer V2
         A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`  -
-          https://arxiv.org/pdf/2111.09883
+          https://huggingface.co/papers/2111.09883
 
     Args:
         img_size: Input resolution.

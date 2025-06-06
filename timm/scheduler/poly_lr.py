@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 class PolyLRScheduler(Scheduler):
     """ Polynomial LR Scheduler w/ warmup, noise, and k-decay
 
-    k-decay option based on `k-decay: A New Method For Learning Rate Schedule` - https://arxiv.org/abs/2004.05909
+    k-decay option based on `k-decay: A New Method For Learning Rate Schedule` - https://huggingface.co/papers/2004.05909
     """
 
     def __init__(

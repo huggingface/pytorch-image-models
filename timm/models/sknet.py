@@ -1,8 +1,8 @@
 """ Selective Kernel Networks (ResNet base)
 
-Paper: Selective Kernel Networks (https://arxiv.org/abs/1903.06586)
+Paper: Selective Kernel Networks (https://huggingface.co/papers/1903.06586)
 
-This was inspired by reading 'Compounding the Performance Improvements...' (https://arxiv.org/abs/2001.06268)
+This was inspired by reading 'Compounding the Performance Improvements...' (https://huggingface.co/papers/2001.06268)
 and a streamlined impl at https://github.com/clovaai/assembled-cnn but I ended up building something closer
 to the original paper with some modifications of my own to better balance param count vs accuracy.
 

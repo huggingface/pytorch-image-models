@@ -243,7 +243,7 @@ class HieraPatchEmbed(nn.Module):
 
 class HieraDet(nn.Module):
     """
-    Reference: https://arxiv.org/abs/2306.00989
+    Reference: https://huggingface.co/papers/2306.00989
     """
 
     def __init__(
@@ -320,7 +320,7 @@ class HieraDet(nn.Module):
         # Which blocks have global att?
         self.global_att_blocks = global_att_blocks
 
-        # Windowed positional embedding (https://arxiv.org/abs/2311.05613)
+        # Windowed positional embedding (https://huggingface.co/papers/2311.05613)
         self.global_pos_size = global_pos_size
         self.pos_embed = nn.Parameter(torch.zeros(1, embed_dim, *self.global_pos_size))
         self.pos_embed_window = nn.Parameter(torch.zeros(1, embed_dim, self.window_spec[0], self.window_spec[0]))

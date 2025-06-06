@@ -1,6 +1,6 @@
 """ Adaptive Gradient Clipping
 
-An impl of AGC, as per (https://arxiv.org/abs/2102.06171):
+An impl of AGC, as per (https://huggingface.co/papers/2102.06171):
 
 @article{brock2021high,
   author={Andrew Brock and Soham De and Samuel L. Smith and Karen Simonyan},

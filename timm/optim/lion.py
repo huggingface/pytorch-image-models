@@ -1,5 +1,5 @@
 """ Lion Optimizer
-Paper: `Symbolic Discovery of Optimization Algorithms` - https://arxiv.org/abs/2302.06675
+Paper: `Symbolic Discovery of Optimization Algorithms` - https://huggingface.co/papers/2302.06675
 Original Impl: https://github.com/google/automl/tree/master/lion
 """
 # Copyright 2023 Google Research. All Rights Reserved.
@@ -196,7 +196,7 @@ def _single_tensor_lion(
         update = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1).sign_()
 
         if caution:
-            # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+            # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
             mask = (update * grad > 0).to(grad.dtype)
             mask.div_(mask.mean().clamp_(min=1e-3))
             update.mul_(mask)
@@ -238,7 +238,7 @@ def _multi_tensor_lion(
     updates = [u.sign_() for u in updates]
 
     if caution:
-        # Apply caution as per 'Cautious Optimizers' - https://arxiv.org/abs/2411.16085
+        # Apply caution as per 'Cautious Optimizers' - https://huggingface.co/papers/2411.16085
         masks = torch._foreach_mul(updates, grads)
         masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
         mask_scale = [m.mean() for m in masks]

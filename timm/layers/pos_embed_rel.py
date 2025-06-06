@@ -331,7 +331,7 @@ def gen_relative_log_coords(
 
 class RelPosMlp(nn.Module):
     """ Log-Coordinate Relative Position MLP
-    Based on ideas presented in Swin-V2 paper (https://arxiv.org/abs/2111.09883)
+    Based on ideas presented in Swin-V2 paper (https://huggingface.co/papers/2111.09883)
 
     This impl covers the 'swin' implementation as well as two timm specific modes ('cr', and 'rw')
     """

@@ -1,7 +1,7 @@
 """ RepViT
 
 Paper: `RepViT: Revisiting Mobile CNN From ViT Perspective`
-    - https://arxiv.org/abs/2307.09283
+    - https://huggingface.co/papers/2307.09283
 
 @misc{wang2023repvit,
       title={RepViT: Revisiting Mobile CNN From ViT Perspective}, 

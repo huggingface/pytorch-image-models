@@ -1,5 +1,5 @@
 """
-InceptionNeXt paper: https://arxiv.org/abs/2303.16900
+InceptionNeXt paper: https://huggingface.co/papers/2303.16900
 Original implementation & weights from: https://github.com/sail-sg/inceptionnext
 """
 
@@ -234,7 +234,7 @@ class MetaNeXtStage(nn.Module):
 
 class MetaNeXt(nn.Module):
     r""" MetaNeXt
-        A PyTorch impl of : `InceptionNeXt: When Inception Meets ConvNeXt` - https://arxiv.org/abs/2303.16900
+        A PyTorch impl of : `InceptionNeXt: When Inception Meets ConvNeXt` - https://huggingface.co/papers/2303.16900
 
     Args:
         in_chans (int): Number of input image channels. Default: 3

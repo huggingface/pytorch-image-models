@@ -3,9 +3,9 @@
 PyTorch implementations of DropBlock and DropPath (Stochastic Depth) regularization layers.
 
 Papers:
-DropBlock: A regularization method for convolutional networks (https://arxiv.org/abs/1810.12890)
+DropBlock: A regularization method for convolutional networks (https://huggingface.co/papers/1810.12890)
 
-Deep Networks with Stochastic Depth (https://arxiv.org/abs/1603.09382)
+Deep Networks with Stochastic Depth (https://huggingface.co/papers/1603.09382)
 
 Code:
 DropBlock impl inspired by two Tensorflow impl that I liked:
@@ -30,7 +30,7 @@ def drop_block_2d(
         inplace: bool = False,
         batchwise: bool = False
 ):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """ DropBlock. See https://huggingface.co/papers/1810.12890
 
     DropBlock with an experimental gaussian noise option. This layer has been tested on a few training
     runs with success, but needs further validation and possibly optimization for lower runtime impact.
@@ -83,7 +83,7 @@ def drop_block_fast_2d(
         with_noise: bool = False,
         inplace: bool = False,
 ):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """ DropBlock. See https://huggingface.co/papers/1810.12890
 
     DropBlock with an experimental gaussian noise option. Simplied from above without concern for valid
     block mask at edges.
@@ -115,7 +115,7 @@ def drop_block_fast_2d(
 
 
 class DropBlock2d(nn.Module):
-    """ DropBlock. See https://arxiv.org/pdf/1810.12890.pdf
+    """ DropBlock. See https://huggingface.co/papers/1810.12890
     """
 
     def __init__(
