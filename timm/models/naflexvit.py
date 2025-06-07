@@ -844,8 +844,8 @@ class NaFlexVit(nn.Module):
         norm_layer = get_norm_layer(cfg.norm_layer) or LayerNorm
         embed_norm_layer = get_norm_layer(cfg.embed_norm_layer)
         act_layer = get_act_layer(cfg.act_layer) or nn.GELU
-        block_fn = Block  # TODO: Support configurable block_fn via string lookup
-        mlp_layer = Mlp   # TODO: Support configurable mlp_layer via string lookup
+        block_fn = cfg.block_fn or Block  # TODO: Support configurable block_fn via string lookup
+        mlp_layer = cfg.mlp_layer or Mlp   # TODO: Support configurable mlp_layer via string lookup
 
         # Store instance variables
         self.num_classes = num_classes
