@@ -47,19 +47,26 @@ class ImageDataset(data.Dataset):
         self.target_transform = target_transform
         self._consecutive_errors = 0
 
-    def __getitem__(self, index):
-        img, target = self.reader[index]
-
+    def __getitem__(self, index, retry_count=0):
+        max_retries = min(_ERROR_RETRY * 2, len(self.reader))  # Don't retry more than dataset size
         try:
-            img = img.read() if self.load_bytes else Image.open(img)
+            img, target = self.reader[index]
+            try:
+                img = img.read() if self.load_bytes else Image.open(img)
+                self._consecutive_errors = 0
+            except Exception as e:
+                _logger.warning(f'Failed to load sample (index {index}, file {self.reader.filename(index)}). {str(e)}')
+                self._consecutive_errors += 1
+                if retry_count < max_retries and self._consecutive_errors < _ERROR_RETRY:
+                    next_index = (index + 1) % len(self.reader)
+                    return self.__getitem__(next_index, retry_count + 1)
+                else:
+                    raise RuntimeError(
+                        f'Failed to load any valid samples after {retry_count} attempts. '
+                        f'Last error: {str(e)}')
         except Exception as e:
-            _logger.warning(f'Skipped sample (index {index}, file {self.reader.filename(index)}). {str(e)}')
-            self._consecutive_errors += 1
-            if self._consecutive_errors < _ERROR_RETRY:
-                return self.__getitem__((index + 1) % len(self.reader))
-            else:
-                raise e
-        self._consecutive_errors = 0
+            _logger.error(f'Error accessing dataset at index {index}: {str(e)}')
+            raise
 
         if self.input_img_mode and not self.load_bytes:
             img = img.convert(self.input_img_mode)
