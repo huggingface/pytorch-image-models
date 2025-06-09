@@ -33,8 +33,7 @@ import yaml
 from torch.nn.parallel import DistributedDataParallel as NativeDDP
 
 from timm import utils
-from timm.data import create_dataset, create_loader, create_naflex_loader, resolve_data_config, \
-    Mixup, FastCollateMixup, AugMixDataset
+from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.layers import convert_splitbn_model, convert_sync_batchnorm, set_fast_norm
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, LabelSmoothingCrossEntropy
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, model_parameters
@@ -397,21 +396,6 @@ group.add_argument('--wandb-tags', default=[], type=str, nargs='+',
 group.add_argument('--wandb-resume-id', default='', type=str, metavar='ID',
                    help='If resuming a run, the id of the run in wandb')
 
-# NaFlex scheduled loader arguments
-group.add_argument('--naflex-loader', action='store_true', default=False,
-                   help='Use NaFlex loader (Requires NaFlex compatible model)')
-group.add_argument('--naflex-train-seq-lens', type=int, nargs='+', default=[128, 256, 576, 784, 1024],
-                   help='Sequence lengths to use for NaFlex loader')
-group.add_argument('--naflex-max-seq-len', type=int, default=576,
-                   help='Fixed maximum sequence length for NaFlex loader (validation)')
-group.add_argument('--naflex-patch-sizes', type=int, nargs='+', default=None,
-                   help='List of patch sizes for variable patch size training (e.g., 8 12 16 24 32)')
-group.add_argument('--naflex-patch-size-probs', type=float, nargs='+', default=None,
-                   help='Probabilities for each patch size (must sum to 1.0, uniform if not specified)')
-group.add_argument('--naflex-loss-scale', default='linear', type=str,
-                   help='Scale loss (gradient) by batch_size ("none", "sqrt", or "linear")')
-
-
 def _parse_args():
     # Do we have a config file to parse?
     args_config, remaining = config_parser.parse_known_args()
@@ -495,6 +479,12 @@ def main():
             num_classes=-1,  # force head adaptation
         )
 
+    # if args.no_ghost:
+    #     # jeśli jeszcze nie ma, utwórz dictę model_kwargs
+    #     if not hasattr(args, 'model_kwargs') or args.model_kwargs is None:
+    #         args.model_kwargs = {}
+    #     args.model_kwargs['use_ghost'] = False
+
     model = create_model(
         args.model,
         pretrained=args.pretrained,
@@ -511,6 +501,21 @@ def main():
         **factory_kwargs,
         **args.model_kwargs,
     )
+
+    # tylko dla modeli z "ghost" w nazwie
+    if args.model and 'ghost' in args.model.lower():
+        use_ghost = args.model_kwargs.get('use_ghost', True)
+        if not use_ghost:
+            print(">>> Ablation run: GhostModule DISABLED (use_ghost=False)")
+        else:
+            print(">>> Standard run: GhostModule ENABLED (use_ghost=True)")
+
+    # CSPNet ablacja przez model-kwargs
+    if args.model and 'csp' in args.model.lower():
+        use_csp = args.model_kwargs.get('use_csp', True)
+        print(f">>> {'Ablation' if not use_csp else 'Standard'} run: "
+            f"CSP {'DISABLED' if not use_csp else 'ENABLED'} (use_csp={use_csp})")
+                
     if args.head_init_scale is not None:
         with torch.no_grad():
             model.get_classifier().weight.mul_(args.head_init_scale)
@@ -530,6 +535,26 @@ def main():
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
 
     data_config = resolve_data_config(vars(args), model=model, verbose=utils.is_primary(args))
+
+    if utils.is_primary(args):
+        try:
+            # jeżeli masz nowsze timm (z get_model_complexity_info)
+            from timm.utils import get_model_complexity_info
+            # data_config['input_size'] to np. (3, 64, 64)
+            macs, params = get_model_complexity_info(
+               model, data_config['input_size'], as_strings=True,
+               print_per_layer_stat=False, verbose=False)
+            print(f">>> Model complexity: {macs} FLOPs, {params} params")
+        except ImportError:
+           # fallback na bibliotekę ptflops (pip install ptflops)
+            try:
+                from ptflops import get_model_complexity_info as pt_get
+                macs, params = pt_get(
+                    model, tuple(data_config['input_size']), as_strings=True,
+                    print_per_layer_stat=False, verbose=False)
+                print(f">>> Model complexity (ptflops): {macs}, params: {params}")
+            except ImportError:
+                print(">>> Nie udało się policzyć FLOPS (brak timm.utils ani ptflops)")
 
     # setup augmentation batch splits for contrastive loss or split bn
     num_aug_splits = 0
@@ -684,7 +709,6 @@ def main():
         trust_remote_code=args.dataset_trust_remote_code,
     )
 
-    dataset_eval = None
     if args.val_split:
         dataset_eval = create_dataset(
             args.dataset,
@@ -701,23 +725,38 @@ def main():
             trust_remote_code=args.dataset_trust_remote_code,
         )
 
+    # setup mixup / cutmix
+    collate_fn = None
+    mixup_fn = None
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        mixup_args = dict(
+            mixup_alpha=args.mixup,
+            cutmix_alpha=args.cutmix,
+            cutmix_minmax=args.cutmix_minmax,
+            prob=args.mixup_prob,
+            switch_prob=args.mixup_switch_prob,
+            mode=args.mixup_mode,
+            label_smoothing=args.smoothing,
+            num_classes=args.num_classes
+        )
+        if args.prefetcher:
+            assert not num_aug_splits  # collate conflict (need to support de-interleaving in collate mixup)
+            collate_fn = FastCollateMixup(**mixup_args)
+        else:
+            mixup_fn = Mixup(**mixup_args)
+
+    # wrap dataset in AugMix helper
+    if num_aug_splits > 1:
+        dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
+
     # create data loaders w/ augmentation pipeline
     train_interpolation = args.train_interpolation
     if args.no_aug or not train_interpolation:
         train_interpolation = data_config['interpolation']
-        
-    # Check if we should use the NaFlex scheduled loader
-    common_loader_kwargs = dict(
-        mean=data_config['mean'],
-        std=data_config['std'],
-        pin_memory=args.pin_mem,
-        img_dtype=model_dtype or torch.float32,
-        device=device,
-        distributed=args.distributed,
-        use_prefetcher=args.prefetcher,
-    )
-
-    train_loader_kwargs = dict(
+    loader_train = create_loader(
+        dataset_train,
+        input_size=data_config['input_size'],
         batch_size=args.batch_size,
         is_training=True,
         no_aug=args.no_aug,
@@ -738,134 +777,41 @@ def main():
         num_aug_repeats=args.aug_repeats,
         num_aug_splits=num_aug_splits,
         interpolation=train_interpolation,
+        mean=data_config['mean'],
+        std=data_config['std'],
         num_workers=args.workers,
+        distributed=args.distributed,
+        collate_fn=collate_fn,
+        pin_memory=args.pin_mem,
+        img_dtype=model_dtype or torch.float32,
+        device=device,
+        use_prefetcher=args.prefetcher,
+        use_multi_epochs_loader=args.use_multi_epochs_loader,
         worker_seeding=args.worker_seeding,
     )
 
-    mixup_fn = None
-    mixup_args = {}
-    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
-    if mixup_active:
-        mixup_args = dict(
-            mixup_alpha=args.mixup,
-            cutmix_alpha=args.cutmix,
-            cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob,
-            switch_prob=args.mixup_switch_prob,
-            mode=args.mixup_mode,
-            label_smoothing=args.smoothing,
-            num_classes=args.num_classes
-        )
-
-    naflex_mode = False
-    model_patch_size = None
-    if args.naflex_loader:
-        if utils.is_primary(args):
-            _logger.info('Using NaFlex loader')
-
-        assert num_aug_splits <= 1, 'Augmentation splits not supported in NaFlex mode'
-        naflex_mixup_fn = None
-        if mixup_active:
-            from timm.data import NaFlexMixup
-            mixup_args.pop('mode')  # not supported
-            mixup_args.pop('cutmix_minmax')  # not supported
-            naflex_mixup_fn = NaFlexMixup(**mixup_args)
-
-        # Extract model's patch size for NaFlex mode
-        if hasattr(model, 'embeds') and hasattr(model.embeds, 'patch_size'):
-            # NaFlexVit models have embeds.patch_size
-            model_patch_size = model.embeds.patch_size
-        else:
-            # Fallback to default
-            model_patch_size = (16, 16)
-            if utils.is_primary(args):
-                _logger.warning(f'Could not determine model patch size, using default: {model_patch_size}')
-
-        # Configure patch sizes for NaFlex loader
-        patch_loader_kwargs = {}
-        if args.naflex_patch_sizes:
-            # Variable patch size mode
-            patch_loader_kwargs['patch_size_choices'] = args.naflex_patch_sizes
-            if args.naflex_patch_size_probs:
-                if len(args.naflex_patch_size_probs) != len(args.naflex_patch_sizes):
-                    parser.error('--naflex-patch-size-probs must have same length as --naflex-patch-sizes')
-                patch_loader_kwargs['patch_size_choice_probs'] = args.naflex_patch_size_probs
-            if utils.is_primary(args):
-                _logger.info(f'Using variable patch sizes: {args.naflex_patch_sizes}')
-        else:
-            # Single patch size mode - use model's patch size
-            patch_loader_kwargs['patch_size'] = model_patch_size
-            if utils.is_primary(args):
-                _logger.info(f'Using model patch size: {model_patch_size}')
-
-        naflex_mode = True
-        loader_train = create_naflex_loader(
-            dataset=dataset_train,
-            train_seq_lens=args.naflex_train_seq_lens,
-            mixup_fn=naflex_mixup_fn,
-            rank=args.rank,
-            world_size=args.world_size,
-            **patch_loader_kwargs,
-            **common_loader_kwargs,
-            **train_loader_kwargs,
-        )
-    else:
-        # setup mixup / cutmix
-        collate_fn = None
-        if mixup_active:
-            if args.prefetcher:
-                assert not num_aug_splits  # collate conflict (need to support de-interleaving in collate mixup)
-                collate_fn = FastCollateMixup(**mixup_args)
-            else:
-                mixup_fn = Mixup(**mixup_args)
-
-        # wrap dataset in AugMix helper
-        if num_aug_splits > 1:
-            dataset_train = AugMixDataset(dataset_train, num_splits=num_aug_splits)
-
-        # Use standard loader
-        loader_train = create_loader(
-            dataset_train,
-            input_size=data_config['input_size'],
-            collate_fn=collate_fn,
-            use_multi_epochs_loader=args.use_multi_epochs_loader,
-            **common_loader_kwargs,
-            **train_loader_kwargs,
-        )
-
     loader_eval = None
     if args.val_split:
-        assert dataset_eval is not None
         eval_workers = args.workers
         if args.distributed and ('tfds' in args.dataset or 'wds' in args.dataset):
             # FIXME reduces validation padding issues when using TFDS, WDS w/ workers and distributed training
             eval_workers = min(2, args.workers)
-
-        eval_loader_kwargs = dict(
+        loader_eval = create_loader(
+            dataset_eval,
+            input_size=data_config['input_size'],
             batch_size=args.validation_batch_size or args.batch_size,
             is_training=False,
             interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
             num_workers=eval_workers,
+            distributed=args.distributed,
             crop_pct=data_config['crop_pct'],
+            pin_memory=args.pin_mem,
+            img_dtype=model_dtype or torch.float32,
+            device=device,
+            use_prefetcher=args.prefetcher,
         )
-
-        if args.naflex_loader:
-            # Use largest sequence length for validation
-            loader_eval = create_naflex_loader(
-                dataset=dataset_eval,
-                patch_size=model_patch_size,  # Use model's native patch size (already determined above)
-                max_seq_len=args.naflex_max_seq_len,
-                **common_loader_kwargs,
-                **eval_loader_kwargs
-            )
-        else:
-            # Use standard loader
-            loader_eval = create_loader(
-                dataset_eval,
-                input_size=data_config['input_size'],
-                **common_loader_kwargs,
-                **eval_loader_kwargs,
-            )
 
     # setup loss function
     if args.jsd_loss:
@@ -986,7 +932,6 @@ def main():
                 optimizer,
                 train_loss_fn,
                 args,
-                device=device,
                 lr_scheduler=lr_scheduler,
                 saver=saver,
                 output_dir=output_dir,
@@ -996,7 +941,6 @@ def main():
                 model_ema=model_ema,
                 mixup_fn=mixup_fn,
                 num_updates_total=num_epochs * updates_per_epoch,
-                naflex_mode=naflex_mode,
             )
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -1099,7 +1043,6 @@ def train_one_epoch(
         model_ema=None,
         mixup_fn=None,
         num_updates_total=None,
-        naflex_mode=False,
 ):
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
@@ -1145,10 +1088,10 @@ def train_one_epoch(
         def _forward():
             with amp_autocast():
                 output = model(input)
-                _loss = loss_fn(output, target)
+                loss = loss_fn(output, target)
             if accum_steps > 1:
-                _loss /= accum_steps
-            return _loss
+                loss /= accum_steps
+            return loss
 
         def _backward(_loss):
             if loss_scaler is not None:
@@ -1172,53 +1115,16 @@ def train_one_epoch(
                         )
                     optimizer.step()
 
-        if naflex_mode:
-            assert isinstance(input, dict)
-            batch_size = input['patches'].shape[0]
-
-            # scale gradient vs the minimum batch size (for max seq len)
-            if not args.naflex_loss_scale or args.naflex_loss_scale == 'none':
-                local_scale = 1.0
-            else:
-                local_scale = (batch_size / args.batch_size)
-                if local_scale == 'sqrt':
-                    local_scale = local_scale ** 0.5
-
-            if args.distributed:
-                # scale gradient btw distributed ranks, each one can have different batch size
-                global_batch_size = utils.reduce_tensor(
-                    torch.tensor(batch_size, device=device, dtype=torch.float32),
-                    1 # SUM
-                )
-                dist_scale = args.world_size * batch_size / global_batch_size
-            else:
-                dist_scale = None
-
-            if has_no_sync and not need_update:
-                with model.no_sync():
-                    loss = _forward()
-                    scaled_loss = local_scale * loss
-                    if dist_scale is not None:
-                        scaled_loss *= dist_scale
-                    _backward(scaled_loss)
-            else:
-                loss = _forward()
-                scaled_loss = local_scale * loss
-                if dist_scale is not None:
-                    scaled_loss *= dist_scale
-                _backward(scaled_loss)
-        else:
-            batch_size = input.shape[0]
-            if has_no_sync and not need_update:
-                with model.no_sync():
-                    loss = _forward()
-                    _backward(loss)
-            else:
+        if has_no_sync and not need_update:
+            with model.no_sync():
                 loss = _forward()
                 _backward(loss)
+        else:
+            loss = _forward()
+            _backward(loss)
 
-        losses_m.update(loss.item() * accum_steps, batch_size)
-        update_sample_count += batch_size
+        losses_m.update(loss.item() * accum_steps, input.size(0))
+        update_sample_count += input.size(0)
 
         if not need_update:
             data_start_time = time.time()
@@ -1235,8 +1141,7 @@ def train_one_epoch(
             elif device.type == 'npu':
                 torch.npu.synchronize()
         time_now = time.time()
-
-        update_time_m.update((time.time() - update_start_time) / update_sample_count, update_sample_count)
+        update_time_m.update(time.time() - update_start_time)
         update_start_time = time_now
 
         if update_idx % args.log_interval == 0:
@@ -1255,8 +1160,8 @@ def train_one_epoch(
                     f'Train: {epoch} [{update_idx:>4d}/{updates_per_epoch} '
                     f'({100. * (update_idx + 1) / updates_per_epoch:>3.0f}%)]  '
                     f'Loss: {loss_now:#.3g} ({loss_avg:#.3g})  '
-                    f'Time: {update_time_m.val:.3f}s, {1 / update_time_m.val:>7.2f}/s  '
-                    f'({update_time_m.avg:.3f}s, {1 / update_time_m.avg:>7.2f}/s)  '
+                    f'Time: {update_time_m.val:.3f}s, {update_sample_count / update_time_m.val:>7.2f}/s  '
+                    f'({update_time_m.avg:.3f}s, {update_sample_count / update_time_m.avg:>7.2f}/s)  '
                     f'LR: {lr:.3e}  '
                     f'Data: {data_time_m.val:.3f} ({data_time_m.avg:.3f})'
                 )
@@ -1345,10 +1250,9 @@ def validate(
             elif device.type == "npu":
                 torch.npu.synchronize()
 
-            batch_size = output.shape[0]
-            losses_m.update(reduced_loss.item(), batch_size)
-            top1_m.update(acc1.item(), batch_size)
-            top5_m.update(acc5.item(), batch_size)
+            losses_m.update(reduced_loss.item(), input.size(0))
+            top1_m.update(acc1.item(), output.size(0))
+            top5_m.update(acc5.item(), output.size(0))
 
             batch_time_m.update(time.time() - end)
             end = time.time()
