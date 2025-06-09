@@ -20,7 +20,6 @@ from .efficientnet import *
 from .efficientvit_mit import *
 from .efficientvit_msra import *
 from .eva import *
-from .fasternet import *
 from .fastvit import *
 from .focalnet import *
 from .gcvit import *
@@ -42,7 +41,6 @@ from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
 from .mvitv2 import *
-from .naflexvit import *
 from .nasnet import *
 from .nest import *
 from .nextvit import *
@@ -62,10 +60,7 @@ from .rexnet import *
 from .selecsls import *
 from .senet import *
 from .sequencer import *
-from .shvit import *
 from .sknet import *
-from .starnet import *
-from .swiftformer import *
 from .swin_transformer import *
 from .swin_transformer_v2 import *
 from .swin_transformer_v2_cr import *
@@ -85,6 +80,8 @@ from .vovnet import *
 from .xception import *
 from .xception_aligned import *
 from .xcit import *
+from .cspghostnet import *
+
 
 from ._builder import (
     build_model_with_cfg as build_model_with_cfg,
