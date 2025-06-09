@@ -633,6 +633,7 @@ class CspNet(nn.Module):
             drop_rate=0.,
             drop_path_rate=0.,
             zero_init_last=True,
+            use_csp: bool = True,
             **kwargs,
     ):
         """
@@ -650,9 +651,48 @@ class CspNet(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
+        self.use_csp = use_csp
         assert output_stride in (8, 16, 32)
 
-        cfg = replace(cfg, **kwargs)  # overlay kwargs onto cfg
+        # ablacja tylko CSP (cross stage partial)
+        # if not self.use_csp:
+        #     from dataclasses import replace as _rep
+        #     n = len(cfg.stages.depth)
+        #     cfg = _rep(
+        #         cfg,
+        #         stages=_rep(
+        #             cfg.stages,
+        #             stage_type=('dark',) * n
+        #         )
+        #     )
+
+        if not use_csp:
+            from dataclasses import replace as _rep
+            # zostawiamy CrossStage, ale wyłączamy samą część partial
+            cfg = replace(
+                cfg,
+                stages=_rep(cfg.stages, expand_ratio=1.0, cross_linear=False)  # lub expand_ratio=1.0 jeśli chcesz utrzymać liczbę ścieżek
+            )
+
+        # bardziej podobne do vanilla resnet50
+        # if not self.use_csp:
+        #     from dataclasses import replace as _rep
+        #     cfg = _rep(
+        #         cfg,
+        #         stages=_rep(
+        #             cfg.stages,
+        #             stage_type='dark',
+        #             depth=(3, 4, 6, 3),
+        #             out_chs=(256, 512, 1024, 2048),
+        #             bottle_ratio=0.25,
+        #             expand_ratio=1.0,
+        #             block_ratio=1.0,
+        #             cross_linear=False
+        #         )
+        #     )
+
+
+
         layer_args = dict(
             act_layer=cfg.act_layer,
             norm_layer=cfg.norm_layer,
@@ -897,7 +937,7 @@ model_cfgs = dict(
 )
 
 
-def _create_cspnet(variant, pretrained=False, **kwargs):
+def _create_cspnet(variant, pretrained=False, use_csp=True, **kwargs):
     if variant.startswith('darknet') or variant.startswith('cspdarknet'):
         # NOTE: DarkNet is one of few models with stride==1 features w/ 6 out_indices [0..5]
         default_out_indices = (0, 1, 2, 3, 4, 5)
@@ -908,6 +948,7 @@ def _create_cspnet(variant, pretrained=False, **kwargs):
         CspNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
         feature_cfg=dict(flatten_sequential=True, out_indices=out_indices),
+        use_csp=use_csp,
         **kwargs)
 
 
