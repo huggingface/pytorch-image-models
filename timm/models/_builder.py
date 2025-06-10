@@ -220,7 +220,7 @@ def load_pretrained(
         if pretrained_path.is_dir():
             state_dict = load_state_dict_from_path(pretrained_path)
         else:
-            RuntimeError(f"Specified path is not a directory: {pretrained_loc}")
+            raise RuntimeError(f"Specified path is not a directory: {pretrained_loc}")
     else:
         model_name = pretrained_cfg.get('architecture', 'this model')
         raise RuntimeError(f"No pretrained weights exist for {model_name}. Use `pretrained=False` for random init.")
