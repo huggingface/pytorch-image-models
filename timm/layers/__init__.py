@@ -1,7 +1,7 @@
 from .activations import *
 from .adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
-from .attention import Attention, AttentionRope
+from .attention import Attention, AttentionRope, maybe_add_mask
 from .attention2d import MultiQueryAttention2d, Attention2d, MultiQueryAttentionV2
 from .attention_pool import AttentionPoolLatent
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
@@ -41,7 +41,7 @@ from .norm_act import BatchNormAct2d, GroupNormAct, GroupNorm1Act, LayerNormAct,
     SyncBatchNormAct, convert_sync_batchnorm, FrozenBatchNormAct2d, freeze_batch_norm_2d, unfreeze_batch_norm_2d
 from .padding import get_padding, get_same_padding, pad_same
 from .patch_dropout import PatchDropout
-from .patch_embed import PatchEmbed, PatchEmbedWithSize, resample_patch_embed
+from .patch_embed import PatchEmbed, PatchEmbedWithSize, PatchEmbedInterpolator, resample_patch_embed
 from .pool1d import global_pool_nlc
 from .pool2d_same import AvgPool2dSame, create_pool2d
 from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
