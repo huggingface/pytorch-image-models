@@ -1,6 +1,10 @@
 """ AdamW Optimizer
 Impl copied from PyTorch master
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
 NOTE: This impl has been deprecated in favour of torch.optim.AdamW and remains as a reference
 """
 import math
@@ -31,6 +35,7 @@ class AdamWLegacy(Optimizer):
         amsgrad: whether to use the AMSGrad variant of this algorithm
             from the paper `On the Convergence of Adam and Beyond`
         caution: apply caution when using AdamW
+        corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr)
     """
 
     def __init__(
@@ -42,6 +47,7 @@ class AdamWLegacy(Optimizer):
             weight_decay: float = 1e-2,
             amsgrad: bool = False,
             caution: bool = False,
+            corrected_weight_decay: bool = False,
     ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -58,6 +64,7 @@ class AdamWLegacy(Optimizer):
             weight_decay=weight_decay,
             amsgrad=amsgrad,
             caution=caution,
+            corrected_weight_decay=corrected_weight_decay,
         )
         super(AdamWLegacy, self).__init__(params, defaults)
 
@@ -66,6 +73,7 @@ class AdamWLegacy(Optimizer):
         for group in self.param_groups:
             group.setdefault('amsgrad', False)
             group.setdefault('caution', False)
+            group.setdefault('corrected_weight_decay', False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -86,7 +94,8 @@ class AdamWLegacy(Optimizer):
                     continue
 
                 # Perform stepweight decay
-                p.data.mul_(1 - group['lr'] * group['weight_decay'])
+                wd_scale = group['lr'] if not group['corrected_weight_decay'] else group['lr'] ** 2 / self.defaults['lr']
+                p.data.mul_(1 - wd_scale * group['weight_decay'])
 
                 # Perform optimization step
                 grad = p.grad

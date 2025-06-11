@@ -10,6 +10,10 @@ Modified for reduced dependencies on PyTorch internals from original at: https:/
  title = {ADOPT: Modified Adam Can Converge with Any β2 with the Optimal Rate},
  year = {2024}
 }
+
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
 """
 from typing import cast, List, Optional, Tuple, Union
 
@@ -66,6 +70,7 @@ class Adopt(Optimizer):
             clip_exp: Optional[float] = 0.333,
             weight_decay: float = 0.0,
             decoupled: bool = False,
+            corrected_weight_decay: bool = False,
             *,
             caution: bool = False,
             foreach: Optional[bool] = False,
@@ -98,6 +103,7 @@ class Adopt(Optimizer):
             weight_decay=weight_decay,
             clip_exp=clip_exp,
             decoupled=decoupled,
+            corrected_weight_decay=corrected_weight_decay,
             caution=caution,
             maximize=maximize,
             foreach=foreach,
@@ -115,6 +121,7 @@ class Adopt(Optimizer):
             group.setdefault("differentiable", False)
             group.setdefault("clip_exp", None)
             group.setdefault("caution", False)
+            group.setdefault("corrected_weight_decay", False)
             for p in group["params"]:
                 p_state = self.state.get(p, [])
                 if len(p_state) != 0 and not torch.is_tensor(p_state["step"]):
@@ -222,6 +229,7 @@ class Adopt(Optimizer):
                 lr=group["lr"],
                 weight_decay=group["weight_decay"],
                 clip_exp=group["clip_exp"],
+                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
                 decoupled=group["decoupled"],
                 eps=group["eps"],
                 caution=group["caution"],
@@ -251,6 +259,7 @@ def _single_tensor_adopt(
         lr: Union[float, Tensor],
         weight_decay: float,
         clip_exp: Optional[float],
+        max_lr: Optional[float],
         decoupled: bool,
         eps: float,
         caution: bool,
@@ -299,7 +308,8 @@ def _single_tensor_adopt(
             continue
 
         if weight_decay != 0 and decoupled:
-            param.add_(param, alpha=-lr * weight_decay)
+            wd_scale = lr ** 2 / max_lr if max_lr is not None else lr
+            param.add_(param, alpha=-wd_scale * weight_decay)
 
         denom = torch.clamp(exp_avg_sq.sqrt(), eps)
         normed_grad = grad.div(denom)
@@ -336,6 +346,7 @@ def _multi_tensor_adopt(
         lr: Union[float, Tensor],
         weight_decay: float,
         clip_exp: Optional[float],
+        max_lr: Optional[float],
         decoupled: bool,
         eps: float,
         caution: bool,
@@ -410,7 +421,8 @@ def _multi_tensor_adopt(
             continue
 
         if weight_decay != 0 and decoupled:
-            torch._foreach_add_(device_params, device_params, alpha=-lr * weight_decay)
+            wd_scale = lr ** 2 / max_lr if max_lr is not None else lr
+            torch._foreach_add_(device_params, device_params, alpha=-wd_scale * weight_decay)
 
         exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
         torch._foreach_maximum_(exp_avg_sq_sqrt, eps)
@@ -460,6 +472,7 @@ def adopt(
         lr: Union[float, Tensor],
         weight_decay: float,
         clip_exp: Optional[float],
+        max_lr: Optional[float],
         decoupled: bool,
         eps: float,
         caution: bool,
@@ -498,6 +511,7 @@ def adopt(
         lr=lr,
         weight_decay=weight_decay,
         clip_exp=clip_exp,
+        max_lr=max_lr,
         decoupled=decoupled,
         eps=eps,
         caution=caution,

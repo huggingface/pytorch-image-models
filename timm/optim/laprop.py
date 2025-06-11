@@ -11,6 +11,10 @@ Paper: LaProp: Separating Momentum and Adaptivity in Adam, https://arxiv.org/abs
   year={2020}
 }
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
 """
 from typing import Tuple
 
@@ -33,6 +37,7 @@ class LaProp(Optimizer):
             eps: float = 1e-15,
             weight_decay: float = 0.,
             caution: bool = False,
+            corrected_weight_decay: bool = False,
     ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -48,8 +53,15 @@ class LaProp(Optimizer):
             eps=eps,
             weight_decay=weight_decay,
             caution=caution,
+            corrected_weight_decay=corrected_weight_decay,
         )
         super(LaProp, self).__init__(params, defaults)
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault('caution', False)
+            group.setdefault('corrected_weight_decay', False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -116,6 +128,10 @@ class LaProp(Optimizer):
                 p.add_(exp_avg, alpha=-step_size)
 
                 if group['weight_decay'] != 0:
-                    p.add_(p, alpha=-(group['lr'] * group['weight_decay']))
+                    if group['corrected_weight_decay']:
+                        wd_scale = group['lr'] ** 2 / self.defaults['lr']
+                    else:
+                        wd_scale = group['lr']
+                    p.add_(p, alpha=-wd_scale * group['weight_decay'])
 
         return loss

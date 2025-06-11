@@ -4,6 +4,10 @@ Adapted from the implementation in big vision: https://github.com/google-researc
 
 Described in 'Scaling Vision Transformers': https://arxiv.org/abs/2106.04560
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
 Adaptation and PyTorch modifications by Ross Wightman
 """
 from typing import List, Optional, Tuple, Union
@@ -68,6 +72,7 @@ class AdafactorBigVision(Optimizer):
             clipping_threshold: Optional[float] = None,
             unscaled_wd: bool = False,
             caution: bool = False,
+            corrected_weight_decay: bool = False,
             *,
             foreach: Optional[bool] = False,
     ):
@@ -94,6 +99,7 @@ class AdafactorBigVision(Optimizer):
             clipping_threshold=clipping_threshold,
             unscaled_wd=unscaled_wd,
             caution=caution,
+            corrected_weight_decay=corrected_weight_decay,
             foreach=foreach,
         )
         super().__init__(params, defaults)
@@ -102,6 +108,7 @@ class AdafactorBigVision(Optimizer):
         super().__setstate__(state)
         for group in self.param_groups:
             group.setdefault('caution', False)
+            group.setdefault('corrected_weight_decay', False)
             group.setdefault('foreach', None)
             for p in group['params']:
                 p_state = self.state.get(p, {})
@@ -197,6 +204,7 @@ class AdafactorBigVision(Optimizer):
                 clipping_threshold=group['clipping_threshold'],
                 unscaled_wd=group['unscaled_wd'],
                 caution=group['caution'],
+                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
             )
 
         return loss
@@ -222,6 +230,7 @@ def _single_tensor_adafactor(
         clipping_threshold: Optional[float],
         unscaled_wd: bool,
         caution: bool,
+        max_lr: Optional[float],
 ):
     for i, param in enumerate(params):
         grad = grads[i]
@@ -286,10 +295,18 @@ def _single_tensor_adafactor(
         if weight_decay != 0:
             if unscaled_wd:
                 # match big vision impl, 'fully decoupled' decay w/o LR scaling
-                param.mul_(1. - weight_decay)
+                if max_lr is None:
+                    param.mul_(1. - weight_decay)
+                else:
+                    # corrected weight decay: scale by lr / max_lr
+                    param.mul_(1. - (lr / max_lr) * weight_decay)
             else:
                 # match typical pytorch behaviour for decoupled decay, eg adamw where wd is scaled by LR
-                param.mul_(1. - lr * weight_decay)
+                if max_lr is None:
+                    param.mul_(1. - lr * weight_decay)
+                else:
+                    # corrected weight decay: scale by lr^2 / max_lr
+                    param.mul_(1. - (lr ** 2 / max_lr) * weight_decay)
 
         # Update parameters
         param.add_(update, alpha=-1.0)
@@ -315,6 +332,7 @@ def _multi_tensor_adafactor(
         clipping_threshold: Optional[float],
         unscaled_wd: bool,
         caution: bool,
+        max_lr: Optional[float],
 ):
     # FIXME TODO
     assert False, 'multi-tensor fn (foreach=True) not implemented yet'

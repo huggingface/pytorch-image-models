@@ -1,6 +1,10 @@
 """ Lion Optimizer
 Paper: `Symbolic Discovery of Optimization Algorithms` - https://arxiv.org/abs/2302.06675
 Original Impl: https://github.com/google/automl/tree/master/lion
+
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
 """
 # Copyright 2023 Google Research. All Rights Reserved.
 #
@@ -34,17 +38,19 @@ class Lion(Optimizer):
             betas: Tuple[float, float] = (0.9, 0.99),
             weight_decay: float = 0.0,
             caution: bool = False,
+            corrected_weight_decay: bool = False,
             maximize: bool = False,
             foreach: Optional[bool] = None,
     ):
         """Initialize the hyperparameters.
 
         Args:
-          params: iterable of parameters to optimize or dicts defining parameter groups
-          lr: learning rate
-          betas: coefficients used for computing running averages of gradient and its square
-          weight_decay: weight decay coefficient
-          caution: apply caution
+            params: iterable of parameters to optimize or dicts defining parameter groups
+            lr: learning rate
+            betas: coefficients used for computing running averages of gradient and its square
+            weight_decay: weight decay coefficient
+            caution: apply caution
+            corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr)
         """
 
         if not 0.0 <= lr:
@@ -58,6 +64,7 @@ class Lion(Optimizer):
             betas=betas,
             weight_decay=weight_decay,
             caution=caution,
+            corrected_weight_decay=corrected_weight_decay,
             foreach=foreach,
             maximize=maximize,
         )
@@ -67,6 +74,7 @@ class Lion(Optimizer):
         super().__setstate__(state)
         for group in self.param_groups:
             group.setdefault('caution', False)
+            group.setdefault('corrected_weight_decay', False)
             group.setdefault('maximize', False)
             group.setdefault('foreach', None)
 
@@ -75,10 +83,10 @@ class Lion(Optimizer):
         """Performs a single optimization step.
 
         Args:
-          closure: A closure that reevaluates the model and returns the loss.
+            closure: A closure that reevaluates the model and returns the loss.
 
         Returns:
-          the loss.
+            the loss.
         """
         loss = None
         if closure is not None:
@@ -118,6 +126,7 @@ class Lion(Optimizer):
                 caution=group['caution'],
                 maximize=group['maximize'],
                 foreach=group['foreach'],
+                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
             )
 
         return loss
@@ -137,6 +146,7 @@ def lion(
         lr: float,
         weight_decay: float,
         caution: bool,
+        max_lr: Optional[float] = None,
 ):
     r"""Functional API that performs Lion algorithm computation.
     """
@@ -165,6 +175,7 @@ def lion(
         weight_decay=weight_decay,
         caution=caution,
         maximize=maximize,
+        max_lr=max_lr,
     )
 
 
@@ -179,6 +190,7 @@ def _single_tensor_lion(
         weight_decay: float,
         caution: bool,
         maximize: bool,
+        max_lr: Optional[float],
 ):
     for i, param in enumerate(params):
         grad = grads[i] if not maximize else -grads[i]
@@ -190,7 +202,8 @@ def _single_tensor_lion(
             param = torch.view_as_real(param)
 
         # Perform stepweight decay
-        param.mul_(1 - lr * weight_decay)
+        wd_scale = lr if max_lr is None else lr ** 2 / max_lr
+        param.mul_(1 - wd_scale * weight_decay)
 
         # Weight update
         update = exp_avg.mul(beta1).add_(grad, alpha=1 - beta1).sign_()
@@ -218,6 +231,7 @@ def _multi_tensor_lion(
         weight_decay: float,
         caution: bool,
         maximize: bool,
+        max_lr: Optional[float],
 ):
     if len(params) == 0:
         return
@@ -230,7 +244,8 @@ def _multi_tensor_lion(
     params = [torch.view_as_real(x) if torch.is_complex(x) else x for x in params]
 
     # Perform stepweight decay
-    torch._foreach_mul_(params, 1 - lr * weight_decay)
+    wd_scale = lr if max_lr is None else lr ** 2 / max_lr
+    torch._foreach_mul_(params, 1 - wd_scale * weight_decay)
 
     # Weight update
     updates = torch._foreach_mul(exp_avgs, beta1)

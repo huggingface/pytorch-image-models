@@ -532,6 +532,132 @@ def _register_lamb_lars(registry: OptimizerRegistry) -> None:
         registry.register(opt)
 
 
+def _register_corrected_decay_optimizers(registry: OptimizerRegistry) -> None:
+    """Register corrected weight decay optimizer variants"""
+    corrected_optimizers = [
+        OptimInfo(
+            name='adamc',
+            opt_class=AdamWLegacy,
+            description='AdamW with corrected weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='nadamc',
+            opt_class=NAdamW,
+            description='NAdamW with corrected weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='sgdc',
+            opt_class=SGDW,
+            description='SGD with corrected decoupled weight decay (lr²/max_lr scaling)',
+            has_eps=False,
+            has_momentum=True,
+            defaults={'nesterov': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='adoptc',
+            opt_class=Adopt,
+            description='Adopt with corrected decoupled weight decay (lr²/max_lr scaling)',
+            defaults={'decoupled': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='lambcd',
+            opt_class=Lamb,
+            description='LAMB with corrected decoupled weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'decoupled_decay': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='kronc',
+            opt_class=Kron,
+            description='PSGD Kron with corrected decoupled weight decay (lr²/max_lr scaling)',
+            has_momentum=True,
+            defaults={'decoupled_decay': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='lionc',
+            opt_class=Lion,
+            description='Lion with corrected weight decay (lr²/max_lr scaling)',
+            has_eps=False,
+            has_betas=True,
+            defaults={'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='lapropc',
+            opt_class=LaProp,
+            description='LaProp with corrected weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='rmsproptfc',
+            opt_class=RMSpropTF,
+            description='RMSprop TF-style with corrected decoupled weight decay (lr²/max_lr scaling)',
+            has_momentum=True,
+            defaults={'alpha': 0.9, 'decoupled_decay': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='adafactorbvc',
+            opt_class=AdafactorBigVision,
+            description='Adafactor Big Vision with corrected weight decay (lr²/max_lr or lr/max_lr scaling)',
+            defaults={'corrected_weight_decay': True}
+        ),
+    ]
+    for opt in corrected_optimizers:
+        registry.register(opt)
+
+    # Cautious + corrected variants
+    cautious_corrected = [
+        OptimInfo(
+            name='cadamc',
+            opt_class=AdamWLegacy,
+            description='Cautious AdamW with corrected weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'caution': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='cadoptc',
+            opt_class=Adopt,
+            description='Cautious Adopt with corrected decoupled weight decay (lr²/max_lr scaling)',
+            defaults={'decoupled': True, 'caution': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='cnadamc',
+            opt_class=NAdamW,
+            description='Cautious NAdamW with corrected weight decay (lr²/max_lr scaling)',
+            has_betas=True,
+            defaults={'caution': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='csgdc',
+            opt_class=SGDW,
+            description='Cautious SGD with corrected decoupled weight decay (lr²/max_lr scaling)',
+            has_eps=False,
+            has_momentum=True,
+            defaults={'nesterov': True, 'caution': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='clionc',
+            opt_class=Lion,
+            description='Cautious Lion with corrected weight decay (lr²/max_lr scaling)',
+            has_eps=False,
+            has_betas=True,
+            defaults={'caution': True, 'corrected_weight_decay': True}
+        ),
+        OptimInfo(
+            name='cadafactorbvc',
+            opt_class=AdafactorBigVision,
+            description='Cautious Adafactor Big Vision with corrected weight decay',
+            defaults={'caution': True, 'corrected_weight_decay': True}
+        ),
+    ]
+    for opt in cautious_corrected:
+        registry.register(opt)
+
+
 def _register_cautious_optimizers(registry: OptimizerRegistry) -> None:
     cautious_optimizers = [
         OptimInfo(
@@ -896,6 +1022,7 @@ def _register_default_optimizers() -> None:
     _register_apex_optimizers(default_registry)
     _register_bnb_optimizers(default_registry)
     _register_cautious_optimizers(default_registry)
+    _register_corrected_decay_optimizers(default_registry)
 
     # Register aliases
     default_registry.register_alias('nesterov', 'sgd')

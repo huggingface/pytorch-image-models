@@ -11,6 +11,10 @@ Contributions to above also made by
 
 The above work drew from https://github.com/lixilinx/psgd_torch by Xi-Lin Li
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
 This `timm` impl
 * works with a wider variety of torch versions
 * fixes some checkpoint save/restore (resume issues)
@@ -94,6 +98,7 @@ class Kron(torch.optim.Optimizer):
         mu_dtype: Dtype of the momentum accumulator.
         precond_dtype: Dtype of the preconditioner.
         decoupled_decay: AdamW style decoupled weight decay
+        corrected_weight_decay: apply corrected weight decay when using decoupled_decay (lr**2 / max_lr)
         flatten: Flatten dimensions instead of fully relying on expressions for higher rank params
         flatten_start_dim: Start of flatten range, defaults to 2. Seems good tradeoff for ConvNets.
         flatten_end_dim: End of flatten range, defaults to -1.
@@ -117,6 +122,7 @@ class Kron(torch.optim.Optimizer):
         mu_dtype: Optional[torch.dtype] = None,
         precond_dtype: Optional[torch.dtype] = None,
         decoupled_decay: bool = False,
+        corrected_weight_decay: bool = False,
         flatten: bool = False,
         flatten_start_dim: int = 2,
         flatten_end_dim: int = -1,
@@ -147,6 +153,7 @@ class Kron(torch.optim.Optimizer):
             mu_dtype=mu_dtype,
             precond_dtype=precond_dtype,
             decoupled_decay=decoupled_decay,
+            corrected_weight_decay=corrected_weight_decay,
             flatten=flatten,
             flatten_start_dim=flatten_start_dim,
             flatten_end_dim=flatten_end_dim,
@@ -170,6 +177,11 @@ class Kron(torch.optim.Optimizer):
             self._q_terms = _q_terms
             self._precond_grad = _precond_grad
             self._balance_Q = _balance_Q
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault('corrected_weight_decay', False)
 
     def __getstate__(self):
         _dict = super().__getstate__()
@@ -353,7 +365,11 @@ class Kron(torch.optim.Optimizer):
                         weight_decay = 2 * self.rng.random() * weight_decay
 
                     if group["decoupled_decay"]:
-                        p.mul_(1. - group["lr"] * weight_decay)
+                        if group['corrected_weight_decay']:
+                            wd_scale = group["lr"] ** 2 / self.defaults['lr']
+                        else:
+                            wd_scale = group["lr"]
+                        p.mul_(1. - wd_scale * weight_decay)
                     else:
                         pre_grad.add_(p, alpha=weight_decay)
 
