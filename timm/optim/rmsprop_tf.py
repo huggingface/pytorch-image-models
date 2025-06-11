@@ -4,6 +4,10 @@ Originally cut & paste from PyTorch RMSProp
 https://github.com/pytorch/pytorch/blob/063946d2b3f3f1e953a2a3b54e0b34f1393de295/torch/optim/rmsprop.py
 Licensed under BSD-Clause 3 (ish), https://github.com/pytorch/pytorch/blob/master/LICENSE
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
 Modifications Copyright 2021 Ross Wightman
 """
 
@@ -39,6 +43,7 @@ class RMSpropTF(Optimizer):
         centered: if ``True``, compute the centered RMSProp, the gradient is normalized by an estimation of its variance
         weight_decay: weight decay (L2 penalty) (default: 0)
         decoupled_decay: decoupled weight decay as per https://arxiv.org/abs/1711.05101
+        corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr) when decoupled_decay is True
         lr_in_momentum: learning rate scaling is included in the momentum buffer update as per defaults in Tensorflow
         caution: apply caution
     """
@@ -53,6 +58,7 @@ class RMSpropTF(Optimizer):
             momentum: float = 0.,
             centered: bool = False,
             decoupled_decay: bool = False,
+            corrected_weight_decay: bool = False,
             lr_in_momentum: bool = True,
             caution: bool = False,
     ):
@@ -75,6 +81,7 @@ class RMSpropTF(Optimizer):
             centered=centered,
             weight_decay=weight_decay,
             decoupled_decay=decoupled_decay,
+            corrected_weight_decay=corrected_weight_decay,
             lr_in_momentum=lr_in_momentum,
             caution=caution,
         )
@@ -86,6 +93,7 @@ class RMSpropTF(Optimizer):
             group.setdefault('momentum', 0)
             group.setdefault('centered', False)
             group.setdefault('caution', False)
+            group.setdefault('corrected_weight_decay', False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -125,7 +133,11 @@ class RMSpropTF(Optimizer):
 
                 if group['weight_decay'] != 0:
                     if group['decoupled_decay']:
-                        p.mul_(1. - group['lr'] * group['weight_decay'])
+                        if group['corrected_weight_decay']:
+                            wd_scale = group['lr'] ** 2 / self.defaults['lr']
+                        else:
+                            wd_scale = group['lr']
+                        p.mul_(1. - wd_scale * group['weight_decay'])
                     else:
                         grad = grad.add(p, alpha=group['weight_decay'])
 

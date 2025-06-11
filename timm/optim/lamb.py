@@ -10,6 +10,10 @@ similar in behaviour to APEX FusedLamb if you aren't using NVIDIA GPUs or cannot
 
 In addition to some cleanup, this Lamb impl has been modified to support PyTorch XLA and has been tested on TPU.
 
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
 Original copyrights for above sources are below.
 
 Modifications Copyright 2021 Ross Wightman
@@ -79,6 +83,8 @@ class Lamb(Optimizer):
         trust_clip: Enable LAMBC trust ratio clipping.
         always_adapt: Apply adaptive learning rate to 0.0 weight decay parameter.
         caution: Apply caution.
+        decoupled: apply decoupled weight decay
+        corrected_weight_decay: apply corrected weight decay (lr**2 / max_lr) when using decoupled_decay
     """
 
     def __init__(
@@ -95,6 +101,7 @@ class Lamb(Optimizer):
             always_adapt: bool = False,
             caution: bool = False,
             decoupled_decay: bool = False,
+            corrected_weight_decay: bool = False,
     ):
         defaults = dict(
             lr=lr,
@@ -108,6 +115,7 @@ class Lamb(Optimizer):
             always_adapt=always_adapt,
             caution=caution,
             decoupled_decay=decoupled_decay,
+            corrected_weight_decay=corrected_weight_decay,
         )
         super().__init__(params, defaults)
 
@@ -116,6 +124,7 @@ class Lamb(Optimizer):
         for group in self.param_groups:
             group.setdefault('caution', False)
             group.setdefault('decoupled_decay', False)
+            group.setdefault('corrected_weight_decay', False)
 
     def _get_clip_grad_norm(self):
         max_grad_norm = self.defaults['max_grad_norm']
@@ -203,7 +212,11 @@ class Lamb(Optimizer):
                 weight_decay = group['weight_decay']
                 if weight_decay != 0:
                     if group.get('decoupled_decay', False):
-                        p.add_(p, alpha=-group['lr'] * weight_decay)
+                        if group['corrected_weight_decay']:
+                            wd_scale = group['lr'] ** 2 / self.defaults['lr']
+                        else:
+                            wd_scale = group['lr']
+                        p.add_(p, alpha=-wd_scale * weight_decay)
                     else:
                         update.add_(p, alpha=weight_decay)
 
