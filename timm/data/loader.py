@@ -123,10 +123,10 @@ class PrefetchLoader:
     def __iter__(self):
         first = True
         if self.is_cuda:
-            stream = torch.cuda.Stream()
+            stream = torch.cuda.Stream(device=self.device)
             stream_context = partial(torch.cuda.stream, stream=stream)
         elif self.is_npu:
-            stream = torch.npu.Stream()
+            stream = torch.npu.Stream(device=self.device)
             stream_context = partial(torch.npu.stream, stream=stream)
         else:
             stream = None
@@ -148,9 +148,9 @@ class PrefetchLoader:
 
             if stream is not None:
                 if self.is_cuda:
-                    torch.cuda.current_stream().wait_stream(stream)
+                    torch.cuda.current_stream(device=self.device).wait_stream(stream)
                 elif self.is_npu:
-                    torch.npu.current_stream().wait_stream(stream)
+                    torch.npu.current_stream(device=self.device).wait_stream(stream)
 
             input = next_input
             target = next_target
