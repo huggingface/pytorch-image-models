@@ -32,6 +32,10 @@ def get_padding(kernel_size: int, stride: int, dilation: int = 1) -> int:
 
 
 class BasicBlock(nn.Module):
+    """Basic residual block for ResNet.
+
+    This is the standard residual block used in ResNet-18 and ResNet-34.
+    """
     expansion = 1
 
     def __init__(
@@ -51,7 +55,7 @@ class BasicBlock(nn.Module):
             aa_layer: Optional[Type[nn.Module]] = None,
             drop_block: Optional[Type[nn.Module]] = None,
             drop_path: Optional[nn.Module] = None,
-    ):
+    ) -> None:
         """
         Args:
             inplanes: Input channel dimensionality.
@@ -63,12 +67,12 @@ class BasicBlock(nn.Module):
             reduce_first: Reduction factor for first convolution output width of residual blocks.
             dilation: Dilation rate for convolution layers.
             first_dilation: Dilation rate for first convolution layer.
-            act_layer: Activation layer.
-            norm_layer: Normalization layer.
-            attn_layer: Attention layer.
-            aa_layer: Anti-aliasing layer.
-            drop_block: Class for DropBlock layer.
-            drop_path: Optional DropPath layer.
+            act_layer: Activation layer class.
+            norm_layer: Normalization layer class.
+            attn_layer: Attention layer class.
+            aa_layer: Anti-aliasing layer class.
+            drop_block: DropBlock layer class.
+            drop_path: Optional DropPath layer instance.
         """
         super(BasicBlock, self).__init__()
 
@@ -99,7 +103,8 @@ class BasicBlock(nn.Module):
         self.dilation = dilation
         self.drop_path = drop_path
 
-    def zero_init_last(self):
+    def zero_init_last(self) -> None:
+        """Initialize the last batch norm layer weights to zero for better convergence."""
         if getattr(self.bn2, 'weight', None) is not None:
             nn.init.zeros_(self.bn2.weight)
 
@@ -130,6 +135,10 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
+    """Bottleneck residual block for ResNet.
+
+    This is the bottleneck block used in ResNet-50, ResNet-101, and ResNet-152.
+    """
     expansion = 4
 
     def __init__(
@@ -149,7 +158,7 @@ class Bottleneck(nn.Module):
             aa_layer: Optional[Type[nn.Module]] = None,
             drop_block: Optional[Type[nn.Module]] = None,
             drop_path: Optional[nn.Module] = None,
-    ):
+    ) -> None:
         """
         Args:
             inplanes: Input channel dimensionality.
@@ -161,12 +170,12 @@ class Bottleneck(nn.Module):
             reduce_first: Reduction factor for first convolution output width of residual blocks.
             dilation: Dilation rate for convolution layers.
             first_dilation: Dilation rate for first convolution layer.
-            act_layer: Activation layer.
-            norm_layer: Normalization layer.
-            attn_layer: Attention layer.
-            aa_layer: Anti-aliasing layer.
-            drop_block: Class for DropBlock layer.
-            drop_path: Optional DropPath layer.
+            act_layer: Activation layer class.
+            norm_layer: Normalization layer class.
+            attn_layer: Attention layer class.
+            aa_layer: Anti-aliasing layer class.
+            drop_block: DropBlock layer class.
+            drop_path: Optional DropPath layer instance.
         """
         super(Bottleneck, self).__init__()
 
@@ -199,7 +208,8 @@ class Bottleneck(nn.Module):
         self.dilation = dilation
         self.drop_path = drop_path
 
-    def zero_init_last(self):
+    def zero_init_last(self) -> None:
+        """Initialize the last batch norm layer weights to zero for better convergence."""
         if getattr(self.bn3, 'weight', None) is not None:
             nn.init.zeros_(self.bn3.weight)
 
@@ -278,7 +288,15 @@ def downsample_avg(
     ])
 
 
-def drop_blocks(drop_prob: float = 0.):
+def drop_blocks(drop_prob: float = 0.) -> List[Optional[partial]]:
+    """Create DropBlock layer instances for each stage.
+
+    Args:
+        drop_prob: Drop probability for DropBlock.
+
+    Returns:
+        List of DropBlock partial instances or None for each stage.
+    """
     return [
         None, None,
         partial(DropBlock2d, drop_prob=drop_prob, block_size=5, gamma_scale=0.25) if drop_prob else None,
@@ -286,7 +304,7 @@ def drop_blocks(drop_prob: float = 0.):
 
 
 def make_blocks(
-        block_fns: Tuple[Union[BasicBlock, Bottleneck]],
+        block_fns: Tuple[Union[Type[BasicBlock], Type[Bottleneck]], ...],
         channels: Tuple[int, ...],
         block_repeats: Tuple[int, ...],
         inplanes: int,
@@ -298,6 +316,24 @@ def make_blocks(
         drop_path_rate: float = 0.,
         **kwargs,
 ) -> Tuple[List[Tuple[str, nn.Module]], List[Dict[str, Any]]]:
+    """Create ResNet stages with specified block configurations.
+
+    Args:
+        block_fns: Block class to use for each stage.
+        channels: Number of channels for each stage.
+        block_repeats: Number of blocks to repeat for each stage.
+        inplanes: Number of input channels.
+        reduce_first: Reduction factor for first convolution in each stage.
+        output_stride: Target output stride of network.
+        down_kernel_size: Kernel size for downsample layers.
+        avg_down: Use average pooling for downsample.
+        drop_block_rate: DropBlock drop rate.
+        drop_path_rate: Drop path rate for stochastic depth.
+        **kwargs: Additional arguments passed to block constructors.
+
+    Returns:
+        Tuple of stage modules list and feature info list.
+    """
     stages = []
     feature_info = []
     net_num_blocks = sum(block_repeats)
@@ -445,7 +481,7 @@ class ResNet(nn.Module):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
-        
+
         act_layer = get_act_layer(act_layer)
         norm_layer = get_norm_layer(norm_layer)
 
@@ -520,7 +556,12 @@ class ResNet(nn.Module):
         self.init_weights(zero_init_last=zero_init_last)
 
     @torch.jit.ignore
-    def init_weights(self, zero_init_last: bool = True):
+    def init_weights(self, zero_init_last: bool = True) -> None:
+        """Initialize model weights.
+
+        Args:
+            zero_init_last: Zero-initialize the last BN in each residual branch.
+        """
         for n, m in self.named_modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -530,19 +571,46 @@ class ResNet(nn.Module):
                     m.zero_init_last()
 
     @torch.jit.ignore
-    def group_matcher(self, coarse: bool = False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, str]:
+        """Create regex patterns for parameter grouping.
+
+        Args:
+            coarse: Use coarse (stage-level) or fine (block-level) grouping.
+
+        Returns:
+            Dictionary mapping group names to regex patterns.
+        """
         matcher = dict(stem=r'^conv1|bn1|maxpool', blocks=r'^layer(\d+)' if coarse else r'^layer(\d+)\.(\d+)')
         return matcher
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable: bool = True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def get_classifier(self, name_only: bool = False):
+    def get_classifier(self, name_only: bool = False) -> Union[str, nn.Module]:
+        """Get the classifier module.
+
+        Args:
+            name_only: Return classifier module name instead of module.
+
+        Returns:
+            Classifier module or name.
+        """
         return 'fc' if name_only else self.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
@@ -555,17 +623,18 @@ class ResNet(nn.Module):
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
-            x: Input image tensor
-            indices: Take last n blocks if int, all if None, select matching indices if sequence
-            norm: Apply norm layer to compatible intermediates
-            stop_early: Stop iterating over blocks when last desired intermediate hit
-            output_fmt: Shape of intermediate feature outputs
-            intermediates_only: Only return intermediate features
-        Returns:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
 
+        Returns:
+            Features and list of intermediate features or just intermediate features.
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
@@ -599,8 +668,16 @@ class ResNet(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layers.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(5, indices)
         layer_names = ('layer1', 'layer2', 'layer3', 'layer4')
@@ -612,6 +689,7 @@ class ResNet(nn.Module):
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers."""
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act1(x)
@@ -627,22 +705,43 @@ class ResNet(nn.Module):
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier layer.
+
+        Returns:
+            Output tensor.
+        """
         x = self.global_pool(x)
         if self.drop_rate:
             x = F.dropout(x, p=float(self.drop_rate), training=self.training)
         return x if pre_logits else self.fc(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _create_resnet(variant, pretrained: bool = False, **kwargs) -> ResNet:
+def _create_resnet(variant: str, pretrained: bool = False, **kwargs) -> ResNet:
+    """Create a ResNet model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        ResNet model instance.
+    """
     return build_model_with_cfg(ResNet, variant, pretrained, **kwargs)
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a default configuration for ResNet models."""
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
@@ -653,25 +752,29 @@ def _cfg(url='', **kwargs):
     }
 
 
-def _tcfg(url='', **kwargs):
+def _tcfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a configuration with bicubic interpolation."""
     return _cfg(url=url, **dict({'interpolation': 'bicubic'}, **kwargs))
 
 
-def _ttcfg(url='', **kwargs):
+def _ttcfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a configuration for models trained with timm."""
     return _cfg(url=url, **dict({
         'interpolation': 'bicubic', 'test_input_size': (3, 288, 288), 'test_crop_pct': 0.95,
         'origin_url': 'https://github.com/huggingface/pytorch-image-models',
     }, **kwargs))
 
 
-def _rcfg(url='', **kwargs):
+def _rcfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a configuration for ResNet-RS models."""
     return _cfg(url=url, **dict({
         'interpolation': 'bicubic', 'crop_pct': 0.95, 'test_input_size': (3, 288, 288), 'test_crop_pct': 1.0,
         'origin_url': 'https://github.com/huggingface/pytorch-image-models', 'paper_ids': 'arXiv:2110.00476'
     }, **kwargs))
 
 
-def _r3cfg(url='', **kwargs):
+def _r3cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a configuration for ResNet-RS models with 160x160 input."""
     return _cfg(url=url, **dict({
         'interpolation': 'bicubic', 'input_size': (3, 160, 160), 'pool_size': (5, 5),
         'crop_pct': 0.95, 'test_input_size': (3, 224, 224), 'test_crop_pct': 0.95,
@@ -679,7 +782,8 @@ def _r3cfg(url='', **kwargs):
     }, **kwargs))
 
 
-def _gcfg(url='', **kwargs):
+def _gcfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a configuration for Gluon pretrained models."""
     return _cfg(url=url, **dict({
         'interpolation': 'bicubic',
         'origin_url': 'https://cv.gluon.ai/model_zoo/classification.html',

@@ -82,7 +82,7 @@ class ConvMixer(nn.Module):
         if global_pool is not None:
             self.pooling = SelectAdaptivePool2d(pool_type=global_pool, flatten=True)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-          
+
     def forward_features(self, x):
         x = self.stem(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():

@@ -74,12 +74,12 @@ class Conv2dNorm(nn.Sequential):
         w = c.weight * w[:, None, None, None]
         b = bn.bias - bn.running_mean * bn.weight / (bn.running_var + bn.eps) ** 0.5
         m = nn.Conv2d(
-            in_channels=w.size(1) * self.c.groups, 
-            out_channels=w.size(0), 
-            kernel_size=w.shape[2:], 
-            stride=self.c.stride, 
-            padding=self.c.padding, 
-            dilation=self.c.dilation, 
+            in_channels=w.size(1) * self.c.groups,
+            out_channels=w.size(0),
+            kernel_size=w.shape[2:],
+            stride=self.c.stride,
+            padding=self.c.padding,
+            dilation=self.c.dilation,
             groups=self.c.groups,
             device=c.weight.device,
             dtype=c.weight.dtype,
@@ -183,7 +183,7 @@ class SHSA(nn.Module):
         qkv = self.qkv(x1)
         q, k, v = torch.split(qkv, [self.qk_dim, self.qk_dim, self.pdim], dim=1)
         q, k, v = q.flatten(2), k.flatten(2), v.flatten(2)
-        
+
         attn = (q.transpose(-2, -1) @ k) * self.scale
         attn = attn.softmax(dim=-1)
         x1 = (v @ attn.transpose(-2, -1)).reshape(B, self.pdim, H, W)
@@ -203,9 +203,9 @@ class BasicBlock(nn.Module):
     ):
         super().__init__()
         self.conv = Residual(Conv2dNorm(dim, dim, 3, 1, 1, groups=dim, bn_weight_init=0))
-        if type == "s": 
+        if type == "s":
             self.mixer = Residual(SHSA(dim, qk_dim, pdim, norm_layer, act_layer))
-        else: 
+        else:
             self.mixer = nn.Identity()
         self.ffn = Residual(FFN(dim, int(dim * 2)))
 
@@ -330,7 +330,7 @@ class SHViT(nn.Module):
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
         return self.head.l
-    
+
     def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
         self.num_classes = num_classes
         # cannot meaningfully change pooling of efficient head after creation
@@ -373,7 +373,7 @@ class SHViT(nn.Module):
         for feat_idx, stage in enumerate(stages):
             x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates
@@ -405,7 +405,7 @@ class SHViT(nn.Module):
         if self.drop_rate > 0.:
             x = F.dropout(x, p=self.drop_rate, training=self.training)
         return x if pre_logits else self.head(x)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)

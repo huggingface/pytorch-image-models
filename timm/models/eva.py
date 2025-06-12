@@ -26,7 +26,7 @@ Modifications by / Copyright 2023 Ross Wightman, original copyrights below
 # EVA02 models Copyright (c) 2023 BAAI-Vision
 import math
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -167,12 +167,12 @@ class EvaAttention(nn.Module):
         else:
             q = q * self.scale
             attn = (q @ k.transpose(-2, -1))
-            
+
             if attn_mask is not None:
                 attn_mask = attn_mask.to(torch.bool)
                 attn = attn.masked_fill(~attn_mask[:, None, None, :], float("-inf"))
             attn = attn.softmax(dim=-1)
-            
+
             attn = self.attn_drop(attn)
             x = attn @ v
 
@@ -599,7 +599,8 @@ class Eva(nn.Module):
             self.head.weight.data.mul_(head_init_scale)
             self.head.bias.data.mul_(head_init_scale)
 
-    def fix_init_weight(self):
+    def fix_init_weight(self) -> None:
+        """Fix initialization weights by rescaling based on layer depth."""
         def rescale(param, layer_id):
             param.div_(math.sqrt(2.0 * layer_id))
 
@@ -607,23 +608,31 @@ class Eva(nn.Module):
             rescale(layer.attn.proj.weight.data, layer_id + 1)
             rescale(layer.mlp.fc2.weight.data, layer_id + 1)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module) -> None:
+        """Initialize weights for Linear layers.
+
+        Args:
+            m: Module to initialize.
+        """
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self) -> Set[str]:
+        """Parameters to exclude from weight decay."""
         nwd = {'pos_embed', 'cls_token'}
         return nwd
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Create layer groupings for optimization."""
         matcher = dict(
             stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))],
@@ -634,7 +643,13 @@ class Eva(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of output classes.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -766,7 +781,15 @@ class Eva(nn.Module):
         x = global_pool_nlc(x, pool_type=pool_type, num_prefix_tokens=self.num_prefix_tokens)
         return x
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Feature tensor.
+        """
         x = self.patch_embed(x)
         x, rot_pos_embed = self._pos_embed(x)
         x = self.norm_pre(x)
@@ -778,24 +801,50 @@ class Eva(nn.Module):
         x = self.norm(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return pre-logits if True.
+
+        Returns:
+            Output tensor.
+        """
         x = self.pool(x)
         x = self.fc_norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
 def _convert_pe(
-    state_dict,
-    model,
+    state_dict: Dict[str, torch.Tensor],
+    model: nn.Module,
     prefix: str = 'visual.',
-):
-    """ Convert Perception Encoder weights """
+) -> Dict[str, torch.Tensor]:
+    """Convert Perception Encoder weights.
+
+    Args:
+        state_dict: State dictionary to convert.
+        model: Target model instance.
+        prefix: Prefix to strip from keys.
+
+    Returns:
+        Converted state dictionary.
+    """
     state_dict = state_dict.get('model', state_dict)
     state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
 
@@ -852,12 +901,22 @@ def _convert_pe(
 
 
 def checkpoint_filter_fn(
-        state_dict,
-        model,
-        interpolation='bicubic',
-        antialias=True,
-):
-    """ convert patch embedding weight from manual patchify + linear proj to conv"""
+        state_dict: Dict[str, torch.Tensor],
+        model: nn.Module,
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+) -> Dict[str, torch.Tensor]:
+    """Convert patch embedding weight from manual patchify + linear proj to conv.
+
+    Args:
+        state_dict: Checkpoint state dictionary.
+        model: Target model instance.
+        interpolation: Interpolation method for resizing.
+        antialias: Whether to use antialiasing when resizing.
+
+    Returns:
+        Filtered state dictionary.
+    """
     out_dict = {}
     state_dict = state_dict.get('model_ema', state_dict)
     state_dict = state_dict.get('model', state_dict)
@@ -936,7 +995,17 @@ def checkpoint_filter_fn(
     return out_dict
 
 
-def _create_eva(variant, pretrained=False, **kwargs):
+def _create_eva(variant: str, pretrained: bool = False, **kwargs) -> Eva:
+    """Create an EVA model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        Instantiated Eva model.
+    """
     out_indices = kwargs.pop('out_indices', 3)
     model = build_model_with_cfg(
         Eva, variant, pretrained,
@@ -947,7 +1016,16 @@ def _create_eva(variant, pretrained=False, **kwargs):
     return model
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Generate default configuration for EVA models.
+
+    Args:
+        url: Model weights URL.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        Model configuration dictionary.
+    """
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
@@ -958,7 +1036,16 @@ def _cfg(url='', **kwargs):
     }
 
 
-def _pe_cfg(url='', **kwargs):
+def _pe_cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Generate default configuration for Perception Encoder models.
+
+    Args:
+        url: Model weights URL.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        Model configuration dictionary.
+    """
     return {
         'url': url,
         'num_classes': 0, 'input_size': (3, 224, 224), 'pool_size': None,
@@ -1203,7 +1290,7 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def eva_giant_patch14_224(pretrained=False, **kwargs) -> Eva:
+def eva_giant_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -1211,7 +1298,7 @@ def eva_giant_patch14_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva_giant_patch14_336(pretrained=False, **kwargs) -> Eva:
+def eva_giant_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -1219,7 +1306,7 @@ def eva_giant_patch14_336(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva_giant_patch14_560(pretrained=False, **kwargs) -> Eva:
+def eva_giant_patch14_560(pretrained: bool = False, **kwargs) -> Eva:
     """ EVA-g model https://arxiv.org/abs/2211.07636 """
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_560', pretrained=pretrained, **dict(model_args, **kwargs))
@@ -1227,7 +1314,7 @@ def eva_giant_patch14_560(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_tiny_patch14_224(pretrained=False, **kwargs) -> Eva:
+def eva02_tiny_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1244,7 +1331,7 @@ def eva02_tiny_patch14_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_small_patch14_224(pretrained=False, **kwargs) -> Eva:
+def eva02_small_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1261,7 +1348,7 @@ def eva02_small_patch14_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_base_patch14_224(pretrained=False, **kwargs) -> Eva:
+def eva02_base_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1280,7 +1367,7 @@ def eva02_base_patch14_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_large_patch14_224(pretrained=False, **kwargs) -> Eva:
+def eva02_large_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1299,7 +1386,7 @@ def eva02_large_patch14_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_tiny_patch14_336(pretrained=False, **kwargs) -> Eva:
+def eva02_tiny_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -1316,7 +1403,7 @@ def eva02_tiny_patch14_336(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_small_patch14_336(pretrained=False, **kwargs) -> Eva:
+def eva02_small_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -1333,7 +1420,7 @@ def eva02_small_patch14_336(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_base_patch14_448(pretrained=False, **kwargs) -> Eva:
+def eva02_base_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=448,
         patch_size=14,
@@ -1352,7 +1439,7 @@ def eva02_base_patch14_448(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_large_patch14_448(pretrained=False, **kwargs) -> Eva:
+def eva02_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=448,
         patch_size=14,
@@ -1371,7 +1458,7 @@ def eva02_large_patch14_448(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva_giant_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
+def eva_giant_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
     """ EVA-g CLIP model (only difference from non-CLIP is the pooling)  """
     model_args = dict(
         patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408,
@@ -1381,7 +1468,7 @@ def eva_giant_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_base_patch16_clip_224(pretrained=False, **kwargs) -> Eva:
+def eva02_base_patch16_clip_224(pretrained: bool = False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base """
     model_args = dict(
         img_size=224,
@@ -1403,7 +1490,7 @@ def eva02_base_patch16_clip_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_large_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
+def eva02_large_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
     model_args = dict(
         img_size=224,
@@ -1425,7 +1512,7 @@ def eva02_large_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_large_patch14_clip_336(pretrained=False, **kwargs) -> Eva:
+def eva02_large_patch14_clip_336(pretrained: bool = False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
     model_args = dict(
         img_size=336,
@@ -1447,7 +1534,7 @@ def eva02_large_patch14_clip_336(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
+def eva02_enormous_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that uses residual post-norm in blocks """
     model_args = dict(
         img_size=224,
@@ -1464,7 +1551,7 @@ def eva02_enormous_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_medium_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
+def vit_medium_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1485,7 +1572,7 @@ def vit_medium_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_mediumd_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
+def vit_mediumd_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1506,7 +1593,7 @@ def vit_mediumd_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_betwixt_patch16_rope_reg4_gap_256(pretrained=False, **kwargs) -> Eva:
+def vit_betwixt_patch16_rope_reg4_gap_256(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1527,7 +1614,7 @@ def vit_betwixt_patch16_rope_reg4_gap_256(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_base_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
+def vit_base_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1548,7 +1635,7 @@ def vit_base_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
+def vit_pe_core_base_patch16_224(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=16,
         embed_dim=768,
@@ -1571,7 +1658,7 @@ def vit_pe_core_base_patch16_224(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
+def vit_pe_core_large_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=14,
         embed_dim=1024,
@@ -1594,7 +1681,7 @@ def vit_pe_core_large_patch14_336(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
+def vit_pe_core_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=14,
         embed_dim=1536,
@@ -1617,7 +1704,7 @@ def vit_pe_core_gigantic_patch14_448(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
+def vit_pe_lang_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=14,
         embed_dim=1024,
@@ -1641,7 +1728,7 @@ def vit_pe_lang_large_patch14_448(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
+def vit_pe_lang_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=14,
         embed_dim=1536,
@@ -1664,7 +1751,7 @@ def vit_pe_lang_gigantic_patch14_448(pretrained=False, **kwargs):
 
 
 @register_model
-def vit_pe_spatial_gigantic_patch14_448(pretrained=False, **kwargs):
+def vit_pe_spatial_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
     model_args = dict(
         patch_size=14,
         embed_dim=1536,
