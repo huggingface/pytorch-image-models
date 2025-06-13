@@ -20,13 +20,13 @@ import logging
 import math
 from dataclasses import dataclass, fields, replace
 from functools import partial
-from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union, Final, Any, Literal
+from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union, Any
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
     AttentionPoolLatent,
     Mlp,
@@ -34,14 +34,13 @@ from timm.layers import (
     get_act_layer,
     get_norm_layer,
     LayerNorm,
-    LayerType,
     _assert,
 )
 from timm.models._builder import build_model_with_cfg
 from timm.models._features import feature_take_indices
 from timm.models._features_fx import register_notrace_function, register_notrace_module
 from timm.models._registry import register_model, generate_default_cfgs
-from timm.models._manipulate import checkpoint_seq, named_apply
+from timm.models._manipulate import checkpoint, checkpoint_seq, named_apply
 
 from .vision_transformer import Block, global_pool_nlc
 
@@ -1054,7 +1053,7 @@ class NaFlexVit(nn.Module):
             output_dict: bool = False,
             patch_coord: Optional[torch.Tensor] = None,
             patch_valid: Optional[torch.Tensor] = None,
-            mask: Optional[torch.Tensor] = None,
+            attn_mask: Optional[torch.Tensor] = None,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]], Dict[str, Any]]:
         """ Forward features that returns intermediates.
 
@@ -1069,7 +1068,7 @@ class NaFlexVit(nn.Module):
             output_dict: Return outputs as a dictionary with 'image_features' and 'image_intermediates' keys
             patch_coord: Optional patch coordinates [B, N, 2] for NaFlex mode
             patch_valid: Optional patch type indicators (1=patch, 0=padding) for NaFlex
-            mask: Optional attention mask
+            attn_mask: Optional attention mask for masked attention
         Returns:
             A tuple with (final_features, intermediates), a list of intermediate features, or a dictionary containing
             'image_features' and 'image_intermediates' (and optionally 'image_intermediates_prefix')
@@ -1093,8 +1092,8 @@ class NaFlexVit(nn.Module):
             H, W = self.embeds.dynamic_feat_size((height, width))
 
         # Create attention mask if patch_type is provided and mask is not
-        if mask is None and patch_valid is not None:
-            mask = create_attention_mask(patch_valid, self.num_prefix_tokens, patches.dtype)
+        if attn_mask is None and patch_valid is not None:
+            attn_mask = create_attention_mask(patch_valid, self.num_prefix_tokens, patches.dtype)
 
         # Forward pass through embedding
         x = self.embeds(patches, patch_coord=patch_coord)
@@ -1107,7 +1106,12 @@ class NaFlexVit(nn.Module):
             blocks = self.blocks[:max_index + 1]
 
         for i, blk in enumerate(blocks):
-            x = blk(x, attn_mask=mask)
+            if attn_mask is not None:
+                x = blk(x, attn_mask=attn_mask)
+            elif self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk. x)
+            else:
+                x = blk(x)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)
