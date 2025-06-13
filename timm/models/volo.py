@@ -20,9 +20,8 @@ Modifications and additions for timm by / Copyright 2022, Ross Wightman
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -38,18 +37,31 @@ __all__ = ['VOLO']  # model_registry will add each entrypoint fn to this
 
 
 class OutlookAttention(nn.Module):
+    """Outlook attention mechanism for VOLO models."""
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            kernel_size=3,
-            padding=1,
-            stride=1,
-            qkv_bias=False,
-            attn_drop=0.,
-            proj_drop=0.,
+            dim: int,
+            num_heads: int,
+            kernel_size: int = 3,
+            padding: int = 1,
+            stride: int = 1,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
     ):
+        """Initialize OutlookAttention.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            kernel_size: Kernel size for attention computation.
+            padding: Padding for attention computation.
+            stride: Stride for attention computation.
+            qkv_bias: Whether to use bias in linear layers.
+            attn_drop: Attention dropout rate.
+            proj_drop: Projection dropout rate.
+        """
         super().__init__()
         head_dim = dim // num_heads
         self.num_heads = num_heads
@@ -68,7 +80,15 @@ class OutlookAttention(nn.Module):
         self.unfold = nn.Unfold(kernel_size=kernel_size, padding=padding, stride=stride)
         self.pool = nn.AvgPool2d(kernel_size=stride, stride=stride, ceil_mode=True)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor of shape (B, H, W, C).
+
+        Returns:
+            Output tensor of shape (B, H, W, C).
+        """
         B, H, W, C = x.shape
 
         v = self.v(x).permute(0, 3, 1, 2)  # B, C, H, W
@@ -96,20 +116,37 @@ class OutlookAttention(nn.Module):
 
 
 class Outlooker(nn.Module):
+    """Outlooker block that combines outlook attention with MLP."""
+
     def __init__(
             self,
-            dim,
-            kernel_size,
-            padding,
-            stride=1,
-            num_heads=1,
-            mlp_ratio=3.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            qkv_bias=False,
+            dim: int,
+            kernel_size: int,
+            padding: int,
+            stride: int = 1,
+            num_heads: int = 1,
+            mlp_ratio: float = 3.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Callable = nn.GELU,
+            norm_layer: Callable = nn.LayerNorm,
+            qkv_bias: bool = False,
     ):
+        """Initialize Outlooker block.
+
+        Args:
+            dim: Input feature dimension.
+            kernel_size: Kernel size for outlook attention.
+            padding: Padding for outlook attention.
+            stride: Stride for outlook attention.
+            num_heads: Number of attention heads.
+            mlp_ratio: Ratio for MLP hidden dimension.
+            attn_drop: Attention dropout rate.
+            drop_path: Stochastic depth drop rate.
+            act_layer: Activation layer type.
+            norm_layer: Normalization layer type.
+            qkv_bias: Whether to use bias in linear layers.
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = OutlookAttention(
@@ -131,23 +168,41 @@ class Outlooker(nn.Module):
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         x = x + self.drop_path1(self.attn(self.norm1(x)))
         x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
 
 class Attention(nn.Module):
+    """Multi-head self-attention module."""
     fused_attn: torch.jit.Final[bool]
 
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            qkv_bias=False,
-            attn_drop=0.,
-            proj_drop=0.,
+            dim: int,
+            num_heads: int = 8,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
     ):
+        """Initialize Attention module.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            qkv_bias: Whether to use bias in QKV projection.
+            attn_drop: Attention dropout rate.
+            proj_drop: Projection dropout rate.
+        """
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -159,7 +214,15 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor of shape (B, H, W, C).
+
+        Returns:
+            Output tensor of shape (B, H, W, C).
+        """
         B, H, W, C = x.shape
 
         qkv = self.qkv(x).reshape(B, H * W, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
@@ -185,18 +248,31 @@ class Attention(nn.Module):
 
 
 class Transformer(nn.Module):
+    """Transformer block with multi-head self-attention and MLP."""
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Callable = nn.GELU,
+            norm_layer: Callable = nn.LayerNorm,
     ):
+        """Initialize Transformer block.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            mlp_ratio: Ratio for MLP hidden dimension.
+            qkv_bias: Whether to use bias in QKV projection.
+            attn_drop: Attention dropout rate.
+            drop_path: Stochastic depth drop rate.
+            act_layer: Activation layer type.
+            norm_layer: Normalization layer type.
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop)
@@ -206,23 +282,42 @@ class Transformer(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=int(dim * mlp_ratio), act_layer=act_layer)
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         x = x + self.drop_path1(self.attn(self.norm1(x)))
         x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
 
 class ClassAttention(nn.Module):
+    """Class attention mechanism for class token interaction."""
 
     def __init__(
             self,
-            dim,
-            num_heads=8,
-            head_dim=None,
-            qkv_bias=False,
-            attn_drop=0.,
-            proj_drop=0.,
+            dim: int,
+            num_heads: int = 8,
+            head_dim: Optional[int] = None,
+            qkv_bias: bool = False,
+            attn_drop: float = 0.,
+            proj_drop: float = 0.,
     ):
+        """Initialize ClassAttention.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            head_dim: Dimension per head. If None, computed as dim // num_heads.
+            qkv_bias: Whether to use bias in QKV projection.
+            attn_drop: Attention dropout rate.
+            proj_drop: Projection dropout rate.
+        """
         super().__init__()
         self.num_heads = num_heads
         if head_dim is not None:
@@ -238,7 +333,15 @@ class ClassAttention(nn.Module):
         self.proj = nn.Linear(self.head_dim * self.num_heads, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor of shape (B, N, C) where first token is class token.
+
+        Returns:
+            Class token output of shape (B, 1, C).
+        """
         B, N, C = x.shape
 
         kv = self.kv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
@@ -256,20 +359,35 @@ class ClassAttention(nn.Module):
 
 
 class ClassBlock(nn.Module):
+    """Class block that combines class attention with MLP."""
 
     def __init__(
             self,
-            dim,
-            num_heads,
-            head_dim=None,
-            mlp_ratio=4.,
-            qkv_bias=False,
-            drop=0.,
-            attn_drop=0.,
-            drop_path=0.,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
+            dim: int,
+            num_heads: int,
+            head_dim: Optional[int] = None,
+            mlp_ratio: float = 4.,
+            qkv_bias: bool = False,
+            drop: float = 0.,
+            attn_drop: float = 0.,
+            drop_path: float = 0.,
+            act_layer: Callable = nn.GELU,
+            norm_layer: Callable = nn.LayerNorm,
     ):
+        """Initialize ClassBlock.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            head_dim: Dimension per head. If None, computed as dim // num_heads.
+            mlp_ratio: Ratio for MLP hidden dimension.
+            qkv_bias: Whether to use bias in QKV projection.
+            drop: Dropout rate.
+            attn_drop: Attention dropout rate.
+            drop_path: Stochastic depth drop rate.
+            act_layer: Activation layer type.
+            norm_layer: Normalization layer type.
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = ClassAttention(
@@ -291,56 +409,94 @@ class ClassBlock(nn.Module):
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor of shape (B, N, C) where first token is class token.
+
+        Returns:
+            Output tensor with updated class token.
+        """
         cls_embed = x[:, :1]
         cls_embed = cls_embed + self.drop_path1(self.attn(self.norm1(x)))
         cls_embed = cls_embed + self.drop_path2(self.mlp(self.norm2(cls_embed)))
         return torch.cat([cls_embed, x[:, 1:]], dim=1)
 
 
-def get_block(block_type, **kargs):
+def get_block(block_type: str, **kargs: Any) -> nn.Module:
+    """Get block based on type.
+
+    Args:
+        block_type: Type of block ('ca' for ClassBlock).
+        **kargs: Additional keyword arguments for block.
+
+    Returns:
+        The requested block module.
+    """
     if block_type == 'ca':
         return ClassBlock(**kargs)
 
 
-def rand_bbox(size, lam, scale=1):
-    """
-    get bounding box as token labeling (https://github.com/zihangJiang/TokenLabeling)
-    return: bounding box
+def rand_bbox(size: Tuple[int, ...], lam: float, scale: int = 1) -> Tuple[int, int, int, int]:
+    """Get random bounding box for token labeling.
+
+    Reference: https://github.com/zihangJiang/TokenLabeling
+
+    Args:
+        size: Input tensor size tuple.
+        lam: Lambda parameter for cutmix.
+        scale: Scaling factor.
+
+    Returns:
+        Bounding box coordinates (bbx1, bby1, bbx2, bby2).
     """
     W = size[1] // scale
     H = size[2] // scale
-    cut_rat = np.sqrt(1. - lam)
-    cut_w = (W * cut_rat).astype(int)
-    cut_h = (H * cut_rat).astype(int)
+    W_t = torch.tensor(W, dtype=torch.float32)
+    H_t = torch.tensor(H, dtype=torch.float32)
+    cut_rat = torch.sqrt(1. - lam)
+    cut_w = (W_t * cut_rat).int()
+    cut_h = (H_t * cut_rat).int()
 
     # uniform
-    cx = np.random.randint(W)
-    cy = np.random.randint(H)
+    cx = torch.randint(0, W, (1,))
+    cy = torch.randint(0, H, (1,))
 
-    bbx1 = np.clip(cx - cut_w // 2, 0, W)
-    bby1 = np.clip(cy - cut_h // 2, 0, H)
-    bbx2 = np.clip(cx + cut_w // 2, 0, W)
-    bby2 = np.clip(cy + cut_h // 2, 0, H)
+    bbx1 = torch.clamp(cx - cut_w // 2, 0, W)
+    bby1 = torch.clamp(cy - cut_h // 2, 0, H)
+    bbx2 = torch.clamp(cx + cut_w // 2, 0, W)
+    bby2 = torch.clamp(cy + cut_h // 2, 0, H)
 
-    return bbx1, bby1, bbx2, bby2
+    return bbx1.item(), bby1.item(), bbx2.item(), bby2.item()
 
 
 class PatchEmbed(nn.Module):
-    """ Image to Patch Embedding.
-    Different with ViT use 1 conv layer, we use 4 conv layers to do patch embedding
-    """
+    """Image to patch embedding with multi-layer convolution."""
 
     def __init__(
             self,
-            img_size=224,
-            stem_conv=False,
-            stem_stride=1,
-            patch_size=8,
-            in_chans=3,
-            hidden_dim=64,
-            embed_dim=384,
+            img_size: int = 224,
+            stem_conv: bool = False,
+            stem_stride: int = 1,
+            patch_size: int = 8,
+            in_chans: int = 3,
+            hidden_dim: int = 64,
+            embed_dim: int = 384,
     ):
+        """Initialize PatchEmbed.
+
+        Different from ViT which uses 1 conv layer, VOLO uses multiple conv layers for patch embedding.
+
+        Args:
+            img_size: Input image size.
+            stem_conv: Whether to use stem convolution layers.
+            stem_stride: Stride for stem convolution.
+            patch_size: Patch size (must be 4, 8, or 16).
+            in_chans: Number of input channels.
+            hidden_dim: Hidden dimension for stem convolution.
+            embed_dim: Output embedding dimension.
+        """
         super().__init__()
         assert patch_size in [4, 8, 16]
         if stem_conv:
@@ -362,7 +518,15 @@ class PatchEmbed(nn.Module):
             hidden_dim, embed_dim, kernel_size=patch_size // stem_stride, stride=patch_size // stem_stride)
         self.num_patches = (img_size // patch_size) * (img_size // patch_size)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor of shape (B, C, H, W).
+
+        Returns:
+            Output tensor of shape (B, embed_dim, H', W').
+        """
         if self.conv is not None:
             x = self.conv(x)
         x = self.proj(x)  # B, C, H, W
@@ -370,14 +534,28 @@ class PatchEmbed(nn.Module):
 
 
 class Downsample(nn.Module):
-    """ Image to Patch Embedding, downsampling between stage1 and stage2
-    """
+    """Downsampling module between stages."""
 
-    def __init__(self, in_embed_dim, out_embed_dim, patch_size=2):
+    def __init__(self, in_embed_dim: int, out_embed_dim: int, patch_size: int = 2):
+        """Initialize Downsample.
+
+        Args:
+            in_embed_dim: Input embedding dimension.
+            out_embed_dim: Output embedding dimension.
+            patch_size: Patch size for downsampling.
+        """
         super().__init__()
         self.proj = nn.Conv2d(in_embed_dim, out_embed_dim, kernel_size=patch_size, stride=patch_size)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor of shape (B, H, W, C).
+
+        Returns:
+            Output tensor of shape (B, H', W', C').
+        """
         x = x.permute(0, 3, 1, 2)
         x = self.proj(x)  # B, C, H, W
         x = x.permute(0, 2, 3, 1)
@@ -385,23 +563,39 @@ class Downsample(nn.Module):
 
 
 def outlooker_blocks(
-        block_fn,
-        index,
-        dim,
-        layers,
-        num_heads=1,
-        kernel_size=3,
-        padding=1,
-        stride=2,
-        mlp_ratio=3.,
-        qkv_bias=False,
-        attn_drop=0,
-        drop_path_rate=0.,
-        **kwargs,
-):
-    """
-    generate outlooker layer in stage1
-    return: outlooker layers
+        block_fn: Callable,
+        index: int,
+        dim: int,
+        layers: List[int],
+        num_heads: int = 1,
+        kernel_size: int = 3,
+        padding: int = 1,
+        stride: int = 2,
+        mlp_ratio: float = 3.,
+        qkv_bias: bool = False,
+        attn_drop: float = 0,
+        drop_path_rate: float = 0.,
+        **kwargs: Any,
+) -> nn.Sequential:
+    """Generate outlooker layers for stage 1.
+
+    Args:
+        block_fn: Block function to use (typically Outlooker).
+        index: Index of current stage.
+        dim: Feature dimension.
+        layers: List of layer counts for each stage.
+        num_heads: Number of attention heads.
+        kernel_size: Kernel size for outlook attention.
+        padding: Padding for outlook attention.
+        stride: Stride for outlook attention.
+        mlp_ratio: Ratio for MLP hidden dimension.
+        qkv_bias: Whether to use bias in QKV projection.
+        attn_drop: Attention dropout rate.
+        drop_path_rate: Stochastic depth drop rate.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Sequential module containing outlooker blocks.
     """
     blocks = []
     for block_idx in range(layers[index]):
@@ -422,20 +616,33 @@ def outlooker_blocks(
 
 
 def transformer_blocks(
-        block_fn,
-        index,
-        dim,
-        layers,
-        num_heads,
-        mlp_ratio=3.,
-        qkv_bias=False,
-        attn_drop=0,
-        drop_path_rate=0.,
-        **kwargs,
-):
-    """
-    generate transformer layers in stage2
-    return: transformer layers
+        block_fn: Callable,
+        index: int,
+        dim: int,
+        layers: List[int],
+        num_heads: int,
+        mlp_ratio: float = 3.,
+        qkv_bias: bool = False,
+        attn_drop: float = 0,
+        drop_path_rate: float = 0.,
+        **kwargs: Any,
+) -> nn.Sequential:
+    """Generate transformer layers for stage 2.
+
+    Args:
+        block_fn: Block function to use (typically Transformer).
+        index: Index of current stage.
+        dim: Feature dimension.
+        layers: List of layer counts for each stage.
+        num_heads: Number of attention heads.
+        mlp_ratio: Ratio for MLP hidden dimension.
+        qkv_bias: Whether to use bias in QKV projection.
+        attn_drop: Attention dropout rate.
+        drop_path_rate: Stochastic depth drop rate.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Sequential module containing transformer blocks.
     """
     blocks = []
     for block_idx in range(layers[index]):
@@ -453,35 +660,59 @@ def transformer_blocks(
 
 
 class VOLO(nn.Module):
-    """
-    Vision Outlooker, the main class of our model
-    """
+    """Vision Outlooker (VOLO) model."""
 
     def __init__(
             self,
-            layers,
-            img_size=224,
-            in_chans=3,
-            num_classes=1000,
-            global_pool='token',
-            patch_size=8,
-            stem_hidden_dim=64,
-            embed_dims=None,
-            num_heads=None,
-            downsamples=(True, False, False, False),
-            outlook_attention=(True, False, False, False),
-            mlp_ratio=3.0,
-            qkv_bias=False,
-            drop_rate=0.,
-            pos_drop_rate=0.,
-            attn_drop_rate=0.,
-            drop_path_rate=0.,
-            norm_layer=nn.LayerNorm,
-            post_layers=('ca', 'ca'),
-            use_aux_head=True,
-            use_mix_token=False,
-            pooling_scale=2,
+            layers: List[int],
+            img_size: int = 224,
+            in_chans: int = 3,
+            num_classes: int = 1000,
+            global_pool: str = 'token',
+            patch_size: int = 8,
+            stem_hidden_dim: int = 64,
+            embed_dims: Optional[List[int]] = None,
+            num_heads: Optional[List[int]] = None,
+            downsamples: Tuple[bool, ...] = (True, False, False, False),
+            outlook_attention: Tuple[bool, ...] = (True, False, False, False),
+            mlp_ratio: float = 3.0,
+            qkv_bias: bool = False,
+            drop_rate: float = 0.,
+            pos_drop_rate: float = 0.,
+            attn_drop_rate: float = 0.,
+            drop_path_rate: float = 0.,
+            norm_layer: Callable = nn.LayerNorm,
+            post_layers: Optional[Tuple[str, ...]] = ('ca', 'ca'),
+            use_aux_head: bool = True,
+            use_mix_token: bool = False,
+            pooling_scale: int = 2,
     ):
+        """Initialize VOLO model.
+
+        Args:
+            layers: Number of blocks in each stage.
+            img_size: Input image size.
+            in_chans: Number of input channels.
+            num_classes: Number of classes for classification.
+            global_pool: Global pooling type ('token', 'avg', or '').
+            patch_size: Patch size for patch embedding.
+            stem_hidden_dim: Hidden dimension for stem convolution.
+            embed_dims: List of embedding dimensions for each stage.
+            num_heads: List of number of attention heads for each stage.
+            downsamples: Whether to downsample between stages.
+            outlook_attention: Whether to use outlook attention in each stage.
+            mlp_ratio: Ratio for MLP hidden dimension.
+            qkv_bias: Whether to use bias in QKV projection.
+            drop_rate: Dropout rate.
+            pos_drop_rate: Position embedding dropout rate.
+            attn_drop_rate: Attention dropout rate.
+            drop_path_rate: Stochastic depth drop rate.
+            norm_layer: Normalization layer type.
+            post_layers: Post-processing layer types.
+            use_aux_head: Whether to use auxiliary head.
+            use_mix_token: Whether to use token mixing for training.
+            pooling_scale: Pooling scale factor.
+        """
         super().__init__()
         num_layers = len(layers)
         mlp_ratio = to_ntuple(num_layers)(mlp_ratio)
@@ -589,18 +820,36 @@ class VOLO(nn.Module):
         trunc_normal_(self.pos_embed, std=.02)
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module) -> None:
+        """Initialize weights for modules.
+
+        Args:
+            m: Module to initialize.
+        """
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self) -> set:
+        """Get set of parameters that should not have weight decay.
+
+        Returns:
+            Set of parameter names.
+        """
         return {'pos_embed', 'cls_token'}
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Get parameter grouping for optimizer.
+
+        Args:
+            coarse: Whether to use coarse grouping.
+
+        Returns:
+            Parameter grouping dictionary.
+        """
         return dict(
             stem=r'^cls_token|pos_embed|patch_embed',  # stem and embed
             blocks=[
@@ -615,14 +864,30 @@ class VOLO(nn.Module):
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Set gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get classifier module.
+
+        Returns:
+            The classifier head module.
+        """
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -630,7 +895,15 @@ class VOLO(nn.Module):
         if self.aux_head is not None:
             self.aux_head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_tokens(self, x):
+    def forward_tokens(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through token processing stages.
+
+        Args:
+            x: Input tensor of shape (B, H, W, C).
+
+        Returns:
+            Token tensor of shape (B, N, C).
+        """
         for idx, block in enumerate(self.network):
             if idx == 2:
                 # add positional encoding after outlooker blocks
@@ -645,7 +918,15 @@ class VOLO(nn.Module):
         x = x.reshape(B, -1, C)
         return x
 
-    def forward_cls(self, x):
+    def forward_cls(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through class attention blocks.
+
+        Args:
+            x: Input token tensor of shape (B, N, C).
+
+        Returns:
+            Output tensor with class token of shape (B, N+1, C).
+        """
         B, N, C = x.shape
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat([cls_tokens, x], dim=1)
@@ -656,7 +937,16 @@ class VOLO(nn.Module):
                 x = block(x)
         return x
 
-    def forward_train(self, x):
+    def forward_train(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, Tuple[int, int, int, int]]]:
+        """Forward pass for training with mix token support.
+
+        Args:
+            x: Input tensor of shape (B, C, H, W).
+
+        Returns:
+            If training with mix_token: tuple of (class_token, aux_tokens, bbox).
+            Otherwise: class_token tensor.
+        """
         """ A separate forward fn for training with mix_token (if a train script supports).
         Combining multiple modes in as single forward with different return types is torchscript hell.
         """
@@ -665,7 +955,7 @@ class VOLO(nn.Module):
 
         # mix token, see token labeling for details.
         if self.mix_token and self.training:
-            lam = np.random.beta(self.beta, self.beta)
+            lam = torch.distributions.Beta(self.beta, self.beta).sample()
             patch_h, patch_w = x.shape[1] // self.pooling_scale, x.shape[2] // self.pooling_scale
             bbx1, bby1, bbx2, bby2 = rand_bbox(x.size(), lam, scale=self.pooling_scale)
             temp_x = x.clone()
@@ -778,7 +1068,17 @@ class VOLO(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune classification head.
+
+        Returns:
+            List of kept intermediate indices.
+        """
         """ Prune layers not required for specified intermediates.
         """
         take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
@@ -791,7 +1091,15 @@ class VOLO(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction.
+
+        Args:
+            x: Input tensor of shape (B, C, H, W).
+
+        Returns:
+            Feature tensor.
+        """
         x = self.patch_embed(x).permute(0, 2, 3, 1)  # B,C,H,W-> B,H,W,C
 
         # step2: tokens learning in the two stages
@@ -803,7 +1111,16 @@ class VOLO(nn.Module):
         x = self.norm(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classification head.
+
+        Args:
+            x: Input feature tensor.
+            pre_logits: Whether to return pre-logits features.
+
+        Returns:
+            Classification logits or pre-logits features.
+        """
         if self.global_pool == 'avg':
             out = x.mean(dim=1)
         elif self.global_pool == 'token':
@@ -820,14 +1137,32 @@ class VOLO(nn.Module):
             out = out + 0.5 * aux.max(1)[0]
         return out
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass (simplified, without mix token training).
+
+        Args:
+            x: Input tensor of shape (B, C, H, W).
+
+        Returns:
+            Classification logits.
+        """
         """ simplified forward (without mix token training) """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _create_volo(variant, pretrained=False, **kwargs):
+def _create_volo(variant: str, pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """Create VOLO model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Whether to load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        VOLO model instance.
+    """
     out_indices = kwargs.pop('out_indices', 3)
     return build_model_with_cfg(
         VOLO,
@@ -838,7 +1173,16 @@ def _create_volo(variant, pretrained=False, **kwargs):
     )
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs: Any) -> Dict[str, Any]:
+    """Create model configuration.
+
+    Args:
+        url: URL for pretrained weights.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Model configuration dictionary.
+    """
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
@@ -898,73 +1242,74 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def volo_d1_224(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D1 model, Params: 27M """
+def volo_d1_224(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D1 model, Params: 27M."""
     model_args = dict(layers=(4, 4, 8, 2), embed_dims=(192, 384, 384, 384), num_heads=(6, 12, 12, 12), **kwargs)
     model = _create_volo('volo_d1_224', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d1_384(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D1 model, Params: 27M """
+def volo_d1_384(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D1 model, Params: 27M."""
     model_args = dict(layers=(4, 4, 8, 2), embed_dims=(192, 384, 384, 384), num_heads=(6, 12, 12, 12), **kwargs)
     model = _create_volo('volo_d1_384', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d2_224(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D2 model, Params: 59M """
+def volo_d2_224(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D2 model, Params: 59M."""
     model_args = dict(layers=(6, 4, 10, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d2_224', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d2_384(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D2 model, Params: 59M """
+def volo_d2_384(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D2 model, Params: 59M."""
     model_args = dict(layers=(6, 4, 10, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d2_384', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d3_224(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D3 model, Params: 86M """
+def volo_d3_224(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D3 model, Params: 86M."""
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d3_224', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d3_448(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D3 model, Params: 86M """
+def volo_d3_448(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D3 model, Params: 86M."""
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(256, 512, 512, 512), num_heads=(8, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d3_448', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d4_224(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D4 model, Params: 193M """
+def volo_d4_224(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D4 model, Params: 193M."""
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d4_224', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d4_448(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D4 model, Params: 193M """
+def volo_d4_448(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D4 model, Params: 193M."""
     model_args = dict(layers=(8, 8, 16, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16), **kwargs)
     model = _create_volo('volo_d4_448', pretrained=pretrained, **model_args)
     return model
 
 
 @register_model
-def volo_d5_224(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D5 model, Params: 296M
-    stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5
+def volo_d5_224(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D5 model, Params: 296M.
+
+    stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5.
     """
     model_args = dict(
         layers=(12, 12, 20, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16),
@@ -974,9 +1319,10 @@ def volo_d5_224(pretrained=False, **kwargs) -> VOLO:
 
 
 @register_model
-def volo_d5_448(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D5 model, Params: 296M
-    stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5
+def volo_d5_448(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D5 model, Params: 296M.
+
+    stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5.
     """
     model_args = dict(
         layers=(12, 12, 20, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16),
@@ -986,9 +1332,10 @@ def volo_d5_448(pretrained=False, **kwargs) -> VOLO:
 
 
 @register_model
-def volo_d5_512(pretrained=False, **kwargs) -> VOLO:
-    """ VOLO-D5 model, Params: 296M
-    stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5
+def volo_d5_512(pretrained: bool = False, **kwargs: Any) -> VOLO:
+    """VOLO-D5 model, Params: 296M.
+
+    stem_hidden_dim=128, the dim in patch embedding is 128 for VOLO-D5.
     """
     model_args = dict(
         layers=(12, 12, 20, 4), embed_dims=(384, 768, 768, 768), num_heads=(12, 16, 16, 16),

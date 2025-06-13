@@ -113,7 +113,7 @@ class GhostModuleV2(nn.Module):
 
 class GhostModuleV3(nn.Module):
     def __init__(
-            self, 
+            self,
             in_chs: int,
             out_chs: int,
             kernel_size: int = 1,
@@ -152,7 +152,7 @@ class GhostModuleV3(nn.Module):
         self.cheap_rpr_scale = ConvBnAct(init_chs, new_chs, 1, 1, pad_type=0, group_size=1, act_layer=None)
         self.cheap_activation = act_layer(inplace=True)
 
-        self.short_conv = nn.Sequential( 
+        self.short_conv = nn.Sequential(
             nn.Conv2d(in_chs, out_chs, kernel_size, stride, kernel_size//2, bias=False),
             nn.BatchNorm2d(out_chs),
             nn.Conv2d(out_chs, out_chs, kernel_size=(1,5), stride=1, padding=(0,2), groups=out_chs, bias=False),
@@ -164,7 +164,7 @@ class GhostModuleV3(nn.Module):
         self.in_channels = init_chs
         self.groups = init_chs
         self.kernel_size = dw_size
-            
+
     def forward(self, x):
         if self.infer_mode:
             x1 = self.primary_conv(x)
@@ -179,9 +179,9 @@ class GhostModuleV3(nn.Module):
             for cheap_rpr_conv in self.cheap_rpr_conv:
                 x2 += cheap_rpr_conv(x1)
             x2 = self.cheap_activation(x2)
-        
+
         out = torch.cat([x1,x2], dim=1)
-        if self.mode not in ['shortcut']:       
+        if self.mode not in ['shortcut']:
             return out
         else:
             res = self.short_conv(F.avg_pool2d(x, kernel_size=2, stride=2))
@@ -211,7 +211,7 @@ class GhostModuleV3(nn.Module):
         kernel_final = kernel_conv + kernel_scale + kernel_identity
         bias_final = bias_conv + bias_scale + bias_identity
         return kernel_final, bias_final
-    
+
     def _get_kernel_bias_cheap(self):
         kernel_scale = 0
         bias_scale = 0
@@ -235,7 +235,7 @@ class GhostModuleV3(nn.Module):
         kernel_final = kernel_conv + kernel_scale + kernel_identity
         bias_final = bias_conv + bias_scale + bias_identity
         return kernel_final, bias_final
-    
+
     def _fuse_bn_tensor(self, branch):
         if isinstance(branch, ConvBnAct):
             kernel = branch.conv.weight
@@ -285,7 +285,7 @@ class GhostModuleV3(nn.Module):
         self.primary_conv.weight.data = primary_kernel
         self.primary_conv.bias.data = primary_bias
         self.primary_conv = nn.Sequential(
-            self.primary_conv, 
+            self.primary_conv,
             self.primary_activation if self.primary_activation is not None else nn.Sequential()
         )
 
@@ -304,7 +304,7 @@ class GhostModuleV3(nn.Module):
         self.cheap_operation.bias.data = cheap_bias
 
         self.cheap_operation = nn.Sequential(
-            self.cheap_operation, 
+            self.cheap_operation,
             self.cheap_activation if self.cheap_activation is not None else nn.Sequential()
         )
 
@@ -326,7 +326,7 @@ class GhostModuleV3(nn.Module):
             self.__delattr__('cheap_rpr_skip')
 
         self.infer_mode = True
-        
+
     def reparameterize(self):
         self.switch_to_deploy()
 
@@ -370,7 +370,7 @@ class GhostBottleneck(nn.Module):
 
         # Point-wise linear projection
         self.ghost2 = GhostModule(mid_chs, out_chs, act_layer=nn.Identity)
-        
+
         # shortcut
         if in_chs == out_chs and self.stride == 1:
             self.shortcut = nn.Sequential()
@@ -401,19 +401,19 @@ class GhostBottleneck(nn.Module):
 
         # 2nd ghost bottleneck
         x = self.ghost2(x)
-        
+
         x += self.shortcut(shortcut)
         return x
 
 
-class GhostBottleneckV3(nn.Module): 
+class GhostBottleneckV3(nn.Module):
     """ GhostV3 bottleneck w/ optional SE"""
 
     def __init__(
-            self, 
-            in_chs: int, 
-            mid_chs: int, 
-            out_chs: int, 
+            self,
+            in_chs: int,
+            mid_chs: int,
+            out_chs: int,
             dw_kernel_size: int = 3,
             stride: int = 1,
             act_layer: LayerType = nn.ReLU,
@@ -436,7 +436,7 @@ class GhostBottleneckV3(nn.Module):
         # Depth-wise convolution
         if self.stride > 1:
             self.dw_rpr_conv = nn.ModuleList(
-                [ConvBnAct(mid_chs, mid_chs, dw_kernel_size, stride, pad_type=(dw_kernel_size - 1) // 2, 
+                [ConvBnAct(mid_chs, mid_chs, dw_kernel_size, stride, pad_type=(dw_kernel_size - 1) // 2,
                         group_size=1, act_layer=None) for _ in range(self.num_conv_branches)]
             )
             # Re-parameterizable scale branch
@@ -453,7 +453,7 @@ class GhostBottleneckV3(nn.Module):
 
         # Point-wise linear projection
         self.ghost2 = GhostModuleV3(mid_chs, out_chs, act_layer=nn.Identity, mode='original')
-        
+
         # shortcut
         if in_chs == out_chs and self.stride == 1:
             self.shortcut = nn.Identity()
@@ -489,7 +489,7 @@ class GhostBottleneckV3(nn.Module):
 
         # 2nd ghost bottleneck
         x = self.ghost2(x)
-        
+
         x += self.shortcut(shortcut)
         return x
 
@@ -549,7 +549,7 @@ class GhostBottleneckV3(nn.Module):
         t = (gamma / std).reshape(-1, 1, 1, 1)
         return kernel * t, beta - running_mean * gamma / std
 
-    def switch_to_deploy(self):    
+    def switch_to_deploy(self):
         if self.infer_mode or self.stride == 1:
             return
         dw_kernel, dw_bias = self._get_kernel_bias_dw()
@@ -578,7 +578,7 @@ class GhostBottleneckV3(nn.Module):
             self.__delattr__('dw_rpr_skip')
 
         self.infer_mode = True
-            
+
     def reparameterize(self):
         self.switch_to_deploy()
 
@@ -642,8 +642,8 @@ class GhostNet(nn.Module):
         out_chs = make_divisible(exp_size * width, 4)
         stages.append(nn.Sequential(ConvBnAct(prev_chs, out_chs, 1)))
         self.pool_dim = prev_chs = out_chs
-        
-        self.blocks = nn.Sequential(*stages)        
+
+        self.blocks = nn.Sequential(*stages)
 
         # building last several layers
         self.num_features = prev_chs
@@ -732,7 +732,7 @@ class GhostNet(nn.Module):
             else:
                 x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates
@@ -753,7 +753,7 @@ class GhostNet(nn.Module):
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks w/ stem as idx 0
         if prune_head:
             self.reset_classifier(0, '')
-        return take_indices 
+        return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv_stem(x)
@@ -804,7 +804,7 @@ def _create_ghostnet(variant: str, width: float = 1.0, pretrained: bool = False,
     Constructs a GhostNet model
     """
     cfgs = [
-        # k, t, c, SE, s 
+        # k, t, c, SE, s
         # stage1
         [[3,  16,  16, 0, 1]],
         # stage2

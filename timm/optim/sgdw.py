@@ -1,3 +1,11 @@
+""" SGD with decoupled weight-decay.
+
+References for added functionality:
+    Cautious Optimizers: https://arxiv.org/abs/2411.16085
+    Why Gradients Rapidly Increase Near the End of Training: https://arxiv.org/abs/2506.02285
+
+Hacked together by Ross Wightman
+"""
 from typing import List, Optional
 
 import torch
@@ -25,6 +33,7 @@ class SGDW(Optimizer):
             nesterov: bool = False,
             *,
             caution: bool = False,
+            corrected_weight_decay: bool = False,
             maximize: bool = False,
             foreach: Optional[bool] = None,
             differentiable: bool = False,
@@ -43,6 +52,7 @@ class SGDW(Optimizer):
             weight_decay=weight_decay,
             nesterov=nesterov,
             caution=caution,
+            corrected_weight_decay=corrected_weight_decay,
             maximize=maximize,
             foreach=foreach,
             differentiable=differentiable,
@@ -55,6 +65,7 @@ class SGDW(Optimizer):
         super().__setstate__(state)
         for group in self.param_groups:
             group.setdefault('caution', False)
+            group.setdefault('corrected_weight_decay', False)
             group.setdefault('nesterov', False)
             group.setdefault('maximize', False)
             group.setdefault('foreach', None)
@@ -113,6 +124,7 @@ class SGDW(Optimizer):
                 maximize=group['maximize'],
                 has_sparse_grad=has_sparse_grad,
                 foreach=group['foreach'],
+                max_lr=self.defaults['lr'] if group['corrected_weight_decay'] else None,
             )
 
             # update momentum_buffers in state
@@ -138,7 +150,8 @@ def sgdw(
         dampening: float,
         nesterov: bool,
         caution: bool,
-        maximize: bool
+        maximize: bool,
+        max_lr: Optional[float] = None
 ):
     r"""Functional API that performs SGD algorithm computation.
 
@@ -175,6 +188,7 @@ def sgdw(
         caution=caution,
         has_sparse_grad=has_sparse_grad,
         maximize=maximize,
+        max_lr=max_lr,
     )
 
 
@@ -190,12 +204,14 @@ def _single_tensor_sgdw(
         nesterov: bool,
         caution: bool,
         maximize: bool,
-        has_sparse_grad: bool
+        has_sparse_grad: bool,
+        max_lr: Optional[float]
 ):
     for i, param in enumerate(params):
         grad = grads[i] if not maximize else -grads[i]
 
-        param.mul_(1. - lr * weight_decay)
+        wd_scale = lr if max_lr is None else lr ** 2 / max_lr
+        param.mul_(1. - wd_scale * weight_decay)
 
         if momentum != 0:
             buf = momentum_buffer_list[i]
@@ -234,7 +250,8 @@ def _multi_tensor_sgdw(
         nesterov: bool,
         caution: bool,
         maximize: bool,
-        has_sparse_grad: bool
+        has_sparse_grad: bool,
+        max_lr: Optional[float]
 ):
     if len(params) == 0:
         return
@@ -247,7 +264,8 @@ def _multi_tensor_sgdw(
         if maximize:
             device_grads = torch._foreach_neg(device_grads)
 
-        torch._foreach_mul_(params, 1. - lr * weight_decay)
+        wd_scale = lr if max_lr is None else lr ** 2 / max_lr
+        torch._foreach_mul_(params, 1. - wd_scale * weight_decay)
 
         if momentum != 0:
             bufs = []

@@ -38,7 +38,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # No code was used directly from ConvNeXt-V2, however the weights are CC BY-NC 4.0 so beware if using commercially.
 
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -57,8 +57,17 @@ __all__ = ['ConvNeXt']  # model_registry will add each entrypoint fn to this
 
 
 class Downsample(nn.Module):
+    """Downsample module for ConvNeXt."""
 
-    def __init__(self, in_chs, out_chs, stride=1, dilation=1):
+    def __init__(self, in_chs: int, out_chs: int, stride: int = 1, dilation: int = 1) -> None:
+        """Initialize Downsample module.
+
+        Args:
+            in_chs: Number of input channels.
+            out_chs: Number of output channels.
+            stride: Stride for downsampling.
+            dilation: Dilation rate.
+        """
         super().__init__()
         avg_stride = stride if dilation == 1 else 1
         if stride > 1 or dilation > 1:
@@ -72,14 +81,16 @@ class Downsample(nn.Module):
         else:
             self.conv = nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = self.pool(x)
         x = self.conv(x)
         return x
 
 
 class ConvNeXtBlock(nn.Module):
-    """ ConvNeXt Block
+    """ConvNeXt Block.
+
     There are two equivalent implementations:
       (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
       (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
@@ -148,7 +159,8 @@ class ConvNeXtBlock(nn.Module):
             self.shortcut = nn.Identity()
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         shortcut = x
         x = self.conv_dw(x)
         if self.use_conv_mlp:
@@ -167,24 +179,43 @@ class ConvNeXtBlock(nn.Module):
 
 
 class ConvNeXtStage(nn.Module):
+    """ConvNeXt stage (multiple blocks)."""
 
     def __init__(
             self,
-            in_chs,
-            out_chs,
-            kernel_size=7,
-            stride=2,
-            depth=2,
-            dilation=(1, 1),
-            drop_path_rates=None,
-            ls_init_value=1.0,
-            conv_mlp=False,
-            conv_bias=True,
-            use_grn=False,
-            act_layer='gelu',
-            norm_layer=None,
-            norm_layer_cl=None
-    ):
+            in_chs: int,
+            out_chs: int,
+            kernel_size: int = 7,
+            stride: int = 2,
+            depth: int = 2,
+            dilation: Tuple[int, int] = (1, 1),
+            drop_path_rates: Optional[List[float]] = None,
+            ls_init_value: float = 1.0,
+            conv_mlp: bool = False,
+            conv_bias: bool = True,
+            use_grn: bool = False,
+            act_layer: Union[str, Callable] = 'gelu',
+            norm_layer: Optional[Callable] = None,
+            norm_layer_cl: Optional[Callable] = None
+    ) -> None:
+        """Initialize ConvNeXt stage.
+
+        Args:
+            in_chs: Number of input channels.
+            out_chs: Number of output channels.
+            kernel_size: Kernel size for depthwise convolution.
+            stride: Stride for downsampling.
+            depth: Number of blocks in stage.
+            dilation: Dilation rates.
+            drop_path_rates: Drop path rates for each block.
+            ls_init_value: Initial value for layer scale.
+            conv_mlp: Use convolutional MLP.
+            conv_bias: Use bias in convolutions.
+            use_grn: Use global response normalization.
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+            norm_layer_cl: Normalization layer for channels last.
+        """
         super().__init__()
         self.grad_checkpointing = False
 
@@ -226,7 +257,8 @@ class ConvNeXtStage(nn.Module):
             in_chs = out_chs
         self.blocks = nn.Sequential(*stage_blocks)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = self.downsample(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.blocks, x)
@@ -264,8 +296,9 @@ def _get_norm_layers(norm_layer: Union[Callable, str], conv_mlp: bool, norm_eps:
 
 
 class ConvNeXt(nn.Module):
-    r""" ConvNeXt
-        A PyTorch impl of : `A ConvNet for the 2020s`  - https://arxiv.org/pdf/2201.03545.pdf
+    """ConvNeXt model architecture.
+
+    A PyTorch impl of : `A ConvNet for the 2020s`  - https://arxiv.org/pdf/2201.03545.pdf
     """
 
     def __init__(
@@ -406,7 +439,15 @@ class ConvNeXt(nn.Module):
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Union[str, List]]:
+        """Create regex patterns for parameter grouping.
+
+        Args:
+            coarse: Use coarse grouping.
+
+        Returns:
+            Dictionary mapping group names to regex patterns.
+        """
         return dict(
             stem=r'^stem',
             blocks=r'^stages\.(\d+)' if coarse else [
@@ -417,15 +458,27 @@ class ConvNeXt(nn.Module):
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         for s in self.stages:
             s.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier module."""
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
@@ -438,17 +491,18 @@ class ConvNeXt(nn.Module):
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward features that returns intermediates.
 
         Args:
-            x: Input image tensor
-            indices: Take last n blocks if int, all if None, select matching indices if sequence
-            norm: Apply norm layer to compatible intermediates
-            stop_early: Stop iterating over blocks when last desired intermediate hit
-            output_fmt: Shape of intermediate feature outputs
-            intermediates_only: Only return intermediate features
-        Returns:
+            x: Input image tensor.
+            indices: Take last n blocks if int, all if None, select matching indices if sequence.
+            norm: Apply norm layer to compatible intermediates.
+            stop_early: Stop iterating over blocks when last desired intermediate hit.
+            output_fmt: Shape of intermediate feature outputs.
+            intermediates_only: Only return intermediate features.
 
+        Returns:
+            List of intermediate features or tuple of (final features, intermediates).
         """
         assert output_fmt in ('NCHW',), 'Output shape must be NCHW.'
         intermediates = []
@@ -483,8 +537,16 @@ class ConvNeXt(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stages), indices)
         self.stages = self.stages[:max_index + 1]  # truncate blocks w/ stem as idx 0
@@ -494,22 +556,40 @@ class ConvNeXt(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers."""
         x = self.stem(x)
         x = self.stages(x)
         x = self.norm_pre(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier.
+
+        Returns:
+            Output tensor.
+        """
         return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _init_weights(module, name=None, head_init_scale=1.0):
+def _init_weights(module: nn.Module, name: Optional[str] = None, head_init_scale: float = 1.0) -> None:
+    """Initialize model weights.
+
+    Args:
+        module: Module to initialize.
+        name: Module name.
+        head_init_scale: Scale factor for head initialization.
+    """
     if isinstance(module, nn.Conv2d):
         trunc_normal_(module.weight, std=.02)
         if module.bias is not None:

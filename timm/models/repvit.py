@@ -4,7 +4,7 @@ Paper: `RepViT: Revisiting Mobile CNN From ViT Perspective`
     - https://arxiv.org/abs/2307.09283
 
 @misc{wang2023repvit,
-      title={RepViT: Revisiting Mobile CNN From ViT Perspective}, 
+      title={RepViT: Revisiting Mobile CNN From ViT Perspective},
       author={Ao Wang and Hui Chen and Zijia Lin and Hengjun Pu and Guiguang Ding},
       year={2023},
       eprint={2307.09283},
@@ -372,7 +372,7 @@ class RepVit(nn.Module):
             else:
                 x = stage(x)
             if feat_idx in take_indices:
-                intermediates.append(x) 
+                intermediates.append(x)
 
         if intermediates_only:
             return intermediates

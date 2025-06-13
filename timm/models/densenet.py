@@ -4,6 +4,7 @@ fixed kwargs passthrough and addition of dynamic global avg/max pool.
 """
 import re
 from collections import OrderedDict
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -20,15 +21,30 @@ __all__ = ['DenseNet']
 
 
 class DenseLayer(nn.Module):
+    """Dense layer for DenseNet.
+
+    Implements the bottleneck layer with 1x1 and 3x3 convolutions.
+    """
+
     def __init__(
             self,
-            num_input_features,
-            growth_rate,
-            bn_size,
-            norm_layer=BatchNormAct2d,
-            drop_rate=0.,
-            grad_checkpointing=False,
-    ):
+            num_input_features: int,
+            growth_rate: int,
+            bn_size: int,
+            norm_layer: type = BatchNormAct2d,
+            drop_rate: float = 0.,
+            grad_checkpointing: bool = False,
+    ) -> None:
+        """Initialize DenseLayer.
+
+        Args:
+            num_input_features: Number of input features.
+            growth_rate: Growth rate (k) of the layer.
+            bn_size: Bottleneck size multiplier.
+            norm_layer: Normalization layer class.
+            drop_rate: Dropout rate.
+            grad_checkpointing: Use gradient checkpointing.
+        """
         super(DenseLayer, self).__init__()
         self.add_module('norm1', norm_layer(num_input_features)),
         self.add_module('conv1', nn.Conv2d(
@@ -39,23 +55,23 @@ class DenseLayer(nn.Module):
         self.drop_rate = float(drop_rate)
         self.grad_checkpointing = grad_checkpointing
 
-    def bottleneck_fn(self, xs):
-        # type: (List[torch.Tensor]) -> torch.Tensor
+    def bottleneck_fn(self, xs: List[torch.Tensor]) -> torch.Tensor:
+        """Bottleneck function for concatenated features."""
         concated_features = torch.cat(xs, 1)
         bottleneck_output = self.conv1(self.norm1(concated_features))  # noqa: T484
         return bottleneck_output
 
     # todo: rewrite when torchscript supports any
-    def any_requires_grad(self, x):
-        # type: (List[torch.Tensor]) -> bool
+    def any_requires_grad(self, x: List[torch.Tensor]) -> bool:
+        """Check if any tensor in list requires gradient."""
         for tensor in x:
             if tensor.requires_grad:
                 return True
         return False
 
     @torch.jit.unused  # noqa: T484
-    def call_checkpoint_bottleneck(self, x):
-        # type: (List[torch.Tensor]) -> torch.Tensor
+    def call_checkpoint_bottleneck(self, x: List[torch.Tensor]) -> torch.Tensor:
+        """Call bottleneck function with gradient checkpointing."""
         def closure(*xs):
             return self.bottleneck_fn(xs)
 
@@ -73,7 +89,15 @@ class DenseLayer(nn.Module):
 
     # torchscript does not yet support *args, so we overload method
     # allowing it to take either a List[Tensor] or single Tensor
-    def forward(self, x):  # noqa: F811
+    def forward(self, x: Union[torch.Tensor, List[torch.Tensor]]) -> torch.Tensor:  # noqa: F811
+        """Forward pass.
+
+        Args:
+            x: Input features (single tensor or list of tensors).
+
+        Returns:
+            New features to be concatenated.
+        """
         if isinstance(x, torch.Tensor):
             prev_features = [x]
         else:
@@ -93,18 +117,33 @@ class DenseLayer(nn.Module):
 
 
 class DenseBlock(nn.ModuleDict):
+    """DenseNet Block.
+
+    Contains multiple dense layers with concatenated features.
+    """
     _version = 2
 
     def __init__(
             self,
-            num_layers,
-            num_input_features,
-            bn_size,
-            growth_rate,
-            norm_layer=BatchNormAct2d,
-            drop_rate=0.,
-            grad_checkpointing=False,
-    ):
+            num_layers: int,
+            num_input_features: int,
+            bn_size: int,
+            growth_rate: int,
+            norm_layer: type = BatchNormAct2d,
+            drop_rate: float = 0.,
+            grad_checkpointing: bool = False,
+    ) -> None:
+        """Initialize DenseBlock.
+
+        Args:
+            num_layers: Number of layers in the block.
+            num_input_features: Number of input features.
+            bn_size: Bottleneck size multiplier.
+            growth_rate: Growth rate (k) for each layer.
+            norm_layer: Normalization layer class.
+            drop_rate: Dropout rate.
+            grad_checkpointing: Use gradient checkpointing.
+        """
         super(DenseBlock, self).__init__()
         for i in range(num_layers):
             layer = DenseLayer(
@@ -117,7 +156,15 @@ class DenseBlock(nn.ModuleDict):
             )
             self.add_module('denselayer%d' % (i + 1), layer)
 
-    def forward(self, init_features):
+    def forward(self, init_features: torch.Tensor) -> torch.Tensor:
+        """Forward pass through all layers in the block.
+
+        Args:
+            init_features: Initial features from previous layer.
+
+        Returns:
+            Concatenated features from all layers.
+        """
         features = [init_features]
         for name, layer in self.items():
             new_features = layer(features)
@@ -126,13 +173,26 @@ class DenseBlock(nn.ModuleDict):
 
 
 class DenseTransition(nn.Sequential):
+    """Transition layer between DenseNet blocks.
+
+    Reduces feature dimensions and spatial resolution.
+    """
+
     def __init__(
             self,
-            num_input_features,
-            num_output_features,
-            norm_layer=BatchNormAct2d,
-            aa_layer=None,
-    ):
+            num_input_features: int,
+            num_output_features: int,
+            norm_layer: type = BatchNormAct2d,
+            aa_layer: Optional[type] = None,
+    ) -> None:
+        """Initialize DenseTransition.
+
+        Args:
+            num_input_features: Number of input features.
+            num_output_features: Number of output features.
+            norm_layer: Normalization layer class.
+            aa_layer: Anti-aliasing layer class.
+        """
         super(DenseTransition, self).__init__()
         self.add_module('norm', norm_layer(num_input_features))
         self.add_module('conv', nn.Conv2d(
@@ -144,38 +204,57 @@ class DenseTransition(nn.Sequential):
 
 
 class DenseNet(nn.Module):
-    r"""Densenet-BC model class, based on
-    `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`_
+    """Densenet-BC model class.
+
+    Based on `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`_
 
     Args:
-        growth_rate (int) - how many filters to add each layer (`k` in paper)
-        block_config (list of 4 ints) - how many layers in each pooling block
-        bn_size (int) - multiplicative factor for number of bottle neck layers
-          (i.e. bn_size * k features in the bottleneck layer)
-        drop_rate (float) - dropout rate before classifier layer
-        proj_drop_rate (float) - dropout rate after each dense layer
-        num_classes (int) - number of classification classes
-        memory_efficient (bool) - If True, uses checkpointing. Much more memory efficient,
-          but slower. Default: *False*. See `"paper" <https://arxiv.org/pdf/1707.06990.pdf>`_
+        growth_rate: How many filters to add each layer (`k` in paper).
+        block_config: How many layers in each pooling block.
+        bn_size: Multiplicative factor for number of bottle neck layers
+          (i.e. bn_size * k features in the bottleneck layer).
+        drop_rate: Dropout rate before classifier layer.
+        proj_drop_rate: Dropout rate after each dense layer.
+        num_classes: Number of classification classes.
+        memory_efficient: If True, uses checkpointing. Much more memory efficient,
+          but slower. Default: *False*. See `"paper" <https://arxiv.org/pdf/1707.06990.pdf>`_.
     """
 
     def __init__(
             self,
-            growth_rate=32,
-            block_config=(6, 12, 24, 16),
-            num_classes=1000,
-            in_chans=3,
-            global_pool='avg',
-            bn_size=4,
-            stem_type='',
-            act_layer='relu',
-            norm_layer='batchnorm2d',
-            aa_layer=None,
-            drop_rate=0.,
-            proj_drop_rate=0.,
-            memory_efficient=False,
-            aa_stem_only=True,
-    ):
+            growth_rate: int = 32,
+            block_config: Tuple[int, ...] = (6, 12, 24, 16),
+            num_classes: int = 1000,
+            in_chans: int = 3,
+            global_pool: str = 'avg',
+            bn_size: int = 4,
+            stem_type: str = '',
+            act_layer: str = 'relu',
+            norm_layer: str = 'batchnorm2d',
+            aa_layer: Optional[type] = None,
+            drop_rate: float = 0.,
+            proj_drop_rate: float = 0.,
+            memory_efficient: bool = False,
+            aa_stem_only: bool = True,
+    ) -> None:
+        """Initialize DenseNet.
+
+        Args:
+            growth_rate: How many filters to add each layer (k in paper).
+            block_config: How many layers in each pooling block.
+            num_classes: Number of classification classes.
+            in_chans: Number of input channels.
+            global_pool: Global pooling type.
+            bn_size: Multiplicative factor for number of bottle neck layers.
+            stem_type: Type of stem ('', 'deep', 'deep_tiered').
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+            aa_layer: Anti-aliasing layer.
+            drop_rate: Dropout rate before classifier layer.
+            proj_drop_rate: Dropout rate after each dense layer.
+            memory_efficient: If True, uses checkpointing for memory efficiency.
+            aa_stem_only: Apply anti-aliasing only to stem.
+        """
         self.num_classes = num_classes
         super(DenseNet, self).__init__()
         norm_layer = get_norm_act_layer(norm_layer, act_layer=act_layer)
@@ -269,7 +348,8 @@ class DenseNet(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Group parameters for optimization."""
         matcher = dict(
             stem=r'^features\.conv[012]|features\.norm[012]|features\.pool[012]',
             blocks=r'^features\.(?:denseblock|transition)(\d+)' if coarse else [
@@ -280,35 +360,69 @@ class DenseNet(nn.Module):
         return matcher
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
         for b in self.features.modules():
             if isinstance(b, DenseLayer):
                 b.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.global_pool, self.classifier = create_classifier(
             self.num_features, self.num_classes, pool_type=global_pool)
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers."""
         return self.features(x)
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Feature tensor.
+            pre_logits: Return features before final classifier.
+
+        Returns:
+            Output tensor.
+        """
         x = self.global_pool(x)
         x = self.head_drop(x)
         return x if pre_logits else self.classifier(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output logits.
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _filter_torchvision_pretrained(state_dict):
+def _filter_torchvision_pretrained(state_dict: dict) -> Dict[str, torch.Tensor]:
+    """Filter torchvision pretrained state dict for compatibility.
+
+    Args:
+        state_dict: State dictionary from torchvision checkpoint.
+
+    Returns:
+        Filtered state dictionary.
+    """
     pattern = re.compile(
         r'^(.*denselayer\d+\.(?:norm|relu|conv))\.((?:[12])\.(?:weight|bias|running_mean|running_var))$')
 
@@ -321,7 +435,25 @@ def _filter_torchvision_pretrained(state_dict):
     return state_dict
 
 
-def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
+def _create_densenet(
+        variant: str,
+        growth_rate: int,
+        block_config: Tuple[int, ...],
+        pretrained: bool,
+        **kwargs,
+) -> DenseNet:
+    """Create a DenseNet model.
+
+    Args:
+        variant: Model variant name.
+        growth_rate: Growth rate parameter.
+        block_config: Block configuration.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        DenseNet model instance.
+    """
     kwargs['growth_rate'] = growth_rate
     kwargs['block_config'] = block_config
     return build_model_with_cfg(
@@ -334,7 +466,8 @@ def _create_densenet(variant, growth_rate, block_config, pretrained, **kwargs):
     )
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create default configuration for DenseNet models."""
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bicubic',

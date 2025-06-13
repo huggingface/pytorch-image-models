@@ -508,7 +508,7 @@ class EfficientVitMsra(nn.Module):
             stages = self.stages
         else:
             stages = self.stages[:max_index + 1]
- 
+
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint(stage, x)

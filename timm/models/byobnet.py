@@ -52,6 +52,10 @@ __all__ = ['ByobNet', 'ByoModelCfg', 'ByoBlockCfg', 'create_byob_stem', 'create_
 
 @dataclass
 class ByoBlockCfg:
+    """Block configuration for Bring-Your-Own-Blocks.
+
+    Defines configuration for a single block or stage of blocks.
+    """
     type: Union[str, nn.Module]
     d: int  # block depth (number of block repeats in stage)
     c: int  # number of output channels for each block in stage
@@ -69,6 +73,10 @@ class ByoBlockCfg:
 
 @dataclass
 class ByoModelCfg:
+    """Model configuration for Bring-Your-Own-Blocks network.
+
+    Defines overall architecture configuration.
+    """
     blocks: Tuple[Union[ByoBlockCfg, Tuple[ByoBlockCfg, ...]], ...]
     downsample: str = 'conv1x1'
     stem_type: str = '3x3'
@@ -97,7 +105,18 @@ class ByoModelCfg:
     block_kwargs: Dict[str, Any] = field(default_factory=lambda: dict())
 
 
-def _rep_vgg_bcfg(d=(4, 6, 16, 1), wf=(1., 1., 1., 1.), groups=0):
+def _rep_vgg_bcfg(d: Tuple[int, ...] = (4, 6, 16, 1), wf: Tuple[float, ...] = (1., 1., 1., 1.), groups: int = 0) -> \
+Tuple[ByoBlockCfg, ...]:
+    """Create RepVGG block configuration.
+
+    Args:
+        d: Depth (number of blocks) per stage.
+        wf: Width factor per stage.
+        groups: Number of groups for grouped convolution.
+
+    Returns:
+        Tuple of block configurations.
+    """
     c = (64, 128, 256, 512)
     group_size = 0
     if groups > 0:
@@ -106,7 +125,23 @@ def _rep_vgg_bcfg(d=(4, 6, 16, 1), wf=(1., 1., 1., 1.), groups=0):
     return bcfg
 
 
-def _mobileone_bcfg(d=(2, 8, 10, 1), wf=(1., 1., 1., 1.), se_blocks=(), num_conv_branches=1):
+def _mobileone_bcfg(
+        d: Tuple[int, ...] = (2, 8, 10, 1),
+        wf: Tuple[float, ...] = (1., 1., 1., 1.),
+        se_blocks: Tuple[int, ...] = (),
+        num_conv_branches: int = 1
+) -> List[List[ByoBlockCfg]]:
+    """Create MobileOne block configuration.
+
+    Args:
+        d: Depth (number of blocks) per stage.
+        wf: Width factor per stage.
+        se_blocks: Number of SE blocks per stage.
+        num_conv_branches: Number of conv branches.
+
+    Returns:
+        List of block configurations per stage.
+    """
     c = (64, 128, 256, 512)
     prev_c = min(64, c[0] * wf[0])
     se_blocks = se_blocks or (0,) * len(d)
@@ -128,12 +163,23 @@ def _mobileone_bcfg(d=(2, 8, 10, 1), wf=(1., 1., 1., 1.), se_blocks=(), num_conv
 
 
 def interleave_blocks(
-        types: Tuple[str, str], d,
+        types: Tuple[str, str],
+        d: int,
         every: Union[int, List[int]] = 1,
         first: bool = False,
         **kwargs,
-) -> Tuple[ByoBlockCfg]:
-    """ interleave 2 block types in stack
+) -> Tuple[ByoBlockCfg, ...]:
+    """Interleave 2 block types in stack.
+
+    Args:
+        types: Two block type names to interleave.
+        d: Total depth of blocks.
+        every: Interval for alternating blocks.
+        first: Whether to start with alternate block.
+        **kwargs: Additional block arguments.
+
+    Returns:
+        Tuple of interleaved block configurations.
     """
     assert len(types) == 2
     if isinstance(every, int):
@@ -149,6 +195,14 @@ def interleave_blocks(
 
 
 def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]]) -> List[ByoBlockCfg]:
+    """Expand block config into individual block instances.
+
+    Args:
+        stage_blocks_cfg: Block configuration(s) for a stage.
+
+    Returns:
+        List of individual block configurations.
+    """
     if not isinstance(stage_blocks_cfg, Sequence):
         stage_blocks_cfg = (stage_blocks_cfg,)
     block_cfgs = []
@@ -157,7 +211,16 @@ def expand_blocks_cfg(stage_blocks_cfg: Union[ByoBlockCfg, Sequence[ByoBlockCfg]
     return block_cfgs
 
 
-def num_groups(group_size, channels):
+def num_groups(group_size: Optional[int], channels: int) -> int:
+    """Calculate number of groups for grouped convolution.
+
+    Args:
+        group_size: Size of each group (1 for depthwise).
+        channels: Number of channels.
+
+    Returns:
+        Number of groups.
+    """
     if not group_size:  # 0 or None
         return 1  # normal conv with 1 group
     else:
@@ -168,6 +231,7 @@ def num_groups(group_size, channels):
 
 @dataclass
 class LayerFn:
+    """Container for layer factory functions."""
     conv_norm_act: Callable = ConvNormAct
     norm_act: Callable = BatchNormAct2d
     act: Callable = nn.ReLU
@@ -176,6 +240,11 @@ class LayerFn:
 
 
 class DownsampleAvg(nn.Module):
+    """Average pool downsampling module.
+
+    AvgPool Downsampling as in 'D' ResNet variants.
+    """
+
     def __init__(
             self,
             in_chs: int,
@@ -183,9 +252,18 @@ class DownsampleAvg(nn.Module):
             stride: int = 1,
             dilation: int = 1,
             apply_act: bool = False,
-            layers: LayerFn = None,
+            layers: Optional[LayerFn] = None,
     ):
-        """ AvgPool Downsampling as in 'D' ResNet variants."""
+        """Initialize DownsampleAvg.
+
+        Args:
+            in_chs: Number of input channels.
+            out_chs: Number of output channels.
+            stride: Stride for downsampling.
+            dilation: Dilation rate.
+            apply_act: Whether to apply activation.
+            layers: Layer factory functions.
+        """
         super(DownsampleAvg, self).__init__()
         layers = layers or LayerFn()
         avg_stride = stride if dilation == 1 else 1
@@ -196,7 +274,15 @@ class DownsampleAvg(nn.Module):
             self.pool = nn.Identity()
         self.conv = layers.conv_norm_act(in_chs, out_chs, 1, apply_act=apply_act)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output tensor.
+        """
         return self.conv(self.pool(x))
 
 
@@ -208,7 +294,21 @@ def create_shortcut(
         dilation: Tuple[int, int],
         layers: LayerFn,
         **kwargs,
-):
+) -> Optional[nn.Module]:
+    """Create shortcut connection for residual blocks.
+
+    Args:
+        downsample_type: Type of downsampling ('avg', 'conv1x1', or '').
+        in_chs: Input channels.
+        out_chs: Output channels.
+        stride: Stride for downsampling.
+        dilation: Dilation rates.
+        layers: Layer factory functions.
+        **kwargs: Additional arguments.
+
+    Returns:
+        Shortcut module or None.
+    """
     assert downsample_type in ('avg', 'conv1x1', '')
     if in_chs != out_chs or stride != 1 or dilation[0] != dilation[1]:
         if not downsample_type:
@@ -911,7 +1011,7 @@ _block_registry = dict(
 )
 
 
-def register_block(block_type:str, block_fn: nn.Module):
+def register_block(block_type: str, block_fn: nn.Module):
     _block_registry[block_type] = block_fn
 
 
@@ -1108,7 +1208,6 @@ def create_byob_stages(
         layers: Optional[LayerFn] = None,
         block_kwargs_fn: Optional[Callable] = update_block_kwargs,
 ):
-
     layers = layers or LayerFn()
     feature_info = []
     block_cfgs = [expand_blocks_cfg(s) for s in cfg.blocks]
@@ -1177,13 +1276,14 @@ def get_layer_fns(cfg: ByoModelCfg, allow_aa: bool = True):
 
 
 class ByobNet(nn.Module):
-    """ 'Bring-your-own-blocks' Net
+    """Bring-your-own-blocks Network.
 
     A flexible network backbone that allows building model stem + blocks via
     dataclass cfg definition w/ factory functions for module instantiation.
 
     Current assumption is that both stem and blocks are in conv-bn-act order (w/ block ending in act).
     """
+
     def __init__(
             self,
             cfg: ByoModelCfg,
@@ -1193,7 +1293,7 @@ class ByobNet(nn.Module):
             output_stride: int = 32,
             img_size: Optional[Union[int, Tuple[int, int]]] = None,
             drop_rate: float = 0.,
-            drop_path_rate: float =0.,
+            drop_path_rate: float = 0.,
             zero_init_last: bool = True,
             **kwargs,
     ):
@@ -1288,7 +1388,7 @@ class ByobNet(nn.Module):
                 qkv_separate=True,
             )
             self.head_hidden_size = self.head.embed_dim
-        elif cfg.head_type =='attn_rot':
+        elif cfg.head_type == 'attn_rot':
             if global_pool is None:
                 global_pool = 'token'
             assert global_pool in ('', 'token')
@@ -1318,7 +1418,15 @@ class ByobNet(nn.Module):
         named_apply(partial(_init_weights, zero_init_last=zero_init_last), self)
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Group matcher for parameter groups.
+
+        Args:
+            coarse: Whether to use coarse grouping.
+
+        Returns:
+            Dictionary mapping group names to patterns.
+        """
         matcher = dict(
             stem=r'^stem',
             blocks=[
@@ -1329,14 +1437,30 @@ class ByobNet(nn.Module):
         return matcher
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: Whether to enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get classifier module.
+
+        Returns:
+            Classifier module.
+        """
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None) -> None:
+        """Reset classifier.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         self.head.reset(num_classes, global_pool)
 
@@ -1407,8 +1531,16 @@ class ByobNet(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.stage_ends), indices)
         max_index = self.stage_ends[max_index]
@@ -1419,8 +1551,15 @@ class ByobNet(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction.
 
-    def forward_features(self, x):
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Feature tensor.
+        """
         x = self.stem(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
             x = checkpoint_seq(self.stages, x)
@@ -1429,16 +1568,40 @@ class ByobNet(nn.Module):
         x = self.final_conv(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through head.
+
+        Args:
+            x: Input features.
+            pre_logits: Return features before final linear layer.
+
+        Returns:
+            Classification logits or features.
+        """
         return self.head(x, pre_logits=pre_logits) if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output logits.
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _init_weights(module, name='', zero_init_last=False):
+def _init_weights(module: nn.Module, name: str = '', zero_init_last: bool = False) -> None:
+    """Initialize weights.
+
+    Args:
+        module: Module to initialize.
+        name: Module name.
+        zero_init_last: Zero-initialize last layer.
+    """
     if isinstance(module, nn.Conv2d):
         fan_out = module.kernel_size[0] * module.kernel_size[1] * module.out_channels
         fan_out //= module.groups
@@ -2061,7 +2224,7 @@ def _convert_openai_clip(
         if k.startswith(f'{prefix}attnpool'):
             if not model_has_attn_pool:
                 continue
-            k = k.replace(prefix + 'attnpool', 'head')  #'attn_pool')
+            k = k.replace(prefix + 'attnpool', 'head')  # 'attn_pool')
             k = k.replace('positional_embedding', 'pos_embed')
             k = k.replace('q_proj', 'q')
             k = k.replace('k_proj', 'k')
@@ -2081,7 +2244,17 @@ def checkpoint_filter_fn(
     return state_dict
 
 
-def _create_byobnet(variant, pretrained=False, **kwargs):
+def _create_byobnet(variant: str, pretrained: bool = False, **kwargs) -> ByobNet:
+    """Create a ByobNet model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        ByobNet model instance.
+    """
     return build_model_with_cfg(
         ByobNet, variant, pretrained,
         model_cfg=model_cfgs[variant],
@@ -2091,7 +2264,16 @@ def _create_byobnet(variant, pretrained=False, **kwargs):
     )
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create default configuration dictionary.
+
+    Args:
+        url: Model weight URL.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',
@@ -2101,7 +2283,16 @@ def _cfg(url='', **kwargs):
     }
 
 
-def _cfgr(url='', **kwargs):
+def _cfgr(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create RepVGG configuration dictionary.
+
+    Args:
+        url: Model weight URL.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
         'crop_pct': 0.9, 'interpolation': 'bicubic',

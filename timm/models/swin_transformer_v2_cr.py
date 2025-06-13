@@ -29,7 +29,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from typing import Tuple, Optional, List, Union, Any, Type
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -49,23 +49,24 @@ _logger = logging.getLogger(__name__)
 
 
 def bchw_to_bhwc(x: torch.Tensor) -> torch.Tensor:
-    """Permutes a tensor from the shape (B, C, H, W) to (B, H, W, C). """
+    """Permutes a tensor from the shape (B, C, H, W) to (B, H, W, C)."""
     return x.permute(0, 2, 3, 1)
 
 
 def bhwc_to_bchw(x: torch.Tensor) -> torch.Tensor:
-    """Permutes a tensor from the shape (B, H, W, C) to (B, C, H, W). """
+    """Permutes a tensor from the shape (B, H, W, C) to (B, C, H, W)."""
     return x.permute(0, 3, 1, 2)
 
 
-def window_partition(x, window_size: Tuple[int, int]):
-    """
+def window_partition(x: torch.Tensor, window_size: Tuple[int, int]) -> torch.Tensor:
+    """Partition into non-overlapping windows.
+
     Args:
-        x: (B, H, W, C)
-        window_size (int): window size
+        x: Input tensor of shape (B, H, W, C).
+        window_size: Window size (height, width).
 
     Returns:
-        windows: (num_windows*B, window_size, window_size, C)
+        Windows tensor of shape (num_windows*B, window_size[0], window_size[1], C).
     """
     B, H, W, C = x.shape
     x = x.view(B, H // window_size[0], window_size[0], W // window_size[1], window_size[1], C)
@@ -74,15 +75,16 @@ def window_partition(x, window_size: Tuple[int, int]):
 
 
 @register_notrace_function  # reason: int argument is a Proxy
-def window_reverse(windows, window_size: Tuple[int, int], img_size: Tuple[int, int]):
-    """
+def window_reverse(windows: torch.Tensor, window_size: Tuple[int, int], img_size: Tuple[int, int]) -> torch.Tensor:
+    """Merge windows back to feature map.
+
     Args:
-        windows: (num_windows * B, window_size[0], window_size[1], C)
-        window_size (Tuple[int, int]): Window size
-        img_size (Tuple[int, int]): Image size
+        windows: Windows tensor of shape (num_windows * B, window_size[0], window_size[1], C).
+        window_size: Window size (height, width).
+        img_size: Image size (height, width).
 
     Returns:
-        x: (B, H, W, C)
+        Feature map tensor of shape (B, H, W, C).
     """
     H, W = img_size
     C = windows.shape[-1]
@@ -139,7 +141,7 @@ class WindowMultiHeadAttention(nn.Module):
         self._make_pair_wise_relative_positions()
 
     def _make_pair_wise_relative_positions(self) -> None:
-        """Method initializes the pair-wise relative positions to compute the positional biases."""
+        """Initialize the pair-wise relative positions to compute the positional biases."""
         device = self.logit_scale.device
         coordinates = torch.stack(ndgrid(
             torch.arange(self.window_size[0], device=device),
@@ -152,9 +154,10 @@ class WindowMultiHeadAttention(nn.Module):
         self.register_buffer("relative_coordinates_log", relative_coordinates_log, persistent=False)
 
     def set_window_size(self, window_size: Tuple[int, int]) -> None:
-        """Update window size & interpolate position embeddings
+        """Update window size and regenerate relative position coordinates.
+
         Args:
-            window_size (int): New window size
+            window_size: New window size.
         """
         window_size = to_2tuple(window_size)
         if window_size != self.window_size:
@@ -162,11 +165,10 @@ class WindowMultiHeadAttention(nn.Module):
             self._make_pair_wise_relative_positions()
 
     def _relative_positional_encodings(self) -> torch.Tensor:
-        """Method computes the relative positional encodings
+        """Compute the relative positional encodings.
 
         Returns:
-            relative_position_bias (torch.Tensor): Relative positional encodings
-            (1, number of heads, window size ** 2, window size ** 2)
+            Relative positional encodings of shape (1, num_heads, window_size**2, window_size**2).
         """
         window_area = self.window_size[0] * self.window_size[1]
         relative_position_bias = self.meta_mlp(self.relative_coordinates_log)
@@ -177,13 +179,14 @@ class WindowMultiHeadAttention(nn.Module):
         return relative_position_bias
 
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """ Forward pass.
+        """Forward pass of window multi-head self-attention.
+
         Args:
-            x (torch.Tensor): Input tensor of the shape (B * windows, N, C)
-            mask (Optional[torch.Tensor]): Attention mask for the shift case
+            x: Input tensor of shape (B * windows, N, C).
+            mask: Attention mask for the shift case.
 
         Returns:
-            Output tensor of the shape [B * windows, N, C]
+            Output tensor of shape (B * windows, N, C).
         """
         Bw, L, C = x.shape
 
@@ -404,13 +407,13 @@ class SwinTransformerV2CrBlock(nn.Module):
         return x
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
+        """Forward pass of Swin Transformer V2 block.
 
         Args:
-            x (torch.Tensor): Input tensor of the shape [B, C, H, W]
+            x: Input tensor of shape [B, C, H, W].
 
         Returns:
-            output (torch.Tensor): Output tensor of the shape [B, C, H, W]
+            Output tensor of shape [B, C, H, W].
         """
         # post-norm branches (op -> norm -> drop)
         x = x + self.drop_path1(self.norm1(self._shifted_window_attn(x)))
@@ -424,23 +427,30 @@ class SwinTransformerV2CrBlock(nn.Module):
 
 
 class PatchMerging(nn.Module):
-    """ This class implements the patch merging as a strided convolution with a normalization before.
-    Args:
-        dim (int): Number of input channels
-        norm_layer (Type[nn.Module]): Type of normalization layer to be utilized.
+    """Patch merging layer.
+
+    This class implements the patch merging as a strided convolution with a normalization before.
     """
 
     def __init__(self, dim: int, norm_layer: Type[nn.Module] = nn.LayerNorm) -> None:
+        """Initialize patch merging layer.
+
+        Args:
+            dim: Number of input channels.
+            norm_layer: Type of normalization layer to be utilized.
+        """
         super(PatchMerging, self).__init__()
         self.norm = norm_layer(4 * dim)
         self.reduction = nn.Linear(in_features=4 * dim, out_features=2 * dim, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """ Forward pass.
+        """Forward pass of patch merging.
+
         Args:
-            x (torch.Tensor): Input tensor of the shape [B, C, H, W]
+            x: Input tensor of shape [B, C, H, W].
+
         Returns:
-            output (torch.Tensor): Output tensor of the shape [B, 2 * C, H // 2, W // 2]
+            Output tensor of shape [B, 2 * C, H // 2, W // 2].
         """
         B, H, W, C = x.shape
 
@@ -455,16 +465,26 @@ class PatchMerging(nn.Module):
 
 
 class PatchEmbed(nn.Module):
-    """ 2D Image to Patch Embedding """
+    """2D Image to Patch Embedding."""
     def __init__(
             self,
-            img_size=224,
-            patch_size=16,
-            in_chans=3,
-            embed_dim=768,
-            norm_layer=None,
-            strict_img_size=True,
-    ):
+            img_size: Union[int, Tuple[int, int]] = 224,
+            patch_size: Union[int, Tuple[int, int]] = 16,
+            in_chans: int = 3,
+            embed_dim: int = 768,
+            norm_layer: Optional[Callable] = None,
+            strict_img_size: bool = True,
+    ) -> None:
+        """Initialize patch embedding.
+
+        Args:
+            img_size: Input image size.
+            patch_size: Patch size.
+            in_chans: Number of input channels.
+            embed_dim: Embedding dimension.
+            norm_layer: Normalization layer.
+            strict_img_size: Enforce strict image size.
+        """
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -477,14 +497,27 @@ class PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
-    def set_input_size(self, img_size: Tuple[int, int]):
+    def set_input_size(self, img_size: Tuple[int, int]) -> None:
+        """Update input image size.
+
+        Args:
+            img_size: New image size.
+        """
         img_size = to_2tuple(img_size)
         if img_size != self.img_size:
             self.img_size = img_size
             self.grid_size = (img_size[0] // self.patch_size[0], img_size[1] // self.patch_size[1])
             self.num_patches = self.grid_size[0] * self.grid_size[1]
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass of patch embedding.
+
+        Args:
+            x: Input tensor of shape [B, C, H, W].
+
+        Returns:
+            Output tensor of shape [B, C', H', W'].
+        """
         B, C, H, W = x.shape
         if self.strict_img_size:
             _assert(H == self.img_size[0], f"Input image height ({H}) doesn't match model ({self.img_size[0]}).")
@@ -907,7 +940,16 @@ def _create_swin_transformer_v2_cr(variant, pretrained=False, **kwargs):
     return model
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a default configuration dictionary.
+
+    Args:
+        url: Model weights URL.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url,
         'num_classes': 1000,
@@ -967,8 +1009,8 @@ default_cfgs = generate_default_cfgs({
 
 
 @register_model
-def swinv2_cr_tiny_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-T V2 CR @ 384x384, trained ImageNet-1k"""
+def swinv2_cr_tiny_384(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-T V2 CR @ 384x384, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=96,
         depths=(2, 2, 6, 2),
@@ -978,8 +1020,8 @@ def swinv2_cr_tiny_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_tiny_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-T V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_tiny_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-T V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=96,
         depths=(2, 2, 6, 2),
@@ -989,8 +1031,9 @@ def swinv2_cr_tiny_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_tiny_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
+def swinv2_cr_tiny_ns_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
     """Swin-T V2 CR @ 224x224, trained ImageNet-1k w/ extra stage norms.
+
     ** Experimental, may make default if results are improved. **
     """
     model_args = dict(
@@ -1003,8 +1046,8 @@ def swinv2_cr_tiny_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_small_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-S V2 CR @ 384x384, trained ImageNet-1k"""
+def swinv2_cr_small_384(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-S V2 CR @ 384x384, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
@@ -1014,8 +1057,8 @@ def swinv2_cr_small_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_small_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-S V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_small_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-S V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
@@ -1025,8 +1068,8 @@ def swinv2_cr_small_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_small_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-S V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_small_ns_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-S V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
@@ -1037,8 +1080,8 @@ def swinv2_cr_small_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_small_ns_256(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-S V2 CR @ 256x256, trained ImageNet-1k"""
+def swinv2_cr_small_ns_256(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-S V2 CR @ 256x256, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=96,
         depths=(2, 2, 18, 2),
@@ -1049,8 +1092,8 @@ def swinv2_cr_small_ns_256(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_base_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-B V2 CR @ 384x384, trained ImageNet-1k"""
+def swinv2_cr_base_384(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-B V2 CR @ 384x384, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=128,
         depths=(2, 2, 18, 2),
@@ -1060,8 +1103,8 @@ def swinv2_cr_base_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_base_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-B V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_base_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-B V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=128,
         depths=(2, 2, 18, 2),
@@ -1071,8 +1114,8 @@ def swinv2_cr_base_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_base_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-B V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_base_ns_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-B V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=128,
         depths=(2, 2, 18, 2),
@@ -1083,8 +1126,8 @@ def swinv2_cr_base_ns_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_large_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-L V2 CR @ 384x384, trained ImageNet-1k"""
+def swinv2_cr_large_384(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-L V2 CR @ 384x384, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=192,
         depths=(2, 2, 18, 2),
@@ -1094,8 +1137,8 @@ def swinv2_cr_large_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_large_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-L V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_large_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-L V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=192,
         depths=(2, 2, 18, 2),
@@ -1105,8 +1148,8 @@ def swinv2_cr_large_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_huge_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-H V2 CR @ 384x384, trained ImageNet-1k"""
+def swinv2_cr_huge_384(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-H V2 CR @ 384x384, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=352,
         depths=(2, 2, 18, 2),
@@ -1117,8 +1160,8 @@ def swinv2_cr_huge_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_huge_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-H V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_huge_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-H V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=352,
         depths=(2, 2, 18, 2),
@@ -1129,8 +1172,8 @@ def swinv2_cr_huge_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_giant_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-G V2 CR @ 384x384, trained ImageNet-1k"""
+def swinv2_cr_giant_384(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-G V2 CR @ 384x384, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=512,
         depths=(2, 2, 42, 2),
@@ -1141,8 +1184,8 @@ def swinv2_cr_giant_384(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
 
 
 @register_model
-def swinv2_cr_giant_224(pretrained=False, **kwargs) -> SwinTransformerV2Cr:
-    """Swin-G V2 CR @ 224x224, trained ImageNet-1k"""
+def swinv2_cr_giant_224(pretrained: bool = False, **kwargs) -> SwinTransformerV2Cr:
+    """Swin-G V2 CR @ 224x224, trained ImageNet-1k."""
     model_args = dict(
         embed_dim=512,
         depths=(2, 2, 42, 2),

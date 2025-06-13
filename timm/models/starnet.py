@@ -94,10 +94,10 @@ class StarNet(nn.Module):
         self.grad_checkpointing = False
         self.feature_info = []
         stem_chs = 32
-        
+
         # stem layer
         self.stem = nn.Sequential(
-            ConvBN(in_chans, stem_chs, kernel_size=3, stride=2, padding=1), 
+            ConvBN(in_chans, stem_chs, kernel_size=3, stride=2, padding=1),
             act_layer(),
         )
         prev_chs = stem_chs
@@ -207,7 +207,7 @@ class StarNet(nn.Module):
                     x_inter = self.norm(x)  # applying final norm last intermediate
                 else:
                     x_inter = x
-                intermediates.append(x_inter) 
+                intermediates.append(x_inter)
 
         if intermediates_only:
             return intermediates

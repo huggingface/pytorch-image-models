@@ -39,7 +39,7 @@ Modifications by / Copyright 2021 Ross Wightman, original copyrights below
 # --------------------------------------------------------'
 
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -58,6 +58,18 @@ __all__ = ['Beit']
 
 
 def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
+    """Generate relative position index for window-based attention.
+
+    Creates a lookup table for relative position indices between all pairs of positions
+    within a window, including special handling for cls token interactions.
+
+    Args:
+        window_size: Height and width of the attention window.
+
+    Returns:
+        Relative position index tensor of shape (window_area+1, window_area+1)
+        where +1 accounts for the cls token.
+    """
     num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
     # cls to token & token 2 cls & cls to cls
     # get pair-wise relative position index for each token inside the window
@@ -78,6 +90,11 @@ def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
 
 
 class Attention(nn.Module):
+    """Multi-head attention module with optional relative position bias.
+
+    Implements multi-head self-attention with support for relative position bias
+    and fused attention operations. Can use either standard or custom head dimensions.
+    """
     fused_attn: torch.jit.Final[bool]
 
     def __init__(
@@ -91,6 +108,18 @@ class Attention(nn.Module):
             window_size: Optional[Tuple[int, int]] = None,
             attn_head_dim: Optional[int] = None,
     ):
+        """Initialize attention module.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            qkv_bias: If True, add learnable bias to query, key, value projections.
+            qkv_bias_separate: If True, use separate bias for q, k, v projections.
+            attn_drop: Dropout rate for attention weights.
+            proj_drop: Dropout rate for output projection.
+            window_size: Window size for relative position bias. If None, no relative position bias.
+            attn_head_dim: Dimension per attention head. If None, uses dim // num_heads.
+        """
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -126,7 +155,12 @@ class Attention(nn.Module):
         self.proj = nn.Linear(all_head_dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def _get_rel_pos_bias(self):
+    def _get_rel_pos_bias(self) -> torch.Tensor:
+        """Get relative position bias for the attention window.
+
+        Returns:
+            Relative position bias tensor of shape (1, num_heads, window_area+1, window_area+1).
+        """
         relative_position_bias = self.relative_position_bias_table[
             self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1] + 1,
@@ -134,7 +168,16 @@ class Attention(nn.Module):
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         return relative_position_bias.unsqueeze(0)
 
-    def forward(self, x, shared_rel_pos_bias: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, shared_rel_pos_bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass of attention module.
+
+        Args:
+            x: Input tensor of shape (batch_size, num_tokens, dim).
+            shared_rel_pos_bias: Optional shared relative position bias from parent module.
+
+        Returns:
+            Output tensor of shape (batch_size, num_tokens, dim).
+        """
         B, N, C = x.shape
 
         if self.q_bias is None:
@@ -183,6 +226,12 @@ class Attention(nn.Module):
 
 
 class Block(nn.Module):
+    """Transformer block with attention and MLP.
+
+    Standard transformer block consisting of multi-head self-attention and MLP
+    with residual connections and layer normalization. Supports layer scale and
+    stochastic depth regularization.
+    """
 
     def __init__(
             self,
@@ -201,6 +250,24 @@ class Block(nn.Module):
             window_size: Optional[Tuple[int, int]] = None,
             attn_head_dim: Optional[int] = None,
     ):
+        """Initialize transformer block.
+
+        Args:
+            dim: Input feature dimension.
+            num_heads: Number of attention heads.
+            qkv_bias: If True, add learnable bias to query, key, value projections.
+            mlp_ratio: Ratio of MLP hidden dimension to input dimension.
+            scale_mlp: If True, apply layer normalization in MLP.
+            swiglu_mlp: If True, use SwiGLU activation in MLP.
+            proj_drop: Dropout rate for projections.
+            attn_drop: Dropout rate for attention.
+            drop_path: Drop path rate for stochastic depth.
+            init_values: Initial values for layer scale. If None, no layer scale.
+            act_layer: Activation function class.
+            norm_layer: Normalization layer class.
+            window_size: Window size for relative position bias in attention.
+            attn_head_dim: Dimension per attention head.
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -239,7 +306,16 @@ class Block(nn.Module):
         else:
             self.gamma_1, self.gamma_2 = None, None
 
-    def forward(self, x, shared_rel_pos_bias: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, shared_rel_pos_bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Forward pass of transformer block.
+
+        Args:
+            x: Input tensor of shape (batch_size, num_tokens, dim).
+            shared_rel_pos_bias: Optional shared relative position bias.
+
+        Returns:
+            Output tensor of shape (batch_size, num_tokens, dim).
+        """
         if self.gamma_1 is None:
             x = x + self.drop_path1(self.attn(self.norm1(x), shared_rel_pos_bias=shared_rel_pos_bias))
             x = x + self.drop_path2(self.mlp(self.norm2(x)))
@@ -250,8 +326,19 @@ class Block(nn.Module):
 
 
 class RelativePositionBias(nn.Module):
+    """Relative position bias module for window-based attention.
 
-    def __init__(self, window_size, num_heads):
+    Generates learnable relative position biases for all pairs of positions
+    within a window, including special handling for cls token.
+    """
+
+    def __init__(self, window_size: Tuple[int, int], num_heads: int):
+        """Initialize relative position bias module.
+
+        Args:
+            window_size: Height and width of the attention window.
+            num_heads: Number of attention heads.
+        """
         super().__init__()
         self.window_size = window_size
         self.window_area = window_size[0] * window_size[1]
@@ -260,14 +347,23 @@ class RelativePositionBias(nn.Module):
         # trunc_normal_(self.relative_position_bias_table, std=.02)
         self.register_buffer("relative_position_index", gen_relative_position_index(window_size))
 
-    def forward(self):
+    def forward(self) -> torch.Tensor:
+        """Generate relative position bias.
+
+        Returns:
+            Relative position bias tensor of shape (num_heads, window_area+1, window_area+1).
+        """
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_area + 1, self.window_area + 1, -1)  # Wh*Ww,Wh*Ww,nH
         return relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
 
 
 class Beit(nn.Module):
-    """ Vision Transformer with support for patch or hybrid CNN input stage
+    """BEiT: BERT Pre-Training of Image Transformers.
+
+    Vision Transformer model with support for relative position bias and
+    shared relative position bias across layers. Implements both BEiT v1 and v2
+    architectures with flexible configuration options.
     """
 
     def __init__(
@@ -296,6 +392,33 @@ class Beit(nn.Module):
             use_shared_rel_pos_bias: bool = False,
             head_init_scale: float = 0.001,
     ):
+        """Initialize BEiT model.
+
+        Args:
+            img_size: Input image size.
+            patch_size: Patch size for patch embedding.
+            in_chans: Number of input image channels.
+            num_classes: Number of classes for classification head.
+            global_pool: Type of global pooling ('avg' or '').
+            embed_dim: Embedding dimension.
+            depth: Number of transformer blocks.
+            num_heads: Number of attention heads.
+            qkv_bias: If True, add learnable bias to query, key, value projections.
+            mlp_ratio: Ratio of MLP hidden dimension to embedding dimension.
+            swiglu_mlp: If True, use SwiGLU activation in MLP.
+            scale_mlp: If True, apply layer normalization in MLP.
+            drop_rate: Dropout rate.
+            pos_drop_rate: Dropout rate for position embeddings.
+            proj_drop_rate: Dropout rate for projections.
+            attn_drop_rate: Dropout rate for attention.
+            drop_path_rate: Stochastic depth rate.
+            norm_layer: Normalization layer class.
+            init_values: Initial values for layer scale.
+            use_abs_pos_emb: If True, use absolute position embeddings.
+            use_rel_pos_bias: If True, use relative position bias in attention.
+            use_shared_rel_pos_bias: If True, share relative position bias across layers.
+            head_init_scale: Scale factor for head initialization.
+        """
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -363,6 +486,11 @@ class Beit(nn.Module):
             self.head.bias.data.mul_(head_init_scale)
 
     def fix_init_weight(self):
+        """Fix initialization weights according to BEiT paper.
+
+        Rescales attention and MLP weights based on layer depth to improve
+        training stability.
+        """
         def rescale(param, layer_id):
             param.div_(math.sqrt(2.0 * layer_id))
 
@@ -370,7 +498,12 @@ class Beit(nn.Module):
             rescale(layer.attn.proj.weight.data, layer_id + 1)
             rescale(layer.mlp.fc2.weight.data, layer_id + 1)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module):
+        """Initialize model weights.
+
+        Args:
+            m: Module to initialize.
+        """
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -380,7 +513,12 @@ class Beit(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self) -> Set[str]:
+        """Get parameter names that should not use weight decay.
+
+        Returns:
+            Set of parameter names to exclude from weight decay.
+        """
         nwd = {'pos_embed', 'cls_token'}
         for n, _ in self.named_parameters():
             if 'relative_position_bias_table' in n:
@@ -388,11 +526,24 @@ class Beit(nn.Module):
         return nwd
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
+    def set_grad_checkpointing(self, enable: bool = True):
+        """Enable or disable gradient checkpointing.
+
+        Args:
+            enable: If True, enable gradient checkpointing.
+        """
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
-    def group_matcher(self, coarse=False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Create parameter group matcher for optimizer parameter groups.
+
+        Args:
+            coarse: If True, use coarse grouping.
+
+        Returns:
+            Dictionary mapping group names to regex patterns.
+        """
         matcher = dict(
             stem=r'^cls_token|pos_embed|patch_embed|rel_pos_bias',  # stem and embed
             blocks=[(r'^blocks\.(\d+)', None), (r'^norm', (99999,))],
@@ -401,9 +552,20 @@ class Beit(nn.Module):
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier head.
+
+        Returns:
+            The classification head module.
+        """
         return self.head
 
     def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        """Reset the classification head.
+
+        Args:
+            num_classes: Number of classes for new head.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -419,18 +581,20 @@ class Beit(nn.Module):
             output_fmt: str = 'NCHW',
             intermediates_only: bool = False,
     ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
-        """ Forward features that returns intermediates.
+        """Forward pass that returns intermediate feature maps.
 
         Args:
-            x: Input image tensor
-            indices: Take last n blocks if an int, if is a sequence, select by matching indices
-            return_prefix_tokens: Return both prefix and spatial intermediate tokens
-            norm: Apply norm layer to all intermediates
-            stop_early: Stop iterating over blocks when last desired intermediate hit
-            output_fmt: Shape of intermediate feature outputs
-            intermediates_only: Only return intermediate features
-        Returns:
+            x: Input image tensor of shape (batch_size, channels, height, width).
+            indices: Block indices to return features from. If int, returns last n blocks.
+            return_prefix_tokens: If True, return both prefix and spatial tokens.
+            norm: If True, apply normalization to intermediate features.
+            stop_early: If True, stop at last selected intermediate.
+            output_fmt: Output format ('NCHW' or 'NLC').
+            intermediates_only: If True, only return intermediate features.
 
+        Returns:
+            If intermediates_only is True, returns list of intermediate tensors.
+            Otherwise, returns tuple of (final_features, intermediates).
         """
         assert output_fmt in ('NCHW', 'NLC'), 'Output format must be one of NCHW or NLC.'
         reshape = output_fmt == 'NCHW'
@@ -484,8 +648,16 @@ class Beit(nn.Module):
             indices: Union[int, List[int]] = 1,
             prune_norm: bool = False,
             prune_head: bool = True,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediate outputs.
+
+        Args:
+            indices: Indices of blocks to keep.
+            prune_norm: If True, remove final normalization.
+            prune_head: If True, remove classification head.
+
+        Returns:
+            List of indices that were kept.
         """
         take_indices, max_index = feature_take_indices(len(self.blocks), indices)
         self.blocks = self.blocks[:max_index + 1]  # truncate blocks
@@ -496,7 +668,15 @@ class Beit(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    def forward_features(self, x):
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers.
+
+        Args:
+            x: Input tensor of shape (batch_size, channels, height, width).
+
+        Returns:
+            Feature tensor of shape (batch_size, num_tokens, embed_dim).
+        """
         x = self.patch_embed(x)
         x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
         if self.pos_embed is not None:
@@ -512,20 +692,46 @@ class Beit(nn.Module):
         x = self.norm(x)
         return x
 
-    def forward_head(self, x, pre_logits: bool = False):
+    def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classification head.
+
+        Args:
+            x: Feature tensor of shape (batch_size, num_tokens, embed_dim).
+            pre_logits: If True, return features before final linear layer.
+
+        Returns:
+            Logits tensor of shape (batch_size, num_classes) or pre-logits.
+        """
         if self.global_pool:
             x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the model.
+
+        Args:
+            x: Input tensor of shape (batch_size, channels, height, width).
+
+        Returns:
+            Logits tensor of shape (batch_size, num_classes).
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
-def _cfg(url='', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create a default configuration dictionary for BEiT models.
+
+    Args:
+        url: Model weights URL.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url,
         'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
@@ -602,7 +808,21 @@ default_cfgs = generate_default_cfgs({
 })
 
 
-def checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antialias=True):
+def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module, interpolation: str = 'bicubic', antialias: bool = True) -> Dict[str, torch.Tensor]:
+    """Filter and process checkpoint state dict for loading.
+
+    Handles resizing of patch embeddings, position embeddings, and relative position
+    bias tables when model size differs from checkpoint.
+
+    Args:
+        state_dict: Checkpoint state dictionary.
+        model: Target model to load weights into.
+        interpolation: Interpolation method for resizing.
+        antialias: If True, use antialiasing when resizing.
+
+    Returns:
+        Filtered state dictionary.
+    """
     state_dict = state_dict.get('model', state_dict)
     state_dict = state_dict.get('module', state_dict)
     # beit v2 didn't strip module
@@ -644,7 +864,17 @@ def checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antialias=T
     return out_dict
 
 
-def _create_beit(variant, pretrained=False, **kwargs):
+def _create_beit(variant: str, pretrained: bool = False, **kwargs) -> Beit:
+    """Create a BEiT model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: If True, load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        BEiT model instance.
+    """
     out_indices = kwargs.pop('out_indices', 3)
     model = build_model_with_cfg(
         Beit, variant, pretrained,
@@ -656,7 +886,8 @@ def _create_beit(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def beit_base_patch16_224(pretrained=False, **kwargs) -> Beit:
+def beit_base_patch16_224(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT base model @ 224x224 with patch size 16x16."""
     model_args = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=0.1)
@@ -665,7 +896,8 @@ def beit_base_patch16_224(pretrained=False, **kwargs) -> Beit:
 
 
 @register_model
-def beit_base_patch16_384(pretrained=False, **kwargs) -> Beit:
+def beit_base_patch16_384(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT base model @ 384x384 with patch size 16x16."""
     model_args = dict(
         img_size=384, patch_size=16, embed_dim=768, depth=12, num_heads=12,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=0.1)
@@ -674,7 +906,8 @@ def beit_base_patch16_384(pretrained=False, **kwargs) -> Beit:
 
 
 @register_model
-def beit_large_patch16_224(pretrained=False, **kwargs) -> Beit:
+def beit_large_patch16_224(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT large model @ 224x224 with patch size 16x16."""
     model_args = dict(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5)
@@ -683,7 +916,8 @@ def beit_large_patch16_224(pretrained=False, **kwargs) -> Beit:
 
 
 @register_model
-def beit_large_patch16_384(pretrained=False, **kwargs) -> Beit:
+def beit_large_patch16_384(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT large model @ 384x384 with patch size 16x16."""
     model_args = dict(
         img_size=384, patch_size=16, embed_dim=1024, depth=24, num_heads=16,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5)
@@ -692,7 +926,8 @@ def beit_large_patch16_384(pretrained=False, **kwargs) -> Beit:
 
 
 @register_model
-def beit_large_patch16_512(pretrained=False, **kwargs) -> Beit:
+def beit_large_patch16_512(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT large model @ 512x512 with patch size 16x16."""
     model_args = dict(
         img_size=512, patch_size=16, embed_dim=1024, depth=24, num_heads=16,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5)
@@ -701,7 +936,8 @@ def beit_large_patch16_512(pretrained=False, **kwargs) -> Beit:
 
 
 @register_model
-def beitv2_base_patch16_224(pretrained=False, **kwargs) -> Beit:
+def beitv2_base_patch16_224(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT v2 base model @ 224x224 with patch size 16x16."""
     model_args = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5)
@@ -710,7 +946,8 @@ def beitv2_base_patch16_224(pretrained=False, **kwargs) -> Beit:
 
 
 @register_model
-def beitv2_large_patch16_224(pretrained=False, **kwargs) -> Beit:
+def beitv2_large_patch16_224(pretrained: bool = False, **kwargs) -> Beit:
+    """BEiT v2 large model @ 224x224 with patch size 16x16."""
     model_args = dict(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5)

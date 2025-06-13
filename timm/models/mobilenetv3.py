@@ -7,7 +7,7 @@ Paper: Searching for MobileNetV3 - https://arxiv.org/abs/1905.02244
 Hacked together by / Copyright 2019, Ross Wightman
 """
 from functools import partial
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Dict, Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -27,7 +27,7 @@ __all__ = ['MobileNetV3', 'MobileNetV3Features']
 
 
 class MobileNetV3(nn.Module):
-    """ MobiletNet-V3
+    """MobileNetV3.
 
     Based on my EfficientNet implementation and building blocks, this model utilizes the MobileNet-v3 specific
     'efficient head', where global pooling is done before the head convolution without a final batch-norm
@@ -64,7 +64,8 @@ class MobileNetV3(nn.Module):
             layer_scale_init_value: Optional[float] = None,
             global_pool: str = 'avg',
     ):
-        """
+        """Initialize MobileNetV3.
+
         Args:
             block_args: Arguments for blocks of the network.
             num_classes: Number of classes for classification head.
@@ -73,6 +74,7 @@ class MobileNetV3(nn.Module):
             fix_stem: If True, don't scale stem by round_chs_fn.
             num_features: Number of output channels of the conv head layer.
             head_bias: If True, add a learnable bias to the conv head layer.
+            head_norm: If True, add normalization to the head layer.
             pad_type: Type of padding to use for convolution layers.
             act_layer: Type of activation layer.
             norm_layer: Type of normalization layer.
@@ -137,7 +139,12 @@ class MobileNetV3(nn.Module):
 
         efficientnet_init_weights(self)
 
-    def as_sequential(self):
+    def as_sequential(self) -> nn.Sequential:
+        """Convert model to sequential form.
+
+        Returns:
+            Sequential module containing all layers.
+        """
         layers = [self.conv_stem, self.bn1]
         layers.extend(self.blocks)
         layers.extend([self.global_pool, self.conv_head, self.norm_head, self.act2])
@@ -145,21 +152,30 @@ class MobileNetV3(nn.Module):
         return nn.Sequential(*layers)
 
     @torch.jit.ignore
-    def group_matcher(self, coarse: bool = False):
+    def group_matcher(self, coarse: bool = False) -> Dict[str, Any]:
+        """Group parameters for optimization."""
         return dict(
             stem=r'^conv_stem|bn1',
             blocks=r'^blocks\.(\d+)' if coarse else r'^blocks\.(\d+)\.(\d+)'
         )
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable: bool = True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
         self.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
+        """Get the classifier head."""
         return self.classifier
 
-    def reset_classifier(self, num_classes: int, global_pool: str = 'avg'):
+    def reset_classifier(self, num_classes: int, global_pool: str = 'avg') -> None:
+        """Reset the classifier head.
+
+        Args:
+            num_classes: Number of classes for new classifier.
+            global_pool: Global pooling type.
+        """
         self.num_classes = num_classes
         # NOTE: cannot meaningfully change pooling of efficient head after creation
         self.global_pool = SelectAdaptivePool2d(pool_type=global_pool)
@@ -230,8 +246,17 @@ class MobileNetV3(nn.Module):
             prune_norm: bool = False,
             prune_head: bool = True,
             extra_blocks: bool = False,
-    ):
-        """ Prune layers not required for specified intermediates.
+    ) -> List[int]:
+        """Prune layers not required for specified intermediates.
+
+        Args:
+            indices: Indices of intermediate layers to keep.
+            prune_norm: Whether to prune normalization layer.
+            prune_head: Whether to prune the classifier head.
+            extra_blocks: Include outputs of all blocks.
+
+        Returns:
+            List of indices that were kept.
         """
         if extra_blocks:
             take_indices, max_index = feature_take_indices(len(self.blocks) + 1, indices)
@@ -249,6 +274,14 @@ class MobileNetV3(nn.Module):
         return take_indices
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through feature extraction layers.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Feature tensor.
+        """
         x = self.conv_stem(x)
         x = self.bn1(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -258,6 +291,15 @@ class MobileNetV3(nn.Module):
         return x
 
     def forward_head(self, x: torch.Tensor, pre_logits: bool = False) -> torch.Tensor:
+        """Forward pass through classifier head.
+
+        Args:
+            x: Input features.
+            pre_logits: Return features before final linear layer.
+
+        Returns:
+            Classification logits or features.
+        """
         x = self.global_pool(x)
         x = self.conv_head(x)
         x = self.norm_head(x)
@@ -270,13 +312,21 @@ class MobileNetV3(nn.Module):
         return self.classifier(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Output logits.
+        """
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
 
 
 class MobileNetV3Features(nn.Module):
-    """ MobileNetV3 Feature Extractor
+    """MobileNetV3 Feature Extractor.
 
     A work-in-progress feature extraction module for MobileNet-V3 to use as a backbone for segmentation
     and object detection models.
@@ -302,11 +352,12 @@ class MobileNetV3Features(nn.Module):
             drop_path_rate: float = 0.,
             layer_scale_init_value: Optional[float] = None,
     ):
-        """
+        """Initialize MobileNetV3Features.
+
         Args:
             block_args: Arguments for blocks of the network.
             out_indices: Output from stages at indices.
-            feature_location: Location of feature before/after each block, must be in ['bottleneck', 'expansion']
+            feature_location: Location of feature before/after each block, must be in ['bottleneck', 'expansion'].
             in_chans: Number of input image channels.
             stem_size: Number of output channels of the initial stem convolution.
             fix_stem: If True, don't scale stem by round_chs_fn.
@@ -316,6 +367,7 @@ class MobileNetV3Features(nn.Module):
             se_from_exp: If True, calculate SE channel reduction from expanded mid channels.
             act_layer: Type of activation layer.
             norm_layer: Type of normalization layer.
+            aa_layer: Type of anti-aliasing layer.
             se_layer: Type of Squeeze-and-Excite layer.
             drop_rate: Dropout rate.
             drop_path_rate: Stochastic depth rate.
@@ -362,10 +414,19 @@ class MobileNetV3Features(nn.Module):
             self.feature_hooks = FeatureHooks(hooks, self.named_modules())
 
     @torch.jit.ignore
-    def set_grad_checkpointing(self, enable: bool = True):
+    def set_grad_checkpointing(self, enable: bool = True) -> None:
+        """Enable or disable gradient checkpointing."""
         self.grad_checkpointing = enable
 
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
+        """Forward pass through feature extraction.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            List of feature tensors.
+        """
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)
@@ -388,6 +449,16 @@ class MobileNetV3Features(nn.Module):
 
 
 def _create_mnv3(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """Create a MobileNetV3 model.
+
+    Args:
+        variant: Model variant name.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        MobileNetV3 model instance.
+    """
     features_mode = ''
     model_cls = MobileNetV3
     kwargs_filter = None
@@ -422,7 +493,13 @@ def _gen_mobilenet_v3_rw(
     Paper: https://arxiv.org/abs/1905.02244
 
     Args:
-      channel_multiplier: multiplier to number of channels per layer.
+        variant: Model variant name.
+        channel_multiplier: Multiplier to number of channels per layer.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        MobileNetV3 model instance.
     """
     arch_def = [
         # stage 0, 112x112 in
@@ -454,8 +531,12 @@ def _gen_mobilenet_v3_rw(
 
 
 def _gen_mobilenet_v3(
-        variant: str, channel_multiplier: float = 1.0, depth_multiplier: float = 1.0,
-        group_size=None, pretrained: bool = False, **kwargs
+        variant: str,
+        channel_multiplier: float = 1.0,
+        depth_multiplier: float = 1.0,
+        group_size: Optional[int] = None,
+        pretrained: bool = False,
+        **kwargs
 ) -> MobileNetV3:
     """Creates a MobileNet-V3 model.
 
@@ -463,7 +544,15 @@ def _gen_mobilenet_v3(
     Paper: https://arxiv.org/abs/1905.02244
 
     Args:
-      channel_multiplier: multiplier to number of channels per layer.
+        variant: Model variant name.
+        channel_multiplier: Multiplier to number of channels per layer.
+        depth_multiplier: Depth multiplier for model scaling.
+        group_size: Group size for grouped convolutions.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        MobileNetV3 model instance.
     """
     if 'small' in variant:
         num_features = 1024
@@ -553,11 +642,21 @@ def _gen_mobilenet_v3(
     return model
 
 
-def _gen_fbnetv3(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs):
-    """ FBNetV3
+def _gen_fbnetv3(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """FBNetV3 model generator.
+
     Paper: `FBNetV3: Joint Architecture-Recipe Search using Predictor Pretraining`
         - https://arxiv.org/abs/2006.02049
     FIXME untested, this is a preliminary impl of some FBNet-V3 variants.
+
+    Args:
+        variant: Model variant name.
+        channel_multiplier: Channel width multiplier.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        MobileNetV3 model instance.
     """
     vl = variant.split('_')[-1]
     if vl in ('a', 'b'):
@@ -614,14 +713,21 @@ def _gen_fbnetv3(variant: str, channel_multiplier: float = 1.0, pretrained: bool
     return model
 
 
-def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs):
-    """ LCNet
+def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool = False, **kwargs) -> MobileNetV3:
+    """LCNet model generator.
+
     Essentially a MobileNet-V3 crossed with a MobileNet-V1
 
     Paper: `PP-LCNet: A Lightweight CPU Convolutional Neural Network` - https://arxiv.org/abs/2109.15099
 
     Args:
-      channel_multiplier: multiplier to number of channels per layer.
+        variant: Model variant name.
+        channel_multiplier: Multiplier to number of channels per layer.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        MobileNetV3 model instance.
     """
     arch_def = [
         # stage 0, 112x112 in
@@ -653,15 +759,25 @@ def _gen_lcnet(variant: str, channel_multiplier: float = 1.0, pretrained: bool =
 
 
 def _gen_mobilenet_v4(
-        variant: str, channel_multiplier: float = 1.0, group_size=None, pretrained: bool = False, **kwargs,
+        variant: str,
+        channel_multiplier: float = 1.0,
+        group_size: Optional[int] = None,
+        pretrained: bool = False,
+        **kwargs,
 ) -> MobileNetV3:
     """Creates a MobileNet-V4 model.
 
-    Ref impl: ?
-    Paper: https://arxiv.org/abs/1905.02244
+    Paper: https://arxiv.org/abs/2404.10518
 
     Args:
-      channel_multiplier: multiplier to number of channels per layer.
+        variant: Model variant name.
+        channel_multiplier: Multiplier to number of channels per layer.
+        group_size: Group size for grouped convolutions.
+        pretrained: Load pretrained weights.
+        **kwargs: Additional model arguments.
+
+    Returns:
+        MobileNetV3 model instance.
     """
     num_features = 1280
     if 'hybrid' in variant:
@@ -901,7 +1017,16 @@ def _gen_mobilenet_v4(
     return model
 
 
-def _cfg(url: str = '', **kwargs):
+def _cfg(url: str = '', **kwargs) -> Dict[str, Any]:
+    """Create default configuration dictionary.
+
+    Args:
+        url: Model weight URL.
+        **kwargs: Additional configuration options.
+
+    Returns:
+        Configuration dictionary.
+    """
     return {
         'url': url, 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
         'crop_pct': 0.875, 'interpolation': 'bilinear',

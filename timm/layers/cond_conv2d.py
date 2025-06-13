@@ -8,7 +8,6 @@ Hacked together by / Copyright 2020 Ross Wightman
 
 import math
 from functools import partial
-import numpy as np
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
@@ -21,7 +20,7 @@ from .padding import get_padding_value
 def get_condconv_initializer(initializer, num_experts, expert_shape):
     def condconv_initializer(weight):
         """CondConv initializer function."""
-        num_params = np.prod(expert_shape)
+        num_params = math.prod(expert_shape)
         if (len(weight.shape) != 2 or weight.shape[0] != num_experts or
                 weight.shape[1] != num_params):
             raise (ValueError(
@@ -75,7 +74,7 @@ class CondConv2d(nn.Module):
             partial(nn.init.kaiming_uniform_, a=math.sqrt(5)), self.num_experts, self.weight_shape)
         init_weight(self.weight)
         if self.bias is not None:
-            fan_in = np.prod(self.weight_shape[1:])
+            fan_in = math.prod(self.weight_shape[1:])
             bound = 1 / math.sqrt(fan_in)
             init_bias = get_condconv_initializer(
                 partial(nn.init.uniform_, a=-bound, b=bound), self.num_experts, self.bias_shape)
