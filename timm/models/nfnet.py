@@ -19,7 +19,7 @@ Hacked together by / copyright Ross Wightman, 2021.
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn

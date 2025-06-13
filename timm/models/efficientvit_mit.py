@@ -19,7 +19,7 @@ from timm.layers import SelectAdaptivePool2d, create_conv2d, GELUTanh
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
-from ._manipulate import checkpoint, checkpoint_seq
+from ._manipulate import checkpoint_seq
 from ._registry import register_model, generate_default_cfgs
 
 
