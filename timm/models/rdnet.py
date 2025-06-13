@@ -281,6 +281,27 @@ class RDNet(nn.Module):
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
+    @torch.jit.ignore
+    def group_matcher(self, coarse=False):
+        assert not coarse, "coarse grouping is not implemented for RDNet"
+        return dict(
+            stem=r'^stem',
+            blocks=r'^dense_stages\.(\d+)',
+        )
+
+    @torch.jit.ignore
+    def set_grad_checkpointing(self, enable=True):
+        for s in self.dense_stages:
+            s.grad_checkpointing = enable
+
+    @torch.jit.ignore
+    def get_classifier(self) -> nn.Module:
+        return self.head.fc
+
+    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+        self.num_classes = num_classes
+        self.head.reset(num_classes, global_pool)
+
     def forward_intermediates(
             self,
             x: torch.Tensor,
@@ -350,14 +371,6 @@ class RDNet(nn.Module):
             self.reset_classifier(0, '')
         return take_indices
 
-    @torch.jit.ignore
-    def get_classifier(self) -> nn.Module:
-        return self.head.fc
-
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
-        self.num_classes = num_classes
-        self.head.reset(num_classes, global_pool)
-
     def forward_features(self, x):
         x = self.stem(x)
         x = self.dense_stages(x)
@@ -371,19 +384,6 @@ class RDNet(nn.Module):
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x
-
-    @torch.jit.ignore
-    def group_matcher(self, coarse=False):
-        assert not coarse, "coarse grouping is not implemented for RDNet"
-        return dict(
-            stem=r'^stem',
-            blocks=r'^dense_stages\.(\d+)',
-        )
-
-    @torch.jit.ignore
-    def set_grad_checkpointing(self, enable=True):
-        for s in self.dense_stages:
-            s.grad_checkpointing = enable
 
 
 def _init_weights(module, name=None, head_init_scale=1.0):

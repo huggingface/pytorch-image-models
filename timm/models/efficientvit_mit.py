@@ -789,7 +789,10 @@ class EfficientVit(nn.Module):
             stages = self.stages[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stages, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 
@@ -943,7 +946,10 @@ class EfficientVitLarge(nn.Module):
             stages = self.stages[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stages, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 

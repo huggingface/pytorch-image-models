@@ -24,7 +24,7 @@ import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, ClassifierHead, to_2tuple, to_ntuple, trunc_normal_, \
-    _assert, use_fused_attn, resize_rel_pos_bias_table, resample_patch_embed, ndgrid
+    use_fused_attn, resize_rel_pos_bias_table, resample_patch_embed, ndgrid
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function

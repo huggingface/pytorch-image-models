@@ -478,7 +478,10 @@ class Xcit(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x, Hp, Wp)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x, Hp, Wp)
+            else:
+                x = blk(x, Hp, Wp)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)
@@ -494,7 +497,10 @@ class Xcit(nn.Module):
         # NOTE not supporting return of class tokens
         x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
         for blk in self.cls_attn_blocks:
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
 
         x = self.norm(x)
 

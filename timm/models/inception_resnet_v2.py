@@ -5,7 +5,6 @@ based upon Google's Tensorflow implementation and pretrained weights (Apache 2.0
 from functools import partial
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import create_classifier, ConvNormAct

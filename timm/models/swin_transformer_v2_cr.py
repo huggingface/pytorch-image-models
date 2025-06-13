@@ -29,7 +29,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
