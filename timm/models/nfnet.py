@@ -215,7 +215,7 @@ def create_stem(
     if 'deep' in stem_type:
         if 'quad' in stem_type:
             # 4 deep conv stack as in NFNet-F models
-            assert not 'pool' in stem_type
+            assert 'pool' not in stem_type
             stem_chs = (out_chs // 8, out_chs // 4, out_chs // 2, out_chs)
             strides = (2, 1, 1, 2)
             stem_stride = 4

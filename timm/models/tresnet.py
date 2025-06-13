@@ -15,7 +15,7 @@ import torch.nn as nn
 from timm.layers import SpaceToDepth, BlurPool2d, ClassifierHead, SEModule, ConvNormAct, DropPath
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import checkpoint_seq
+from ._manipulate import checkpoint, checkpoint_seq
 from ._registry import register_model, generate_default_cfgs, register_model_deprecations
 
 __all__ = ['TResNet']  # model_registry will add each entrypoint fn to this
@@ -263,7 +263,10 @@ class TResNet(nn.Module):
             stages = self.body[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 intermediates.append(x)
 

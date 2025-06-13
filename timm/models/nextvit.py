@@ -17,7 +17,7 @@ from timm.layers import DropPath, trunc_normal_, ConvMlp, get_norm_layer, get_ac
 from timm.layers import ClassifierHead
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import checkpoint, checkpoint_seq
+from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['NextViT']
@@ -595,7 +595,7 @@ class NextViT(nn.Module):
 
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(stage, x)
+                x = checkpoint_seq(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:

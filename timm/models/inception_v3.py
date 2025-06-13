@@ -4,7 +4,6 @@ Originally from torchvision Inception3 model
 Licensed BSD-Clause 3 https://github.com/pytorch/vision/blob/master/LICENSE
 """
 from functools import partial
-from typing import Optional
 
 import torch
 import torch.nn as nn

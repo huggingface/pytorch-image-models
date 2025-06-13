@@ -44,7 +44,7 @@ from timm.layers import (
 )
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import checkpoint, checkpoint_seq, named_apply
+from ._manipulate import named_apply, checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['ByobNet', 'ByoModelCfg', 'ByoBlockCfg', 'create_byob_stem', 'create_block']
@@ -1385,7 +1385,7 @@ class ByobNet(nn.Module):
         for stage in stages:
             feat_idx += 1
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(stage, x)
+                x = checkpoint_seq(stage, x)
             else:
                 x = stage(x)
             if not exclude_final_conv and feat_idx == last_idx:
