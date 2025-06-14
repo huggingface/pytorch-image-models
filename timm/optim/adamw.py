@@ -362,9 +362,9 @@ def _multi_tensor_adamw(
     torch._foreach_mul_(params, 1 -  wd_scale * weight_decay)
 
     # Decay the first and second moment running average coefficient
-    torch._foreach_lerp_(exp_avgs, grads, 1 - beta1)
-    #torch._foreach_mul_(exp_avgs, beta1)
-    #torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
+    #torch._foreach_lerp_(exp_avgs, grads, 1 - beta1)
+    torch._foreach_mul_(exp_avgs, beta1)
+    torch._foreach_add_(exp_avgs, grads, alpha=1 - beta1)
 
     torch._foreach_mul_(exp_avg_sqs, beta2)
     torch._foreach_addcmul_(exp_avg_sqs, grads, grads, 1 - beta2)
