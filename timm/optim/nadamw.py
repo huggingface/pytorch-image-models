@@ -375,6 +375,7 @@ def _multi_tensor_nadamw(
             masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]  # capturable?
             mask_scale = [m.mean() for m in masks]
             torch._foreach_maximum_(mask_scale, 1e-3)
+            #torch._foreach_clamp_min_(mask_scale, 1e-3)
             torch._foreach_div_(masks, mask_scale)
             torch._foreach_mul_(exp_avgs, masks)
 
@@ -402,6 +403,7 @@ def _multi_tensor_nadamw(
             masks = [(m > 0).to(g.dtype) for m, g in zip(masks, grads)]
             mask_scale = [m.mean() for m in masks]
             torch._foreach_maximum_(mask_scale, 1e-3)
+            #torch._foreach_clamp_min_(mask_scale, 1e-3)
             torch._foreach_div_(masks, mask_scale)
             torch._foreach_mul_(exp_avgs, masks)
 

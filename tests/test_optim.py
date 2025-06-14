@@ -298,7 +298,7 @@ def test_optim_factory(optimizer):
     assert isinstance(opt_info, OptimInfo)
 
     lr = (1e-2,) * 4
-    if optimizer in ('mars', 'nadam', 'claprop', 'crmsproptf', 'cadafactorbv', 'csgdw', 'clamb'):
+    if optimizer in ('mars', 'nadam', 'claprop', 'crmsproptf', 'cadafactorbv', 'csgdw', 'csgdc', 'clamb'):
         lr = (1e-3,) * 4
     elif optimizer in ('cmars',):
         lr = (1e-4,) * 4
@@ -378,7 +378,7 @@ def test_sgd(optimizer):
     _test_model(optimizer, dict(lr=1e-3))
 
 
-@pytest.mark.parametrize('optimizer',  ['adamw', 'adam', 'nadam', 'adamax', 'nadamw'])
+@pytest.mark.parametrize('optimizer',  ['adamw', 'adam', 'nadam', 'adamax', 'nadamw', 'adamwlegacy', 'adamc'])
 def test_adam(optimizer):
     _test_rosenbrock(
         lambda params: create_optimizer_v2(params, optimizer, lr=5e-2)
