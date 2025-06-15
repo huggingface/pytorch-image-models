@@ -689,7 +689,10 @@ class ResNetV2(nn.Module):
             stages = self.stages[:max_index]
 
         for feat_idx, stage in enumerate(stages, start=1):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stage, x, flatten=True)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 if feat_idx == last_idx:
                     x_inter = self.norm(x) if norm else x

@@ -14,21 +14,16 @@ Original code: https://github.com/IBM/CrossViT/blob/main/models/crossvit.py
 NOTE: model names have been renamed from originals to represent actual input res all *_224 -> *_240 and *_384 -> *_408
 
 Modifications and additions for timm hacked together by / Copyright 2021, Ross Wightman
+Modified from Timm. https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 """
 
 # Copyright IBM All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
-"""
-Modified from Timm. https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
-
-"""
 from functools import partial
 from typing import List, Optional, Tuple
 
 import torch
-import torch.hub
 import torch.nn as nn
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
