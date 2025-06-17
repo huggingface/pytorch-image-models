@@ -25,6 +25,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple, Type, Union, Fina
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
@@ -89,6 +90,7 @@ class NaFlexVitCfg:
     pos_embed_grid_size: Optional[Tuple[int, int]] = (16, 16)  # Grid size for position embedding initialization
     pos_embed_interp_mode: str = 'bicubic'  # Interpolation mode for position embedding resizing
     pos_embed_ar_preserving: bool = False  # Whether to preserve aspect ratio during position embedding interpolation
+    pos_embed_use_grid_sample: bool = False  # Whether to use grid_sample for naflex position embedding interpolation
 
     # Image processing
     dynamic_img_pad: bool = False  # Whether to enable dynamic padding for variable resolution
@@ -221,6 +223,7 @@ class NaFlexEmbeds(nn.Module):
             pos_embed_grid_size: Optional[Tuple[int, int]] = (14, 14),
             pos_embed_interp_mode: str = 'bicubic',
             pos_embed_ar_preserving: bool = False,
+            pos_embed_use_grid_sample: bool = False,
             input_norm_layer: Optional[Type[nn.Module]] = None,
             proj_norm_layer: Union[bool, Optional[Type[nn.Module]]] = None,
             norm_layer: Optional[Type[nn.Module]] = None,
@@ -256,6 +259,7 @@ class NaFlexEmbeds(nn.Module):
         self.num_reg_tokens = reg_tokens
         self.pos_embed_interp_mode = pos_embed_interp_mode
         self.pos_embed_ar_preserving = pos_embed_ar_preserving
+        self.pos_embed_use_grid_sample = pos_embed_use_grid_sample
         self.patch_size = to_2tuple(patch_size)
         self.in_chans = in_chans
         self.embed_dim = embed_dim
@@ -438,18 +442,6 @@ class NaFlexEmbeds(nn.Module):
                 )[:, :, :size[0], :size[1]].flatten(2).transpose(1, 2)
             return pos_embed_flat.to(dtype=x.dtype)
 
-        # FIXME leaving alternative code commented here for now for comparisons
-        # pos_embed_cache: Dict[Tuple[int, int], torch.Tensor] = {}
-        # for i, s in enumerate(naflex_grid_sizes):
-        #     if s in pos_embed_cache:
-        #         pos_embed_flat = pos_embed_cache[s]
-        #     else:
-        #         pos_embed_flat = _interp(s)
-        #         pos_embed_cache[s] = pos_embed_flat
-        #
-        #     seq_len = min(x.shape[1], pos_embed_flat.shape[1])
-        #     x[i, :seq_len] += pos_embed_flat[0, :seq_len]
-
         # Determine unique grid sizes to avoid duplicate interpolation
         size_to_indices: Dict[Tuple[int, int], List[int]] = {}
         for bi, k in enumerate(naflex_grid_sizes):
@@ -466,6 +458,57 @@ class NaFlexEmbeds(nn.Module):
                 torch.as_tensor(batch_indices, device=x.device),
                 pos_embed_flat[:, :seq_len].expand(len(batch_indices), -1, -1)
             )
+
+    def _apply_learned_naflex_pos_embed_grid_sample(
+            self,
+            x: torch.Tensor,
+            naflex_grid_sizes: List[Tuple[int, int]],
+    ):
+        """ NaFlex 2D position embedding interpolation using F.grid_sample.
+
+        Based on proposal by https://github.com/stas-sl
+        """
+        device = x.device
+        B, C = x.shape[0:2]
+
+        def _make_coords(h, w):
+            _y, _x = torch.meshgrid(
+                torch.arange(h, device=device),
+                torch.arange(w, device=device),
+                indexing='ij',
+            )
+            coord = torch.stack([_y.flatten(), _x.flatten()], dim=1)
+            return coord
+
+        coords = pad_sequence(
+            [_make_coords(h, w) for h, w in naflex_grid_sizes],
+            batch_first=True,
+        )
+        shapes = coords.amax(1) + 1
+        theta = torch.zeros(B, 2, 3, dtype=torch.float32, device=device)
+        if self.pos_embed_ar_preserving:
+            shape_max = shapes.amax()
+            grid_size = (shape_max, shape_max)
+            L = shapes.amax(1)
+            theta[:, 0, 0] = grid_size[1] / L  # scale x
+            theta[:, 1, 1] = grid_size[0] / L  # scale y
+        else:
+            grid_size = shapes.amax(0)
+            theta[:, 0, 0] = grid_size[1] / shapes[:, 1]  # scale x
+            theta[:, 1, 1] = grid_size[0] / shapes[:, 0]  # scale y
+        theta[:, 0, 2] = theta[:, 0, 0] - 1  # translate x
+        theta[:, 1, 2] = theta[:, 1, 1] - 1  # translate y
+        grid = F.affine_grid(theta, (B, C, *grid_size), align_corners=False)
+        pos_embed = F.grid_sample(
+            self.pos_embed.permute(0, 3, 1, 2).expand(B, -1, -1, -1).float(),
+            grid,
+            mode=self.pos_embed_interp_mode,
+            align_corners=False,
+            padding_mode='border',
+        ).to(dtype=x.dtype)
+        bi = torch.arange(B, device=device).unsqueeze(1).expand(-1, coords.shape[1])
+        # NOTE leave as '+=', do not change to .add_(...)
+        x += pos_embed[bi, :, coords[..., 0], coords[..., 1]]
 
     def _apply_learned_pos_embed(
             self,
@@ -516,7 +559,7 @@ class NaFlexEmbeds(nn.Module):
         # Handle each batch element separately with its own grid size
         orig_h, orig_w = self.pos_embed_y.shape[1], self.pos_embed_x.shape[1]
 
-        # bucket samples that share the same (H,W) so we build each grid once
+        # bucket samples that share the same (H, W) so we build each grid once
         size_to_indices: Dict[Tuple[int, int], List[int]] = {}
         for bi, k in enumerate(naflex_grid_sizes):
             size_to_indices.setdefault(k, []).append(bi)
@@ -630,7 +673,10 @@ class NaFlexEmbeds(nn.Module):
 
         if self.pos_embed_type == 'learned':
             if naflex_grid_sizes is not None:
-                self._apply_learned_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
+                if self.pos_embed_use_grid_sample:
+                    self._apply_learned_naflex_pos_embed_grid_sample(x, naflex_grid_sizes=naflex_grid_sizes)
+                else:
+                    self._apply_learned_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
             else:
                 assert grid_size is not None
                 self._apply_learned_pos_embed(x, grid_size=grid_size)
@@ -874,6 +920,7 @@ class NaFlexVit(nn.Module):
             pos_embed_grid_size=cfg.pos_embed_grid_size,
             pos_embed_interp_mode=cfg.pos_embed_interp_mode,
             pos_embed_ar_preserving=cfg.pos_embed_ar_preserving,
+            pos_embed_use_grid_sample=cfg.pos_embed_use_grid_sample,
             proj_norm_layer=embed_norm_layer,
             pos_drop_rate=cfg.pos_drop_rate,
             patch_drop_rate=cfg.patch_drop_rate,
