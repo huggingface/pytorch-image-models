@@ -462,7 +462,8 @@ class NaFlexEmbeds(nn.Module):
     def _apply_learned_naflex_pos_embed_grid_sample(
             self,
             x: torch.Tensor,
-            naflex_grid_sizes: List[Tuple[int, int]],
+            patch_coord: torch.Tensor,
+            patch_valid: Optional[torch.Tensor] = None,
     ):
         """ NaFlex 2D position embedding interpolation using F.grid_sample.
 
@@ -470,36 +471,24 @@ class NaFlexEmbeds(nn.Module):
         """
         device = x.device
         B, N, C = x.shape
+        shapes = patch_coord.max(dim=1).values + 1  # (B, 2) containing [h_i, w_i]
 
-        def _make_coords(h, w):
-            _y, _x = torch.meshgrid(
-                torch.arange(h, device=device),
-                torch.arange(w, device=device),
-                indexing='ij',
-            )
-            coord = torch.stack([_y.flatten(), _x.flatten()], dim=1)
-            return coord
-
-        coords = torch.zeros(B, N, 2, dtype=torch.long, device=device)
-        for i, (h, w) in enumerate(naflex_grid_sizes):
-            coords_i = _make_coords(h, w)  # (h*w, 2)
-            coords[i, :coords_i.shape[0]] = coords_i  # pad with zeros past h*w
-            # FIXME should we be masking?
-
-        shapes = coords.amax(1) + 1
-        theta = torch.zeros(B, 2, 3, dtype=torch.float32, device=device)
         if self.pos_embed_ar_preserving:
-            L = shapes.amax(1)
-            grid_max = L.amax()
-            grid_size = (grid_max, grid_max)
-            theta[:, 0, 0] = grid_size[1] / L  # scale x
-            theta[:, 1, 1] = grid_size[0] / L  # scale y
+            L_i = shapes.amax(dim=1)  # (B,)  max(h_i, w_i)
+            L_global = L_i.amax()
+            grid_size = (L_global, L_global)
+            s_x = s_y = L_global / L_i  # uniform zoom (B,)
         else:
-            grid_size = shapes.amax(0)
-            theta[:, 0, 0] = grid_size[1] / shapes[:, 1]  # scale x
-            theta[:, 1, 1] = grid_size[0] / shapes[:, 0]  # scale y
+            grid_size = shapes.amax(dim=0)
+            s_x = grid_size[1] / shapes[:, 1]  # horizontal zoom (B,)
+            s_y = grid_size[0] / shapes[:, 0]  # vertical zoom (B,)
+
+        theta = torch.zeros(B, 2, 3, device=device, dtype=torch.float32)
+        theta[:, 0, 0] = s_x  # scale x
+        theta[:, 1, 1] = s_y  # scale y
         theta[:, 0, 2] = theta[:, 0, 0] - 1  # translate x
         theta[:, 1, 2] = theta[:, 1, 1] - 1  # translate y
+
         grid = F.affine_grid(theta, (B, C, *grid_size), align_corners=False)
         pos_embed = F.grid_sample(
             self.pos_embed.permute(0, 3, 1, 2).expand(B, -1, -1, -1).float(),
@@ -507,10 +496,20 @@ class NaFlexEmbeds(nn.Module):
             mode=self.pos_embed_interp_mode,
             align_corners=False,
             padding_mode='border',
-        ).to(dtype=x.dtype)
+        ).to(dtype=x.dtype)  # (B, C, H_out, W_out)
+
+        # NOTE if we bring in patch_valid, can explicitly mask padding tokens
+        # more experimentation at train time needed
+        # lin_idx = patch_coord[..., 0] * grid_size[1] + patch_coord[..., 1]  # (B, N)
+        # pos_flat = pos_embed.flatten(2).transpose(1, 2)
+        # pos_flat = pos_flat.gather(1, lin_idx.unsqueeze(2).expand(-1, -1, C))  # (B, N, C)
+        # if patch_valid is not None:
+        #     pos_flat.mul_(patch_valid.unsqueeze(2))
+        # idx_vec = torch.arange(N, device=device)  # (N,)
+        # x.index_add_(1, idx_vec, pos_flat)
+
         bi = torch.arange(B, device=device).unsqueeze(1)
-        # NOTE leave as '+=', do not change to .add_(...)
-        x += pos_embed[bi, :, coords[..., 0], coords[..., 1]]
+        x += pos_embed[bi, :, patch_coord[..., 0], patch_coord[..., 1]]  # NOTE leave as '+='
 
     def _apply_learned_pos_embed(
             self,
@@ -605,6 +604,7 @@ class NaFlexEmbeds(nn.Module):
             self,
             x: torch.Tensor,
             patch_coord: Optional[torch.Tensor] = None,
+            patch_valid: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Forward pass for patch embedding with position encoding.
 
@@ -676,7 +676,11 @@ class NaFlexEmbeds(nn.Module):
         if self.pos_embed_type == 'learned':
             if naflex_grid_sizes is not None:
                 if self.pos_embed_use_grid_sample:
-                    self._apply_learned_naflex_pos_embed_grid_sample(x, naflex_grid_sizes=naflex_grid_sizes)
+                    self._apply_learned_naflex_pos_embed_grid_sample(
+                        x,
+                        patch_coord=patch_coord,
+                        patch_valid=patch_valid,
+                    )
                 else:
                     self._apply_learned_naflex_pos_embed(x, naflex_grid_sizes=naflex_grid_sizes)
             else:
@@ -1146,7 +1150,7 @@ class NaFlexVit(nn.Module):
             mask = create_attention_mask(patch_valid, self.num_prefix_tokens, patches.dtype)
 
         # Forward pass through embedding
-        x = self.embeds(patches, patch_coord=patch_coord)
+        x = self.embeds(patches, patch_coord=patch_coord, patch_valid=patch_valid)
         x = self.norm_pre(x)
 
         # Forward pass through blocks
@@ -1219,7 +1223,7 @@ class NaFlexVit(nn.Module):
             )
 
         # Pass through embedding module with patch coordinate/type support
-        x = self.embeds(x, patch_coord=patch_coord)
+        x = self.embeds(x, patch_coord=patch_coord, patch_valid=patch_valid)
         x = self.norm_pre(x)
         # Apply transformer blocks with masked attention if mask provided
         if attn_mask is not None:
