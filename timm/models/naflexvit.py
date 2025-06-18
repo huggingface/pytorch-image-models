@@ -469,7 +469,7 @@ class NaFlexEmbeds(nn.Module):
         Based on proposal by https://github.com/stas-sl
         """
         device = x.device
-        B, C = x.shape[0:2]
+        B, N, C = x.shape
 
         def _make_coords(h, w):
             _y, _x = torch.meshgrid(
@@ -480,10 +480,12 @@ class NaFlexEmbeds(nn.Module):
             coord = torch.stack([_y.flatten(), _x.flatten()], dim=1)
             return coord
 
-        coords = pad_sequence(
-            [_make_coords(h, w) for h, w in naflex_grid_sizes],
-            batch_first=True,
-        )
+        coords = torch.zeros(B, N, 2, dtype=torch.long, device=device)
+        for i, (h, w) in enumerate(naflex_grid_sizes):
+            coords_i = _make_coords(h, w)  # (h*w, 2)
+            coords[i, :coords_i.shape[0]] = coords_i  # pad with zeros past h*w
+            # FIXME should we be masking?
+
         shapes = coords.amax(1) + 1
         theta = torch.zeros(B, 2, 3, dtype=torch.float32, device=device)
         if self.pos_embed_ar_preserving:
@@ -506,7 +508,7 @@ class NaFlexEmbeds(nn.Module):
             align_corners=False,
             padding_mode='border',
         ).to(dtype=x.dtype)
-        bi = torch.arange(B, device=device).unsqueeze(1).expand(-1, coords.shape[1])
+        bi = torch.arange(B, device=device).unsqueeze(1)
         # NOTE leave as '+=', do not change to .add_(...)
         x += pos_embed[bi, :, coords[..., 0], coords[..., 1]]
 
