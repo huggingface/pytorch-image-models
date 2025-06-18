@@ -487,9 +487,9 @@ class NaFlexEmbeds(nn.Module):
         shapes = coords.amax(1) + 1
         theta = torch.zeros(B, 2, 3, dtype=torch.float32, device=device)
         if self.pos_embed_ar_preserving:
-            shape_max = shapes.amax()
-            grid_size = (shape_max, shape_max)
             L = shapes.amax(1)
+            grid_max = L.amax()
+            grid_size = (grid_max, grid_max)
             theta[:, 0, 0] = grid_size[1] / L  # scale x
             theta[:, 1, 1] = grid_size[0] / L  # scale y
         else:
