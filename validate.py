@@ -345,11 +345,12 @@ def validate(args):
     model.eval()
     with torch.no_grad():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
-        input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device=device, dtype=model_dtype)
-        if args.channels_last:
-            input = input.contiguous(memory_format=torch.channels_last)
-        with amp_autocast():
-            model(input)
+        if not args.naflex_loader:
+            input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device=device, dtype=model_dtype)
+            if args.channels_last:
+                input = input.contiguous(memory_format=torch.channels_last)
+            with amp_autocast():
+                model(input)
 
         end = time.time()
         for batch_idx, (input, target) in enumerate(loader):
