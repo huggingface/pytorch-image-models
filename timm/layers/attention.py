@@ -154,8 +154,8 @@ class AttentionRope(nn.Module):
             self.k_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
             self.v_proj = nn.Linear(dim, attn_dim, bias=qkv_bias)
 
-        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.q_norm = norm_layer(head_dim) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
         self.norm = norm_layer(attn_dim) if scale_norm else nn.Identity()
         self.proj = nn.Linear(attn_dim, dim)
