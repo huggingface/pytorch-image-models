@@ -429,7 +429,7 @@ class RexNet(nn.Module):
         """
         x = self.stem(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.features, x, flatten=True)
+            x = checkpoint_seq(self.features, x)
         else:
             x = self.features(x)
         return x

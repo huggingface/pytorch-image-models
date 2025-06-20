@@ -229,7 +229,7 @@ class MobileNetV3(nn.Module):
             blocks = self.blocks[:max_index]
         for feat_idx, blk in enumerate(blocks, start=1):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(blk, x, flatten=True)
+                x = checkpoint_seq(blk, x)
             else:
                 x = blk(x)
             if feat_idx in take_indices:

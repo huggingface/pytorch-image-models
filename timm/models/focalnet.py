@@ -274,7 +274,7 @@ class FocalNetStage(nn.Module):
         x = self.downsample(x)
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint.checkpoint(blk, x)
+                x = checkpoint(blk, x)
             else:
                 x = blk(x)
         return x

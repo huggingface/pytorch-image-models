@@ -636,7 +636,7 @@ class SwinTransformerV2CrStage(nn.Module):
         for block in self.blocks:
             # Perform checkpointing if utilized
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint.checkpoint(block, x)
+                x = checkpoint(block, x)
             else:
                 x = block(x)
         x = bhwc_to_bchw(x)

@@ -288,6 +288,7 @@ class HieraDet(nn.Module):
         norm_layer = get_norm_layer(norm_layer)
         act_layer = get_act_layer(act_layer)
         assert len(stages) == len(window_spec)
+        self.grad_checkpointing = False
         self.num_classes = num_classes
         self.window_spec = window_spec
         self.output_fmt = 'NHWC'

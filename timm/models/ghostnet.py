@@ -728,7 +728,7 @@ class GhostNet(nn.Module):
 
         for feat_idx, stage in enumerate(stages, start=1):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint_seq(stage, x, flatten=True)
+                x = checkpoint_seq(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:
