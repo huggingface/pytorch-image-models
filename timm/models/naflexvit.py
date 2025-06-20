@@ -1257,7 +1257,7 @@ class NaFlexVit(nn.Module):
             if attn_mask is not None:
                 x = blk(x, attn_mask=attn_mask)
             elif self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk. x)
+                x = checkpoint(blk, x)
             else:
                 x = blk(x)
             if i in take_indices:
