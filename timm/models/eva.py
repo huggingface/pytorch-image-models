@@ -1245,44 +1245,45 @@ default_cfgs = generate_default_cfgs({
     ),
 
     # Perception Encoder weights
-    'vit_pe_core_base_patch16_224': _pe_cfg(
-        #hf_hub_id='facebook/pe_core_base_patch16_224_timm',
-        hf_hub_id='facebook/PE-Core-B16-224',
-        hf_hub_filename='PE-Core-B16-224.pt',
+    'vit_pe_core_base_patch16_224.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Core-B16-224',
+        #hf_hub_filename='PE-Core-B16-224.pt',
         input_size=(3, 224, 224),
         num_classes=1024,  # output proj dim
     ),
-    'vit_pe_core_large_patch14_336': _pe_cfg(
-        hf_hub_id='facebook/PE-Core-L14-336',
-        hf_hub_filename='PE-Core-L14-336.pt',
+    'vit_pe_core_large_patch14_336.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Core-L14-336',
+        #hf_hub_filename='PE-Core-L14-336.pt',
         input_size=(3, 336, 336),
         num_classes=1024,  # output proj dim
     ),
-    'vit_pe_core_gigantic_patch14_448': _pe_cfg(
-        #hf_hub_id='timm/',
-        hf_hub_id='facebook/PE-Core-G14-448',
-        hf_hub_filename='PE-Core-G14-448.pt',
+    'vit_pe_core_gigantic_patch14_448.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Core-G14-448',
+        #hf_hub_filename='PE-Core-G14-448.pt',
         input_size=(3, 448, 448),
         num_classes=1280,  # output proj dim
     ),
-    'vit_pe_lang_large_patch14_448': _pe_cfg(
-        #hf_hub_id='timm/',
-        hf_hub_id='facebook/PE-Lang-L14-448',
-        hf_hub_filename='PE-Lang-L14-448.pt',
+    'vit_pe_lang_large_patch14_448.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Lang-L14-448',
+        #hf_hub_filename='PE-Lang-L14-448.pt',
         input_size=(3, 448, 448),
         num_classes=0,
     ),
-    'vit_pe_lang_gigantic_patch14_448': _pe_cfg(
-        #hf_hub_id='timm/',
-        hf_hub_id='facebook/PE-Lang-G14-448',
-        hf_hub_filename='PE-Lang-G14-448.pt',
+    'vit_pe_lang_gigantic_patch14_448.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Lang-G14-448',
+        #hf_hub_filename='PE-Lang-G14-448.pt',
         input_size=(3, 448, 448),
         num_classes=0,
     ),
-    'vit_pe_spatial_gigantic_patch14_448': _pe_cfg(
-        #hf_hub_id='timm/',
-        hf_hub_id='facebook/PE-Spatial-G14-448',
-        hf_hub_filename='PE-Spatial-G14-448.pt',
+    'vit_pe_spatial_gigantic_patch14_448.fb': _pe_cfg(
+        hf_hub_id='timm/',
+        #hf_hub_id='facebook/PE-Spatial-G14-448',
+        #hf_hub_filename='PE-Spatial-G14-448.pt',
         input_size=(3, 448, 448),
         num_classes=0,
     ),
