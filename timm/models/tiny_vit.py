@@ -571,7 +571,7 @@ class TinyVit(nn.Module):
 
         for feat_idx, stage in enumerate(stages):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(stages, x)
+                x = checkpoint(stage, x)
             else:
                 x = stage(x)
             if feat_idx in take_indices:
