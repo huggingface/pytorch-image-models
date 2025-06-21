@@ -1039,7 +1039,10 @@ class VOLO(nn.Module):
                 # add positional encoding after outlooker blocks
                 x = x + self.pos_embed
                 x = self.pos_drop(x)
-            x = block(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(block, x)
+            else:
+                x = block(x)
             if idx in take_indices:
                 if norm and idx >= 2:
                     x_inter = self.norm(x)

@@ -198,7 +198,10 @@ class StarNet(nn.Module):
             stages = self.stages[:max_index + 1]
 
         for feat_idx, stage in enumerate(stages):
-            x = stage(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint_seq(stage, x)
+            else:
+                x = stage(x)
             if feat_idx in take_indices:
                 if norm and feat_idx == last_idx:
                     x_inter = self.norm(x)  # applying final norm last intermediate
@@ -233,7 +236,7 @@ class StarNet(nn.Module):
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.stem(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.stages, x, flatten=True)
+            x = checkpoint_seq(self.stages, x)
         else:
             x = self.stages(x)
         x = self.norm(x)

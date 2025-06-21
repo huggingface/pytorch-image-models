@@ -386,7 +386,10 @@ class TNT(nn.Module):
             blocks = self.blocks[:max_index + 1]
 
         for i, blk in enumerate(blocks):
-            pixel_embed, patch_embed = blk(pixel_embed, patch_embed)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                pixel_embed, patch_embed = checkpoint(blk, pixel_embed, patch_embed)
+            else:
+                pixel_embed, patch_embed = blk(pixel_embed, patch_embed)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(patch_embed) if norm else patch_embed)

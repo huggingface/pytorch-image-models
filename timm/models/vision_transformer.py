@@ -68,7 +68,7 @@ from timm.layers import (
 )
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
+from ._manipulate import named_apply, checkpoint, checkpoint_seq, adapt_input_conv
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
 
 __all__ = ['VisionTransformer']  # model_registry will add each entrypoint fn to this
@@ -824,7 +824,12 @@ class VisionTransformer(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x, attn_mask=attn_mask)
+            if attn_mask is not None:
+                x = blk(x, attn_mask=attn_mask)
+            elif self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
             if i in take_indices:
                 # normalize intermediates with final norm layer if enabled
                 intermediates.append(self.norm(x) if norm else x)

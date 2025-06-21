@@ -397,6 +397,8 @@ class ResNetStage(nn.Module):
             **block_kwargs: Any,
     ):
         super(ResNetStage, self).__init__()
+        self.grad_checkpointing = False
+
         first_dilation = 1 if dilation in (1, 2) else 2
         layer_kwargs = dict(act_layer=act_layer, conv_layer=conv_layer, norm_layer=norm_layer)
         proj_layer = DownsampleAvg if avg_down else DownsampleConv
@@ -431,7 +433,10 @@ class ResNetStage(nn.Module):
         Returns:
             Output tensor.
         """
-        x = self.blocks(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            x = checkpoint_seq(self.blocks, x)
+        else:
+            x = self.blocks(x)
         return x
 
 
@@ -604,7 +609,6 @@ class ResNetV2(nn.Module):
         )
 
         self.init_weights(zero_init_last=zero_init_last)
-        self.grad_checkpointing = False
 
     @torch.jit.ignore
     def init_weights(self, zero_init_last: bool = True) -> None:
@@ -631,7 +635,8 @@ class ResNetV2(nn.Module):
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable: bool = True) -> None:
         """Enable or disable gradient checkpointing."""
-        self.grad_checkpointing = enable
+        for s in self.stages:
+            s.grad_checkpointing = enable
 
     @torch.jit.ignore
     def get_classifier(self) -> nn.Module:
@@ -731,10 +736,7 @@ class ResNetV2(nn.Module):
             Feature tensor.
         """
         x = self.stem(x)
-        if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.stages, x, flatten=True)
-        else:
-            x = self.stages(x)
+        x = self.stages(x)
         x = self.norm(x)
         return x
 

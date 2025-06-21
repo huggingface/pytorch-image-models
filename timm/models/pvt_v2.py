@@ -267,7 +267,7 @@ class PyramidVisionTransformerStage(nn.Module):
         x = x.reshape(B, -1, C)
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint.checkpoint(blk, x, feat_size)
+                x = checkpoint(blk, x, feat_size)
             else:
                 x = blk(x, feat_size)
         x = self.norm(x)

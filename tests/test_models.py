@@ -186,6 +186,18 @@ def test_model_forward(model_name, batch_size):
     assert outputs.shape[0] == batch_size
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
+    # Test that grad-checkpointing, if supported, doesn't cause model failures or change in output
+    try:
+        model.set_grad_checkpointing()
+    except:
+        # throws if not supported, that's fine
+        pass
+    else:
+        outputs2 = model(inputs)
+        if isinstance(outputs, tuple):
+            outputs2 = torch.cat(outputs2)
+        assert torch.allclose(outputs, outputs2, rtol=1e-4, atol=1e-5), 'Output does not match'
+
 
 @pytest.mark.base
 @pytest.mark.timeout(timeout120)
@@ -528,6 +540,20 @@ def test_model_forward_intermediates(model_name, batch_size):
 
     output2 = model.forward_features(inpt)
     assert torch.allclose(output, output2)
+
+    # Test that grad-checkpointing, if supported
+    try:
+        model.set_grad_checkpointing()
+    except:
+        # throws if not supported, that's fine
+        pass
+    else:
+        output3, _ = model.forward_intermediates(
+            inpt,
+            output_fmt=output_fmt,
+        )
+        assert torch.allclose(output, output3, rtol=1e-4, atol=1e-5), 'Output does not match'
+
 
 
 def _create_fx_model(model, train=False):

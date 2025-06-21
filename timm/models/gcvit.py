@@ -361,7 +361,7 @@ class GlobalContextVitStage(nn.Module):
         global_query = self.global_norm(global_query.permute(0, 2, 3, 1))
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint.checkpoint(blk, x)
+                x = checkpoint(blk, x, global_query)
             else:
                 x = blk(x, global_query)
         x = self.norm(x)

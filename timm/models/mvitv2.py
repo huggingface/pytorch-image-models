@@ -681,7 +681,7 @@ class MultiScaleVitStage(nn.Module):
     def forward(self, x, feat_size: List[int]):
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x, feat_size = checkpoint.checkpoint(blk, x, feat_size)
+                x, feat_size = checkpoint(blk, x, feat_size)
             else:
                 x, feat_size = blk(x, feat_size)
         return x, feat_size

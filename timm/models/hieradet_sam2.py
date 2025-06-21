@@ -1,12 +1,11 @@
 import math
 from copy import deepcopy
 from functools import partial
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.jit import Final
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, ClNormMlpClassifierHead, LayerScale, \
@@ -14,8 +13,8 @@ from timm.layers import PatchEmbed, Mlp, DropPath, ClNormMlpClassifierHead, Laye
 
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
-from ._registry import generate_default_cfgs, register_model, register_model_deprecations
+from ._manipulate import named_apply, checkpoint
+from ._registry import generate_default_cfgs, register_model
 
 
 def window_partition(x, window_size: Tuple[int, int]):
@@ -289,6 +288,7 @@ class HieraDet(nn.Module):
         norm_layer = get_norm_layer(norm_layer)
         act_layer = get_act_layer(act_layer)
         assert len(stages) == len(window_spec)
+        self.grad_checkpointing = False
         self.num_classes = num_classes
         self.window_spec = window_spec
         self.output_fmt = 'NHWC'
@@ -471,7 +471,10 @@ class HieraDet(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         for i, blk in enumerate(blocks):
-            x = blk(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
             if i in take_indices:
                 x_out = x.permute(0, 3, 1, 2) if output_fmt == 'NCHW' else x
                 intermediates.append(x_out)
@@ -503,8 +506,11 @@ class HieraDet(nn.Module):
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)  # BHWC
         x = self._pos_embed(x)
-        for i, blk in enumerate(self.blocks):
-            x = blk(x)
+        for blk in self.blocks:
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                x = checkpoint(blk, x)
+            else:
+                x = blk(x)
         return x
 
     def forward_head(self, x, pre_logits: bool = False) -> torch.Tensor:

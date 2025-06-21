@@ -29,7 +29,7 @@ Modifications and additions for timm hacked together by / Copyright 2022, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.nn as nn
@@ -636,7 +636,7 @@ class SwinTransformerV2CrStage(nn.Module):
         for block in self.blocks:
             # Perform checkpointing if utilized
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint.checkpoint(block, x)
+                x = checkpoint(block, x)
             else:
                 x = block(x)
         x = bhwc_to_bchw(x)

@@ -11,7 +11,6 @@ Paper: https://arxiv.org/abs/2401.16456
   year={2024}
 }
 """
-import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import torch
@@ -245,7 +244,7 @@ class StageBlock(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.downsample(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.blocks, x, flatten=True)
+            x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
         return x
@@ -429,7 +428,7 @@ def checkpoint_filter_fn(state_dict: Dict[str, torch.Tensor], model: nn.Module) 
     state_dict = state_dict.get('model', state_dict)
 
     # out_dict = {}
-    #
+    # import re
     # replace_rules = [
     #     (re.compile(r'^blocks1\.'), 'stages.0.blocks.'),
     #     (re.compile(r'^blocks2\.'), 'stages.1.blocks.'),

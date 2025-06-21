@@ -304,7 +304,7 @@ class Stage(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.downsample(x)
         if self.grad_checkpointing and not torch.jit.is_scripting():
-            x = checkpoint_seq(self.blocks, x, flatten=True)
+            x = checkpoint_seq(self.blocks, x)
         else:
             x = self.blocks(x)
         return x
