@@ -609,7 +609,6 @@ class ResNetV2(nn.Module):
         )
 
         self.init_weights(zero_init_last=zero_init_last)
-        self.grad_checkpointing = False
 
     @torch.jit.ignore
     def init_weights(self, zero_init_last: bool = True) -> None:
