@@ -11,7 +11,21 @@
 - [Citing](#citing)
 
 ## What's New
+## June 23, 2025
+* Add F.grid_sample based 2D and factorized pos embed resize to NaFlexViT. Faster when lots of different sizes (based on example by https://github.com/stas-sl).
+* Further speed up patch embed resample by replacing vmap with matmul (based on snippet by https://github.com/stas-sl).
+* Add 3 initial native aspect NaFlexViT checkpoints created while testing, ImageNet-1k and 3 different pos embed configs w/ same hparams.
 
+ | Model | Top-1 Acc | Top-5 Acc | Params (M) | Eval Seq Len |
+ |:---|:---:|:---:|:---:|:---:|
+ | [naflexvit_base_patch16_par_gap.e300_s576_in1k](https://hf.co/timm/naflexvit_base_patch16_par_gap.e300_s576_in1k) | 83.67 | 96.45 | 86.63 | 576 |
+ | [naflexvit_base_patch16_parfac_gap.e300_s576_in1k](https://hf.co/timm/naflexvit_base_patch16_parfac_gap.e300_s576_in1k) | 83.63 | 96.41 | 86.46 | 576 |
+ | [naflexvit_base_patch16_gap.e300_s576_in1k](https://hf.co/timm/naflexvit_base_patch16_gap.e300_s576_in1k) | 83.50 | 96.46 | 86.63 | 576 |
+* Support gradient checkpointing for `forward_intermediates` and fix some checkpointing bugs. Thanks https://github.com/brianhou0208
+* Add 'corrected weight decay' (https://arxiv.org/abs/2506.02285) as option to AdamW (legacy), Adopt, Kron, Adafactor (BV), Lamb, LaProp, Lion, NadamW, RmsPropTF, SGDW optimizers
+* Switch PE (perception encoder) ViT models to use native timm weights instead of remapping on the fly
+* Fix cuda stream bug in prefetch loader
+  
 ## June 5, 2025
 * Initial NaFlexVit model code. NaFlexVit is a Vision Transformer with:
   1. Encapsulated embedding and position encoding in a single module
@@ -534,7 +548,8 @@ Included optimizers available via `timm.optim.create_optimizer_v2` factory metho
 * `bnb<name>` optimizers by name with [BitsAndBytes](https://github.com/TimDettmers/bitsandbytes) installed
 * `cadamw`, `clion`, and more 'Cautious' optimizers from https://github.com/kyleliang919/C-Optim - https://arxiv.org/abs/2411.16085
 * `adam`, `adamw`, `rmsprop`, `adadelta`, `adagrad`, and `sgd` pass through to `torch.optim` implementations
-
+* `c` suffix (eg `adamc`, `nadamc` to implement 'corrected weight decay' in https://arxiv.org/abs/2506.02285)
+  
 ### Augmentations
 * Random Erasing from [Zhun Zhong](https://github.com/zhunzhong07/Random-Erasing/blob/master/transforms.py) - https://arxiv.org/abs/1708.04896)
 * Mixup - https://arxiv.org/abs/1710.09412
