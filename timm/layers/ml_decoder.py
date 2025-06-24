@@ -31,7 +31,7 @@ class MLDecoderHead(nn.Module):
             self.flatten = nn.Flatten(1) if self.use_conv and global_pool else nn.Identity()
         num_pooled_features = self.in_features * self.global_pool.feat_mult()
         # TODO fix this it is incorrect, need to impl a reset for mldecoder itself i think
-        self.head = type(self.head)(in_features=in_features, num_classes=num_classes)
+        self.head = type(self.head)(in_features=num_pooled_features, num_classes=num_classes)
 
 
     def forward(self, x, q=None, pre_logits: bool = False):
@@ -273,6 +273,7 @@ class CrossAttention(nn.Module):
             query_dim: Optional[int] = None,
             kv_dim: Optional[int] = None,
             num_heads: int = 8,
+            use_query_proj: bool = True,
             qkv_bias: bool = True,
             qk_norm: bool = False,
             attn_drop: float = 0.1,
@@ -290,7 +291,7 @@ class CrossAttention(nn.Module):
         self.query_dim = query_dim or dim
         self.kv_dim = kv_dim or dim
         
-        self.q = nn.Linear(self.query_dim, dim, bias=qkv_bias)
+        self.q = nn.Linear(self.query_dim, dim, bias=qkv_bias) if use_query_proj else nn.Identity()
         self.kv = nn.Linear(self.kv_dim, dim * 2, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -369,6 +370,7 @@ class MLDecoder(nn.Module):
         learnable_class_embed: bool = False,
         embed_drop: float = 0.1,
         embed_norm: bool = True,
+        use_query_proj: bool = True,
         qk_norm: bool = False,
         attn_drop: float = 0.1,
         mlp_ratio: float = 8/3,
@@ -443,6 +445,7 @@ class MLDecoder(nn.Module):
             dim, 
             query_dim=self.query_dim, 
             kv_dim=dim if use_input_proj else in_features, 
+            use_query_proj=use_query_proj,
             num_heads=num_heads,
             use_out_proj=attn_out_proj)
         self.norm2 = norm_layer(dim) if use_mlp else nn.Identity()
