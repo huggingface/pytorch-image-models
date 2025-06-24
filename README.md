@@ -408,6 +408,8 @@ All model architecture families include variants with pretrained weights. There 
 
 * Aggregating Nested Transformers - https://arxiv.org/abs/2105.12723
 * BEiT - https://arxiv.org/abs/2106.08254
+* BEiT-V2 - https://arxiv.org/abs/2208.06366
+* BEiT3 - https://arxiv.org/abs/2208.10442
 * Big Transfer ResNetV2 (BiT) - https://arxiv.org/abs/1912.11370
 * Bottleneck Transformers - https://arxiv.org/abs/2101.11605
 * CaiT (Class-Attention in Image Transformers) - https://arxiv.org/abs/2103.17239
@@ -424,6 +426,7 @@ All model architecture families include variants with pretrained weights. There 
 * DPN (Dual-Path Network) - https://arxiv.org/abs/1707.01629
 * EdgeNeXt - https://arxiv.org/abs/2206.10589
 * EfficientFormer - https://arxiv.org/abs/2206.01191
+* EfficientFormer-V2 - https://arxiv.org/abs/2212.08059
 * EfficientNet (MBConvNet Family)
     * EfficientNet NoisyStudent (B0-B7, L2) - https://arxiv.org/abs/1911.04252
     * EfficientNet AdvProp (B0-B8) - https://arxiv.org/abs/1911.09665
@@ -440,12 +443,14 @@ All model architecture families include variants with pretrained weights. There 
 * EfficientViT (MSRA) - https://arxiv.org/abs/2305.07027
 * EVA - https://arxiv.org/abs/2211.07636
 * EVA-02 - https://arxiv.org/abs/2303.11331
+* FasterNet - https://arxiv.org/abs/2303.03667
 * FastViT - https://arxiv.org/abs/2303.14189
 * FlexiViT - https://arxiv.org/abs/2212.08013
 * FocalNet (Focal Modulation Networks) - https://arxiv.org/abs/2203.11926
 * GCViT (Global Context Vision Transformer) - https://arxiv.org/abs/2206.09959
 * GhostNet - https://arxiv.org/abs/1911.11907
 * GhostNet-V2 - https://arxiv.org/abs/2211.12905
+* GhostNet-V3 - https://arxiv.org/abs/2404.11202
 * gMLP - https://arxiv.org/abs/2105.08050
 * GPU-Efficient Networks - https://arxiv.org/abs/2006.14090
 * Halo Nets - https://arxiv.org/abs/2103.12731
@@ -501,14 +506,19 @@ All model architecture families include variants with pretrained weights. There 
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * Sequencer2D - https://arxiv.org/abs/2205.01972
+* SHViT - https://arxiv.org/abs/2401.16456
 * SigLIP (image encoder) - https://arxiv.org/abs/2303.15343
 * SigLIP 2 (image encoder) - https://arxiv.org/abs/2502.14786
+* StarNet - https://arxiv.org/abs/2403.19967
+* SwiftFormer - https://arxiv.org/pdf/2303.15446
 * Swin S3 (AutoFormerV2) - https://arxiv.org/abs/2111.14725
 * Swin Transformer - https://arxiv.org/abs/2103.14030
 * Swin Transformer V2 - https://arxiv.org/abs/2111.09883
+* TinyViT - https://arxiv.org/abs/2207.10666
 * Transformer-iN-Transformer (TNT) - https://arxiv.org/abs/2103.00112
 * TResNet - https://arxiv.org/abs/2003.13630
 * Twins (Spatial Attention in Vision Transformers) - https://arxiv.org/pdf/2104.13840.pdf
+* VGG - https://arxiv.org/abs/1409.1556
 * Visformer - https://arxiv.org/abs/2104.12533
 * Vision Transformer - https://arxiv.org/abs/2010.11929
 * ViTamin - https://arxiv.org/abs/2404.02132
