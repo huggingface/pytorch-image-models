@@ -554,6 +554,8 @@ class MobileNetV5Encoder(nn.Module):
 
 
 def _create_mnv5_encoder(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV5Encoder:
+    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
+    feature_cfg = dict(out_indices=out_indices, feature_cls='getter')
     kwargs_filter = (
         'num_classes',
         'num_features',
@@ -567,6 +569,7 @@ def _create_mnv5_encoder(variant: str, pretrained: bool = False, **kwargs) -> Mo
         variant,
         pretrained,
         pretrained_strict=False,
+        feature_cfg=feature_cfg,
         kwargs_filter=kwargs_filter,
         **kwargs,
     )
@@ -574,11 +577,14 @@ def _create_mnv5_encoder(variant: str, pretrained: bool = False, **kwargs) -> Mo
 
 
 def _create_mnv5(variant: str, pretrained: bool = False, **kwargs) -> MobileNetV5Encoder:
+    out_indices = kwargs.pop('out_indices', (0, 1, 2, 3, 4))
+    feature_cfg = dict(out_indices=out_indices, feature_cls='getter')
     model = build_model_with_cfg(
         MobileNetV5,
         variant,
         pretrained,
         pretrained_strict=False,
+        feature_cfg=feature_cfg,
         **kwargs,
     )
     return model
