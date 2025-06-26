@@ -5,22 +5,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
+from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
     SelectAdaptivePool2d, Linear, LayerType, PadType, RmsNorm2d, ConvNormAct, create_conv2d, get_norm_act_layer,
     to_2tuple
 )
-from ._builder import build_model_with_cfg, pretrained_cfg_for_features
+from ._builder import build_model_with_cfg
 from ._efficientnet_blocks import SqueezeExcite, UniversalInvertedResidual
 from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
-    round_channels, resolve_bn_args, resolve_act_layer, BN_EPS_TF_DEFAULT
-from ._features import FeatureInfo, FeatureHooks, feature_take_indices
+    round_channels, resolve_act_layer
+from ._features import feature_take_indices
+from ._features_fx import register_notrace_module
 from ._manipulate import checkpoint_seq, checkpoint
-from ._registry import generate_default_cfgs, register_model, register_model_deprecations
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['MobileNetV5', 'MobileNetV5Encoder']
 
 
+@register_notrace_module
 class MobileNetV5MultiScaleFusionAdapter(nn.Module):
   """Multi-layer fusion token adapter.
 
