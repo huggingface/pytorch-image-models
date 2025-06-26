@@ -803,7 +803,14 @@ default_cfgs = generate_default_cfgs({
 @register_model
 def mobilenetv5_300m_enc(pretrained: bool = False, **kwargs) -> MobileNetV5Encoder:
     """MobileNet V5 Vision Encoder"""
-    model = _gen_mobilenet_v5('mobilenetv5_300m_enc', pretrained=pretrained, encoder=True, **kwargs)
+    pad_type = kwargs.pop('pad_type', 'same')
+    model = _gen_mobilenet_v5(
+        'mobilenetv5_300m_enc',
+        pretrained=pretrained,
+        encoder=True,
+        pad_type=pad_type,
+        **kwargs,
+    )
     return model
 
 
