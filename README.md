@@ -11,6 +11,11 @@
 - [Citing](#citing)
 
 ## What's New
+
+## June 26, 2025
+* MobileNetV5 backbone (w/ encoder only variant) for [Gemma 3n](https://ai.google.dev/gemma/docs/gemma-3n#parameters) image encoder
+* Version 1.0.16 released
+
 ## June 23, 2025
 * Add F.grid_sample based 2D and factorized pos embed resize to NaFlexViT. Faster when lots of different sizes (based on example by https://github.com/stas-sl).
 * Further speed up patch embed resample by replacing vmap with matmul (based on snippet by https://github.com/stas-sl).
