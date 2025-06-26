@@ -74,7 +74,8 @@ class MobileNetV5MultiScaleFusionAdapter(nn.Module):
     high_resolution = inputs[0].shape[-2:]  # Assuming the first input is the highest resolution.
     resized_inputs = []
     for _, img in enumerate(inputs):
-        if any([r < hr for r, hr in zip(img.shape[-2:], high_resolution)]):
+        feat_size = img.shape[-2:]
+        if feat_size[0] < high_resolution[0] or feat_size[1] < high_resolution[1]:
             img = F.interpolate(img, size=high_resolution, mode=self.interpolation_mode)
         resized_inputs.append(img)
 
