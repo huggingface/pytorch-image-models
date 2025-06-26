@@ -69,7 +69,7 @@ class MobileNetV5MultiScaleFusionAdapter(nn.Module):
 
     self.norm = norm_layer(self.out_channels)
 
-  def forward(self, inputs: list[torch.Tensor]) -> torch.Tensor:
+  def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
     # Inputs list of [B, C, H, W] tensors
     high_resolution = inputs[0].shape[-2:]  # Assuming the first input is the highest resolution.
     resized_inputs = []
@@ -81,7 +81,7 @@ class MobileNetV5MultiScaleFusionAdapter(nn.Module):
     channel_cat_imgs = torch.cat(resized_inputs, dim=1)  # Cat on channel dim, must equal self.in_channels
     img = self.ffn(channel_cat_imgs)
 
-    if any([ro != rh for ro, rh in zip(high_resolution, self.output_resolution)]):
+    if high_resolution[0] != self.output_resolution[0] or high_resolution[1] != self.output_resolution[1]:
         # Interpolate / pool to target output_resolution if highest feature resolution differs
         if (
             high_resolution[0] % self.output_resolution[0] != 0 or
