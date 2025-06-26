@@ -478,7 +478,7 @@ class RmsNormAct(RmsNorm):
     def __init__(
             self,
             num_channels,
-            eps=1e-5,
+            eps=1e-6,
             affine=True,
             apply_act=True,
             act_layer=nn.ReLU,
@@ -511,7 +511,7 @@ class RmsNormAct2d(RmsNorm2d):
     def __init__(
             self,
             num_channels,
-            eps=1e-5,
+            eps=1e-6,
             affine=True,
             apply_act=True,
             act_layer=nn.ReLU,
