@@ -765,7 +765,7 @@ def _gen_mobilenet_v5(
 
 def _cfg(url: str = '', **kwargs):
     return {
-        'url': url, 'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (8, 8),
+        'url': url, 'num_classes': 1000, 'input_size': (3, 256, 256), 'pool_size': (16, 16),
         'crop_pct': 1.0, 'interpolation': 'bicubic',
         'mean': IMAGENET_INCEPTION_MEAN, 'std': IMAGENET_INCEPTION_STD,
         'first_conv': 'conv_stem.conv', 'classifier': 'classifier',
@@ -777,18 +777,17 @@ default_cfgs = generate_default_cfgs({
     # encoder-only configs
     'mobilenetv5_300m_enc': _cfg(
         #hf_hub_id='timm/',
-        input_size=(3, 768, 768), pool_size=(24, 24),
+        input_size=(3, 768, 768),
         num_classes=0),
 
-    # classification configs for testing / fine-tune (WIP)
+    # WIP classification configs for testing
     'mobilenetv5_300m': _cfg(
         # hf_hub_id='timm/',
-        input_size=(3, 768, 768), pool_size=(24, 24),
+        input_size=(3, 768, 768),
         num_classes=0),
     'mobilenetv5_base.untrained': _cfg(
         # hf_hub_id='timm/',
-        num_classes=1000,
-        input_size=(3, 224, 224), pool_size=(7, 7)),
+        num_classes=1000)
 })
 
 
