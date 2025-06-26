@@ -11,7 +11,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm, fast_rms_norm, fast_simple_norm, simple_norm
+from .fast_norm import (
+    is_fast_norm, fast_group_norm, fast_layer_norm, fast_rms_norm, rms_norm2d, fast_rms_norm2d,
+    fast_simple_norm, simple_norm
+)
 
 try:
     from torch.nn.functional import rms_norm
@@ -173,7 +176,11 @@ class RmsNorm(nn.Module):
 
 
 class RmsNorm2d(nn.Module):
-    """ RmsNorm w/ fast (apex) norm if available
+    """ RmsNorm2D for NCHW tensors, w/ fast apex or cast norm if available
+
+    NOTE: It's currently (2025-05-10) faster to use an eager 2d kernel that does reduction
+    on dim=1 than to permute and use internal PyTorch F.rms_norm, this may change if something
+    like https://github.com/pytorch/pytorch/pull/150576 lands.
     """
     __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm']
     normalized_shape: Tuple[int, ...]
@@ -205,14 +212,12 @@ class RmsNorm2d(nn.Module):
             nn.init.ones_(self.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.permute(0, 2, 3, 1)
         # NOTE fast norm fallback needs our rms norm impl, so both paths through here.
         # Since there is no built-in PyTorch impl, always use APEX RmsNorm if is installed.
         if self._fast_norm:
-            x = fast_rms_norm(x, self.normalized_shape, self.weight, self.eps)
+            x = fast_rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
         else:
-            x = rms_norm(x, self.normalized_shape, self.weight, self.eps)
-        x = x.permute(0, 3, 1, 2)
+            x = rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
         return x
 
 

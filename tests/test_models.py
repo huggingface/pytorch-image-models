@@ -210,6 +210,7 @@ def test_model_backward(model_name, batch_size):
         pytest.skip("Fixed input size model > limit.")
 
     model = create_model(model_name, pretrained=False, num_classes=42)
+    encoder_only = model.num_classes == 0  # FIXME better approach?
     num_params = sum([x.numel() for x in model.parameters()])
     model.train()
 
@@ -224,7 +225,12 @@ def test_model_backward(model_name, batch_size):
         assert x.grad is not None, f'No gradient for {n}'
     num_grad = sum([x.grad.numel() for x in model.parameters() if x.grad is not None])
 
-    assert outputs.shape[-1] == 42
+    if encoder_only:
+        output_fmt = getattr(model, 'output_fmt', 'NCHW')
+        feat_axis = get_channel_dim(output_fmt)
+        assert outputs.shape[feat_axis] == model.num_features, f'unpooled feature dim {outputs.shape[feat_axis]} != model.num_features {model.num_features}'
+    else:
+        assert outputs.shape[-1] == 42
     assert num_params == num_grad, 'Some parameters are missing gradients'
     assert not torch.isnan(outputs).any(), 'Output included NaNs'
 
