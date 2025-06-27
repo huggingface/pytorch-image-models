@@ -1,6 +1,6 @@
 """ EVA
 
-EVA from https://github.com/baaivision/EVA , paper: https://arxiv.org/abs/2211.07636
+EVA ViT from https://github.com/baaivision/EVA , paper: https://arxiv.org/abs/2211.07636
 
 @article{EVA,
   title={EVA: Exploring the Limits of Masked Visual Representation Learning at Scale},
@@ -18,7 +18,18 @@ EVA-02: A Visual Representation for Neon Genesis - https://arxiv.org/abs/2303.11
   year={2023}
 }
 
-This file contains EVA & EVA02 model implementations evolved from BEiT, additional models in vision_transformer.py.
+@article{bolya2025perception,
+  title={Perception encoder: The best visual embeddings are not at the output of the network},
+  author={Bolya, Daniel and Huang, Po-Yao and Sun, Peize and Cho, Jang Hyun and Madotto, Andrea and Wei, Chen and Ma,
+    Tengyu and Zhi, Jiale and Rajasegaran, Jathushan and Rasheed, Hanoona and others},
+  journal={arXiv preprint arXiv:2504.13181},
+  year={2025}
+}
+
+This file contains a number of ViT variants the utilise ROPE position embeddings, SwiGLU and other additions:
+ * EVA & EVA02 model implementations that evolved from BEiT, additional models in vision_transformer.py.
+ * `timm` original SBB ViT w/ ROPE position embeddings
+ * Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)
 
 Modifications by / Copyright 2023 Ross Wightman, original copyrights below
 """
@@ -1295,7 +1306,7 @@ default_cfgs = generate_default_cfgs({
 
 @register_model
 def eva_giant_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
-    """ EVA-g model https://arxiv.org/abs/2211.07636 """
+    """EVA-g model https://arxiv.org/abs/2211.07636"""
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -1303,7 +1314,7 @@ def eva_giant_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva_giant_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
-    """ EVA-g model https://arxiv.org/abs/2211.07636 """
+    """EVA-g model https://arxiv.org/abs/2211.07636"""
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_336', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -1311,7 +1322,7 @@ def eva_giant_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva_giant_patch14_560(pretrained: bool = False, **kwargs) -> Eva:
-    """ EVA-g model https://arxiv.org/abs/2211.07636 """
+    """EVA-g model https://arxiv.org/abs/2211.07636"""
     model_args = dict(patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408)
     model = _create_eva('eva_giant_patch14_560', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
@@ -1319,6 +1330,7 @@ def eva_giant_patch14_560(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_tiny_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Tiny https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1336,6 +1348,7 @@ def eva02_tiny_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_small_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Small https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1353,6 +1366,7 @@ def eva02_small_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_base_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Base https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1372,6 +1386,7 @@ def eva02_base_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_large_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Large https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1391,6 +1406,7 @@ def eva02_large_patch14_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_tiny_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Tiny https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -1408,6 +1424,7 @@ def eva02_tiny_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_small_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Small https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -1425,6 +1442,7 @@ def eva02_small_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_base_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Base https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=448,
         patch_size=14,
@@ -1444,6 +1462,7 @@ def eva02_base_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """EVA02 Large https://arxiv.org/abs/2303.11331"""
     model_args = dict(
         img_size=448,
         patch_size=14,
@@ -1463,7 +1482,7 @@ def eva02_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva_giant_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
-    """ EVA-g CLIP model (only difference from non-CLIP is the pooling)  """
+    """EVA-g CLIP model (only difference from non-CLIP is the pooling)"""
     model_args = dict(
         patch_size=14, embed_dim=1408, depth=40, num_heads=16, mlp_ratio=6144 / 1408,
         global_pool=kwargs.pop('global_pool', 'token'))
@@ -1473,7 +1492,7 @@ def eva_giant_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_base_patch16_clip_224(pretrained: bool = False, **kwargs) -> Eva:
-    """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base """
+    """An EVA-CLIP specific variant that adds additional attn scale layer-norm to eva02_base"""
     model_args = dict(
         img_size=224,
         patch_size=16,
@@ -1495,7 +1514,7 @@ def eva02_base_patch16_clip_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_large_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
-    """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
+    """An EVA-CLIP specific variant that adds additional attn scale layer-norm to eva02_large"""
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1517,7 +1536,7 @@ def eva02_large_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_large_patch14_clip_336(pretrained: bool = False, **kwargs) -> Eva:
-    """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_large """
+    """An EVA-CLIP specific variant that adds additional attn scale layer-norm to eva02_large"""
     model_args = dict(
         img_size=336,
         patch_size=14,
@@ -1539,7 +1558,7 @@ def eva02_large_patch14_clip_336(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def eva02_enormous_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
-    """ A EVA-CLIP specific variant that uses residual post-norm in blocks """
+    """An EVA-CLIP specific variant that uses residual post-norm in blocks"""
     model_args = dict(
         img_size=224,
         patch_size=14,
@@ -1556,6 +1575,7 @@ def eva02_enormous_patch14_clip_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_medium_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Eva:
+    """timm SBB ViT with ROPE"""
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1577,6 +1597,7 @@ def vit_medium_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> 
 
 @register_model
 def vit_mediumd_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Eva:
+    """timm SBB ViT with ROPE"""
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1598,6 +1619,7 @@ def vit_mediumd_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) ->
 
 @register_model
 def vit_betwixt_patch16_rope_reg4_gap_256(pretrained: bool = False, **kwargs) -> Eva:
+    """timm SBB ViT with ROPE"""
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1619,6 +1641,7 @@ def vit_betwixt_patch16_rope_reg4_gap_256(pretrained: bool = False, **kwargs) ->
 
 @register_model
 def vit_base_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Eva:
+    """timm SBB ViT with ROPE"""
     model_args = dict(
         img_size=256,
         patch_size=16,
@@ -1640,6 +1663,7 @@ def vit_base_patch16_rope_reg1_gap_256(pretrained: bool = False, **kwargs) -> Ev
 
 @register_model
 def vit_pe_core_base_patch16_224(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
         patch_size=16,
         embed_dim=768,
@@ -1663,6 +1687,7 @@ def vit_pe_core_base_patch16_224(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_pe_core_large_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
         patch_size=14,
         embed_dim=1024,
@@ -1686,6 +1711,7 @@ def vit_pe_core_large_patch14_336(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_pe_core_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
         patch_size=14,
         embed_dim=1536,
@@ -1709,6 +1735,7 @@ def vit_pe_core_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_pe_lang_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
         patch_size=14,
         embed_dim=1024,
@@ -1733,6 +1760,7 @@ def vit_pe_lang_large_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_pe_lang_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
         patch_size=14,
         embed_dim=1536,
@@ -1756,6 +1784,7 @@ def vit_pe_lang_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
 
 @register_model
 def vit_pe_spatial_gigantic_patch14_448(pretrained: bool = False, **kwargs) -> Eva:
+    """Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)"""
     model_args = dict(
         patch_size=14,
         embed_dim=1536,
