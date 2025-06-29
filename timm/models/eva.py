@@ -550,6 +550,7 @@ class Eva(nn.Module):
         if use_rot_pos_emb:
             ref_feat_shape = to_2tuple(ref_feat_shape) if ref_feat_shape is not None else None
             if rope_mixed_mode:
+                self.rope_mixed = True
                 # Mixed mode to supports depth-dependent frequencies
                 self.rope = RotaryEmbeddingMixed(
                     dim=embed_dim,
@@ -560,6 +561,7 @@ class Eva(nn.Module):
                     grid_indexing=rope_grid_indexing,
                 )
             else:
+                self.rope_mixed = False
                 self.rope = RotaryEmbeddingCat(
                     dim=embed_dim // num_heads,
                     temperature=rope_temperature,
@@ -570,6 +572,7 @@ class Eva(nn.Module):
                     grid_indexing=rope_grid_indexing,
                 )
         else:
+            self.rope_mixed = False
             self.rope = None
 
         self.norm_pre = norm_layer(embed_dim) if activate_pre_norm else nn.Identity()
@@ -770,7 +773,7 @@ class Eva(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         # Handle depth-dependent embeddings for mixed mode
-        if rot_pos_embed is not None and isinstance(self.rope, RotaryEmbeddingMixed):
+        if self.rope_mixed and rot_pos_embed is not None:
             for i, blk in enumerate(blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
                     x = checkpoint(blk, x, rope=rot_pos_embed[i])
@@ -847,7 +850,7 @@ class Eva(nn.Module):
         x = self.norm_pre(x)
 
         # Handle depth-dependent embeddings for mixed mode
-        if rot_pos_embed is not None and isinstance(self.rope, RotaryEmbeddingMixed):
+        if self.rope_mixed and rot_pos_embed is not None:
             # rot_pos_embed has shape (depth, H*W, dim) for mixed mode
             for i, blk in enumerate(self.blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
