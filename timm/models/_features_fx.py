@@ -17,19 +17,26 @@ except ImportError:
     has_fx_feature_extraction = False
 
 # Layers we went to treat as leaf modules
-from timm.layers import Conv2dSame, ScaledStdConv2dSame, CondConv2d, StdConv2dSame, Format
-from timm.layers import resample_abs_pos_embed, resample_abs_pos_embed_nhwc, maybe_add_mask
-from timm.layers.non_local_attn import BilinearAttnTransform
-from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
-from timm.layers.norm_act import (
+from timm.layers import (
+    Conv2dSame,
+    ScaledStdConv2dSame,
+    CondConv2d,
+    StdConv2dSame,
+    Format,
+    resample_abs_pos_embed,
+    resample_abs_pos_embed_nhwc,
+    maybe_add_mask,
     BatchNormAct2d,
     SyncBatchNormAct,
     FrozenBatchNormAct2d,
     GroupNormAct,
     GroupNorm1Act,
     LayerNormAct,
-    LayerNormAct2d
+    LayerNormAct2d,
+    RotaryEmbeddingMixed,
 )
+from timm.layers.non_local_attn import BilinearAttnTransform
+from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 
 __all__ = ['register_notrace_module', 'is_notrace_module', 'get_notrace_modules',
            'register_notrace_function', 'is_notrace_function', 'get_notrace_functions',
@@ -50,6 +57,7 @@ _leaf_modules = {
     GroupNorm1Act,
     LayerNormAct,
     LayerNormAct2d,
+    RotaryEmbeddingMixed,
 }
 
 try:
