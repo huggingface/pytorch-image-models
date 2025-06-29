@@ -49,7 +49,7 @@ from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_pos
     resize_rel_pos_bias_table, resize_rel_pos_bias_table_simple, resize_rel_pos_bias_table_levit
 from .pos_embed_sincos import pixel_freq_bands, freq_bands, build_sincos2d_pos_embed, build_fourier_pos_embed, \
     build_rotary_pos_embed, apply_rot_embed, apply_rot_embed_cat, apply_rot_embed_list, apply_keep_indices_nlc, \
-    FourierEmbed, RotaryEmbedding, RotaryEmbeddingCat
+    FourierEmbed, RotaryEmbedding, RotaryEmbeddingCat, RotaryEmbeddingMixed
 from .squeeze_excite import SEModule, SqueezeExcite, EffectiveSEModule, EffectiveSqueezeExcite
 from .selective_kernel import SelectiveKernel
 from .separable_conv import SeparableConv2d, SeparableConvNormAct
