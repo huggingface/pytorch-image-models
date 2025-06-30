@@ -15,7 +15,10 @@ except ImportError:
     def inplace_abn_sync(**kwargs):
         inplace_abn(**kwargs)
 
+from ._fx import register_notrace_module
 
+
+@register_notrace_module
 class InplaceAbn(nn.Module):
     """Activated Batch Normalization
 

@@ -8,6 +8,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from ._fx import register_notrace_module
 from .conv_bn_act import ConvNormAct
 from .helpers import make_divisible
 from .trace_utils import _assert
@@ -69,6 +70,7 @@ class NonLocalAttn(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
 
+@register_notrace_module
 class BilinearAttnTransform(nn.Module):
 
     def __init__(self, in_channels, block_size, groups, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):

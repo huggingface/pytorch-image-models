@@ -9,11 +9,12 @@ from typing import List, Tuple, Optional, Union
 import torch
 import torch.nn.functional as F
 
-from .helpers import to_2tuple
+from ._fx import register_notrace_function
 
 _logger = logging.getLogger(__name__)
 
 
+@register_notrace_function
 def resample_abs_pos_embed(
         posemb: torch.Tensor,
         new_size: List[int],
@@ -57,6 +58,7 @@ def resample_abs_pos_embed(
     return posemb
 
 
+@register_notrace_function
 def resample_abs_pos_embed_nhwc(
         posemb: torch.Tensor,
         new_size: List[int],

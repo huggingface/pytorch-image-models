@@ -4,10 +4,12 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
+from ._fx import register_notrace_function
 from .config import use_fused_attn
 from .pos_embed_sincos import apply_rot_embed_cat
 
 
+@register_notrace_function
 def maybe_add_mask(scores: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
     return scores if attn_mask is None else scores + attn_mask
 
