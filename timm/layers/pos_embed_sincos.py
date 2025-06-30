@@ -512,6 +512,7 @@ def init_random_2d_freqs(
     return torch.stack([fx, fy], dim=0)
 
 
+@torch.fx.wrap
 @register_notrace_function
 def get_mixed_freqs(
         freqs: torch.Tensor,
@@ -583,8 +584,6 @@ class RotaryEmbeddingMixed(nn.Module):
             rotate=True,
         )  # (2, depth, num_heads, head_dim//2)
         self.freqs = nn.Parameter(freqs)
-
-
 
     def get_embed(self, shape: Optional[List[int]] = None) -> torch.Tensor:
         """Generate rotary embeddings for the given spatial shape.

@@ -12,15 +12,11 @@ from typing import Optional, Union, Tuple
 import torch
 import torch.nn as nn
 
-from ._fx import register_notrace_function
 from .config import use_fused_attn
 from .helpers import to_2tuple
 from .pos_embed import resample_abs_pos_embed
 from .pos_embed_sincos import apply_rot_embed, RotaryEmbedding
 from .weight_init import trunc_normal_
-
-# have to register again for some reason
-register_notrace_function(resample_abs_pos_embed)
 
 
 class RotAttentionPool2d(nn.Module):

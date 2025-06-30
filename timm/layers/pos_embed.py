@@ -14,6 +14,7 @@ from ._fx import register_notrace_function
 _logger = logging.getLogger(__name__)
 
 
+@torch.fx.wrap
 @register_notrace_function
 def resample_abs_pos_embed(
         posemb: torch.Tensor,
@@ -58,6 +59,7 @@ def resample_abs_pos_embed(
     return posemb
 
 
+@torch.fx.wrap
 @register_notrace_function
 def resample_abs_pos_embed_nhwc(
         posemb: torch.Tensor,

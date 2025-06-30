@@ -46,17 +46,10 @@ def get_notrace_modules():
 # Functions we want to autowrap (treat them as leaves)
 _autowrap_functions = set()
 
-try:
-    # pass through to torch.fx.wrap when possible, works in some cases our old mechanism doesn't
-    register_notrace_function = torch.fx.wrap  # exists in modern PyTorch
-except AttributeError:
-    # old Torch
-    def register_notrace_function(name_or_fn):
-        if callable(name_or_fn):
-            _autowrap_functions.add(name_or_fn)
-            return name_or_fn
-        _autowrap_functions.add(name_or_fn)
-        return name_or_fn
+
+def register_notrace_function(name_or_fn):
+    _autowrap_functions.add(name_or_fn)
+    return name_or_fn
 
 
 def is_notrace_function(func: Callable):
