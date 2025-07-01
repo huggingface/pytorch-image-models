@@ -708,7 +708,7 @@ class Eva(nn.Module):
             rot_pos_embed = self.rope.get_embed(shape=(H, W)) if self.rope is not None else None
         else:
             pos_embed = self.pos_embed
-            rot_pos_embed = self.rope.get_embed(shape=self.patch_embed.grid_size) if self.rope is not None else None
+            rot_pos_embed = self.rope.get_embed() if self.rope is not None else None
 
         to_cat = []
         if self.cls_token is not None:
@@ -1392,19 +1392,19 @@ default_cfgs = generate_default_cfgs({
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
     ),
-    'vit_small_patch16_rope_mixed_224.naver_in1k': _cfg(
+    'vit_small_patch16_mrope_224.naver_in1k': _cfg(
         hf_hub_id='naver-ai/rope_mixed_deit_small_patch16_LS',
         hf_hub_filename='pytorch_model.bin',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
     ),
-    'vit_base_patch16_rope_mixed_224.naver_in1k': _cfg(
+    'vit_base_patch16_mrope_224.naver_in1k': _cfg(
         hf_hub_id='naver-ai/rope_mixed_deit_base_patch16_LS',
         hf_hub_filename='pytorch_model.bin',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
     ),
-    'vit_large_patch16_rope_mixed_224.naver_in1k': _cfg(
+    'vit_large_patch16_mrope_224.naver_in1k': _cfg(
         hf_hub_id='naver-ai/rope_mixed_deit_large_patch16_LS',
         hf_hub_filename='pytorch_model.bin',
         mean=IMAGENET_DEFAULT_MEAN,
@@ -1428,19 +1428,19 @@ default_cfgs = generate_default_cfgs({
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
     ),
-    'vit_small_patch16_rope_mixed_ape_224.naver_in1k': _cfg(
+    'vit_small_patch16_mrope_ape_224.naver_in1k': _cfg(
         hf_hub_id='naver-ai/rope_mixed_ape_deit_small_patch16_LS',
         hf_hub_filename='pytorch_model.bin',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
     ),
-    'vit_base_patch16_rope_mixed_ape_224.naver_in1k': _cfg(
+    'vit_base_patch16_mrope_ape_224.naver_in1k': _cfg(
         hf_hub_id='naver-ai/rope_mixed_ape_deit_base_patch16_LS',
         hf_hub_filename='pytorch_model.bin',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
     ),
-    'vit_large_patch16_rope_mixed_ape_224.naver_in1k': _cfg(
+    'vit_large_patch16_mrope_ape_224.naver_in1k': _cfg(
         hf_hub_id='naver-ai/rope_mixed_ape_deit_large_patch16_LS',
         hf_hub_filename='pytorch_model.bin',
         mean=IMAGENET_DEFAULT_MEAN,
@@ -2023,7 +2023,7 @@ def vit_large_patch16_rope_224(pretrained: bool = False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_small_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed ViT-S/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2042,12 +2042,12 @@ def vit_small_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_small_patch16_rope_mixed_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_patch16_mrope_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_base_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed ViT-B/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2066,12 +2066,12 @@ def vit_base_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_base_patch16_rope_mixed_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_base_patch16_mrope_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_large_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed ViT-L/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2090,7 +2090,7 @@ def vit_large_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_large_patch16_rope_mixed_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_large_patch16_mrope_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -2170,7 +2170,7 @@ def vit_large_patch16_rope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_small_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed + APE ViT-S/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2191,12 +2191,12 @@ def vit_small_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> 
         rope_mixed_mode=True,
     )
 
-    model = _create_eva('vit_small_patch16_rope_mixed_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_patch16_mrope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_base_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed + APE ViT-B/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2216,12 +2216,12 @@ def vit_base_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> E
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_base_patch16_rope_mixed_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_base_patch16_mrope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_large_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed + APE ViT-L/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2241,6 +2241,6 @@ def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> 
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_large_patch16_rope_mixed_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_large_patch16_mrope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 

@@ -365,9 +365,8 @@ class RotaryEmbedding(nn.Module):
             )
 
     def get_embed(self, shape: Optional[List[int]] = None):
-        if self.bands is not None:
+        if shape is not None and self.bands is not None:
             # rebuild embeddings every call, use if target shape changes
-            assert shape is not None
             return build_rotary_pos_embed(
                 shape,
                 self.bands,
@@ -376,8 +375,10 @@ class RotaryEmbedding(nn.Module):
                 grid_offset=self.grid_offset,
                 grid_indexing=self.grid_indexing,
             )
-        else:
+        elif self.pos_embed_sin is not None and self.pos_embed_cos is not None:
             return self.pos_embed_sin, self.pos_embed_cos
+        else:
+            assert False, "get_embed() requires pre-computed pos embeds or valid shape w/ pre-computed bands"
 
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
@@ -456,7 +457,7 @@ class RotaryEmbeddingCat(nn.Module):
             )
 
     def get_embed(self, shape: Optional[List[int]] = None):
-        if self.bands is not None and shape is not None:
+        if shape is not None and self.bands is not None:
             # rebuild embeddings every call, use if target shape changes
             embeds = build_rotary_pos_embed(
                 shape,
@@ -470,7 +471,7 @@ class RotaryEmbeddingCat(nn.Module):
         elif self.pos_embed is not None:
             return self.pos_embed
         else:
-            assert False, "get_embed() requires pre-computed pos_embed or valid shape w/ pre-computed bands"
+            assert False, "get_embed() requires pre-computed pos embed or valid shape w/ pre-computed bands"
 
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
@@ -514,16 +515,13 @@ def init_random_2d_freqs(
 
 @torch.fx.wrap
 @register_notrace_function
-def get_mixed_freqs(
-        freqs: torch.Tensor,
+def get_mixed_grid(
         height: int,
         width: int,
         grid_indexing: str = 'ij',
-):
-    """Compute mixed (learnable) frequencies."""
-    # Create position indices
-    device = freqs.device
-    dtype = freqs.dtype
+        device: Optional[torch.device] = None,
+        dtype: torch.dtype = torch.float32,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     x_pos, y_pos = torch.meshgrid(
         torch.arange(height, dtype=dtype, device=device),
         torch.arange(width, dtype=dtype, device=device),
@@ -531,14 +529,25 @@ def get_mixed_freqs(
     )
     t_x = x_pos.flatten()
     t_y = y_pos.flatten()
+    return t_x, t_y
+
+
+def get_mixed_freqs(
+        freqs: torch.Tensor,
+        t_x: torch.Tensor,
+        t_y: torch.Tensor,
+) -> torch.Tensor:
+    """Compute mixed (learnable) frequencies."""
+    # Create position indices
+    dtype = freqs.dtype
+    freqs = freqs.float()
     freqs_x = (t_x.unsqueeze(-1) @ freqs[0].unsqueeze(-2))
     freqs_y = (t_y.unsqueeze(-1) @ freqs[1].unsqueeze(-2))
     combined = freqs_x + freqs_y  # shape: (num_heads, N, dim//4)
     sin_emb = torch.sin(combined).repeat_interleave(2, -1)  # (N, dim//2)
     cos_emb = torch.cos(combined).repeat_interleave(2, -1)  # (N, dim//2)
     rope_embeds = torch.cat([sin_emb, cos_emb], dim=-1)  # (num_heads, H*W, head_dim)
-
-    return rope_embeds
+    return rope_embeds.to(dtype)
 
 
 class RotaryEmbeddingMixed(nn.Module):
@@ -584,6 +593,18 @@ class RotaryEmbeddingMixed(nn.Module):
             rotate=True,
         )  # (2, depth, num_heads, head_dim//2)
         self.freqs = nn.Parameter(freqs)
+        if feat_shape is not None:
+            # cache pre-computed grid
+            t_x, t_y = get_mixed_grid(
+                feat_shape[0],
+                feat_shape[1],
+                grid_indexing=grid_indexing,
+                device=self.freqs.device
+            )
+            self.register_buffer('t_x', t_x, persistent=False)
+            self.register_buffer('t_y', t_y, persistent=False)
+        else:
+            self.t_x = self.t_y = None
 
     def get_embed(self, shape: Optional[List[int]] = None) -> torch.Tensor:
         """Generate rotary embeddings for the given spatial shape.
@@ -594,9 +615,19 @@ class RotaryEmbeddingMixed(nn.Module):
         Returns:
             Tensor of shape (depth, H*W, dim) containing concatenated sin/cos embeddings
         """
-        assert shape is not None, "shape must be provided"
-        H, W = shape
-        return get_mixed_freqs(self.freqs, height=H, width=W, grid_indexing=self.grid_indexing)
+        if shape is not None:
+            t_x, t_y = get_mixed_grid(
+                shape[0],
+                shape[1],
+                grid_indexing=self.grid_indexing,
+                device=self.freqs.device
+            )
+        elif self.t_x is not None and self.t_y is not None:
+            t_x, t_y = self.t_x, self.t_y
+        else:
+            assert False, "get_embed() requires pre-computed t_x/t_y or valid shape"
+
+        return get_mixed_freqs(self.freqs, t_x, t_y)
 
     def forward(self, x):
         # assuming channel-first tensor where spatial dim are >= 2
