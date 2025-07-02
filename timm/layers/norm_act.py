@@ -19,6 +19,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 from torchvision.ops.misc import FrozenBatchNorm2d
 
+from ._fx import register_notrace_module
 from .create_act import create_act_layer
 from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm, fast_rms_norm, rms_norm2d, fast_rms_norm2d
 from .norm import RmsNorm, RmsNorm2d
@@ -39,6 +40,7 @@ def _create_act(act_layer, act_kwargs=None, inplace=False, apply_act=True):
     return nn.Identity() if act is None else act
 
 
+@register_notrace_module
 class BatchNormAct2d(nn.BatchNorm2d):
     """BatchNorm + Activation
 
@@ -134,6 +136,7 @@ class BatchNormAct2d(nn.BatchNorm2d):
         return x
 
 
+@register_notrace_module
 class SyncBatchNormAct(nn.SyncBatchNorm):
     # Thanks to Selim Seferbekov (https://github.com/rwightman/pytorch-image-models/issues/1254)
     # This is a quick workaround to support SyncBatchNorm for timm BatchNormAct2d layers
@@ -191,6 +194,7 @@ def convert_sync_batchnorm(module, process_group=None):
     return module_output
 
 
+@register_notrace_module
 class FrozenBatchNormAct2d(torch.nn.Module):
     """
     BatchNormAct2d where the batch statistics and the affine parameters are fixed

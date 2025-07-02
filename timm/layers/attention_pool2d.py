@@ -12,7 +12,7 @@ from typing import Optional, Union, Tuple
 import torch
 import torch.nn as nn
 
-from. config import use_fused_attn
+from .config import use_fused_attn
 from .helpers import to_2tuple
 from .pos_embed import resample_abs_pos_embed
 from .pos_embed_sincos import apply_rot_embed, RotaryEmbedding

@@ -12,6 +12,7 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
+from ._fx import register_notrace_module
 from .helpers import to_2tuple
 from .conv2d_same import conv2d_same
 from .padding import get_padding_value
@@ -30,6 +31,7 @@ def get_condconv_initializer(initializer, num_experts, expert_shape):
     return condconv_initializer
 
 
+@register_notrace_module
 class CondConv2d(nn.Module):
     """ Conditionally Parameterized Convolution
     Inspired by: https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/condconv/condconv_layers.py

@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 
+from ._fx import register_notrace_module
 from .config import is_exportable, is_scriptable
 from .padding import pad_same, pad_same_arg, get_padding_value
 
@@ -27,6 +28,7 @@ def conv2d_same(
     return F.conv2d(x, weight, bias, stride, (0, 0), dilation, groups)
 
 
+@register_notrace_module
 class Conv2dSame(nn.Conv2d):
     """ Tensorflow like 'SAME' convolution wrapper for 2D convolutions
     """

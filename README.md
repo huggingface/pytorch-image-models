@@ -508,6 +508,7 @@ All model architecture families include variants with pretrained weights. There 
 * Res2Net - https://arxiv.org/abs/1904.01169
 * ResNeSt - https://arxiv.org/abs/2004.08955
 * ReXNet - https://arxiv.org/abs/2007.00992
+* ROPE-ViT - https://arxiv.org/abs/2403.13298
 * SelecSLS - https://arxiv.org/abs/1907.00837
 * Selective Kernel Networks - https://arxiv.org/abs/1903.06586
 * Sequencer2D - https://arxiv.org/abs/2205.01972

@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ._fx import register_notrace_module
 from .padding import get_padding, get_padding_value, pad_same
 
 
@@ -47,6 +48,7 @@ class StdConv2d(nn.Conv2d):
         return x
 
 
+@register_notrace_module
 class StdConv2dSame(nn.Conv2d):
     """Conv2d with Weight Standardization. TF compatible SAME padding. Used for ViT Hybrid model.
 
@@ -102,6 +104,7 @@ class ScaledStdConv2d(nn.Conv2d):
         return F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
+@register_notrace_module
 class ScaledStdConv2dSame(nn.Conv2d):
     """Conv2d layer with Scaled Weight Standardization and Tensorflow-like SAME padding support
 
