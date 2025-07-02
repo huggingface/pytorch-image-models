@@ -26,10 +26,20 @@ EVA-02: A Visual Representation for Neon Genesis - https://arxiv.org/abs/2303.11
   year={2025}
 }
 
+@inproceedings{heo2024rotary,
+  title={Rotary position embedding for vision transformer},
+  author={Heo, Byeongho and Park, Song and Han, Dongyoon and Yun, Sangdoo},
+  booktitle={European Conference on Computer Vision},
+  pages={289--305},
+  year={2024},
+  organization={Springer}
+}
+
 This file contains a number of ViT variants the utilise ROPE position embeddings, SwiGLU and other additions:
  * EVA & EVA02 model implementations that evolved from BEiT, additional models in vision_transformer.py.
  * `timm` original SBB ViT w/ ROPE position embeddings
  * Perception Encoder (PE) ViT from Meta (https://arxiv.org/abs/2504.13181)
+ * ROPE-ViT from Naver AI (https://arxiv.org/abs/2403.13298)
 
 Modifications by / Copyright 2023 Ross Wightman, original copyrights below
 """
@@ -773,7 +783,7 @@ class Eva(nn.Module):
         else:
             blocks = self.blocks[:max_index + 1]
         # Handle depth-dependent embeddings for mixed mode
-        if self.rope_mixed and rot_pos_embed is not None:
+        if getattr(self, 'rope_mixed', False) and rot_pos_embed is not None:
             for i, blk in enumerate(blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
                     x = checkpoint(blk, x, rope=rot_pos_embed[i])
@@ -850,7 +860,7 @@ class Eva(nn.Module):
         x = self.norm_pre(x)
 
         # Handle depth-dependent embeddings for mixed mode
-        if self.rope_mixed and rot_pos_embed is not None:
+        if getattr(self, 'rope_mixed', False) and rot_pos_embed is not None:
             # rot_pos_embed has shape (depth, H*W, dim) for mixed mode
             for i, blk in enumerate(self.blocks):
                 if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -991,23 +1001,6 @@ def checkpoint_filter_fn(
     state_dict = state_dict.get('module', state_dict)
     state_dict = state_dict.get('state_dict', state_dict)
 
-    # FIXME remove after conversion, check if this is a rope-vit checkpoint
-    if 'freqs' in state_dict:
-        # Handle rope-vit specific conversions
-        for k, v in state_dict.items():
-            # Skip rope-vit specific buffers
-            if any([kk in k for kk in ('freqs_t_x', 'freqs_t_y')]):
-                continue
-            # Handle mixed mode frequency parameters
-            if k == 'freqs':
-                # Check if model uses mixed mode by looking at other keys or freqs shape
-                # Mixed mode has learnable freqs, axial mode doesn't use them
-                k = 'rope.freqs'
-                model_shape = model.state_dict().get(k).shape
-                v = v.reshape(model_shape)
-            out_dict[k] = v
-        return out_dict
-
     # Loading Meta PE (Perception Encoder) weights
     if 'visual.conv1.weight' in state_dict:
         return _convert_pe(state_dict, model)
@@ -1031,7 +1024,7 @@ def checkpoint_filter_fn(
                 continue
             k = k[len_prefix:]
 
-        if 'rope' in k:
+        if 'rope' in k and not k == 'rope.freqs':
             # fixed embedding no need to load buffer from checkpoint
             continue
 
@@ -1375,76 +1368,76 @@ default_cfgs = generate_default_cfgs({
 
     # RoPE-ViT models from Naver
     'vit_small_patch16_rope_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_axial_deit_small_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
     'vit_base_patch16_rope_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_axial_deit_base_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
     'vit_large_patch16_rope_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_axial_deit_large_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
-    'vit_small_patch16_mrope_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_mixed_deit_small_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+    'vit_small_patch16_rope_mixed_224.naver_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
-    'vit_base_patch16_mrope_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_mixed_deit_base_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+    'vit_base_patch16_rope_mixed_224.naver_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
-    'vit_large_patch16_mrope_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_mixed_deit_large_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+    'vit_large_patch16_rope_mixed_224.naver_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
     'vit_small_patch16_rope_ape_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_axial_ape_deit_small_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
     'vit_base_patch16_rope_ape_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_axial_ape_deit_base_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
     'vit_large_patch16_rope_ape_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_axial_ape_deit_large_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
-    'vit_small_patch16_mrope_ape_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_mixed_ape_deit_small_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+    'vit_small_patch16_rope_mixed_ape_224.naver_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
-    'vit_base_patch16_mrope_ape_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_mixed_ape_deit_base_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+    'vit_base_patch16_rope_mixed_ape_224.naver_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
-    'vit_large_patch16_mrope_ape_224.naver_in1k': _cfg(
-        hf_hub_id='naver-ai/rope_mixed_ape_deit_large_patch16_LS',
-        hf_hub_filename='pytorch_model.bin',
+    'vit_large_patch16_rope_mixed_ape_224.naver_in1k': _cfg(
+        hf_hub_id='timm/',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
+        license='apache-2.0',
     ),
 })
 
@@ -2023,7 +2016,7 @@ def vit_large_patch16_rope_224(pretrained: bool = False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_small_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed ViT-S/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2042,12 +2035,12 @@ def vit_small_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_small_patch16_mrope_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_patch16_rope_mixed_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_base_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed ViT-B/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2066,12 +2059,12 @@ def vit_base_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_base_patch16_mrope_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_base_patch16_rope_mixed_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_large_patch16_rope_mixed_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed ViT-L/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2090,7 +2083,7 @@ def vit_large_patch16_mrope_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_large_patch16_mrope_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_large_patch16_rope_mixed_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
@@ -2170,7 +2163,7 @@ def vit_large_patch16_rope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
 
 
 @register_model
-def vit_small_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_small_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed + APE ViT-S/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2191,12 +2184,12 @@ def vit_small_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_mixed_mode=True,
     )
 
-    model = _create_eva('vit_small_patch16_mrope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_small_patch16_rope_mixed_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_base_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_base_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed + APE ViT-B/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2216,12 +2209,12 @@ def vit_base_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_base_patch16_mrope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_base_patch16_rope_mixed_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 
 
 @register_model
-def vit_large_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
+def vit_large_patch16_rope_mixed_ape_224(pretrained: bool = False, **kwargs) -> Eva:
     """RoPE-Mixed + APE ViT-L/16 from https://github.com/naver-ai/rope-vit"""
     model_args = dict(
         patch_size=16,
@@ -2241,6 +2234,6 @@ def vit_large_patch16_mrope_ape_224(pretrained: bool = False, **kwargs) -> Eva:
         rope_temperature=10.0,
         rope_mixed_mode=True,
     )
-    model = _create_eva('vit_large_patch16_mrope_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
+    model = _create_eva('vit_large_patch16_rope_mixed_ape_224', pretrained=pretrained, **dict(model_args, **kwargs))
     return model
 

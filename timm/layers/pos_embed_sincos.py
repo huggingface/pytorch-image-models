@@ -555,6 +555,9 @@ class RotaryEmbeddingMixed(nn.Module):
 
     This implementation supports mixed (learnable) ROPE. In mixed mode,
     each transformer block has its own set of learnable frequency parameters.
+
+    Based on 'Rotary Position Embedding for Vision: https://arxiv.org/abs/2403.13298)'
+    Compatible with original at https://github.com/naver-ai/rope-vit
     """
     def __init__(
             self,
