@@ -321,7 +321,7 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             f'Running inference benchmark on {self.model_name} for {self.num_bench_iter} steps w/ '
             f'input size {self.input_size} and batch size {self.batch_size}.')
 
-        with torch.no_grad():
+        with torch.inference_mode():
             self._init_input()
 
             for _ in range(self.num_warm_iter):

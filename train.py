@@ -512,7 +512,7 @@ def main():
         **args.model_kwargs,
     )
     if args.head_init_scale is not None:
-        with torch.no_grad():
+        with torch.inference_mode():
             model.get_classifier().weight.mul_(args.head_init_scale)
             model.get_classifier().bias.mul_(args.head_init_scale)
     if args.head_init_bias is not None:
@@ -1310,7 +1310,7 @@ def validate(
 
     end = time.time()
     last_idx = len(loader) - 1
-    with torch.no_grad():
+    with torch.inference_mode():
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher:

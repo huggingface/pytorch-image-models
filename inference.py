@@ -273,7 +273,7 @@ def main():
     all_labels = []
     all_outputs = []
     use_probs = args.output_type == 'prob'
-    with torch.no_grad():
+    with torch.inference_mode():
         for batch_idx, (input, _) in enumerate(loader):
 
             with amp_autocast():
