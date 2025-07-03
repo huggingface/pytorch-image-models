@@ -512,7 +512,7 @@ def main():
         **args.model_kwargs,
     )
     if args.head_init_scale is not None:
-        with torch.inference_mode():
+        with torch.no_grad():
             model.get_classifier().weight.mul_(args.head_init_scale)
             model.get_classifier().bias.mul_(args.head_init_scale)
     if args.head_init_bias is not None:
