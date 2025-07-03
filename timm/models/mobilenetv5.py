@@ -7,19 +7,20 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.layers import (
-    SelectAdaptivePool2d, Linear, LayerType, PadType, RmsNorm2d, ConvNormAct, create_conv2d, get_norm_act_layer,
-    to_2tuple
+    SelectAdaptivePool2d, Linear, LayerType, RmsNorm2d, ConvNormAct, create_conv2d, get_norm_act_layer, to_2tuple
 )
 from ._builder import build_model_with_cfg
 from ._efficientnet_blocks import SqueezeExcite, UniversalInvertedResidual
 from ._efficientnet_builder import BlockArgs, EfficientNetBuilder, decode_arch_def, efficientnet_init_weights, \
-    round_channels, resolve_act_layer
+    round_channels
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_module
-from ._manipulate import checkpoint_seq, checkpoint
+from ._manipulate import checkpoint_seq
 from ._registry import generate_default_cfgs, register_model
 
 __all__ = ['MobileNetV5', 'MobileNetV5Encoder']
+
+_GELU = partial(nn.GELU, approximate='tanh')
 
 
 @register_notrace_module
@@ -56,7 +57,7 @@ class MobileNetV5MultiScaleFusionAdapter(nn.Module):
     self.layer_scale_init_value = layer_scale_init_value
     self.noskip = noskip
 
-    act_layer = act_layer or nn.GELU
+    act_layer = act_layer or _GELU
     norm_layer = norm_layer or RmsNorm2d
     self.ffn = UniversalInvertedResidual(
         in_chs=self.in_channels,
@@ -154,7 +155,7 @@ class MobileNetV5(nn.Module):
             global_pool: Type of pooling to use for global pooling features of the FC head.
         """
         super().__init__()
-        act_layer = act_layer or nn.GELU
+        act_layer = act_layer or _GELU
         norm_layer = norm_layer or RmsNorm2d
         norm_act_layer = get_norm_act_layer(norm_layer, act_layer)
         se_layer = se_layer or SqueezeExcite
@@ -411,7 +412,7 @@ class MobileNetV5Encoder(nn.Module):
             layer_scale_init_value: Optional[float] = None,
     ):
         super().__init__()
-        act_layer = act_layer or nn.GELU
+        act_layer = act_layer or _GELU
         norm_layer = norm_layer or RmsNorm2d
         se_layer = se_layer or SqueezeExcite
         self.num_classes = 0    # Exists to satisfy ._hub module APIs.
@@ -761,7 +762,7 @@ def _gen_mobilenet_v5(
         fix_stem=channel_multiplier < 1.0,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         norm_layer=RmsNorm2d,
-        act_layer=nn.GELU,
+        act_layer=_GELU,
         layer_scale_init_value=1e-5,
     )
     model_kwargs = dict(model_kwargs, **kwargs)
