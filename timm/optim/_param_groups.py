@@ -92,7 +92,12 @@ def param_groups_layer_decay(
         layer_map = auto_group_layers(model)
     num_layers = max(layer_map.values()) + 1
     layer_max = num_layers - 1
-    layer_scales = list(layer_decay ** (layer_max - i) for i in range(num_layers))
+    
+    # no decay: layer_scale is zero
+    if layer_decay == 0:
+        layer_scales = [1.0] * num_layers
+    else:
+        layer_scales = [layer_decay ** (layer_max - i) for i in range(num_layers)]
 
     for name, param in model.named_parameters():
         if not param.requires_grad:
