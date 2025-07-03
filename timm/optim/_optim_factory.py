@@ -39,6 +39,8 @@ from .rmsprop_tf import RMSpropTF
 from .sgdp import SGDP
 from .sgdw import SGDW
 
+import inspect
+
 _logger = logging.getLogger(__name__)
 
 
@@ -258,36 +260,6 @@ class OptimizerRegistry:
             ValueError: If optimizer not found or configuration invalid
         """
 
-        # Get parameters to optimize
-        if isinstance(model_or_params, nn.Module):
-            # Extract parameters from a nn.Module, build param groups w/ weight-decay and/or layer-decay applied
-            no_weight_decay = getattr(model_or_params, 'no_weight_decay', lambda: set())()
-
-            if param_group_fn:
-                # run custom fn to generate param groups from nn.Module
-                params = param_group_fn(model_or_params)
-            elif layer_decay is not None:
-                params = param_groups_layer_decay(
-                    model_or_params,
-                    weight_decay=weight_decay,
-                    layer_decay=layer_decay,
-                    no_weight_decay_list=no_weight_decay,
-                    weight_decay_exclude_1d=weight_decay_exclude_1d,
-                )
-                weight_decay = 0.
-            elif weight_decay and weight_decay_exclude_1d:
-                params = param_groups_weight_decay(
-                    model_or_params,
-                    weight_decay=weight_decay,
-                    no_weight_decay_list=no_weight_decay,
-                )
-                weight_decay = 0.
-            else:
-                params = model_or_params.parameters()
-        else:
-            # pass parameters / parameter groups through to optimizer
-            params = model_or_params
-
         # Parse optimizer name
         opt_split = opt.lower().split('_')
         opt_name = opt_split[-1]
@@ -325,6 +297,50 @@ class OptimizerRegistry:
 
         # Create optimizer
         opt_class = self.get_optimizer_class(opt_info, bind_defaults=False)
+     
+        # Get parameters to optimize
+        if isinstance(model_or_params, nn.Module):
+            # Extract parameters from a nn.Module, build param groups w/ weight-decay and/or layer-decay applied
+            no_weight_decay = getattr(model_or_params, 'no_weight_decay', lambda: set())()
+
+            if param_group_fn:
+                # run custom fn to generate param groups from nn.Module
+                params = param_group_fn(model_or_params)
+            elif layer_decay is not None:
+                
+                # Resolve learning rate for layer decay
+                if lr is None:
+                    try:
+                        sig = inspect.signature(opt_class)
+                        lr = sig.parameters['lr'].default
+                    except Exception:
+                        lr = None
+                    
+                    if lr is None:
+                        raise ValueError("Learning rate is required for layer decay but no default lr found in optimizer")
+                
+                params = param_groups_layer_decay(
+                    model_or_params,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    layer_decay=layer_decay,
+                    no_weight_decay_list=no_weight_decay,
+                    weight_decay_exclude_1d=weight_decay_exclude_1d,
+                )
+                weight_decay = 0.
+            elif weight_decay and weight_decay_exclude_1d:
+                params = param_groups_weight_decay(
+                    model_or_params,
+                    weight_decay=weight_decay,
+                    no_weight_decay_list=no_weight_decay,
+                )
+                weight_decay = 0.
+            else:
+                params = model_or_params.parameters()
+        else:
+            # pass parameters / parameter groups through to optimizer
+            params = model_or_params
+            
         optimizer = opt_class(params, **opt_args)
 
         # Apply Lookahead if requested

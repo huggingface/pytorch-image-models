@@ -68,6 +68,7 @@ _layer_map = auto_group_layers  # backward compat
 
 def param_groups_layer_decay(
         model: nn.Module,
+        lr: float,
         weight_decay: float = 0.05,
         no_weight_decay_list: Collection[str] = (),
         weight_decay_exclude_1d: bool = True,
@@ -111,12 +112,12 @@ def param_groups_layer_decay(
         if group_name not in param_groups:
             this_scale = layer_scales[layer_id]
             param_group_names[group_name] = {
-                "lr_scale": this_scale,
+                "lr": lr*this_scale,
                 "weight_decay": this_decay,
                 "param_names": [],
             }
             param_groups[group_name] = {
-                "lr_scale": this_scale,
+                "lr": lr*this_scale,
                 "weight_decay": this_decay,
                 "params": [],
             }
