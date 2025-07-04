@@ -8,19 +8,35 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 import types
 import functools
+from typing import Optional
 
 from .evo_norm import *
 from .filter_response_norm import FilterResponseNormAct2d, FilterResponseNormTlu2d
-from .norm_act import BatchNormAct2d, GroupNormAct, LayerNormAct, LayerNormAct2d, RmsNormAct, RmsNormAct2d
+from .norm_act import (
+    BatchNormAct2d,
+    GroupNormAct,
+    GroupNorm1Act,
+    LayerNormAct,
+    LayerNormActFp32,
+    LayerNormAct2d,
+    LayerNormAct2dFp32,
+    RmsNormAct,
+    RmsNormActFp32,
+    RmsNormAct2d,
+    RmsNormAct2dFp32,
+)
 from .inplace_abn import InplaceAbn
+from .typing import LayerType
 
 _NORM_ACT_MAP = dict(
     batchnorm=BatchNormAct2d,
     batchnorm2d=BatchNormAct2d,
     groupnorm=GroupNormAct,
-    groupnorm1=functools.partial(GroupNormAct, num_groups=1),
+    groupnorm1=GroupNorm1Act,
     layernorm=LayerNormAct,
     layernorm2d=LayerNormAct2d,
+    layernormfp32=LayerNormActFp32,
+    layernorm2dfp32=LayerNormAct2dFp32,
     evonormb0=EvoNorm2dB0,
     evonormb1=EvoNorm2dB1,
     evonormb2=EvoNorm2dB2,
@@ -36,22 +52,51 @@ _NORM_ACT_MAP = dict(
     iabn=InplaceAbn,
     rmsnorm=RmsNormAct,
     rmsnorm2d=RmsNormAct2d,
+    rmsnormfp32=RmsNormActFp32,
+    rmsnorm2dfp32=RmsNormAct2dFp32,
 )
 _NORM_ACT_TYPES = {m for n, m in _NORM_ACT_MAP.items()}
+# Reverse map from base norm layer names to norm+act layer classes
+_NORM_TO_NORM_ACT_MAP = dict(
+    batchnorm=BatchNormAct2d,
+    batchnorm2d=BatchNormAct2d,
+    groupnorm=GroupNormAct,
+    groupnorm1=GroupNorm1Act,
+    layernorm=LayerNormAct,
+    layernorm2d=LayerNormAct2d,
+    layernormfp32=LayerNormActFp32,
+    layernorm2dfp32=LayerNormAct2dFp32,
+    rmsnorm=RmsNormAct,
+    rmsnorm2d=RmsNormAct2d,
+    rmsnormfp32=RmsNormActFp32,
+    rmsnorm2dfp32=RmsNormAct2dFp32,
+)
 # has act_layer arg to define act type
 _NORM_ACT_REQUIRES_ARG = {
     BatchNormAct2d,
     GroupNormAct,
+    GroupNorm1Act,
     LayerNormAct,
     LayerNormAct2d,
+    LayerNormActFp32,
+    LayerNormAct2dFp32,
     FilterResponseNormAct2d,
     InplaceAbn,
     RmsNormAct,
     RmsNormAct2d,
+    RmsNormActFp32,
+    RmsNormAct2dFp32,
 }
 
 
-def create_norm_act_layer(layer_name, num_features, act_layer=None, apply_act=True, jit=False, **kwargs):
+def create_norm_act_layer(
+        layer_name: LayerType,
+        num_features: int,
+        act_layer: Optional[LayerType] = None,
+        apply_act: bool = True,
+        jit: bool = False,
+        **kwargs,
+):
     layer = get_norm_act_layer(layer_name, act_layer=act_layer)
     layer_instance = layer(num_features, apply_act=apply_act, **kwargs)
     if jit:
@@ -59,7 +104,10 @@ def create_norm_act_layer(layer_name, num_features, act_layer=None, apply_act=Tr
     return layer_instance
 
 
-def get_norm_act_layer(norm_layer, act_layer=None):
+def get_norm_act_layer(
+        norm_layer: LayerType,
+        act_layer: Optional[LayerType] = None,
+):
     if norm_layer is None:
         return None
     assert isinstance(norm_layer, (type, str,  types.FunctionType, functools.partial))
@@ -82,21 +130,10 @@ def get_norm_act_layer(norm_layer, act_layer=None):
         # if function type, must be a lambda/fn that creates a norm_act layer
         norm_act_layer = norm_layer
     else:
+        # Use reverse map to find the corresponding norm+act layer
         type_name = norm_layer.__name__.lower()
-        if type_name.startswith('batchnorm'):
-            norm_act_layer = BatchNormAct2d
-        elif type_name.startswith('groupnorm'):
-            norm_act_layer = GroupNormAct
-        elif type_name.startswith('groupnorm1'):
-            norm_act_layer = functools.partial(GroupNormAct, num_groups=1)
-        elif type_name.startswith('layernorm2d'):
-            norm_act_layer = LayerNormAct2d
-        elif type_name.startswith('layernorm'):
-            norm_act_layer = LayerNormAct
-        elif type_name.startswith('rmsnorm2d'):
-            norm_act_layer = RmsNormAct2d
-        else:
-            assert False, f"No equivalent norm_act layer for {type_name}"
+        norm_act_layer = _NORM_TO_NORM_ACT_MAP.get(type_name, None)
+        assert norm_act_layer is not None, f"No equivalent norm_act layer for {type_name}"
 
     if norm_act_layer in _NORM_ACT_REQUIRES_ARG:
         # pass `act_layer` through for backwards compat where `act_layer=None` implies no activation.
@@ -104,4 +141,5 @@ def get_norm_act_layer(norm_layer, act_layer=None):
         norm_act_kwargs.setdefault('act_layer', act_layer)
     if norm_act_kwargs:
         norm_act_layer = functools.partial(norm_act_layer, **norm_act_kwargs)  # bind/rebind args
+
     return norm_act_layer
