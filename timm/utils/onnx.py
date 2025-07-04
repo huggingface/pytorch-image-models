@@ -54,7 +54,7 @@ def onnx_export(
     # Opset >= 11 should allow for dynamic padding, however I cannot get it to work due to
     # issues in the tracing of the dynamic padding or errors attempting to export the model after jit
     # scripting it (an approach that should work). Perhaps in a future PyTorch or ONNX versions...
-    with torch.no_grad():
+    with torch.inference_mode():
         original_out = model(example_input)
 
     input_names = input_names or ["input0"]

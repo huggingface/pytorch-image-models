@@ -1310,7 +1310,7 @@ def validate(
 
     end = time.time()
     last_idx = len(loader) - 1
-    with torch.no_grad():
+    with torch.inference_mode():
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher:

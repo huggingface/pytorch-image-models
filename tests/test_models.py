@@ -145,7 +145,7 @@ def test_model_inference(model_name, batch_size):
         owl_tensors = safetensors.torch.load_file(os.path.join(temp_dir, 'test', 'owl_tensors.safetensors'))
         test_owl = Image.open(os.path.join(temp_dir, 'test', 'test_owl.jpg'))
 
-    with torch.no_grad():
+    with torch.inference_mode():
         rand_output = model(rand_tensors['input'])
         rand_features = model.forward_features(rand_tensors['input'])
         rand_pre_logits = model.forward_head(rand_features, pre_logits=True)
@@ -631,7 +631,7 @@ def test_model_forward_fx(model_name, batch_size):
     input_size = _get_input_size(model=model, target=TARGET_FWD_FX_SIZE)
     if max(input_size) > MAX_FWD_FX_SIZE:
         pytest.skip("Fixed input size model > limit.")
-    with torch.no_grad():
+    with torch.inference_mode():
         inputs = torch.randn((batch_size, *input_size))
         outputs = model(inputs)
         if isinstance(outputs, tuple):
@@ -711,7 +711,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
         model.eval()
 
         model = torch.jit.script(_create_fx_model(model))
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = tuple(model(torch.randn((batch_size, *input_size))).values())
             if isinstance(outputs, tuple):
                 outputs = torch.cat(outputs)
@@ -742,7 +742,7 @@ if 'GITHUB_ACTIONS' not in os.environ:
         model.eval()
 
         model = torch.jit.script(model)
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = model(torch.randn((batch_size, *input_size)))
 
         assert isinstance(outputs, list)

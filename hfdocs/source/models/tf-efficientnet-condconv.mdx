@@ -41,7 +41,7 @@ To get the model predictions:
 
 ```py
 >>> import torch
->>> with torch.no_grad():
+>>> with torch.inference_mode():
 ...     out = model(tensor)
 >>> probabilities = torch.nn.functional.softmax(out[0], dim=0)
 >>> print(probabilities.shape)

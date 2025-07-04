@@ -343,7 +343,7 @@ def validate(args):
     top5 = AverageMeter()
 
     model.eval()
-    with torch.no_grad():
+    with torch.inference_mode():
         # warmup, reduce variability of first batch time, especially for comparing torchscript vs non
         if not args.naflex_loader:
             input = torch.randn((args.batch_size,) + tuple(data_config['input_size'])).to(device=device, dtype=model_dtype)
