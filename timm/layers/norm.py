@@ -12,8 +12,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .fast_norm import (
-    is_fast_norm, fast_group_norm, fast_layer_norm, fast_rms_norm, rms_norm2d, fast_rms_norm2d,
-    fast_simple_norm, simple_norm
+    is_fast_norm,
+    fast_group_norm,
+    fast_layer_norm,
+    fast_rms_norm,
+    rms_norm2d,
+    fast_rms_norm2d,
+    fast_simple_norm,
+    simple_norm,
 )
 
 try:
@@ -24,15 +30,27 @@ except ImportError:
 
 class GroupNorm(nn.GroupNorm):
     _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
 
-    def __init__(self, num_channels, num_groups=32, eps=1e-5, affine=True):
+    def __init__(
+            self,
+            num_channels: int,
+            num_groups: int = 32,
+            eps: float = 1e-5,
+            affine: bool = True,
+            use_fp32: bool = False,
+            **kwargs,
+    ):
         # NOTE num_channels is swapped to first arg for consistency in swapping norm layers with BN
-        super().__init__(num_groups, num_channels, eps=eps, affine=affine)
+        super().__init__(num_groups, num_channels, eps=eps, affine=affine, **kwargs)
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
     def forward(self, x):
         if self._fast_norm:
             return fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            return F.group_norm(x.float(), self.num_groups, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             return F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
@@ -42,14 +60,18 @@ class GroupNorm1(nn.GroupNorm):
     Input: tensor in shape [B, C, *]
     """
     _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
 
-    def __init__(self, num_channels, **kwargs):
+    def __init__(self, num_channels: int, use_fp32: bool = False, **kwargs):
         super().__init__(1, num_channels, **kwargs)
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self._fast_norm:
             return fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            return F.group_norm(x.float(), self.num_groups, self.weight, self.bias, self.eps).to(x.device)
         else:
             return F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
@@ -58,14 +80,25 @@ class LayerNorm(nn.LayerNorm):
     """ LayerNorm w/ fast norm option
     """
     _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
 
-    def __init__(self, num_channels, eps=1e-6, affine=True):
-        super().__init__(num_channels, eps=eps, elementwise_affine=affine)
+    def __init__(
+            self,
+            num_channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            **kwargs,
+    ):
+        super().__init__(num_channels, eps=eps, elementwise_affine=affine, **kwargs)
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self._fast_norm:
             x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         return x
@@ -74,15 +107,26 @@ class LayerNorm(nn.LayerNorm):
 class LayerNorm2d(nn.LayerNorm):
     """ LayerNorm for channels of '2D' spatial NCHW tensors """
     _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
 
-    def __init__(self, num_channels, eps=1e-6, affine=True):
-        super().__init__(num_channels, eps=eps, elementwise_affine=affine)
+    def __init__(
+            self,
+            num_channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            **kwargs,
+    ):
+        super().__init__(num_channels, eps=eps, elementwise_affine=affine, **kwargs)
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.permute(0, 2, 3, 1)
         if self._fast_norm:
             x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = x.permute(0, 3, 1, 2)
@@ -121,7 +165,7 @@ class LayerNormExp2d(nn.LayerNorm):
     layout. However, benefits are not always clear and can perform worse on other GPUs.
     """
 
-    def __init__(self, num_channels, eps=1e-6):
+    def __init__(self, num_channels: int, eps: float = 1e-6):
         super().__init__(num_channels, eps=eps)
 
     def forward(self, x) -> torch.Tensor:
@@ -136,13 +180,22 @@ class LayerNormExp2d(nn.LayerNorm):
 class RmsNorm(nn.Module):
     """ RmsNorm w/ fast (apex) norm if available
     """
-    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm']
+    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm', '_fp32_norm']
     normalized_shape: Tuple[int, ...]
     eps: float
     elementwise_affine: bool
     _fast_norm: bool
+    _fp32_norm: bool
 
-    def __init__(self, channels, eps=1e-6, affine=True, device=None, dtype=None) -> None:
+    def __init__(
+            self,
+            channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
@@ -153,6 +206,7 @@ class RmsNorm(nn.Module):
         self.eps = eps
         self.elementwise_affine = affine
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
         if self.elementwise_affine:
             self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
@@ -167,9 +221,11 @@ class RmsNorm(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # NOTE fast norm fallback needs our rms norm impl, so both paths through here.
-        # Since there is no built-in PyTorch impl, always use APEX RmsNorm if is installed.
+        # Since there is no built-in PyTorch impl, always uses APEX RmsNorm if installed.
         if self._fast_norm:
             x = fast_rms_norm(x, self.normalized_shape, self.weight, self.eps)
+        elif self._fp32_norm:
+            x = rms_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
         else:
             x = rms_norm(x, self.normalized_shape, self.weight, self.eps)
         return x
@@ -182,13 +238,22 @@ class RmsNorm2d(nn.Module):
     on dim=1 than to permute and use internal PyTorch F.rms_norm, this may change if something
     like https://github.com/pytorch/pytorch/pull/150576 lands.
     """
-    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm']
+    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm', '_fp32_norm']
     normalized_shape: Tuple[int, ...]
     eps: float
     elementwise_affine: bool
     _fast_norm: bool
+    _fp32_norm: bool
 
-    def __init__(self, channels, eps=1e-6, affine=True, device=None, dtype=None) -> None:
+    def __init__(
+            self,
+            channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
@@ -199,6 +264,7 @@ class RmsNorm2d(nn.Module):
         self.eps = eps
         self.elementwise_affine = affine
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
         if self.elementwise_affine:
             self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
@@ -216,6 +282,8 @@ class RmsNorm2d(nn.Module):
         # Since there is no built-in PyTorch impl, always use APEX RmsNorm if is installed.
         if self._fast_norm:
             x = fast_rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
+        elif self._fp32_norm:
+            x = rms_norm2d(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
         else:
             x = rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
         return x
@@ -224,13 +292,22 @@ class RmsNorm2d(nn.Module):
 class SimpleNorm(nn.Module):
     """ SimpleNorm (x / std(x))
     """
-    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm']
+    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm', '_fp32_norm']
     normalized_shape: Tuple[int, ...]
     eps: float
     elementwise_affine: bool
     _fast_norm: bool
+    _fp32_norm: bool
 
-    def __init__(self, channels, eps=1e-6, affine=True, device=None, dtype=None) -> None:
+    def __init__(
+            self,
+            channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
@@ -241,6 +318,7 @@ class SimpleNorm(nn.Module):
         self.eps = eps
         self.elementwise_affine = affine
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
         if self.elementwise_affine:
             self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
@@ -256,6 +334,8 @@ class SimpleNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self._fast_norm:
             x = fast_simple_norm(x, self.normalized_shape, self.weight, self.eps)
+        elif self._fp32_norm:
+            x = simple_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
         else:
             x = simple_norm(x, self.normalized_shape, self.weight, self.eps)
         return x
@@ -264,13 +344,22 @@ class SimpleNorm(nn.Module):
 class SimpleNorm2d(nn.Module):
     """ SimpleNorm for NCHW tensors
     """
-    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm']
+    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine', '_fast_norm', '_fp32_norm']
     normalized_shape: Tuple[int, ...]
     eps: float
     elementwise_affine: bool
     _fast_norm: bool
+    _fp32_norm: bool
 
-    def __init__(self, channels, eps=1e-6, affine=True, device=None, dtype=None) -> None:
+    def __init__(
+            self,
+            channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            device=None,
+            dtype=None,
+    ) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         normalized_shape = channels
@@ -281,6 +370,7 @@ class SimpleNorm2d(nn.Module):
         self.eps = eps
         self.elementwise_affine = affine
         self._fast_norm = is_fast_norm()  # can't script unless we have these flags here (no globals)
+        self._fp32_norm = use_fp32
 
         if self.elementwise_affine:
             self.weight = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
@@ -297,6 +387,8 @@ class SimpleNorm2d(nn.Module):
         x = x.permute(0, 2, 3, 1)
         if self._fast_norm:
             x = fast_simple_norm(x, self.normalized_shape, self.weight, self.eps)
+        elif self._fp32_norm:
+            x = simple_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
         else:
             x = simple_norm(x, self.normalized_shape, self.weight, self.eps)
         x = x.permute(0, 3, 1, 2)

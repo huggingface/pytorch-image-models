@@ -12,7 +12,7 @@ This allows swapping with alternative layers that are natively both norm + act s
 
 Hacked together by / Copyright 2022 Ross Wightman
 """
-from typing import Union, List, Optional, Any
+from typing import Any, Dict, List, Optional, Type, Union
 
 import torch
 from torch import nn as nn
@@ -21,9 +21,17 @@ from torchvision.ops.misc import FrozenBatchNorm2d
 
 from ._fx import register_notrace_module
 from .create_act import create_act_layer
-from .fast_norm import is_fast_norm, fast_group_norm, fast_layer_norm, fast_rms_norm, rms_norm2d, fast_rms_norm2d
+from .fast_norm import (
+    is_fast_norm,
+    fast_group_norm,
+    fast_layer_norm,
+    fast_rms_norm,
+    rms_norm2d,
+    fast_rms_norm2d,
+)
 from .norm import RmsNorm, RmsNorm2d
 from .trace_utils import _assert
+from .typing import LayerType
 
 try:
     from torch.nn.functional import rms_norm
@@ -31,7 +39,12 @@ except ImportError:
     from .fast_norm import rms_norm
 
 
-def _create_act(act_layer, act_kwargs=None, inplace=False, apply_act=True):
+def _create_act(
+        act_layer: LayerType,
+        act_kwargs: Dict[str, Any] = None,
+        inplace: Optional[bool] = False,
+        apply_act: bool = True,
+) -> nn.Module:
     act_kwargs = act_kwargs or {}
     act_kwargs.setdefault('inplace', inplace)
     act = None
@@ -50,16 +63,16 @@ class BatchNormAct2d(nn.BatchNorm2d):
     """
     def __init__(
             self,
-            num_features,
-            eps=1e-5,
-            momentum=0.1,
-            affine=True,
-            track_running_stats=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            num_features: int,
+            eps: float = 1e-5,
+            momentum: float = 0.1,
+            affine: bool = True,
+            track_running_stats: bool = True,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
             device=None,
             dtype=None,
     ):
@@ -208,11 +221,11 @@ class FrozenBatchNormAct2d(torch.nn.Module):
         self,
         num_features: int,
         eps: float = 1e-5,
-        apply_act=True,
-        act_layer=nn.ReLU,
-        act_kwargs=None,
-        inplace=True,
-        drop_layer=None,
+        apply_act: bool = True,
+        act_layer: LayerType = nn.ReLU,
+        act_kwargs: Dict[str, Any] = None,
+        inplace: bool = True,
+        drop_layer: Optional[Type[nn.Module]] = None,
     ):
         super().__init__()
         self.eps = eps
@@ -344,7 +357,7 @@ def unfreeze_batch_norm_2d(module):
     return res
 
 
-def _num_groups(num_channels, num_groups, group_size):
+def _num_groups(num_channels: int, num_groups: int, group_size: int):
     if group_size:
         assert num_channels % group_size == 0
         return num_channels // group_size
@@ -352,19 +365,23 @@ def _num_groups(num_channels, num_groups, group_size):
 
 
 class GroupNormAct(nn.GroupNorm):
+    _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
+
     # NOTE num_channel and num_groups order flipped for easier layer swaps / binding of fixed args
     def __init__(
             self,
-            num_channels,
-            num_groups=32,
-            eps=1e-5,
-            affine=True,
-            group_size=None,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            num_channels: int,
+            num_groups: int = 32,
+            eps: float = 1e-5,
+            affine: bool = True,
+            group_size: Optional[int] = None,
+            use_fp32: bool = False,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
     ):
         super(GroupNormAct, self).__init__(
             _num_groups(num_channels, num_groups, group_size),
@@ -376,10 +393,13 @@ class GroupNormAct(nn.GroupNorm):
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
         self._fast_norm = is_fast_norm()
+        self._fp32_norm = use_fp32
 
     def forward(self, x):
         if self._fast_norm:
             x = fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            x = F.group_norm(x.float(), self.num_groups, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
         x = self.drop(x)
@@ -388,26 +408,33 @@ class GroupNormAct(nn.GroupNorm):
 
 
 class GroupNorm1Act(nn.GroupNorm):
+    _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
+
     def __init__(
             self,
-            num_channels,
-            eps=1e-5,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            num_channels: int,
+            eps: float = 1e-5,
+            affine: bool = True,
+            use_fp32: bool = False,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
     ):
         super(GroupNorm1Act, self).__init__(1, num_channels, eps=eps, affine=affine)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
         self._fast_norm = is_fast_norm()
+        self._fp32_norm = use_fp32
 
     def forward(self, x):
         if self._fast_norm:
             x = fast_group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            x = F.group_norm(x.float(), self.num_groups, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             x = F.group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
         x = self.drop(x)
@@ -416,26 +443,34 @@ class GroupNorm1Act(nn.GroupNorm):
 
 
 class LayerNormAct(nn.LayerNorm):
+    _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
+
     def __init__(
             self,
             normalization_shape: Union[int, List[int], torch.Size],
-            eps=1e-5,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            eps: float = 1e-5,
+            affine: bool = True,
+            use_fp32: bool = False,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
+            **kwargs,
     ):
-        super(LayerNormAct, self).__init__(normalization_shape, eps=eps, elementwise_affine=affine)
+        super(LayerNormAct, self).__init__(normalization_shape, eps=eps, elementwise_affine=affine, **kwargs)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
         self._fast_norm = is_fast_norm()
+        self._fp32_norm = use_fp32
 
     def forward(self, x):
         if self._fast_norm:
             x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = self.drop(x)
@@ -444,26 +479,34 @@ class LayerNormAct(nn.LayerNorm):
 
 
 class LayerNormAct2d(nn.LayerNorm):
+    _fast_norm: torch.jit.Final[bool]
+    _fp32_norm: torch.jit.Final[bool]
+
     def __init__(
             self,
-            num_channels,
-            eps=1e-5,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            num_channels: int,
+            eps: float = 1e-5,
+            affine: bool = True,
+            use_fp32: bool = False,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
+            **kwargs,
     ):
-        super(LayerNormAct2d, self).__init__(num_channels, eps=eps, elementwise_affine=affine)
+        super(LayerNormAct2d, self).__init__(num_channels, eps=eps, elementwise_affine=affine, **kwargs)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
         self._fast_norm = is_fast_norm()
+        self._fp32_norm = use_fp32  # for norm
 
     def forward(self, x):
         x = x.permute(0, 2, 3, 1)
         if self._fast_norm:
             x = fast_layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        elif self._fp32_norm:
+            x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
         else:
             x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         x = x.permute(0, 3, 1, 2)
@@ -481,23 +524,28 @@ class RmsNormAct(RmsNorm):
     """
     def __init__(
             self,
-            num_channels,
-            eps=1e-6,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            num_channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
+            **kwargs,
     ):
-        super().__init__(channels=num_channels, eps=eps, affine=affine)
+        super().__init__(channels=num_channels, eps=eps, affine=affine, **kwargs)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
         self._fast_norm = is_fast_norm()
+        self._fp32_norm = use_fp32  # for norm
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self._fast_norm:
             x = fast_rms_norm(x, self.normalized_shape, self.weight, self.eps)
+        elif self._fp32_norm:
+            x = rms_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
         else:
             x = rms_norm(x, self.normalized_shape, self.weight, self.eps)
         x = self.drop(x)
@@ -514,23 +562,27 @@ class RmsNormAct2d(RmsNorm2d):
     """
     def __init__(
             self,
-            num_channels,
-            eps=1e-6,
-            affine=True,
-            apply_act=True,
-            act_layer=nn.ReLU,
-            act_kwargs=None,
-            inplace=True,
-            drop_layer=None,
+            num_channels: int,
+            eps: float = 1e-6,
+            affine: bool = True,
+            use_fp32: bool = False,
+            apply_act: bool = True,
+            act_layer: LayerType = nn.ReLU,
+            act_kwargs: Dict[str, Any] = None,
+            inplace: bool = True,
+            drop_layer: Optional[Type[nn.Module]] = None,
     ):
         super().__init__(channels=num_channels, eps=eps, affine=affine)
         self.drop = drop_layer() if drop_layer is not None else nn.Identity()
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
         self._fast_norm = is_fast_norm()
+        self._fp32_norm = use_fp32  # for norm
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self._fast_norm:
             x = fast_rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
+        elif self._fp32_norm:
+            x = rms_norm2d(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
         else:
             x = rms_norm2d(x, self.normalized_shape, self.weight, self.eps)
         x = self.drop(x)
