@@ -43,6 +43,7 @@ class MobileNetV5MultiScaleFusionAdapter(nn.Module):
         expansion_ratio: float = 2.0,
         interpolation_mode: str = "nearest",
         layer_scale_init_value: Optional[float] = None,
+        pad_type: str = '',
         noskip: bool = True,
         act_layer: Optional[LayerType] = None,
         norm_layer: Optional[LayerType] = None,
@@ -62,6 +63,7 @@ class MobileNetV5MultiScaleFusionAdapter(nn.Module):
         in_chs=self.in_channels,
         out_chs=self.out_channels,
         dw_kernel_size_mid=0,
+        pad_type=pad_type,
         exp_ratio=self.expansion_ratio,
         act_layer=act_layer,
         norm_layer=norm_layer,
@@ -206,6 +208,7 @@ class MobileNetV5(nn.Module):
                 in_chs=self.msfa_in_chs,
                 out_chs=num_features,
                 output_resolution=self.msfa_output_resolution,
+                pad_type=pad_type,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
             )
@@ -457,6 +460,7 @@ class MobileNetV5Encoder(nn.Module):
             in_chs=self.msfa_in_chs,
             out_chs=self.num_features,
             output_resolution=self.msfa_output_resolution,
+            pad_type=pad_type,
             norm_layer=norm_layer,
             act_layer=act_layer,
         )
