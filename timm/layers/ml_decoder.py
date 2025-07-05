@@ -1,5 +1,6 @@
 from typing import Any, Literal, Optional
 import types
+from functools import partial
 
 import torch
 from torch import nn, Tensor
@@ -85,7 +86,7 @@ def add_ml_decoder_head(model, head_version='new', **kwargs):
         '''
         #target_type = type(model.forward_head)
         model.head = MLDecoderHead(head, num_features, num_classes)
-        model.forward_head = types.MethodType(model.head.forward, model, type(model))
+        model.forward_head = partial(model.head.forward, model.head) #types.MethodType(model.head.forward, model, type(model))
 
     # maybe  and isinstance(model.head, (NormMlpClassifierHead, ClassifierHead) ?
     elif hasattr(model, 'head'):    # ClassifierHead, nn.Sequential
