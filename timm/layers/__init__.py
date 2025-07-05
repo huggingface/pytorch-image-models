@@ -69,13 +69,34 @@ from .linear import Linear
 from .mixed_conv2d import MixedConv2d
 from .mlp import Mlp, GluMlp, GatedMlp, SwiGLU, SwiGLUPacked, ConvMlp, GlobalResponseNormMlp
 from .non_local_attn import NonLocalAttn, BatNonLocalAttn
-from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm, RmsNorm2d, SimpleNorm, SimpleNorm2d
+from .norm import (
+    GroupNorm,
+    GroupNorm1,
+    LayerNorm,
+    LayerNorm2d,
+    LayerNormFp32,
+    LayerNorm2dFp32,
+    RmsNorm,
+    RmsNorm2d,
+    RmsNormFp32,
+    RmsNorm2dFp32,
+    SimpleNorm,
+    SimpleNorm2d,
+    SimpleNormFp32,
+    SimpleNorm2dFp32,
+)
 from .norm_act import (
     BatchNormAct2d,
     GroupNormAct,
     GroupNorm1Act,
     LayerNormAct,
     LayerNormAct2d,
+    LayerNormActFp32,
+    LayerNormAct2dFp32,
+    RmsNormAct,
+    RmsNormAct2d,
+    RmsNormActFp32,
+    RmsNormAct2dFp32,
     SyncBatchNormAct,
     convert_sync_batchnorm,
     FrozenBatchNormAct2d,

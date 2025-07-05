@@ -10,7 +10,22 @@ from typing import Type
 
 import torch.nn as nn
 
-from .norm import GroupNorm, GroupNorm1, LayerNorm, LayerNorm2d, RmsNorm, RmsNorm2d, SimpleNorm, SimpleNorm2d
+from .norm import (
+    GroupNorm,
+    GroupNorm1,
+    LayerNorm,
+    LayerNorm2d,
+    LayerNormFp32,
+    LayerNorm2dFp32,
+    RmsNorm,
+    RmsNorm2d,
+    RmsNormFp32,
+    RmsNorm2dFp32,
+    SimpleNorm,
+    SimpleNorm2d,
+    SimpleNormFp32,
+    SimpleNorm2dFp32,
+)
 from torchvision.ops.misc import FrozenBatchNorm2d
 
 _NORM_MAP = dict(
@@ -21,10 +36,16 @@ _NORM_MAP = dict(
     groupnorm1=GroupNorm1,
     layernorm=LayerNorm,
     layernorm2d=LayerNorm2d,
+    layernormfp32=LayerNormFp32,
+    layernorm2dfp32=LayerNorm2dFp32,
     rmsnorm=RmsNorm,
     rmsnorm2d=RmsNorm2d,
+    rmsnormfp32=RmsNormFp32,
+    rmsnorm2dfp32=RmsNorm2dFp32,
     simplenorm=SimpleNorm,
     simplenorm2d=SimpleNorm2d,
+    simplenormfp32=SimpleNormFp32,
+    simplenorm2dfp32=SimpleNorm2dFp32,
     frozenbatchnorm2d=FrozenBatchNorm2d,
 )
 _NORM_TYPES = {m for n, m in _NORM_MAP.items()}
