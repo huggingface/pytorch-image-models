@@ -206,6 +206,10 @@ group.add_argument('--clip-mode', type=str, default='norm',
                    help='Gradient clipping mode. One of ("norm", "value", "agc")')
 group.add_argument('--layer-decay', type=float, default=None,
                    help='layer-wise learning rate decay (default: None)')
+group.add_argument('--layer-decay-min-scale', type=float, default=0,
+                   help='layer-wise lr decay minimum scale clamp (default: 0)')
+group.add_argument('--layer-decay-no-opt-scale', type=float, default=None,
+                   help='layer-wise lr decay no optimization scale (default: None)')
 group.add_argument('--opt-kwargs', nargs='*', default={}, action=utils.ParseKwargs)
 
 # Learning rate schedule parameters

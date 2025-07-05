@@ -234,6 +234,8 @@ class OptimizerRegistry:
             foreach: Optional[bool] = None,
             weight_decay_exclude_1d: bool = True,
             layer_decay: Optional[float] = None,
+            layer_decay_min_scale: Optional[float] = None,
+            layer_decay_no_opt_scale: Optional[float] = None,
             param_group_fn: Optional[Callable[[nn.Module], ParamsT]] = None,
             **kwargs: Any,
     ) -> torch.optim.Optimizer:
@@ -248,6 +250,8 @@ class OptimizerRegistry:
             foreach: Enable/disable foreach operation
             weight_decay_exclude_1d: Whether to skip weight decay for 1d params (biases and norm affine)
             layer_decay: Layer-wise learning rate decay
+            layer_scale_min_scale: Minimum layer scale factor clamp value
+            layer_scale_no_opt_scale: Layer scale below which optimization is disabled
             param_group_fn: Optional custom parameter grouping function
             **kwargs: Additional optimizer-specific arguments
 
@@ -273,6 +277,8 @@ class OptimizerRegistry:
                     layer_decay=layer_decay,
                     no_weight_decay_list=no_weight_decay,
                     weight_decay_exclude_1d=weight_decay_exclude_1d,
+                    min_scale=layer_decay_min_scale,
+                    no_opt_scale=layer_decay_no_opt_scale,
                 )
                 weight_decay = 0.
             elif weight_decay and weight_decay_exclude_1d:
@@ -1140,6 +1146,8 @@ def create_optimizer_v2(
         foreach: Optional[bool] = None,
         filter_bias_and_bn: bool = True,
         layer_decay: Optional[float] = None,
+        layer_decay_min_scale: float = 0.0,
+        layer_decay_no_opt_scale: Optional[float] = None,
         param_group_fn: Optional[Callable[[nn.Module], ParamsT]] = None,
         **kwargs: Any,
 ) -> torch.optim.Optimizer:
@@ -1215,31 +1223,36 @@ def create_optimizer_v2(
         foreach=foreach,
         weight_decay_exclude_1d=filter_bias_and_bn,
         layer_decay=layer_decay,
+        layer_decay_min_scale=layer_decay_min_scale,
+        layer_decay_no_opt_scale=layer_decay_no_opt_scale,
         param_group_fn=param_group_fn,
         **kwargs
     )
 
 
 def optimizer_kwargs(cfg):
-    """ cfg/argparse to kwargs helper
-    Convert optimizer args in argparse args or cfg like object to keyword args for updated create fn.
-    """
-    kwargs = dict(
-        opt=cfg.opt,
-        lr=cfg.lr,
-        weight_decay=cfg.weight_decay,
-        momentum=cfg.momentum,
-    )
-    if getattr(cfg, 'opt_eps', None) is not None:
-        kwargs['eps'] = cfg.opt_eps
-    if getattr(cfg, 'opt_betas', None) is not None:
-        kwargs['betas'] = cfg.opt_betas
-    if getattr(cfg, 'layer_decay', None) is not None:
-        kwargs['layer_decay'] = cfg.layer_decay
-    if getattr(cfg, 'opt_args', None) is not None:
-        kwargs.update(cfg.opt_args)
-    if getattr(cfg, 'opt_foreach', None) is not None:
-        kwargs['foreach'] = cfg.opt_foreach
+    """Convert argparse-style `cfg` object to kwargs for an optimizer factory."""
+    kwargs = {
+        'opt':           cfg.opt,
+        'lr':            cfg.lr,
+        'weight_decay':  cfg.weight_decay,
+        'momentum':      cfg.momentum,
+    }
+    if (eps := getattr(cfg, 'opt_eps', None)) is not None:
+        kwargs['eps'] = eps
+    if (betas := getattr(cfg, 'opt_betas', None)) is not None:
+        kwargs['betas'] = betas
+    if (layer_decay := getattr(cfg, 'layer_decay', None)) is not None:
+        kwargs['layer_decay'] = layer_decay
+    if (ld_min := getattr(cfg, 'layer_decay_min_scale', None)) is not None:
+        kwargs['layer_decay_min_scale'] = ld_min
+    if (ld_no_opt := getattr(cfg, 'layer_decay_no_opt_scale', None)) is not None:
+        kwargs['layer_decay_no_opt_scale'] = ld_no_opt
+    if (opt_args := getattr(cfg, 'opt_args', None)) is not None:
+        kwargs.update(opt_args)
+    if (foreach := getattr(cfg, 'opt_foreach', None)) is not None:
+        kwargs['foreach'] = foreach
+
     return kwargs
 
 

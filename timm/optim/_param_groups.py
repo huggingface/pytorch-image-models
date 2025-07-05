@@ -73,6 +73,8 @@ def param_groups_layer_decay(
         weight_decay_exclude_1d: bool = True,
         layer_decay: float = .75,
         end_layer_decay: Optional[float] = None,
+        min_scale: float = 0.,
+        no_opt_scale: Optional[float] = None,
         verbose: bool = False,
 ):
     """
@@ -91,7 +93,7 @@ def param_groups_layer_decay(
         layer_map = auto_group_layers(model)
     num_layers = max(layer_map.values()) + 1
     layer_max = num_layers - 1
-    layer_scales = list(layer_decay ** (layer_max - i) for i in range(num_layers))
+    layer_scales = list(max(min_scale, layer_decay ** (layer_max - i)) for i in range(num_layers))
 
     for name, param in model.named_parameters():
         if not param.requires_grad:
@@ -106,10 +108,14 @@ def param_groups_layer_decay(
             this_decay = weight_decay
 
         layer_id = layer_map.get(name, layer_max)
-        group_name = "layer_%d_%s" % (layer_id, g_decay)
+        this_scale = layer_scales[layer_id]
+        if no_opt_scale and this_scale < no_opt_scale:
+            # if the calculated layer scale is below this, exclude from optimization
+            param.requires_grad = False
+            continue
 
+        group_name = "layer_%d_%s" % (layer_id, g_decay)
         if group_name not in param_groups:
-            this_scale = layer_scales[layer_id]
             param_group_names[group_name] = {
                 "lr_scale": this_scale,
                 "weight_decay": this_decay,
