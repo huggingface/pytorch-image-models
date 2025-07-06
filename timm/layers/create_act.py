@@ -1,11 +1,12 @@
 """ Activation Factory
 Hacked together by / Copyright 2020 Ross Wightman
 """
-from typing import Union, Callable, Type
+from typing import Callable, Optional, Type, Union
 
 from .activations import *
 from .activations_me import *
 from .config import is_exportable, is_scriptable
+from .typing import LayerType
 
 # PyTorch has an optimized, native 'silu' (aka 'swish') operator as of PyTorch 1.7.
 # Also hardsigmoid, hardswish, and soon mish. This code will use native version if present.
@@ -88,7 +89,7 @@ for a in _ACT_LAYERS:
     a.setdefault('hardswish', a.get('hard_swish'))
 
 
-def get_act_fn(name: Union[Callable, str] = 'relu'):
+def get_act_fn(name: Optional[LayerType] = 'relu'):
     """ Activation Function Factory
     Fetching activation fns by name with this function allows export or torch script friendly
     functions to be returned dynamically based on current config.
@@ -106,7 +107,7 @@ def get_act_fn(name: Union[Callable, str] = 'relu'):
     return _ACT_FN_DEFAULT[name]
 
 
-def get_act_layer(name: Union[Type[nn.Module], str] = 'relu'):
+def get_act_layer(name: Optional[LayerType] = 'relu'):
     """ Activation Layer Factory
     Fetching activation layers by name with this function allows export or torch script friendly
     functions to be returned dynamically based on current config.
@@ -125,7 +126,11 @@ def get_act_layer(name: Union[Type[nn.Module], str] = 'relu'):
     return _ACT_LAYER_DEFAULT[name]
 
 
-def create_act_layer(name: Union[Type[nn.Module], str], inplace=None, **kwargs):
+def create_act_layer(
+        name: Optional[LayerType],
+        inplace: Optional[bool] = None,
+        **kwargs
+):
     act_layer = get_act_layer(name)
     if act_layer is None:
         return None
