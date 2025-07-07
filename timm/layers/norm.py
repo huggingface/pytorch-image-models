@@ -104,7 +104,9 @@ class LayerNormFp32(nn.LayerNorm):
         super().__init__(num_channels, eps=eps, elementwise_affine=affine, **kwargs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        bias = self.bias.float() if self.bias is not None else None
+        x = F.layer_norm(x.float(), self.normalized_shape, weight, bias, self.eps).to(x.dtype)
         return x
 
 
@@ -146,7 +148,9 @@ class LayerNorm2dFp32(nn.LayerNorm):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.permute(0, 2, 3, 1)
-        x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        bias = self.bias.float() if self.bias is not None else None
+        x = F.layer_norm(x.float(), self.normalized_shape, weight, bias, self.eps).to(x.dtype)
         x = x.permute(0, 3, 1, 2)
         return x
 
@@ -282,7 +286,8 @@ class RmsNormFp32(nn.Module):
             nn.init.ones_(self.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = rms_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        x = rms_norm(x.float(), self.normalized_shape, weight, self.eps).to(x.dtype)
         return x
 
 
@@ -381,7 +386,8 @@ class RmsNorm2dFp32(nn.Module):
             nn.init.ones_(self.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = rms_norm2d(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        x = rms_norm2d(x.float(), self.normalized_shape, weight, self.eps).to(x.dtype)
         return x
 
 
@@ -470,7 +476,8 @@ class SimpleNormFp32(nn.Module):
             nn.init.ones_(self.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = simple_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        x = simple_norm(x.float(), self.normalized_shape, weight, self.eps).to(x.dtype)
         return x
 
 
@@ -562,6 +569,7 @@ class SimpleNorm2dFp32(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.permute(0, 2, 3, 1)
-        x = simple_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        x = simple_norm(x.float(), self.normalized_shape, weight, self.eps).to(x.dtype)
         x = x.permute(0, 3, 1, 2)
         return x
