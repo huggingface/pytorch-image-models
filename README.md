@@ -12,6 +12,32 @@
 
 ## What's New
 
+## July 7, 2025
+* MobileNet-v5 backbone tweaks for improved Google Gemma 3n behaviour (to pair with updated official weights)
+  * Add stem bias (zero'd in updated weights, compat break with old weights)
+  * GELU -> GELU (tanh approx). A minor change to be closer to JAX
+* Add two arguments to layer-decay support, a min scale clamp and 'no optimization' scale threshold
+* Add 'Fp32' LayerNorm, RMSNorm, SimpleNorm variants that can be enabled to force computation of norm in float32
+* Some typing, argument cleanup for norm, norm+act layers done with above
+* Support Naver ROPE-ViT (https://github.com/naver-ai/rope-vit) in `eva.py`, add RotaryEmbeddingMixed module for mixed mode, weights on HuggingFace Hub
+
+|model                                             |img_size|top1  |top5  |param_count|
+|--------------------------------------------------|--------|------|------|-----------|
+|vit_large_patch16_rope_mixed_ape_224.naver_in1k  |224     |84.84 |97.122|304.4      |
+|vit_large_patch16_rope_mixed_224.naver_in1k      |224     |84.828|97.116|304.2      |
+|vit_large_patch16_rope_ape_224.naver_in1k        |224     |84.65 |97.154|304.37     |
+|vit_large_patch16_rope_224.naver_in1k            |224     |84.648|97.122|304.17     |
+|vit_base_patch16_rope_mixed_ape_224.naver_in1k   |224     |83.894|96.754|86.59      |
+|vit_base_patch16_rope_mixed_224.naver_in1k       |224     |83.804|96.712|86.44      |
+|vit_base_patch16_rope_ape_224.naver_in1k         |224     |83.782|96.61 |86.59      |
+|vit_base_patch16_rope_224.naver_in1k             |224     |83.718|96.672|86.43      |
+|vit_small_patch16_rope_224.naver_in1k            |224     |81.23 |95.022|21.98      |
+|vit_small_patch16_rope_mixed_224.naver_in1k      |224     |81.216|95.022|21.99      |
+|vit_small_patch16_rope_ape_224.naver_in1k        |224     |81.004|95.016|22.06      |
+|vit_small_patch16_rope_mixed_ape_224.naver_in1k  |224     |80.986|94.976|22.06      |
+* Some cleanup of ROPE modules, helpers, and FX tracing leaf registration
+* Preparing version 1.0.17 release
+
 ## June 26, 2025
 * MobileNetV5 backbone (w/ encoder only variant) for [Gemma 3n](https://ai.google.dev/gemma/docs/gemma-3n#parameters) image encoder
 * Version 1.0.16 released
