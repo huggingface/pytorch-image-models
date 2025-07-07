@@ -2881,22 +2881,35 @@ def test_efficientnet(pretrained=False, **kwargs) -> EfficientNet:
 
 @register_model
 def test_efficientnet_gn(pretrained=False, **kwargs) -> EfficientNet:
+
     model = _gen_test_efficientnet(
-        'test_efficientnet_gn', pretrained=pretrained, norm_layer=partial(GroupNormAct, group_size=8), **kwargs)
+        'test_efficientnet_gn',
+        pretrained=pretrained,
+        norm_layer=kwargs.pop('norm_layer', partial(GroupNormAct, group_size=8)),
+        **kwargs
+    )
     return model
 
 
 @register_model
 def test_efficientnet_ln(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_test_efficientnet(
-        'test_efficientnet_ln', pretrained=pretrained, norm_layer=LayerNormAct2d, **kwargs)
+        'test_efficientnet_ln',
+        pretrained=pretrained,
+        norm_layer=kwargs.pop('norm_layer', LayerNormAct2d),
+        **kwargs
+    )
     return model
 
 
 @register_model
 def test_efficientnet_evos(pretrained=False, **kwargs) -> EfficientNet:
     model = _gen_test_efficientnet(
-        'test_efficientnet_evos', pretrained=pretrained, norm_layer=partial(EvoNorm2dS0, group_size=8), **kwargs)
+        'test_efficientnet_evos',
+        pretrained=pretrained,
+        norm_layer=kwargs.pop('norm_layer', partial(EvoNorm2dS0, group_size=8)),
+        **kwargs
+    )
     return model
 
 

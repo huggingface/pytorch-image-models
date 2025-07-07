@@ -482,7 +482,9 @@ class LayerNormActFp32(nn.LayerNorm):
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
     def forward(self, x):
-        x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        bias = self.bias.float() if self.bias is not None else None
+        x = F.layer_norm(x.float(), self.normalized_shape, weight, bias, self.eps).to(x.dtype)
         x = self.drop(x)
         x = self.act(x)
         return x
@@ -540,7 +542,9 @@ class LayerNormAct2dFp32(nn.LayerNorm):
 
     def forward(self, x):
         x = x.permute(0, 2, 3, 1)
-        x = F.layer_norm(x.float(), self.normalized_shape, self.weight, self.bias, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        bias = self.bias.float() if self.bias is not None else None
+        x = F.layer_norm(x.float(), self.normalized_shape, weight, bias, self.eps).to(x.dtype)
         x = x.permute(0, 3, 1, 2)
         x = self.drop(x)
         x = self.act(x)
@@ -605,7 +609,8 @@ class RmsNormActFp32(RmsNorm):
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = rms_norm(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        x = rms_norm(x.float(), self.normalized_shape, weight, self.eps).to(x.dtype)
         x = self.drop(x)
         x = self.act(x)
         return x
@@ -667,7 +672,8 @@ class RmsNormAct2dFp32(RmsNorm2d):
         self.act = _create_act(act_layer, act_kwargs=act_kwargs, inplace=inplace, apply_act=apply_act)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = rms_norm2d(x.float(), self.normalized_shape, self.weight, self.eps).to(x.dtype)
+        weight = self.weight.float() if self.weight is not None else None
+        x = rms_norm2d(x.float(), self.normalized_shape, weight, self.eps).to(x.dtype)
         x = self.drop(x)
         x = self.act(x)
         return x
