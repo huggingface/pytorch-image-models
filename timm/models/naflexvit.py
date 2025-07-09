@@ -227,7 +227,7 @@ class NaFlexEmbeds(nn.Module):
             default_img_size: Optional[Union[int, Tuple[int, int]]] = None,
             pos_embed: str = 'learned',
             pos_embed_grid_size: Optional[Tuple[int, int]] = (14, 14),
-            pos_embed_interp_mode: str = 'bicubic',
+            pos_embed_interp_mode: str = 'bilinear',
             pos_embed_ar_preserving: bool = False,
             pos_embed_use_grid_sample: bool = False,
             input_norm_layer: Optional[Type[nn.Module]] = None,
