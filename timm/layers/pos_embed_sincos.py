@@ -81,7 +81,7 @@ def build_sincos2d_pos_embed(
 def swap_shape_xy(seq: List[int]) -> List[int]:
     if len(seq) < 2:
         return seq
-    return [seq[1], seq[0]] + seq[2:]
+    return [seq[1], seq[0]] + list(seq[2:])
 
 
 def build_fourier_pos_embed(
