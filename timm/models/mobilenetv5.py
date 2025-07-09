@@ -528,7 +528,6 @@ class MobileNetV5Encoder(nn.Module):
         feat_idx = 0    # stem is index 0
         x = self.conv_stem(x)
         if feat_idx in take_indices:
-            print("conv_stem is captured")
             intermediates.append(x)
         if feat_idx in self.msfa_indices:
             msfa_intermediates.append(x)
