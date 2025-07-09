@@ -137,7 +137,7 @@
 * Allow override of `cache_dir` arg for model creation
 * Pass through `trust_remote_code` for HF datasets wrapper
 * `inception_next_atto` model added by creator
-* Adan optimizer caution, and Lamb decoupled weighgt decay options
+* Adan optimizer caution, and Lamb decoupled weight decay options
 * Some feature_info metadata fixed by https://github.com/brianhou0208
 * All OpenCLIP and JAX (CLIP, SigLIP, Pali, etc) model weights that used load time remapping were given their own HF Hub instances so that they work with `hf-hub:` based loading, and thus will work with new Transformers `TimmWrapperModel`
 
@@ -301,7 +301,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 * Other misc fixes
 
 ### June 24, 2024
-* 3 more MobileNetV4 hyrid weights with different MQA weight init scheme
+* 3 more MobileNetV4 hybrid weights with different MQA weight init scheme
 
 | model                                                                                            |top1  |top1_err|top5  |top5_err|param_count|img_size|
 |--------------------------------------------------------------------------------------------------|------|--------|------|--------|-----------|--------|
@@ -344,7 +344,7 @@ Add a set of new very well trained ResNet & ResNet-V2 18/34 (basic block) weight
 ### May 14, 2024
 * Support loading PaliGemma jax weights into SigLIP ViT models with average pooling.
 * Add Hiera models from Meta (https://github.com/facebookresearch/hiera).
-* Add `normalize=` flag for transforms, return non-normalized torch.Tensor with original dytpe (for `chug`)
+* Add `normalize=` flag for transforms, return non-normalized torch.Tensor with original dtype (for `chug`)
 * Version 1.0.3 release
 
 ### May 11, 2024
