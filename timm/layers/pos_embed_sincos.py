@@ -241,10 +241,11 @@ def apply_keep_indices_nlc(
         pos_embed_has_batch: bool = False,
 ) -> torch.Tensor:
     """ Apply keep indices to different ROPE shapes
-    Expected shapes:
-    * pos_embed shape [seq_len, pos_embed_dim] → output [batch_size, seq_len, pos_embed_dim]
-    * pos_embed shape [num_heads, seq_len, pos_embed_dim] → output [batch_size, num_heads, seq_len, pos_embed_dim]
-    * pos_embed shape [depth, num_heads, seq_len, pos_embed_dim] → output [batch_size, depth, num_heads, seq_len, pos_embed_dim]
+
+    Expected pos_embed shapes:
+    * [seq_len, pos_embed_dim] --> output [batch_size, seq_len, pos_embed_dim]
+    * [num_heads, seq_len, pos_embed_dim] --> output [batch_size, num_heads, seq_len, pos_embed_dim]
+    * [depth, num_heads, seq_len, pos_embed_dim] --> output [batch_size, depth, num_heads, seq_len, pos_embed_dim]
 
     And all of the above with leading batch dimension already present if `pos_embed_has_batch == True`
 
